@@ -8,24 +8,37 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-// WithScope adds org_id and project_id as optional parameters if they are not already defined in the
-// config.
+// NoopPropertyOption is a property option that does nothing.
+func NoopPropertyOption() mcp.PropertyOption {
+	return func(schema map[string]interface{}) {}
+}
+
+// WithScope adds org_id and project_id as optional/required parameters, based  on
+// what is set in the env variables.
 func WithScope(config *config.Config, required bool) mcp.ToolOption {
-	var opt mcp.PropertyOption
+	opt := NoopPropertyOption()
 	if required {
 		opt = mcp.Required()
 	}
 	return func(tool *mcp.Tool) {
+		defaultProjectOpt := NoopPropertyOption()
+		defaultOrgOpt := NoopPropertyOption()
+		if config.DefaultOrgID != "" {
+			defaultOrgOpt = mcp.DefaultString(config.DefaultOrgID)
+		}
+		if config.DefaultProjectID != "" {
+			defaultProjectOpt = mcp.DefaultString(config.DefaultProjectID)
+		}
 		mcp.WithString("org_id",
 			mcp.Description("The ID of the organization."),
-			mcp.DefaultString(config.OrgID),
+			defaultOrgOpt,
 			opt,
-		)
+		)(tool)
 		mcp.WithString("project_id",
 			mcp.Description("The ID of the project."),
-			mcp.DefaultString(config.ProjectID),
+			defaultProjectOpt,
 			opt,
-		)
+		)(tool)
 	}
 }
 
@@ -41,8 +54,8 @@ func fetchScope(config *config.Config, request mcp.CallToolRequest, required boo
 
 	scope := dto.Scope{
 		AccountID: config.AccountID,
-		OrgID:     config.OrgID,
-		ProjectID: config.ProjectID,
+		OrgID:     config.DefaultOrgID,
+		ProjectID: config.DefaultProjectID,
 	}
 
 	// try to fetch it from the MCP request
@@ -58,8 +71,11 @@ func fetchScope(config *config.Config, request mcp.CallToolRequest, required boo
 	// org ID and project ID may or may not be required for APIs. If they are required, we return an error
 	// if not present.
 	if required {
-		if scope.OrgID == "" || scope.ProjectID == "" {
-			return scope, fmt.Errorf("org ID and project ID are required")
+		if scope.OrgID == "" {
+			return scope, fmt.Errorf("org ID is required")
+		}
+		if scope.ProjectID == "" {
+			return scope, fmt.Errorf("project ID is required")
 		}
 	}
 

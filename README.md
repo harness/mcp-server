@@ -50,7 +50,7 @@ go build -o cmd/harness-mcp-server/harness-mcp-server ./cmd/harness-mcp-server
 
 3. Run the server:
 ```bash
-HARNESS_API_KEY=your_api_key HARNESS_ACCOUNT_ID=your_account_id HARNESS_ORG_ID=your_org_id HARNESS_PROJECT_ID=your_project_id ./cmd/harness-mcp-server/harness-mcp-server stdio
+HARNESS_API_KEY=your_api_key HARNESS_DEFAULT_ORG_ID=your_org_id HARNESS_DEFAULT_PROJECT_ID=your_project_id ./cmd/harness-mcp-server/harness-mcp-server stdio
 ```
 
 ### Claude Desktop Configuration
@@ -69,9 +69,8 @@ On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
         "args": ["stdio"],
         "env": {
           "HARNESS_API_KEY": "<YOUR_API_KEY>",
-          "HARNESS_ACCOUNT_ID": "<YOUR_ACCOUNT_ID>",
-          "HARNESS_ORG_ID": "<YOUR_ORG_ID>",
-          "HARNESS_PROJECT_ID": "<YOUR_PROJECT_ID>"
+          "HARNESS_DEFAULT_ORG_ID": "<YOUR_ORG_ID>",
+          "HARNESS_DEFAULT_PROJECT_ID": "<YOUR_PROJECT_ID>"
         }
       }
     }
@@ -99,10 +98,9 @@ To use the Harness MCP Server with Windsurf:
       "args": ["stdio"],
       "env": {
         "HARNESS_API_KEY": "<YOUR_API_KEY>",
-        "HARNESS_ACCOUNT_ID": "<YOUR_ACCOUNT_ID>",
-        "HARNESS_ORG_ID": "<YOUR_ORG_ID>",
-        "HARNESS_PROJECT_ID": "<YOUR_PROJECT_ID>",
-        "HARNESS_BASE_URL": "<YOUR_BASE_URL>",
+        "HARNESS_DEFAULT_ORG_ID": "<YOUR_ORG_ID>",
+        "HARNESS_DEFAULT_PROJECT_ID": "<YOUR_PROJECT_ID>",
+        "HARNESS_BASE_URL": "<YOUR_BASE_URL>"
       }
     }
   }
@@ -127,10 +125,9 @@ The Harness MCP Server supports the following command line arguments:
 
 Environment variables are prefixed with `HARNESS_`:
 
-- `HARNESS_API_KEY`: Harness API key (required)
-- `HARNESS_ACCOUNT_ID`: Harness account ID (required)
-- `HARNESS_ORG_ID`: Harness organization ID (optional, but required for some operations)
-- `HARNESS_PROJECT_ID`: Harness project ID (optional, but required for some operations)
+- `HARNESS_API_KEY`: Harness API key (required) - Account ID is automatically extracted from the API key
+- `HARNESS_DEFAULT_ORG_ID`: Default Harness organization ID (optional, if not specified it would need to be passed in the request if it's required for that operation)
+- `HARNESS_DEFAULT_PROJECT_ID`: Default Harness project ID (optional, if not specified it would need to be passed in the request if it's required for that operation)
 - `HARNESS_TOOLSETS`: Comma-separated list of toolsets to enable (default: "all")
 - `HARNESS_READ_ONLY`: Set to "true" to run in read-only mode
 - `HARNESS_LOG_FILE`: Path to log file

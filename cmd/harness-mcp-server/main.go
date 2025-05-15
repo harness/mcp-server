@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/harness/harness-mcp/client"
@@ -23,6 +24,16 @@ var version = "0.1.0"
 var commit = "dev"
 var date = "unknown"
 
+// extractAccountIDFromAPIKey extracts the account ID from a Harness API key
+// API key format: pat.ACCOUNT_ID.TOKEN_ID.<>
+func extractAccountIDFromAPIKey(apiKey string) (string, error) {
+	parts := strings.Split(apiKey, ".")
+	if len(parts) < 2 {
+		return "", fmt.Errorf("invalid API key format")
+	}
+	return parts[1], nil
+}
+
 var (
 	rootCmd = &cobra.Command{
 		Use:     "harness-mcp-server",
@@ -36,28 +47,34 @@ var (
 		Short: "Start stdio server",
 		Long:  `Start a server that communicates via standard input/output streams using JSON-RPC messages.`,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			token := viper.GetString("api_key")
-			if token == "" {
+			apiKey := viper.GetString("api_key")
+			if apiKey == "" {
 				return fmt.Errorf("API key not provided")
 			}
 
+			// Extract account ID from API key
+			accountID, err := extractAccountIDFromAPIKey(apiKey)
+			if err != nil {
+				return fmt.Errorf("failed to extract account ID from API key: %w", err)
+			}
+
 			var toolsets []string
-			err := viper.UnmarshalKey("toolsets", &toolsets)
+			err = viper.UnmarshalKey("toolsets", &toolsets)
 			if err != nil {
 				return fmt.Errorf("Failed to unmarshal toolsets: %w", err)
 			}
 
 			cfg := config.Config{
-				Version:     version,
-				BaseURL:     viper.GetString("base_url"),
-				AccountID:   viper.GetString("account_id"),
-				OrgID:       viper.GetString("org_id"),
-				ProjectID:   viper.GetString("project_id"),
-				APIKey:      viper.GetString("api_key"),
-				ReadOnly:    viper.GetBool("read_only"),
-				Toolsets:    toolsets,
-				LogFilePath: viper.GetString("log_file"),
-				Debug:       viper.GetBool("debug"),
+				Version:          version,
+				BaseURL:          viper.GetString("base_url"),
+				AccountID:        accountID,
+				DefaultOrgID:     viper.GetString("default_org_id"),
+				DefaultProjectID: viper.GetString("default_project_id"),
+				APIKey:           apiKey,
+				ReadOnly:         viper.GetBool("read_only"),
+				Toolsets:         toolsets,
+				LogFilePath:      viper.GetString("log_file"),
+				Debug:            viper.GetBool("debug"),
 			}
 
 			if err := runStdioServer(cfg); err != nil {
@@ -80,9 +97,8 @@ func init() {
 	rootCmd.PersistentFlags().Bool("debug", false, "Enable debug logging")
 	rootCmd.PersistentFlags().String("base-url", "https://app.harness.io", "Base URL for Harness")
 	rootCmd.PersistentFlags().String("api-key", "", "API key for authentication")
-	rootCmd.PersistentFlags().String("account-id", "", "Account ID to use")
-	rootCmd.PersistentFlags().String("org-id", "", "(Optional) org ID to use")
-	rootCmd.PersistentFlags().String("project-id", "", "(Optional) project ID to use")
+	rootCmd.PersistentFlags().String("default-org-id", "", "Default org ID to use. If not specified, it would need to be passed in the query (if required)")
+	rootCmd.PersistentFlags().String("default-project-id", "", "Default project ID to use. If not specified, it would need to be passed in the query (if required)")
 
 	// Bind flags to viper
 	_ = viper.BindPFlag("toolsets", rootCmd.PersistentFlags().Lookup("toolsets"))
@@ -91,9 +107,8 @@ func init() {
 	_ = viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
 	_ = viper.BindPFlag("base_url", rootCmd.PersistentFlags().Lookup("base-url"))
 	_ = viper.BindPFlag("api_key", rootCmd.PersistentFlags().Lookup("api-key"))
-	_ = viper.BindPFlag("account_id", rootCmd.PersistentFlags().Lookup("account-id"))
-	_ = viper.BindPFlag("org_id", rootCmd.PersistentFlags().Lookup("org-id"))
-	_ = viper.BindPFlag("project_id", rootCmd.PersistentFlags().Lookup("project-id"))
+	_ = viper.BindPFlag("default_org_id", rootCmd.PersistentFlags().Lookup("default-org-id"))
+	_ = viper.BindPFlag("default_project_id", rootCmd.PersistentFlags().Lookup("default-project-id"))
 
 	// Add subcommands
 	rootCmd.AddCommand(stdioCmd)
