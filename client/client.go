@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/harness/harness-mcp/client/ar"
 	"io"
 	"log/slog"
 	"net/http"
@@ -52,6 +53,7 @@ type Client struct {
 	Pipelines    *PipelineService
 	Repositories *RepositoryService
 	Logs         *LogService
+	Registry     *ar.ClientWithResponses
 }
 
 type service struct {
@@ -96,6 +98,14 @@ func (c *Client) initialize() error {
 	c.Pipelines = &PipelineService{client: c}
 	c.Repositories = &RepositoryService{client: c}
 	c.Logs = &LogService{client: c}
+
+	// TODO: Replace it with harness-go-sdk
+	arClient, err := ar.NewClientWithResponses(c.BaseURL.String()+"/har/api/v1", ar.WithHTTPClient(c.client),
+		ar.WithRequestEditorFn(getEditor(c.APIKey)))
+	if err != nil {
+		return err
+	}
+	c.Registry = arClient
 
 	return nil
 }
@@ -355,5 +365,13 @@ func setDefaultPagination(opts *dto.PaginationOptions) {
 		if opts.Size > maxPageSize {
 			opts.Size = maxPageSize
 		}
+	}
+}
+
+// TODO: Remove once we have Client service or we integrate with go-sdk
+func getEditor(token string) func(ctx context.Context, req *http.Request) error {
+	return func(ctx context.Context, req *http.Request) error {
+		req.Header.Set("x-api-key", token)
+		return nil
 	}
 }

@@ -91,14 +91,17 @@ func init() {
 	rootCmd.SetVersionTemplate("{{.Short}}\n{{.Version}}\n")
 
 	// Add global flags
-	rootCmd.PersistentFlags().StringSlice("toolsets", harness.DefaultTools, "An optional comma separated list of groups of tools to allow, defaults to enabling all")
+	rootCmd.PersistentFlags().StringSlice("toolsets", harness.DefaultTools,
+		"An optional comma separated list of groups of tools to allow, defaults to enabling all")
 	rootCmd.PersistentFlags().Bool("read-only", false, "Restrict the server to read-only operations")
 	rootCmd.PersistentFlags().String("log-file", "", "Path to log file")
 	rootCmd.PersistentFlags().Bool("debug", false, "Enable debug logging")
 	rootCmd.PersistentFlags().String("base-url", "https://app.harness.io", "Base URL for Harness")
 	rootCmd.PersistentFlags().String("api-key", "", "API key for authentication")
-	rootCmd.PersistentFlags().String("default-org-id", "", "Default org ID to use. If not specified, it would need to be passed in the query (if required)")
-	rootCmd.PersistentFlags().String("default-project-id", "", "Default project ID to use. If not specified, it would need to be passed in the query (if required)")
+	rootCmd.PersistentFlags().String("default-org-id", "",
+		"Default org ID to use. If not specified, it would need to be passed in the query (if required)")
+	rootCmd.PersistentFlags().String("default-project-id", "",
+		"Default project ID to use. If not specified, it would need to be passed in the query (if required)")
 
 	// Bind flags to viper
 	_ = viper.BindPFlag("toolsets", rootCmd.PersistentFlags().Lookup("toolsets"))
@@ -161,7 +164,8 @@ func runStdioServer(config config.Config) error {
 
 	// Define beforeInit function to add client info to user agent
 	beforeInit := func(_ context.Context, _ any, message *mcp.InitializeRequest) {
-		slog.Info("Client connected", "name", message.Params.ClientInfo.Name, "version", message.Params.ClientInfo.Version)
+		slog.Info("Client connected", "name", message.Params.ClientInfo.Name, "version",
+			message.Params.ClientInfo.Version)
 	}
 
 	// Setup server hooks

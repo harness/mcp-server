@@ -3,7 +3,6 @@ package client
 import (
 	"context"
 	"fmt"
-
 	"github.com/harness/harness-mcp/client/dto"
 )
 
@@ -19,7 +18,10 @@ type PipelineService struct {
 	client *Client
 }
 
-func (p *PipelineService) Get(ctx context.Context, scope dto.Scope, pipelineID string) (*dto.Entity[dto.PipelineData], error) {
+func (p *PipelineService) Get(ctx context.Context, scope dto.Scope, pipelineID string) (
+	*dto.Entity[dto.PipelineData],
+	error,
+) {
 	path := fmt.Sprintf(pipelinePath, pipelineID)
 
 	// Prepare query parameters
@@ -38,7 +40,11 @@ func (p *PipelineService) Get(ctx context.Context, scope dto.Scope, pipelineID s
 	return response, nil
 }
 
-func (p *PipelineService) List(ctx context.Context, scope dto.Scope, opts *dto.PipelineListOptions) (*dto.ListOutput[dto.PipelineListItem], error) {
+func (p *PipelineService) List(
+	ctx context.Context,
+	scope dto.Scope,
+	opts *dto.PipelineListOptions,
+) (*dto.ListOutput[dto.PipelineListItem], error) {
 	// Prepare query parameters
 	params := make(map[string]string)
 	addScope(scope, params)
@@ -50,7 +56,7 @@ func (p *PipelineService) List(ctx context.Context, scope dto.Scope, opts *dto.P
 
 	// Set default pagination
 	setDefaultPagination(&opts.PaginationOptions)
-	
+
 	// Add pagination parameters
 	params["page"] = fmt.Sprintf("%d", opts.Page)
 	params["size"] = fmt.Sprintf("%d", opts.Size)
@@ -77,7 +83,11 @@ func (p *PipelineService) List(ctx context.Context, scope dto.Scope, opts *dto.P
 	return response, nil
 }
 
-func (p *PipelineService) ListExecutions(ctx context.Context, scope dto.Scope, opts *dto.PipelineExecutionOptions) (*dto.ListOutput[dto.PipelineExecution], error) {
+func (p *PipelineService) ListExecutions(
+	ctx context.Context,
+	scope dto.Scope,
+	opts *dto.PipelineExecutionOptions,
+) (*dto.ListOutput[dto.PipelineExecution], error) {
 	// Prepare query parameters
 	params := make(map[string]string)
 	addScope(scope, params)
@@ -130,7 +140,11 @@ func (p *PipelineService) ListExecutions(ctx context.Context, scope dto.Scope, o
 }
 
 // GetExecution retrieves details of a specific pipeline execution
-func (p *PipelineService) GetExecution(ctx context.Context, scope dto.Scope, planExecutionID string) (*dto.Entity[dto.PipelineExecution], error) {
+func (p *PipelineService) GetExecution(
+	ctx context.Context,
+	scope dto.Scope,
+	planExecutionID string,
+) (*dto.Entity[dto.PipelineExecution], error) {
 	path := fmt.Sprintf(pipelineExecutionGetPath, planExecutionID)
 
 	// Prepare query parameters
@@ -155,7 +169,11 @@ func (p *PipelineService) GetExecution(ctx context.Context, scope dto.Scope, pla
 	return result, nil
 }
 
-func (p *PipelineService) FetchExecutionURL(ctx context.Context, scope dto.Scope, pipelineID, planExecutionID string) (string, error) {
+func (p *PipelineService) FetchExecutionURL(
+	ctx context.Context,
+	scope dto.Scope,
+	pipelineID, planExecutionID string,
+) (string, error) {
 	path := pipelineExecutionPath
 
 	// Prepare query parameters
