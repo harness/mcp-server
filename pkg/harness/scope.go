@@ -17,8 +17,10 @@ func NoopPropertyOption() mcp.PropertyOption {
 // what is set in the env variables.
 func WithScope(config *config.Config, required bool) mcp.ToolOption {
 	opt := NoopPropertyOption()
+	verbiage := "Optional" // this helps with having the client not pass in bogus parameters
 	if required {
 		opt = mcp.Required()
+		verbiage = "Required"
 	}
 	return func(tool *mcp.Tool) {
 		defaultProjectOpt := NoopPropertyOption()
@@ -30,12 +32,12 @@ func WithScope(config *config.Config, required bool) mcp.ToolOption {
 			defaultProjectOpt = mcp.DefaultString(config.DefaultProjectID)
 		}
 		mcp.WithString("org_id",
-			mcp.Description("The ID of the organization."),
+			mcp.Description(fmt.Sprintf("%s ID of the organization.", verbiage)),
 			defaultOrgOpt,
 			opt,
 		)(tool)
 		mcp.WithString("project_id",
-			mcp.Description("The ID of the project."),
+			mcp.Description(fmt.Sprintf("%s ID of the project.", verbiage)),
 			defaultProjectOpt,
 			opt,
 		)(tool)
