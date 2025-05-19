@@ -7,7 +7,7 @@ import (
 
 func GetRef(scope dto.Scope, params ...string) string {
 	var result []string
-	ref := scope.GetScopeRef()
+	ref := scope.GetRef()
 	if ref != "" {
 		result = append(result, ref)
 	}

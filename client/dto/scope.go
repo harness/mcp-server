@@ -9,7 +9,7 @@ type Scope struct {
 	ProjectID string `json:"projectIdentifier"`
 }
 
-func (s Scope) GetScopeRef() string {
+func (s Scope) GetRef() string {
 	var result []string
 	if s.AccountID != "" {
 		result = append(result, s.AccountID)
