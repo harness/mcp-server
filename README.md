@@ -25,6 +25,14 @@ The server implements several toolsets:
 - `get_repository`: Get details of a specific repository
 - `list_repositories`: List repositories
 
+#### Registry Toolset
+- `get_registry`: Get details of a specific registry in Harness artifact registry
+- `list_artifact_files`: List files for a specific artifact version in a Harness artifact registry
+- `list_artifact_versions`: List artifact versions in a Harness artifact registry
+- `list_artifacts`: List artifacts in a Harness artifact registry
+- `list_registries`: List registries in Harness artifact registry
+
+
 #### Logs Toolset
 - `download_execution_logs`: Download logs for a pipeline execution
 

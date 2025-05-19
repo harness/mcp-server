@@ -5,16 +5,11 @@ import (
 	"strings"
 )
 
-func GetScopeRef(scope dto.Scope, params ...string) string {
-	result := []string{}
-	if len(scope.AccountID) > 0 {
-		result = append(result, scope.AccountID)
-	}
-	if len(scope.OrgID) > 0 {
-		result = append(result, scope.OrgID)
-	}
-	if len(scope.ProjectID) > 0 {
-		result = append(result, scope.ProjectID)
+func GetRef(scope dto.Scope, params ...string) string {
+	var result []string
+	ref := scope.GetScopeRef()
+	if ref != "" {
+		result = append(result, ref)
 	}
 	for _, param := range params {
 		result = append(result, param)

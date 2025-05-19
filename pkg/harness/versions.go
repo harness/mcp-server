@@ -15,10 +15,13 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-// ListVersionsTool creates a tool for listing artifact versions in a registry
-func ListVersionsTool(config *config.Config, client *client.Client) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("list_versions",
-			mcp.WithDescription("List artifact versions in a Harness artifact registry."),
+// ListArtifactVersionsTool creates a tool for listing artifact versions in a registry
+func ListArtifactVersionsTool(config *config.Config, client *client.Client) (
+	tool mcp.Tool,
+	handler server.ToolHandlerFunc,
+) {
+	return mcp.NewTool("list_artifact_versions",
+			mcp.WithDescription("List artifact versions in a Harness artifact registry"),
 			mcp.WithString("registry",
 				mcp.Required(),
 				mcp.Description("The name of the registry"),
@@ -27,19 +30,11 @@ func ListVersionsTool(config *config.Config, client *client.Client) (tool mcp.To
 				mcp.Required(),
 				mcp.Description("The name of the artifact"),
 			),
-			mcp.WithNumber("page",
-				mcp.DefaultNumber(0),
-				mcp.Description("Page number for pagination - page 0 is the first page"),
-				mcp.Min(0),
-			),
-			mcp.WithNumber("size",
-				mcp.DefaultNumber(10),
-				mcp.Description("Number of items per page"),
-			),
 			mcp.WithString("search",
 				mcp.Description("Optional search term to filter versions"),
 			),
 			WithScope(config, false),
+			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			log.Println("Listing artifact versions")
@@ -56,23 +51,13 @@ func ListVersionsTool(config *config.Config, client *client.Client) (tool mcp.To
 
 			params := &ar.GetAllArtifactVersionsParams{}
 
-			// Handle pagination
-			page, err := OptionalParam[float64](request, "page")
+			pageInt, sizeInt, err := fetchPagination(request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			pageInt := int64(page)
-			params.Page = &pageInt
-
-			size, err := OptionalParam[float64](request, "size")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			sizeInt := int64(size)
-			if sizeInt == 0 {
-				sizeInt = 10
-			}
-			params.Size = &sizeInt
+			pageInt64, sizeInt64 := int64(pageInt), int64(sizeInt)
+			params.Page = &pageInt64
+			params.Size = &sizeInt64
 
 			// Handle search parameter
 			search, ok, err := OptionalParamOK[string](request, "search")
@@ -87,36 +72,36 @@ func ListVersionsTool(config *config.Config, client *client.Client) (tool mcp.To
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			registryFullRef := utils.GetScopeRef(scope, registryRef)
-
-			log.Printf("Listing versions for registry: %s, artifact: %s, size: %d, page: %d", registryFullRef,
-				artifactRef, *params.Size, *params.Page)
+			registryFullRef := utils.GetRef(scope, registryRef)
 
 			// Call the GetAllArtifactVersions API
 			response, err := client.Registry.GetAllArtifactVersionsWithResponse(ctx, registryFullRef, artifactRef,
 				params)
 			if err != nil {
-				return nil, fmt.Errorf("failed to list artifact versions: %w", err)
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			if response.JSON200 == nil {
-				return nil, fmt.Errorf("failed to list artifact versions: unexpected response status %d",
-					response.StatusCode())
+				return mcp.NewToolResultError(fmt.Errorf("failed to list artifact versions: unexpected response status %d",
+					response.StatusCode()).Error()), nil
 			}
 
 			r, err := json.Marshal(response.JSON200.Data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal versions data: %w", err)
+				return mcp.NewToolResultError(fmt.Errorf("failed to marshal versions data: %w", err).Error()), nil
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
 		}
 }
 
-// ListFilesTool creates a tool for listing files for a specific artifact version in a registry
-func ListFilesTool(config *config.Config, client *client.Client) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("list_files",
-			mcp.WithDescription("List files for a specific artifact version in a Harness artifact registry."),
+// ListArtifactFilesTool creates a tool for listing files for a specific artifact version in a registry
+func ListArtifactFilesTool(config *config.Config, client *client.Client) (
+	tool mcp.Tool,
+	handler server.ToolHandlerFunc,
+) {
+	return mcp.NewTool("list_artifact_files",
+			mcp.WithDescription("List files for a specific artifact version in a Harness artifact registry"),
 			mcp.WithString("registry",
 				mcp.Required(),
 				mcp.Description("The name of the registry"),
@@ -129,22 +114,16 @@ func ListFilesTool(config *config.Config, client *client.Client) (tool mcp.Tool,
 				mcp.Required(),
 				mcp.Description("The version of the artifact"),
 			),
-			mcp.WithNumber("page",
-				mcp.DefaultNumber(0),
-				mcp.Description("Page number for pagination - page 0 is the first page"),
-				mcp.Min(0),
-			),
-			mcp.WithNumber("size",
-				mcp.DefaultNumber(10),
-				mcp.Description("Number of items per page"),
-			),
 			mcp.WithString("sort_order",
-				mcp.Description("Optional sort order (asc or desc)"),
+				mcp.Description("Optional sort order"),
+				mcp.Enum("asc", "desc"),
 			),
 			mcp.WithString("sort_field",
 				mcp.Description("Optional field to sort by"),
+				mcp.Enum("updatedAt"),
 			),
 			WithScope(config, false),
+			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			log.Println("Listing artifact files")
@@ -166,23 +145,13 @@ func ListFilesTool(config *config.Config, client *client.Client) (tool mcp.Tool,
 
 			params := &ar.GetArtifactFilesParams{}
 
-			// Handle pagination
-			page, err := OptionalParam[float64](request, "page")
+			pageInt, sizeInt, err := fetchPagination(request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			pageInt := int64(page)
-			params.Page = &pageInt
-
-			size, err := OptionalParam[float64](request, "size")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			sizeInt := int64(size)
-			if sizeInt == 0 {
-				sizeInt = 10
-			}
-			params.Size = &sizeInt
+			pageInt64, sizeInt64 := int64(pageInt), int64(sizeInt)
+			params.Page = &pageInt64
+			params.Size = &sizeInt64
 
 			// Handle sort options
 			sortOrder, ok, err := OptionalParamOK[string](request, "sort_order")
@@ -205,26 +174,23 @@ func ListFilesTool(config *config.Config, client *client.Client) (tool mcp.Tool,
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			registryFullRef := utils.GetScopeRef(scope, registryRef)
-
-			log.Printf("Listing files for registry: %s, artifact: %s, version: %s, size: %d, page: %d",
-				registryFullRef, artifactRef, versionRef, *params.Size, *params.Page)
+			registryFullRef := utils.GetRef(scope, registryRef)
 
 			// Call the GetArtifactFiles API
 			response, err := client.Registry.GetArtifactFilesWithResponse(ctx, registryFullRef, artifactRef, versionRef,
 				params)
 			if err != nil {
-				return nil, fmt.Errorf("failed to list artifact files: %w", err)
+				return mcp.NewToolResultError(fmt.Errorf("failed to list artifact files: %w", err).Error()), nil
 			}
 
 			if response.JSON200 == nil {
-				return nil, fmt.Errorf("failed to list artifact files: unexpected response status %d",
-					response.StatusCode())
+				return mcp.NewToolResultError(fmt.Errorf("failed to list artifact files: unexpected response status %d",
+					response.StatusCode()).Error()), nil
 			}
 
 			r, err := json.Marshal(response.JSON200)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal files data: %w", err)
+				return mcp.NewToolResultError(fmt.Errorf("failed to marshal files data: %w", err).Error()), nil
 			}
 
 			return mcp.NewToolResultText(string(r)), nil

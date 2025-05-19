@@ -49,8 +49,8 @@ func InitToolsets(client *client.Client, config *config.Config) (*toolsets.Tools
 			toolsets.NewServerTool(GetRegistryTool(config, client)),
 			toolsets.NewServerTool(ListRegistriesTool(config, client)),
 			toolsets.NewServerTool(ListArtifactsTool(config, client)),
-			toolsets.NewServerTool(ListVersionsTool(config, client)),
-			toolsets.NewServerTool(ListFilesTool(config, client)),
+			toolsets.NewServerTool(ListArtifactVersionsTool(config, client)),
+			toolsets.NewServerTool(ListArtifactFilesTool(config, client)),
 		)
 
 	// Create the logs toolset
