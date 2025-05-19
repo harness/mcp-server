@@ -8,7 +8,10 @@ The Harness MCP Server is a [Model Context Protocol (MCP)](https://modelcontextp
 
 The server implements several toolsets:
 
-#### Pipelines Toolset
+#### Pipelines Toolset 
+
+Toolset Name: `pipelines`
+
 - `get_pipeline`: Get details of a specific pipeline
 - `list_pipelines`: List pipelines in a repository
 - `get_execution`: Get details of a specific pipeline execution
@@ -16,12 +19,18 @@ The server implements several toolsets:
 - `fetch_execution_url`: Fetch the execution URL for a pipeline execution
 
 #### Pull Requests Toolset
+
+Toolset Name: `pullrequests`
+
 - `get_pull_request`: Get details of a specific pull request
 - `list_pull_requests`: List pull requests in a repository
 - `get_pull_request_checks`: Get status checks for a specific pull request
 - `create_pull_request`: Create a new pull request
 
 #### Repositories Toolset
+
+Toolset Name: `repositories`
+
 - `get_repository`: Get details of a specific repository
 - `list_repositories`: List repositories
 
@@ -34,6 +43,9 @@ The server implements several toolsets:
 
 
 #### Logs Toolset
+
+Toolset Name: `logs`
+
 - `download_execution_logs`: Download logs for a pipeline execution
 
 ## Prerequisites
