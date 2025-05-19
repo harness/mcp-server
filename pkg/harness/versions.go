@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
-
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/ar"
 	"github.com/harness/harness-mcp/pkg/utils"
@@ -37,8 +35,6 @@ func ListArtifactVersionsTool(config *config.Config, client *client.Client) (
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			log.Println("Listing artifact versions")
-
 			registryRef, err := requiredParam[string](request, "registry")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -126,8 +122,6 @@ func ListArtifactFilesTool(config *config.Config, client *client.Client) (
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			log.Println("Listing artifact files")
-
 			registryRef, err := requiredParam[string](request, "registry")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil

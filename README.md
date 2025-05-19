@@ -34,7 +34,10 @@ Toolset Name: `repositories`
 - `get_repository`: Get details of a specific repository
 - `list_repositories`: List repositories
 
-#### Registry Toolset
+#### Registries Toolset
+
+Toolset Name: `registries`
+
 - `get_registry`: Get details of a specific registry in Harness artifact registry
 - `list_artifact_files`: List files for a specific artifact version in a Harness artifact registry
 - `list_artifact_versions`: List artifact versions in a Harness artifact registry
