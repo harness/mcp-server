@@ -58,7 +58,7 @@ Toolset Name: `logs`
 
 ## Quickstart
 
-### Build from source
+### Build from Source
 
 1. Clone the repository:
 ```bash
@@ -74,6 +74,19 @@ go build -o cmd/harness-mcp-server/harness-mcp-server ./cmd/harness-mcp-server
 3. Run the server:
 ```bash
 HARNESS_API_KEY=your_api_key HARNESS_DEFAULT_ORG_ID=your_org_id HARNESS_DEFAULT_PROJECT_ID=your_project_id ./cmd/harness-mcp-server/harness-mcp-server stdio
+```
+
+### Use Docker Image
+
+Alternatively, you can use the pre-built Docker image:
+
+```bash
+docker run -i --rm \
+  -e HARNESS_API_KEY=your_api_key \
+  -e HARNESS_DEFAULT_ORG_ID=your_org_id \
+  -e HARNESS_DEFAULT_PROJECT_ID=your_project_id \
+  -e HARNESS_BASE_URL=your_base_url \
+  harness/mcp-server stdio
 ```
 
 ### Claude Desktop Configuration
@@ -113,12 +126,47 @@ To use the Harness MCP Server with Windsurf:
 
 1. Add the server configuration to your Windsurf config file:
 
+### Using Local Binary
+
 ```json
 {
   "mcpServers": {
     "harness": {
       "command": "/path/to/harness-mcp-server",
       "args": ["stdio"],
+      "env": {
+        "HARNESS_API_KEY": "<YOUR_API_KEY>",
+        "HARNESS_DEFAULT_ORG_ID": "<YOUR_ORG_ID>",
+        "HARNESS_DEFAULT_PROJECT_ID": "<YOUR_PROJECT_ID>",
+        "HARNESS_BASE_URL": "<YOUR_BASE_URL>"
+      }
+    }
+  }
+}
+```
+
+### Using Docker Image
+
+```json
+{
+  "mcpServers": {
+    "harness": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "HARNESS_API_KEY",
+        "-e",
+        "HARNESS_DEFAULT_ORG_ID",
+        "-e",
+        "HARNESS_DEFAULT_PROJECT_ID",
+        "-e",
+        "HARNESS_BASE_URL",
+        "harness/mcp-server",
+        "stdio"
+      ],
       "env": {
         "HARNESS_API_KEY": "<YOUR_API_KEY>",
         "HARNESS_DEFAULT_ORG_ID": "<YOUR_ORG_ID>",
@@ -172,7 +220,3 @@ npx @modelcontextprotocol/inspector /path/to/harness-mcp-server stdio
 ```
 
 Upon launching, the Inspector will display a URL that you can access in your browser to begin debugging.
-
-## To do
-
-Add Docker image for easier use
