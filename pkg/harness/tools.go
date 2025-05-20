@@ -2,7 +2,6 @@ package harness
 
 import (
 	"context"
-
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/toolsets"
@@ -45,6 +44,15 @@ func InitToolsets(client *client.Client, config *config.Config) (*toolsets.Tools
 			toolsets.NewServerTool(ListRepositoriesTool(config, client)),
 		)
 
+	registries := toolsets.NewToolset("registries", "Harness Artifact Registry related tools").
+		AddReadTools(
+			toolsets.NewServerTool(GetRegistryTool(config, client)),
+			toolsets.NewServerTool(ListRegistriesTool(config, client)),
+			toolsets.NewServerTool(ListArtifactsTool(config, client)),
+			toolsets.NewServerTool(ListArtifactVersionsTool(config, client)),
+			toolsets.NewServerTool(ListArtifactFilesTool(config, client)),
+		)
+
 	// Create the logs toolset
 	logs := toolsets.NewToolset("logs", "Harness Logs related tools").
 		AddReadTools(
@@ -55,6 +63,7 @@ func InitToolsets(client *client.Client, config *config.Config) (*toolsets.Tools
 	tsg.AddToolset(pullrequests)
 	tsg.AddToolset(pipelines)
 	tsg.AddToolset(repositories)
+	tsg.AddToolset(registries)
 	tsg.AddToolset(logs)
 
 	// Enable requested toolsets
