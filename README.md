@@ -51,8 +51,8 @@ Toolset Name: `logs`
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/vistaarjuneja/harness-mcp.git
-cd harness-mcp
+git clone https://github.com/harness/mcp-server.git
+cd mcp-server
 ```
 
 2. Build the binary:
