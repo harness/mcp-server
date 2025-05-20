@@ -54,9 +54,14 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.Client) (to
 			// Check if logs directory exists, if not create it
 			_, err = os.Stat(logsDirectory)
 			if err != nil {
-				createErr := os.Mkdir(logsDirectory, 0755)
-				if createErr != nil {
-					return mcp.NewToolResultError(createErr.Error()), nil
+				// Directory does not exist, create it
+				if os.IsNotExist(err) {
+					createErr := os.Mkdir(logsDirectory, 0755)
+					if createErr != nil {
+						return mcp.NewToolResultError(createErr.Error()), nil
+					}
+				} else {
+					return mcp.NewToolResultError(err.Error()), nil
 				}
 			}
 
