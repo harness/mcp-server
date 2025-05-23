@@ -9,20 +9,31 @@ import (
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+<<<<<<< HEAD
 	"strconv"
+=======
+>>>>>>> 855cdf8 ([CCM-tools] CCM Overview)
 	"time"
 )
 
 // GetCcmOverview creates a tool for getting a ccm overview from an account
+<<<<<<< HEAD
 func GetCcmOverviewTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	now := time.Now()
 	defaultStartTime := now.AddDate(0, 0, -60).UnixMilli()
 	defaultEndTime := now.UnixMilli()
+=======
+func GetCcmOverview(config *config.Config, client *client.Client) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	now := time.Now()
+	defaultStartTime := now.AddDate(0, 0, -60).Unix()
+	defaultEndTime := now.Unix()
+>>>>>>> 855cdf8 ([CCM-tools] CCM Overview)
 	return mcp.NewTool("get_ccm_overview",
 			mcp.WithDescription("Get an overview from an specific account in Harness Cloud Cost Management"),
 			mcp.WithString("accountIdentifier",
 				mcp.Description("The account identifier"),
 			),
+<<<<<<< HEAD
 			mcp.WithString("startTime",
 				mcp.DefaultString(fmt.Sprintf("%d", defaultStartTime)),
 				mcp.Description("Start time of the period in Unix epoch **milliseconds** (e.g. 1743465600000 for April 1, 2025)"),
@@ -30,6 +41,15 @@ func GetCcmOverviewTool(config *config.Config, client *client.CloudCostManagemen
 			mcp.WithString("endTime",
 				mcp.DefaultString(fmt.Sprintf("%d", defaultEndTime)),
 				mcp.Description("End time of the period in Unix epoch **milliseconds** (e.g. 1743465600000 for April 1, 2025)"),
+=======
+			mcp.WithNumber("startTime",
+				mcp.DefaultNumber(float64(defaultStartTime)),
+				mcp.Description("Start time of the period"),
+			),
+			mcp.WithNumber("endTime",
+				mcp.DefaultNumber(float64(defaultEndTime)),
+				mcp.Description("End time of the period"),
+>>>>>>> 855cdf8 ([CCM-tools] CCM Overview)
 			),
 			mcp.WithString("groupBy",
 				mcp.Description("Optional type to group by period"),
