@@ -53,6 +53,11 @@ func InitToolsets(client *client.Client, config *config.Config) (*toolsets.Tools
 			toolsets.NewServerTool(ListArtifactFilesTool(config, client)),
 		)
 
+	cloudcostmanagement := toolsets.NewToolset("cloudcostmanagement", "Harness Cloud Cost Management related tools").
+		AddReadTools(
+			toolsets.NewServerTool(GetCcmOverview(config, client)),
+		)
+
 	// Create the logs toolset
 	logs := toolsets.NewToolset("logs", "Harness Logs related tools").
 		AddReadTools(
@@ -64,6 +69,7 @@ func InitToolsets(client *client.Client, config *config.Config) (*toolsets.Tools
 	tsg.AddToolset(pipelines)
 	tsg.AddToolset(repositories)
 	tsg.AddToolset(registries)
+	tsg.AddToolset(cloudcostmanagement)
 	tsg.AddToolset(logs)
 
 	// Enable requested toolsets

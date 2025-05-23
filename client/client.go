@@ -48,12 +48,13 @@ type Client struct {
 	APIKey string
 
 	// Services used for talking to different Harness entities
-	Connectors   *ConnectorService
-	PullRequests *PullRequestService
-	Pipelines    *PipelineService
-	Repositories *RepositoryService
-	Logs         *LogService
-	Registry     *ar.ClientWithResponses
+	Connectors          *ConnectorService
+	PullRequests        *PullRequestService
+	Pipelines           *PipelineService
+	Repositories        *RepositoryService
+	Logs                *LogService
+	Registry            *ar.ClientWithResponses
+	CloudCostManagement *CloudCostManagementService
 }
 
 type service struct {
@@ -98,6 +99,7 @@ func (c *Client) initialize() error {
 	c.Pipelines = &PipelineService{client: c}
 	c.Repositories = &RepositoryService{client: c}
 	c.Logs = &LogService{client: c}
+	c.CloudCostManagement = &CloudCostManagementService{client: c}
 
 	// TODO: Replace it with harness-go-sdk
 	arClient, err := ar.NewClientWithResponses(c.BaseURL.String()+"/har/api/v1", ar.WithHTTPClient(c.client),
