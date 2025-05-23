@@ -41,8 +41,23 @@ type Client struct {
 	// set to a domain endpoint to use with custom Harness installations
 	BaseURL *url.URL
 
+<<<<<<< HEAD
 	// AuthProvider used for authentication
 	AuthProvider auth.Provider
+=======
+	// API key for authentication
+	// TODO: We can abstract out the auth provider
+	APIKey string
+
+	// Services used for talking to different Harness entities
+	Connectors          *ConnectorService
+	PullRequests        *PullRequestService
+	Pipelines           *PipelineService
+	Repositories        *RepositoryService
+	Logs                *LogService
+	Registry            *ar.ClientWithResponses
+	CloudCostManagement *CloudCostManagementService
+>>>>>>> 855cdf8 ([CCM-tools] CCM Overview)
 }
 
 type service struct {
@@ -74,6 +89,39 @@ func NewWithAuthProvider(uri string, authProvider auth.Provider, timeout ...time
 	return c, nil
 }
 
+<<<<<<< HEAD
+=======
+func (c *Client) initialize() error {
+	if c.client == nil {
+		c.client = defaultHTTPClient()
+	}
+	if c.BaseURL == nil {
+		baseURL, err := url.Parse(defaultBaseURL)
+		if err != nil {
+			return err
+		}
+		c.BaseURL = baseURL
+	}
+
+	c.Connectors = &ConnectorService{client: c}
+	c.PullRequests = &PullRequestService{client: c}
+	c.Pipelines = &PipelineService{client: c}
+	c.Repositories = &RepositoryService{client: c}
+	c.Logs = &LogService{client: c}
+	c.CloudCostManagement = &CloudCostManagementService{client: c}
+
+	// TODO: Replace it with harness-go-sdk
+	arClient, err := ar.NewClientWithResponses(c.BaseURL.String()+"/har/api/v1", ar.WithHTTPClient(c.client),
+		ar.WithRequestEditorFn(getEditor(c.APIKey)))
+	if err != nil {
+		return err
+	}
+	c.Registry = arClient
+
+	return nil
+}
+
+>>>>>>> 855cdf8 ([CCM-tools] CCM Overview)
 // Get is a simple helper that builds up the request URL, adding the path and parameters.
 // The response from the request is unmarshalled into the data parameter.
 func (c *Client) Get(
