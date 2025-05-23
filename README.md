@@ -45,6 +45,7 @@ Toolset Name: `registries`
 - `list_artifacts`: List artifacts in a Harness artifact registry
 - `list_registries`: List registries in Harness artifact registry
 
+<<<<<<< HEAD
 #### Dashboards Toolset
 
 Toolset Name: `dashboards`
@@ -52,6 +53,8 @@ Toolset Name: `dashboards`
 - `list_dashboards`: Lists all available Harness dashboards
 - `get_dashboard_data`: Retrieves the data from a specific Harness dashboard
 
+=======
+>>>>>>> a841d9c ([CCM-tools] CCM Overview)
 #### Cloud Cost Management Toolset
 
 Toolset Name: `cloudcostmanagement`
