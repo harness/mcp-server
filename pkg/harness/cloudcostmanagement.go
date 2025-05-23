@@ -57,11 +57,10 @@ func GetCcmOverviewTool(config *config.Config, client *client.CloudCostManagemen
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-
 			startTime, err :=  utils.FormatMMDDYYYYToUnixMillis(startTimeStr)
 			endTime, err := utils.FormatMMDDYYYYToUnixMillis(endTimeStr)
-
 			groupBy, err := requiredParam[string](request, "groupBy")
+
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
