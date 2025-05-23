@@ -12,9 +12,12 @@ const (
 type PeriodType string
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 // CCMBaseResponse represents a basic ccm response.
 =======
 
+=======
+>>>>>>> 6c850ff ([CCM-tools] CCM Overview)
 // CEView represents a basic ccm response.
 // The `data` field contains the response data.
 >>>>>>> 1554fc7 (Added List Cloud Cost Management tool)
