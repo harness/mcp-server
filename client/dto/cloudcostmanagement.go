@@ -11,7 +11,6 @@ const (
 
 type PeriodType string
 
-
 // CEView represents a basic ccm response.
 // The `data` field contains the response data.
 type CCMBaseResponse struct {
