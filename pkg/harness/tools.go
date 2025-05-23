@@ -53,6 +53,13 @@ func InitToolsets(client *client.Client, config *config.Config) (*toolsets.Tools
 			toolsets.NewServerTool(ListArtifactFilesTool(config, client)),
 		)
 
+	// Create the templates toolset
+	templates := toolsets.NewToolset("templates", "Harness Template related tools").
+		AddReadTools(
+			toolsets.NewServerTool(ListTemplatesTool(config, client)),
+			toolsets.NewServerTool(GetTemplateTool(config, client)),
+		)
+
 	// Create the logs toolset
 	logs := toolsets.NewToolset("logs", "Harness Logs related tools").
 		AddReadTools(
@@ -64,6 +71,7 @@ func InitToolsets(client *client.Client, config *config.Config) (*toolsets.Tools
 	tsg.AddToolset(pipelines)
 	tsg.AddToolset(repositories)
 	tsg.AddToolset(registries)
+	tsg.AddToolset(templates)
 	tsg.AddToolset(logs)
 
 	// Enable requested toolsets
