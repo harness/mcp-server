@@ -45,6 +45,11 @@ Toolset Name: `registries`
 - `list_artifacts`: List artifacts in a Harness artifact registry
 - `list_registries`: List registries in Harness artifact registry
 
+#### Cloud Cost Management Toolset
+
+Toolset Name: `cloudcostmanagement`
+
+- `get_ccm_overview`: Get the ccm overview of a specific account
 
 #### Logs Toolset
 
