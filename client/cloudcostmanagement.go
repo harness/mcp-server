@@ -12,6 +12,7 @@ const (
 	ccmGetOverviewPath = ccmBasePath + "/overview?accountIdentifier=%s&startTime=%d&endTime=%d&groupBy=%s"
 	ccmCostCategoryListPath = ccmBasePath + "/business-mapping/filter-panel?accountIdentifier=%s"
 	ccmCostCategoryDetailListPath = ccmBasePath + "/business-mapping?accountIdentifier=%s" // This endpoint lists cost categories
+	ccmCostCategoryListPath = ccmBasePath + "/business-mapping/filter-panel?accountIdentifier=%s" // This endpoint lists cost categories
 )
 
 type CloudCostManagementService struct {
@@ -58,6 +59,7 @@ func (r *CloudCostManagementService) ListCostCategories(ctx context.Context, sco
 
 	return costCategories, nil
 }
+<<<<<<< HEAD
 
 func (r *CloudCostManagementService) ListCostCategoriesDetail(ctx context.Context, scope dto.Scope, opts *dto.CCMListCostCategoriesDetailOptions) (*dto.CCMCostCategoryDetailList, error) {
 	path := ccmCostCategoryDetailListPath
