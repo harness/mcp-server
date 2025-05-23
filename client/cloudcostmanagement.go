@@ -9,6 +9,7 @@ import (
 const (
 	ccmBasePath        = "ccm/api"
 	ccmGetOverviewPath = ccmBasePath + "/overview?accountIdentifier=%s&startTime=%d&endTime=%d&groupBy=%s"
+<<<<<<< HEAD
 	ccmCostCategoryListPath = ccmBasePath + "/business-mapping/filter-panel?accountIdentifier=%s" // This endpoint lists cost categories
 
 //business-mapping/filter-panel?accountIdentifier=${ACCOUNT_ID}&costCategory=string&search=string"
@@ -16,6 +17,12 @@ const (
 
 type CloudCostManagementService struct {
 	Client *Client
+=======
+)
+
+type CloudCostManagementService struct {
+	client *Client
+>>>>>>> 855cdf8 ([CCM-tools] CCM Overview)
 }
 
 func (c *CloudCostManagementService) GetOverview(ctx context.Context, accID string, startTime int64, endTime int64, groupBy string) (*dto.CEView, error) {
@@ -23,13 +30,18 @@ func (c *CloudCostManagementService) GetOverview(ctx context.Context, accID stri
 	params := make(map[string]string)
 
 	ccmOverview := new(dto.CEView)
+<<<<<<< HEAD
 	err := c.Client.Get(ctx, path, params, nil, ccmOverview)
+=======
+	err := c.client.Get(ctx, path, params, nil, ccmOverview)
+>>>>>>> 855cdf8 ([CCM-tools] CCM Overview)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ccm overview: %w", err)
 	}
 
 	return ccmOverview, nil
 }
+<<<<<<< HEAD
 
 func (r *CloudCostManagementService) ListCostCategories(ctx context.Context, scope dto.Scope, opts *dto.CcmListCostCategoriesOptions) (*dto.CCMCostCategoryList, error) {
 	path := ccmCostCategoryListPath
@@ -58,3 +70,5 @@ func (r *CloudCostManagementService) ListCostCategories(ctx context.Context, sco
 
 	return costCategories, nil
 }
+=======
+>>>>>>> 855cdf8 ([CCM-tools] CCM Overview)
