@@ -20,6 +20,8 @@ const (
 )
 
 // CCMBaseResponse represents a basic ccm response.
+// CEView represents a basic ccm response.
+// The `data` field contains the response data.
 type CCMBaseResponse struct {
 	Status        string     `json:"state,omitempty"`
 	Message       string     `json:"message,omitempty"`
