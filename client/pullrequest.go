@@ -9,11 +9,12 @@ import (
 )
 
 const (
-	pullRequestBasePath   = "code/api/v1/repos"
-	pullRequestGetPath    = pullRequestBasePath + "/%s/pullreq/%d"
-	pullRequestListPath   = pullRequestBasePath + "/%s/pullreq"
-	pullRequestCreatePath = pullRequestBasePath + "/%s/pullreq"
-	pullRequestChecksPath = pullRequestBasePath + "/%s/pullreq/%d/checks"
+	pullRequestBasePath     = "code/api/v1/repos"
+	pullRequestGetPath      = pullRequestBasePath + "/%s/pullreq/%d"
+	pullRequestListPath     = pullRequestBasePath + "/%s/pullreq"
+	pullRequestCreatePath   = pullRequestBasePath + "/%s/pullreq"
+	pullRequestChecksPath   = pullRequestBasePath + "/%s/pullreq/%d/checks"
+	pullRequestActivitiesPath = pullRequestBasePath + "/%s/pullreq/%d/activities"
 )
 
 type PullRequestService struct {
@@ -155,4 +156,19 @@ func (p *PullRequestService) GetChecks(ctx context.Context, scope dto.Scope, rep
 	}
 
 	return checks, nil
+}
+
+// GetActivities retrieves the activities (including comments) for a specific pull request
+func (p *PullRequestService) GetActivities(ctx context.Context, scope dto.Scope, repoID string, prNumber int) (*dto.PullRequestActivitiesResponse, error) {
+	path := fmt.Sprintf(pullRequestActivitiesPath, repoID, prNumber)
+	params := make(map[string]string)
+	addScope(scope, params)
+
+	activities := new(dto.PullRequestActivitiesResponse)
+	err := p.client.Get(ctx, path, params, nil, activities)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pull request activities: %w", err)
+	}
+
+	return activities, nil
 }

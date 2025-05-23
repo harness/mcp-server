@@ -346,3 +346,48 @@ func CreatePullRequestTool(config *config.Config, client *client.Client) (tool m
 			return mcp.NewToolResultText(string(r)), nil
 		}
 }
+
+// GetPullRequestActivitiesTool creates a tool for getting activities (including comments) for a specific pull request
+func GetPullRequestActivitiesTool(config *config.Config, client *client.Client) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("get_pull_request_activities",
+			mcp.WithDescription("Get activities and comments for a specific pull request in a Harness repository."),
+			mcp.WithString("repo_id",
+				mcp.Required(),
+				mcp.Description("The ID of the repository"),
+			),
+			mcp.WithNumber("pr_number",
+				mcp.Required(),
+				mcp.Description("The number of the pull request"),
+			),
+			WithScope(config, true),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			repoID, err := requiredParam[string](request, "repo_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			prNumberFloat, err := requiredParam[float64](request, "pr_number")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			prNumber := int(prNumberFloat)
+
+			scope, err := fetchScope(config, request, true)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.PullRequests.GetActivities(ctx, scope, repoID, prNumber)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get pull request activities: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal pull request activities: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}

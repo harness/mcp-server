@@ -158,3 +158,23 @@ type PullRequestOptions struct {
 	AuthorID      int      `json:"author_id,omitempty"`
 	IncludeChecks bool     `json:"include_checks,omitempty"`
 }
+
+// PullRequestActivity represents an activity on a pull request
+type PullRequestActivity struct {
+	ID        int               `json:"id,omitempty"`
+	Type      string            `json:"type,omitempty"`
+	Created   int64             `json:"created,omitempty"`
+	Updated   int64             `json:"updated,omitempty"`
+	Actor     PullRequestAuthor `json:"actor,omitempty"`
+	Action    string            `json:"action,omitempty"`
+	Content   string            `json:"content,omitempty"`
+	ParentID  int               `json:"parent_id,omitempty"`
+	IsDeleted bool              `json:"is_deleted,omitempty"`
+	Metadata  interface{}       `json:"metadata,omitempty"`
+}
+
+// PullRequestActivitiesResponse represents the response from the activities API
+type PullRequestActivitiesResponse struct {
+	Activities []PullRequestActivity `json:"activities,omitempty"`
+	Total      int                   `json:"total,omitempty"`
+}
