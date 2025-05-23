@@ -52,6 +52,7 @@ type Client struct {
 	PullRequests *PullRequestService
 	Pipelines    *PipelineService
 	Repositories *RepositoryService
+	Templates    *TemplateService
 	Logs         *LogService
 	Registry     *ar.ClientWithResponses
 }
@@ -97,6 +98,7 @@ func (c *Client) initialize() error {
 	c.PullRequests = &PullRequestService{client: c}
 	c.Pipelines = &PipelineService{client: c}
 	c.Repositories = &RepositoryService{client: c}
+	c.Templates = &TemplateService{client: c}
 	c.Logs = &LogService{client: c}
 
 	// TODO: Replace it with harness-go-sdk
