@@ -1,14 +1,64 @@
-.idea
-cmd/harness-mcp-server/harness-mcp-server
-
-# VSCode
+# IDE and editors
+.idea/
 .vscode/*
 !.vscode/launch.json
+!.vscode/settings.json
+!.vscode/extensions.json
+*.swp
+*.swo
+*~
 
-
-# Added by goreleaser init:
-dist/
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+cmd/harness-mcp-server/harness-mcp-server
 __debug_bin*
 
-# Go
-vendor
+# Testing
+*.out
+*.test
+*.prof
+coverage.txt
+
+# Build & Release
+bin/
+dist/
+release/
+
+# Go specific
+vendor/
+
+# Dependencies
+go.work
+
+# Logs
+*.log
+logs/
+
+# OS specific
+.DS_Store
+.DS_Store?
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+._*
+.Spotlight-V100
+.Trashes
+
+# Environment variables
+.env
+*.env
+.envrc
+
+# Output of the go coverage tool
+*.cover
+
+# Project specific ignores
+/tmp
+
+# goreleaser
+dist/

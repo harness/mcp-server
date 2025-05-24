@@ -8,7 +8,10 @@ The Harness MCP Server is a [Model Context Protocol (MCP)](https://modelcontextp
 
 The server implements several toolsets:
 
-#### Pipelines Toolset
+#### Pipelines Toolset 
+
+Toolset Name: `pipelines`
+
 - `get_pipeline`: Get details of a specific pipeline
 - `list_pipelines`: List pipelines in a repository
 - `get_execution`: Get details of a specific pipeline execution
@@ -16,6 +19,9 @@ The server implements several toolsets:
 - `fetch_execution_url`: Fetch the execution URL for a pipeline execution
 
 #### Pull Requests Toolset
+
+Toolset Name: `pullrequests`
+
 - `get_pull_request`: Get details of a specific pull request
 - `list_pull_requests`: List pull requests in a repository
 - `get_pull_request_checks`: Get status checks for a specific pull request
@@ -23,10 +29,27 @@ The server implements several toolsets:
 - `create_pull_request`: Create a new pull request
 
 #### Repositories Toolset
+
+Toolset Name: `repositories`
+
 - `get_repository`: Get details of a specific repository
 - `list_repositories`: List repositories
 
+#### Registries Toolset
+
+Toolset Name: `registries`
+
+- `get_registry`: Get details of a specific registry in Harness artifact registry
+- `list_artifact_files`: List files for a specific artifact version in a Harness artifact registry
+- `list_artifact_versions`: List artifact versions in a Harness artifact registry
+- `list_artifacts`: List artifacts in a Harness artifact registry
+- `list_registries`: List registries in Harness artifact registry
+
+
 #### Logs Toolset
+
+Toolset Name: `logs`
+
 - `download_execution_logs`: Download logs for a pipeline execution
 
 ## Prerequisites
@@ -36,12 +59,12 @@ The server implements several toolsets:
 
 ## Quickstart
 
-### Build from source
+### Build from Source
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/vistaarjuneja/harness-mcp.git
-cd harness-mcp
+git clone https://github.com/harness/mcp-server.git
+cd mcp-server
 ```
 
 2. Build the binary:
@@ -51,7 +74,20 @@ go build -o cmd/harness-mcp-server/harness-mcp-server ./cmd/harness-mcp-server
 
 3. Run the server:
 ```bash
-HARNESS_API_KEY=your_api_key HARNESS_ACCOUNT_ID=your_account_id HARNESS_ORG_ID=your_org_id HARNESS_PROJECT_ID=your_project_id ./cmd/harness-mcp-server/harness-mcp-server stdio
+HARNESS_API_KEY=your_api_key HARNESS_DEFAULT_ORG_ID=your_org_id HARNESS_DEFAULT_PROJECT_ID=your_project_id ./cmd/harness-mcp-server/harness-mcp-server stdio
+```
+
+### Use Docker Image
+
+Alternatively, you can use the pre-built Docker image:
+
+```bash
+docker run -i --rm \
+  -e HARNESS_API_KEY=your_api_key \
+  -e HARNESS_DEFAULT_ORG_ID=your_org_id \
+  -e HARNESS_DEFAULT_PROJECT_ID=your_project_id \
+  -e HARNESS_BASE_URL=your_base_url \
+  harness/mcp-server stdio
 ```
 
 ### Claude Desktop Configuration
@@ -70,9 +106,8 @@ On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
         "args": ["stdio"],
         "env": {
           "HARNESS_API_KEY": "<YOUR_API_KEY>",
-          "HARNESS_ACCOUNT_ID": "<YOUR_ACCOUNT_ID>",
-          "HARNESS_ORG_ID": "<YOUR_ORG_ID>",
-          "HARNESS_PROJECT_ID": "<YOUR_PROJECT_ID>"
+          "HARNESS_DEFAULT_ORG_ID": "<YOUR_ORG_ID>",
+          "HARNESS_DEFAULT_PROJECT_ID": "<YOUR_PROJECT_ID>"
         }
       }
     }
@@ -92,6 +127,8 @@ To use the Harness MCP Server with Windsurf:
 
 1. Add the server configuration to your Windsurf config file:
 
+### Using Local Binary
+
 ```json
 {
   "mcpServers": {
@@ -100,10 +137,42 @@ To use the Harness MCP Server with Windsurf:
       "args": ["stdio"],
       "env": {
         "HARNESS_API_KEY": "<YOUR_API_KEY>",
-        "HARNESS_ACCOUNT_ID": "<YOUR_ACCOUNT_ID>",
-        "HARNESS_ORG_ID": "<YOUR_ORG_ID>",
-        "HARNESS_PROJECT_ID": "<YOUR_PROJECT_ID>",
-        "HARNESS_BASE_URL": "<YOUR_BASE_URL>",
+        "HARNESS_DEFAULT_ORG_ID": "<YOUR_ORG_ID>",
+        "HARNESS_DEFAULT_PROJECT_ID": "<YOUR_PROJECT_ID>",
+        "HARNESS_BASE_URL": "<YOUR_BASE_URL>"
+      }
+    }
+  }
+}
+```
+
+### Using Docker Image
+
+```json
+{
+  "mcpServers": {
+    "harness": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "HARNESS_API_KEY",
+        "-e",
+        "HARNESS_DEFAULT_ORG_ID",
+        "-e",
+        "HARNESS_DEFAULT_PROJECT_ID",
+        "-e",
+        "HARNESS_BASE_URL",
+        "harness/mcp-server",
+        "stdio"
+      ],
+      "env": {
+        "HARNESS_API_KEY": "<YOUR_API_KEY>",
+        "HARNESS_DEFAULT_ORG_ID": "<YOUR_ORG_ID>",
+        "HARNESS_DEFAULT_PROJECT_ID": "<YOUR_PROJECT_ID>",
+        "HARNESS_BASE_URL": "<YOUR_BASE_URL>"
       }
     }
   }
@@ -128,10 +197,9 @@ The Harness MCP Server supports the following command line arguments:
 
 Environment variables are prefixed with `HARNESS_`:
 
-- `HARNESS_API_KEY`: Harness API key (required)
-- `HARNESS_ACCOUNT_ID`: Harness account ID (required)
-- `HARNESS_ORG_ID`: Harness organization ID (optional, but required for some operations)
-- `HARNESS_PROJECT_ID`: Harness project ID (optional, but required for some operations)
+- `HARNESS_API_KEY`: Harness API key (required) - Account ID is automatically extracted from the API key
+- `HARNESS_DEFAULT_ORG_ID`: Default Harness organization ID (optional, if not specified it would need to be passed in the request if it's required for that operation)
+- `HARNESS_DEFAULT_PROJECT_ID`: Default Harness project ID (optional, if not specified it would need to be passed in the request if it's required for that operation)
 - `HARNESS_TOOLSETS`: Comma-separated list of toolsets to enable (default: "all")
 - `HARNESS_READ_ONLY`: Set to "true" to run in read-only mode
 - `HARNESS_LOG_FILE`: Path to log file
@@ -153,7 +221,3 @@ npx @modelcontextprotocol/inspector /path/to/harness-mcp-server stdio
 ```
 
 Upon launching, the Inspector will display a URL that you can access in your browser to begin debugging.
-
-## To do
-
-Add Docker image for easier use

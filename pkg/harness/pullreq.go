@@ -359,6 +359,26 @@ func GetPullRequestActivitiesTool(config *config.Config, client *client.Client) 
 				mcp.Required(),
 				mcp.Description("The number of the pull request"),
 			),
+			mcp.WithString("kind",
+				mcp.Description("Optional comma-separated kinds of the pull request activity to include in the result. Enum: \"change-comment\" \"comment\" \"system\""),
+			),
+			mcp.WithString("type",
+				mcp.Description("Optional comma-separated types of the pull request activity to include in the result. Enum: \"branch-delete\" \"branch-restore\" \"branch-update\" \"code-comment\" \"comment\" \"label-modify\" \"merge\" \"review-submit\" \"reviewer-add\" \"reviewer-delete\" \"state-change\" \"target-branch-change\" \"title-change\""),
+			),
+			mcp.WithNumber("after",
+				mcp.Description("The result should contain only entries created at and after this timestamp (unix millis)."),
+			),
+			mcp.WithNumber("before",
+				mcp.Description("The result should contain only entries created before this timestamp (unix millis)."),
+			),
+			mcp.WithNumber("page",
+				mcp.DefaultNumber(1),
+				mcp.Description("Page number for pagination"),
+			),
+			mcp.WithNumber("limit",
+				mcp.DefaultNumber(30),
+				mcp.Description("The maximum number of results to return (1-100)."),
+			),
 			WithScope(config, true),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -378,7 +398,65 @@ func GetPullRequestActivitiesTool(config *config.Config, client *client.Client) 
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			data, err := client.PullRequests.GetActivities(ctx, scope, repoID, prNumber)
+			// Create the options struct
+			opts := &dto.PullRequestActivityOptions{}
+
+			// Handle pagination
+			page, err := OptionalParam[float64](request, "page")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if page > 0 {
+				opts.Page = int(page)
+			}
+
+			limit, err := OptionalParam[float64](request, "limit")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if limit > 0 {
+				opts.Limit = int(limit)
+			}
+
+			// Handle filtering parameters
+			kindStr, err := OptionalParam[string](request, "kind")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if kindStr != "" {
+				opts.Kind = parseCommaSeparatedList(kindStr)
+			}
+
+			typeStr, err := OptionalParam[string](request, "type")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if typeStr != "" {
+				opts.Type = parseCommaSeparatedList(typeStr)
+			}
+
+			after, err := OptionalParam[float64](request, "after")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if after > 0 {
+				opts.After = int64(after)
+			}
+
+			before, err := OptionalParam[float64](request, "before")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if before > 0 {
+				opts.Before = int64(before)
+			}
+
+			// Set scope identifiers
+			opts.AccountIdentifier = scope.AccountID
+			opts.OrgIdentifier = scope.OrgID
+			opts.ProjectIdentifier = scope.ProjectID
+
+			data, err := client.PullRequests.GetActivities(ctx, scope, repoID, prNumber, opts)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get pull request activities: %w", err)
 			}

@@ -1,5 +1,7 @@
 package dto
 
+import "encoding/json"
+
 // PullRequest represents a pull request in the system
 type PullRequest struct {
 	Author            PullRequestAuthor       `json:"author,omitempty"`
@@ -161,18 +163,19 @@ type PullRequestOptions struct {
 
 // PullRequestActivity represents an activity on a pull request
 type PullRequestActivity struct {
-	ID          int               `json:"id,omitempty"`
-	Type        string            `json:"type,omitempty"`
-	Created     int64             `json:"created,omitempty"`
-	Updated     int64             `json:"updated,omitempty"`
-	Actor       PullRequestAuthor `json:"actor,omitempty"`
-	Action      string            `json:"action,omitempty"`
-	Content     string            `json:"content,omitempty"`
-	ParentID    int               `json:"parent_id,omitempty"`
-	IsDeleted   bool              `json:"is_deleted,omitempty"`
-	Kind        string            `json:"kind,omitempty"`
-	CodeComment CodeComment       `json:"code_comment,omitempty"`
-	Metadata    interface{}       `json:"metadata,omitempty"`
+	ID          int             `json:"id,omitempty"`
+	Type        string          `json:"type,omitempty"`
+	Created     int64           `json:"created,omitempty"`
+	Updated     int64           `json:"updated,omitempty"`
+	ParentID    int             `json:"parent_id,omitempty"`
+	RepoID      int64           `json:"repo_id"`
+	PullReqID   int64           `json:"pullreq_id"`
+	Kind        string          `json:"kind,omitempty"`
+	Text        string          `json:"text,omitempty"`
+	CodeComment CodeComment     `json:"code_comment,omitempty"`
+	Metadata    interface{}     `json:"metadata,omitempty"`
+	Resolved    int64           `json:"resolved,omitempty"`
+	PayloadRaw  json.RawMessage `json:"payload"`
 }
 
 // PullRequestActivitiesResponse represents the response from the activities API
@@ -189,4 +192,17 @@ type CodeComment struct {
 	SpanNew      int    `json:"span_new,omitempty"`
 	LineOld      int    `json:"line_old,omitempty"`
 	SpanOld      int    `json:"span_old,omitempty"`
+}
+
+// PullRequestActivityOptions defines options for listing PR activities
+type PullRequestActivityOptions struct {
+	AccountIdentifier  string   `json:"accountIdentifier,omitempty"`
+	OrgIdentifier      string   `json:"orgIdentifier,omitempty"`
+	ProjectIdentifier  string   `json:"projectIdentifier,omitempty"`
+	Kind              []string `json:"kind,omitempty"`
+	Type              []string `json:"type,omitempty"`
+	After             int64    `json:"after,omitempty"`
+	Before            int64    `json:"before,omitempty"`
+	Limit             int      `json:"limit,omitempty"`
+	Page              int      `json:"page,omitempty"`
 }
