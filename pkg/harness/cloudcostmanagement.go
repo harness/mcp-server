@@ -9,26 +9,27 @@ import (
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"strconv"
 	"time"
 )
 
 // GetCcmOverview creates a tool for getting a ccm overview from an account
 func GetCcmOverview(config *config.Config, client *client.Client) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	now := time.Now()
-	defaultStartTime := now.AddDate(0, 0, -60).Unix()
-	defaultEndTime := now.Unix()
+	defaultStartTime := now.AddDate(0, 0, -60).UnixMilli()
+	defaultEndTime := now.UnixMilli()
 	return mcp.NewTool("get_ccm_overview",
 			mcp.WithDescription("Get an overview from an specific account in Harness Cloud Cost Management"),
 			mcp.WithString("accountIdentifier",
 				mcp.Description("The account identifier"),
 			),
-			mcp.WithNumber("startTime",
-				mcp.DefaultNumber(float64(defaultStartTime)),
-				mcp.Description("Start time of the period"),
+			mcp.WithString("startTime",
+				mcp.DefaultString(fmt.Sprintf("%d", defaultStartTime)),
+				mcp.Description("Start time of the period in Unix epoch **milliseconds** (e.g. 1743465600000 for April 1, 2025)"),
 			),
-			mcp.WithNumber("endTime",
-				mcp.DefaultNumber(float64(defaultEndTime)),
-				mcp.Description("End time of the period"),
+			mcp.WithString("endTime",
+				mcp.DefaultString(fmt.Sprintf("%d", defaultEndTime)),
+				mcp.Description("End time of the period in Unix epoch **milliseconds** (e.g. 1743465600000 for April 1, 2025)"),
 			),
 			mcp.WithString("groupBy",
 				mcp.Description("Optional type to group by period"),
@@ -46,17 +47,17 @@ func GetCcmOverview(config *config.Config, client *client.Client) (tool mcp.Tool
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			startTimeFloat, err := requiredParam[float64](request, "startTime")
+			startTimeStr, err := requiredParam[string](request, "startTime")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			startTime := int64(startTimeFloat)
+			startTime, err := strconv.ParseInt(startTimeStr, 10, 64)
 
-			endTimeFloat, err := requiredParam[float64](request, "endTime")
+			endTimeStr, err := requiredParam[string](request, "endTime")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			endTime := int64(endTimeFloat)
+			endTime, err := strconv.ParseInt(endTimeStr, 10, 64)
 
 			groupBy, err := requiredParam[string](request, "groupBy")
 			if err != nil {
