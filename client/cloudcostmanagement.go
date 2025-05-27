@@ -12,12 +12,11 @@ const (
 	ccmGetOverviewPath = ccmBasePath + "/overview?accountIdentifier=%s&startTime=%d&endTime=%d&groupBy=%s"
 	ccmCostCategoryListPath = ccmBasePath + "/business-mapping/filter-panel?accountIdentifier=%s"
 	ccmCostCategoryDetailListPath = ccmBasePath + "/business-mapping?accountIdentifier=%s" // This endpoint lists cost categories
-	ccmCostCategoryListPath = ccmBasePath + "/business-mapping/filter-panel?accountIdentifier=%s" // This endpoint lists cost categories
 )
 
 type CloudCostManagementService struct {
 	Client *Client
-)
+}
 
 func (c *CloudCostManagementService) GetOverview(ctx context.Context, accID string, startTime int64, endTime int64, groupBy string) (*dto.CEView, error) {
 	path := fmt.Sprintf(ccmGetOverviewPath, accID, startTime, endTime, groupBy)
@@ -107,4 +106,3 @@ func setCCMPaginationDefault(opts *dto.CCMPaginationOptions) {
 		opts.Limit = safeMaxPageSize
 	}
 }
-
