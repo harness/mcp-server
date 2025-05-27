@@ -31,7 +31,7 @@ func (c *CloudCostManagementService) GetOverview(ctx context.Context, accID stri
 	return ccmOverview, nil
 }
 
-func (r *CloudCostManagementService) ListCostCategories(ctx context.Context, scope dto.Scope, opts *dto.CCMListCostCategoriesOptions) (*dto.CCMCostCategoryList, error) {
+func (r *CloudCostManagementService) ListCostCategories(ctx context.Context, scope dto.Scope, opts *dto.CcmListCostCategoriesOptions) (*dto.CCMCostCategoryList, error) {
 	path := ccmCostCategoryListPath
 	params := make(map[string]string)
 	addScope(scope, params)
@@ -107,3 +107,4 @@ func setCCMPaginationDefault(opts *dto.CCMPaginationOptions) {
 		opts.Limit = safeMaxPageSize
 	}
 }
+
