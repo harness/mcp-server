@@ -56,6 +56,7 @@ func InitToolsets(client *client.Client, config *config.Config) (*toolsets.Tools
 	cloudcostmanagement := toolsets.NewToolset("cloudcostmanagement", "Harness Cloud Cost Management related tools").
 		AddReadTools(
 			toolsets.NewServerTool(GetCcmOverview(config, client)),
+			toolsets.NewServerTool(ListCcmCostCategoriesTool(config, client)),
 		)
 
 	// Create the logs toolset
