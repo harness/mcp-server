@@ -167,6 +167,7 @@ type PullRequestActivity struct {
 	Type        string          `json:"type,omitempty"`
 	Created     int64           `json:"created,omitempty"`
 	Updated     int64           `json:"updated,omitempty"`
+	Edited      int64           `json:"edited,omitempty"`
 	ParentID    int             `json:"parent_id,omitempty"`
 	RepoID      int64           `json:"repo_id"`
 	PullReqID   int64           `json:"pullreq_id"`
@@ -179,9 +180,8 @@ type PullRequestActivity struct {
 }
 
 // PullRequestActivitiesResponse represents the response from the activities API
-type PullRequestActivitiesResponse struct {
-	Activities []PullRequestActivity `json:"activities,omitempty"`
-}
+// It's a direct slice of activities as the API returns an array
+type PullRequestActivitiesResponse []PullRequestActivity
 
 type CodeComment struct {
 	Outdated     bool   `json:"outdated,omitempty"`
@@ -196,9 +196,9 @@ type CodeComment struct {
 
 // PullRequestActivityOptions defines options for listing PR activities
 type PullRequestActivityOptions struct {
-	AccountIdentifier  string   `json:"accountIdentifier,omitempty"`
-	OrgIdentifier      string   `json:"orgIdentifier,omitempty"`
-	ProjectIdentifier  string   `json:"projectIdentifier,omitempty"`
+	AccountIdentifier string   `json:"accountIdentifier,omitempty"`
+	OrgIdentifier     string   `json:"orgIdentifier,omitempty"`
+	ProjectIdentifier string   `json:"projectIdentifier,omitempty"`
 	Kind              []string `json:"kind,omitempty"`
 	Type              []string `json:"type,omitempty"`
 	After             int64    `json:"after,omitempty"`

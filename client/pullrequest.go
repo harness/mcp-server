@@ -175,7 +175,7 @@ func setDefaultPaginationForPRActivities(opts *dto.PullRequestActivityOptions) {
 }
 
 // GetActivities retrieves the activities (including comments) for a specific pull request
-func (p *PullRequestService) GetActivities(ctx context.Context, scope dto.Scope, repoID string, prNumber int, opts *dto.PullRequestActivityOptions) (*dto.PullRequestActivitiesResponse, error) {
+func (p *PullRequestService) GetActivities(ctx context.Context, scope dto.Scope, repoID string, prNumber int, opts *dto.PullRequestActivityOptions) (dto.PullRequestActivitiesResponse, error) {
 	path := fmt.Sprintf(pullRequestActivitiesPath, repoID, prNumber)
 	params := make(map[string]string)
 	addScope(scope, params)
@@ -214,8 +214,8 @@ func (p *PullRequestService) GetActivities(ctx context.Context, scope dto.Scope,
 		params["projectIdentifier"] = opts.ProjectIdentifier
 	}
 
-	activities := new(dto.PullRequestActivitiesResponse)
-	err := p.client.Get(ctx, path, params, nil, activities)
+	var activities dto.PullRequestActivitiesResponse
+	err := p.client.Get(ctx, path, params, nil, &activities)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get pull request activities: %w", err)
 	}
