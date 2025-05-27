@@ -78,9 +78,16 @@ func GetCcmOverviewTool(config *config.Config, client *client.CloudCostManagemen
 		}
 }
 
+<<<<<<< HEAD
 func ListCcmCostCategoriesTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_ccm_cost_categories",
 			mcp.WithDescription("List the cost categories for an account in Harness Cloud Cost Management"),
+=======
+
+func ListCcmCostCategoriesTool(config *config.Config, client *client.Client) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("list_ccm_cost_categories",
+			mcp.WithDescription("List the cost categories from an account in Harness Cloud Cost Management"),
+>>>>>>> 1554fc7 (Added List Cloud Cost Management tool)
 			mcp.WithString("account_id",
 				mcp.Description("The account identifier"),
 			),
@@ -127,6 +134,7 @@ func ListCcmCostCategoriesTool(config *config.Config, client *client.CloudCostMa
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+<<<<<<< HEAD
 			data, err := client.ListCostCategories(ctx, scope, params)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get CCM Cost Categories: %w", err)
@@ -279,6 +287,9 @@ func GetCcmCostCategoryTool(config *config.Config, client *client.CloudCostManag
 			}
 
 			data, err := client.GetCostCategory(ctx, scope, params)
+=======
+			data, err := client.CloudCostManagement.ListCostCategories(ctx, scope, params)
+>>>>>>> 1554fc7 (Added List Cloud Cost Management tool)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get CCM Cost Categories: %w", err)
 			}
