@@ -11,11 +11,25 @@ const (
 
 type PeriodType string
 
-// CEView represents a ccm overview
-type CEView struct {
+
+// CEView represents a basic ccm response.
+// The `data` field contains the response data.
+type CCMBaseResponse struct {
 	Status        string      `json:"state,omitempty"`
-	Data          CCMOverview `json:"data,omitempty"`
+	Message	   string      `json:"message,omitempty"`
 	CorrelationID string      `json:"correlation_id,omitempty"`
+	Error		 []CCMError      `json:"error,omitempty"`
+}
+
+// Response error
+type CCMError struct {
+	FieldId	 string `json:"fieldId,omitempty"`
+	Error string `json:"error,omitempty"`
+}
+
+type CEView struct {
+	CCMBaseResponse
+	Data          CCMOverview `json:"data,omitempty"`
 }
 
 // CCMOverview represents the Overview data from a CCM Overview
@@ -43,4 +57,17 @@ type CCMReference struct {
 	Id   string `json:"id,omitempty"`
 	Name string `json:"name,omitempty"`
 	Type string `json:"type,omitempty"`
+}
+
+// CcmCostCategoriesOptions represents options for listing cost categories
+type CcmListCostCategoriesOptions struct {
+	AccountIdentifier string `json:"accountIdentifier,omitempty"`
+	CostCategory string `json:"costCategory,omitempty"`
+	SearchTerm string `json:"search,omitempty"`
+}
+
+// CcmCostCategoryList represents a list of cost categories in CCM
+type CCMCostCategoryList struct {
+	CCMBaseResponse
+	Data []string `json:"data,omitempty"`
 }
