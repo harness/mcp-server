@@ -59,7 +59,6 @@ func (r *CloudCostManagementService) ListCostCategories(ctx context.Context, sco
 
 	return costCategories, nil
 }
-<<<<<<< HEAD
 
 func (r *CloudCostManagementService) ListCostCategoriesDetail(ctx context.Context, scope dto.Scope, opts *dto.CCMListCostCategoriesDetailOptions) (*dto.CCMCostCategoryDetailList, error) {
 	path := ccmCostCategoryDetailListPath
