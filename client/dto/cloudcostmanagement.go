@@ -33,7 +33,7 @@ type CCMError struct {
 	Error   string `json:"error,omitempty"`
 }
 
-// CEView represents a basic Cost Overview response.
+// CEView represents a basic ccm response.
 // The `data` field contains the response data.
 type CEView struct {
 	CCMBaseResponse
