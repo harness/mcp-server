@@ -9,6 +9,7 @@ const (
 	PeriodTypeYear    string = "YEAR"
 )
 
+<<<<<<< HEAD
 const (
 	SortTypeName    string = "NAME"
 	SortTypeLastEdit    string = "LAST_EDIT"
@@ -18,6 +19,9 @@ const (
 	SortOrderAsc    string = "ASCENDING"
 	SortOrderDesc   string = "DESCENDING"
 )
+=======
+type PeriodType string
+>>>>>>> e1bd408 (Added List Cloud Cost Management tool)
 
 // CEView represents a basic ccm response.
 // The `data` field contains the response data.
@@ -66,12 +70,17 @@ type CCMReference struct {
 	Type string `json:"type,omitempty"`
 }
 
+<<<<<<< HEAD
 // ***************************
 // Cost Category (name) List
 // ***************************
 
 // CcmCostCategoriesOptions represents options for listing cost categories
 type CCMListCostCategoriesOptions struct {
+=======
+// CcmCostCategoriesOptions represents options for listing cost categories
+type CcmListCostCategoriesOptions struct {
+>>>>>>> e1bd408 (Added List Cloud Cost Management tool)
 	AccountIdentifier string `json:"accountIdentifier,omitempty"`
 	CostCategory string `json:"costCategory,omitempty"`
 	SearchTerm string `json:"search,omitempty"`
@@ -82,6 +91,7 @@ type CCMCostCategoryList struct {
 	CCMBaseResponse
 	Data []string `json:"data,omitempty"`
 }
+<<<<<<< HEAD
 
 // ***************************
 // Cost Category Details List
@@ -192,3 +202,5 @@ type CCMSuppressed struct {
 	Message          string                 `json:"message"`
 	LocalizedMessage string                 `json:"localizedMessage"`
 }
+=======
+>>>>>>> e1bd408 (Added List Cloud Cost Management tool)
