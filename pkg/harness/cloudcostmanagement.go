@@ -98,7 +98,11 @@ func GetCcmOverview(config *config.Config, client *client.Client) (tool mcp.Tool
 }
 
 
+<<<<<<< HEAD
 func ListCcmCostCategoriesTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+=======
+func ListCcmCostCategoriesTool(config *config.Config, client *client.Client) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+>>>>>>> 5582f70 (Added List Cloud Cost Management tool)
 	return mcp.NewTool("list_ccm_cost_categories",
 			mcp.WithDescription("List the cost categories from an account in Harness Cloud Cost Management"),
 			mcp.WithString("account_id",
