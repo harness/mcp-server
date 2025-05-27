@@ -12,11 +12,12 @@ const (
 	ccmGetOverviewPath = ccmBasePath + "/overview?accountIdentifier=%s&startTime=%d&endTime=%d&groupBy=%s"
 	ccmCostCategoryListPath = ccmBasePath + "/business-mapping/filter-panel?accountIdentifier=%s" // This endpoint lists cost categories
 	ccmCostCategoryDetailListPath = ccmBasePath + "/business-mapping?accountIdentifier=%s" // This endpoint lists cost categories
+
 )
 
 type CloudCostManagementService struct {
 	Client *Client
-)
+}
 
 func (c *CloudCostManagementService) GetOverview(ctx context.Context, accID string, startTime int64, endTime int64, groupBy string) (*dto.CEView, error) {
 	path := fmt.Sprintf(ccmGetOverviewPath, accID, startTime, endTime, groupBy)
@@ -62,7 +63,7 @@ func (r *CloudCostManagementService) ListCostCategories(ctx context.Context, sco
 func (r *CloudCostManagementService) ListCostCategoriesDetail(ctx context.Context, scope dto.Scope, opts *dto.CCMListCostCategoriesDetailOptions) (*dto.CCMCostCategoryDetailList, error) {
 	path := ccmCostCategoryDetailListPath
 	params := make(map[string]string)
-//	addScope(scope, params)
+	addScope(scope, params)
 
 	// Handle nil options by creating default options
 	if opts == nil {
