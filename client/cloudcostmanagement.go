@@ -131,3 +131,4 @@ func setCCMPaginationDefault(opts *dto.CCMPaginationOptions) {
 		opts.Limit = safeMaxPageSize
 	}
 }
+

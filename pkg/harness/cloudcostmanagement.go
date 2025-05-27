@@ -104,7 +104,7 @@ func ListCcmCostCategoriesTool(config *config.Config, client *client.CloudCostMa
 			}
 
 			// Handle search parameter
-			searchTerm, ok, err := OptionalParamOK[string](request, "search")
+			searchTerm, ok, err := OptionalParamOK[string](request, "search_term")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
