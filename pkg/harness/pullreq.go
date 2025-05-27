@@ -396,7 +396,7 @@ func GetPullRequestActivitiesTool(config *config.Config, client *client.Client) 
 			}
 			prNumber := int(prNumberFloat)
 
-			scope, err := fetchScope(config, request, true)
+			scope, err := fetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
