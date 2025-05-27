@@ -93,7 +93,7 @@ func ListCcmCostCategoriesTool(config *config.Config, client *client.CloudCostMa
 			WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			accountId, err := OptionalParam[string](request, "accountIdentifier")
+			accountId, err := OptionalParam[string](request, "account_id")
 			if accountId == "" {
 				accountId, err = getAccountID(config, request)
 			}
@@ -101,11 +101,11 @@ func ListCcmCostCategoriesTool(config *config.Config, client *client.CloudCostMa
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			params := &dto.CCMListCostCategoriesOptions{}
+			params := &dto.CcmListCostCategoriesOptions{}
 			params.AccountIdentifier = accountId
 
 			// Handle cost category parameter 
-			costCategory, ok, err := OptionalParamOK[string](request, "costCategory")
+			costCategory, ok, err := OptionalParamOK[string](request, "cost_category")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -114,7 +114,7 @@ func ListCcmCostCategoriesTool(config *config.Config, client *client.CloudCostMa
 			}
 
 			// Handle search parameter
-			searchTerm, ok, err := OptionalParamOK[string](request, "search")
+			searchTerm, ok, err := OptionalParamOK[string](request, "search_term")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

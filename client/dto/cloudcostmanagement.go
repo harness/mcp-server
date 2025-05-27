@@ -9,7 +9,6 @@ const (
 	PeriodTypeYear    string = "YEAR"
 )
 
-<<<<<<< HEAD
 const (
 	SortTypeName    string = "NAME"
 	SortTypeLastEdit    string = "LAST_EDIT"
@@ -19,12 +18,8 @@ const (
 	SortOrderAsc    string = "ASCENDING"
 	SortOrderDesc   string = "DESCENDING"
 )
-=======
-type PeriodType string
->>>>>>> e1bd408 (Added List Cloud Cost Management tool)
 
-// CEView represents a basic ccm response.
-// The `data` field contains the response data.
+// CCMBaseResponse represents a basic ccm response.
 type CCMBaseResponse struct {
 	Status        string      `json:"state,omitempty"`
 	Message	   string      `json:"message,omitempty"`
@@ -38,6 +33,8 @@ type CCMError struct {
 	Error string `json:"error,omitempty"`
 }
 
+// CEView represents a basic ccm response.
+// The `data` field contains the response data.
 type CEView struct {
 	CCMBaseResponse
 	Data          CCMOverview `json:"data,omitempty"`
@@ -70,25 +67,12 @@ type CCMReference struct {
 	Type string `json:"type,omitempty"`
 }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> a371c74 (Added Claud Cost Managment - Categories detail list)
 // ***************************
 // Cost Category (name) List
 // ***************************
 
-<<<<<<< HEAD
 // CcmCostCategoriesOptions represents options for listing cost categories
 type CCMListCostCategoriesOptions struct {
-=======
-// CcmCostCategoriesOptions represents options for listing cost categories
-type CcmListCostCategoriesOptions struct {
->>>>>>> e1bd408 (Added List Cloud Cost Management tool)
-=======
-// CcmCostCategoriesOptions represents options for listing cost categories
-type CCMListCostCategoriesOptions struct {
->>>>>>> a371c74 (Added Claud Cost Managment - Categories detail list)
 	AccountIdentifier string `json:"accountIdentifier,omitempty"`
 	CostCategory string `json:"costCategory,omitempty"`
 	SearchTerm string `json:"search,omitempty"`
@@ -99,10 +83,6 @@ type CCMCostCategoryList struct {
 	CCMBaseResponse
 	Data []string `json:"data,omitempty"`
 }
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> a371c74 (Added Claud Cost Managment - Categories detail list)
 
 // ***************************
 // Cost Category Details List
@@ -213,8 +193,3 @@ type CCMSuppressed struct {
 	Message          string                 `json:"message"`
 	LocalizedMessage string                 `json:"localizedMessage"`
 }
-<<<<<<< HEAD
-=======
->>>>>>> e1bd408 (Added List Cloud Cost Management tool)
-=======
->>>>>>> a371c74 (Added Claud Cost Managment - Categories detail list)
