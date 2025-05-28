@@ -9,11 +9,11 @@ import (
 )
 
 const (
-	pullRequestBasePath     = "code/api/v1/repos"
-	pullRequestGetPath      = pullRequestBasePath + "/%s/pullreq/%d"
-	pullRequestListPath     = pullRequestBasePath + "/%s/pullreq"
-	pullRequestCreatePath   = pullRequestBasePath + "/%s/pullreq"
-	pullRequestChecksPath   = pullRequestBasePath + "/%s/pullreq/%d/checks"
+	pullRequestBasePath       = "code/api/v1/repos"
+	pullRequestGetPath        = pullRequestBasePath + "/%s/pullreq/%d"
+	pullRequestListPath       = pullRequestBasePath + "/%s/pullreq"
+	pullRequestCreatePath     = pullRequestBasePath + "/%s/pullreq"
+	pullRequestChecksPath     = pullRequestBasePath + "/%s/pullreq/%d/checks"
 	pullRequestActivitiesPath = pullRequestBasePath + "/%s/pullreq/%d/activities"
 )
 
@@ -187,8 +187,6 @@ func (p *PullRequestService) GetActivities(ctx context.Context, scope dto.Scope,
 
 	setDefaultPaginationForPRActivities(opts)
 
-	// Add pagination parameters
-	params["page"] = fmt.Sprintf("%d", opts.Page)
 	params["limit"] = fmt.Sprintf("%d", opts.Limit)
 
 	// Add filtering parameters

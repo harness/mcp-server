@@ -373,10 +373,6 @@ func GetPullRequestActivitiesTool(config *config.Config, client *client.Client) 
 			mcp.WithNumber("before",
 				mcp.Description("The result should contain only entries created before this timestamp (unix millis)."),
 			),
-			mcp.WithNumber("page",
-				mcp.DefaultNumber(1),
-				mcp.Description("Page number for pagination"),
-			),
 			mcp.WithNumber("limit",
 				mcp.DefaultNumber(20),
 				mcp.Description("The maximum number of results to return (1-100)."),
@@ -403,15 +399,6 @@ func GetPullRequestActivitiesTool(config *config.Config, client *client.Client) 
 
 			// Create the options struct
 			opts := &dto.PullRequestActivityOptions{}
-
-			// Handle pagination
-			page, err := OptionalParam[float64](request, "page")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			if page > 0 {
-				opts.Page = int(page)
-			}
 
 			limit, err := OptionalParam[float64](request, "limit")
 			if err != nil {
