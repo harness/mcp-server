@@ -373,10 +373,6 @@ func GetPullRequestActivitiesTool(config *config.Config, client *client.Client) 
 			mcp.WithNumber("before",
 				mcp.Description("The result should contain only entries created before this timestamp (unix millis)."),
 			),
-			mcp.WithBoolean("get_all_comments",
-				mcp.DefaultBool(false),
-				mcp.Description("If true, retrieves all comment types (both code comments and regular comments)"),
-			),
 			mcp.WithNumber("page",
 				mcp.DefaultNumber(1),
 				mcp.Description("Page number for pagination"),
@@ -425,12 +421,6 @@ func GetPullRequestActivitiesTool(config *config.Config, client *client.Client) 
 				opts.Limit = int(limit)
 			}
 
-			// Check if we're retrieving all comments
-			allComments, err := OptionalParam[bool](request, "get_all_comments")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-
 			// Handle filtering parameters
 			kindStr, err := OptionalParam[string](request, "kind")
 			if err != nil {
@@ -440,17 +430,11 @@ func GetPullRequestActivitiesTool(config *config.Config, client *client.Client) 
 				opts.Kind = parseCommaSeparatedList(kindStr)
 			}
 
-			// Handle type parameter or set default types for comments
 			typeStr, err := OptionalParam[string](request, "type")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-
-			if allComments {
-				// If get_all_comments is true, we want both regular and code comments
-				opts.Type = []string{"code-comment", "comment"}
-			} else if typeStr != "" {
-				// Otherwise use the specified types
+			if typeStr != "" {
 				opts.Type = parseCommaSeparatedList(typeStr)
 			}
 
