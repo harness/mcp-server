@@ -12,6 +12,7 @@ const (
 	ccmGetOverviewPath = ccmBasePath + "/overview?accountIdentifier=%s&startTime=%d&endTime=%d&groupBy=%s"
 	ccmCostCategoryListPath = ccmBasePath + "/business-mapping/filter-panel?accountIdentifier=%s" // This endpoint lists cost categories
 	ccmCostCategoryDetailListPath = ccmBasePath + "/business-mapping?accountIdentifier=%s" // This endpoint lists cost categories
+	ccmGetCostCategoryPath = ccmBasePath + "/business-mapping/%s?accountIdentifier=%s" // This endpoint lists cost categories
 )
 
 type CloudCostManagementService struct {
@@ -91,6 +92,26 @@ func (r *CloudCostManagementService) ListCostCategoriesDetail(ctx context.Contex
 	}
 
 	return costCategories, nil
+}
+
+func (r *CloudCostManagementService) GetCostCategory(ctx context.Context, scope dto.Scope, opts *dto.CCMGetCostCategoryOptions) (*dto.CCMCostCategory, error) {
+	// Opts shouuldn't be nil 
+	if opts == nil {
+		return nil, fmt.Errorf("Missing parameters for Get CCM Cost categories.")
+	}
+
+	path := fmt.Sprintf(ccmGetCostCategoryPath, opts.CostCategoryId, opts.AccountIdentifier)
+	params := make(map[string]string)
+
+	// Temporary slice to hold the strings
+	costCategory := new(dto.CCMCostCategory)
+
+	err := r.client.Get(ctx, path, params, nil, costCategory)
+	if err != nil {
+		return nil, fmt.Errorf("failed to Get cloud cost managment cost category by Id: %w", err)
+	}
+
+	return costCategory, nil
 }
 
 func setCCMPaginationDefault(opts *dto.CCMPaginationOptions) {

@@ -185,3 +185,16 @@ type CCMSuppressed struct {
 	Message          string                 `json:"message"`
 	LocalizedMessage string                 `json:"localizedMessage"`
 }
+
+// CCMCostCategory represents the details of a cost category in CCM
+type CCMCostCategory struct {
+	MetaData         map[string]interface{}	`json:"metaData"`
+	Resource       	 CCMBusinessMapping     `json:"resource"`
+	ResponseMessages []CCMResponseMessage 	`json:"responseMessages"`
+}
+
+// CcmGetCostCategoryOptions represents options for listing cost categories
+type CCMGetCostCategoryOptions struct {
+	AccountIdentifier string `json:"accountIdentifier,omitempty"`
+	CostCategoryId string `json:"id,omitempty"`
+}

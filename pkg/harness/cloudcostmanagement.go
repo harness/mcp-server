@@ -349,6 +349,58 @@ func ListCcmCostCategoriesDetailTool(config *config.Config, client *client.Clien
 		}
 	}
 
+func GetCcmCostCategoryTool(config *config.Config, client *client.Client) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("get_ccm_cost_category",
+			mcp.WithDescription("Retrieve the details of a cost category by its ID from a specific account in Harness Cloud Cost Management."),
+			mcp.WithString("account_id",
+				mcp.Description("The account identifier"),
+			),
+			mcp.WithString("id",
+				mcp.Description("Required Cost Category ID to retrieve a specific cost category"),
+			),
+			WithScope(config, false),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			accountId, err := OptionalParam[string](request, "account_id")
+			if accountId == "" {
+				accountId, err = getAccountID(config, request)
+			}
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			params := &dto.CCMGetCostCategoryOptions{}
+			params.AccountIdentifier = accountId
+			// Handle cost category parameter 
+			costCategoryId, ok, err := OptionalParamOK[string](request, "id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if ok && costCategoryId != "" {
+				params.CostCategoryId = costCategoryId
+			}
+			scope, err := fetchScope(config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.CloudCostManagement.GetCostCategory(ctx, scope, params)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get CCM Cost Categories: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal CCM Cost Category: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+	}
+
+
+
+
 // getAccountID retrieves AccountID from the config file
 func getAccountID(config *config.Config, request mcp.CallToolRequest) (string, error) {
 	scope, scopeErr := fetchScope(config, request, true)
