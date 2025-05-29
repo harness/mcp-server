@@ -57,6 +57,7 @@ func InitToolsets(client *client.Client, config *config.Config) (*toolsets.Tools
 		AddReadTools(
 			toolsets.NewServerTool(GetCcmOverview(config, client)),
 			toolsets.NewServerTool(ListCcmCostCategoriesTool(config, client)),
+			toolsets.NewServerTool(ListCcmCostCategoriesDetailTool(config, client)),
 		)
 
 	// Create the logs toolset
@@ -72,7 +73,7 @@ func InitToolsets(client *client.Client, config *config.Config) (*toolsets.Tools
 	tsg.AddToolset(registries)
 	tsg.AddToolset(cloudcostmanagement)
 	tsg.AddToolset(logs)
-
+	
 	// Enable requested toolsets
 	if err := tsg.EnableToolsets(config.Toolsets); err != nil {
 		return nil, err
