@@ -46,6 +46,7 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 		return nil, err
 	}
 
+<<<<<<< HEAD
 	if err := registerLogs(config, tsg); err != nil {
 		return nil, err
 	}
@@ -54,6 +55,29 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 		return nil, err
 	}
 
+=======
+	cloudcostmanagement := toolsets.NewToolset("cloudcostmanagement", "Harness Cloud Cost Management related tools").
+		AddReadTools(
+			toolsets.NewServerTool(GetCcmOverview(config, client)),
+			toolsets.NewServerTool(ListCcmCostCategoriesTool(config, client)),
+			toolsets.NewServerTool(ListCcmCostCategoriesDetailTool(config, client)),
+		)
+
+	// Create the logs toolset
+	logs := toolsets.NewToolset("logs", "Harness Logs related tools").
+		AddReadTools(
+			toolsets.NewServerTool(DownloadExecutionLogsTool(config, client)),
+		)
+
+	// Add toolsets to the group
+	tsg.AddToolset(pullrequests)
+	tsg.AddToolset(pipelines)
+	tsg.AddToolset(repositories)
+	tsg.AddToolset(registries)
+	tsg.AddToolset(cloudcostmanagement)
+	tsg.AddToolset(logs)
+	
+>>>>>>> 9a8d795 (Added Claud Cost Managment - Categories detail list)
 	// Enable requested toolsets
 	if err := tsg.EnableToolsets(config.Toolsets); err != nil {
 		return nil, err
