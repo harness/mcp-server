@@ -274,6 +274,7 @@ func registerCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGro
 		AddReadTools(
 			toolsets.NewServerTool(GetCcmOverviewTool(config, ccmClient)),
 			toolsets.NewServerTool(ListCcmCostCategoriesTool(config, ccmClient)),
+			toolsets.NewServerTool(ListCcmCostCategoriesDetailTool(config, ccmClient)),
 		)
 
 	// Add toolset to the group
