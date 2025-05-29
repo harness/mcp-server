@@ -58,6 +58,7 @@ func InitToolsets(client *client.Client, config *config.Config) (*toolsets.Tools
 			toolsets.NewServerTool(GetCcmOverview(config, client)),
 			toolsets.NewServerTool(ListCcmCostCategoriesTool(config, client)),
 			toolsets.NewServerTool(ListCcmCostCategoriesDetailTool(config, client)),
+			toolsets.NewServerTool(GetCcmCostCategoryTool(config, client)),
 		)
 
 	// Create the logs toolset
