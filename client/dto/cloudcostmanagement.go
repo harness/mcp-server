@@ -211,5 +211,8 @@ type CCMGetCostCategoryOptions struct {
 	AccountIdentifier string `json:"accountIdentifier,omitempty"`
 	CostCategoryId string `json:"id,omitempty"`
 }
+<<<<<<< HEAD
 =======
 >>>>>>> 1554fc7 (Added List Cloud Cost Management tool)
+=======
+>>>>>>> 243276b (Added Get Cost Category by Id)

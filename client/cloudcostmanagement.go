@@ -14,10 +14,13 @@ const (
 <<<<<<< HEAD
 	ccmCostCategoryDetailListPath = ccmBasePath + "/business-mapping?accountIdentifier=%s" // This endpoint lists cost categories
 	ccmGetCostCategoryPath = ccmBasePath + "/business-mapping/%s?accountIdentifier=%s" // This endpoint lists cost categories
+<<<<<<< HEAD
 =======
 
 //business-mapping/filter-panel?accountIdentifier=${ACCOUNT_ID}&costCategory=string&search=string"
 >>>>>>> 1554fc7 (Added List Cloud Cost Management tool)
+=======
+>>>>>>> 243276b (Added Get Cost Category by Id)
 )
 
 type CloudCostManagementService struct {
@@ -120,7 +123,11 @@ func (r *CloudCostManagementService) GetCostCategory(ctx context.Context, scope 
 	// Temporary slice to hold the strings
 	costCategory := new(dto.CCMCostCategory)
 
+<<<<<<< HEAD
 	err := r.Client.Get(ctx, path, params, nil, costCategory)
+=======
+	err := r.client.Get(ctx, path, params, nil, costCategory)
+>>>>>>> 243276b (Added Get Cost Category by Id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to Get cloud cost managment cost category by Id: %w", err)
 	}
