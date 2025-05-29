@@ -303,6 +303,7 @@ func GetCcmCostCategoryTool(config *config.Config, client *client.CloudCostManag
 		}
 	}
 
+<<<<<<< HEAD
 func GetCcmCostCategoryTool(config *config.Config, client *client.Client) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_ccm_cost_category",
 			mcp.WithDescription("Retrieve the details of a cost category by its ID from a specific account in Harness Cloud Cost Management."),
@@ -311,11 +312,40 @@ func GetCcmCostCategoryTool(config *config.Config, client *client.Client) (tool 
 			),
 			mcp.WithString("id",
 				mcp.Description("Required Cost Category ID to retrieve a specific cost category"),
+=======
+func ListCcmCostCategoriesDetailTool(config *config.Config, client *client.Client) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("list_ccm_cost_categories_detail",
+			mcp.WithDescription("List the cost categories with advanced options in Harness Cloud Cost Management"),
+			mcp.WithString("account_id",
+				mcp.Description("The account identifier"),
+			),
+			mcp.WithString("search_key",
+				mcp.Description("Optional search key to filter cost categories"),
+			),
+			mcp.WithString("sort_type",
+				mcp.Description("Sort type for the results (e.g., NAME, LAST_EDIT)"),
+			),
+			mcp.WithString("sort_order",
+				mcp.Description("Sort order for the results (e.g., ASCENDING, DESCENDING)"),
+			),
+			mcp.WithNumber("limit",
+				mcp.DefaultNumber(5),
+				mcp.Max(20),
+				mcp.Description("Number of items per page"),
+			),
+			mcp.WithNumber("offset",
+				mcp.DefaultNumber(1),
+				mcp.Description("Offset or page number for pagination"),
+>>>>>>> be63165 (Added Claud Cost Managment - Categories detail list)
 			),
 			WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+<<<<<<< HEAD
 			accountId, err := OptionalParam[string](request, "account_id")
+=======
+			accountId, err := OptionalParam[string](request, "accountIdentifier")
+>>>>>>> be63165 (Added Claud Cost Managment - Categories detail list)
 			if accountId == "" {
 				accountId, err = getAccountID(config, request)
 			}
@@ -323,6 +353,7 @@ func GetCcmCostCategoryTool(config *config.Config, client *client.Client) (tool 
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+<<<<<<< HEAD
 			params := &dto.CCMGetCostCategoryOptions{}
 			params.AccountIdentifier = accountId
 			// Handle cost category parameter 
@@ -333,12 +364,66 @@ func GetCcmCostCategoryTool(config *config.Config, client *client.Client) (tool 
 			if ok && costCategoryId != "" {
 				params.CostCategoryId = costCategoryId
 			}
+=======
+			params := &dto.CCMListCostCategoriesDetailOptions{}
+			params.AccountIdentifier = accountId
+
+			// Handle search key parameter
+			searchKey, ok, err := OptionalParamOK[string](request, "searchKey")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if ok && searchKey != "" {
+				params.SearchKey = searchKey
+			}
+
+			// Handle sort type parameter
+			sortType, ok, err := OptionalParamOK[string](request, "sortType")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if ok && sortType != "" {
+				params.SortType = sortType
+			}
+
+			// Handle sort order parameter
+			sortOrder, ok, err := OptionalParamOK[string](request, "sortOrder")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if ok && sortOrder != "" {
+				params.SortOrder = sortOrder
+			}
+
+			// Handle limit parameter
+			limit, ok, err := OptionalParamOK[float64](request, "limit")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if ok {
+				params.Limit = utils.SafeFloatToInt32(limit, 5)
+			}
+
+			// Handle offset parameter
+			offset, ok, err := OptionalParamOK[float64](request, "offset")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if ok {
+				params.Offset = utils.SafeFloatToInt32(offset, 1)
+			}
+
+>>>>>>> be63165 (Added Claud Cost Managment - Categories detail list)
 			scope, err := fetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+<<<<<<< HEAD
 			data, err := client.CloudCostManagement.GetCostCategory(ctx, scope, params)
+=======
+			data, err := client.CloudCostManagement.ListCostCategoriesDetail(ctx, scope, params)
+>>>>>>> be63165 (Added Claud Cost Managment - Categories detail list)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get CCM Cost Categories: %w", err)
 			}
@@ -352,9 +437,12 @@ func GetCcmCostCategoryTool(config *config.Config, client *client.Client) (tool 
 		}
 	}
 
+<<<<<<< HEAD
 
 
 
+=======
+>>>>>>> be63165 (Added Claud Cost Managment - Categories detail list)
 // getAccountID retrieves AccountID from the config file
 func getAccountID(config *config.Config, request mcp.CallToolRequest) (string, error) {
 	scope, scopeErr := fetchScope(config, request, true)
