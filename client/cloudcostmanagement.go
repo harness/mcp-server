@@ -12,7 +12,6 @@ const (
 	ccmGetOverviewPath = ccmBasePath + "/overview?accountIdentifier=%s&startTime=%d&endTime=%d&groupBy=%s"
 	ccmCostCategoryListPath = ccmBasePath + "/business-mapping/filter-panel?accountIdentifier=%s" // This endpoint lists cost categories
 	ccmCostCategoryDetailListPath = ccmBasePath + "/business-mapping?accountIdentifier=%s" // This endpoint lists cost categories
-
 )
 
 type CloudCostManagementService struct {
