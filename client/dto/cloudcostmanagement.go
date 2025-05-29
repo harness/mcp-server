@@ -59,17 +59,12 @@ type CCMReference struct {
 	Type string `json:"type,omitempty"`
 }
 
-<<<<<<< HEAD
 // ***************************
 // Cost Category (name) List
 // ***************************
 
 // CcmCostCategoriesOptions represents options for listing cost categories
-type CCMListCostCategoriesOptions struct {
-=======
-// CcmCostCategoriesOptions represents options for listing cost categories
 type CcmListCostCategoriesOptions struct {
->>>>>>> 8e379a9 (Added List Cloud Cost Management tool)
 	AccountIdentifier string `json:"accountIdentifier,omitempty"`
 	CostCategory string `json:"costCategory,omitempty"`
 	SearchTerm string `json:"search,omitempty"`
@@ -80,7 +75,6 @@ type CCMCostCategoryList struct {
 	CCMBaseResponse
 	Data []string `json:"data,omitempty"`
 }
-<<<<<<< HEAD
 
 // ***************************
 // Cost Category Details List
@@ -191,5 +185,16 @@ type CCMSuppressed struct {
 	Message          string                 `json:"message"`
 	LocalizedMessage string                 `json:"localizedMessage"`
 }
-=======
->>>>>>> 8e379a9 (Added List Cloud Cost Management tool)
+
+// CCMCostCategory represents the details of a cost category in CCM
+type CCMCostCategory struct {
+	MetaData         map[string]interface{}	`json:"metaData"`
+	Resource       	 CCMBusinessMapping     `json:"resource"`
+	ResponseMessages []CCMResponseMessage 	`json:"responseMessages"`
+}
+
+// CcmGetCostCategoryOptions represents options for listing cost categories
+type CCMGetCostCategoryOptions struct {
+	AccountIdentifier string `json:"accountIdentifier,omitempty"`
+	CostCategoryId string `json:"id,omitempty"`
+}
