@@ -104,7 +104,7 @@ func ListCcmCostCategoriesTool(config *config.Config, client *client.CloudCostMa
 			}
 
 			// Handle search parameter
-			searchTerm, ok, err := OptionalParamOK[string](request, "search_term")
+			searchTerm, ok, err := OptionalParamOK[string](request, "search")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -272,7 +272,6 @@ func GetCcmCostCategoryTool(config *config.Config, client *client.CloudCostManag
 			return mcp.NewToolResultText(string(r)), nil
 		}
 }
-
 
 // getAccountID retrieves AccountID from the config file
 func getAccountID(config *config.Config, request mcp.CallToolRequest) (string, error) {
