@@ -169,7 +169,7 @@ func ListCcmCostCategoriesDetailTool(config *config.Config, client *client.Clien
 			WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			accountId, err := OptionalParam[string](request, "accountIdentifier")
+			accountId, err := OptionalParam[string](request, "account_id")
 			if accountId == "" {
 				accountId, err = getAccountID(config, request)
 			}
@@ -181,7 +181,7 @@ func ListCcmCostCategoriesDetailTool(config *config.Config, client *client.Clien
 			params.AccountIdentifier = accountId
 
 			// Handle search key parameter
-			searchKey, ok, err := OptionalParamOK[string](request, "searchKey")
+			searchKey, ok, err := OptionalParamOK[string](request, "search_key")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -190,7 +190,7 @@ func ListCcmCostCategoriesDetailTool(config *config.Config, client *client.Clien
 			}
 
 			// Handle sort type parameter
-			sortType, ok, err := OptionalParamOK[string](request, "sortType")
+			sortType, ok, err := OptionalParamOK[string](request, "sort_type")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -199,7 +199,7 @@ func ListCcmCostCategoriesDetailTool(config *config.Config, client *client.Clien
 			}
 
 			// Handle sort order parameter
-			sortOrder, ok, err := OptionalParamOK[string](request, "sortOrder")
+			sortOrder, ok, err := OptionalParamOK[string](request, "sort_order")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
