@@ -161,6 +161,7 @@ func runStdioServer(config config.Config) error {
 	}
 
 	slog.Info("Starting server", "url", config.BaseURL)
+	slog.Debug("Using ", "Config ->", config)
 
 	// Define beforeInit function to add client info to user agent
 	beforeInit := func(_ context.Context, _ any, message *mcp.InitializeRequest) {
@@ -191,6 +192,9 @@ func runStdioServer(config config.Config) error {
 
 	// Register the tools with the server
 	toolsets.RegisterTools(harnessServer)
+
+	// Set the guidelines prompts
+	harness.RegisterPrompts(harnessServer)
 
 	// Create stdio server
 	stdioServer := server.NewStdioServer(harnessServer)
