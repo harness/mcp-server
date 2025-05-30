@@ -39,7 +39,7 @@ func GetCcmOverview(config *config.Config, client *client.Client) (tool mcp.Tool
 			WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			accID, err := OptionalParam[string](request, "account_id")
+			accID, err := OptionalParam[string](request, "accountIdentifier")
 			if accID == "" {
 				accID, err = getAccountID(config, request)
 			}
