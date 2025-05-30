@@ -14,7 +14,7 @@ const (
 )
 
 type RepositoryService struct {
-	client *Client
+	Client *Client
 }
 
 func (r *RepositoryService) Get(ctx context.Context, scope dto.Scope, repoIdentifier string) (*dto.Repository, error) {
@@ -23,7 +23,7 @@ func (r *RepositoryService) Get(ctx context.Context, scope dto.Scope, repoIdenti
 	addScope(scope, params)
 
 	repo := new(dto.Repository)
-	err := r.client.Get(ctx, path, params, nil, repo)
+	err := r.Client.Get(ctx, path, params, nil, repo)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get repository: %w", err)
 	}
@@ -73,7 +73,7 @@ func (r *RepositoryService) List(ctx context.Context, scope dto.Scope, opts *dto
 	}
 
 	var repos []*dto.Repository
-	err := r.client.Get(ctx, path, params, nil, &repos)
+	err := r.Client.Get(ctx, path, params, nil, &repos)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list repositories: %w", err)
 	}

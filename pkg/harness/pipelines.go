@@ -12,7 +12,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-func GetPipelineTool(config *config.Config, client *client.Client) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetPipelineTool(config *config.Config, client *client.PipelineService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_pipeline",
 			mcp.WithDescription("Get details of a specific pipeline in a Harness repository."),
 			mcp.WithString("pipeline_id",
@@ -31,7 +31,7 @@ func GetPipelineTool(config *config.Config, client *client.Client) (tool mcp.Too
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			data, err := client.Pipelines.Get(ctx, scope, pipelineID)
+			data, err := client.Get(ctx, scope, pipelineID)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get pipeline: %w", err)
 			}
@@ -45,7 +45,7 @@ func GetPipelineTool(config *config.Config, client *client.Client) (tool mcp.Too
 		}
 }
 
-func ListPipelinesTool(config *config.Config, client *client.Client) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListPipelinesTool(config *config.Config, client *client.PipelineService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_pipelines",
 			mcp.WithDescription("List pipelines in a Harness repository."),
 			mcp.WithString("search_term",
@@ -78,7 +78,7 @@ func ListPipelinesTool(config *config.Config, client *client.Client) (tool mcp.T
 				},
 			}
 
-			data, err := client.Pipelines.List(ctx, scope, opts)
+			data, err := client.List(ctx, scope, opts)
 			if err != nil {
 				return nil, fmt.Errorf("failed to list pipelines: %w", err)
 			}
@@ -92,7 +92,7 @@ func ListPipelinesTool(config *config.Config, client *client.Client) (tool mcp.T
 		}
 }
 
-func FetchExecutionURLTool(config *config.Config, client *client.Client) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func FetchExecutionURLTool(config *config.Config, client *client.PipelineService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("fetch_execution_url",
 			mcp.WithDescription("Fetch the execution URL for a pipeline execution in Harness."),
 			mcp.WithString("pipeline_id",
@@ -121,7 +121,7 @@ func FetchExecutionURLTool(config *config.Config, client *client.Client) (tool m
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			url, err := client.Pipelines.FetchExecutionURL(ctx, scope, pipelineID, planExecutionID)
+			url, err := client.FetchExecutionURL(ctx, scope, pipelineID, planExecutionID)
 			if err != nil {
 				return nil, fmt.Errorf("failed to fetch execution URL: %w", err)
 			}
@@ -130,7 +130,7 @@ func FetchExecutionURLTool(config *config.Config, client *client.Client) (tool m
 		}
 }
 
-func GetExecutionTool(config *config.Config, client *client.Client) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetExecutionTool(config *config.Config, client *client.PipelineService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_execution",
 			mcp.WithDescription("Get details of a specific pipeline execution in Harness."),
 			mcp.WithString("plan_execution_id",
@@ -150,7 +150,7 @@ func GetExecutionTool(config *config.Config, client *client.Client) (tool mcp.To
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			data, err := client.Pipelines.GetExecution(ctx, scope, planExecutionID)
+			data, err := client.GetExecution(ctx, scope, planExecutionID)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get execution details: %w", err)
 			}
@@ -164,7 +164,7 @@ func GetExecutionTool(config *config.Config, client *client.Client) (tool mcp.To
 		}
 }
 
-func ListExecutionsTool(config *config.Config, client *client.Client) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListExecutionsTool(config *config.Config, client *client.PipelineService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_executions",
 			mcp.WithDescription("List pipeline executions in a Harness repository."),
 			mcp.WithString("search_term",
@@ -233,7 +233,7 @@ func ListExecutionsTool(config *config.Config, client *client.Client) (tool mcp.
 				},
 			}
 
-			data, err := client.Pipelines.ListExecutions(ctx, scope, opts)
+			data, err := client.ListExecutions(ctx, scope, opts)
 			if err != nil {
 				return nil, fmt.Errorf("failed to list pipeline executions: %w", err)
 			}

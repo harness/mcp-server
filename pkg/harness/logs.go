@@ -17,7 +17,7 @@ import (
 // DownloadExecutionLogsTool creates a tool for downloading logs for a pipeline execution
 // TODO: to make this easy to use, we ask to pass in an output path and do the complete download of the logs.
 // This is less work for the user, but we may want to only return the download instruction instead in the future.
-func DownloadExecutionLogsTool(config *config.Config, client *client.Client) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func DownloadExecutionLogsTool(config *config.Config, client *client.LogService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("download_execution_logs",
 			mcp.WithDescription("Downloads logs for an execution inside Harness"),
 			mcp.WithString("plan_execution_id",
@@ -41,7 +41,7 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.Client) (to
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			logDownloadURL, err := client.Logs.DownloadLogs(ctx, scope, planExecutionID)
+			logDownloadURL, err := client.DownloadLogs(ctx, scope, planExecutionID)
 			if err != nil {
 				return nil, fmt.Errorf("failed to fetch log download URL: %w", err)
 			}
@@ -75,7 +75,7 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.Client) (to
 			}
 
 			// Get the download URL
-			logDownloadURL, err = client.Logs.DownloadLogs(ctx, scope, planExecutionID)
+			logDownloadURL, err = client.DownloadLogs(ctx, scope, planExecutionID)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to fetch log download URL: %v", err)), nil
 			}

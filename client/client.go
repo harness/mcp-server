@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/harness/harness-mcp/client/ar"
 	"io"
 	"log/slog"
 	"net/http"
@@ -13,14 +12,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/harness/harness-mcp/pkg/harness/auth"
+
 	"github.com/cenkalti/backoff/v4"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/rs/zerolog/log"
 )
 
 var (
-	defaultBaseURL = "https://app.harness.io/"
-
 	// these can be moved to a level above if we want to make this a generic
 	// client, keeping these here to ensure we don't end up returning too much info
 	// when different tools get added.
@@ -43,17 +42,8 @@ type Client struct {
 	// set to a domain endpoint to use with custom Harness installations
 	BaseURL *url.URL
 
-	// API key for authentication
-	// TODO: We can abstract out the auth provider
-	APIKey string
-
-	// Services used for talking to different Harness entities
-	Connectors   *ConnectorService
-	PullRequests *PullRequestService
-	Pipelines    *PipelineService
-	Repositories *RepositoryService
-	Logs         *LogService
-	Registry     *ar.ClientWithResponses
+	// AuthProvider used for authentication
+	AuthProvider auth.Provider
 }
 
 type service struct {
@@ -67,47 +57,17 @@ func defaultHTTPClient() *http.Client {
 }
 
 // NewWithToken creates a new client with the specified base URL and API token
-func NewWithToken(uri, apiKey string) (*Client, error) {
+func NewWithAuthProvider(uri string, authProvider auth.Provider) (*Client, error) {
 	parsedURL, err := url.Parse(uri)
 	if err != nil {
 		return nil, err
 	}
 	c := &Client{
-		client:  defaultHTTPClient(),
-		BaseURL: parsedURL,
-		APIKey:  apiKey,
+		client:       defaultHTTPClient(),
+		BaseURL:      parsedURL,
+		AuthProvider: authProvider,
 	}
-	c.initialize()
 	return c, nil
-}
-
-func (c *Client) initialize() error {
-	if c.client == nil {
-		c.client = defaultHTTPClient()
-	}
-	if c.BaseURL == nil {
-		baseURL, err := url.Parse(defaultBaseURL)
-		if err != nil {
-			return err
-		}
-		c.BaseURL = baseURL
-	}
-
-	c.Connectors = &ConnectorService{client: c}
-	c.PullRequests = &PullRequestService{client: c}
-	c.Pipelines = &PipelineService{client: c}
-	c.Repositories = &RepositoryService{client: c}
-	c.Logs = &LogService{client: c}
-
-	// TODO: Replace it with harness-go-sdk
-	arClient, err := ar.NewClientWithResponses(c.BaseURL.String()+"/har/api/v1", ar.WithHTTPClient(c.client),
-		ar.WithRequestEditorFn(getEditor(c.APIKey)))
-	if err != nil {
-		return err
-	}
-	c.Registry = arClient
-
-	return nil
 }
 
 // Get is a simple helper that builds up the request URL, adding the path and parameters.
@@ -262,7 +222,14 @@ func (c *Client) PostRaw(
 // Do is a wrapper of http.Client.Do that injects the auth header in the request.
 func (c *Client) Do(r *http.Request) (*http.Response, error) {
 	slog.Debug("Request", "method", r.Method, "url", r.URL.String())
-	r.Header.Add(apiKeyHeader, c.APIKey)
+
+	// set the auth header
+	ctx := r.Context()
+	k, v, err := c.AuthProvider.GetHeader(ctx)
+	if err != nil {
+		return nil, err
+	}
+	r.Header.Set(k, v)
 
 	return c.client.Do(r)
 }
@@ -365,13 +332,5 @@ func setDefaultPagination(opts *dto.PaginationOptions) {
 		if opts.Size > maxPageSize {
 			opts.Size = maxPageSize
 		}
-	}
-}
-
-// TODO: Remove once we have Client service or we integrate with go-sdk
-func getEditor(token string) func(ctx context.Context, req *http.Request) error {
-	return func(ctx context.Context, req *http.Request) error {
-		req.Header.Set("x-api-key", token)
-		return nil
 	}
 }

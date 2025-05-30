@@ -13,7 +13,7 @@ import (
 )
 
 // GetRepositoryTool creates a tool for getting a specific repository
-func GetRepositoryTool(config *config.Config, client *client.Client) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetRepositoryTool(config *config.Config, client *client.RepositoryService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_repository",
 			mcp.WithDescription("Get details of a specific repository in Harness."),
 			mcp.WithString("repo_identifier",
@@ -33,7 +33,7 @@ func GetRepositoryTool(config *config.Config, client *client.Client) (tool mcp.T
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			data, err := client.Repositories.Get(ctx, scope, repoIdentifier)
+			data, err := client.Get(ctx, scope, repoIdentifier)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get repository: %w", err)
 			}
@@ -48,7 +48,7 @@ func GetRepositoryTool(config *config.Config, client *client.Client) (tool mcp.T
 }
 
 // ListRepositoriesTool creates a tool for listing repositories
-func ListRepositoriesTool(config *config.Config, client *client.Client) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListRepositoriesTool(config *config.Config, client *client.RepositoryService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_repositories",
 			mcp.WithDescription("List repositories in Harness."),
 			mcp.WithString("query",
@@ -121,7 +121,7 @@ func ListRepositoriesTool(config *config.Config, client *client.Client) (tool mc
 				opts.Order = order
 			}
 
-			data, err := client.Repositories.List(ctx, scope, opts)
+			data, err := client.List(ctx, scope, opts)
 			if err != nil {
 				return nil, fmt.Errorf("failed to list repositories: %w", err)
 			}

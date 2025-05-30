@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/harness/harness-mcp/client"
+
 	"github.com/harness/harness-mcp/client/ar"
 	"github.com/harness/harness-mcp/pkg/utils"
 
@@ -14,7 +14,7 @@ import (
 )
 
 // ListArtifactVersionsTool creates a tool for listing artifact versions in a registry
-func ListArtifactVersionsTool(config *config.Config, client *client.Client) (
+func ListArtifactVersionsTool(config *config.Config, client *ar.ClientWithResponses) (
 	tool mcp.Tool,
 	handler server.ToolHandlerFunc,
 ) {
@@ -71,7 +71,7 @@ func ListArtifactVersionsTool(config *config.Config, client *client.Client) (
 			registryFullRef := utils.GetRef(scope, registryRef)
 
 			// Call the GetAllArtifactVersions API
-			response, err := client.Registry.GetAllArtifactVersionsWithResponse(ctx, registryFullRef, artifactRef,
+			response, err := client.GetAllArtifactVersionsWithResponse(ctx, registryFullRef, artifactRef,
 				params)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -92,7 +92,7 @@ func ListArtifactVersionsTool(config *config.Config, client *client.Client) (
 }
 
 // ListArtifactFilesTool creates a tool for listing files for a specific artifact version in a registry
-func ListArtifactFilesTool(config *config.Config, client *client.Client) (
+func ListArtifactFilesTool(config *config.Config, client *ar.ClientWithResponses) (
 	tool mcp.Tool,
 	handler server.ToolHandlerFunc,
 ) {
@@ -171,7 +171,7 @@ func ListArtifactFilesTool(config *config.Config, client *client.Client) (
 			registryFullRef := utils.GetRef(scope, registryRef)
 
 			// Call the GetArtifactFiles API
-			response, err := client.Registry.GetArtifactFilesWithResponse(ctx, registryFullRef, artifactRef, versionRef,
+			response, err := client.GetArtifactFilesWithResponse(ctx, registryFullRef, artifactRef, versionRef,
 				params)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Errorf("failed to list artifact files: %w", err).Error()), nil

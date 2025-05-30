@@ -11,9 +11,9 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness"
+	"github.com/harness/harness-mcp/pkg/harness/auth"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/spf13/cobra"
@@ -47,6 +47,9 @@ var (
 		Short: "Start stdio server",
 		Long:  `Start a server that communicates via standard input/output streams using JSON-RPC messages.`,
 		RunE: func(_ *cobra.Command, _ []string) error {
+			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+			defer stop()
+
 			apiKey := viper.GetString("api_key")
 			if apiKey == "" {
 				return fmt.Errorf("API key not provided")
@@ -77,7 +80,67 @@ var (
 				Debug:            viper.GetBool("debug"),
 			}
 
-			if err := runStdioServer(cfg); err != nil {
+			if err := runStdioServer(ctx, cfg); err != nil {
+				return fmt.Errorf("failed to run stdio server: %w", err)
+			}
+			return nil
+		},
+	}
+
+	// TODO: this will move to streamable HTTP once the service is setup
+	internalCmd = &cobra.Command{
+		Use:   "internal",
+		Short: "Start stdio server in internal mode",
+		Long:  `Start a server that communicates via standard input/output streams using JSON-RPC messages with additional internal credentials.`,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+			defer stop()
+
+			// TODO: get this from request header and add in the context once we move to streamable HTTP
+			bearerToken := viper.GetString("bearer_token")
+			if bearerToken == "" {
+				return fmt.Errorf("bearer token not provided")
+			}
+
+			mcpSecret := viper.GetString("mcp_svc_secret")
+			if mcpSecret == "" {
+				return fmt.Errorf("MCP service secret not provided")
+			}
+
+			// Move this out to middleware once we move to streamable HTTP
+			session, err := auth.AuthenticateSession(bearerToken, mcpSecret)
+			if err != nil {
+				return fmt.Errorf("Failed to authenticate session: %w", err)
+			}
+
+			// Store the authenticated session in the context
+			ctx = auth.WithAuthSession(ctx, session)
+
+			var toolsets []string
+			err = viper.UnmarshalKey("toolsets", &toolsets)
+			if err != nil {
+				return fmt.Errorf("Failed to unmarshal toolsets: %w", err)
+			}
+
+			cfg := config.Config{
+				// Common fields
+				Version:     version,
+				ReadOnly:    true, // we keep it read-only for now
+				Toolsets:    toolsets,
+				LogFilePath: viper.GetString("log_file"),
+				Debug:       viper.GetBool("debug"),
+				Internal:    true,
+				AccountID:   session.Principal.AccountID,
+				// Internal mode specific fields
+				BearerToken:        viper.GetString("bearer_token"),
+				PipelineSvcBaseURL: viper.GetString("pipeline_svc_base_url"),
+				PipelineSvcSecret:  viper.GetString("pipeline_svc_secret"),
+				NgManagerBaseURL:   viper.GetString("ng_manager_base_url"),
+				NgManagerSecret:    viper.GetString("ng_manager_secret"),
+				McpSvcSecret:       viper.GetString("mcp_svc_secret"),
+			}
+
+			if err := runStdioServer(ctx, cfg); err != nil {
 				return fmt.Errorf("failed to run stdio server: %w", err)
 			}
 			return nil
@@ -96,25 +159,46 @@ func init() {
 	rootCmd.PersistentFlags().Bool("read-only", false, "Restrict the server to read-only operations")
 	rootCmd.PersistentFlags().String("log-file", "", "Path to log file")
 	rootCmd.PersistentFlags().Bool("debug", false, "Enable debug logging")
-	rootCmd.PersistentFlags().String("base-url", "https://app.harness.io", "Base URL for Harness")
-	rootCmd.PersistentFlags().String("api-key", "", "API key for authentication")
-	rootCmd.PersistentFlags().String("default-org-id", "",
+
+	// Add stdio-specific flags
+	stdioCmd.Flags().String("base-url", "https://app.harness.io", "Base URL for Harness")
+	stdioCmd.Flags().String("api-key", "", "API key for authentication")
+	stdioCmd.Flags().String("default-org-id", "",
 		"Default org ID to use. If not specified, it would need to be passed in the query (if required)")
-	rootCmd.PersistentFlags().String("default-project-id", "",
+	stdioCmd.Flags().String("default-project-id", "",
 		"Default project ID to use. If not specified, it would need to be passed in the query (if required)")
 
-	// Bind flags to viper
+	// Add internal-specific flags
+	internalCmd.Flags().String("bearer-token", "", "Bearer token for authentication")
+	internalCmd.Flags().String("pipeline-svc-base-url", "", "Base URL for pipeline service")
+	internalCmd.Flags().String("pipeline-svc-secret", "", "Secret for pipeline service")
+	internalCmd.Flags().String("ng-manager-base-url", "", "Base URL for NG manager")
+	internalCmd.Flags().String("ng-manager-secret", "", "Secret for NG manager")
+	internalCmd.Flags().String("mcp-svc-secret", "", "Secret for MCP service")
+
+	// Bind global flags to viper
 	_ = viper.BindPFlag("toolsets", rootCmd.PersistentFlags().Lookup("toolsets"))
 	_ = viper.BindPFlag("read_only", rootCmd.PersistentFlags().Lookup("read-only"))
 	_ = viper.BindPFlag("log_file", rootCmd.PersistentFlags().Lookup("log-file"))
 	_ = viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
-	_ = viper.BindPFlag("base_url", rootCmd.PersistentFlags().Lookup("base-url"))
-	_ = viper.BindPFlag("api_key", rootCmd.PersistentFlags().Lookup("api-key"))
-	_ = viper.BindPFlag("default_org_id", rootCmd.PersistentFlags().Lookup("default-org-id"))
-	_ = viper.BindPFlag("default_project_id", rootCmd.PersistentFlags().Lookup("default-project-id"))
+
+	// Bind stdio-specific flags to viper
+	_ = viper.BindPFlag("base_url", stdioCmd.Flags().Lookup("base-url"))
+	_ = viper.BindPFlag("api_key", stdioCmd.Flags().Lookup("api-key"))
+	_ = viper.BindPFlag("default_org_id", stdioCmd.Flags().Lookup("default-org-id"))
+	_ = viper.BindPFlag("default_project_id", stdioCmd.Flags().Lookup("default-project-id"))
+
+	// Bind internal-specific flags to viper
+	_ = viper.BindPFlag("bearer_token", internalCmd.Flags().Lookup("bearer-token"))
+	_ = viper.BindPFlag("pipeline_svc_base_url", internalCmd.Flags().Lookup("pipeline-svc-base-url"))
+	_ = viper.BindPFlag("pipeline_svc_secret", internalCmd.Flags().Lookup("pipeline-svc-secret"))
+	_ = viper.BindPFlag("ng_manager_base_url", internalCmd.Flags().Lookup("ng-manager-base-url"))
+	_ = viper.BindPFlag("ng_manager_secret", internalCmd.Flags().Lookup("ng-manager-secret"))
+	_ = viper.BindPFlag("mcp_svc_secret", internalCmd.Flags().Lookup("mcp-svc-secret"))
 
 	// Add subcommands
 	rootCmd.AddCommand(stdioCmd)
+	stdioCmd.AddCommand(internalCmd)
 }
 
 func initConfig() {
@@ -150,11 +234,7 @@ type runConfig struct {
 	enabledToolsets []string
 }
 
-func runStdioServer(config config.Config) error {
-	// Create app context
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
+func runStdioServer(ctx context.Context, config config.Config) error {
 	err := initLogger(config.LogFilePath, config.Debug)
 	if err != nil {
 		return fmt.Errorf("failed to initialize logger: %w", err)
@@ -177,14 +257,8 @@ func runStdioServer(config config.Config) error {
 	// WithRecovery makes sure panics are logged and don't crash the server
 	harnessServer := harness.NewServer(version, server.WithHooks(hooks), server.WithRecovery())
 
-	client, err := client.NewWithToken(config.BaseURL, config.APIKey)
-	if err != nil {
-		slog.Error("Failed to create client", "error", err)
-		return fmt.Errorf("failed to create client: %w", err)
-	}
-
 	// Initialize toolsets
-	toolsets, err := harness.InitToolsets(client, &config)
+	toolsets, err := harness.InitToolsets(&config)
 	if err != nil {
 		slog.Error("Failed to initialize toolsets", "error", err)
 	}

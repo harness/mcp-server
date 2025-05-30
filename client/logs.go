@@ -13,13 +13,13 @@ const (
 
 // LogService handles operations related to pipeline logs
 type LogService struct {
-	client *Client
+	Client *Client
 }
 
 // DownloadLogs fetches a download URL for pipeline execution logs
 func (l *LogService) DownloadLogs(ctx context.Context, scope dto.Scope, planExecutionID string) (string, error) {
 	// First, get the pipeline execution details to determine the prefix format
-	pipelineService := &PipelineService{client: l.client}
+	pipelineService := &PipelineService{Client: l.Client} // TODO: needs to be changed for internal case, we should move this above
 	execution, err := pipelineService.GetExecution(ctx, scope, planExecutionID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get execution details: %w", err)
@@ -53,7 +53,7 @@ func (l *LogService) DownloadLogs(ctx context.Context, scope dto.Scope, planExec
 	response := &dto.LogDownloadResponse{}
 
 	// Make the POST request
-	err = l.client.Post(ctx, logDownloadPath, params, nil, response)
+	err = l.Client.Post(ctx, logDownloadPath, params, nil, response)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch log download URL: %w", err)
 	}

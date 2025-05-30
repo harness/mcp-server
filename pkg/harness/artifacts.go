@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/harness/harness-mcp/client"
+
 	"github.com/harness/harness-mcp/client/ar"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/utils"
@@ -13,7 +13,7 @@ import (
 )
 
 // ListArtifactsTool creates a tool for listing artifacts in a registry
-func ListArtifactsTool(config *config.Config, client *client.Client) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListArtifactsTool(config *config.Config, client *ar.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_artifacts",
 			mcp.WithDescription("List artifacts in a Harness artifact registry"),
 			mcp.WithString("registry",
@@ -58,7 +58,7 @@ func ListArtifactsTool(config *config.Config, client *client.Client) (tool mcp.T
 			ref := utils.GetRef(scope, registryRef)
 
 			// Call the GetAllArtifactsByRegistry API
-			response, err := client.Registry.GetAllArtifactsByRegistryWithResponse(ctx, ref, params)
+			response, err := client.GetAllArtifactsByRegistryWithResponse(ctx, ref, params)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

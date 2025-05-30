@@ -15,7 +15,7 @@ import (
 )
 
 // GetPullRequestTool creates a tool for getting a specific pull request
-func GetPullRequestTool(config *config.Config, client *client.Client) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetPullRequestTool(config *config.Config, client *client.PullRequestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_pull_request",
 			mcp.WithDescription("Get details of a specific pull request in a Harness repository."),
 			mcp.WithString("repo_id",
@@ -45,7 +45,7 @@ func GetPullRequestTool(config *config.Config, client *client.Client) (tool mcp.
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			data, err := client.PullRequests.Get(ctx, scope, repoID, prNumber)
+			data, err := client.Get(ctx, scope, repoID, prNumber)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get pull request: %w", err)
 			}
@@ -61,7 +61,7 @@ func GetPullRequestTool(config *config.Config, client *client.Client) (tool mcp.
 
 // ListPullRequestsTool creates a tool for listing pull requests
 // TODO: more options can be added (sort, order, timestamps, etc)
-func ListPullRequestsTool(config *config.Config, client *client.Client) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListPullRequestsTool(config *config.Config, client *client.PullRequestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_pull_requests",
 			mcp.WithDescription("List pull requests in a Harness repository."),
 			mcp.WithString("repo_id",
@@ -174,7 +174,7 @@ func ListPullRequestsTool(config *config.Config, client *client.Client) (tool mc
 			}
 			opts.IncludeChecks = includeChecks
 
-			data, err := client.PullRequests.List(ctx, scope, repoID, opts)
+			data, err := client.List(ctx, scope, repoID, opts)
 			if err != nil {
 				return nil, fmt.Errorf("failed to list pull requests: %w", err)
 			}
@@ -216,7 +216,7 @@ func splitAndTrim(s, sep string) []string {
 }
 
 // GetPullRequestChecksTool creates a tool for getting pull request status checks
-func GetPullRequestChecksTool(config *config.Config, client *client.Client) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetPullRequestChecksTool(config *config.Config, client *client.PullRequestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_pull_request_checks",
 			mcp.WithDescription("Get status checks for a specific pull request in a Harness repository."),
 			mcp.WithString("repo_identifier",
@@ -246,7 +246,7 @@ func GetPullRequestChecksTool(config *config.Config, client *client.Client) (too
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			data, err := client.PullRequests.GetChecks(ctx, scope, repoIdentifier, prNumber)
+			data, err := client.GetChecks(ctx, scope, repoIdentifier, prNumber)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get pull request checks: %w", err)
 			}
@@ -261,7 +261,7 @@ func GetPullRequestChecksTool(config *config.Config, client *client.Client) (too
 }
 
 // CreatePullRequestTool creates a tool for creating a new pull request
-func CreatePullRequestTool(config *config.Config, client *client.Client) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func CreatePullRequestTool(config *config.Config, client *client.PullRequestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("create_pull_request",
 			mcp.WithDescription("Create a new pull request in a Harness repository."),
 			mcp.WithString("repo_identifier",
@@ -333,7 +333,7 @@ func CreatePullRequestTool(config *config.Config, client *client.Client) (tool m
 				Description:  description,
 			}
 
-			data, err := client.PullRequests.Create(ctx, scope, repoIdentifier, createRequest)
+			data, err := client.Create(ctx, scope, repoIdentifier, createRequest)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create pull request: %w", err)
 			}

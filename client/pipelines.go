@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+
 	"github.com/harness/harness-mcp/client/dto"
 )
 
@@ -15,7 +16,7 @@ const (
 )
 
 type PipelineService struct {
-	client *Client
+	Client *Client
 }
 
 func (p *PipelineService) Get(ctx context.Context, scope dto.Scope, pipelineID string) (
@@ -32,7 +33,7 @@ func (p *PipelineService) Get(ctx context.Context, scope dto.Scope, pipelineID s
 	response := &dto.Entity[dto.PipelineData]{}
 
 	// Make the GET request
-	err := p.client.Get(ctx, path, params, map[string]string{}, response)
+	err := p.Client.Get(ctx, path, params, map[string]string{}, response)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +76,7 @@ func (p *PipelineService) List(
 	response := &dto.ListOutput[dto.PipelineListItem]{}
 
 	// Make the POST request
-	err := p.client.Post(ctx, pipelineListPath, params, requestBody, response)
+	err := p.Client.Post(ctx, pipelineListPath, params, requestBody, response)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +132,7 @@ func (p *PipelineService) ListExecutions(
 	response := &dto.ListOutput[dto.PipelineExecution]{}
 
 	// Make the POST request
-	err := p.client.Post(ctx, pipelineExecutionSummaryPath, params, requestBody, response)
+	err := p.Client.Post(ctx, pipelineExecutionSummaryPath, params, requestBody, response)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list pipeline executions: %w", err)
 	}
@@ -155,7 +156,7 @@ func (p *PipelineService) GetExecution(
 	response := &dto.Entity[dto.PipelineExecutionResponse]{}
 
 	// Make the GET request
-	err := p.client.Get(ctx, path, params, map[string]string{}, response)
+	err := p.Client.Get(ctx, path, params, map[string]string{}, response)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get execution details: %w", err)
 	}
@@ -186,7 +187,7 @@ func (p *PipelineService) FetchExecutionURL(
 	urlResponse := &dto.Entity[string]{}
 
 	// Make the POST request
-	err := p.client.Post(ctx, path, params, nil, urlResponse)
+	err := p.Client.Post(ctx, path, params, nil, urlResponse)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch execution URL: %w", err)
 	}

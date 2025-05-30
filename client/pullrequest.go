@@ -17,7 +17,7 @@ const (
 )
 
 type PullRequestService struct {
-	client *Client
+	Client *Client
 }
 
 func (p *PullRequestService) Get(ctx context.Context, scope dto.Scope, repoID string, prNumber int) (*dto.PullRequest, error) {
@@ -26,7 +26,7 @@ func (p *PullRequestService) Get(ctx context.Context, scope dto.Scope, repoID st
 	addScope(scope, params)
 
 	pr := new(dto.PullRequest)
-	err := p.client.Get(ctx, path, params, nil, pr)
+	err := p.Client.Get(ctx, path, params, nil, pr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get pull request: %w", err)
 	}
@@ -115,7 +115,7 @@ func (p *PullRequestService) List(ctx context.Context, scope dto.Scope, repoID s
 	}
 
 	var prs []*dto.PullRequest
-	err := p.client.Get(ctx, path, params, nil, &prs)
+	err := p.Client.Get(ctx, path, params, nil, &prs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list pull requests: %w", err)
 	}
@@ -134,7 +134,7 @@ func (p *PullRequestService) Create(ctx context.Context, scope dto.Scope, repoID
 	}
 
 	pr := new(dto.PullRequest)
-	err := p.client.Post(ctx, path, params, createPR, pr)
+	err := p.Client.Post(ctx, path, params, createPR, pr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create pull request: %w", err)
 	}
@@ -149,7 +149,7 @@ func (p *PullRequestService) GetChecks(ctx context.Context, scope dto.Scope, rep
 	addScope(scope, params)
 
 	checks := new(dto.PullRequestChecksResponse)
-	err := p.client.Get(ctx, path, params, nil, checks)
+	err := p.Client.Get(ctx, path, params, nil, checks)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get pull request checks: %w", err)
 	}

@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/harness/harness-mcp/client"
+
 	"github.com/harness/harness-mcp/client/ar"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/utils"
@@ -13,7 +13,7 @@ import (
 )
 
 // GetRegistryTool creates a tool for getting a specific registry
-func GetRegistryTool(config *config.Config, client *client.Client) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetRegistryTool(config *config.Config, client *ar.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_registry",
 			mcp.WithDescription("Get details of a specific registry in Harness artifact registry"),
 			mcp.WithString("registry",
@@ -35,7 +35,7 @@ func GetRegistryTool(config *config.Config, client *client.Client) (tool mcp.Too
 
 			// Call the GetRegistry API
 			ref := utils.GetRef(scope, registryRef)
-			response, err := client.Registry.GetRegistryWithResponse(ctx, ref)
+			response, err := client.GetRegistryWithResponse(ctx, ref)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -55,7 +55,7 @@ func GetRegistryTool(config *config.Config, client *client.Client) (tool mcp.Too
 }
 
 // ListRegistriesTool creates a tool for listing registries
-func ListRegistriesTool(config *config.Config, client *client.Client) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListRegistriesTool(config *config.Config, client *ar.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_registries",
 			mcp.WithDescription("List registries in Harness artifact registry"),
 			mcp.WithString("type",
@@ -105,7 +105,7 @@ func ListRegistriesTool(config *config.Config, client *client.Client) (tool mcp.
 			}
 
 			// Call the GetAllRegistries API
-			response, err := client.Registry.GetAllRegistriesWithResponse(ctx, ref, params)
+			response, err := client.GetAllRegistriesWithResponse(ctx, ref, params)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

@@ -1,14 +1,27 @@
 package config
 
 type Config struct {
-	Version          string
+	// Common fields for both modes
+	Version     string
+	ReadOnly    bool
+	Toolsets    []string
+	LogFilePath string
+	Debug       bool
+
+	Internal bool
+
+	// Only used for external mode
 	BaseURL          string
 	AccountID        string
 	DefaultOrgID     string
 	DefaultProjectID string
 	APIKey           string
-	ReadOnly         bool
-	Toolsets         []string
-	LogFilePath      string
-	Debug            bool
+
+	// Only used for internal mode
+	BearerToken        string
+	PipelineSvcBaseURL string
+	PipelineSvcSecret  string
+	NgManagerBaseURL   string
+	NgManagerSecret    string
+	McpSvcSecret       string
 }
