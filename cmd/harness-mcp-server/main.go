@@ -241,6 +241,7 @@ func runStdioServer(ctx context.Context, config config.Config) error {
 	}
 
 	slog.Info("Starting server", "url", config.BaseURL)
+	slog.Debug("Using ", "Config ->", config)
 
 	// Define beforeInit function to add client info to user agent
 	beforeInit := func(_ context.Context, _ any, message *mcp.InitializeRequest) {
