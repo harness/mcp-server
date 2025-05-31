@@ -177,6 +177,30 @@ To use the Harness MCP Server with Windsurf:
   }
 }
 ```
+## Usage with Amazon Q Developer CLI
+
+To use the Harness MCP Server with Amazon Q Developer CLI:
+
+1. Add the server configuration to your Amazon Q config file at: `~/.aws/amazonq/mcp.json`  
+
+### Using Local Binary
+
+```json
+{
+  "mcpServers": {
+    "harness": {
+      "command": "/path/to/harness-mcp-server",
+      "args": ["stdio"],
+      "env": {
+        "HARNESS_API_KEY": "<YOUR_API_KEY>",
+        "HARNESS_DEFAULT_ORG_ID": "<YOUR_ORG_ID>",
+        "HARNESS_DEFAULT_PROJECT_ID": "<YOUR_PROJECT_ID>",
+        "HARNESS_BASE_URL": "<YOUR_BASE_URL>"
+      }
+    }
+  }
+}
+```
 
 ## Development
 
