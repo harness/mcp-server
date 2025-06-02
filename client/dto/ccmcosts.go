@@ -11,6 +11,10 @@ const (
 
 type PeriodType string
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> b52be07 (Added perspectives detail feature)
 // CEView represents a basic ccm response.
 // The `data` field contains the response data.
 type CCMBaseResponse struct {
@@ -184,6 +188,11 @@ type CCMSuppressed struct {
 	Message          string                 `json:"message"`
 	LocalizedMessage string                 `json:"localizedMessage"`
 }
+<<<<<<< HEAD
+=======
+<<<<<<<< HEAD:client/dto/cloudcostmanagement.go
+========
+>>>>>>> b52be07 (Added perspectives detail feature)
 
 // CCMCostCategory represents the details of a cost category in CCM
 type CCMCostCategory struct {
@@ -198,3 +207,7 @@ type CCMGetCostCategoryOptions struct {
 	CostCategoryId string `json:"id,omitempty"`
 }
 
+<<<<<<< HEAD
+=======
+>>>>>>>> b52be07 (Added perspectives detail feature):client/dto/ccmcosts.go
+>>>>>>> b52be07 (Added perspectives detail feature)
