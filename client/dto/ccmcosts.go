@@ -11,16 +11,6 @@ const (
 
 type PeriodType string
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-// CCMBaseResponse represents a basic ccm response.
-=======
-
-=======
->>>>>>> 6c850ff ([CCM-tools] CCM Overview)
-// CEView represents a basic ccm response.
-// The `data` field contains the response data.
->>>>>>> 1554fc7 (Added List Cloud Cost Management tool)
 type CCMBaseResponse struct {
 	Status        string      `json:"state,omitempty"`
 	Message	   string      `json:"message,omitempty"`
@@ -34,11 +24,8 @@ type CCMError struct {
 	Error string `json:"error,omitempty"`
 }
 
-<<<<<<< HEAD
 // CEView represents a basic ccm response.
 // The `data` field contains the response data.
-=======
->>>>>>> 1554fc7 (Added List Cloud Cost Management tool)
 type CEView struct {
 	CCMBaseResponse
 	Data          CCMOverview `json:"data,omitempty"`
@@ -71,13 +58,10 @@ type CCMReference struct {
 	Type string `json:"type,omitempty"`
 }
 
-<<<<<<< HEAD
 // ***************************
 // Cost Category (name) List
 // ***************************
 
-=======
->>>>>>> 1554fc7 (Added List Cloud Cost Management tool)
 // CcmCostCategoriesOptions represents options for listing cost categories
 type CcmListCostCategoriesOptions struct {
 	AccountIdentifier string `json:"accountIdentifier,omitempty"`
@@ -90,7 +74,6 @@ type CCMCostCategoryList struct {
 	CCMBaseResponse
 	Data []string `json:"data,omitempty"`
 }
-<<<<<<< HEAD
 
 // ***************************
 // Cost Category Details List
@@ -214,8 +197,3 @@ type CCMGetCostCategoryOptions struct {
 	AccountIdentifier string `json:"accountIdentifier,omitempty"`
 	CostCategoryId string `json:"id,omitempty"`
 }
-<<<<<<< HEAD
-=======
->>>>>>> 1554fc7 (Added List Cloud Cost Management tool)
-=======
->>>>>>> 243276b (Added Get Cost Category by Id)
