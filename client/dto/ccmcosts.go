@@ -197,3 +197,4 @@ type CCMGetCostCategoryOptions struct {
 	AccountIdentifier string `json:"accountIdentifier,omitempty"`
 	CostCategoryId string `json:"id,omitempty"`
 }
+
