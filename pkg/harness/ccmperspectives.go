@@ -121,4 +121,3 @@ func ListCcmPerspectivesDetailTool(config *config.Config, client *client.CloudCo
 			return mcp.NewToolResultText(string(r)), nil
 		}
 	}
-
