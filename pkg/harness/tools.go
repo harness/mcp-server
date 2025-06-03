@@ -135,6 +135,7 @@ func registerPullRequests(config *config.Config, tsg *toolsets.ToolsetGroup) err
 			toolsets.NewServerTool(GetPullRequestTool(config, pullRequestClient)),
 			toolsets.NewServerTool(ListPullRequestsTool(config, pullRequestClient)),
 			toolsets.NewServerTool(GetPullRequestChecksTool(config, pullRequestClient)),
+			toolsets.NewServerTool(GetPullRequestActivitiesTool(config, pullRequestClient)),
 		).
 		AddWriteTools(
 			toolsets.NewServerTool(CreatePullRequestTool(config, pullRequestClient)),

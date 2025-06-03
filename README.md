@@ -25,6 +25,7 @@ Toolset Name: `pullrequests`
 - `get_pull_request`: Get details of a specific pull request
 - `list_pull_requests`: List pull requests in a repository
 - `get_pull_request_checks`: Get status checks for a specific pull request
+- `get_pull_request_activities`: Get activities and comments for a specific pull request
 - `create_pull_request`: Create a new pull request
 
 #### Repositories Toolset

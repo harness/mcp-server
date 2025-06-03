@@ -9,11 +9,12 @@ import (
 )
 
 const (
-	pullRequestBasePath   = "code/api/v1/repos"
-	pullRequestGetPath    = pullRequestBasePath + "/%s/pullreq/%d"
-	pullRequestListPath   = pullRequestBasePath + "/%s/pullreq"
-	pullRequestCreatePath = pullRequestBasePath + "/%s/pullreq"
-	pullRequestChecksPath = pullRequestBasePath + "/%s/pullreq/%d/checks"
+	pullRequestBasePath       = "code/api/v1/repos"
+	pullRequestGetPath        = pullRequestBasePath + "/%s/pullreq/%d"
+	pullRequestListPath       = pullRequestBasePath + "/%s/pullreq"
+	pullRequestCreatePath     = pullRequestBasePath + "/%s/pullreq"
+	pullRequestChecksPath     = pullRequestBasePath + "/%s/pullreq/%d/checks"
+	pullRequestActivitiesPath = pullRequestBasePath + "/%s/pullreq/%d/activities"
 )
 
 type PullRequestService struct {
@@ -155,4 +156,67 @@ func (p *PullRequestService) GetChecks(ctx context.Context, scope dto.Scope, rep
 	}
 
 	return checks, nil
+}
+
+// setDefaultPaginationForPRActivities sets default pagination values for PullRequestActivityOptions
+func setDefaultPaginationForPRActivities(opts *dto.PullRequestActivityOptions) {
+	if opts == nil {
+		return
+	}
+	if opts.Page <= 0 {
+		opts.Page = 1
+	}
+
+	if opts.Limit <= 0 {
+		opts.Limit = defaultPageSize
+	} else if opts.Limit > maxPageSize {
+		opts.Limit = maxPageSize
+	}
+}
+
+// GetActivities retrieves the activities (including comments) for a specific pull request
+func (p *PullRequestService) GetActivities(ctx context.Context, scope dto.Scope, repoID string, prNumber int, opts *dto.PullRequestActivityOptions) (dto.PullRequestActivitiesResponse, error) {
+	path := fmt.Sprintf(pullRequestActivitiesPath, repoID, prNumber)
+	params := make(map[string]string)
+	addScope(scope, params)
+
+	// Handle nil options by creating default options
+	if opts == nil {
+		opts = &dto.PullRequestActivityOptions{}
+	}
+
+	setDefaultPaginationForPRActivities(opts)
+
+	params["limit"] = fmt.Sprintf("%d", opts.Limit)
+
+	// Add filtering parameters
+	if len(opts.Kind) > 0 {
+		params["kind"] = strings.Join(opts.Kind, ",")
+	}
+	if len(opts.Type) > 0 {
+		params["type"] = strings.Join(opts.Type, ",")
+	}
+	if opts.After > 0 {
+		params["after"] = fmt.Sprintf("%d", opts.After)
+	}
+	if opts.Before > 0 {
+		params["before"] = fmt.Sprintf("%d", opts.Before)
+	}
+	if opts.AccountIdentifier != "" {
+		params["accountIdentifier"] = opts.AccountIdentifier
+	}
+	if opts.OrgIdentifier != "" {
+		params["orgIdentifier"] = opts.OrgIdentifier
+	}
+	if opts.ProjectIdentifier != "" {
+		params["projectIdentifier"] = opts.ProjectIdentifier
+	}
+
+	var activities dto.PullRequestActivitiesResponse
+	err := p.Client.Get(ctx, path, params, nil, &activities)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pull request activities: %w", err)
+	}
+
+	return activities, nil
 }

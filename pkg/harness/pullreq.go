@@ -346,3 +346,116 @@ func CreatePullRequestTool(config *config.Config, client *client.PullRequestServ
 			return mcp.NewToolResultText(string(r)), nil
 		}
 }
+
+// GetPullRequestActivitiesTool creates a tool for getting activities (including comments) for a specific pull request
+func GetPullRequestActivitiesTool(config *config.Config, client *client.PullRequestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("get_pull_request_activities",
+			mcp.WithDescription("Get activities and comments for a specific pull request in a Harness repository."),
+			mcp.WithString("repo_id",
+				mcp.Required(),
+				mcp.Description("The ID of the repository"),
+			),
+			mcp.WithNumber("pr_number",
+				mcp.Required(),
+				mcp.Description("The number of the pull request"),
+			),
+			mcp.WithString("kind",
+				mcp.Description("Optional comma-separated kinds of the pull request activity to include in the result."),
+				mcp.Enum("change-comment", "comment", "system"),
+			),
+			mcp.WithString("type",
+				mcp.Description("Optional comma-separated types of the pull request activity to include in the result."),
+				mcp.Enum("branch-delete", "branch-restore", "branch-update", "code-comment", "comment", "label-modify", "merge", "review-submit", "reviewer-add", "reviewer-delete", "state-change", "target-branch-change", "title-change"),
+			),
+			mcp.WithNumber("after",
+				mcp.Description("The result should contain only entries created at and after this timestamp (unix millis)."),
+			),
+			mcp.WithNumber("before",
+				mcp.Description("The result should contain only entries created before this timestamp (unix millis)."),
+			),
+			mcp.WithNumber("limit",
+				mcp.DefaultNumber(20),
+				mcp.Description("The maximum number of results to return (1-100)."),
+				mcp.Max(100),
+			),
+			WithScope(config, false),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			repoID, err := requiredParam[string](request, "repo_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			prNumberFloat, err := requiredParam[float64](request, "pr_number")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			prNumber := int(prNumberFloat)
+
+			scope, err := fetchScope(config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// Create the options struct
+			opts := &dto.PullRequestActivityOptions{}
+
+			limit, err := OptionalParam[float64](request, "limit")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if limit > 0 {
+				opts.Limit = int(limit)
+			}
+
+			// Handle filtering parameters
+			kindStr, err := OptionalParam[string](request, "kind")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if kindStr != "" {
+				opts.Kind = parseCommaSeparatedList(kindStr)
+			}
+
+			typeStr, err := OptionalParam[string](request, "type")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if typeStr != "" {
+				opts.Type = parseCommaSeparatedList(typeStr)
+			}
+
+			after, err := OptionalParam[float64](request, "after")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if after > 0 {
+				opts.After = int64(after)
+			}
+
+			before, err := OptionalParam[float64](request, "before")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if before > 0 {
+				opts.Before = int64(before)
+			}
+
+			// Set scope identifiers
+			opts.AccountIdentifier = scope.AccountID
+			opts.OrgIdentifier = scope.OrgID
+			opts.ProjectIdentifier = scope.ProjectID
+
+			data, err := client.GetActivities(ctx, scope, repoID, prNumber, opts)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to get pull request activities: %s", err.Error())), nil
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal pull request activities: %s", err.Error())), nil
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}

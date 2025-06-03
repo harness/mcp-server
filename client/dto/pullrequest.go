@@ -1,5 +1,7 @@
 package dto
 
+import "encoding/json"
+
 // PullRequest represents a pull request in the system
 type PullRequest struct {
 	Author            PullRequestAuthor       `json:"author,omitempty"`
@@ -112,18 +114,18 @@ type PullRequestCheckReporter struct {
 
 // PullRequestCheck represents a status check for a pull request
 type PullRequestCheck struct {
-	Created    int64                  `json:"created,omitempty"`
-	Ended      int64                  `json:"ended,omitempty"`
-	ID         int                    `json:"id,omitempty"`
-	Identifier string                 `json:"identifier,omitempty"`
-	Link       string                 `json:"link,omitempty"`
-	Metadata   interface{}            `json:"metadata"`
-	Payload    PullRequestCheckPayload `json:"payload,omitempty"`
+	Created    int64                    `json:"created,omitempty"`
+	Ended      int64                    `json:"ended,omitempty"`
+	ID         int                      `json:"id,omitempty"`
+	Identifier string                   `json:"identifier,omitempty"`
+	Link       string                   `json:"link,omitempty"`
+	Metadata   interface{}              `json:"metadata"`
+	Payload    PullRequestCheckPayload  `json:"payload,omitempty"`
 	ReportedBy PullRequestCheckReporter `json:"reported_by,omitempty"`
-	Started    int64                  `json:"started,omitempty"`
-	Status     string                 `json:"status,omitempty"`
-	Summary    string                 `json:"summary,omitempty"`
-	Updated    int64                  `json:"updated,omitempty"`
+	Started    int64                    `json:"started,omitempty"`
+	Status     string                   `json:"status,omitempty"`
+	Summary    string                   `json:"summary,omitempty"`
+	Updated    int64                    `json:"updated,omitempty"`
 }
 
 // PullRequestCheckInfo represents a check with additional information
@@ -136,7 +138,7 @@ type PullRequestCheckInfo struct {
 // PullRequestChecksResponse represents the response from the checks API
 type PullRequestChecksResponse struct {
 	Checks    []PullRequestCheckInfo `json:"checks,omitempty"`
-	CommitSha string                `json:"commit_sha,omitempty"`
+	CommitSha string                 `json:"commit_sha,omitempty"`
 }
 
 // PullRequestOptions represents the options for listing pull requests
@@ -157,4 +159,50 @@ type PullRequestOptions struct {
 	Limit         int      `json:"limit,omitempty"`
 	AuthorID      int      `json:"author_id,omitempty"`
 	IncludeChecks bool     `json:"include_checks,omitempty"`
+}
+
+// PullRequestActivity represents an activity on a pull request
+type PullRequestActivity struct {
+	ID          int             `json:"id,omitempty"`
+	Type        string          `json:"type,omitempty"`
+	Created     int64           `json:"created,omitempty"`
+	Updated     int64           `json:"updated,omitempty"`
+	Edited      int64           `json:"edited,omitempty"`
+	ParentID    int             `json:"parent_id,omitempty"`
+	RepoID      int64           `json:"repo_id"`
+	PullReqID   int64           `json:"pullreq_id"`
+	Kind        string          `json:"kind,omitempty"`
+	Text        string          `json:"text,omitempty"`
+	CodeComment CodeComment     `json:"code_comment,omitempty"`
+	Metadata    interface{}     `json:"metadata,omitempty"`
+	Resolved    int64           `json:"resolved,omitempty"`
+	PayloadRaw  json.RawMessage `json:"payload"`
+}
+
+// PullRequestActivitiesResponse represents the response from the activities API
+// It's a direct slice of activities as the API returns an array
+type PullRequestActivitiesResponse []PullRequestActivity
+
+type CodeComment struct {
+	Outdated     bool   `json:"outdated,omitempty"`
+	MergeBaseSHA string `json:"merge_base_sha,omitempty"`
+	SourceSHA    string `json:"source_sha,omitempty"`
+	Path         string `json:"path,omitempty"`
+	LineNew      int    `json:"line_new,omitempty"`
+	SpanNew      int    `json:"span_new,omitempty"`
+	LineOld      int    `json:"line_old,omitempty"`
+	SpanOld      int    `json:"span_old,omitempty"`
+}
+
+// PullRequestActivityOptions defines options for listing PR activities
+type PullRequestActivityOptions struct {
+	AccountIdentifier string   `json:"accountIdentifier,omitempty"`
+	OrgIdentifier     string   `json:"orgIdentifier,omitempty"`
+	ProjectIdentifier string   `json:"projectIdentifier,omitempty"`
+	Kind              []string `json:"kind,omitempty"`
+	Type              []string `json:"type,omitempty"`
+	After             int64    `json:"after,omitempty"`
+	Before            int64    `json:"before,omitempty"`
+	Limit             int      `json:"limit,omitempty"`
+	Page              int      `json:"page,omitempty"`
 }
