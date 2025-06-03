@@ -96,43 +96,54 @@ var (
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
-			// TODO: get this from request header and add in the context once we move to streamable HTTP
-			bearerToken := viper.GetString("bearer_token")
-			if bearerToken == "" {
-				return fmt.Errorf("bearer token not provided")
+			clientID := viper.GetString("client_id")
+			clientSecret := viper.GetString("client_secret")
+
+			var provider auth.Provider
+			if clientID != "" && clientSecret != "" {
+				provider = auth.NewOIDCProvider(clientID, clientSecret, viper.GetString("token_url"))
+			} else {
+				bearerToken := viper.GetString("bearer_token")
+				if bearerToken == "" {
+					return fmt.Errorf("bearer token not provided")
+				}
+
+				mcpSecret := viper.GetString("mcp_svc_secret")
+				if mcpSecret == "" {
+					return fmt.Errorf("MCP service secret not provided")
+				}
+
+				// Move this out to middleware once we move to streamable HTTP
+				session, err := auth.AuthenticateSession(bearerToken, mcpSecret)
+				if err != nil {
+					return fmt.Errorf("Failed to authenticate session: %w", err)
+				}
+
+				// Store the authenticated session in the context
+				ctx = auth.WithAuthSession(ctx, session)
+
+				var toolsets []string
+				err = viper.UnmarshalKey("toolsets", &toolsets)
+				if err != nil {
+					return fmt.Errorf("Failed to unmarshal toolsets: %w", err)
+				}
 			}
 
-			mcpSecret := viper.GetString("mcp_svc_secret")
-			if mcpSecret == "" {
-				return fmt.Errorf("MCP service secret not provided")
-			}
-
-			// Move this out to middleware once we move to streamable HTTP
-			session, err := auth.AuthenticateSession(bearerToken, mcpSecret)
+			_, value, err := provider.GetHeader(ctx)
 			if err != nil {
-				return fmt.Errorf("Failed to authenticate session: %w", err)
+				return fmt.Errorf("failed to get auth header: %w", err)
 			}
-
-			// Store the authenticated session in the context
-			ctx = auth.WithAuthSession(ctx, session)
-
-			var toolsets []string
-			err = viper.UnmarshalKey("toolsets", &toolsets)
-			if err != nil {
-				return fmt.Errorf("Failed to unmarshal toolsets: %w", err)
-			}
-
 			cfg := config.Config{
 				// Common fields
 				Version:     version,
 				ReadOnly:    true, // we keep it read-only for now
-				Toolsets:    toolsets,
+				Toolsets:    viper.GetStringSlice("toolsets"),
 				LogFilePath: viper.GetString("log_file"),
 				Debug:       viper.GetBool("debug"),
 				Internal:    true,
-				AccountID:   session.Principal.AccountID,
+				AccountID:   "account-id", // Replace with actual account ID
 				// Internal mode specific fields
-				BearerToken:        viper.GetString("bearer_token"),
+				BearerToken:        value,
 				PipelineSvcBaseURL: viper.GetString("pipeline_svc_base_url"),
 				PipelineSvcSecret:  viper.GetString("pipeline_svc_secret"),
 				NgManagerBaseURL:   viper.GetString("ng_manager_base_url"),
@@ -176,6 +187,11 @@ func init() {
 	internalCmd.Flags().String("ng-manager-secret", "", "Secret for NG manager")
 	internalCmd.Flags().String("mcp-svc-secret", "", "Secret for MCP service")
 
+	// Add OIDC-specific flags
+	internalCmd.Flags().String("client-id", "", "Client ID for OIDC authentication")
+	internalCmd.Flags().String("client-secret", "", "Client secret for OIDC authentication")
+	internalCmd.Flags().String("token-url", "", "Token URL for OIDC authentication")
+
 	// Bind global flags to viper
 	_ = viper.BindPFlag("toolsets", rootCmd.PersistentFlags().Lookup("toolsets"))
 	_ = viper.BindPFlag("read_only", rootCmd.PersistentFlags().Lookup("read-only"))
@@ -195,6 +211,11 @@ func init() {
 	_ = viper.BindPFlag("ng_manager_base_url", internalCmd.Flags().Lookup("ng-manager-base-url"))
 	_ = viper.BindPFlag("ng_manager_secret", internalCmd.Flags().Lookup("ng-manager-secret"))
 	_ = viper.BindPFlag("mcp_svc_secret", internalCmd.Flags().Lookup("mcp-svc-secret"))
+
+	// Bind OIDC-specific flags to viper
+	_ = viper.BindPFlag("client_id", internalCmd.Flags().Lookup("client-id"))
+	_ = viper.BindPFlag("client_secret", internalCmd.Flags().Lookup("client-secret"))
+	_ = viper.BindPFlag("token_url", internalCmd.Flags().Lookup("token-url"))
 
 	// Add subcommands
 	rootCmd.AddCommand(stdioCmd)
