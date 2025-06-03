@@ -42,6 +42,10 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 		return nil, err
 	}
 
+	if err := registerRepoFiles(config, tsg); err != nil {
+		return nil, err
+	}
+
 	if err := registerRegistries(config, tsg); err != nil {
 		return nil, err
 	}
@@ -172,6 +176,34 @@ func registerRepositories(config *config.Config, tsg *toolsets.ToolsetGroup) err
 
 	// Add toolset to the group
 	tsg.AddToolset(repositories)
+	return nil
+}
+
+// registerRepoFiles registers the repository files toolset
+func registerRepoFiles(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Determine the base URL and secret for repofiles
+	baseURL := config.BaseURL
+	secret := ""
+	if config.Internal {
+		return nil
+	}
+
+	// Create base client for repofiles
+	c, err := createClient(baseURL, config, secret)
+	if err != nil {
+		return err
+	}
+
+	repoFilesClient := &client.RepoFilesService{Client: c}
+
+	// Create the repofiles toolset
+	repofiles := toolsets.NewToolset("repofiles", "Harness Repository Files related tools").
+		AddReadTools(
+			toolsets.NewServerTool(GetRepoFileContentTool(config, repoFilesClient)),
+		)
+
+	// Add toolset to the group
+	tsg.AddToolset(repofiles)
 	return nil
 }
 

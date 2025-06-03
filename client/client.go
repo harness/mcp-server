@@ -44,6 +44,9 @@ type Client struct {
 
 	// AuthProvider used for authentication
 	AuthProvider auth.Provider
+
+	// Services for handling API endpoints
+	RepoFiles *RepoFilesService
 }
 
 type service struct {
@@ -67,6 +70,10 @@ func NewWithAuthProvider(uri string, authProvider auth.Provider) (*Client, error
 		BaseURL:      parsedURL,
 		AuthProvider: authProvider,
 	}
+
+	// Initialize services
+	c.RepoFiles = &RepoFilesService{Client: c}
+
 	return c, nil
 }
 
