@@ -14,7 +14,7 @@ import (
 )
 
 // GetCcmOverview creates a tool for getting a ccm overview from an account
-func GetCcmOverview(config *config.Config, client *client.Client) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetCcmOverviewTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	now := time.Now()
 	defaultStartTime := now.AddDate(0, 0, -60).UnixMilli()
 	defaultEndTime := now.UnixMilli()
@@ -64,7 +64,7 @@ func GetCcmOverview(config *config.Config, client *client.Client) (tool mcp.Tool
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			data, err := client.CloudCostManagement.GetOverview(ctx, accID, startTime, endTime, groupBy)
+			data, err := client.GetOverview(ctx, accID, startTime, endTime, groupBy)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get CCM Overview: %w", err)
 			}

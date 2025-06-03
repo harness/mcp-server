@@ -12,7 +12,7 @@ const (
 )
 
 type CloudCostManagementService struct {
-	client *Client
+	Client *Client
 }
 
 func (c *CloudCostManagementService) GetOverview(ctx context.Context, accID string, startTime int64, endTime int64, groupBy string) (*dto.CEView, error) {
@@ -20,7 +20,7 @@ func (c *CloudCostManagementService) GetOverview(ctx context.Context, accID stri
 	params := make(map[string]string)
 
 	ccmOverview := new(dto.CEView)
-	err := c.client.Get(ctx, path, params, nil, ccmOverview)
+	err := c.Client.Get(ctx, path, params, nil, ccmOverview)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ccm overview: %w", err)
 	}
