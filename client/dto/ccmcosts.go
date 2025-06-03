@@ -194,6 +194,9 @@ type CCMSuppressed struct {
 ========
 >>>>>>> b52be07 (Added perspectives detail feature)
 
+// ***************************
+// Get Cost Category
+// ***************************
 // CCMCostCategory represents the details of a cost category in CCM
 type CCMCostCategory struct {
 	MetaData         map[string]interface{}	`json:"metaData"`

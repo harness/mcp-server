@@ -105,12 +105,58 @@ func ListCcmPerspectivesDetailTool(config *config.Config, client *client.CloudCo
 
 			data, err := client.ListPerspectivesDetail(ctx, scope, params)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get CCM Cost Perspectives: %w", err)
+				return nil, fmt.Errorf("failed to get CCM Perspectives: %w", err)
 			}
 
 			r, err := json.Marshal(data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal CCM Cost Perspectives: %w", err)
+				return nil, fmt.Errorf("failed to marshal CCM Perspectives: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+	}
+
+func GetCcmPerspectiveTool(config *config.Config, client *client.Client) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("get_ccm_perspective",
+			mcp.WithDescription("Get a perspective with advanced options in Harness Cloud Cost Management"),
+			mcp.WithString("account_id",
+				mcp.Description("The account identifier"),
+			),
+			mcp.WithString("perspective_id",
+				mcp.Description("Required perspective identifier."),
+			),
+			WithScope(config, false),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			accountId, err := OptionalParam[string](request, "account_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			perspectiveId, err := OptionalParam[string](request, "perspective_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+
+			params := &dto.CCMGetPerspectiveOptions{}
+			params.AccountIdentifier = accountId
+			params.PerspectiveId = perspectiveId
+
+			scope, err := fetchScope(config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.CloudCostManagement.GetPerspective(ctx, scope, params)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get CCM Perspective: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal CCM Perspective: %w", err)
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
