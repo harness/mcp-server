@@ -8,6 +8,7 @@ import (
 
 const (
 	ccmPerspetiveDetailListPath = ccmBasePath + "/perspective/getAllPerspectives?accountIdentifier=%s"
+	ccmGetPerspectivePath = ccmBasePath + "/perspective"
 )
 
 func (r *CloudCostManagementService) ListPerspectivesDetail(ctx context.Context, scope dto.Scope, opts *dto.CCMListPerspectivesDetailOptions) (*dto.CCMPerspectivesDetailList, error) {
@@ -43,6 +44,26 @@ func (r *CloudCostManagementService) ListPerspectivesDetail(ctx context.Context,
 	err := r.Client.Get(ctx, path, params, nil, &items)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list cloud cost management cost categories: %w", err)
+	}
+
+	return items, nil
+}
+
+func (r *CloudCostManagementService) GetPerspective(ctx context.Context, scope dto.Scope, opts *dto.CCMGetPerspectiveOptions) (*dto.CCMPerspectiveDetail, error) {
+
+	path := ccmGetPerspectivePath
+	params := make(map[string]string)
+	// Handle nil options by creating default options
+	if opts == nil {
+		opts = &dto.CCMGetPerspectiveOptions{}
+	}
+	params["accountIdentifier"] = opts.AccountIdentifier
+	params["perspectiveId"] = opts.PerspectiveId
+
+	items := new(dto.CCMPerspectiveDetail)
+	err := r.client.Get(ctx, path, params, nil, &items)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list cloud cost management perspectives: %w", err)
 	}
 
 	return items, nil

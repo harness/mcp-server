@@ -195,6 +195,9 @@ type CCMSuppressed struct {
 	LocalizedMessage string                 `json:"localizedMessage"`
 }
 
+// ***************************
+// Get Cost Category
+// ***************************
 // CCMCostCategory represents the details of a cost category in CCM
 type CCMCostCategory struct {
 	MetaData         map[string]interface{} `json:"metaData"`
