@@ -228,7 +228,10 @@ Environment variables are prefixed with `HARNESS_`:
 - `HARNESS_READ_ONLY`: Set to "true" to run in read-only mode
 - `HARNESS_LOG_FILE`: Path to log file
 - `HARNESS_LOG_LEVEL`: Set the logging level (debug, info, warn, error)
-- `HARNESS_BASE_URL`: Base URL for Harness (default: "https://app.harness.io")
+- `HARNESS_BASE_URL`: Base URL for Harness based on your cluster location:
+  - SaaS prod-1: `https://app.harness.io`
+  - SaaS prod-2: `https://app.harness.io/gratis`
+  - SaaS prod-3: `https://app3.harness.io`
 
 ### Authentication
 
