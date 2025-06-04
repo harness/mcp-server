@@ -28,21 +28,24 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 	// Create a toolset group
 	tsg := toolsets.NewToolsetGroup(config.ReadOnly)
 
-	// Register pipelines
-	if err := registerPipelines(config, tsg); err != nil {
-		return nil, err
-	}
-
-	// TODO: support internal mode for other endpoints as well eventually
-	if err := registerPullRequests(config, tsg); err != nil {
-		return nil, err
-	}
-
+	// Register all tools
 	if err := registerRepositories(config, tsg); err != nil {
 		return nil, err
 	}
 
+	if err := registerBranchOperations(config, tsg); err != nil {
+		return nil, err
+	}
+
 	if err := registerRegistries(config, tsg); err != nil {
+		return nil, err
+	}
+
+	if err := registerPipelines(config, tsg); err != nil {
+		return nil, err
+	}
+
+	if err := registerPullRequests(config, tsg); err != nil {
 		return nil, err
 	}
 
@@ -168,10 +171,43 @@ func registerRepositories(config *config.Config, tsg *toolsets.ToolsetGroup) err
 		AddReadTools(
 			toolsets.NewServerTool(GetRepositoryTool(config, repositoryClient)),
 			toolsets.NewServerTool(ListRepositoriesTool(config, repositoryClient)),
+			toolsets.NewServerTool(GetFileContentTool(config, repositoryClient)),
+			toolsets.NewServerTool(GetFileContentFromCommitTool(config, repositoryClient)),
+			toolsets.NewServerTool(GetCommitDiffTool(config, c)),
 		)
 
 	// Add toolset to the group
 	tsg.AddToolset(repositories)
+	return nil
+}
+
+// registerBranchOperations registers the branch operations toolset
+func registerBranchOperations(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Determine the base URL and secret for branch operations
+	baseURL := config.BaseURL
+	secret := ""
+	if config.Internal {
+		return nil
+	}
+
+	// Create base client for branch operations
+	c, err := createClient(baseURL, config, secret)
+	if err != nil {
+		return err
+	}
+
+	branchClient := &client.BranchService{Client: c}
+
+	// Create the branch operations toolset
+	branchOps := toolsets.NewToolset("branch_operations", "Harness Branch and File Operations tools").
+		AddWriteTools(
+			toolsets.NewServerTool(CreateBranchTool(config, branchClient)),
+			toolsets.NewServerTool(CommitFileTool(config, branchClient)),
+			toolsets.NewServerTool(CommitMultipleFilesTool(config, branchClient)),
+		)
+
+	// Add toolset to the group
+	tsg.AddToolset(branchOps)
 	return nil
 }
 
