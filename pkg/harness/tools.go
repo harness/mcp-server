@@ -33,9 +33,7 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 		return nil, err
 	}
 
-	if err := registerBranchOperations(config, tsg); err != nil {
-		return nil, err
-	}
+	// Branch operations toolset has been removed
 
 	if err := registerRegistries(config, tsg); err != nil {
 		return nil, err
@@ -183,31 +181,7 @@ func registerRepositories(config *config.Config, tsg *toolsets.ToolsetGroup) err
 
 // registerBranchOperations registers the branch operations toolset
 func registerBranchOperations(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-	// Determine the base URL and secret for branch operations
-	baseURL := config.BaseURL
-	secret := ""
-	if config.Internal {
-		return nil
-	}
-
-	// Create base client for branch operations
-	c, err := createClient(baseURL, config, secret)
-	if err != nil {
-		return err
-	}
-
-	branchClient := &client.BranchService{Client: c}
-
-	// Create the branch operations toolset
-	branchOps := toolsets.NewToolset("branch_operations", "Harness Branch and File Operations tools").
-		AddWriteTools(
-			toolsets.NewServerTool(CreateBranchTool(config, branchClient)),
-			toolsets.NewServerTool(CommitFileTool(config, branchClient)),
-			toolsets.NewServerTool(CommitMultipleFilesTool(config, branchClient)),
-		)
-
-	// Add toolset to the group
-	tsg.AddToolset(branchOps)
+	// Branch operations have been removed
 	return nil
 }
 

@@ -4,14 +4,12 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 
-	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
-	"github.com/harness/harness-mcp/pkg/harness"
-	"github.com/harness/harness-mcp/pkg/harness/auth"
-	"github.com/mark3labs/mcp-go/mcp"
 )
 
 func main() {
@@ -53,7 +51,7 @@ func main() {
 		log.Fatal("Commit ID is required. Provide it via --commit-id flag or HARNESS_COMMIT_ID environment variable")
 	}
 
-	// Create a config
+	// Create a config for reference
 	cfg := &config.Config{
 		BaseURL:          baseURL,
 		APIKey:           apiKey,
@@ -62,40 +60,44 @@ func main() {
 		AccountID:        accountID,
 	}
 
-	// Create auth provider
-	authProvider := auth.NewAPIKeyProvider(apiKey)
-
-	// Create client
-	c, err := client.NewWithAuthProvider(cfg.BaseURL, authProvider)
+	// Make a direct API call to get commit diff using a custom HTTP client
+	// Since we're removing the handler approach, we'll use a simple HTTP request instead
+	// Create the URL for the API call
+	apiPath := fmt.Sprintf("%scode/api/v1/repos/%s/+/diff/%s", cfg.BaseURL, repoID, commitID)
+	
+	// Create HTTP request
+	req, err := http.NewRequestWithContext(context.Background(), "GET", apiPath, nil)
 	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
+		log.Fatalf("Error creating request: %v", err)
 	}
-
-	// Create the commit diff tool
-	tool, handler := harness.GetCommitDiffTool(cfg, c)
-
-	// Create a request
-	request := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: tool.Name,
-			Arguments: map[string]interface{}{
-				"repo_identifier": repoID,
-				"commit_id":       commitID,
-				"org_id":          orgID,
-				"project_id":      projectID,
-			},
-		},
-	}
-
-	// Call the handler
-	result, err := handler(context.Background(), request)
+	
+	// Add query parameters
+	q := req.URL.Query()
+	q.Add("accountIdentifier", accountID)
+	q.Add("orgIdentifier", orgID)
+	q.Add("projectIdentifier", projectID)
+	req.URL.RawQuery = q.Encode()
+	
+	// Add headers
+	req.Header.Set("x-api-key", apiKey)
+	
+	// Create HTTP client and make the request
+	httpClient := &http.Client{}
+	resp, err := httpClient.Do(req)
 	if err != nil {
-		log.Fatalf("Error calling handler: %v", err)
+		log.Fatalf("Error making request: %v", err)
 	}
-
+	defer resp.Body.Close()
+	
+	// Read and parse the response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalf("Error reading response: %v", err)
+	}
+	
 	// Print the result
 	fmt.Println("Result:")
-	fmt.Println(result.Result)
+	fmt.Println(string(body))
 }
 
 // getValueWithFallback returns the first non-empty value from:

@@ -1,43 +1,8 @@
 package dto
 
-// BranchCreateRequest represents a request to create a new branch
-type BranchCreateRequest struct {
-	BranchName string `json:"branch_name"`
-	StartPoint string `json:"start_point,omitempty"` // Optional, defaults to default branch if not specified
-}
-
-// BranchCreateResponse represents the response from creating a branch
-type BranchCreateResponse struct {
-	Name      string `json:"name"`
-	CommitSha string `json:"commit_sha"`
-	Success   bool   `json:"success"`
-}
-
-// FileCommitRequest represents a request to commit a file change
-type FileCommitRequest struct {
-	Branch      string `json:"branch"`      // Branch to commit to
-	FilePath    string `json:"file_path"`   // Path of the file to commit
-	Content     string `json:"content"`     // Content to write to the file
-	CommitMsg   string `json:"commit_msg"`  // Commit message
-	IsNewFile   bool   `json:"is_new_file"` // Whether this is a new file or an update
-}
-
-// FileCommitResponse represents the response from committing a file
-type FileCommitResponse struct {
-	CommitSha string `json:"commit_sha"`
-	Success   bool   `json:"success"`
-}
-
-// MultiFileCommitRequest represents a request to commit multiple file changes
-type MultiFileCommitRequest struct {
-	Branch    string          `json:"branch"`     // Branch to commit to
-	CommitMsg string          `json:"commit_msg"` // Commit message
-	Files     []FileOperation `json:"files"`      // Files to commit
-}
-
-// FileOperation represents a single file operation in a multi-file commit
-type FileOperation struct {
-	FilePath    string `json:"file_path"`   // Path of the file
-	Content     string `json:"content"`     // Content to write
-	IsNewFile   bool   `json:"is_new_file"` // Whether this is a new file or an update
-}
+// This file previously contained DTOs for branch operations:
+// - BranchCreateRequest and BranchCreateResponse
+// - FileCommitRequest and FileCommitResponse
+// - MultiFileCommitRequest and FileOperation
+//
+// These DTOs have been removed as requested.
