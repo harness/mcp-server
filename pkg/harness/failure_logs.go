@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -33,6 +34,9 @@ func GetPipelineFailureLogsTool(config *config.Config, logClient *client.LogServ
 			mcp.WithString("execution_id",
 				mcp.Description("Optional: Specific execution ID to get logs for"),
 			),
+			mcp.WithString("execution_url",
+				mcp.Description("Optional: Direct Harness pipeline execution URL"),
+			),
 			mcp.WithNumber("max_pages",
 				mcp.Description("Optional: Maximum number of pages to search through (default: 20)"),
 			),
@@ -49,6 +53,11 @@ func GetPipelineFailureLogsTool(config *config.Config, logClient *client.LogServ
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			executionURL, err := OptionalParam[string](request, "execution_url")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
 			workspacePath, err := OptionalParam[string](request, "workspace_path")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -59,6 +68,26 @@ func GetPipelineFailureLogsTool(config *config.Config, logClient *client.LogServ
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			// Create base scope from config (will be overridden if URL provides values)
+			urlScope := &dto.Scope{}
+			
+			// Extract data from URL if provided
+			if executionURL != "" {
+				// Parse URL to extract scope and execution ID
+				extractedScope, parsedID, err := extractScopeFromURL(executionURL)
+				if err != nil {
+					return mcp.NewToolResultError(fmt.Sprintf("Failed to extract information from URL: %v", err)), nil
+				}
+				
+				// Set execution ID if not already provided
+				if executionID == "" {
+					executionID = parsedID
+				}
+				
+				// Store extracted scope
+				urlScope = extractedScope
+			}
+
 			var gitInfo *GitInfo
 			if workspacePath != "" {
 				gitInfo, err = extractGitInfo(workspacePath)
@@ -67,25 +96,47 @@ func GetPipelineFailureLogsTool(config *config.Config, logClient *client.LogServ
 				}
 			}
 
+			// Create clients for the required services
+			pipelineClient := &client.PipelineService{Client: logClient.Client}
+			
+			// Merge scope values - Only use org and project from URL, as PAT is account-specific
+			requestScope := scope
+			// Do NOT override the account ID from config as the PAT is account-specific
+			// We ignore urlScope.AccountID even if it's present
+			
+			// Use org ID from URL if available
+			if urlScope.OrgID != "" {
+				slog.Info("Using org ID from URL", "orgID", urlScope.OrgID)
+				requestScope.OrgID = urlScope.OrgID
+			}
+			
+			// Use project ID from URL if available
+			if urlScope.ProjectID != "" {
+				slog.Info("Using project ID from URL", "projectID", urlScope.ProjectID)
+				requestScope.ProjectID = urlScope.ProjectID
+			}
+
 			failureResponse := &dto.FailureLogResponse{}
 			if executionID != "" {
-				// If execution ID is provided, get logs directly for that execution
-				// Create clients for the required services
-				pipelineClient := &client.PipelineService{Client: logClient.Client}
-				failureResponse, err = getFailureLogsForExecution(ctx, pipelineClient, logClient, scope, executionID)
+				// If execution ID is provided (directly or from URL), get logs directly for that execution
+				failureResponse, err = getFailureLogsForExecution(ctx, pipelineClient, logClient, requestScope, executionID)
 				if err != nil {
-					return mcp.NewToolResultError(fmt.Sprintf("Failed to get logs: %v", err)), nil
+					// Format error in a clean, readable way
+					errorMsg := fmt.Sprintf("Couldn't fetch details for execution %s, ERROR: %v", 
+						executionID, err)
+					return mcp.NewToolResultError(errorMsg), nil
 				}
 			} else if gitInfo != nil {
 				// Otherwise, search for matching executions
-				// Create clients for the required services
-				pipelineClient := &client.PipelineService{Client: logClient.Client}
-				failureResponse, err = findMatchingExecutionAndGetLogs(ctx, pipelineClient, logClient, scope, gitInfo, maxPages)
+				failureResponse, err = findMatchingExecutionAndGetLogs(ctx, pipelineClient, logClient, requestScope, gitInfo, maxPages)
 				if err != nil {
-					return mcp.NewToolResultError(fmt.Sprintf("Failed to find matching execution: %v", err)), nil
+					// Format error in a clean, readable way
+					errorMsg := fmt.Sprintf("Couldn't find matching executions for git repo %s, ERROR: %v", 
+						gitInfo.RepoURL, err)
+					return mcp.NewToolResultError(errorMsg), nil
 				}
 			} else {
-				return mcp.NewToolResultError("Either execution_id or workspace_path must be provided"), nil
+				return mcp.NewToolResultError("Either execution_id, execution_url, or workspace_path must be provided"), nil
 			}
 
 			// Marshal the response to JSON
@@ -148,6 +199,69 @@ func normalizeGitURL(url string) string {
 	}
 
 	return url
+}
+
+// extractScopeFromURL extracts account, org, project, and execution IDs from a Harness pipeline URL
+func extractScopeFromURL(executionURL string) (*dto.Scope, string, error) {
+	if executionURL == "" {
+		return nil, "", fmt.Errorf("empty execution URL provided")
+	}
+
+	// Parse the URL
+	parsedURL, err := url.Parse(executionURL)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to parse URL: %v", err)
+	}
+
+	// Check if it's a valid Harness URL (any subdomain of harness.io)
+	if !strings.HasSuffix(parsedURL.Host, "harness.io") {
+		return nil, "", fmt.Errorf("not a valid Harness execution URL: %s", executionURL)
+	}
+
+	// Initialize scope
+	scope := &dto.Scope{}
+	
+	// Extract path segments
+	pathSegments := strings.Split(parsedURL.Path, "/")
+	
+	// Extract execution ID
+	executionID := ""
+	for i, segment := range pathSegments {
+		// Extract account ID (follows "account" segment)
+		if segment == "account" && i+1 < len(pathSegments) {
+			scope.AccountID = pathSegments[i+1]
+		}
+		
+		// Extract org ID (follows "orgs" segment)
+		if segment == "orgs" && i+1 < len(pathSegments) {
+			scope.OrgID = pathSegments[i+1]
+		}
+		
+		// Extract project ID (follows "projects" segment)
+		if segment == "projects" && i+1 < len(pathSegments) {
+			scope.ProjectID = pathSegments[i+1]
+		}
+		
+		// Extract execution ID (follows "executions" or "deployments" segment)
+		if (segment == "executions" || segment == "deployments") && i+1 < len(pathSegments) {
+			executionID = pathSegments[i+1]
+		}
+	}
+
+	// Check for execution ID in query parameters if not found in path
+	if executionID == "" {
+		queryParams := parsedURL.Query()
+		if id := queryParams.Get("executionId"); id != "" {
+			executionID = id
+		}
+	}
+
+	// Validate we found the execution ID
+	if executionID == "" {
+		return nil, "", fmt.Errorf("could not extract execution ID from URL: %s", executionURL)
+	}
+
+	return scope, executionID, nil
 }
 
 // findMatchingExecutionAndGetLogs finds executions that match the Git context and returns failure logs
@@ -255,6 +369,19 @@ func getFailureLogsForExecution(ctx context.Context, pipelineClient *client.Pipe
 	// Get execution details
 	execution, err := pipelineClient.GetExecution(ctx, scope, executionID)
 	if err != nil {
+		// Extract status code if available in the error message
+		statusCode := ""
+		if strings.Contains(err.Error(), "status code 403") {
+			statusCode = "403"
+		} else if strings.Contains(err.Error(), "status code 401") {
+			statusCode = "401"
+		} else if strings.Contains(err.Error(), "status code 404") {
+			statusCode = "404"
+		}
+		
+		if statusCode != "" {
+			return nil, fmt.Errorf("%s: %w", statusCode, err)
+		}
 		return nil, fmt.Errorf("failed to get execution details: %w", err)
 	}
 
