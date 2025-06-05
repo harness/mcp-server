@@ -273,7 +273,7 @@ func registerCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGro
 	ccm := toolsets.NewToolset("ccm", "Harness Cloud Cost Management related tools").
 		AddReadTools(
 			toolsets.NewServerTool(GetCcmOverviewTool(config, ccmClient)),
-			toolsets.NewServerTool(ListCcmCostCategoriesTool(config, client)),
+			toolsets.NewServerTool(ListCcmCostCategoriesTool(config, ccmClient)),
 		)
 
 	// Add toolset to the group
