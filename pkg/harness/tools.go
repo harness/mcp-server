@@ -33,7 +33,9 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 		return nil, err
 	}
 
-	// Branch operations toolset has been removed
+	if err := registerBranchOperations(config, tsg); err != nil {
+		return nil, err
+	}
 
 	if err := registerRegistries(config, tsg); err != nil {
 		return nil, err
@@ -181,7 +183,24 @@ func registerRepositories(config *config.Config, tsg *toolsets.ToolsetGroup) err
 
 // registerBranchOperations registers the branch operations toolset
 func registerBranchOperations(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-	// Branch operations have been removed
+	// Create a new toolset for branch operations
+	ts := toolsets.NewToolset("branchoperations", "Branch Operations")
+
+	// Register the branch operation tools
+	createBranchTool, createBranchHandler := CreateBranchTool(config)
+	commitChangesTool, commitChangesHandler := CommitChangesTool(config)
+	createBranchAndCommitTool, createBranchAndCommitHandler := CreateBranchAndCommitTool(config)
+
+	// Add the tools to the toolset
+	ts.AddWriteTools(
+		toolsets.NewServerTool(createBranchTool, createBranchHandler),
+		toolsets.NewServerTool(commitChangesTool, commitChangesHandler),
+		toolsets.NewServerTool(createBranchAndCommitTool, createBranchAndCommitHandler),
+	)
+
+	// Add the toolset to the toolset group
+	tsg.AddToolset(ts)
+	
 	return nil
 }
 
