@@ -51,7 +51,7 @@ func (r *CloudCostManagementService) ListCostCategories(ctx context.Context, sco
 	// Temporary slice to hold the strings
 	costCategories := new(dto.CCMCostCategoryList)
 
-	err := r.client.Get(ctx, path, params, nil, costCategories)
+	err := r.Client.Get(ctx, path, params, nil, costCategories)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list cloud cost managment cost categories: %w", err)
 	}

@@ -49,7 +49,8 @@ Toolset Name: `registries`
 
 Toolset Name: `cloudcostmanagement`
 
-- `get_ccm_overview`: Get the ccm overview of a specific account
+- `get_ccm_overview`: Retrieve the cost overview for a specific account.
+- `list_ccm_cost_categories`:  List all cost categories for a specified account.
 
 #### Logs Toolset
 
