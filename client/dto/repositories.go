@@ -38,3 +38,52 @@ type RepositoryOptions struct {
 	Page      int    `json:"page,omitempty"`
 	Limit     int    `json:"limit,omitempty"`
 }
+
+// FileContentRequest represents a request to get file content from a commit
+type FileContentRequest struct {
+	Path      string `json:"path"`
+	GitRef    string `json:"git_ref"`
+	OrgID     string `json:"org_id,omitempty"`
+	ProjectID string `json:"project_id,omitempty"`
+	RoutingID string `json:"routing_id,omitempty"`
+}
+
+// FileContent represents the content of a file at a specific commit
+type FileContent struct {
+	Type        string       `json:"type"`
+	Sha         string       `json:"sha"`
+	Name        string       `json:"name"`
+	Path        string       `json:"path"`
+	LatestCommit *Commit      `json:"latest_commit,omitempty"`
+	Content     *EncodedContent `json:"content,omitempty"`
+}
+
+// EncodedContent represents encoded content of a file
+type EncodedContent struct {
+	Encoding string `json:"encoding"`
+	Data     string `json:"data"`
+	Size     int    `json:"size"`
+	DataSize int    `json:"data_size"`
+}
+
+// Commit represents a git commit
+type Commit struct {
+	Sha        string     `json:"sha"`
+	ParentShas []string   `json:"parent_shas,omitempty"`
+	Title      string     `json:"title"`
+	Message    string     `json:"message"`
+	Author     *Signature `json:"author,omitempty"`
+	Committer  *Signature `json:"committer,omitempty"`
+}
+
+// Signature represents author or committer information
+type Signature struct {
+	Identity *Identity `json:"identity,omitempty"`
+	When     string    `json:"when,omitempty"`
+}
+
+// Identity represents a user identity
+type Identity struct {
+	Name  string `json:"name,omitempty"`
+	Email string `json:"email,omitempty"`
+}
