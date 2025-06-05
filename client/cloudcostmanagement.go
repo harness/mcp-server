@@ -62,7 +62,7 @@ func (r *CloudCostManagementService) ListCostCategories(ctx context.Context, sco
 func (r *CloudCostManagementService) ListCostCategoriesDetail(ctx context.Context, scope dto.Scope, opts *dto.CCMListCostCategoriesDetailOptions) (*dto.CCMCostCategoryDetailList, error) {
 	path := ccmCostCategoryDetailListPath
 	params := make(map[string]string)
-	addScope(scope, params)
+//	addScope(scope, params)
 
 	// Handle nil options by creating default options
 	if opts == nil {
@@ -85,7 +85,7 @@ func (r *CloudCostManagementService) ListCostCategoriesDetail(ctx context.Contex
 
 	costCategories := new(dto.CCMCostCategoryDetailList)
 
-	err := r.client.Get(ctx, path, params, nil, &costCategories)
+	err := r.Client.Get(ctx, path, params, nil, &costCategories)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list cloud cost management cost categories: %w", err)
 	}
