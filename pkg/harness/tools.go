@@ -242,6 +242,7 @@ func registerLogs(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	logs := toolsets.NewToolset("logs", "Harness Logs related tools").
 		AddReadTools(
 			toolsets.NewServerTool(DownloadExecutionLogsTool(config, logClient)),
+			toolsets.NewServerTool(GetPipelineFailureLogsTool(config, logClient)),
 		)
 
 	// Add toolset to the group

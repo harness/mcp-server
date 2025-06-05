@@ -13,6 +13,7 @@ const (
 	pipelineExecutionPath        = "pipeline/api/pipelines/execution/url"
 	pipelineExecutionGetPath     = "pipeline/api/pipelines/execution/v2/%s"
 	pipelineExecutionSummaryPath = "pipeline/api/pipelines/execution/summary"
+	pipelineExecutionGraphPath   = "pipeline/api/pipelines/execution/getExecutionGraph/%s"
 )
 
 type PipelineService struct {
@@ -193,4 +194,24 @@ func (p *PipelineService) FetchExecutionURL(
 	}
 
 	return urlResponse.Data, nil
+}
+
+// GetExecutionGraph retrieves the execution graph for a specific pipeline executionAdd commentMore actions
+func (p *PipelineService) GetExecutionGraph(ctx context.Context, scope dto.Scope, planExecutionID string) (*dto.ExecutionGraphResponse, error) {
+	path := fmt.Sprintf(pipelineExecutionGraphPath, planExecutionID)
+
+	// Prepare query parameters
+	params := make(map[string]string)
+	addScope(scope, params)
+
+	// Initialize the response object
+	response := &dto.Entity[dto.ExecutionGraphResponse]{}
+
+	// Make the GET request
+	err := p.Client.Get(ctx, path, params, nil, response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get execution graph: %w", err)
+	}
+
+	return &response.Data, nil
 }
