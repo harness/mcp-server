@@ -50,6 +50,10 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 		return nil, err
 	}
 
+	if err := registerDashboards(config, tsg); err != nil {
+		return nil, err
+	}
+
 	// Enable requested toolsets
 	if err := tsg.EnableToolsets(config.Toolsets); err != nil {
 		return nil, err
@@ -246,5 +250,34 @@ func registerLogs(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 	// Add toolset to the group
 	tsg.AddToolset(logs)
+	return nil
+}
+
+// registerDashboards registers the dashboards toolset
+func registerDashboards(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Determine the base URL for dashboards
+	baseURL := config.BaseURL
+	secret := ""
+	if config.Internal {
+		return nil
+	}
+
+	// Create base client for dashboards
+	c, err := createClient(baseURL, config, secret)
+	if err != nil {
+		return err
+	}
+
+	dashboardClient := &client.DashboardService{Client: c}
+
+	// Create the dashboards toolset
+	dashboards := toolsets.NewToolset("dashboards", "Harness Dashboards related tools").
+		AddReadTools(
+			toolsets.NewServerTool(ListDashboardsTool(config, dashboardClient)),
+			toolsets.NewServerTool(GetDashboardDataTool(config, dashboardClient)),
+		)
+
+	// Add toolset to the group
+	tsg.AddToolset(dashboards)
 	return nil
 }
