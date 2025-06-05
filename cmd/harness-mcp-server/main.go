@@ -51,14 +51,24 @@ var (
 			defer stop()
 
 			apiKey := viper.GetString("api_key")
-			if apiKey == "" {
-				return fmt.Errorf("API key not provided")
+			oidcClientID := viper.GetString("oidc_client_id")
+			oidcClientSecret := viper.GetString("oidc_client_secret")
+			oidcTokenURL := viper.GetString("oidc_token_url")
+
+			if apiKey == "" && (oidcClientID == "" || oidcClientSecret == "" || oidcTokenURL == "") {
+				return fmt.Errorf("API key or OIDC credentials not provided")
 			}
 
-			// Extract account ID from API key
-			accountID, err := extractAccountIDFromAPIKey(apiKey)
-			if err != nil {
-				return fmt.Errorf("failed to extract account ID from API key: %w", err)
+			var accountID string
+			var err error
+			if apiKey != "" {
+				// Extract account ID from API key
+				accountID, err = extractAccountIDFromAPIKey(apiKey)
+				if err != nil {
+					return fmt.Errorf("failed to extract account ID from API key: %w", err)
+				}
+			} else {
+				accountID = "OTMwZTQ0ZDQtYjkwNC00OT"
 			}
 
 			var toolsets []string
@@ -74,6 +84,9 @@ var (
 				DefaultOrgID:     viper.GetString("default_org_id"),
 				DefaultProjectID: viper.GetString("default_project_id"),
 				APIKey:           apiKey,
+				OIDCClientID:     oidcClientID,
+				OIDCClientSecret: oidcClientSecret,
+				OIDCTokenURL:     oidcTokenURL,
 				ReadOnly:         viper.GetBool("read_only"),
 				Toolsets:         toolsets,
 				LogFilePath:      viper.GetString("log_file"),
@@ -174,6 +187,9 @@ func init() {
 	// Add stdio-specific flags
 	stdioCmd.Flags().String("base-url", "https://app.harness.io", "Base URL for Harness")
 	stdioCmd.Flags().String("api-key", "", "API key for authentication")
+	stdioCmd.Flags().String("oidc-client-id", "", "Client ID for OIDC authentication")
+	stdioCmd.Flags().String("oidc-client-secret", "", "Client secret for OIDC authentication")
+	stdioCmd.Flags().String("oidc-token-url", "", "Token URL for OIDC authentication")
 	stdioCmd.Flags().String("default-org-id", "",
 		"Default org ID to use. If not specified, it would need to be passed in the query (if required)")
 	stdioCmd.Flags().String("default-project-id", "",
@@ -213,9 +229,9 @@ func init() {
 	_ = viper.BindPFlag("mcp_svc_secret", internalCmd.Flags().Lookup("mcp-svc-secret"))
 
 	// Bind OIDC-specific flags to viper
-	_ = viper.BindPFlag("client_id", internalCmd.Flags().Lookup("client-id"))
-	_ = viper.BindPFlag("client_secret", internalCmd.Flags().Lookup("client-secret"))
-	_ = viper.BindPFlag("token_url", internalCmd.Flags().Lookup("token-url"))
+	_ = viper.BindPFlag("oidc_client_id", internalCmd.Flags().Lookup("oidc-client-id"))
+	_ = viper.BindPFlag("oidc_client_secret", internalCmd.Flags().Lookup("oidc-client-secret"))
+	_ = viper.BindPFlag("oidc_token_url", internalCmd.Flags().Lookup("oidc-token-url"))
 
 	// Add subcommands
 	rootCmd.AddCommand(stdioCmd)

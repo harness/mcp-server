@@ -16,6 +16,9 @@ type Config struct {
 	DefaultOrgID     string
 	DefaultProjectID string
 	APIKey           string
+	OIDCClientID     string
+	OIDCClientSecret string
+	OIDCTokenURL     string
 
 	// Only used for internal mode
 	BearerToken        string

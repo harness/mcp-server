@@ -50,6 +50,10 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 		return nil, err
 	}
 
+	if err := registerAuth(config, tsg); err != nil {
+		return nil, err
+	}
+
 	// Enable requested toolsets
 	if err := tsg.EnableToolsets(config.Toolsets); err != nil {
 		return nil, err
@@ -66,6 +70,9 @@ func createClient(baseURL string, config *config.Config, secret string) (*client
 	if config.Internal {
 		// Use JWT auth for internal mode
 		authProvider = auth.NewJWTProvider(secret, serviceIdentity, &defaultJWTLifetime)
+	} else if config.OIDCClientID != "" && config.OIDCClientSecret != "" {
+		// Use OIDC auth for external mode
+		authProvider = auth.NewOIDCProvider(config.OIDCClientID, config.OIDCClientSecret, config.OIDCTokenURL)
 	} else {
 		// Use API key auth for external mode
 		authProvider = auth.NewAPIKeyProvider(config.APIKey)
@@ -246,5 +253,35 @@ func registerLogs(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 	// Add toolset to the group
 	tsg.AddToolset(logs)
+	return nil
+}
+
+// registerAuth registers the authentication and security toolset
+func registerAuth(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	baseURL := config.BaseURL
+	secret := ""
+	if config.Internal {
+		return nil
+	}
+	// Create base client for logs
+	c, err := createClient(baseURL, config, secret)
+	if err != nil {
+		return err
+	}
+
+	authClient := &client.AuthService{Client: c}
+
+	// Create the auth toolset
+	auth := toolsets.NewToolset("auth", "Authentication and Security related tools").
+		AddReadTools(
+			toolsets.NewServerTool(GetAccessHeatmapTool(config, authClient)),
+			toolsets.NewServerTool(GetUserSessionsTool(config, authClient)),
+			toolsets.NewServerTool(GetUserEventsTool(config, authClient)),
+			toolsets.NewServerTool(GetSecurityEventsTool(config, authClient)),
+			toolsets.NewServerTool(GenerateComplianceReportTool(config, authClient)),
+		)
+
+	// Add toolset to the group
+	tsg.AddToolset(auth)
 	return nil
 }

@@ -222,6 +222,9 @@ The Harness MCP Server supports the following command line arguments:
 Environment variables are prefixed with `HARNESS_`:
 
 - `HARNESS_API_KEY`: Harness API key (required) - Account ID is automatically extracted from the API key
+- `HARNESS_OIDC_CLIENT_ID`: Client ID for OIDC authentication (required for external mode)
+- `HARNESS_OIDC_CLIENT_SECRET`: Client secret for OIDC authentication (required for external mode)
+- `HARNESS_OIDC_TOKEN_URL`: Token URL for OIDC authentication (required for external mode)
 - `HARNESS_DEFAULT_ORG_ID`: Default Harness organization ID (optional, if not specified it would need to be passed in the request if it's required for that operation)
 - `HARNESS_DEFAULT_PROJECT_ID`: Default Harness project ID (optional, if not specified it would need to be passed in the request if it's required for that operation)
 - `HARNESS_TOOLSETS`: Comma-separated list of toolsets to enable (default: "all")
