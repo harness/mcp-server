@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/harness/harness-mcp/client/dto"
 )
@@ -58,11 +59,23 @@ type DashboardData struct {
 }
 
 // ListDashboards fetches all dashboards from Harness
-func (d *DashboardService) ListDashboards(ctx context.Context, scope dto.Scope, page int, pageSize int, folderID string, tags string) (*DashboardListResponse, error) {
+func (d *DashboardService) ListDashboards(ctx context.Context, page int, pageSize int, folderID string, tags string) (*DashboardListResponse, error) {
 	path := dashboardSearchPath
 	params := make(map[string]string)
-	addScope(scope, params)
 
+	// Get API key from auth provider
+	_, apiKey, err := d.Client.AuthProvider.GetHeader(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get API key: %w", err)
+	}
+	
+	// Extract account ID from API key (format: pat.ACCOUNT_ID.TOKEN_ID.<>)
+	parts := strings.Split(apiKey, ".")
+	if len(parts) < 2 {
+		return nil, fmt.Errorf("invalid API key format")
+	}
+	params["accountId"] = parts[1]
+	
 	// Set default pagination values
 	if page <= 0 {
 		page = 1
@@ -83,7 +96,7 @@ func (d *DashboardService) ListDashboards(ctx context.Context, scope dto.Scope, 
 	}
 
 	response := new(DashboardListResponse)
-	err := d.Client.Get(ctx, path, params, nil, response)
+	err = d.Client.Get(ctx, path, params, nil, response)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list dashboards: %w", err)
 	}
@@ -92,37 +105,57 @@ func (d *DashboardService) ListDashboards(ctx context.Context, scope dto.Scope, 
 }
 
 // GetDashboardData fetches data for a specific dashboard
-func (d *DashboardService) GetDashboardData(ctx context.Context, scope dto.Scope, dashboardID string, filters string) (*DashboardData, error) {
-	// Format the path with the dashboard ID
-	path := fmt.Sprintf(dashboardDataPath, dashboardID)
+func (d *DashboardService) GetDashboardData(ctx context.Context, dashboardID string, reportingTimeframe int) (*DashboardData, error) {
+	// Format the base URL like the sample code
+	baseURL := fmt.Sprintf("https://app.harness.io/%s", fmt.Sprintf(dashboardDataPath, dashboardID))
 	
 	// Create query parameters with proper encoding
 	queryParams := url.Values{}
-	addScopeValues(scope, queryParams)
 	
-	if filters != "" {
-		queryParams.Add("filters", filters)
+	// Get API key from auth provider
+	_, apiKey, err := d.Client.AuthProvider.GetHeader(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get API key: %w", err)
 	}
+	
+	// Extract account ID from API key (format: pat.ACCOUNT_ID.TOKEN_ID.<>)
+	parts := strings.Split(apiKey, ".")
+	if len(parts) < 2 {
+		return nil, fmt.Errorf("invalid API key format")
+	}
+	queryParams.Add("accountId", parts[1])
+	
+	// Set default reporting timeframe if not provided
+	if reportingTimeframe <= 0 {
+		reportingTimeframe = 30 // Default to 30 days
+	}
+	queryParams.Add("filters", fmt.Sprintf("Reporting+Timeframe=%d", reportingTimeframe))
 	queryParams.Add("expanded_tables", "true")
 	
-	// Construct the full URL with properly encoded parameters
-	fullURL := fmt.Sprintf("%s/%s?%s", d.Client.BaseURL, path, queryParams.Encode())
+	// Construct the full request URL with properly encoded parameters
+	requestURL := baseURL + "?" + queryParams.Encode()
 	
 	// Create a new HTTP request
-	req, err := http.NewRequest("GET", fullURL, nil)
+	req, err := http.NewRequest("GET", requestURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	
 	// Add auth header
-	key, value, err := d.Client.AuthProvider.GetHeader(ctx)
+	var headerKey, headerValue string
+	headerKey, headerValue, err = d.Client.AuthProvider.GetHeader(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get auth header: %w", err)
 	}
-	req.Header.Set(key, value)
+	req.Header.Set(headerKey, headerValue)
+	
+	// Create a client with longer timeout
+	httpClient := &http.Client{
+		Timeout: 60 * time.Second, // Increasing timeout to 60 seconds
+	}
 	
 	// Execute the request
-	resp, err := d.Client.client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute request: %w", err)
 	}

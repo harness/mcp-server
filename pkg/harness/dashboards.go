@@ -18,14 +18,8 @@ func ListDashboardsTool(config *config.Config, client *client.DashboardService) 
 			mcp.WithString("filter",
 				mcp.Description("Optional filter to apply when listing dashboards"),
 			),
-			WithScope(config, true),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := fetchScope(config, request, true)
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-
 			// Get filter from request if present
 			filter, _ := OptionalParam[string](request, "filter")
 
@@ -35,15 +29,14 @@ func ListDashboardsTool(config *config.Config, client *client.DashboardService) 
 				tags = filter
 			}
 
-			// Get the dashboards with direct parameters
-			response, err := client.ListDashboards(ctx, scope, 1, 100, "", tags)
+			// Get the dashboards with direct parameters - no scope required
+			response, err := client.ListDashboards(ctx, 1, 100, "", tags)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to list dashboards: %v", err)), nil
 			}
 
-			// Process result, organizing dashboards by model categories
+			// Process result, organizing dashboards by model categories only to optimize token usage
 			categories := make(map[string][]map[string]string)
-			allDashboards := make([]map[string]string, 0, len(response.Resource))
 
 			for _, dashboard := range response.Resource {
 				// Create dashboard entry with essential fields
@@ -52,9 +45,6 @@ func ListDashboardsTool(config *config.Config, client *client.DashboardService) 
 					"title": dashboard.Title,
 					"type":  dashboard.Type,
 				}
-
-				// Add to all dashboards list
-				allDashboards = append(allDashboards, dashboardEntry)
 
 				// Categorize dashboard by models
 				modelCategories := dashboard.Models
@@ -75,12 +65,8 @@ func ListDashboardsTool(config *config.Config, client *client.DashboardService) 
 				}
 			}
 
-			// Convert result to JSON string
-			resultJSON, err := json.Marshal(map[string]interface{}{
-				"categories":     categories,
-				"all_dashboards": allDashboards,
-				"total_count":    response.Items,
-			})
+			// Convert only categories to JSON string to save tokens
+			resultJSON, err := json.Marshal(categories)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal result: %v", err)), nil
 			}
@@ -97,10 +83,9 @@ func GetDashboardDataTool(config *config.Config, client *client.DashboardService
 				mcp.Required(),
 				mcp.Description("The ID of the dashboard to retrieve data from"),
 			),
-			mcp.WithString("filters",
-				mcp.Description("Optional filters to apply when retrieving dashboard data (e.g., 'Reporting Timeframe=30')"),
+			mcp.WithNumber("reporting_timeframe",
+				mcp.Description("Reporting timeframe in days (default: 30)"),
 			),
-			WithScope(config, true),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			// Get required parameters
@@ -109,16 +94,20 @@ func GetDashboardDataTool(config *config.Config, client *client.DashboardService
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := fetchScope(config, request, true)
+			// Get reporting timeframe (defaulting to 30 if not present)
+			reportingTimeframe, err := OptionalParam[float64](request, "reporting_timeframe")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-
-			// Get optional filters
-			filters, _ := OptionalParam[string](request, "filters")
+			
+			// Convert to int and use default if not set
+			timeframeInt := int(reportingTimeframe)
+			if timeframeInt <= 0 {
+				timeframeInt = 30 // Default to 30 days
+			}
 
 			// Fetch the dashboard data
-			dashboardData, err := client.GetDashboardData(ctx, scope, dashboardID, filters)
+			dashboardData, err := client.GetDashboardData(ctx, dashboardID, timeframeInt)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to get dashboard data: %v", err)), nil
 			}
