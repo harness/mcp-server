@@ -61,7 +61,7 @@ func (r *CloudCostManagementService) GetPerspective(ctx context.Context, scope d
 	params["perspectiveId"] = opts.PerspectiveId
 
 	items := new(dto.CCMPerspectiveDetail)
-	err := r.client.Get(ctx, path, params, nil, &items)
+	err := r.Client.Get(ctx, path, params, nil, &items)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list cloud cost management perspectives: %w", err)
 	}
