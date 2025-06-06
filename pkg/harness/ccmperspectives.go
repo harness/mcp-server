@@ -19,7 +19,7 @@ func ListCcmPerspectivesDetailTool(config *config.Config, client *client.CloudCo
 				mcp.Description("The account identifier"),
 			),
 			mcp.WithString("search_key",
-				mcp.Description("Optional search key to filter cost categories"),
+				mcp.Description("Optional search key to filter perspectives"),
 			),
 			mcp.WithString("sort_type",
 				mcp.Description("Sort type for the results (e.g., NAME, LAST_EDIT)"),
