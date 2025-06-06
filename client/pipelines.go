@@ -8,22 +8,35 @@ import (
 )
 
 const (
-	pipelinePath                 = "pipeline/api/pipelines/%s"
-	pipelineListPath             = "pipeline/api/pipelines/list"
-	pipelineExecutionPath        = "pipeline/api/pipelines/execution/url"
-	pipelineExecutionGetPath     = "pipeline/api/pipelines/execution/v2/%s"
-	pipelineExecutionSummaryPath = "pipeline/api/pipelines/execution/summary"
+	// Base API paths
+	pipelinePath                 = "api/pipelines/%s"
+	pipelineListPath             = "api/pipelines/list"
+	pipelineExecutionPath        = "api/pipelines/execution/url"
+	pipelineExecutionGetPath     = "api/pipelines/execution/v2/%s"
+	pipelineExecutionSummaryPath = "api/pipelines/execution/summary"
+	
+	// Prefix to prepend for external API calls
+	externalPathPrefix = "pipeline/"
 )
 
 type PipelineService struct {
 	Client *Client
+	UseInternalPaths bool
+}
+
+func (p *PipelineService) buildPath(basePath string) string {
+	if p.UseInternalPaths {
+		return basePath
+	}
+	return externalPathPrefix + basePath
 }
 
 func (p *PipelineService) Get(ctx context.Context, scope dto.Scope, pipelineID string) (
 	*dto.Entity[dto.PipelineData],
 	error,
 ) {
-	path := fmt.Sprintf(pipelinePath, pipelineID)
+	pathTemplate := p.buildPath(pipelinePath)
+	path := fmt.Sprintf(pathTemplate, pipelineID)
 
 	// Prepare query parameters
 	params := make(map[string]string)
@@ -46,6 +59,7 @@ func (p *PipelineService) List(
 	scope dto.Scope,
 	opts *dto.PipelineListOptions,
 ) (*dto.ListOutput[dto.PipelineListItem], error) {
+	path := p.buildPath(pipelineListPath)
 	// Prepare query parameters
 	params := make(map[string]string)
 	addScope(scope, params)
@@ -76,7 +90,7 @@ func (p *PipelineService) List(
 	response := &dto.ListOutput[dto.PipelineListItem]{}
 
 	// Make the POST request
-	err := p.Client.Post(ctx, pipelineListPath, params, requestBody, response)
+	err := p.Client.Post(ctx, path, params, requestBody, response)
 	if err != nil {
 		return nil, err
 	}
@@ -89,6 +103,7 @@ func (p *PipelineService) ListExecutions(
 	scope dto.Scope,
 	opts *dto.PipelineExecutionOptions,
 ) (*dto.ListOutput[dto.PipelineExecution], error) {
+	path := p.buildPath(pipelineExecutionSummaryPath)
 	// Prepare query parameters
 	params := make(map[string]string)
 	addScope(scope, params)
@@ -132,7 +147,7 @@ func (p *PipelineService) ListExecutions(
 	response := &dto.ListOutput[dto.PipelineExecution]{}
 
 	// Make the POST request
-	err := p.Client.Post(ctx, pipelineExecutionSummaryPath, params, requestBody, response)
+	err := p.Client.Post(ctx, path, params, requestBody, response)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list pipeline executions: %w", err)
 	}
@@ -146,7 +161,8 @@ func (p *PipelineService) GetExecution(
 	scope dto.Scope,
 	planExecutionID string,
 ) (*dto.Entity[dto.PipelineExecution], error) {
-	path := fmt.Sprintf(pipelineExecutionGetPath, planExecutionID)
+	pathTemplate := p.buildPath(pipelineExecutionGetPath)
+	path := fmt.Sprintf(pathTemplate, planExecutionID)
 
 	// Prepare query parameters
 	params := make(map[string]string)
@@ -175,7 +191,7 @@ func (p *PipelineService) FetchExecutionURL(
 	scope dto.Scope,
 	pipelineID, planExecutionID string,
 ) (string, error) {
-	path := pipelineExecutionPath
+	path := p.buildPath(pipelineExecutionPath)
 
 	// Prepare query parameters
 	params := make(map[string]string)
