@@ -503,6 +503,7 @@ func registerCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGro
 			toolsets.NewServerTool(GetCcmOverviewTool(config, ccmClient)),
 			toolsets.NewServerTool(ListCcmCostCategoriesTool(config, ccmClient)),
 			toolsets.NewServerTool(ListCcmCostCategoriesDetailTool(config, ccmClient)),
+			toolsets.NewServerTool(GetCcmCostCategoryTool(config, ccmClient)),
 		)
 
 	// Add toolset to the group
