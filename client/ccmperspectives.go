@@ -40,7 +40,7 @@ func (r *CloudCostManagementService) ListPerspectivesDetail(ctx context.Context,
 
 	items := new(dto.CCMPerspectivesDetailList)
 
-	err := r.client.Get(ctx, path, params, nil, &items)
+	err := r.Client.Get(ctx, path, params, nil, &items)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list cloud cost management cost categories: %w", err)
 	}
