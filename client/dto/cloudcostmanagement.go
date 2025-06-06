@@ -112,8 +112,7 @@ type CCMCostCategoryResource struct {
 	TotalCount       int                  `json:"totalCount"`
 }
 
-type CCMBusinessMapping struct {
-	UUID            string             `json:"uuid"`
+type CCMBusinessMapping struct { UUID            string             `json:"uuid"`
 	Name            string             `json:"name"`
 	AccountID       string             `json:"accountId"`
 	CostTargets     []CCMCostTarget    `json:"costTargets"`
