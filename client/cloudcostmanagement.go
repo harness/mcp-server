@@ -106,7 +106,7 @@ func (r *CloudCostManagementService) GetCostCategory(ctx context.Context, scope 
 	// Temporary slice to hold the strings
 	costCategory := new(dto.CCMCostCategory)
 
-	err := r.client.Get(ctx, path, params, nil, costCategory)
+	err := r.Client.Get(ctx, path, params, nil, costCategory)
 	if err != nil {
 		return nil, fmt.Errorf("failed to Get cloud cost managment cost category by Id: %w", err)
 	}
