@@ -95,7 +95,10 @@ func registerPipelines(config *config.Config, tsg *toolsets.ToolsetGroup) error 
 		return err
 	}
 
-	pipelineClient := &client.PipelineService{Client: c}
+	pipelineClient := &client.PipelineService{
+		Client:          c,
+		UseInternalPaths: config.Internal,
+	}
 
 	// Create the pipelines toolset
 	pipelines := toolsets.NewToolset("pipelines", "Harness Pipeline related tools").
