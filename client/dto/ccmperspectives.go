@@ -3,6 +3,26 @@ package dto
 // ***************************
 // Perspective List Detail 
 // ***************************
+const (
+	SortByTime string = "TIME"
+	SortByCost string = "COST"
+	SortByClusterCost string = "CLUSTER_COST"
+	SortByName string = "NAME"
+)
+
+const (
+	SortOrderAscending  string = "ASCENDING"
+	SortOrderDescending string = "DESCENDING"
+)
+
+const (
+	FilterByAws string = "AWS"
+	FilterByAzure string = "AZURE"
+	FilterByGcp string = "GCP"
+	FilterByCluster string = "CLUSTER"
+	FilterByDefault string = "DEFAULT"
+)
+
 type CCMListPerspectivesDetailOptions struct {
 	AccountIdentifier string `json:"accountIdentifier,omitempty"`
 	SearchKey         string `json:"searchKey,omitempty"`
