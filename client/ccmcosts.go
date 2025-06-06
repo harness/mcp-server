@@ -139,9 +139,11 @@ func setCCMPaginationDefault(opts *dto.CCMPaginationOptions) {
 	if opts == nil {
 		return
 	}
-	if opts.Offset <= 0 {
-		opts.Offset = 1
-	}
+	// The code below is commented out because when filtering is applied and Offset (or Page) == 1
+	// Seach does not retrieves results, only total count (In get perspective details endpoint)
+	// if opts.Offset <= 0 {
+	// 	opts.Offset = 1
+	// }
 	safeMaxPageSize := utils.SafeIntToInt32(maxPageSize, 20)
 	if opts.Limit <= 0 {
 		opts.Limit = utils.SafeIntToInt32(defaultPageSize, 5)
