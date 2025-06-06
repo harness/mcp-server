@@ -1,15 +1,13 @@
 package dto
 
 const (
-	HOUR    PeriodType = "HOUR"
-	DAY     PeriodType = "DAY"
-	MONTH   PeriodType = "MONTH"
-	WEEK    PeriodType = "WEEK"
-	QUARTER PeriodType = "QUARTER"
-	YEAR    PeriodType = "YEAR"
+	PeriodTypeHour    string = "HOUR"
+	PeriodTypeDay     string = "DAY"
+	PeriodTypeMonth   string = "MONTH"
+	PeriodTypeWeek    string = "WEEK"
+	PeriodTypeQuarter string = "QUARTER"
+	PeriodTypeYear    string = "YEAR"
 )
-
-type PeriodType string
 
 // CEView represents a ccm overview
 type CEView struct {
