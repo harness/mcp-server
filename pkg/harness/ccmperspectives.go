@@ -12,7 +12,7 @@ import (
 	"github.com/harness/harness-mcp/pkg/utils"
 )
 
-func ListCcmPerspectivesDetailTool(config *config.Config,  client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListCcmPerspectivesDetailTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_ccm_perspectives_detail",
 			mcp.WithDescription("List the cost perspectives with advanced options in Harness Cloud Cost Management"),
 			mcp.WithString("account_id",
