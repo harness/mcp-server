@@ -122,7 +122,7 @@ func ListCcmPerspectivesDetailTool(config *config.Config, client *client.CloudCo
 		}
 	}
 
-func GetCcmPerspectiveTool(config *config.Config, client *client.Client) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetCcmPerspectiveTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_ccm_perspective",
 			mcp.WithDescription("Get a perspective with advanced options in Harness Cloud Cost Management"),
 			mcp.WithString("account_id",
@@ -144,7 +144,6 @@ func GetCcmPerspectiveTool(config *config.Config, client *client.Client) (tool m
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-
 			params := &dto.CCMGetPerspectiveOptions{}
 			params.AccountIdentifier = accountId
 			params.PerspectiveId = perspectiveId
@@ -154,7 +153,7 @@ func GetCcmPerspectiveTool(config *config.Config, client *client.Client) (tool m
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			data, err := client.CloudCostManagement.GetPerspective(ctx, scope, params)
+			data, err := client.GetPerspective(ctx, scope, params)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get CCM Perspective: %w", err)
 			}
