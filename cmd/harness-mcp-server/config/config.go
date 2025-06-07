@@ -23,5 +23,7 @@ type Config struct {
 	PipelineSvcSecret  string
 	NgManagerBaseURL   string
 	NgManagerSecret    string
+	ChatbotBaseURL     string
+	ChatbotSecret      string
 	McpSvcSecret       string
 }
