@@ -11,16 +11,8 @@ const (
 	ccmBasePath        = "ccm/api"
 	ccmGetOverviewPath = ccmBasePath + "/overview?accountIdentifier=%s&startTime=%d&endTime=%d&groupBy=%s"
 	ccmCostCategoryListPath = ccmBasePath + "/business-mapping/filter-panel?accountIdentifier=%s" // This endpoint lists cost categories
-<<<<<<< HEAD
 	ccmCostCategoryDetailListPath = ccmBasePath + "/business-mapping?accountIdentifier=%s" // This endpoint lists cost categories
 	ccmGetCostCategoryPath = ccmBasePath + "/business-mapping/%s?accountIdentifier=%s" // This endpoint lists cost categories
-<<<<<<< HEAD
-=======
-
-//business-mapping/filter-panel?accountIdentifier=${ACCOUNT_ID}&costCategory=string&search=string"
->>>>>>> 1554fc7 (Added List Cloud Cost Management tool)
-=======
->>>>>>> 243276b (Added Get Cost Category by Id)
 )
 
 type CloudCostManagementService struct {
@@ -47,11 +39,7 @@ func (r *CloudCostManagementService) ListCostCategories(ctx context.Context, sco
 
 	// Handle nil options by creating default options
 	if opts == nil {
-<<<<<<< HEAD
-		opts = &dto.CCMListCostCategoriesOptions{}
-=======
 		opts = &dto.CcmListCostCategoriesOptions{}
->>>>>>> 1554fc7 (Added List Cloud Cost Management tool)
 	}
 
 	if opts.CostCategory != "" {
@@ -64,18 +52,13 @@ func (r *CloudCostManagementService) ListCostCategories(ctx context.Context, sco
 	// Temporary slice to hold the strings
 	costCategories := new(dto.CCMCostCategoryList)
 
-<<<<<<< HEAD
 	err := r.Client.Get(ctx, path, params, nil, costCategories)
-=======
-	err := r.client.Get(ctx, path, params, nil, costCategories)
->>>>>>> 1554fc7 (Added List Cloud Cost Management tool)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list cloud cost managment cost categories: %w", err)
 	}
 
 	return costCategories, nil
 }
-<<<<<<< HEAD
 
 func (r *CloudCostManagementService) ListCostCategoriesDetail(ctx context.Context, scope dto.Scope, opts *dto.CCMListCostCategoriesDetailOptions) (*dto.CCMCostCategoryDetailList, error) {
 	path := ccmCostCategoryDetailListPath
@@ -123,11 +106,7 @@ func (r *CloudCostManagementService) GetCostCategory(ctx context.Context, scope 
 	// Temporary slice to hold the strings
 	costCategory := new(dto.CCMCostCategory)
 
-<<<<<<< HEAD
 	err := r.Client.Get(ctx, path, params, nil, costCategory)
-=======
-	err := r.client.Get(ctx, path, params, nil, costCategory)
->>>>>>> 243276b (Added Get Cost Category by Id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to Get cloud cost managment cost category by Id: %w", err)
 	}
@@ -151,6 +130,3 @@ func setCCMPaginationDefault(opts *dto.CCMPaginationOptions) {
 		opts.Limit = safeMaxPageSize
 	}
 }
-
-=======
->>>>>>> 1554fc7 (Added List Cloud Cost Management tool)
