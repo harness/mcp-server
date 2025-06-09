@@ -33,6 +33,11 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 		return nil, err
 	}
 
+	// Register chatbot
+	if err := registerChatbot(config, tsg); err != nil {
+		return nil, err
+	}
+
 	// TODO: support internal mode for other endpoints as well eventually
 	if err := registerPullRequests(config, tsg); err != nil {
 		return nil, err
@@ -218,6 +223,36 @@ func registerRegistries(config *config.Config, tsg *toolsets.ToolsetGroup) error
 
 	// Add toolset to the group
 	tsg.AddToolset(registries)
+	return nil
+}
+
+// registerChatbot registers the chatbot toolset
+func registerChatbot(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Skip registration for external mode (no external service exposed)
+	if !config.Internal {
+		return nil
+	}
+
+	// Determine the base URL and secret for chatbot service
+	baseURL := config.ChatbotBaseURL
+	secret := config.ChatbotSecret
+	
+	// Create base client for chatbot
+	c, err := createClient(baseURL, config, secret)
+	if err != nil {
+		return err
+	}
+
+	chatbotClient := &client.ChatbotService{Client: c}
+
+	// Create the chatbot toolset
+	chatbot := toolsets.NewToolset("chatbot", "Harness Documentation Bot tools").
+		AddReadTools(
+			toolsets.NewServerTool(AskChatbotTool(config, chatbotClient)),
+		)
+
+	// Add toolset to the group
+	tsg.AddToolset(chatbot)
 	return nil
 }
 
