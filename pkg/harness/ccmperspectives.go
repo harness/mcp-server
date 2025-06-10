@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
+	"strconv"
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
@@ -154,6 +156,77 @@ func GetCcmPerspectiveTool(config *config.Config, client *client.CloudCostManage
 			}
 
 			data, err := client.GetPerspective(ctx, scope, params)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get CCM Perspective: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal CCM Perspective: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+	}
+
+func GetLastPeriodCostCcmPerspectiveTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+
+	now := time.Now()
+	defaultStartTime := now.AddDate(0, 0, -60).UnixMilli()
+	return mcp.NewTool("get_last_period_cost_ccm_perspective",
+			mcp.WithDescription("Get the last period cost for a perspective in Harness Cloud Cost Management"),
+			mcp.WithString("account_id",
+				mcp.Description("The account identifier"),
+			),
+			mcp.WithString("perspective_id",
+				mcp.Description("Required perspective identifier."),
+			),
+			mcp.WithString("start_time",
+				mcp.DefaultString(fmt.Sprintf("%d", defaultStartTime)),
+				mcp.Description("Start time of the period in Unix epoch **milliseconds** (e.g. 1743465600000 for April 1, 2025)"),
+			),
+			mcp.WithString("period",
+				mcp.Description("Required period to get the cost for"),
+				mcp.DefaultString(dto.PeriodMonthly),
+				mcp.Enum(dto.PeriodDaily, dto.PeriodWeekly, dto.PeriodMonthly, dto.PeriodQuarterly, dto.PeriodYearly),
+			),
+			WithScope(config, false),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			accountId, err := OptionalParam[string](request, "account_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			perspectiveId, err := OptionalParam[string](request, "perspective_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			startTimeStr, err := OptionalParam[string](request, "start_time")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			startTime, err := strconv.ParseInt(startTimeStr, 10, 64) 
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			period, err := OptionalParam[string](request, "period")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			params := &dto.CCMGetLastPeriodCostPerspectiveOptions{}
+			params.AccountIdentifier = accountId
+			params.PerspectiveId = perspectiveId
+			params.StartTime = startTime
+			params.Period = period
+
+			scope, err := fetchScope(config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.GetLastCostPerspective(ctx, scope, params)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get CCM Perspective: %w", err)
 			}

@@ -9,6 +9,7 @@ import (
 const (
 	ccmPerspetiveDetailListPath = ccmBasePath + "/perspective/getAllPerspectives?accountIdentifier=%s"
 	ccmGetPerspectivePath = ccmBasePath + "/perspective"
+	ccmGetLastPeriodCostPerspectivePath = ccmBasePath + "/perspective/lastPeriodCost"
 )
 
 func (r *CloudCostManagementService) ListPerspectivesDetail(ctx context.Context, scope dto.Scope, opts *dto.CCMListPerspectivesDetailOptions) (*dto.CCMPerspectivesDetailList, error) {
@@ -61,6 +62,29 @@ func (r *CloudCostManagementService) GetPerspective(ctx context.Context, scope d
 	params["perspectiveId"] = opts.PerspectiveId
 
 	items := new(dto.CCMPerspectiveDetail)
+	err := r.Client.Get(ctx, path, params, nil, &items)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list cloud cost management perspectives: %w", err)
+	}
+
+	return items, nil
+}
+
+func (r *CloudCostManagementService) GetLastCostPerspective(ctx context.Context, scope dto.Scope, opts *dto.CCMGetLastPeriodCostPerspectiveOptions) (*dto.CCMLastPeriodCostPerspective, error) {
+
+	path := ccmGetLastPeriodCostPerspectivePath
+	params := make(map[string]string)
+	// Handle nil options by creating default options
+	if opts == nil {
+		opts = &dto.CCMGetLastPeriodCostPerspectiveOptions{}
+	}
+
+	params["accountIdentifier"] = opts.AccountIdentifier
+	params["perspectiveId"] = opts.PerspectiveId
+	params["startTime"] = fmt.Sprintf("%d", opts.StartTime)
+	params["period"] = opts.Period
+
+	items := new(dto.CCMLastPeriodCostPerspective)
 	err := r.Client.Get(ctx, path, params, nil, &items)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list cloud cost management perspectives: %w", err)

@@ -23,6 +23,14 @@ const (
 	FilterByDefault string = "DEFAULT"
 )
 
+const (
+	PeriodDaily    string = "DAILY"
+	PeriodWeekly   string = "WEEKLY"
+	PeriodMonthly  string = "MONTHLY"
+	PeriodQuarterly string = "QUARTERLY"
+	PeriodYearly   string = "YEARLY"
+)
+
 type CCMListPerspectivesDetailOptions struct {
 	AccountIdentifier string `json:"accountIdentifier,omitempty"`
 	SearchKey         string `json:"searchKey,omitempty"`
@@ -136,3 +144,16 @@ type CCMAzureViewPreferences struct {
 	CostType string `json:"costType"`
 }
 
+// ***************************
+// Get Last period cost perspective 
+// ***************************
+type CCMGetLastPeriodCostPerspectiveOptions struct {
+	CCMGetPerspectiveOptions
+	StartTime int64 `json:"startTime,omitempty"` // Unix epoch milliseconds
+	Period string `json:"period,omitempty"` // Enum: "DAILY", "WEEKLY", "MONTHLY", "QUARTERLY", "YEARLY"
+}
+
+type CCMLastPeriodCostPerspective struct {
+	CCMBaseResponse
+	Data          float64 `json:"data,omitempty"`
+}

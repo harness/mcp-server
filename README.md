@@ -55,6 +55,7 @@ Toolset Name: `cloudcostmanagement`
 - `get_ccm_cost_category`: Retrieve a cost category detail by Id  for a specified account.
 - `list_ccm_perspectives_detail`: List all perspectives for a specified account.
 - `get_ccm_perspective`: Retrieves a perspective by Id for a specified account.
+- `get_last_period_cost_ccm_perspective`:  Retrieves the cost for a specified period and perspective within a given account.
 
 #### Logs Toolset
 
