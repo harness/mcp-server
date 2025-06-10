@@ -196,9 +196,15 @@ func MoveInfrastructureConfigsTool(config *config.Config, client *client.Infrast
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			
-			configTypesRaw, err := requiredParam[[]interface{}](request, "config_types")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
+			// Get config_types parameter directly from the request parameters as []interface{} doesn't satisfy the comparable constraint
+			param, ok := request.Params.Arguments["config_types"]
+			if !ok || param == nil {
+				return mcp.NewToolResultError("config_types is required"), nil
+			}
+			
+			configTypesRaw, ok := param.([]interface{})
+			if !ok || len(configTypesRaw) == 0 {
+				return mcp.NewToolResultError("config_types must be a non-empty array"), nil
 			}
 			
 			// Convert config types to strings
@@ -228,9 +234,15 @@ func MoveInfrastructureConfigsTool(config *config.Config, client *client.Infrast
 				ConfigTypes: configTypes,
 			}
 			
-			// Process optional service refs
-			serviceRefsRaw, err := OptionalParam[[]interface{}](request, "service_refs")
-			if err == nil && len(serviceRefsRaw) > 0 {
+			// Process optional service refs - get directly from parameters to avoid comparable constraint issues
+			serviceRefsParam, serviceRefsOk := request.Params.Arguments["service_refs"]
+			serviceRefsRaw := make([]interface{}, 0)
+			if serviceRefsOk && serviceRefsParam != nil {
+				if serviceRefs, ok := serviceRefsParam.([]interface{}); ok {
+					serviceRefsRaw = serviceRefs
+				}
+			}
+			if len(serviceRefsRaw) > 0 {
 				serviceRefs := make([]dto.ServiceRef, 0, len(serviceRefsRaw))
 				for _, sr := range serviceRefsRaw {
 					if srvMap, ok := sr.(map[string]interface{}); ok {
