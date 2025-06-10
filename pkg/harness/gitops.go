@@ -96,10 +96,13 @@ func ListGitOpsApplicationsTool(config *config.Config, client *client.GitOpsClie
 			}
 			opts.SyncStatus = syncStatus
 
-			// Handle array parameters
-			clustersRaw, err := OptionalParam[[]interface{}](request, "clusters")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
+			// Handle array parameters - get directly from parameters to avoid comparable constraint issues
+			clustersParam, clustersOk := request.Params.Arguments["clusters"]
+			clustersRaw := make([]interface{}, 0)
+			if clustersOk && clustersParam != nil {
+				if clusters, ok := clustersParam.([]interface{}); ok {
+					clustersRaw = clusters
+				}
 			}
 			if len(clustersRaw) > 0 {
 				clusters := make([]string, 0, len(clustersRaw))
@@ -111,9 +114,13 @@ func ListGitOpsApplicationsTool(config *config.Config, client *client.GitOpsClie
 				opts.Clusters = clusters
 			}
 
-			projectsRaw, err := OptionalParam[[]interface{}](request, "projects")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
+			// Handle projects parameter - get directly from parameters to avoid comparable constraint issues
+			projectsParam, projectsOk := request.Params.Arguments["projects"]
+			projectsRaw := make([]interface{}, 0)
+			if projectsOk && projectsParam != nil {
+				if projects, ok := projectsParam.([]interface{}); ok {
+					projectsRaw = projects
+				}
 			}
 			if len(projectsRaw) > 0 {
 				projects := make([]string, 0, len(projectsRaw))
@@ -332,8 +339,8 @@ func GetGitOpsPodLogsTool(config *config.Config, client *client.GitOpsClient) (t
 				mcp.Description("Optional container name (if not specified, logs from all containers will be retrieved)"),
 			),
 			mcp.WithBoolean("follow",
-				mcp.DefaultBoolean(false),
-				mcp.Description("Whether to follow logs (stream updates)"),
+				// Default is false, but we don't use a DefaultBoolean function as it doesn't exist
+				mcp.Description("Whether to follow logs (stream updates). Default is false."),
 			),
 			mcp.WithNumber("since_seconds",
 				mcp.Description("Get logs from the last N seconds"),
@@ -376,9 +383,14 @@ func GetGitOpsPodLogsTool(config *config.Config, client *client.GitOpsClient) (t
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			follow, err := OptionalParam[bool](request, "follow")
-			if err != nil {
-				follow = false
+			// Default value for follow is false
+			follow := false
+			
+			// Check if the parameter exists
+			if followParam, ok := request.Params.Arguments["follow"]; ok && followParam != nil {
+				if followBool, ok := followParam.(bool); ok {
+					follow = followBool
+				}
 			}
 
 			sinceSecs, err := OptionalParam[float64](request, "since_seconds")
