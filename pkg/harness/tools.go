@@ -59,6 +59,26 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 		return nil, err
 	}
 
+	if err := registerServices(config, tsg); err != nil {
+		return nil, err
+	}
+
+	if err := registerEnvironments(config, tsg); err != nil {
+		return nil, err
+	}
+
+	if err := registerPolicy(config, tsg); err != nil {
+		return nil, err
+	}
+
+	if err := registerInfrastructure(config, tsg); err != nil {
+		return nil, err
+	}
+
+	if err := registerGitOps(config, tsg); err != nil {
+		return nil, err
+	}
+
 	// Enable requested toolsets
 	if err := tsg.EnableToolsets(config.Toolsets); err != nil {
 		return nil, err
@@ -260,6 +280,159 @@ func registerChatbot(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 	// Add toolset to the group
 	tsg.AddToolset(chatbot)
+	return nil
+}
+
+// registerGitOps registers the GitOps toolset
+func registerGitOps(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Determine the base URL and secret for GitOps
+	baseURL := config.BaseURL
+	secret := ""
+	if config.Internal {
+		return nil
+	}
+
+	// Create base client for GitOps
+	c, err := createClient(baseURL, config, secret)
+	if err != nil {
+		return err
+	}
+
+	gitOpsClient := &client.GitOpsClient{Client: c}
+
+	// Create the GitOps toolset
+	gitops := toolsets.NewToolset("gitops", "Harness GitOps related tools").
+		AddReadTools(
+			toolsets.NewServerTool(ListGitOpsApplicationsTool(config, gitOpsClient)),
+			toolsets.NewServerTool(ListGitOpsAgentApplicationsTool(config, gitOpsClient)),
+			toolsets.NewServerTool(GetGitOpsManagedResourcesTool(config, gitOpsClient)),
+			toolsets.NewServerTool(GetGitOpsPodLogsTool(config, gitOpsClient)),
+			toolsets.NewServerTool(GetGitOpsClusterByNameTool(config, gitOpsClient)),
+		)
+
+	// Add toolset to the group
+	tsg.AddToolset(gitops)
+	return nil
+}
+
+// registerInfrastructure registers the infrastructure toolset
+func registerInfrastructure(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Determine the base URL and secret for infrastructure
+	baseURL := config.BaseURL
+	secret := ""
+	if config.Internal {
+		return nil
+	}
+
+	// Create base client for infrastructure
+	c, err := createClient(baseURL, config, secret)
+	if err != nil {
+		return err
+	}
+
+	infrastructureClient := &client.InfrastructureClient{Client: c}
+
+	// Create the infrastructure toolset
+	infrastructure := toolsets.NewToolset("infrastructure", "Harness Infrastructure related tools").
+		AddReadTools(
+			toolsets.NewServerTool(ListInfrastructuresTool(config, infrastructureClient)),
+		).
+		AddWriteTools(
+			toolsets.NewServerTool(MoveInfrastructureConfigsTool(config, infrastructureClient)),
+		)
+
+	// Add toolset to the group
+	tsg.AddToolset(infrastructure)
+	return nil
+}
+
+// registerPolicy registers the policy toolset
+func registerPolicy(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Determine the base URL and secret for policy
+	baseURL := config.BaseURL
+	secret := ""
+	if config.Internal {
+		return nil
+	}
+
+	// Create base client for policy
+	c, err := createClient(baseURL, config, secret)
+	if err != nil {
+		return err
+	}
+
+	policyClient := &client.PolicyClient{Client: c}
+
+	// Create the policy toolset
+	policy := toolsets.NewToolset("policy", "Harness Policy related tools").
+		AddReadTools(
+			toolsets.NewServerTool(GetPolicyDashboardMetricsTool(config, policyClient)),
+			toolsets.NewServerTool(ListPolicyEvaluationsTool(config, policyClient)),
+		)
+
+	// Add toolset to the group
+	tsg.AddToolset(policy)
+	return nil
+}
+
+// registerEnvironments registers the environments toolset
+func registerEnvironments(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Determine the base URL and secret for environments
+	baseURL := config.BaseURL
+	secret := ""
+	if config.Internal {
+		return nil
+	}
+
+	// Create base client for environments
+	c, err := createClient(baseURL, config, secret)
+	if err != nil {
+		return err
+	}
+
+	environmentClient := &client.EnvironmentClient{Client: c}
+
+	// Create the environments toolset
+	environments := toolsets.NewToolset("environments", "Harness Environment related tools").
+		AddReadTools(
+			toolsets.NewServerTool(GetEnvironmentTool(config, environmentClient)),
+			toolsets.NewServerTool(ListEnvironmentsTool(config, environmentClient)),
+		).
+		AddWriteTools(
+			toolsets.NewServerTool(MoveEnvironmentConfigsTool(config, environmentClient)),
+		)
+
+	// Add toolset to the group
+	tsg.AddToolset(environments)
+	return nil
+}
+
+// registerServices registers the services toolset
+func registerServices(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Determine the base URL and secret for services
+	baseURL := config.BaseURL
+	secret := ""
+	if config.Internal {
+		return nil
+	}
+
+	// Create base client for services
+	c, err := createClient(baseURL, config, secret)
+	if err != nil {
+		return err
+	}
+
+	serviceClient := &client.ServiceClient{Client: c}
+
+	// Create the services toolset
+	services := toolsets.NewToolset("services", "Harness Service related tools").
+		AddReadTools(
+			toolsets.NewServerTool(GetServiceTool(config, serviceClient)),
+			toolsets.NewServerTool(ListServicesTool(config, serviceClient)),
+		)
+
+	// Add toolset to the group
+	tsg.AddToolset(services)
 	return nil
 }
 
