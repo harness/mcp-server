@@ -22,6 +22,10 @@ type ServiceClient struct {
 func (s *ServiceClient) Get(ctx context.Context, scope dto.Scope, serviceIdentifier string) (*dto.Service, error) {
 	path := fmt.Sprintf(serviceGetPath, serviceIdentifier)
 	params := make(map[string]string)
+	// Ensure accountIdentifier is always set
+	if scope.AccountID == "" {
+		return nil, fmt.Errorf("accountIdentifier cannot be null")
+	}
 	addScope(scope, params)
 
 	var response dto.ServiceResponse
@@ -54,6 +58,10 @@ func setDefaultPaginationForService(opts *dto.ServiceOptions) {
 func (s *ServiceClient) List(ctx context.Context, scope dto.Scope, opts *dto.ServiceOptions) ([]dto.Service, int, error) {
 	path := serviceListPath
 	params := make(map[string]string)
+	// Ensure accountIdentifier is always set
+	if scope.AccountID == "" {
+		return nil, 0, fmt.Errorf("accountIdentifier cannot be null")
+	}
 	addScope(scope, params)
 
 	// Handle nil options by creating default options
