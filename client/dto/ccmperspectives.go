@@ -157,3 +157,18 @@ type CCMLastPeriodCostPerspective struct {
 	CCMBaseResponse
 	Data          float64 `json:"data,omitempty"`
 }
+
+// ***************************
+// Get Last twelve months cost perspective 
+// ***************************
+type CCMGetLastTwelveMonthsCostPerspectiveOptions = CCMGetLastPeriodCostPerspectiveOptions 
+
+type CCMCostByTime struct {
+	Time int64 `json:"time,omitempty"` // Unix epoch milliseconds
+	Value   float64 `json:"value,omitempty"`  // Cost 
+}
+
+type CCMLastTwelveMonthsCostPerspective struct {
+	CCMBaseResponse
+	Data          []CCMCostByTime `json:"data,omitempty"`
+}
