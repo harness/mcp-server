@@ -317,9 +317,13 @@ func addQueryParams(req *http.Request, params map[string]string) {
 }
 
 func addScope(scope dto.Scope, params map[string]string) {
-	params["accountIdentifier"] = scope.AccountID
-	params["orgIdentifier"] = scope.OrgID
-	params["projectIdentifier"] = scope.ProjectID
+	params["accountIdentifier"] = scope.AccountID // AccountID should always be present from server config
+	if scope.OrgID != "" {
+		params["orgIdentifier"] = scope.OrgID
+	}
+	if scope.ProjectID != "" {
+		params["projectIdentifier"] = scope.ProjectID
+	}
 }
 
 func setDefaultPagination(opts *dto.PaginationOptions) {
