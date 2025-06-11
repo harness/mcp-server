@@ -118,15 +118,7 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 		return nil, err
 	}
 
-	if err := registerPolicy(config, tsg); err != nil {
-		return nil, err
-	}
-
 	if err := registerInfrastructure(config, tsg); err != nil {
-		return nil, err
-	}
-
-	if err := registerGitOps(config, tsg); err != nil {
 		return nil, err
 	}
 
@@ -338,37 +330,7 @@ func registerChatbot(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	return nil
 }
 
-// registerGitOps registers the GitOps toolset
-func registerGitOps(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-	// Determine the base URL and secret for GitOps
-	baseURL := config.BaseURL
-	secret := ""
-	if config.Internal {
-		return nil
-	}
 
-	// Create base client for GitOps
-	c, err := createClient(baseURL, config, secret)
-	if err != nil {
-		return err
-	}
-
-	gitOpsClient := &client.GitOpsClient{Client: c}
-
-	// Create the GitOps toolset
-	gitops := toolsets.NewToolset("gitops", "Harness GitOps related tools").
-		AddReadTools(
-			toolsets.NewServerTool(ListGitOpsApplicationsTool(config, gitOpsClient)),
-			toolsets.NewServerTool(ListGitOpsAgentApplicationsTool(config, gitOpsClient)),
-			toolsets.NewServerTool(GetGitOpsManagedResourcesTool(config, gitOpsClient)),
-			toolsets.NewServerTool(GetGitOpsPodLogsTool(config, gitOpsClient)),
-			toolsets.NewServerTool(GetGitOpsClusterByNameTool(config, gitOpsClient)),
-		)
-
-	// Add toolset to the group
-	tsg.AddToolset(gitops)
-	return nil
-}
 
 // registerConnectors registers the connectors toolset
 func registerConnectors(config *config.Config, tsg *toolsets.ToolsetGroup) error {
@@ -422,34 +384,7 @@ func registerInfrastructure(config *config.Config, tsg *toolsets.ToolsetGroup) e
 	return nil
 }
 
-// registerPolicy registers the policy toolset
-func registerPolicy(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-	// Determine the base URL and secret for policy
-	baseURL := config.BaseURL
-	secret := ""
-	if config.Internal {
-		return nil
-	}
 
-	// Create base client for policy
-	c, err := createClient(baseURL, config, secret)
-	if err != nil {
-		return err
-	}
-
-	policyClient := &client.PolicyClient{Client: c}
-
-	// Create the policy toolset
-	policy := toolsets.NewToolset("policy", "Harness Policy related tools").
-		AddReadTools(
-			toolsets.NewServerTool(GetPolicyDashboardMetricsTool(config, policyClient)),
-			toolsets.NewServerTool(ListPolicyEvaluationsTool(config, policyClient)),
-		)
-
-	// Add toolset to the group
-	tsg.AddToolset(policy)
-	return nil
-}
 
 // registerEnvironments registers the environments toolset
 func registerEnvironments(config *config.Config, tsg *toolsets.ToolsetGroup) error {
