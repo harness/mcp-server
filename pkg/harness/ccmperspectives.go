@@ -239,3 +239,68 @@ func GetLastPeriodCostCcmPerspectiveTool(config *config.Config, client *client.C
 			return mcp.NewToolResultText(string(r)), nil
 		}
 	}
+
+func GetLastTwelveMonthsCostCcmPerspectiveTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+
+	defaultStartTime := utils.CurrentMMDDYYYY() 
+	return mcp.NewTool("get_last_twelve_months_cost_ccm_perspective",
+			mcp.WithDescription("Get the last twelve months cost for a perspective in Harness Cloud Cost Management"),
+			mcp.WithString("account_id",
+				mcp.Description("The account identifier"),
+			),
+			mcp.WithString("perspective_id",
+				mcp.Description("Required perspective identifier."),
+			),
+			mcp.WithString("start_time",
+				mcp.DefaultString(defaultStartTime),
+				mcp.Description("Start time of the period in MM/DD/YYYY format (e.g. 04/01/2023)"), 
+			),
+			// API Documentation specify that **only** YEARLY 'period' is supported
+			// So, for now the value will be "Harcoded". 
+			// Same for 'breakdown' field, but supporting MONTHLY
+			// Same for 'type' field, but supporting PREVIOUS_PERIOD_SPEND
+			// TODO: Check with team.
+			WithScope(config, false),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			accountId, err := OptionalParam[string](request, "account_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			perspectiveId, err := OptionalParam[string](request, "perspective_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			startTimeStr, err := OptionalParam[string](request, "start_time")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			startTime, err := utils.FormatMMDDYYYYToUnixMillis(startTimeStr) 
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			params := &dto.CCMGetLastTwelveMonthsCostPerspectiveOptions{}
+			params.AccountIdentifier = accountId
+			params.PerspectiveId = perspectiveId
+			params.StartTime = startTime
+
+			scope, err := fetchScope(config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.GetLastTwelveMonthsCostPerspective(ctx, scope, params)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get CCM Perspective: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal CCM Perspective: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+	}
