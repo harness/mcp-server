@@ -2,6 +2,7 @@ package harness
 
 import (
 	"context"
+	"encoding/json" // Added missing import
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -9,9 +10,12 @@ import (
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/ar"
+	"github.com/harness/harness-mcp/client/dto" // Added missing import
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness/auth"
 	"github.com/harness/harness-mcp/pkg/toolsets"
+	"github.com/mark3labs/mcp-go/mcp"    // Added missing import
+	"github.com/mark3labs/mcp-go/server" // Added for server.ToolHandlerFunc
 )
 
 // Default tools to enable
@@ -22,6 +26,53 @@ const serviceIdentity = "genaiservice" // TODO: can change once we have our own 
 
 // Default JWT token lifetime
 var defaultJWTLifetime = 1 * time.Hour
+
+// ListConnectorCatalogueTool creates a new mcp.Tool and handler for listing the connector catalogue.
+func ListConnectorCatalogueTool(harnessConfig *config.Config, c *client.Client) (mcp.Tool, server.ToolHandlerFunc) {
+	return mcp.NewTool("list_connector_catalogue",
+			mcp.WithDescription("List the Harness connector catalogue."),
+			// Define scope parameters (org_id, project_id) similar to other tools if needed by API
+			// For getConnectorCatalogue, it seems to primarily use AccountID from scope, but org/project might be for filtering or future use.
+			mcp.WithString("org_id", 
+				mcp.Description("Optional ID of the organization."),
+			),
+			mcp.WithString("project_id", 
+				mcp.Description("Optional ID of the project."),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			orgID, _ := OptionalParam[string](request, "org_id") // Allow empty if not provided
+			projectID, _ := OptionalParam[string](request, "project_id")
+
+			scope := dto.Scope{
+				AccountID: harnessConfig.AccountID,
+				OrgID:     orgID,
+				ProjectID: projectID,
+			}
+
+			// If OrgID or ProjectID are not provided in params, use defaults from config
+			if scope.OrgID == "" {
+				scope.OrgID = harnessConfig.DefaultOrgID
+			}
+			if scope.ProjectID == "" {
+				scope.ProjectID = harnessConfig.DefaultProjectID
+			}
+
+			connectorService := client.ConnectorService{Client: c}
+			catalogue, err := connectorService.ListConnectorCatalogue(ctx, scope)
+			if err != nil {
+				// Using fmt.Errorf for the error that will be wrapped by the MCP framework
+				return nil, fmt.Errorf("failed to list connector catalogue: %w", err)
+			}
+
+			responseBytes, err := json.Marshal(catalogue)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal connector catalogue: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(responseBytes)), nil
+		}
+}
 
 // InitToolsets initializes and returns the toolset groups
 func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
@@ -76,6 +127,10 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 	}
 
 	if err := registerGitOps(config, tsg); err != nil {
+		return nil, err
+	}
+
+	if err := registerConnectors(config, tsg); err != nil {
 		return nil, err
 	}
 
@@ -312,6 +367,27 @@ func registerGitOps(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 	// Add toolset to the group
 	tsg.AddToolset(gitops)
+	return nil
+}
+
+// registerConnectors registers the connectors toolset
+func registerConnectors(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Connector catalogue API uses standard auth and doesn't have a specific service URL or secret beyond the main client config.
+	baseURL := config.BaseURL
+	secret := "" // No specific secret for this general API endpoint
+
+	c, err := createClient(baseURL, config, secret)
+	if err != nil {
+		return fmt.Errorf("failed to create client for connectors: %w", err)
+	}
+
+	// Create the connectors toolset
+	connectors := toolsets.NewToolset("connectors", "Harness Connector related tools").
+		AddReadTools(
+			toolsets.NewServerTool(ListConnectorCatalogueTool(config, c)),
+		)
+
+	tsg.AddToolset(connectors)
 	return nil
 }
 
