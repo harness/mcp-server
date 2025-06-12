@@ -9,9 +9,7 @@ import (
 const (
 	ccmBasePath        = "ccm/api"
 	ccmGetOverviewPath = ccmBasePath + "/overview?accountIdentifier=%s&startTime=%d&endTime=%d&groupBy=%s"
-	ccmCostCategoryListPath = ccmBasePath + "/business-mapping/filter-panel?accountIdentifier=%s" // This endpoint lists cost categories
-
-//business-mapping/filter-panel?accountIdentifier=${ACCOUNT_ID}&costCategory=string&search=string"
+	ccmCostCategoryListPath = ccmBasePath + "/business-mapping/filter-panel?accountIdentifier=%s"
 )
 
 type CloudCostManagementService struct {
