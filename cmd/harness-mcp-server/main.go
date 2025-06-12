@@ -272,6 +272,9 @@ func runStdioServer(ctx context.Context, config config.Config) error {
 	// Register the tools with the server
 	toolsets.RegisterTools(harnessServer)
 
+	// Set the guidelines prompts
+	harness.RegisterPrompts(harnessServer)
+
 	// Create stdio server
 	stdioServer := server.NewStdioServer(harnessServer)
 

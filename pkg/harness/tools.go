@@ -55,6 +55,11 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 		return nil, err
 	}
 
+	if err := registerCloudCostManagement(config, tsg); err != nil {
+		return nil, err
+	}
+
+
 	// Enable requested toolsets
 	if err := tsg.EnableToolsets(config.Toolsets); err != nil {
 		return nil, err
@@ -284,5 +289,32 @@ func registerLogs(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 	// Add toolset to the group
 	tsg.AddToolset(logs)
+	return nil
+}
+
+func registerCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Determine the base URL and secret for CCM
+	baseURL := config.BaseURL
+	secret := ""
+	if config.Internal {
+		return nil
+	}
+
+	// Create base client for CCM
+	c, err := createClient(baseURL, config, secret)
+	if err != nil {
+		return err
+	}
+
+	ccmClient := &client.CloudCostManagementService{Client: c}
+
+	// Create the CCM toolset
+	ccm := toolsets.NewToolset("ccm", "Harness Cloud Cost Management related tools").
+		AddReadTools(
+			toolsets.NewServerTool(GetCcmOverviewTool(config, ccmClient)),
+		)
+
+	// Add toolset to the group
+	tsg.AddToolset(ccm)
 	return nil
 }
