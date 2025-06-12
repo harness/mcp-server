@@ -25,5 +25,7 @@ type Config struct {
 	NgManagerSecret    string
 	ChatbotBaseURL     string
 	ChatbotSecret      string
+	GenaiBaseURL       string
+	GenaiSecret        string
 	McpSvcSecret       string
 }
