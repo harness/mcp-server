@@ -21,7 +21,8 @@ func ListInfrastructuresTool(config *config.Config, client *client.Infrastructur
 				mcp.Description("Optional filter for deployment type (e.g., Kubernetes, ECS)"),
 			),
 			mcp.WithString("environmentIdentifier",
-				mcp.Description("Optional filter for environment"),
+				mcp.Required(),
+				mcp.Description("Filter for environment"),
 			),
 			mcp.WithString("sort",
 				mcp.Description("Optional field to sort by (e.g., name)"),
@@ -74,12 +75,13 @@ func ListInfrastructuresTool(config *config.Config, client *client.Infrastructur
 				opts.DeploymentType = deploymentType
 			}
 
-			environment, err := OptionalParam[string](request, "environmentIdentifier")
+			environmentIdentifier, err := requiredParam[string](request, "environmentIdentifier")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			if environment != "" {
-				opts.EnvironmentIdentifier = environment
+			
+			if environmentIdentifier != "" {
+				opts.EnvironmentIdentifier = environmentIdentifier
 			}
 
 			// Handle sorting
@@ -125,144 +127,172 @@ func ListInfrastructuresTool(config *config.Config, client *client.Infrastructur
 // https://apidocs.harness.io/tag/Infrastructures#operation/moveInfraConfigs
 func MoveInfrastructureConfigsTool(config *config.Config, client *client.InfrastructureClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("move_infrastructure_configs",
-			mcp.WithDescription("Move configurations from one infrastructure to another in Harness."),
-			mcp.WithString("source_org",
+			mcp.WithDescription("Move infrastructure YAML from inline to remote or vice versa in Harness."),
+			mcp.WithString("infra_identifier",
 				mcp.Required(),
-				mcp.Description("Source organization identifier"),
+				mcp.Description("Infrastructure identifier to move"),
 			),
-			mcp.WithString("source_project",
+			mcp.WithString("environment_identifier",
 				mcp.Required(),
-				mcp.Description("Source project identifier"),
+				mcp.Description("Environment identifier for the infrastructure"),
 			),
-			mcp.WithString("source_infrastructure",
+			mcp.WithString("move_config_type",
 				mcp.Required(),
-				mcp.Description("Source infrastructure identifier"),
+				mcp.Description("Specifies the direction of the move operation. Options: INLINE_TO_REMOTE, REMOTE_TO_INLINE"),
 			),
-			mcp.WithString("target_org",
-				mcp.Required(),
-				mcp.Description("Target organization identifier"),
+			mcp.WithString("org_identifier",
+				mcp.Description("Organization identifier"),
 			),
-			mcp.WithString("target_project",
-				mcp.Required(),
-				mcp.Description("Target project identifier"),
+			mcp.WithString("project_identifier",
+				mcp.Description("Project identifier"),
 			),
-			mcp.WithString("target_infrastructure",
-				mcp.Required(),
-				mcp.Description("Target infrastructure identifier"),
+			mcp.WithString("connector_ref",
+				mcp.Description("Identifier of connector needed for operations on the entity"),
 			),
-			mcp.WithArray("config_types",
-				mcp.Required(),
-				mcp.Description("Types of configurations to move"),
+			mcp.WithString("repo_name",
+				mcp.Description("Name of the repository"),
 			),
-			mcp.WithArray("service_refs",
-				mcp.Description("Optional list of service references to move"),
+			mcp.WithString("branch",
+				mcp.Description("Name of the branch"),
+			),
+			mcp.WithString("file_path",
+				mcp.Description("File path of the entity"),
+			),
+			mcp.WithString("commit_msg",
+				mcp.Description("Commit message to use for the merge commit"),
+			),
+			mcp.WithBoolean("is_new_branch",
+				mcp.Description("Checks the new branch"),
+			),
+			mcp.WithString("base_branch",
+				mcp.Description("Name of the default branch"),
+			),
+			mcp.WithBoolean("is_harness_code_repo",
+				mcp.Description("Is Harness code repo enabled"),
 			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			// Get scope
+			scope, err := fetchScope(config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			
 			// Extract required parameters
-			sourceOrg, err := requiredParam[string](request, "source_org")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			sourceProject, err := requiredParam[string](request, "source_project")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			sourceInfra, err := requiredParam[string](request, "source_infrastructure")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			targetOrg, err := requiredParam[string](request, "target_org")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			targetProject, err := requiredParam[string](request, "target_project")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			targetInfra, err := requiredParam[string](request, "target_infrastructure")
+			infraIdentifier, err := requiredParam[string](request, "infra_identifier")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			
-			// Get config_types parameter directly from the request parameters as []interface{} doesn't satisfy the comparable constraint
-			param, ok := request.Params.Arguments["config_types"]
-			if !ok || param == nil {
-				return mcp.NewToolResultError("config_types is required"), nil
+			environmentIdentifier, err := requiredParam[string](request, "environment_identifier")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 			
-			configTypesRaw, ok := param.([]interface{})
-			if !ok || len(configTypesRaw) == 0 {
-				return mcp.NewToolResultError("config_types must be a non-empty array"), nil
+			moveConfigTypeStr, err := requiredParam[string](request, "move_config_type")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 			
-			// Convert config types to strings
-			configTypes := make([]string, 0, len(configTypesRaw))
-			for _, ct := range configTypesRaw {
-				if configType, ok := ct.(string); ok {
-					configTypes = append(configTypes, configType)
-				}
+			// Validate move config type
+			if moveConfigTypeStr != string(dto.InlineToRemote) && moveConfigTypeStr != string(dto.RemoteToInline) {
+				return mcp.NewToolResultError("move_config_type must be either INLINE_TO_REMOTE or REMOTE_TO_INLINE"), nil
+			}
+			moveConfigType := dto.MoveConfigType(moveConfigTypeStr)
+			
+			// Extract optional parameters
+			orgIdentifier, err := OptionalParam[string](request, "org_identifier")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 			
-			if len(configTypes) == 0 {
-				return mcp.NewToolResultError("at least one config type must be specified"), nil
+			projectIdentifier, err := OptionalParam[string](request, "project_identifier")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			
+			connectorRef, err := OptionalParam[string](request, "connector_ref")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			
+			repoName, err := OptionalParam[string](request, "repo_name")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			
+			branch, err := OptionalParam[string](request, "branch")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			
+			filePath, err := OptionalParam[string](request, "file_path")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			
+			commitMsg, err := OptionalParam[string](request, "commit_msg")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			
+			isNewBranch, err := OptionalParam[bool](request, "is_new_branch")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			
+			baseBranch, err := OptionalParam[string](request, "base_branch")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			
+			isHarnessCodeRepo, err := OptionalParam[bool](request, "is_harness_code_repo")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			// Create move request
 			moveRequest := &dto.MoveInfraConfigsRequest{
-				SourceInfrastructureRef: dto.InfrastructureRef{
-					OrgIdentifier:     sourceOrg,
-					ProjectIdentifier:  sourceProject,
-					Identifier:        sourceInfra,
-				},
-				TargetInfrastructureRef: dto.InfrastructureRef{
-					OrgIdentifier:     targetOrg,
-					ProjectIdentifier:  targetProject,
-					Identifier:        targetInfra,
-				},
-				ConfigTypes: configTypes,
+				InfraIdentifier:       infraIdentifier,
+				EnvironmentIdentifier: environmentIdentifier,  
+				AccountIdentifier:     scope.AccountID,
+				OrgIdentifier:         orgIdentifier,
+				ProjectIdentifier:     projectIdentifier,
+				ConnectorRef:          connectorRef,
+				RepoName:              repoName,
+				Branch:                branch,
+				FilePath:              filePath,
+				CommitMsg:             commitMsg,
+				MoveConfigType:        moveConfigType,
 			}
 			
-			// Process optional service refs - get directly from parameters to avoid comparable constraint issues
-			serviceRefsParam, serviceRefsOk := request.Params.Arguments["service_refs"]
-			serviceRefsRaw := make([]interface{}, 0)
-			if serviceRefsOk && serviceRefsParam != nil {
-				if serviceRefs, ok := serviceRefsParam.([]interface{}); ok {
-					serviceRefsRaw = serviceRefs
-				}
+			// Set boolean pointers if values were provided
+			if isNewBranchProvided, ok := request.Params.Arguments["is_new_branch"]; ok && isNewBranchProvided != nil {
+				moveRequest.IsNewBranch = &isNewBranch
 			}
-			if len(serviceRefsRaw) > 0 {
-				serviceRefs := make([]dto.ServiceRef, 0, len(serviceRefsRaw))
-				for _, sr := range serviceRefsRaw {
-					if srvMap, ok := sr.(map[string]interface{}); ok {
-						org, _ := srvMap["org_identifier"].(string)
-						project, _ := srvMap["project_identifier"].(string)
-						id, _ := srvMap["identifier"].(string)
-						
-						if org != "" && project != "" && id != "" {
-							serviceRefs = append(serviceRefs, dto.ServiceRef{
-								OrgIdentifier:     org,
-								ProjectIdentifier: project,
-								Identifier:        id,
-							})
-						}
-					}
-				}
-				moveRequest.ServiceRefs = serviceRefs
+			
+			if isHarnessCodeRepoProvided, ok := request.Params.Arguments["is_harness_code_repo"]; ok && isHarnessCodeRepoProvided != nil {
+				moveRequest.IsHarnessCodeRepo = &isHarnessCodeRepo
 			}
-
+			
+			// Add the base branch if provided
+			if baseBranch != "" {
+				moveRequest.BaseBranch = baseBranch
+			}
+			
 			// Execute the move operation
-			success, err := client.MoveConfigs(ctx, moveRequest)
+			response, err := client.MoveConfigs(ctx, scope, moveRequest)
 			if err != nil {
 				return nil, fmt.Errorf("failed to move infrastructure configurations: %w", err)
 			}
 
 			// Create the response
-			response := map[string]interface{}{
-				"success": success,
-			}
+			result := map[string]interface{}{
+					"identifier": response.Data.Identifier,
+					"success":    response.Data.Success,
+				}
 
-			r, err := json.Marshal(response)
+			r, err := json.Marshal(result)
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal response: %w", err)
 			}

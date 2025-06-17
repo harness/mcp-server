@@ -10,7 +10,7 @@ import (
 const (
 	infrastructureBasePath       = "ng/api/infrastructures"
 	infrastructureListPath       = infrastructureBasePath
-	infrastructureMoveConfigsPath = infrastructureBasePath + "/move-configs"
+	infrastructureMoveConfigsPath = infrastructureBasePath + "/move-config/%s"
 )
 
 type InfrastructureClient struct {
@@ -69,20 +69,80 @@ func (i *InfrastructureClient) List(ctx context.Context, scope dto.Scope, opts *
 		return nil, 0, fmt.Errorf("failed to list infrastructures: %w", err)
 	}
 
-	return response.Data.Content, response.Data.TotalElements, nil
-}
-
-// MoveConfigs moves configurations from one infrastructure to another
-// https://apidocs.harness.io/tag/Infrastructures#operation/moveInfraConfigs
-func (i *InfrastructureClient) MoveConfigs(ctx context.Context, request *dto.MoveInfraConfigsRequest) (bool, error) {
-	path := infrastructureMoveConfigsPath
-	params := make(map[string]string)
-
-	var response dto.MoveInfraConfigsResponse
-	err := i.Client.Post(ctx, path, params, request, &response)
-	if err != nil {
-		return false, fmt.Errorf("failed to move infrastructure configurations: %w", err)
+	// Convert the InfrastructureItem array to Infrastructure array
+	infrastructures := make([]dto.Infrastructure, 0, len(response.Data.Content))
+	for _, item := range response.Data.Content {
+		infrastructures = append(infrastructures, item.Infrastructure)
 	}
 
-	return response.Data.Success, nil
+	return infrastructures, response.Data.TotalItems, nil
+}
+
+// MoveConfigs moves infrastructure YAML from inline to remote or vice versa
+// https://apidocs.harness.io/tag/Infrastructures#operation/moveConfig
+func (i *InfrastructureClient) MoveConfigs(ctx context.Context, scope dto.Scope, request *dto.MoveInfraConfigsRequest) (*dto.MoveInfraConfigsResponse, error) {
+	path := fmt.Sprintf(infrastructureMoveConfigsPath, request.InfraIdentifier)
+	params := make(map[string]string)
+	// Add scope to parameters
+	addScope(scope, params)
+	
+	// Add required parameters
+	params["accountIdentifier"] = request.AccountIdentifier
+	
+	// Add optional parameters
+	if request.EnvironmentIdentifier != "" {
+		params["environmentIdentifier"] = request.EnvironmentIdentifier
+	}
+	
+	if request.OrgIdentifier != "" {
+		params["orgIdentifier"] = request.OrgIdentifier
+	}
+	
+	if request.ProjectIdentifier != "" {
+		params["projectIdentifier"] = request.ProjectIdentifier
+	}
+
+	if request.ConnectorRef != "" {
+		params["connectorRef"] = request.ConnectorRef
+	}
+	
+	if request.RepoName != "" {
+		params["repoName"] = request.RepoName
+	}
+	
+	if request.Branch != "" {
+		params["branch"] = request.Branch
+	}
+	
+	if request.FilePath != "" {
+		params["filePath"] = request.FilePath
+	}
+	
+	if request.CommitMsg != "" {
+		params["commitMsg"] = request.CommitMsg
+	}
+	
+	if request.IsNewBranch != nil {
+		params["isNewBranch"] = fmt.Sprintf("%t", *request.IsNewBranch)
+	}
+	
+	if request.BaseBranch != "" {
+		params["baseBranch"] = request.BaseBranch
+	}
+	
+	if request.IsHarnessCodeRepo != nil {
+		params["isHarnessCodeRepo"] = fmt.Sprintf("%t", *request.IsHarnessCodeRepo)
+	}
+	
+	// Ensure the parameter name matches exactly what the API expects
+	params["moveConfigType"] = string(request.MoveConfigType)
+
+	// No request body needed for this API
+	response := &dto.MoveInfraConfigsResponse{}
+	err := i.Client.Post(ctx, path, params, nil, response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to move infrastructure configurations: %w", err)
+	}
+
+	return response, nil
 }
