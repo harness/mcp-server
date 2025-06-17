@@ -17,13 +17,10 @@ import (
 func ListInfrastructuresTool(config *config.Config, client *client.InfrastructureClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_infrastructures",
 			mcp.WithDescription("List infrastructure definitions in Harness."),
-			mcp.WithString("type",
-				mcp.Description("Optional filter for infrastructure type"),
-			),
-			mcp.WithString("deployment",
+			mcp.WithString("deploymentType",
 				mcp.Description("Optional filter for deployment type (e.g., Kubernetes, ECS)"),
 			),
-			mcp.WithString("environment",
+			mcp.WithString("environmentIdentifier",
 				mcp.Description("Optional filter for environment"),
 			),
 			mcp.WithString("sort",
@@ -69,28 +66,20 @@ func ListInfrastructuresTool(config *config.Config, client *client.Infrastructur
 			}
 
 			// Handle filters
-			infraType, err := OptionalParam[string](request, "type")
+			deploymentType, err := OptionalParam[string](request, "deploymentType")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			if infraType != "" {
-				opts.Type = infraType
+			if deploymentType != "" {
+				opts.DeploymentType = deploymentType
 			}
 
-			deployment, err := OptionalParam[string](request, "deployment")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			if deployment != "" {
-				opts.Deployment = deployment
-			}
-
-			environment, err := OptionalParam[string](request, "environment")
+			environment, err := OptionalParam[string](request, "environmentIdentifier")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			if environment != "" {
-				opts.Environment = environment
+				opts.EnvironmentIdentifier = environment
 			}
 
 			// Handle sorting

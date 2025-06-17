@@ -317,12 +317,21 @@ func addQueryParams(req *http.Request, params map[string]string) {
 }
 
 func addScope(scope dto.Scope, params map[string]string) {
-	params["accountIdentifier"] = scope.AccountID // AccountID should always be present from server config
+	if scope.AccountID == "" {
+		slog.Error("Account ID is empty in scope")
+	} else {
+		params["accountIdentifier"] = scope.AccountID
+		params["accountId"] = scope.AccountID
+	}
+
 	if scope.OrgID != "" {
 		params["orgIdentifier"] = scope.OrgID
+		params["orgId"] = scope.OrgID
 	}
+
 	if scope.ProjectID != "" {
 		params["projectIdentifier"] = scope.ProjectID
+		params["projectId"] = scope.ProjectID
 	}
 }
 

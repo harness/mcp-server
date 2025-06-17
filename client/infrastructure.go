@@ -56,14 +56,11 @@ func (i *InfrastructureClient) List(ctx context.Context, scope dto.Scope, opts *
 	if opts.Order != "" {
 		params["order"] = opts.Order
 	}
-	if opts.Type != "" {
-		params["type"] = opts.Type
+	if opts.DeploymentType != "" {
+		params["deploymentType"] = opts.DeploymentType
 	}
-	if opts.Deployment != "" {
-		params["deployment"] = opts.Deployment
-	}
-	if opts.Environment != "" {
-		params["environment"] = opts.Environment
+	if opts.EnvironmentIdentifier != "" {
+		params["environmentIdentifier"] = opts.EnvironmentIdentifier
 	}
 
 	var response dto.InfrastructureListResponse

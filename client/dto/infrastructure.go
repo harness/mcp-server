@@ -35,9 +35,8 @@ type InfrastructureOptions struct {
 	Limit        int    `json:"limit,omitempty"`
 	Sort         string `json:"sort,omitempty"`
 	Order        string `json:"order,omitempty"`
-	Type         string `json:"type,omitempty"` // Filter by infrastructure type
-	Deployment   string `json:"deployment,omitempty"` // Filter by deployment type
-	Environment  string `json:"environment,omitempty"` // Filter by environment
+	DeploymentType   string `json:"deploymentType,omitempty"` // Filter by deployment type
+	EnvironmentIdentifier  string `json:"environmentIdentifier,omitempty"` // Filter by environment
 }
 
 // MoveInfraConfigsRequest represents the request to move infrastructure configurations
