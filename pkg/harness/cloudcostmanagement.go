@@ -10,7 +10,6 @@ import (
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"strconv"
 	"time"
 )
 
@@ -87,6 +86,7 @@ func ListCcmCostCategoriesTool(config *config.Config, client *client.CloudCostMa
 			mcp.WithDescription("List the cost categories for an account in Harness Cloud Cost Management"),
 			mcp.WithString("account_id",
 				mcp.Description("The account identifier"),
+				mcp.Required(),
 			),
 			mcp.WithString("cost_category",
 				mcp.Description("Optional to search for specific category"),
@@ -105,7 +105,7 @@ func ListCcmCostCategoriesTool(config *config.Config, client *client.CloudCostMa
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			params := &dto.CcmListCostCategoriesOptions{}
+			params := &dto.CCMListCostCategoriesOptions{}
 			params.AccountIdentifier = accountId
 
 			// Handle cost category parameter 
@@ -255,9 +255,11 @@ func GetCcmCostCategoryTool(config *config.Config, client *client.CloudCostManag
 			mcp.WithDescription("Retrieve the details of a cost category by its ID from a specific account in Harness Cloud Cost Management."),
 			mcp.WithString("account_id",
 				mcp.Description("The account identifier"),
+				mcp.Required(),
 			),
 			mcp.WithString("id",
 				mcp.Description("Required Cost Category ID to retrieve a specific cost category"),
+				mcp.Required(),
 			),
 			WithScope(config, false),
 		),
