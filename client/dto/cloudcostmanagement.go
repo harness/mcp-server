@@ -33,7 +33,7 @@ type CCMError struct {
 	Error string `json:"error,omitempty"`
 }
 
-// CEView represents a basic ccm response.
+// CEView represents a basic Cost Overview response.
 // The `data` field contains the response data.
 type CEView struct {
 	CCMBaseResponse
@@ -201,7 +201,7 @@ type CCMCostCategory struct {
 	ResponseMessages []CCMResponseMessage 	`json:"responseMessages"`
 }
 
-// CcmGetCostCategoryOptions represents options for listing cost categories
+// CCMGetCostCategoryOptions represents options for listing cost categories
 type CCMGetCostCategoryOptions struct {
 	AccountIdentifier string `json:"accountIdentifier,omitempty"`
 	CostCategoryId string `json:"id,omitempty"`
