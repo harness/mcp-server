@@ -24,42 +24,8 @@ type DashboardService struct {
 	Client *Client
 }
 
-// Dashboard represents a Harness dashboard
-type Dashboard struct {
-	ID             string   `json:"id"`
-	Title          string   `json:"title"`
-	Description    string   `json:"description"`
-	Models         []string `json:"models"`
-	DataSource     []string `json:"data_source"`
-	Type           string   `json:"type"`
-	ViewCount      int      `json:"view_count"`
-	FavoriteCount  int      `json:"favorite_count"`
-	CreatedAt      string   `json:"created_at"`
-	LastAccessedAt string   `json:"last_accessed_at"`
-}
-
-// DashboardListResponse represents the response from the list dashboards API
-type DashboardListResponse struct {
-	Items    int         `json:"items"`
-	Pages    int         `json:"pages"`
-	Resource []Dashboard `json:"resource"`
-}
-
-// DashboardListOptions represents options for listing dashboards
-type DashboardListOptions struct {
-	Page     int    `json:"page"`
-	PageSize int    `json:"pageSize"`
-	FolderID string `json:"folderId"`
-	Tags     string `json:"tags"`
-}
-
-// DashboardData represents structured data from a dashboard
-type DashboardData struct {
-	Tables map[string][]map[string]string `json:"tables"`
-}
-
 // ListDashboards fetches all dashboards from Harness
-func (d *DashboardService) ListDashboards(ctx context.Context, page int, pageSize int, folderID string, tags string) (*DashboardListResponse, error) {
+func (d *DashboardService) ListDashboards(ctx context.Context, page int, pageSize int, folderID string, tags string) (*dto.DashboardListResponse, error) {
 	path := dashboardSearchPath
 	params := make(map[string]string)
 
@@ -95,7 +61,7 @@ func (d *DashboardService) ListDashboards(ctx context.Context, page int, pageSiz
 		params["tags"] = tags
 	}
 
-	response := new(DashboardListResponse)
+	response := new(dto.DashboardListResponse)
 	err = d.Client.Get(ctx, path, params, nil, response)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list dashboards: %w", err)
@@ -105,7 +71,7 @@ func (d *DashboardService) ListDashboards(ctx context.Context, page int, pageSiz
 }
 
 // GetDashboardData fetches data for a specific dashboard
-func (d *DashboardService) GetDashboardData(ctx context.Context, scope dto.Scope, dashboardID string, reportingTimeframe int) (*DashboardData, error) {
+func (d *DashboardService) GetDashboardData(ctx context.Context, scope dto.Scope, dashboardID string, reportingTimeframe int) (*dto.DashboardData, error) {
 	// Format the path with the dashboard ID using the standard pattern
 	path := fmt.Sprintf(dashboardDataPath, dashboardID)
 
@@ -177,7 +143,7 @@ func (d *DashboardService) GetDashboardData(ctx context.Context, scope dto.Scope
 	}
 
 	// Process the CSV files in the ZIP
-	dashboardData := &DashboardData{
+	dashboardData := &dto.DashboardData{
 		Tables: make(map[string][]map[string]string),
 	}
 

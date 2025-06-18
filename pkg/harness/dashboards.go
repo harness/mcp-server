@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/harness/harness-mcp/client"
+	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -49,15 +50,11 @@ func ListDashboardsTool(config *config.Config, client *client.DashboardService) 
 
 			// Track which categories have dashboards
 			activeCategoryOrder := []string{}
-			categoryDashboards := make(map[string][]map[string]string)
+			// Maps categories to dashboard entries
+			categoryDashboards := make(map[string][]dto.Dashboard)
 
 			for _, dashboard := range response.Resource {
-				// Create dashboard entry with essential fields
-				dashboardEntry := map[string]string{
-					"id":    dashboard.ID,
-					"title": dashboard.Title,
-					"type":  dashboard.Type,
-				}
+				// We can use the dashboard object directly since we're now using dto.Dashboard
 
 				// Format the dashboard display as "ID: {id} - {title}"
 				displayFormat := fmt.Sprintf("ID: %s - %s", dashboard.ID, dashboard.Title)
@@ -75,9 +72,9 @@ func ListDashboardsTool(config *config.Config, client *client.DashboardService) 
 
 					// Also keep the original structure for compatibility
 					if _, exists := categoryDashboards[category]; !exists {
-						categoryDashboards[category] = []map[string]string{}
+						categoryDashboards[category] = []dto.Dashboard{}
 					}
-					categoryDashboards[category] = append(categoryDashboards[category], dashboardEntry)
+					categoryDashboards[category] = append(categoryDashboards[category], dashboard)
 				} else {
 					// Add to each model category
 					for _, model := range modelCategories {
@@ -89,9 +86,9 @@ func ListDashboardsTool(config *config.Config, client *client.DashboardService) 
 
 						// Also keep the original structure for compatibility
 						if _, exists := categoryDashboards[model]; !exists {
-							categoryDashboards[model] = []map[string]string{}
+							categoryDashboards[model] = []dto.Dashboard{}
 						}
-						categoryDashboards[model] = append(categoryDashboards[model], dashboardEntry)
+						categoryDashboards[model] = append(categoryDashboards[model], dashboard)
 					}
 				}
 			}
