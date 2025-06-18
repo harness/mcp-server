@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"github.com/harness/harness-mcp/client/dto"
+	"github.com/harness/harness-mcp/pkg/utils"
 )
 
 const (
 	ccmBasePath        = "ccm/api"
 	ccmGetOverviewPath = ccmBasePath + "/overview?accountIdentifier=%s&startTime=%d&endTime=%d&groupBy=%s"
 	ccmCostCategoryListPath = ccmBasePath + "/business-mapping/filter-panel?accountIdentifier=%s"
+	ccmCostCategoryDetailListPath = ccmBasePath + "/business-mapping?accountIdentifier=%s" // This endpoint lists cost categories
 )
 
 type CloudCostManagementService struct {
@@ -29,14 +31,14 @@ func (c *CloudCostManagementService) GetOverview(ctx context.Context, accID stri
 	return ccmOverview, nil
 }
 
-func (r *CloudCostManagementService) ListCostCategories(ctx context.Context, scope dto.Scope, opts *dto.CcmListCostCategoriesOptions) (*dto.CCMCostCategoryList, error) {
+func (r *CloudCostManagementService) ListCostCategories(ctx context.Context, scope dto.Scope, opts *dto.CCMListCostCategoriesOptions) (*dto.CCMCostCategoryList, error) {
 	path := ccmCostCategoryListPath
 	params := make(map[string]string)
 	addScope(scope, params)
 
 	// Handle nil options by creating default options
 	if opts == nil {
-		opts = &dto.CcmListCostCategoriesOptions{}
+		opts = &dto.CCMListCostCategoriesOptions{}
 	}
 
 	if opts.CostCategory != "" {
@@ -55,4 +57,52 @@ func (r *CloudCostManagementService) ListCostCategories(ctx context.Context, sco
 	}
 
 	return costCategories, nil
+}
+
+func (r *CloudCostManagementService) ListCostCategoriesDetail(ctx context.Context, scope dto.Scope, opts *dto.CCMListCostCategoriesDetailOptions) (*dto.CCMCostCategoryDetailList, error) {
+	path := ccmCostCategoryDetailListPath
+	params := make(map[string]string)
+
+	// Handle nil options by creating default options
+	if opts == nil {
+		opts = &dto.CCMListCostCategoriesDetailOptions{}
+	}
+
+	setCCMPaginationDefault(&opts.CCMPaginationOptions)
+
+	if opts.SearchKey != "" {
+		params["searchKey"] = opts.SearchKey
+	}
+	if opts.SortType != "" {
+		params["sortType"] = opts.SortType
+	}
+	if opts.SortOrder != "" {
+		params["sortOrder"] = opts.SortOrder
+	}
+	params["limit"] = fmt.Sprintf("%d", opts.Limit)
+	params["offset"] = fmt.Sprintf("%d", opts.Offset)
+
+	costCategories := new(dto.CCMCostCategoryDetailList)
+
+	err := r.Client.Get(ctx, path, params, nil, &costCategories)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list cloud cost management cost categories: %w", err)
+	}
+
+	return costCategories, nil
+}
+
+func setCCMPaginationDefault(opts *dto.CCMPaginationOptions) {
+	if opts == nil {
+		return
+	}
+	if opts.Offset <= 0 {
+		opts.Offset = 1
+	}
+	safeMaxPageSize := utils.SafeIntToInt32(maxPageSize, 20)
+	if opts.Limit <= 0 {
+		opts.Limit = utils.SafeIntToInt32(defaultPageSize, 5)
+	} else if opts.Limit > safeMaxPageSize {
+		opts.Limit = safeMaxPageSize
+	}
 }

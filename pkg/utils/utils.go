@@ -4,6 +4,7 @@ import (
 	"github.com/harness/harness-mcp/client/dto"
 	"strings"
 	"time"
+	"math"
 )
 
 func GetRef(scope dto.Scope, params ...string) string {
@@ -38,4 +39,18 @@ func FormatMMDDYYYYToUnixMillis(dateStr string) (int64, error) {
         return 0, err
     }
     return t.UnixNano() / int64(time.Millisecond), nil
+}
+
+func SafeIntToInt32(value int, valueIfOverflow int32) (int32) {
+	if value > math.MaxInt32 || value < math.MinInt32 {
+		return valueIfOverflow
+	}
+	return int32(value)
+}
+
+func SafeFloatToInt32(value float64, valueIfOverflow int32) (int32) {
+	if value > math.MaxInt32 || value < math.MinInt32 {
+		return valueIfOverflow
+	}
+	return int32(value)
 }
