@@ -139,6 +139,8 @@ var (
 				NgManagerSecret:    viper.GetString("ng_manager_secret"),
 				ChatbotBaseURL:     viper.GetString("chatbot_base_url"),
 				ChatbotSecret:      viper.GetString("chatbot_secret"),
+				GenaiBaseURL:       viper.GetString("genai_base_url"),
+				GenaiSecret:        viper.GetString("genai_secret"),
 				McpSvcSecret:       viper.GetString("mcp_svc_secret"),
 			}
 
@@ -178,6 +180,8 @@ func init() {
 	internalCmd.Flags().String("ng-manager-secret", "", "Secret for NG manager")
 	internalCmd.Flags().String("chatbot-base-url", "", "Base URL for chatbot service")
 	internalCmd.Flags().String("chatbot-secret", "", "Secret for chatbot service")
+	internalCmd.Flags().String("genai-base-url", "", "Base URL for genai service")
+	internalCmd.Flags().String("genai-secret", "", "Secret for genai service")
 	internalCmd.Flags().String("mcp-svc-secret", "", "Secret for MCP service")
 
 	// Bind global flags to viper
@@ -200,6 +204,8 @@ func init() {
 	_ = viper.BindPFlag("ng_manager_secret", internalCmd.Flags().Lookup("ng-manager-secret"))
 	_ = viper.BindPFlag("chatbot_base_url", internalCmd.Flags().Lookup("chatbot-base-url"))
 	_ = viper.BindPFlag("chatbot_secret", internalCmd.Flags().Lookup("chatbot-secret"))
+	_ = viper.BindPFlag("genai_base_url", internalCmd.Flags().Lookup("genai-base-url"))
+	_ = viper.BindPFlag("genai_secret", internalCmd.Flags().Lookup("genai-secret"))
 	_ = viper.BindPFlag("mcp_svc_secret", internalCmd.Flags().Lookup("mcp-svc-secret"))
 
 	// Add subcommands

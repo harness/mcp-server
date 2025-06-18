@@ -13,10 +13,10 @@ import (
 	"time"
 
 	"github.com/harness/harness-mcp/pkg/harness/auth"
+	"github.com/rs/zerolog/log"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/harness/harness-mcp/client/dto"
-	"github.com/rs/zerolog/log"
 )
 
 var (
@@ -50,20 +50,25 @@ type service struct {
 	client *Client
 }
 
-func defaultHTTPClient() *http.Client {
+func defaultHTTPClient(timeout ...time.Duration) *http.Client {
+	// Use default timeout of 10 seconds if not specified
+	clientTimeout := 10 * time.Second
+	if len(timeout) > 0 {
+		clientTimeout = timeout[0]
+	}
 	return &http.Client{
-		Timeout: 10 * time.Second,
+		Timeout: clientTimeout,
 	}
 }
 
 // NewWithToken creates a new client with the specified base URL and API token
-func NewWithAuthProvider(uri string, authProvider auth.Provider) (*Client, error) {
+func NewWithAuthProvider(uri string, authProvider auth.Provider, timeout ...time.Duration) (*Client, error) {
 	parsedURL, err := url.Parse(uri)
 	if err != nil {
 		return nil, err
 	}
 	c := &Client{
-		client:       defaultHTTPClient(),
+		client:       defaultHTTPClient(timeout...),
 		BaseURL:      parsedURL,
 		AuthProvider: authProvider,
 	}

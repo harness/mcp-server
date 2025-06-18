@@ -88,6 +88,11 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 	if err := registerChatbot(config, tsg); err != nil {
 		return nil, err
 	}
+	
+	// Register genai
+	if err := registerGenai(config, tsg); err != nil {
+		return nil, err
+	}
 
 	// TODO: support internal mode for other endpoints as well eventually
 	if err := registerPullRequests(config, tsg); err != nil {
@@ -135,7 +140,8 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 }
 
 // createClient creates a client with the appropriate authentication method based on the config
-func createClient(baseURL string, config *config.Config, secret string) (*client.Client, error) {
+// An optional customTimeout can be provided to override the config's DefaultTimeout
+func createClient(baseURL string, config *config.Config, secret string, timeout ...time.Duration) (*client.Client, error) {
 	var authProvider auth.Provider
 	var err error
 
@@ -147,7 +153,7 @@ func createClient(baseURL string, config *config.Config, secret string) (*client
 		authProvider = auth.NewAPIKeyProvider(config.APIKey)
 	}
 
-	client, err := client.NewWithAuthProvider(baseURL, authProvider)
+	client, err := client.NewWithAuthProvider(baseURL, authProvider, timeout...)
 	if err != nil {
 		slog.Error("Failed to create client", "error", err)
 		return nil, fmt.Errorf("failed to create client: %w", err)
@@ -172,7 +178,7 @@ func registerPipelines(config *config.Config, tsg *toolsets.ToolsetGroup) error 
 	}
 
 	pipelineClient := &client.PipelineService{
-		Client:          c,
+		Client:           c,
 		UseInternalPaths: config.Internal,
 	}
 
@@ -310,7 +316,7 @@ func registerChatbot(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for chatbot service
 	baseURL := config.ChatbotBaseURL
 	secret := config.ChatbotSecret
-	
+
 	// Create base client for chatbot
 	c, err := createClient(baseURL, config, secret)
 	if err != nil {
@@ -500,5 +506,38 @@ func registerCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGro
 
 	// Add toolset to the group
 	tsg.AddToolset(ccm)
+	return nil
+}
+
+// registerGenai registers the genai toolset
+func registerGenai(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Skip registration for external mode for now
+	if !config.Internal {
+		return nil
+	}
+
+	// Determine the base URL and secret for genai service
+	baseURL := config.GenaiBaseURL
+	secret := config.GenaiSecret
+
+	// Use a custom timeout for GenAI service (40 seconds)
+	timeout := 40 * time.Second
+
+	// Create base client for genai with the custom timeout
+	c, err := createClient(baseURL, config, secret, timeout)
+	if err != nil {
+		return err
+	}
+
+	genaiClient := &client.GenaiService{Client: c}
+
+	// Create the genai toolset
+	genai := toolsets.NewToolset("genai", "Harness GenAI tools").
+		AddReadTools(
+			toolsets.NewServerTool(AIDevOpsAgentTool(config, genaiClient)),
+		)
+
+	// Add toolset to the group
+	tsg.AddToolset(genai)
 	return nil
 }
