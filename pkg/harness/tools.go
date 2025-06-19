@@ -27,6 +27,9 @@ const serviceIdentity = "genaiservice" // TODO: can change once we have our own 
 // Default JWT token lifetime
 var defaultJWTLifetime = 1 * time.Hour
 
+// Default timeout for GenAI service
+const defaultGenaiTimeout = 60 * time.Second
+
 // ListConnectorCatalogueTool creates a new mcp.Tool and handler for listing the connector catalogue.
 func ListConnectorCatalogueTool(harnessConfig *config.Config, c *client.Client) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("list_connector_catalogue",
@@ -560,11 +563,8 @@ func registerGenai(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	baseURL := config.GenaiBaseURL
 	secret := config.GenaiSecret
 
-	// Use a custom timeout for GenAI service (40 seconds)
-	timeout := 40 * time.Second
-
-	// Create base client for genai with the custom timeout
-	c, err := createClient(baseURL, config, secret, timeout)
+	// Create base client for genai with the default timeout
+	c, err := createClient(baseURL, config, secret, defaultGenaiTimeout)
 	if err != nil {
 		return err
 	}
