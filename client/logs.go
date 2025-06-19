@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/harness/harness-mcp/client/dto"
 )
@@ -52,10 +53,39 @@ func (l *LogService) DownloadLogs(ctx context.Context, scope dto.Scope, planExec
 	// Initialize the response object
 	response := &dto.LogDownloadResponse{}
 
-	// Make the POST request
-	err = l.Client.Post(ctx, logDownloadPath, params, nil, response)
-	if err != nil {
-		return "", fmt.Errorf("failed to fetch log download URL: %w", err)
+	// Make the POST request with retry logic
+	maxAttempts := 3
+	timeBetweenAttempts := 3 * time.Second
+	successObtained := false
+	var lastErr error
+
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		response = &dto.LogDownloadResponse{}
+		err = l.Client.Post(ctx, logDownloadPath, params, nil, response)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to fetch log download URL (attempt %d): %w", attempt, err)
+			if attempt == maxAttempts {
+				break
+			}
+			time.Sleep(timeBetweenAttempts)
+			continue
+		}
+
+		if response.Status == "success" {
+			successObtained = true
+			break
+		}
+
+		if attempt == maxAttempts {
+			lastErr = fmt.Errorf("status did not become success after %d attempts, last status: %s", maxAttempts, response.Status)
+			break
+		}
+
+		time.Sleep(timeBetweenAttempts)
+	}
+
+	if !successObtained {
+		return "", lastErr
 	}
 
 	return response.Link, nil
