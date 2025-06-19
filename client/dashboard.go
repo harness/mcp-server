@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	dashboardSearchPath = "gateway/dashboard/v1/search"
+	dashboardSearchPath = "dashboard/v1/search"
 	dashboardDataPath   = "dashboard/download/dashboards/%s/csv"
 )
 
@@ -25,22 +25,17 @@ type DashboardService struct {
 }
 
 // ListDashboards fetches all dashboards from Harness
-func (d *DashboardService) ListDashboards(ctx context.Context, page int, pageSize int, folderID string, tags string) (*dto.DashboardListResponse, error) {
+func (d *DashboardService) ListDashboards(ctx context.Context, scope dto.Scope, page int, pageSize int, folderID string, tags string) (*dto.DashboardListResponse, error) {
 	path := dashboardSearchPath
 	params := make(map[string]string)
 
-	// Get API key from auth provider
-	_, apiKey, err := d.Client.AuthProvider.GetHeader(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get API key: %w", err)
+	// Ensure accountIdentifier is always set
+	if scope.AccountID == "" {
+		return nil, fmt.Errorf("accountIdentifier cannot be null")
 	}
 
-	// Extract account ID from API key (format: pat.ACCOUNT_ID.TOKEN_ID.<>)
-	parts := strings.Split(apiKey, ".")
-	if len(parts) < 2 {
-		return nil, fmt.Errorf("invalid API key format")
-	}
-	params["accountId"] = parts[1]
+	// Add scope parameters
+	addScope(scope, params)
 
 	// Set default pagination values
 	if page <= 0 {
@@ -62,7 +57,7 @@ func (d *DashboardService) ListDashboards(ctx context.Context, page int, pageSiz
 	}
 
 	response := new(dto.DashboardListResponse)
-	err = d.Client.Get(ctx, path, params, nil, response)
+	err := d.Client.Get(ctx, path, params, nil, response)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list dashboards: %w", err)
 	}
@@ -78,11 +73,11 @@ func (d *DashboardService) GetDashboardData(ctx context.Context, scope dto.Scope
 	// Create params map for query parameters
 	params := make(map[string]string)
 
-	// Add account ID from scope
+	// Add scope parameters including account ID
 	if scope.AccountID == "" {
-		return nil, fmt.Errorf("account ID is required")
+		return nil, fmt.Errorf("accountIdentifier cannot be null")
 	}
-	params["accountId"] = scope.AccountID
+	addScope(scope, params)
 
 	// Set default reporting timeframe if not provided
 	if reportingTimeframe <= 0 {
@@ -91,9 +86,10 @@ func (d *DashboardService) GetDashboardData(ctx context.Context, scope dto.Scope
 	params["filters"] = fmt.Sprintf("Reporting+Timeframe=%d", reportingTimeframe)
 	params["expanded_tables"] = "true"
 
-	// Create a custom HTTP client for this specific request with 60-second timeout
-	customClient := *d.Client                                     // Create a copy of the client
-	customClient.client = &http.Client{Timeout: 60 * time.Second} // Set longer timeout
+	// Create a custom HTTP client for this specific request with 30-second timeout
+	// Note: A longer timeout is needed here because we're downloading and processing CSV files
+	customClient := *d.Client
+	customClient.client = &http.Client{Timeout: 30 * time.Second}
 
 	// For this specific endpoint, we need the raw response to process the ZIP file
 	// Use the standard URL construction but handle the response manually
@@ -110,10 +106,9 @@ func (d *DashboardService) GetDashboardData(ctx context.Context, scope dto.Scope
 	// Add query parameters using the standard helper function
 	addQueryParams(httpReq, params)
 
-	// Add auth header
-	key, value, err := d.Client.AuthProvider.GetHeader(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get auth header: %w", err)
+	key, value, authErr := d.Client.AuthProvider.GetHeader(ctx)
+	if authErr != nil {
+		return nil, fmt.Errorf("failed to get auth header: %w", authErr)
 	}
 	httpReq.Header.Set(key, value)
 
@@ -181,47 +176,47 @@ func (d *DashboardService) GetDashboardData(ctx context.Context, scope dto.Scope
 func parseCSV(reader io.Reader) ([]map[string]string, error) {
 	// Create a new CSV reader
 	csvReader := csv.NewReader(reader)
-	
+
 	// Read all records at once
 	records, err := csvReader.ReadAll()
 	if err != nil {
 		return nil, fmt.Errorf("failed to read CSV content: %w", err)
 	}
-	
+
 	// Check if we have enough data (at least header row)
 	if len(records) < 1 {
 		return nil, fmt.Errorf("CSV content empty, no header row")
 	}
-	
+
 	// Extract headers from the first row
 	headers := records[0]
 	for i, header := range headers {
 		headers[i] = strings.TrimSpace(header)
 	}
-	
+
 	// No data rows
 	if len(records) < 2 {
 		return []map[string]string{}, nil // Return empty result, not an error
 	}
-	
+
 	// Process data rows
 	results := make([]map[string]string, 0, len(records)-1)
 	for i := 1; i < len(records); i++ {
 		values := records[i]
-		
+
 		// Skip rows with mismatched field counts
 		if len(values) != len(headers) {
 			continue
 		}
-		
+
 		// Create a map for this row
 		row := make(map[string]string)
 		for j, value := range values {
 			row[headers[j]] = strings.TrimSpace(value)
 		}
-		
+
 		results = append(results, row)
 	}
-	
+
 	return results, nil
 }

@@ -21,7 +21,11 @@ func ListDashboardsTool(config *config.Config, client *client.DashboardService) 
 			// Default tags - set all module tags to true
 			defaultTags := "HARNESS=true&CD=true&CE=true&CET=true&CF=true&CHAOS=true&CI=true&DBOPS=true&IACM=true&IDP=true&SSCA=true&STO=true&SRM=true"
 
-			response, err := client.ListDashboards(ctx, 1, 100, "", defaultTags)
+			// Create a default scope with account ID from config
+			scope := dto.Scope{AccountID: config.AccountID}
+
+			// Call the updated ListDashboards method with scope parameter
+			response, err := client.ListDashboards(ctx, scope, 1, 100, "", defaultTags)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to list dashboards: %v", err)), nil
 			}
