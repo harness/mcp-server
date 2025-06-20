@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/harness/harness-mcp/client/dto"
 )
@@ -31,14 +30,6 @@ func (d *DashboardService) ListDashboards(ctx context.Context, scope dto.Scope, 
 
 	// Add scope parameters
 	addScope(scope, params)
-
-	// Set default pagination values
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 {
-		pageSize = 40 // Default page size used by the API
-	}
 
 	params["page"] = fmt.Sprintf("%d", page)
 	params["pageSize"] = fmt.Sprintf("%d", pageSize)
@@ -81,11 +72,6 @@ func (d *DashboardService) GetDashboardData(ctx context.Context, scope dto.Scope
 	params["filters"] = fmt.Sprintf("Reporting+Timeframe=%d", reportingTimeframe)
 	params["expanded_tables"] = "true"
 
-	// Create a custom HTTP client for this specific request with 30-second timeout
-	// Note: A longer timeout is needed here because we're downloading and processing CSV files
-	customClient := *d.Client
-	customClient.client = &http.Client{Timeout: 30 * time.Second}
-
 	// For this specific endpoint, we need the raw response to process the ZIP file
 	// Use the standard URL construction but handle the response manually
 	httpReq, err := http.NewRequestWithContext(
@@ -101,7 +87,7 @@ func (d *DashboardService) GetDashboardData(ctx context.Context, scope dto.Scope
 	// Add query parameters using the standard helper function
 	addQueryParams(httpReq, params)
 
-	resp, err := customClient.Do(httpReq)
+	resp, err := d.Client.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute request: %w", err)
 	}

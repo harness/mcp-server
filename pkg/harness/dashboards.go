@@ -12,23 +12,62 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+// WithDashboardPagination adds page and size parameters with dashboard-specific defaults
+func WithDashboardPagination() mcp.ToolOption {
+	return func(tool *mcp.Tool) {
+		mcp.WithNumber("page",
+			mcp.Description("Page number for pagination - page 1 is the first page"),
+			mcp.Min(1),
+			mcp.DefaultNumber(1),
+		)(tool)
+		mcp.WithNumber("size",
+			mcp.Description("Number of items per page"),
+			mcp.DefaultNumber(100),
+			mcp.Max(100),
+		)(tool)
+	}
+}
+
+// fetchDashboardPagination fetches pagination parameters from the request with dashboard-specific defaults
+func fetchDashboardPagination(request mcp.CallToolRequest) (page, size int, err error) {
+	pageVal, err := OptionalIntParamWithDefault(request, "page", 1)
+	if err != nil {
+		return 0, 0, err
+	}
+	page = int(pageVal)
+
+	sizeVal, err := OptionalIntParamWithDefault(request, "size", 100)
+	if err != nil {
+		return 0, 0, err
+	}
+	size = int(sizeVal)
+
+	return page, size, nil
+}
+
 // ListDashboardsTool creates a tool for listing all dashboards in Harness
 func ListDashboardsTool(config *config.Config, client *client.DashboardService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_dashboards",
 			mcp.WithDescription("Lists all available Harness dashboards"),
+			WithDashboardPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			// Default tags - set all module tags to true
 			defaultTags := "HARNESS=true&CD=true&CE=true&CET=true&CF=true&CHAOS=true&CI=true&DBOPS=true&IACM=true&IDP=true&SSCA=true&STO=true&SRM=true"
 
-			// Get scope from the request
 			scope, err := fetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			// Call the updated ListDashboards method with scope parameter
-			response, err := client.ListDashboards(ctx, scope, 1, 100, "", defaultTags)
+			// Get pagination parameters from the request
+			page, size, err := fetchDashboardPagination(request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// Call the updated ListDashboards method with pagination parameters from the request
+			response, err := client.ListDashboards(ctx, scope, page, size, "", defaultTags)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to list dashboards: %v", err)), nil
 			}

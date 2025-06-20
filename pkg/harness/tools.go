@@ -553,7 +553,8 @@ func registerDashboards(config *config.Config, tsg *toolsets.ToolsetGroup) error
 	}
 
 	// Create base client for dashboards
-	c, err := createClient(baseURL, config, secret)
+	customTimeout := 30 * time.Second
+	c, err := createClient(baseURL, config, secret, customTimeout)
 	if err != nil {
 		return err
 	}
