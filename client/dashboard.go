@@ -29,11 +29,6 @@ func (d *DashboardService) ListDashboards(ctx context.Context, scope dto.Scope, 
 	path := dashboardSearchPath
 	params := make(map[string]string)
 
-	// Ensure accountIdentifier is always set
-	if scope.AccountID == "" {
-		return nil, fmt.Errorf("accountIdentifier cannot be null")
-	}
-
 	// Add scope parameters
 	addScope(scope, params)
 
@@ -106,14 +101,7 @@ func (d *DashboardService) GetDashboardData(ctx context.Context, scope dto.Scope
 	// Add query parameters using the standard helper function
 	addQueryParams(httpReq, params)
 
-	key, value, authErr := d.Client.AuthProvider.GetHeader(ctx)
-	if authErr != nil {
-		return nil, fmt.Errorf("failed to get auth header: %w", authErr)
-	}
-	httpReq.Header.Set(key, value)
-
-	// Execute the request with the custom client
-	resp, err := customClient.client.Do(httpReq)
+	resp, err := customClient.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute request: %w", err)
 	}

@@ -21,8 +21,11 @@ func ListDashboardsTool(config *config.Config, client *client.DashboardService) 
 			// Default tags - set all module tags to true
 			defaultTags := "HARNESS=true&CD=true&CE=true&CET=true&CF=true&CHAOS=true&CI=true&DBOPS=true&IACM=true&IDP=true&SSCA=true&STO=true&SRM=true"
 
-			// Create a default scope with account ID from config
-			scope := dto.Scope{AccountID: config.AccountID}
+			// Get scope from the request
+			scope, err := fetchScope(config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
 			// Call the updated ListDashboards method with scope parameter
 			response, err := client.ListDashboards(ctx, scope, 1, 100, "", defaultTags)
@@ -127,7 +130,10 @@ func GetDashboardDataTool(config *config.Config, client *client.DashboardService
 				mcp.Description("The ID of the dashboard to retrieve data from"),
 			),
 			mcp.WithNumber("reporting_timeframe",
-				mcp.Description("Reporting timeframe in days (default: 30)"),
+				mcp.Description("Reporting timeframe in days"),
+				mcp.DefaultNumber(30),
+				mcp.Min(1),
+				mcp.Max(365),
 			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -137,17 +143,14 @@ func GetDashboardDataTool(config *config.Config, client *client.DashboardService
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			// Get reporting timeframe (defaulting to 30 if not present)
+			// Get reporting timeframe
 			reportingTimeframe, err := OptionalParam[float64](request, "reporting_timeframe")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			// Convert to int and use default if not set
+			// Convert to int
 			timeframeInt := int(reportingTimeframe)
-			if timeframeInt <= 0 {
-				timeframeInt = 30 // Default to 30 days
-			}
 
 			// Get scope from the request
 			scope, err := fetchScope(config, request, false)
