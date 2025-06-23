@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/harness/harness-mcp/client/dto"
+	"github.com/harness/harness-mcp/pkg/utils"
 )
 
 const (
@@ -11,6 +12,7 @@ const (
 	ccmGetPerspectivePath = ccmBasePath + "/perspective"
 	ccmGetLastPeriodCostPerspectivePath = ccmBasePath + "/perspective/lastPeriodCost"
 	ccmGetLastTwelveMonthCostPerspectivePath = ccmBasePath + "/perspective/lastYearMonthlyCost"
+	ccmCreatePerspectivePath = ccmBasePath + "/perspective"
 )
 
 func (r *CloudCostManagementService) ListPerspectivesDetail(ctx context.Context, scope dto.Scope, opts *dto.CCMListPerspectivesDetailOptions) (*dto.CCMPerspectivesDetailList, error) {
@@ -117,4 +119,40 @@ func (r *CloudCostManagementService) GetLastTwelveMonthsCostPerspective(ctx cont
 	}
 
 	return items, nil
+}
+
+func (r *CloudCostManagementService) CreatePerspective(ctx context.Context, scope dto.Scope, opts *dto.CCMCreatePerspectiveOptions) (*dto.CCMPerspective, error) {
+	path := ccmCreatePerspectivePath
+	params := make(map[string]string)
+	if opts == nil {
+		opts = &dto.CCMCreatePerspectiveOptions{}
+	}
+
+	// Query parameters
+	params["accountIdentifier"] = opts.Body.AccountId
+	params["clone"] = utils.BoolToString(opts.Clone)
+	params["updateTotalCost"] = utils.BoolToString(opts.UpdateTotalCost)
+
+	// Body payload
+	body := map[string]interface{}{
+		"name":                opts.Body.Name,
+		"accountId":           opts.Body.AccountId,
+		"folderId":            opts.Body.FolderId,
+		"viewVersion":         opts.Body.ViewVersion,
+		"viewTimeRange": map[string]interface{}{
+			"viewTimeRangeType":   opts.Body.ViewTimeRange.ViewTimeRangeType,
+			"startTime":  opts.Body.ViewTimeRange.StartTime,
+			"endTime":    opts.Body.ViewTimeRange.EndTime,
+		},
+		"viewType":            opts.Body.ViewType,
+		"viewState":           opts.Body.ViewState,
+	}
+
+	item := new(dto.CCMPerspective)
+	err := r.Client.Post(ctx, path, params, body, &item)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cloud cost management perspective: %w", err)
+	}
+
+	return item, nil
 }

@@ -64,6 +64,7 @@ Toolset Name: `cloudcostmanagement`
 - `get_ccm_perspective`: Retrieves a perspective by Id for a specified account.
 - `get_last_period_cost_ccm_perspective`:  Retrieves the cost for a specified period and perspective within a given account.
 - `get_last_twelve_months_cost_ccm_perspective`:  Retrieves a monthly cost breakdown for the past 12 months for a perspective within a specified account.
+- `create_ccm_perspective`: Creates a perspective for a specified account. 
 
 #### Logs Toolset
 

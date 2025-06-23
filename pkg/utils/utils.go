@@ -54,3 +54,10 @@ func SafeFloatToInt32(value float64, valueIfOverflow int32) int32 {
 	}
 	return int32(value)
 }
+
+func BoolToString(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
+}

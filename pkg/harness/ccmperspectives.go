@@ -304,3 +304,159 @@ func GetLastTwelveMonthsCostCcmPerspectiveTool(config *config.Config, client *cl
 			return mcp.NewToolResultText(string(r)), nil
 		}
 	}
+
+
+// Create perspective
+func CreateCcmPerspectiveTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+
+	return mcp.NewTool("create_ccm_perspective",
+			mcp.WithDescription("Get the last twelve months cost for a perspective in Harness Cloud Cost Management"),
+			mcp.WithString("account_id",
+				mcp.Required(),
+				mcp.Description("The account identifier"),
+			),
+			mcp.WithString("clone",
+				mcp.DefaultBool(false),
+				mcp.Description("Whether to clone the perspective or create a new one"),
+			),
+			mcp.WithString("update_total_cost",
+				mcp.DefaultBool(false),
+				mcp.Description("Whether to clone the perspective or create a new one"),
+			),
+
+			mcp.WithString("name",
+				mcp.Required(),
+				mcp.Description("Required perspective name"),
+			),
+			mcp.WithString("folder_id",
+				mcp.Description("Containing folder identifier of the perspective"),
+			),
+			mcp.WithString("view_version",
+				mcp.Required(),
+				mcp.Description("Required. Version of the view"),
+			),
+			mcp.WithString("view_time_range_type",
+				mcp.Required(),
+				mcp.Enum(dto.TimeRangeTypeLast7Days, dto.TimeRangeTypeLast30Days, dto.TimeRangeTypeLastMonth, dto.TimeRangeTypeCurrentMonth, dto.TimeRangeTypeCustom),
+				mcp.Description("Containing folder identifier of the perspective"),
+			),
+			mcp.WithString("view_time_range_start",
+				mcp.Description("Start time when using view_time_range_type=Custom. In format MM/DD/YYYY. ie: 04/30/2023 for April 30, 2023"),
+			),
+			mcp.WithString("view_time_range_end",
+				mcp.Description("End time when using view_time_range_type=Custom. In format MM/DD/YYYY. ie: 04/30/2023 for April 30, 2023"),
+			),
+			mcp.WithString("view_type",
+				mcp.Required(),
+				mcp.Enum(dto.ViewTypeSample, dto.ViewTypeCustomer, dto.ViewTypeDefault),
+				mcp.Description("Type of view"),
+			),
+			mcp.WithString("view_state",
+				mcp.Required(),
+				mcp.DefaultString(dto.ViewStateCompleted),
+				mcp.Enum(dto.ViewStateDraft, dto.ViewStateCompleted),
+				mcp.Description("State of view. Set to completed if it is not provided."),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			accountId, err := OptionalParam[string](request, "account_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			clone, err := OptionalParam[bool](request, "clone")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			updateTotalCost, err := OptionalParam[bool](request, "update_total_cost")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			name, err := OptionalParam[string](request, "name")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			folderId, err := OptionalParam[string](request, "folder_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			viewVersion, err := OptionalParam[string](request, "view_version")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			viewTimeRangeType, err := OptionalParam[string](request, "view_time_range_type")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			viewType, err := OptionalParam[string](request, "view_type")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			viewState, err := OptionalParam[string](request, "view_state")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			params := &dto.CCMCreatePerspectiveOptions{}
+			params.Clone =    clone
+			params.UpdateTotalCost =     updateTotalCost
+			params.Body.AccountId =   		 accountId
+			params.Body.Name =               name
+			params.Body.FolderId =            folderId
+			params.Body.ViewVersion =         viewVersion
+			params.Body.ViewTimeRange.ViewTimeRangeType =  viewTimeRangeType
+
+			if viewTimeRangeType == dto.TimeRangeTypeCustom {
+				viewTimeRangeStartString, err := OptionalParam[string](request, "view_time_range_start")
+				if err != nil {
+					return mcp.NewToolResultError(err.Error()), nil
+				}
+
+				viewTimeRangeEndString, err := OptionalParam[string](request, "view_time_range_end")
+				if err != nil {
+					return mcp.NewToolResultError(err.Error()), nil
+				}
+
+				viewTimeRangeStart, err := utils.FormatMMDDYYYYToUnixMillis(viewTimeRangeStartString) 
+				if err != nil {
+					return mcp.NewToolResultError(err.Error()), nil
+				}
+
+				viewTimeRangeEnd, err := utils.FormatMMDDYYYYToUnixMillis(viewTimeRangeEndString) 
+				if err != nil {
+					return mcp.NewToolResultError(err.Error()), nil
+				}
+				params.Body.ViewTimeRange.StartTime = viewTimeRangeStart
+				params.Body.ViewTimeRange.EndTime = viewTimeRangeEnd
+			} else {
+				params.Body.ViewTimeRange.StartTime = 0
+				params.Body.ViewTimeRange.EndTime = 0
+			}
+			params.Body.ViewType = viewType
+			params.Body.ViewState = viewState
+
+			scope, err := fetchScope(config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.CreatePerspective(ctx, scope, params)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create CCM Perspective: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal CCM Perspective: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+	}

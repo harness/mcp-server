@@ -31,12 +31,31 @@ const (
 	PeriodYearly   string = "YEARLY"
 )
 
+const (
+	TimeRangeTypeLast7Days string = "LAST_7"
+	TimeRangeTypeLast30Days string = "LAST_30"
+	TimeRangeTypeLastMonth string = "LAST_MONTH"
+	TimeRangeTypeCurrentMonth string = "CURRENT_MONTH"
+	TimeRangeTypeCustom string = "CUSTOM"
+)
+
+const (
+	ViewTypeSample string = "SAMPLE"
+	ViewTypeCustomer string = "CUSTOMER"
+	ViewTypeDefault string = "DEFAULT"
+)
+
+const (
+	ViewStateDraft string = "DRAFT"
+	ViewStateCompleted string = "COMPLETED"
+)
+
 type CCMListPerspectivesDetailOptions struct {
-	AccountIdentifier string `json:"accountIdentifier,omitempty"`
-	SearchKey         string `json:"searchKey,omitempty"`
-	SortType          string `json:"sortType,omitempty"` // Enum: "NAME", "LAST_EDIT"
-	SortOrder         string `json:"sortOrder,omitempty"` // Enum: "ASCENDING", "DESCENDING"
-	CloudFilters         string `json:"cloudFilters,omitempty"` 
+	AccountIdentifier string
+	SearchKey         string
+	SortType          string
+	SortOrder         string
+	CloudFilters      string
 	CCMPaginationOptions
 }
 
@@ -62,8 +81,8 @@ type CCMPerspectivesDetailList struct {
 // Get Perspective Detail 
 // ***************************
 type CCMGetPerspectiveOptions struct {
-	AccountIdentifier string `json:"accountIdentifier,omitempty"`
-	PerspectiveId string `json:"perspectiveId,omitempty"`
+	AccountIdentifier string
+	PerspectiveId string
 }
 
 type CCMPerspectiveDetail struct {
@@ -74,8 +93,8 @@ type CCMPerspectiveDetail struct {
 type CCMPerspective struct {
 	UUID             string               `json:"uuid"`
 	Name             string               `json:"name"`
-	AccountID        string               `json:"accountId"`
-	FolderID         string               `json:"folderId"`
+	AccountId        string               `json:"accountId"`
+	FolderId         string               `json:"folderId"`
 	ViewVersion      string               `json:"viewVersion"`
 	ViewTimeRange    CCMViewTimeRange     `json:"viewTimeRange"`
 	ViewRules        []CCMViewRule        `json:"viewRules"`
@@ -149,8 +168,8 @@ type CCMAzureViewPreferences struct {
 // ***************************
 type CCMGetLastPeriodCostPerspectiveOptions struct {
 	CCMGetPerspectiveOptions
-	StartTime int64 `json:"startTime,omitempty"` // Unix epoch milliseconds
-	Period string `json:"period,omitempty"` // Enum: "DAILY", "WEEKLY", "MONTHLY", "QUARTERLY", "YEARLY"
+	StartTime int64 
+	Period string
 }
 
 type CCMLastPeriodCostPerspective struct {
@@ -171,4 +190,13 @@ type CCMCostByTime struct {
 type CCMLastTwelveMonthsCostPerspective struct {
 	CCMBaseResponse
 	Data          []CCMCostByTime `json:"data,omitempty"`
+}
+
+// ***************************
+// Create perspective 
+// ***************************
+type CCMCreatePerspectiveOptions struct {
+	Clone bool
+	UpdateTotalCost bool
+	Body CCMPerspective
 }
