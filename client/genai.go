@@ -145,10 +145,7 @@ func (g *GenaiService) processStreamingResponse(body io.ReadCloser, finalRespons
 					}
 				}
 
-				switch eventType {
-				case "final_yaml_created":
-					finalResponse.Response = eventData
-				case "error":
+				if eventType == "error" {
 					finalResponse.Error = eventData
 				}
 			}
@@ -158,10 +155,14 @@ func (g *GenaiService) processStreamingResponse(body io.ReadCloser, finalRespons
 		}
 	}
 
-	// If we didn't get any specific events, use the full content
-	if finalResponse.Response == "" && finalResponse.Error == "" {
-		finalResponse.Response = allContent.String()
-	}
+	// Add a header note to inform the Uber Agent that these events have already been shown to the user
+	// TODO: move this to a prompt template for uber agent to ingest
+	instructionNote := "NOTE TO AGENT: The SSE events below have already been streamed to the end user in real-time.\n" +
+		"Do not repeat the full content of these events in your response.\n" +
+		"Focus on summarizing key outcomes and providing additional context or next steps.\n" +
+		"---\n\n"
+
+	finalResponse.Response = instructionNote + allContent.String()
 
 	if err := scanner.Err(); err != nil {
 		slog.Warn("Error in scanner", "error", err.Error())
