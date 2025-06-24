@@ -20,6 +20,7 @@ func AIDevOpsAgentTool(config *config.Config, client *client.GenaiService) (tool
 				mcp.Required(),
 				mcp.Description("The prompt to send to the genai service"),
 			),
+			mcp.WithBoolean("stream", mcp.Description("Whether to stream the response or not"), mcp.DefaultBool(true)),
 			mcp.WithString("action",
 				mcp.Required(),
 				mcp.Description("The action type to perform (CREATE_STEP, UPDATE_STEP, CREATE_STAGE, etc.)"),
@@ -87,8 +88,23 @@ func AIDevOpsAgentTool(config *config.Config, client *client.GenaiService) (tool
 			interactionID, _ := OptionalParam[string](request, "interaction_id")
 			contextRaw, _ := OptionalParam[[]any](request, "context")
 			conversationRaw, _ := OptionalParam[[]any](request, "conversation_raw")
+			stream := true // default value
+			if streamArg, ok := request.Params.Arguments["stream"].(bool); ok {
+				stream = streamArg
+			}
 
-			// Convert context items
+			// Safely access progress token with nil check
+			var progressToken mcp.ProgressToken
+			if request.Params.Meta != nil {
+				progressToken = request.Params.Meta.ProgressToken
+			}
+
+			// Generate a default progress token if none is provided
+			if progressToken == nil {
+				tokenID := uuid.New().String()
+				progressToken = mcp.ProgressToken(tokenID)
+			}
+
 			var contextItems []dto.ContextItem
 			for _, ctxRaw := range contextRaw {
 				if ctxMap, ok := ctxRaw.(map[string]interface{}); ok {
@@ -132,49 +148,66 @@ func AIDevOpsAgentTool(config *config.Config, client *client.GenaiService) (tool
 				Context:         contextItems,
 				Action:          dto.RequestAction(strings.ToUpper(action)),
 				HarnessContext:  harnessContext,
-				Stream:          false,
+				Stream:          stream,
 			}
 
-			// Send the request to the genai service
-			response, err := client.SendAIDevOpsChat(ctx, scope, genaiRequest)
-			if err != nil {
-				return nil, fmt.Errorf("failed to send request to genai service: %w", err)
+			shouldStream := stream && progressToken != nil
+			mcpServer := server.ServerFromContext(ctx)
+			shouldStream = shouldStream && mcpServer != nil
+
+			if client == nil {
+				return nil, fmt.Errorf("genai client is nil")
 			}
 
-			// Check for errors in response
-			if response.Error != "" {
-				return mcp.NewToolResultError(response.Error), nil
-			}
+			genaiRequest.Stream = shouldStream
 
-			// Format capabilities if present
-			var capabilitiesText string
-			if len(response.CapabilitiesToRun) > 0 {
-				capabilitiesText = "\n\nCapabilities to run:\n"
-				for _, cap := range response.CapabilitiesToRun {
-					capabilitiesText += fmt.Sprintf("\n- Type: %s\n  CallID: %s", cap.Type, cap.CallID)
-
-					// Include input details if available
-					if len(cap.Input) > 0 {
-						capabilitiesText += "\n  Input:"
-						for k, v := range cap.Input {
-							capabilitiesText += fmt.Sprintf("\n    %s: %v", k, v)
-						}
+			if shouldStream {
+				onProgress := func(progress dto.ProgressUpdate) error {
+					if ctx == nil || ctx.Err() != nil {
+						return nil
 					}
-					capabilitiesText += "\n"
+
+					return mcpServer.SendNotificationToClient(
+						ctx,
+						"notifications/progress",
+						map[string]any{
+							"progress":      progress.Progress,
+							"progressToken": progressToken,
+							"total":         progress.Total,
+							"message":       progress.Message,
+						},
+					)
 				}
+
+				response, err := client.SendAIDevOpsChat(ctx, scope, genaiRequest, onProgress)
+				if err != nil {
+					return nil, fmt.Errorf("streaming request failed: %w", err)
+				}
+
+				if response == nil {
+					return nil, fmt.Errorf("got nil response from streaming request")
+				}
+
+				if response.Error != "" {
+					return mcp.NewToolResultError(response.Error), nil
+				}
+
+				return mcp.NewToolResultText(response.Response), nil
+			} else {
+				response, err := client.SendAIDevOpsChat(ctx, scope, genaiRequest)
+				if err != nil {
+					return nil, fmt.Errorf("failed to send request to genai service: %w", err)
+				}
+
+				if response == nil {
+					return nil, fmt.Errorf("got nil response from genai service")
+				}
+
+				if response.Error != "" {
+					return mcp.NewToolResultError(response.Error), nil
+				}
+
+				return mcp.NewToolResultText(response.Response), nil
 			}
-
-			// Combine any response text with capabilities and usage info
-			resultText := ""
-			if response.Response != "" {
-				resultText = response.Response
-			} else if response.ConversationRaw != "" {
-				resultText = response.ConversationRaw
-			}
-
-			// Create the full result text
-			fullResult := fmt.Sprintf("%s%s", resultText, capabilitiesText)
-
-			return mcp.NewToolResultText(fullResult), nil
 		}
 }

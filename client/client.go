@@ -223,6 +223,92 @@ func (c *Client) PostRaw(
 	return nil
 }
 
+// PostStream is similar to Post but returns the raw http.Response for streaming
+func (c *Client) PostStream(
+	ctx context.Context,
+	path string,
+	params map[string]string,
+	body interface{},
+	b ...backoff.BackOff,
+) (*http.Response, error) {
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to serialize body: %w", err)
+	}
+
+	return c.PostRawStream(ctx, path, params, bytes.NewBuffer(bodyBytes), nil, b...)
+}
+
+// PostRawStream is similar to PostRaw but returns the raw http.Response for streaming
+func (c *Client) PostRawStream(
+	ctx context.Context,
+	path string,
+	params map[string]string,
+	body io.Reader,
+	headers map[string]string,
+	b ...backoff.BackOff,
+) (*http.Response, error) {
+	var retryCount int
+	var resp *http.Response
+
+	operation := func() error {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, appendPath(c.BaseURL.String(), path), body)
+		if err != nil {
+			return backoff.Permanent(fmt.Errorf("unable to create HTTP request: %w", err))
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+		// Add custom headers from the headers map
+		for key, value := range headers {
+			req.Header.Add(key, value)
+		}
+		addQueryParams(req, params)
+
+		resp, err = c.Do(req)
+
+		if err != nil || resp == nil {
+			return fmt.Errorf("request failed: %w", err)
+		}
+
+		if isRetryable(resp.StatusCode) {
+			if resp.Body != nil {
+				resp.Body.Close()
+			}
+			return fmt.Errorf("retryable status code: %d", resp.StatusCode)
+		}
+
+		if statusErr := mapStatusCodeToError(resp.StatusCode); statusErr != nil {
+			if resp.Body != nil {
+				resp.Body.Close()
+			}
+			return backoff.Permanent(statusErr)
+		}
+
+		return nil
+	}
+
+	notify := func(err error, next time.Duration) {
+		retryCount++
+		log.Warn().
+			Int("retry_count", retryCount).
+			Dur("next_retry_in", next).
+			Err(err).
+			Msg("Retrying request due to error")
+	}
+
+	if len(b) > 0 {
+		if err := backoff.RetryNotify(operation, b[0], notify); err != nil {
+			return nil, fmt.Errorf("request failed after %d retries: %w", retryCount, err)
+		}
+	} else {
+		if err := operation(); err != nil {
+			return nil, err
+		}
+	}
+
+	return resp, nil
+}
+
 // Do is a wrapper of http.Client.Do that injects the auth header in the request.
 func (c *Client) Do(r *http.Request) (*http.Response, error) {
 	slog.Debug("Request", "method", r.Method, "url", r.URL.String())
