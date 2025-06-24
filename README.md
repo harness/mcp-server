@@ -246,7 +246,7 @@ To use the Harness MCP Server with Amazon Q Developer CLI:
           "-i",
           "--rm",
           "-e",
-          "YjJmMGNkNDAyOGQ2YWQ4ZjI2MzA4NzMxNTlhOTgyNWQ=",
+          "HARNESS_API_KEY",
           "-e",
           "HARNESS_DEFAULT_ORG_ID",
           "-e",
