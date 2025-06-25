@@ -5,14 +5,13 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-
 // RegisterPrompts initializes and registers predefined prompts with the MCP server.
-func RegisterPrompts(mcpServer *server.MCPServer ) {
-	prompts := p.Prompts{} 
+func RegisterPrompts(mcpServer *server.MCPServer) {
+	prompts := p.Prompts{}
 
 	// This prompt is intended to make the LLM handle the date parameters in the correct format because fields descriptions where not enough.
 	prompts.Append(
-			p.NewPrompt().SetName("get_ccm_overview").
+		p.NewPrompt().SetName("get_ccm_overview").
 			SetDescription("Ensure parameters are provided correctly and in the right format. ").
 			SetResultDescription("Input parameters validation").
 			SetText(`When calling get_ccm_overview, ensure you have: accountIdentifier, groupBy, startDate, and endDate.

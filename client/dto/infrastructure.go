@@ -20,11 +20,11 @@ type Infrastructure struct {
 
 // InfrastructureItem represents an item in the response list
 type InfrastructureItem struct {
-	Infrastructure       Infrastructure           `json:"infrastructure"`
-	CreatedAt            int64                    `json:"createdAt,omitempty"`
-	LastModifiedAt       int64                    `json:"lastModifiedAt,omitempty"`
-	EntityValidityDetails interface{}             `json:"entityValidityDetails"`
-	GovernanceMetadata   interface{}             `json:"governanceMetadata"`
+	Infrastructure        Infrastructure `json:"infrastructure"`
+	CreatedAt             int64          `json:"createdAt,omitempty"`
+	LastModifiedAt        int64          `json:"lastModifiedAt,omitempty"`
+	EntityValidityDetails interface{}    `json:"entityValidityDetails"`
+	GovernanceMetadata    interface{}    `json:"governanceMetadata"`
 }
 
 // InfrastructureListResponse represents the response from the list infrastructures API
@@ -32,7 +32,7 @@ type InfrastructureListResponse struct {
 	Status        string      `json:"status,omitempty"`
 	MetaData      interface{} `json:"metaData"`
 	CorrelationID string      `json:"correlationId,omitempty"`
-	Data struct {
+	Data          struct {
 		Content       []InfrastructureItem `json:"content"`
 		TotalPages    int                  `json:"totalPages"`
 		TotalItems    int                  `json:"totalItems"`
@@ -40,36 +40,36 @@ type InfrastructureListResponse struct {
 		PageSize      int                  `json:"pageSize"`
 		PageIndex     int                  `json:"pageIndex"`
 		Empty         bool                 `json:"empty"`
-		PageToken     interface{}         `json:"pageToken"`
+		PageToken     interface{}          `json:"pageToken"`
 	} `json:"data"`
 }
 
 // InfrastructureOptions represents the options for listing infrastructures
 type InfrastructureOptions struct {
-	Page         int    `json:"page,omitempty"`
-	Limit        int    `json:"limit,omitempty"`
-	Sort         string `json:"sort,omitempty"`
-	Order        string `json:"order,omitempty"`
-	DeploymentType   string `json:"deploymentType,omitempty"` // Filter by deployment type
-	EnvironmentIdentifier  string `json:"environmentIdentifier,omitempty"` // Filter by environment
+	Page                  int    `json:"page,omitempty"`
+	Limit                 int    `json:"limit,omitempty"`
+	Sort                  string `json:"sort,omitempty"`
+	Order                 string `json:"order,omitempty"`
+	DeploymentType        string `json:"deploymentType,omitempty"`        // Filter by deployment type
+	EnvironmentIdentifier string `json:"environmentIdentifier,omitempty"` // Filter by environment
 }
 
 // MoveInfraConfigsRequest represents the request to move infrastructure configurations
 type MoveInfraConfigsRequest struct {
-	InfraIdentifier     string         `json:"-"` // Required - from path parameter
-	EnvironmentIdentifier string       `json:"-"` // Required
-	AccountIdentifier   string         `json:"-"` // Required
-	OrgIdentifier       string         `json:"-"`
-	ProjectIdentifier   string         `json:"-"`
-	ConnectorRef        string         `json:"-"`
-	RepoName            string         `json:"-"`
-	Branch              string         `json:"-"`
-	FilePath            string         `json:"-"`
-	CommitMsg           string         `json:"-"`
-	IsNewBranch         *bool          `json:"-"`
-	BaseBranch          string         `json:"-"`
-	IsHarnessCodeRepo   *bool          `json:"-"`
-	MoveConfigType      MoveConfigType `json:"-"` // Required - enum: "INLINE_TO_REMOTE" "REMOTE_TO_INLINE"
+	InfraIdentifier       string         `json:"-"` // Required - from path parameter
+	EnvironmentIdentifier string         `json:"-"` // Required
+	AccountIdentifier     string         `json:"-"` // Required
+	OrgIdentifier         string         `json:"-"`
+	ProjectIdentifier     string         `json:"-"`
+	ConnectorRef          string         `json:"-"`
+	RepoName              string         `json:"-"`
+	Branch                string         `json:"-"`
+	FilePath              string         `json:"-"`
+	CommitMsg             string         `json:"-"`
+	IsNewBranch           *bool          `json:"-"`
+	BaseBranch            string         `json:"-"`
+	IsHarnessCodeRepo     *bool          `json:"-"`
+	MoveConfigType        MoveConfigType `json:"-"` // Required - enum: "INLINE_TO_REMOTE" "REMOTE_TO_INLINE"
 }
 
 // MoveInfraConfigsResponse represents the response from the move infrastructure configs API

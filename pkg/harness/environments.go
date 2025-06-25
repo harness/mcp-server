@@ -209,46 +209,46 @@ func MoveEnvironmentConfigsTool(config *config.Config, client *client.Environmen
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			
+
 			if moveConfigType != string(dto.InlineToRemote) {
 				return mcp.NewToolResultError("move_config_type must be INLINE_TO_REMOTE. The REMOTE_TO_INLINE operation is not supported for environments."), nil
 			}
-			
+
 			connectorRef, err := OptionalParam[string](request, "connector_ref")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			
+
 			repoName, err := OptionalParam[string](request, "repo_name")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			
+
 			branch, err := OptionalParam[string](request, "branch")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			
+
 			filePath, err := OptionalParam[string](request, "file_path")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			
+
 			commitMsg, err := OptionalParam[string](request, "commit_msg")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			
+
 			isNewBranch, err := OptionalParam[bool](request, "is_new_branch")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			
+
 			baseBranch, err := OptionalParam[string](request, "base_branch")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			
+
 			isHarnessCodeRepo, err := OptionalParam[bool](request, "is_harness_code_repo")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -257,28 +257,28 @@ func MoveEnvironmentConfigsTool(config *config.Config, client *client.Environmen
 			// Create move request with the new structure
 			moveRequest := &dto.MoveEnvironmentConfigsRequest{
 				EnvironmentIdentifier: environmentIdentifier,
-				AccountIdentifier:    accountIdentifier,
-				OrgIdentifier:        orgIdentifier,
-				ProjectIdentifier:    projectIdentifier,
-				ConnectorRef:         connectorRef,
-				RepoName:             repoName,
-				Branch:               branch,
-				FilePath:             filePath,
-				CommitMsg:            commitMsg,
+				AccountIdentifier:     accountIdentifier,
+				OrgIdentifier:         orgIdentifier,
+				ProjectIdentifier:     projectIdentifier,
+				ConnectorRef:          connectorRef,
+				RepoName:              repoName,
+				Branch:                branch,
+				FilePath:              filePath,
+				CommitMsg:             commitMsg,
 				MoveConfigType:        dto.MoveConfigType(moveConfigType),
 			}
-			
+
 			// Set boolean pointers if values were provided
 			if isNewBranchProvided, ok := request.Params.Arguments["is_new_branch"]; ok && isNewBranchProvided != nil {
 				val := isNewBranch
 				moveRequest.IsNewBranch = &val
 			}
-			
+
 			if isHarnessCodeRepoProvided, ok := request.Params.Arguments["is_harness_code_repo"]; ok && isHarnessCodeRepoProvided != nil {
 				val := isHarnessCodeRepo
 				moveRequest.IsHarnessCodeRepo = &val
 			}
-			
+
 			// Add the base branch if provided
 			if baseBranch != "" {
 				moveRequest.BaseBranch = baseBranch

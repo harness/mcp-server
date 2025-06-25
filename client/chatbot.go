@@ -19,16 +19,16 @@ type ChatbotService struct {
 func (c *ChatbotService) SendChatMessage(ctx context.Context, scope dto.Scope, request *dto.ChatRequest) (string, error) {
 	path := chatPath
 	params := make(map[string]string)
-	
+
 	// Only add non-empty scope parameters
 	if scope.AccountID != "" {
 		params["accountIdentifier"] = scope.AccountID
 	}
-	
+
 	if scope.OrgID != "" {
 		params["orgIdentifier"] = scope.OrgID
 	}
-	
+
 	if scope.ProjectID != "" {
 		params["projectIdentifier"] = scope.ProjectID
 	}

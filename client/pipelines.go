@@ -14,13 +14,13 @@ const (
 	pipelineExecutionPath        = "api/pipelines/execution/url"
 	pipelineExecutionGetPath     = "api/pipelines/execution/v2/%s"
 	pipelineExecutionSummaryPath = "api/pipelines/execution/summary"
-	
+
 	// Prefix to prepend for external API calls
 	externalPathPrefix = "pipeline/"
 )
 
 type PipelineService struct {
-	Client *Client
+	Client           *Client
 	UseInternalPaths bool
 }
 

@@ -8,9 +8,9 @@ import (
 )
 
 const (
-	ccmBasePath        = "ccm/api"
-	ccmGetOverviewPath = ccmBasePath + "/overview?accountIdentifier=%s&startTime=%d&endTime=%d&groupBy=%s"
-	ccmCostCategoryListPath = ccmBasePath + "/business-mapping/filter-panel?accountIdentifier=%s"
+	ccmBasePath                   = "ccm/api"
+	ccmGetOverviewPath            = ccmBasePath + "/overview?accountIdentifier=%s&startTime=%d&endTime=%d&groupBy=%s"
+	ccmCostCategoryListPath       = ccmBasePath + "/business-mapping/filter-panel?accountIdentifier=%s"
 	ccmCostCategoryDetailListPath = ccmBasePath + "/business-mapping?accountIdentifier=%s" // This endpoint lists cost categories
 )
 
