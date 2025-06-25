@@ -19,8 +19,7 @@ const (
 	SortOrderDesc   string = "DESCENDING"
 )
 
-// CEView represents a basic ccm response.
-// The `data` field contains the response data.
+// CCMBaseResponse represents a basic ccm response.
 type CCMBaseResponse struct {
 	Status        string      `json:"state,omitempty"`
 	Message	   string      `json:"message,omitempty"`
@@ -34,6 +33,8 @@ type CCMError struct {
 	Error string `json:"error,omitempty"`
 }
 
+// CEView represents a basic Cost Overview response.
+// The `data` field contains the response data.
 type CEView struct {
 	CCMBaseResponse
 	Data          CCMOverview `json:"data,omitempty"`
@@ -191,4 +192,17 @@ type CCMSuppressed struct {
 	StackTrace       []CCMStackTraceElement `json:"stackTrace"`
 	Message          string                 `json:"message"`
 	LocalizedMessage string                 `json:"localizedMessage"`
+}
+
+// CCMCostCategory represents the details of a cost category in CCM
+type CCMCostCategory struct {
+	MetaData         map[string]interface{}	`json:"metaData"`
+	Resource       	 CCMBusinessMapping     `json:"resource"`
+	ResponseMessages []CCMResponseMessage 	`json:"responseMessages"`
+}
+
+// CCMGetCostCategoryOptions represents options for listing cost categories
+type CCMGetCostCategoryOptions struct {
+	AccountIdentifier string `json:"accountIdentifier,omitempty"`
+	CostCategoryId string `json:"id,omitempty"`
 }
