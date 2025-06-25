@@ -3,10 +3,10 @@ package client
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/pkg/utils"
 )
-
 const (
 	ccmPerspetiveDetailListPath = ccmBasePath + "/perspective/getAllPerspectives?accountIdentifier=%s"
 	ccmGetPerspectivePath = ccmBasePath + "/perspective"
@@ -121,7 +121,7 @@ func (r *CloudCostManagementService) GetLastTwelveMonthsCostPerspective(ctx cont
 	return items, nil
 }
 
-func (r *CloudCostManagementService) CreatePerspective(ctx context.Context, scope dto.Scope, opts *dto.CCMCreatePerspectiveOptions) (*dto.CCMPerspective, error) {
+func (r *CloudCostManagementService) CreatePerspective(ctx context.Context, scope dto.Scope, opts *dto.CCMCreatePerspectiveOptions) (*dto.CCMCreatePerspectiveResponse, error) {
 	path := ccmCreatePerspectivePath
 	params := make(map[string]string)
 	if opts == nil {
@@ -129,26 +129,65 @@ func (r *CloudCostManagementService) CreatePerspective(ctx context.Context, scop
 	}
 
 	// Query parameters
-	params["accountIdentifier"] = opts.Body.AccountId
+	params["accountIdentifier"] = opts.AccountId
 	params["clone"] = utils.BoolToString(opts.Clone)
 	params["updateTotalCost"] = utils.BoolToString(opts.UpdateTotalCost)
 
 	// Body payload
 	body := map[string]interface{}{
-		"name":                opts.Body.Name,
-		"accountId":           opts.Body.AccountId,
-		"folderId":            opts.Body.FolderId,
-		"viewVersion":         opts.Body.ViewVersion,
+		"name": opts.Body.Name,
+		"viewVersion": opts.Body.ViewVersion,
 		"viewTimeRange": map[string]interface{}{
-			"viewTimeRangeType":   opts.Body.ViewTimeRange.ViewTimeRangeType,
-			"startTime":  opts.Body.ViewTimeRange.StartTime,
-			"endTime":    opts.Body.ViewTimeRange.EndTime,
-		},
-		"viewType":            opts.Body.ViewType,
-		"viewState":           opts.Body.ViewState,
+			"viewTimeRangeType": opts.Body.ViewTimeRange.ViewTimeRangeType,
+			"startTime": opts.Body.ViewTimeRange.StartTime,
+			"endTime": opts.Body.ViewTimeRange.EndTime,
+		},	
+		"viewType": opts.Body.ViewType,
+		"viewState": opts.Body.ViewState,
+
 	}
 
-	item := new(dto.CCMPerspective)
+	awsPreferences := map[string]interface{}{
+		"includeDiscounts": opts.Body.ViewPreferences.AwsPreferences.IncludeDiscounts,
+		"includeCredits": opts.Body.ViewPreferences.AwsPreferences.IncludeCredits,
+		"includeRefunds": opts.Body.ViewPreferences.AwsPreferences.IncludeRefunds,
+		"includeTaxes": opts.Body.ViewPreferences.AwsPreferences.IncludeTaxes,
+	}
+
+	if opts.Body.ViewPreferences.AwsPreferences.AwsCost != "" {
+		awsPreferences["awsCost"] = opts.Body.ViewPreferences.AwsPreferences.AwsCost
+	}
+
+	viewPreferences := map[string]interface{}{
+		"showAnomalies":        opts.Body.ViewPreferences.ShowAnomalies,
+		"includeOthers":        opts.Body.ViewPreferences.IncludeOthers,
+		"includeUnallocatedCost": opts.Body.ViewPreferences.IncludeUnallocatedCost,
+		"awsPreferences": awsPreferences,	
+		"gcpPreferences": map[string]interface{}{
+			"includeDiscounts": opts.Body.ViewPreferences.GcpPreferences.IncludeDiscounts,
+			"includeTaxes": opts.Body.ViewPreferences.GcpPreferences.IncludeTaxes,
+		},
+	}
+
+	if opts.Body.ViewPreferences.AzureViewPreferences.CostType != "" {
+		azureViewPreferences := map[string]interface{}{
+			"costType": opts.Body.ViewPreferences.AzureViewPreferences.CostType,
+		}
+		viewPreferences["azureViewPreferences"] = azureViewPreferences
+	}
+
+	body["viewPreferences"] = viewPreferences
+
+	if opts.Body.AccountId != "" {
+		body["accountId"] = opts.Body.AccountId
+	}
+
+	if opts.Body.FolderId != "" {
+		body["folderId"] = opts.Body.FolderId
+	}	
+
+	slog.Debug("Create Perspective", "Body", body)
+	item := new(dto.CCMCreatePerspectiveResponse)
 	err := r.Client.Post(ctx, path, params, body, &item)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cloud cost management perspective: %w", err)

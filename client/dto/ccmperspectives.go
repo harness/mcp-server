@@ -50,6 +50,32 @@ const (
 	ViewStateCompleted string = "COMPLETED"
 )
 
+const (
+	AwsCostAmortised string = "AMORTISED"
+	AwsCostNetAmortised string = "NET_AMORTISED"
+	AwsCostBlended string = "BLENDED"
+	AwsCostUnblended string = "UNBLENDED"
+	AwsCostEffective string = "EFFECTIVE"
+)
+
+const (
+	DataSourceCluster string = "CLUSTER"
+	DataSourceAws string = "AWS"
+	DataSourceGcp string = "GCP"
+	DataSourceAzure string = "AZURE"
+	DataSourceExternalData string = "EXTERNAL_DATA"
+	DataSourceCommon string = "COMMON"
+	DataSourceCustom string = "CUSTOM"
+	DataSourceBusinessMapping string = "BUSINESS_MAPPING"
+	DataSourceLabel string = "LABEL"
+	DataSourceLabelV2 string = "LABEL_V2"
+)
+
+const (
+	AzureCostTypeActual string = "ACTUAL"
+	AzureCostTypeAmortized string = "AMORTIZED"
+)
+
 type CCMListPerspectivesDetailOptions struct {
 	AccountIdentifier string
 	SearchKey         string
@@ -196,7 +222,13 @@ type CCMLastTwelveMonthsCostPerspective struct {
 // Create perspective 
 // ***************************
 type CCMCreatePerspectiveOptions struct {
+	AccountId string
 	Clone bool
 	UpdateTotalCost bool
 	Body CCMPerspective
+}
+
+type CCMCreatePerspectiveResponse struct {
+	CCMBaseResponse
+	Data          CCMPerspective `json:"data"`
 }

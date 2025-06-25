@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+	"strings"
 	"strconv"
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
@@ -308,12 +309,18 @@ func GetLastTwelveMonthsCostCcmPerspectiveTool(config *config.Config, client *cl
 
 // Create perspective
 func CreateCcmPerspectiveTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return createPerspectiveTool(config, client), 
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return createPerspectiveHandler(config, client, ctx, request)
+		}
+}
+
+func createPerspectiveTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool) {
 
 	return mcp.NewTool("create_ccm_perspective",
 			mcp.WithDescription("Get the last twelve months cost for a perspective in Harness Cloud Cost Management"),
 			mcp.WithString("account_id",
-				mcp.Required(),
-				mcp.Description("The account identifier"),
+				mcp.Description("The account identifier owner of the perspective"),
 			),
 			mcp.WithString("clone",
 				mcp.DefaultBool(false),
@@ -323,13 +330,12 @@ func CreateCcmPerspectiveTool(config *config.Config, client *client.CloudCostMan
 				mcp.DefaultBool(false),
 				mcp.Description("Whether to clone the perspective or create a new one"),
 			),
-
 			mcp.WithString("name",
 				mcp.Required(),
 				mcp.Description("Required perspective name"),
 			),
 			mcp.WithString("folder_id",
-				mcp.Description("Containing folder identifier of the perspective"),
+				mcp.Description("Idenfifier for the containing folder of the perspective"),
 			),
 			mcp.WithString("view_version",
 				mcp.Required(),
@@ -346,9 +352,57 @@ func CreateCcmPerspectiveTool(config *config.Config, client *client.CloudCostMan
 			mcp.WithString("view_time_range_end",
 				mcp.Description("End time when using view_time_range_type=Custom. In format MM/DD/YYYY. ie: 04/30/2023 for April 30, 2023"),
 			),
+			mcp.WithArray("data_sources",
+			mcp.Description(fmt.Sprintf("Supported data sources: %s", getSupportedDataSources())),
+				mcp.Enum(dto.DataSourceAws, dto.DataSourceGcp, dto.DataSourceAzure, dto.DataSourceExternalData, dto.DataSourceCommon, dto.DataSourceCustom, dto.DataSourceBusinessMapping, dto.DataSourceLabel, dto.DataSourceLabelV2),
+			),
+			mcp.WithBoolean("view_pref_show_anomalies",
+				mcp.DefaultBool(false),
+				mcp.Description("Whether to show anomalies in the view"),
+			),
+			mcp.WithBoolean("view_pref_include_others",
+				mcp.DefaultBool(false),
+				mcp.Description("Whether to include other data in the view"),
+			),
+			mcp.WithBoolean("view_pref_include_unallocated_cost",
+				mcp.DefaultBool(false),
+				mcp.Description("Whether to include discounts in the view"),
+			),
+			mcp.WithBoolean("view_pref_aws_pref_include_discounts",
+				mcp.DefaultBool(false),
+				mcp.Description("Whether to include discounts in AWS view"),
+			),
+			mcp.WithBoolean("view_pref_aws_pref_include_credits",
+				mcp.DefaultBool(false),
+				mcp.Description("Whether to include credits in AWS view"),
+			),
+			mcp.WithBoolean("view_pref_aws_pref_include_refunds",
+				mcp.DefaultBool(false),
+				mcp.Description("Whether to include refunds in AWS view"),
+			),
+			mcp.WithBoolean("view_pref_aws_pref_include_taxes",
+				mcp.DefaultBool(false),
+				mcp.Description("Whether to include taxes in AWS view"),
+			),
+			mcp.WithString("view_pref_aws_pref_aws_cost",
+				mcp.Enum(dto.AwsCostUnblended, dto.AwsCostBlended),
+				mcp.Description(fmt.Sprintf("How to show AWS cost (%s, %s)", dto.AwsCostUnblended, dto.AwsCostBlended)),
+			),
+			mcp.WithBoolean("view_pref_gcp_pref_include_discounts",
+				mcp.DefaultBool(false),
+				mcp.Description("Whether to include discounts"),
+			),
+			mcp.WithBoolean("view_pref_gcp_pref_include_taxes",
+				mcp.DefaultBool(false),
+				mcp.Description("Whether to include taxes"),
+			),
+			mcp.WithString("view_pref_azure_pref_cost_type",
+				mcp.Enum(dto.AzureCostTypeActual, dto.AzureCostTypeAmortized),
+				mcp.Description(fmt.Sprintf("How to show AZURE cost (%s, %s)", dto.AzureCostTypeActual, dto.AzureCostTypeAmortized)),
+			),
 			mcp.WithString("view_type",
 				mcp.Required(),
-				mcp.Enum(dto.ViewTypeSample, dto.ViewTypeCustomer, dto.ViewTypeDefault),
+				mcp.Description(fmt.Sprintf("View type (%s, %s, %s)", dto.ViewTypeSample, dto.ViewTypeCustomer, dto.ViewTypeDefault)),
 				mcp.Description("Type of view"),
 			),
 			mcp.WithString("view_state",
@@ -357,106 +411,205 @@ func CreateCcmPerspectiveTool(config *config.Config, client *client.CloudCostMan
 				mcp.Enum(dto.ViewStateDraft, dto.ViewStateCompleted),
 				mcp.Description("State of view. Set to completed if it is not provided."),
 			),
-		),
-		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			accountId, err := OptionalParam[string](request, "account_id")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
+		)
+}
 
-			clone, err := OptionalParam[bool](request, "clone")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
+func createPerspectiveHandler(config *config.Config, client *client.CloudCostManagementService, ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 
-			updateTotalCost, err := OptionalParam[bool](request, "update_total_cost")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-
-			name, err := OptionalParam[string](request, "name")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-
-			folderId, err := OptionalParam[string](request, "folder_id")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-
-			viewVersion, err := OptionalParam[string](request, "view_version")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-
-			viewTimeRangeType, err := OptionalParam[string](request, "view_time_range_type")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-
-			viewType, err := OptionalParam[string](request, "view_type")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-
-			viewState, err := OptionalParam[string](request, "view_state")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-
-			params := &dto.CCMCreatePerspectiveOptions{}
-			params.Clone =    clone
-			params.UpdateTotalCost =     updateTotalCost
-			params.Body.AccountId =   		 accountId
-			params.Body.Name =               name
-			params.Body.FolderId =            folderId
-			params.Body.ViewVersion =         viewVersion
-			params.Body.ViewTimeRange.ViewTimeRangeType =  viewTimeRangeType
-
-			if viewTimeRangeType == dto.TimeRangeTypeCustom {
-				viewTimeRangeStartString, err := OptionalParam[string](request, "view_time_range_start")
-				if err != nil {
-					return mcp.NewToolResultError(err.Error()), nil
-				}
-
-				viewTimeRangeEndString, err := OptionalParam[string](request, "view_time_range_end")
-				if err != nil {
-					return mcp.NewToolResultError(err.Error()), nil
-				}
-
-				viewTimeRangeStart, err := utils.FormatMMDDYYYYToUnixMillis(viewTimeRangeStartString) 
-				if err != nil {
-					return mcp.NewToolResultError(err.Error()), nil
-				}
-
-				viewTimeRangeEnd, err := utils.FormatMMDDYYYYToUnixMillis(viewTimeRangeEndString) 
-				if err != nil {
-					return mcp.NewToolResultError(err.Error()), nil
-				}
-				params.Body.ViewTimeRange.StartTime = viewTimeRangeStart
-				params.Body.ViewTimeRange.EndTime = viewTimeRangeEnd
-			} else {
-				params.Body.ViewTimeRange.StartTime = 0
-				params.Body.ViewTimeRange.EndTime = 0
-			}
-			params.Body.ViewType = viewType
-			params.Body.ViewState = viewState
-
-			scope, err := fetchScope(config, request, false)
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-
-			data, err := client.CreatePerspective(ctx, scope, params)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create CCM Perspective: %w", err)
-			}
-
-			r, err := json.Marshal(data)
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal CCM Perspective: %w", err)
-			}
-
-			return mcp.NewToolResultText(string(r)), nil
-		}
+	// Account Id for querystring.
+	accountId, err := getAccountID(config, request)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
 	}
+
+	perspectiveAccountId, err := OptionalParam[string](request, "account_id")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	clone, err := OptionalParam[bool](request, "clone")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	updateTotalCost, err := OptionalParam[bool](request, "update_total_cost")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	name, err := OptionalParam[string](request, "name")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	folderId, err := OptionalParam[string](request, "folder_id")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	viewVersion, err := OptionalParam[string](request, "view_version")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	viewTimeRangeType, err := OptionalParam[string](request, "view_time_range_type")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	viewType, err := OptionalParam[string](request, "view_type")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	viewState, err := OptionalParam[string](request, "view_state")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}	
+
+	params := &dto.CCMCreatePerspectiveOptions{}
+	params.AccountId = accountId
+	params.Clone = clone
+	params.UpdateTotalCost = updateTotalCost
+	if perspectiveAccountId != "" {
+		params.Body.AccountId = perspectiveAccountId
+	}
+	params.Body.Name = name
+	params.Body.FolderId = folderId
+	params.Body.ViewVersion = viewVersion
+	params.Body.ViewTimeRange.ViewTimeRangeType =  viewTimeRangeType
+
+	if viewTimeRangeType == dto.TimeRangeTypeCustom {
+		viewTimeRangeStartString, err := OptionalParam[string](request, "view_time_range_start")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		viewTimeRangeEndString, err := OptionalParam[string](request, "view_time_range_end")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		viewTimeRangeStart, err := utils.FormatMMDDYYYYToUnixMillis(viewTimeRangeStartString) 
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		viewTimeRangeEnd, err := utils.FormatMMDDYYYYToUnixMillis(viewTimeRangeEndString) 
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		params.Body.ViewTimeRange.StartTime = viewTimeRangeStart
+		params.Body.ViewTimeRange.EndTime = viewTimeRangeEnd
+	} else {
+		params.Body.ViewTimeRange.StartTime = 0
+		params.Body.ViewTimeRange.EndTime = 0
+	}
+
+	viewPrefShowAnomalies, err := OptionalParam[bool](request, "view_pref_show_anomalies")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	viewPrefIncludeOthers, err := OptionalParam[bool](request, "view_pref_include_others")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	viewPrefIncludeUnallocatedCost, err := OptionalParam[bool](request, "view_pref_include_unallocated_cost")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	viewPrefAwsPrefIncludeDiscounts, err := OptionalParam[bool](request, "view_pref_aws_pref_include_discounts")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	viewPrefAwsPrefIncludeCredits, err := OptionalParam[bool](request, "view_pref_aws_pref_include_credits")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	viewPrefAwsPrefIncludeRefunds, err := OptionalParam[bool](request, "view_pref_aws_pref_include_refunds")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	viewPrefAwsPrefIncludeTaxes, err := OptionalParam[bool](request, "view_pref_aws_pref_include_taxes")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	viewPrefAwsPrefAwsCost, err := OptionalParam[string](request, "view_pref_aws_pref_aws_cost")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	viewPrefGcpPrefIncludeDiscounts, err := OptionalParam[bool](request, "view_pref_gcp_pref_include_discounts")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	viewPrefGcpPrefIncludeTaxes, err := OptionalParam[bool](request, "view_pref_gcp_pref_include_taxes")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	viewPrefAzureViewPrefCostType, err := OptionalParam[string](request, "view_pref_azure_pref_cost_type")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	dataSources, err := OptionalStringArrayParam(request, "data_sources")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if dataSources != nil {
+		params.Body.DataSources = dataSources
+	}
+	params.Body.ViewPreferences.ShowAnomalies = viewPrefShowAnomalies
+	params.Body.ViewPreferences.IncludeOthers = viewPrefIncludeOthers
+	params.Body.ViewPreferences.IncludeUnallocatedCost = viewPrefIncludeUnallocatedCost
+	params.Body.ViewPreferences.AwsPreferences.IncludeDiscounts = viewPrefAwsPrefIncludeDiscounts
+	params.Body.ViewPreferences.AwsPreferences.IncludeCredits = viewPrefAwsPrefIncludeCredits
+	params.Body.ViewPreferences.AwsPreferences.IncludeRefunds = viewPrefAwsPrefIncludeRefunds
+	params.Body.ViewPreferences.AwsPreferences.IncludeTaxes = viewPrefAwsPrefIncludeTaxes
+	params.Body.ViewPreferences.AwsPreferences.AwsCost = viewPrefAwsPrefAwsCost
+	params.Body.ViewPreferences.GcpPreferences.IncludeDiscounts = viewPrefGcpPrefIncludeDiscounts
+	params.Body.ViewPreferences.GcpPreferences.IncludeTaxes = viewPrefGcpPrefIncludeTaxes
+	params.Body.ViewPreferences.AzureViewPreferences.CostType = viewPrefAzureViewPrefCostType
+
+	params.Body.ViewType = viewType
+	params.Body.ViewState = viewState
+	scope, err := fetchScope(config, request, false)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	data, err := client.CreatePerspective(ctx, scope, params)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create CCM Perspective: %w", err)
+	}
+
+	r, err := json.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal CCM Perspective: %w", err)
+	}
+
+	return mcp.NewToolResultText(string(r)), nil
+}
+
+func getSupportedDataSources() string {
+	return strings.Join([]string{
+					dto.DataSourceAws,
+					dto.DataSourceGcp,
+					dto.DataSourceAzure,
+					dto.DataSourceExternalData,
+					dto.DataSourceCommon,
+					dto.DataSourceCustom,
+					dto.DataSourceBusinessMapping,
+					dto.DataSourceLabel,
+					dto.DataSourceLabelV2,
+				}, ", ")
+}
