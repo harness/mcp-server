@@ -308,14 +308,23 @@ func registerRepositories(config *config.Config, tsg *toolsets.ToolsetGroup) err
 func registerRegistries(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for registries
 	baseURL := config.BaseURL
+	secret := config.ArtifactRegistrySecret
 	if config.Internal {
-		return nil
+		baseURL = config.ArtifactRegistryBaseURL
 	}
 
-	authProvider := auth.NewAPIKeyProvider(config.APIKey)
+	// Create client with appropriate auth based on internal mode
+	var c *client.Client
+	var err error
 
-	// Create base client for registries
-	c, err := client.NewWithAuthProvider(baseURL, authProvider)
+	if config.Internal {
+		authProvider := auth.NewJWTProvider(secret, "Basic", &defaultJWTLifetime)
+		c, err = client.NewWithAuthProvider(baseURL, authProvider)
+	} else {
+		authProvider := auth.NewAPIKeyProvider(config.APIKey)
+		c, err = client.NewWithAuthProvider(baseURL, authProvider)
+	}
+
 	if err != nil {
 		return err
 	}
@@ -326,10 +335,17 @@ func registerRegistries(config *config.Config, tsg *toolsets.ToolsetGroup) error
 			return err
 		}
 		req.Header.Set(k, v)
+		req.Header.Set("Accept", "application/json")
 		return nil
 	}
 
-	arClient, err := ar.NewClientWithResponses(baseURL+"/har/api/v1", ar.WithHTTPClient(c),
+	// Different API paths for internal vs external mode
+	apiPath := "/har/api/v1"
+	if config.Internal {
+		apiPath = "/api/v1"
+	}
+
+	arClient, err := ar.NewClientWithResponses(baseURL+apiPath, ar.WithHTTPClient(c),
 		ar.WithRequestEditorFn(requestEditorFn))
 	if err != nil {
 		return err
