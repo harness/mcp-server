@@ -119,10 +119,10 @@ func ListServicesTool(config *config.Config, client *client.ServiceClient) (tool
 
 			// Create response with services and metadata
 			response := map[string]interface{}{
-				"services":    services,
-				"totalCount":  totalCount,
-				"pageSize":    opts.Limit,
-				"pageNumber":  opts.Page,
+				"services":   services,
+				"totalCount": totalCount,
+				"pageSize":   opts.Limit,
+				"pageNumber": opts.Page,
 			}
 
 			r, err := json.Marshal(response)

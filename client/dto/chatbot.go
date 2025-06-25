@@ -6,6 +6,6 @@ type ChatHistoryItem struct {
 }
 
 type ChatRequest struct {
-	Question    string           `json:"question"`
-	ChatHistory []ChatHistoryItem `json:"chat_history,omitempty"` 
+	Question    string            `json:"question"`
+	ChatHistory []ChatHistoryItem `json:"chat_history,omitempty"`
 }

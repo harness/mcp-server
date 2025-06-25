@@ -79,7 +79,7 @@ func ListInfrastructuresTool(config *config.Config, client *client.Infrastructur
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			
+
 			if environmentIdentifier != "" {
 				opts.EnvironmentIdentifier = environmentIdentifier
 			}
@@ -177,75 +177,75 @@ func MoveInfrastructureConfigsTool(config *config.Config, client *client.Infrast
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			
+
 			// Extract required parameters
 			infraIdentifier, err := requiredParam[string](request, "infra_identifier")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			
+
 			environmentIdentifier, err := requiredParam[string](request, "environment_identifier")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			
+
 			moveConfigTypeStr, err := requiredParam[string](request, "move_config_type")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			
+
 			// Validate move config type
 			if moveConfigTypeStr != string(dto.InlineToRemote) && moveConfigTypeStr != string(dto.RemoteToInline) {
 				return mcp.NewToolResultError("move_config_type must be either INLINE_TO_REMOTE or REMOTE_TO_INLINE"), nil
 			}
 			moveConfigType := dto.MoveConfigType(moveConfigTypeStr)
-			
+
 			// Extract optional parameters
 			orgIdentifier, err := OptionalParam[string](request, "org_identifier")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			
+
 			projectIdentifier, err := OptionalParam[string](request, "project_identifier")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			
+
 			connectorRef, err := OptionalParam[string](request, "connector_ref")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			
+
 			repoName, err := OptionalParam[string](request, "repo_name")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			
+
 			branch, err := OptionalParam[string](request, "branch")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			
+
 			filePath, err := OptionalParam[string](request, "file_path")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			
+
 			commitMsg, err := OptionalParam[string](request, "commit_msg")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			
+
 			isNewBranch, err := OptionalParam[bool](request, "is_new_branch")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			
+
 			baseBranch, err := OptionalParam[string](request, "base_branch")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			
+
 			isHarnessCodeRepo, err := OptionalParam[bool](request, "is_harness_code_repo")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -254,7 +254,7 @@ func MoveInfrastructureConfigsTool(config *config.Config, client *client.Infrast
 			// Create move request
 			moveRequest := &dto.MoveInfraConfigsRequest{
 				InfraIdentifier:       infraIdentifier,
-				EnvironmentIdentifier: environmentIdentifier,  
+				EnvironmentIdentifier: environmentIdentifier,
 				AccountIdentifier:     scope.AccountID,
 				OrgIdentifier:         orgIdentifier,
 				ProjectIdentifier:     projectIdentifier,
@@ -265,21 +265,21 @@ func MoveInfrastructureConfigsTool(config *config.Config, client *client.Infrast
 				CommitMsg:             commitMsg,
 				MoveConfigType:        moveConfigType,
 			}
-			
+
 			// Set boolean pointers if values were provided
 			if isNewBranchProvided, ok := request.Params.Arguments["is_new_branch"]; ok && isNewBranchProvided != nil {
 				moveRequest.IsNewBranch = &isNewBranch
 			}
-			
+
 			if isHarnessCodeRepoProvided, ok := request.Params.Arguments["is_harness_code_repo"]; ok && isHarnessCodeRepoProvided != nil {
 				moveRequest.IsHarnessCodeRepo = &isHarnessCodeRepo
 			}
-			
+
 			// Add the base branch if provided
 			if baseBranch != "" {
 				moveRequest.BaseBranch = baseBranch
 			}
-			
+
 			// Execute the move operation
 			response, err := client.MoveConfigs(ctx, scope, moveRequest)
 			if err != nil {
@@ -288,9 +288,9 @@ func MoveInfrastructureConfigsTool(config *config.Config, client *client.Infrast
 
 			// Create the response
 			result := map[string]interface{}{
-					"identifier": response.Data.Identifier,
-					"success":    response.Data.Success,
-				}
+				"identifier": response.Data.Identifier,
+				"success":    response.Data.Success,
+			}
 
 			r, err := json.Marshal(result)
 			if err != nil {

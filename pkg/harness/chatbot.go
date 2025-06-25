@@ -24,11 +24,11 @@ func AskChatbotTool(config *config.Config, client *client.ChatbotService) (tool 
 					"type": "object",
 					"properties": map[string]any{
 						"question": map[string]any{
-							"type": "string",
+							"type":        "string",
 							"description": "The question in the chat history",
 						},
 						"answer": map[string]any{
-							"type": "string",
+							"type":        "string",
 							"description": "The answer in the chat history",
 						},
 					},

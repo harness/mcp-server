@@ -141,3 +141,8 @@ func OptionalStringArrayParam(r mcp.CallToolRequest, p string) ([]string, error)
 		return []string{}, fmt.Errorf("parameter %s could not be coerced to []string, is %T", p, r.Params.Arguments[p])
 	}
 }
+
+// boolPtr is a helper function that converts a bool to *bool
+func boolPtr(b bool) *bool {
+	return &b
+}

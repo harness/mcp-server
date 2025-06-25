@@ -136,12 +136,12 @@ func TestJWTProvider_GetHeader(t *testing.T) {
 				if len(parts) != 2 {
 					t.Fatalf("Expected token value format to be '{serviceIdentity} {token}', got %s", value)
 				}
-				
+
 				// Validate service identity
 				if parts[0] != serviceIdentity {
 					t.Errorf("Expected service identity to be '%s', got '%s'", serviceIdentity, parts[0])
 				}
-				
+
 				tokenString := parts[1]
 
 				// Parse token

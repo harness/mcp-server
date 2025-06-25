@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	infrastructureBasePath       = "ng/api/infrastructures"
-	infrastructureListPath       = infrastructureBasePath
+	infrastructureBasePath        = "ng/api/infrastructures"
+	infrastructureListPath        = infrastructureBasePath
 	infrastructureMoveConfigsPath = infrastructureBasePath + "/move-config/%s"
 )
 
@@ -85,19 +85,19 @@ func (i *InfrastructureClient) MoveConfigs(ctx context.Context, scope dto.Scope,
 	params := make(map[string]string)
 	// Add scope to parameters
 	addScope(scope, params)
-	
+
 	// Add required parameters
 	params["accountIdentifier"] = request.AccountIdentifier
-	
+
 	// Add optional parameters
 	if request.EnvironmentIdentifier != "" {
 		params["environmentIdentifier"] = request.EnvironmentIdentifier
 	}
-	
+
 	if request.OrgIdentifier != "" {
 		params["orgIdentifier"] = request.OrgIdentifier
 	}
-	
+
 	if request.ProjectIdentifier != "" {
 		params["projectIdentifier"] = request.ProjectIdentifier
 	}
@@ -105,35 +105,35 @@ func (i *InfrastructureClient) MoveConfigs(ctx context.Context, scope dto.Scope,
 	if request.ConnectorRef != "" {
 		params["connectorRef"] = request.ConnectorRef
 	}
-	
+
 	if request.RepoName != "" {
 		params["repoName"] = request.RepoName
 	}
-	
+
 	if request.Branch != "" {
 		params["branch"] = request.Branch
 	}
-	
+
 	if request.FilePath != "" {
 		params["filePath"] = request.FilePath
 	}
-	
+
 	if request.CommitMsg != "" {
 		params["commitMsg"] = request.CommitMsg
 	}
-	
+
 	if request.IsNewBranch != nil {
 		params["isNewBranch"] = fmt.Sprintf("%t", *request.IsNewBranch)
 	}
-	
+
 	if request.BaseBranch != "" {
 		params["baseBranch"] = request.BaseBranch
 	}
-	
+
 	if request.IsHarnessCodeRepo != nil {
 		params["isHarnessCodeRepo"] = fmt.Sprintf("%t", *request.IsHarnessCodeRepo)
 	}
-	
+
 	// Ensure the parameter name matches exactly what the API expects
 	params["moveConfigType"] = string(request.MoveConfigType)
 
