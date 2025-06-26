@@ -9,13 +9,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/rs/zerolog/log"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/oapi-codegen/runtime"
+	"github.com/rs/zerolog/log"
 )
 
 // Defines values for AuthType.

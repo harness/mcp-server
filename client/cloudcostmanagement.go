@@ -4,16 +4,17 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/pkg/utils"
 )
 
 const (
-	ccmBasePath        = "ccm/api"
-	ccmGetOverviewPath = ccmBasePath + "/overview?accountIdentifier=%s&startTime=%d&endTime=%d&groupBy=%s"
-	ccmCostCategoryListPath = ccmBasePath + "/business-mapping/filter-panel?accountIdentifier=%s"
-	ccmCostCategoryDetailListPath = ccmBasePath + "/business-mapping?accountIdentifier=%s" // This endpoint lists cost categories
-	ccmGetCostCategoryPath = ccmBasePath + "/business-mapping/%s?accountIdentifier=%s" // This endpoint lists cost categories
+	ccmBasePath                   = "ccm/api"
+	ccmGetOverviewPath            = ccmBasePath + "/overview?accountIdentifier=%s&startTime=%d&endTime=%d&groupBy=%s"
+	ccmCostCategoryListPath       = ccmBasePath + "/business-mapping/filter-panel?accountIdentifier=%s"
+	ccmCostCategoryDetailListPath = ccmBasePath + "/business-mapping?accountIdentifier=%s"    // This endpoint lists cost categories
+	ccmGetCostCategoryPath        = ccmBasePath + "/business-mapping/%s?accountIdentifier=%s" // This endpoint lists cost categories
 )
 
 type CloudCostManagementService struct {
@@ -23,7 +24,7 @@ type CloudCostManagementService struct {
 func (c *CloudCostManagementService) GetOverview(ctx context.Context, accID string, startTime int64, endTime int64, groupBy string) (*dto.CEView, error) {
 	path := fmt.Sprintf(ccmGetOverviewPath, accID, startTime, endTime, groupBy)
 
-	slog.Debug("GetOverView", "Path", path) 
+	slog.Debug("GetOverView", "Path", path)
 	params := make(map[string]string)
 
 	ccmOverview := new(dto.CEView)
@@ -97,7 +98,7 @@ func (r *CloudCostManagementService) ListCostCategoriesDetail(ctx context.Contex
 }
 
 func (r *CloudCostManagementService) GetCostCategory(ctx context.Context, scope dto.Scope, opts *dto.CCMGetCostCategoryOptions) (*dto.CCMCostCategory, error) {
-	// Opts shouuldn't be nil 
+	// Opts shouuldn't be nil
 	if opts == nil {
 		return nil, fmt.Errorf("Missing parameters for Get CCM Cost categories.")
 	}

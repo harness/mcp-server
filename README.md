@@ -74,6 +74,24 @@ Toolset Name: `logs`
 
 ## Quickstart
 
+## Makefile Usage
+
+This project provides a `Makefile` to simplify common development tasks. The main targets are:
+
+- `make build` – Build the mcp-server binary with version information embedded.
+- `make init` – Set up git hooks and submodules for pre-commit checks.
+- `make dep` – Download Go module dependencies.
+- `make tools` – Install tools required for the build (if any are specified).
+- `make format` – Format Go code using goimports and gci.
+
+You can run any of these commands from the project root. For example:
+
+```sh
+make build
+make format
+```
+
+
 ### Build from Source
 
 1. Clone the repository:

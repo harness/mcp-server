@@ -2,17 +2,17 @@ package dto
 
 // Service represents a service in Harness
 type Service struct {
-	ID               string                 `json:"identifier"`
-	Name             string                 `json:"name"`
-	Description      string                 `json:"description,omitempty"`
-	OrgIdentifier    string                 `json:"orgIdentifier"`
-	ProjectIdentifier string                `json:"projectIdentifier"`
-	YAML             string                 `json:"yaml,omitempty"`
-	Tags             map[string]string      `json:"tags,omitempty"`
-	Variables        []map[string]interface{} `json:"variables,omitempty"`
-	GitOpsEnabled    bool                   `json:"gitOpsEnabled,omitempty"`
-	CreatedAt        int64                  `json:"createdAt,omitempty"`
-	LastModifiedAt   int64                  `json:"lastModifiedAt,omitempty"`
+	ID                string                   `json:"identifier"`
+	Name              string                   `json:"name"`
+	Description       string                   `json:"description,omitempty"`
+	OrgIdentifier     string                   `json:"orgIdentifier"`
+	ProjectIdentifier string                   `json:"projectIdentifier"`
+	YAML              string                   `json:"yaml,omitempty"`
+	Tags              map[string]string        `json:"tags,omitempty"`
+	Variables         []map[string]interface{} `json:"variables,omitempty"`
+	GitOpsEnabled     bool                     `json:"gitOpsEnabled,omitempty"`
+	CreatedAt         int64                    `json:"createdAt,omitempty"`
+	LastModifiedAt    int64                    `json:"lastModifiedAt,omitempty"`
 }
 
 // ServiceResponse represents the response from the get service API

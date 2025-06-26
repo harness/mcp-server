@@ -4,20 +4,21 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/harness/harness-mcp/pkg/utils"
+	"time"
+
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/utils"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"time"
 )
 
 // GetCcmOverview creates a tool for getting a ccm overview from an account
 func GetCcmOverviewTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	now := time.Now()
-	defaultStartTime := utils.FormatUnixToMMDDYYYY(now.AddDate(0, 0, -60).Unix()) 
-	defaultEndTime:= utils.CurrentMMDDYYYY(); 
+	defaultStartTime := utils.FormatUnixToMMDDYYYY(now.AddDate(0, 0, -60).Unix())
+	defaultEndTime := utils.CurrentMMDDYYYY()
 	return mcp.NewTool("get_ccm_overview",
 			mcp.WithDescription("Get an overview for an specific account in Harness Cloud Cost Management"),
 			mcp.WithString("startTime",
@@ -53,7 +54,7 @@ func GetCcmOverviewTool(config *config.Config, client *client.CloudCostManagemen
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			startTime, err :=  utils.FormatMMDDYYYYToUnixMillis(startTimeStr)
+			startTime, err := utils.FormatMMDDYYYYToUnixMillis(startTimeStr)
 			endTime, err := utils.FormatMMDDYYYYToUnixMillis(endTimeStr)
 			groupBy, err := requiredParam[string](request, "groupBy")
 
@@ -94,7 +95,7 @@ func ListCcmCostCategoriesTool(config *config.Config, client *client.CloudCostMa
 			params := &dto.CCMListCostCategoriesOptions{}
 			params.AccountIdentifier = accountId
 
-			// Handle cost category parameter 
+			// Handle cost category parameter
 			costCategory, ok, err := OptionalParamOK[string](request, "cost_category")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -129,7 +130,7 @@ func ListCcmCostCategoriesTool(config *config.Config, client *client.CloudCostMa
 
 			return mcp.NewToolResultText(string(r)), nil
 		}
-	}
+}
 
 func ListCcmCostCategoriesDetailTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_ccm_cost_categories_detail",
@@ -227,7 +228,7 @@ func ListCcmCostCategoriesDetailTool(config *config.Config, client *client.Cloud
 
 			return mcp.NewToolResultText(string(r)), nil
 		}
-	}
+}
 
 func GetCcmCostCategoryTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_ccm_cost_category",
@@ -246,7 +247,7 @@ func GetCcmCostCategoryTool(config *config.Config, client *client.CloudCostManag
 
 			params := &dto.CCMGetCostCategoryOptions{}
 			params.AccountIdentifier = accountId
-			// Handle cost category parameter 
+			// Handle cost category parameter
 			costCategoryId, ok, err := OptionalParamOK[string](request, "id")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -271,7 +272,7 @@ func GetCcmCostCategoryTool(config *config.Config, client *client.CloudCostManag
 
 			return mcp.NewToolResultText(string(r)), nil
 		}
-	}
+}
 
 // getAccountID retrieves AccountID from the config file
 func getAccountID(config *config.Config, request mcp.CallToolRequest) (string, error) {
@@ -279,7 +280,7 @@ func getAccountID(config *config.Config, request mcp.CallToolRequest) (string, e
 	// Error ignored because it can be related to project or org id
 	// which are not required for CCM
 	if scope.AccountID != "" {
-		return scope.AccountID, nil 
+		return scope.AccountID, nil
 	}
 	return "", fmt.Errorf("Account ID is required")
 }

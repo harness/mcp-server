@@ -1,29 +1,31 @@
 package prompts
 
 import (
-	"log/slog"
 	"context"
+	"log/slog"
+
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
 
 // harness.prompts is intended to make adding guideline prompts easier by hidding mcp framework details.
-// It also wraps the mcp-go framework so that it can be "easily" replaced if necessary. 
+// It also wraps the mcp-go framework so that it can be "easily" replaced if necessary.
 
 // Role represents the role of the prompt creator, either User or Assistant.
 type Role int
+
 const (
-	User Role = iota // 0
-	Assistant        // 1
+	User      Role = iota // 0
+	Assistant             // 1
 )
 
 // Prompt represents the prompt data needed to add to the MCP server.
 type Prompt struct {
-	Name        string
-	Description string
+	Name              string
+	Description       string
 	ResultDescription string
-	Text string
-	Role Role 
+	Text              string
+	Role              Role
 }
 
 // Prompts is a collection of Prompt instances.
@@ -50,7 +52,6 @@ func (b *Prompt) SetDescription(description string) *Prompt {
 	return b
 }
 
-
 // SetResultDescription sets the result description of the prompt and returns the updated Prompt instance.
 func (b *Prompt) SetResultDescription(resultDescription string) *Prompt {
 	b.ResultDescription = resultDescription
@@ -70,7 +71,7 @@ func (b *Prompt) Build() *Prompt {
 		Description:       b.Description,
 		ResultDescription: b.ResultDescription,
 		Text:              b.Text,
-		Role:			   b.Role, 
+		Role:              b.Role,
 	}
 }
 
@@ -100,11 +101,11 @@ func createPrompt(prompt *Prompt) (mcp.Prompt, server.PromptHandlerFunc) {
 		role = mcp.RoleAssistant
 	}
 
-	return mcp.NewPrompt(prompt.Name, mcp.WithPromptDescription(prompt.Description)), 
-	func(ctx context.Context, request mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return mcp.NewGetPromptResult(
-			prompt.ResultDescription,
-			[]mcp.PromptMessage {mcp.NewPromptMessage(role, mcp.NewTextContent(prompt.Text))},
-		), nil
-	}
+	return mcp.NewPrompt(prompt.Name, mcp.WithPromptDescription(prompt.Description)),
+		func(ctx context.Context, request mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+			return mcp.NewGetPromptResult(
+				prompt.ResultDescription,
+				[]mcp.PromptMessage{mcp.NewPromptMessage(role, mcp.NewTextContent(prompt.Text))},
+			), nil
+		}
 }

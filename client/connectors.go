@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/harness/harness-mcp/client/dto"      // Corrected import path for Scope
+	"github.com/harness/harness-mcp/client/dto"             // Corrected import path for Scope
 	pkgDTO "github.com/harness/harness-mcp/pkg/harness/dto" // Alias for the other DTOs
 )
 
@@ -34,7 +34,7 @@ func (c *ConnectorService) ListConnectorCatalogue(ctx context.Context, scope dto
 				Connectors []string `json:"connectors"`
 			} `json:"catalogue"`
 		} `json:"data"`
-		MetaData     interface{} `json:"metaData"`
+		MetaData      interface{} `json:"metaData"`
 		CorrelationID string      `json:"correlationId"`
 	}
 
@@ -71,10 +71,10 @@ func (c *ConnectorService) GetConnector(ctx context.Context, scope dto.Scope, co
 
 	// Define a struct to match the actual API response structure
 	type connectorResponse struct {
-		Status        string                   `json:"status"`
-		Data          pkgDTO.ConnectorDetail   `json:"data"`
-		MetaData      interface{}              `json:"metaData"`
-		CorrelationID string                   `json:"correlationId"`
+		Status        string                 `json:"status"`
+		Data          pkgDTO.ConnectorDetail `json:"data"`
+		MetaData      interface{}            `json:"metaData"`
+		CorrelationID string                 `json:"correlationId"`
 	}
 
 	var response connectorResponse

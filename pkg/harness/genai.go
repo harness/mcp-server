@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
@@ -37,7 +36,7 @@ func AIDevOpsAgentTool(config *config.Config, client *client.GenaiService) (tool
 					"type": "object",
 					"properties": map[string]any{
 						"type": map[string]any{
-							"type": "string",
+							"type":        "string",
 							"description": "The type of context item",
 						},
 						"payload": map[string]any{
@@ -53,11 +52,11 @@ func AIDevOpsAgentTool(config *config.Config, client *client.GenaiService) (tool
 					"type": "object",
 					"properties": map[string]any{
 						"role": map[string]any{
-							"type": "string",
+							"type":        "string",
 							"description": "The role of the message sender (e.g., 'user', 'assistant')",
 						},
 						"content": map[string]any{
-							"type": "string",
+							"type":        "string",
 							"description": "The content of the conversation message",
 						},
 					},

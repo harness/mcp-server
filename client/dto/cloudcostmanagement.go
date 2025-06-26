@@ -10,34 +10,34 @@ const (
 )
 
 const (
-	SortTypeName    string = "NAME"
-	SortTypeLastEdit    string = "LAST_EDIT"
+	SortTypeName     string = "NAME"
+	SortTypeLastEdit string = "LAST_EDIT"
 )
 
 const (
-	SortOrderAsc    string = "ASCENDING"
-	SortOrderDesc   string = "DESCENDING"
+	SortOrderAsc  string = "ASCENDING"
+	SortOrderDesc string = "DESCENDING"
 )
 
 // CCMBaseResponse represents a basic ccm response.
 type CCMBaseResponse struct {
-	Status        string      `json:"state,omitempty"`
-	Message	   string      `json:"message,omitempty"`
-	CorrelationID string      `json:"correlation_id,omitempty"`
-	Error		 []CCMError      `json:"error,omitempty"`
+	Status        string     `json:"state,omitempty"`
+	Message       string     `json:"message,omitempty"`
+	CorrelationID string     `json:"correlation_id,omitempty"`
+	Error         []CCMError `json:"error,omitempty"`
 }
 
 // Response error
 type CCMError struct {
-	FieldId	 string `json:"fieldId,omitempty"`
-	Error string `json:"error,omitempty"`
+	FieldId string `json:"fieldId,omitempty"`
+	Error   string `json:"error,omitempty"`
 }
 
 // CEView represents a basic Cost Overview response.
 // The `data` field contains the response data.
 type CEView struct {
 	CCMBaseResponse
-	Data          CCMOverview `json:"data,omitempty"`
+	Data CCMOverview `json:"data,omitempty"`
 }
 
 // CCMOverview represents the Overview data from a CCM Overview
@@ -74,8 +74,8 @@ type CCMReference struct {
 // CcmCostCategoriesOptions represents options for listing cost categories
 type CCMListCostCategoriesOptions struct {
 	AccountIdentifier string `json:"accountIdentifier,omitempty"`
-	CostCategory string `json:"costCategory,omitempty"`
-	SearchTerm string `json:"search,omitempty"`
+	CostCategory      string `json:"costCategory,omitempty"`
+	SearchTerm        string `json:"search,omitempty"`
 }
 
 // CcmCostCategoryList represents a list of cost categories in CCM
@@ -89,22 +89,22 @@ type CCMCostCategoryList struct {
 // ***************************
 
 type CCMPaginationOptions struct {
-	Limit             int32  `json:"limit,omitempty"`
-	Offset            int32  `json:"offset,omitempty"`
+	Limit  int32 `json:"limit,omitempty"`
+	Offset int32 `json:"offset,omitempty"`
 }
 
 type CCMListCostCategoriesDetailOptions struct {
 	AccountIdentifier string `json:"accountIdentifier,omitempty"`
 	SearchKey         string `json:"searchKey,omitempty"`
-	SortType          string `json:"sortType,omitempty"` // Enum: "NAME", "LAST_EDIT"
+	SortType          string `json:"sortType,omitempty"`  // Enum: "NAME", "LAST_EDIT"
 	SortOrder         string `json:"sortOrder,omitempty"` // Enum: "ASCENDING", "DESCENDING"
 	CCMPaginationOptions
 }
 
 type CCMCostCategoryDetailList struct {
-	MetaData         map[string]interface{}          `json:"metaData"`
-	Resource         CCMCostCategoryResource          `json:"resource"`
-	ResponseMessages []CCMResponseMessage `json:"responseMessages"`
+	MetaData         map[string]interface{}  `json:"metaData"`
+	Resource         CCMCostCategoryResource `json:"resource"`
+	ResponseMessages []CCMResponseMessage    `json:"responseMessages"`
 }
 
 type CCMCostCategoryResource struct {
@@ -113,29 +113,29 @@ type CCMCostCategoryResource struct {
 }
 
 type CCMBusinessMapping struct {
-	UUID           string            `json:"uuid"`
-	Name           string            `json:"name"`
-	AccountID      string            `json:"accountId"`
-	CostTargets    []CCMCostTarget   `json:"costTargets"`
-	SharedCosts    []CCMSharedCost   `json:"sharedCosts"`
+	UUID            string             `json:"uuid"`
+	Name            string             `json:"name"`
+	AccountID       string             `json:"accountId"`
+	CostTargets     []CCMCostTarget    `json:"costTargets"`
+	SharedCosts     []CCMSharedCost    `json:"sharedCosts"`
 	UnallocatedCost CCMUnallocatedCost `json:"unallocatedCost"`
-	DataSources    []string          `json:"dataSources"`
-	CreatedAt      int64             `json:"createdAt"`
-	LastUpdatedAt  int64             `json:"lastUpdatedAt"`
-	CreatedBy      CCMUser           `json:"createdBy"`
-	LastUpdatedBy  CCMUser           `json:"lastUpdatedBy"`
+	DataSources     []string           `json:"dataSources"`
+	CreatedAt       int64              `json:"createdAt"`
+	LastUpdatedAt   int64              `json:"lastUpdatedAt"`
+	CreatedBy       CCMUser            `json:"createdBy"`
+	LastUpdatedBy   CCMUser            `json:"lastUpdatedBy"`
 }
 
 type CCMCostTarget struct {
-	Name  string        `json:"name"`
-	Rules []CCMRule     `json:"rules"`
+	Name  string    `json:"name"`
+	Rules []CCMRule `json:"rules"`
 }
 
 type CCMSharedCost struct {
-	Name      string        `json:"name"`
-	Rules     []CCMRule     `json:"rules"`
-	Strategy  string        `json:"strategy"`
-	Splits    []CCMSplit    `json:"splits"`
+	Name     string     `json:"name"`
+	Rules    []CCMRule  `json:"rules"`
+	Strategy string     `json:"strategy"`
+	Splits   []CCMSplit `json:"splits"`
 }
 
 type CCMUnallocatedCost struct {
@@ -146,7 +146,7 @@ type CCMUnallocatedCost struct {
 }
 
 type CCMSplit struct {
-	CostTargetName        *string  `json:"costTargetName"`
+	CostTargetName         *string  `json:"costTargetName"`
 	PercentageContribution *float64 `json:"percentageContribution"`
 }
 
@@ -162,12 +162,12 @@ type CCMUser struct {
 }
 
 type CCMResponseMessage struct {
-	Code           string                 `json:"code"`
-	Level          string                 `json:"level"`
-	Message        string                 `json:"message"`
-	Exception      *CCMException          `json:"exception"`
-	FailureTypes   []string               `json:"failureTypes"`
-	AdditionalInfo map[string]string      `json:"additionalInfo"`
+	Code           string            `json:"code"`
+	Level          string            `json:"level"`
+	Message        string            `json:"message"`
+	Exception      *CCMException     `json:"exception"`
+	FailureTypes   []string          `json:"failureTypes"`
+	AdditionalInfo map[string]string `json:"additionalInfo"`
 }
 
 type CCMException struct {
@@ -196,13 +196,13 @@ type CCMSuppressed struct {
 
 // CCMCostCategory represents the details of a cost category in CCM
 type CCMCostCategory struct {
-	MetaData         map[string]interface{}	`json:"metaData"`
-	Resource       	 CCMBusinessMapping     `json:"resource"`
-	ResponseMessages []CCMResponseMessage 	`json:"responseMessages"`
+	MetaData         map[string]interface{} `json:"metaData"`
+	Resource         CCMBusinessMapping     `json:"resource"`
+	ResponseMessages []CCMResponseMessage   `json:"responseMessages"`
 }
 
 // CCMGetCostCategoryOptions represents options for listing cost categories
 type CCMGetCostCategoryOptions struct {
 	AccountIdentifier string `json:"accountIdentifier,omitempty"`
-	CostCategoryId string `json:"id,omitempty"`
+	CostCategoryId    string `json:"id,omitempty"`
 }

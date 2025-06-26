@@ -12,11 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/harness/harness-mcp/pkg/harness/auth"
-	"github.com/rs/zerolog/log"
-
 	"github.com/cenkalti/backoff/v4"
 	"github.com/harness/harness-mcp/client/dto"
+	"github.com/harness/harness-mcp/pkg/harness/auth"
+	"github.com/rs/zerolog/log"
 )
 
 var (
