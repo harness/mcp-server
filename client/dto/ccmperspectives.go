@@ -76,6 +76,19 @@ const (
 	AzureCostTypeAmortized string = "AMORTIZED"
 )
 
+const (
+	FieldIdCluster string = "CLUSTER"
+	FieldIdAws string = "AWS"
+	FieldIdGcp string = "GCP"
+	FieldIdAzure string = "AZURE"
+	FieldIdExternalData string = "EXTERNAL_DATA"
+	FieldIdCommon string = "COMMON"
+	FieldIdCustom string = "CUSTOM"
+	FieldIdBusinessMapping string = "BUSINESS_MAPPING"
+	FieldIdLabel string = "LABEL"
+	FieldIdLabelV2 string = "LABEL_V2"
+)
+
 type CCMListPerspectivesDetailOptions struct {
 	AccountIdentifier string
 	SearchKey         string

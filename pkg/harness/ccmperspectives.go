@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 	"strings"
 	"strconv"
@@ -411,6 +412,60 @@ func createPerspectiveTool(config *config.Config, client *client.CloudCostManage
 				mcp.Enum(dto.ViewStateDraft, dto.ViewStateCompleted),
 				mcp.Description("State of view. Set to completed if it is not provided."),
 			),
+			///// RULES
+			mcp.WithArray("view_rules",
+				mcp.Description("State of view. Set to completed if it is not provided."),
+				mcp.Items(map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"view_conditions": map[string]any{
+							"type": "array",
+							"items": map[string]any{
+								"type": "object",
+								"properties": map[string]any{
+									"type": map[string]any{
+										"type": "string",
+										"enum": []string{"ViewIdCondition"},
+									},
+									"viewField": map[string]any{
+										"type": "object",
+										"properties": map[string]any{
+											"field_id": map[string]any{
+												"type": "string",
+											},
+											"field_name": map[string]any{
+												"type": "string",
+											},
+											"identifier": map[string]any{
+												"type": "string",
+												"enum": []string{
+													"CLUSTER", "AWS", "GCP", "AZURE", "EXTERNAL_DATA",
+													"COMMON", "CUSTOM", "BUSINESS_MAPPING", "LABEL", "LABEL_V2",
+												},
+											},
+											"identifier_name": map[string]any{
+												"type": "string",
+											},
+										},	
+									},
+								},
+							},
+							"view_operator": map[string]any{
+								"type": "string",
+								"enum": []string{"NOT_IN", "IN", "EQUALS", "NOT_NULL", "NULL", "LIKE"},
+							},
+							"values": map[string]any{
+								"type": "array",
+								"items": map[string]any{
+									"type": "string",
+								},
+							},
+						},
+					},
+				},
+			),
+		),
+			//// END RULES
 		)
 }
 
@@ -580,6 +635,16 @@ func createPerspectiveHandler(config *config.Config, client *client.CloudCostMan
 	params.Body.ViewPreferences.GcpPreferences.IncludeTaxes = viewPrefGcpPrefIncludeTaxes
 	params.Body.ViewPreferences.AzureViewPreferences.CostType = viewPrefAzureViewPrefCostType
 
+
+	viewRules, err := OptionalParam[map[string]any](request, "rules")
+	slog.Debug("pgk create", "viewConditions", viewRules) 
+	if viewRules != nil {
+		//params.Body.ViewRules = viewRules
+	}
+
+
+
+
 	params.Body.ViewType = viewType
 	params.Body.ViewState = viewState
 	scope, err := fetchScope(config, request, false)
@@ -612,4 +677,34 @@ func getSupportedDataSources() string {
 					dto.DataSourceLabel,
 					dto.DataSourceLabelV2,
 				}, ", ")
+}
+
+func getSupportedFieldId() string {
+	return strings.Join([]string{
+					dto.FieldIdCluster,
+					dto.FieldIdAws,
+					dto.FieldIdGcp,
+					dto.FieldIdAzure,
+					dto.FieldIdExternalData,
+					dto.FieldIdCommon,
+					dto.FieldIdCustom,
+					dto.FieldIdBusinessMapping,
+					dto.FieldIdLabel,
+					dto.FieldIdLabelV2,
+				}, ", ")
+}
+
+func MapToViewRule(m map[string]any) (*[]dto.CCMViewRule, error) {
+    b, err := json.Marshal(m)
+    if err != nil {
+		slog.Debug("MapToViewRule", "rules", err) 
+        return nil, err
+    }
+	rules := new([]dto.CCMViewRule)
+    err = json.Unmarshal(b, rules)
+    if err != nil {
+		slog.Debug("MapToViewRule", "rules", err) 
+        return nil, err
+    }
+	return rules, nil
 }
