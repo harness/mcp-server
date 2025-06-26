@@ -45,6 +45,13 @@ Toolset Name: `registries`
 - `list_artifacts`: List artifacts in a Harness artifact registry
 - `list_registries`: List registries in Harness artifact registry
 
+#### Dashboards Toolset
+
+Toolset Name: `dashboards`
+
+- `list_dashboards`: Lists all available Harness dashboards
+- `get_dashboard_data`: Retrieves the data from a specific Harness dashboard
+
 #### Cloud Cost Management Toolset
 
 Toolset Name: `cloudcostmanagement`

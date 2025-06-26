@@ -33,10 +33,10 @@ func ListConnectorCatalogueTool(harnessConfig *config.Config, c *client.Client) 
 			mcp.WithDescription("List the Harness connector catalogue."),
 			// Define scope parameters (org_id, project_id) similar to other tools if needed by API
 			// For getConnectorCatalogue, it seems to primarily use AccountID from scope, but org/project might be for filtering or future use.
-			mcp.WithString("org_id", 
+			mcp.WithString("org_id",
 				mcp.Description("Optional ID of the organization."),
 			),
-			mcp.WithString("project_id", 
+			mcp.WithString("project_id",
 				mcp.Description("Optional ID of the project."),
 			),
 		),
@@ -88,7 +88,7 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 	if err := registerChatbot(config, tsg); err != nil {
 		return nil, err
 	}
-	
+
 	// Register genai
 	if err := registerGenai(config, tsg); err != nil {
 		return nil, err
@@ -128,6 +128,10 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 	}
 
 	if err := registerConnectors(config, tsg); err != nil {
+		return nil, err
+	}
+
+	if err := registerDashboards(config, tsg); err != nil {
 		return nil, err
 	}
 
@@ -336,8 +340,6 @@ func registerChatbot(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	return nil
 }
 
-
-
 // registerConnectors registers the connectors toolset
 func registerConnectors(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Connector catalogue API uses standard auth and doesn't have a specific service URL or secret beyond the main client config.
@@ -389,8 +391,6 @@ func registerInfrastructure(config *config.Config, tsg *toolsets.ToolsetGroup) e
 	tsg.AddToolset(infrastructure)
 	return nil
 }
-
-
 
 // registerEnvironments registers the environments toolset
 func registerEnvironments(config *config.Config, tsg *toolsets.ToolsetGroup) error {
@@ -541,5 +541,35 @@ func registerGenai(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 	// Add toolset to the group
 	tsg.AddToolset(genai)
+	return nil
+}
+
+// registerDashboards registers the dashboards toolset
+func registerDashboards(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Determine the base URL for dashboards
+	baseURL := config.BaseURL
+	secret := ""
+	if config.Internal {
+		return nil
+	}
+
+	// Create base client for dashboards
+	customTimeout := 30 * time.Second
+	c, err := createClient(baseURL, config, secret, customTimeout)
+	if err != nil {
+		return err
+	}
+
+	dashboardClient := &client.DashboardService{Client: c}
+
+	// Create the dashboards toolset
+	dashboards := toolsets.NewToolset("dashboards", "Harness Dashboards related tools").
+		AddReadTools(
+			toolsets.NewServerTool(ListDashboardsTool(config, dashboardClient)),
+			toolsets.NewServerTool(GetDashboardDataTool(config, dashboardClient)),
+		)
+
+	// Add toolset to the group
+	tsg.AddToolset(dashboards)
 	return nil
 }
