@@ -36,3 +36,40 @@ func ListConnectorCatalogueTool(harnessConfig *config.Config, c *client.Client) 
 			return mcp.NewToolResultText(string(responseBytes)), nil
 		}
 }
+
+// GetConnectorDetailsTool creates a tool for getting details of a specific connector
+// https://apidocs.harness.io/tag/Connectors#operation/getConnector
+func GetConnectorDetailsTool(config *config.Config, c *client.Client) (mcp.Tool, server.ToolHandlerFunc) {
+	return mcp.NewTool("get_connector_details",
+			mcp.WithDescription("Get detailed information about a specific connector."),
+			mcp.WithString("connector_identifier",
+				mcp.Required(),
+				mcp.Description("The identifier of the connector"),
+			),
+			WithScope(config, false),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			connectorIdentifier, err := requiredParam[string](request, "connector_identifier")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			scope, err := fetchScope(config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			connectorService := client.ConnectorService{Client: c}
+			data, err := connectorService.GetConnector(ctx, scope, connectorIdentifier)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get connector: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal connector: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
