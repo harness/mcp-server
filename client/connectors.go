@@ -57,3 +57,31 @@ func (c *ConnectorService) ListConnectorCatalogue(ctx context.Context, scope dto
 
 	return result, nil
 }
+
+// GetConnector retrieves a connector by its identifier
+// https://apidocs.harness.io/tag/Connectors#operation/getConnector
+func (c *ConnectorService) GetConnector(ctx context.Context, scope dto.Scope, connectorIdentifier string) (*pkgDTO.ConnectorDetail, error) {
+	path := fmt.Sprintf("/ng/api/connectors/%s", connectorIdentifier)
+	params := make(map[string]string)
+	// Ensure accountIdentifier is always set
+	if scope.AccountID == "" {
+		return nil, fmt.Errorf("accountIdentifier cannot be null")
+	}
+	addScope(scope, params)
+
+	// Define a struct to match the actual API response structure
+	type connectorResponse struct {
+		Status        string                   `json:"status"`
+		Data          pkgDTO.ConnectorDetail   `json:"data"`
+		MetaData      interface{}              `json:"metaData"`
+		CorrelationID string                   `json:"correlationId"`
+	}
+
+	var response connectorResponse
+	err := c.Client.Get(ctx, path, params, nil, &response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get connector: %w", err)
+	}
+
+	return &response.Data, nil
+}
