@@ -451,11 +451,11 @@ func registerLogs(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 }
 
 func registerCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-	// Determine the base URL and secret for CCM
+	// Determine the base URL and secret for pipeline service
 	baseURL := config.BaseURL
-	secret := ""
+	secret := config.CCMSecret
 	if config.Internal {
-		return nil
+		baseURL = config.CCMBaseURL
 	}
 
 	// Create base client for CCM
@@ -464,7 +464,10 @@ func registerCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGro
 		return err
 	}
 
-	ccmClient := &client.CloudCostManagementService{Client: c}
+	ccmClient := &client.CloudCostManagementService{
+		Client:           c,
+		UseInternalPaths: config.Internal,
+	}
 
 	// Create the CCM toolset
 	ccm := toolsets.NewToolset("ccm", "Harness Cloud Cost Management related tools").
