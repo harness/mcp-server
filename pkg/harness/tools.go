@@ -465,8 +465,7 @@ func registerCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGro
 	}
 
 	ccmClient := &client.CloudCostManagementService{
-		Client:           c,
-		UseInternalPaths: config.Internal,
+		Client: c,
 	}
 
 	// Create the CCM toolset

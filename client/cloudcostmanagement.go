@@ -10,30 +10,19 @@ import (
 )
 
 const (
-	// Base API paths
-	ccmGetOverviewPath            = "api/overview?accountIdentifier=%s&startTime=%d&endTime=%d&groupBy=%s"
-	ccmCostCategoryListPath       = "api/business-mapping/filter-panel?accountIdentifier=%s"
-	ccmCostCategoryDetailListPath = "api/business-mapping?accountIdentifier=%s"    // This endpoint lists cost categories
-	ccmGetCostCategoryPath        = "api/business-mapping/%s?accountIdentifier=%s" // This endpoint lists cost categories
-
-	// Prefix to prepend for external API calls
-	ccmExternalPathPrefix = "ccm/"
+	ccmBasePath                   = "ccm/api"
+	ccmGetOverviewPath            = ccmBasePath + "/overview?accountIdentifier=%s&startTime=%d&endTime=%d&groupBy=%s"
+	ccmCostCategoryListPath       = ccmBasePath + "/business-mapping/filter-panel?accountIdentifier=%s"
+	ccmCostCategoryDetailListPath = ccmBasePath + "/business-mapping?accountIdentifier=%s"    // This endpoint lists cost categories
+	ccmGetCostCategoryPath        = ccmBasePath + "/business-mapping/%s?accountIdentifier=%s" // This endpoint lists cost categories
 )
 
 type CloudCostManagementService struct {
-	Client           *Client
-	UseInternalPaths bool
-}
-
-func (c *CloudCostManagementService) buildPath(basePath string) string {
-	if c.UseInternalPaths {
-		return basePath
-	}
-	return ccmExternalPathPrefix + basePath
+	Client *Client
 }
 
 func (c *CloudCostManagementService) GetOverview(ctx context.Context, accID string, startTime int64, endTime int64, groupBy string) (*dto.CEView, error) {
-	path := c.buildPath(fmt.Sprintf(ccmGetOverviewPath, accID, startTime, endTime, groupBy))
+	path := fmt.Sprintf(ccmGetOverviewPath, accID, startTime, endTime, groupBy)
 
 	slog.Debug("GetOverView", "Path", path)
 	params := make(map[string]string)
@@ -48,7 +37,7 @@ func (c *CloudCostManagementService) GetOverview(ctx context.Context, accID stri
 }
 
 func (r *CloudCostManagementService) ListCostCategories(ctx context.Context, scope dto.Scope, opts *dto.CCMListCostCategoriesOptions) (*dto.CCMCostCategoryList, error) {
-	path := r.buildPath(ccmCostCategoryListPath)
+	path := ccmCostCategoryListPath
 	params := make(map[string]string)
 	addScope(scope, params)
 
@@ -76,7 +65,7 @@ func (r *CloudCostManagementService) ListCostCategories(ctx context.Context, sco
 }
 
 func (r *CloudCostManagementService) ListCostCategoriesDetail(ctx context.Context, scope dto.Scope, opts *dto.CCMListCostCategoriesDetailOptions) (*dto.CCMCostCategoryDetailList, error) {
-	path := r.buildPath(ccmCostCategoryDetailListPath)
+	path := ccmCostCategoryDetailListPath
 	params := make(map[string]string)
 
 	// Handle nil options by creating default options
@@ -114,7 +103,7 @@ func (r *CloudCostManagementService) GetCostCategory(ctx context.Context, scope 
 		return nil, fmt.Errorf("Missing parameters for Get CCM Cost categories.")
 	}
 
-	path := r.buildPath(fmt.Sprintf(ccmGetCostCategoryPath, opts.CostCategoryId, opts.AccountIdentifier))
+	path := fmt.Sprintf(ccmGetCostCategoryPath, opts.CostCategoryId, opts.AccountIdentifier)
 	params := make(map[string]string)
 
 	// Temporary slice to hold the strings
