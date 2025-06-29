@@ -143,8 +143,8 @@ var (
 				GenaiSecret:             viper.GetString("genai_secret"),
 				ArtifactRegistryBaseURL: viper.GetString("artifact_registry_base_url"),
 				ArtifactRegistrySecret:  viper.GetString("artifact_registry_secret"),
-				CCMBaseURL:              viper.GetString("ccm_base_url"),
-				CCMSecret:               viper.GetString("ccm_secret"),
+				NextgenCEBaseURL:        viper.GetString("nextgen_ce_base_url"),
+				NextgenCESecret:         viper.GetString("nextgen_ce_secret"),
 				McpSvcSecret:            viper.GetString("mcp_svc_secret"),
 			}
 
@@ -189,8 +189,8 @@ func init() {
 	internalCmd.Flags().String("mcp-svc-secret", "", "Secret for MCP service")
 	internalCmd.Flags().String("artifact-registry-base-url", "", "Base URL for artifact registry service")
 	internalCmd.Flags().String("artifact-registry-secret", "", "Secret for artifact registry service")
-	internalCmd.Flags().String("ccm-base-url", "", "Base URL for CCM service")
-	internalCmd.Flags().String("ccm-secret", "", "Secret for CCM service")
+	internalCmd.Flags().String("nextgen-ce-base-url", "", "Base URL for Nextgen CE service")
+	internalCmd.Flags().String("nextgen-ce-secret", "", "Secret for Nextgen CE service")
 
 	// Bind global flags to viper
 	_ = viper.BindPFlag("toolsets", rootCmd.PersistentFlags().Lookup("toolsets"))
@@ -217,8 +217,8 @@ func init() {
 	_ = viper.BindPFlag("mcp_svc_secret", internalCmd.Flags().Lookup("mcp-svc-secret"))
 	_ = viper.BindPFlag("artifact_registry_base_url", internalCmd.Flags().Lookup("artifact-registry-base-url"))
 	_ = viper.BindPFlag("artifact_registry_secret", internalCmd.Flags().Lookup("artifact-registry-secret"))
-	_ = viper.BindPFlag("ccm_base_url", internalCmd.Flags().Lookup("ccm-base-url"))
-	_ = viper.BindPFlag("ccm_secret", internalCmd.Flags().Lookup("ccm-secret"))
+	_ = viper.BindPFlag("nextgen_ce_base_url", internalCmd.Flags().Lookup("nextgen-ce-base-url"))
+	_ = viper.BindPFlag("nextgen_ce_secret", internalCmd.Flags().Lookup("nextgen-ce-secret"))
 
 	// Add subcommands
 	rootCmd.AddCommand(stdioCmd)

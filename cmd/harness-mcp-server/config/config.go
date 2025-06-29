@@ -29,7 +29,7 @@ type Config struct {
 	GenaiSecret             string
 	ArtifactRegistryBaseURL string
 	ArtifactRegistrySecret  string
-	CCMBaseURL              string
-	CCMSecret               string
+	NextgenCEBaseURL        string
+	NextgenCESecret         string
 	McpSvcSecret            string
 }

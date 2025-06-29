@@ -451,11 +451,11 @@ func registerLogs(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 }
 
 func registerCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-	// Determine the base URL and secret for pipeline service
+	// Determine the base URL and secret for CCM
 	baseURL := config.BaseURL
-	secret := config.CCMSecret
+	secret := config.NextgenCESecret
 	if config.Internal {
-		baseURL = config.CCMBaseURL
+		baseURL = config.NextgenCEBaseURL
 	}
 
 	// Create base client for CCM
