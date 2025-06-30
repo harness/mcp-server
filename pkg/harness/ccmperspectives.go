@@ -412,60 +412,6 @@ func createPerspectiveTool(config *config.Config, client *client.CloudCostManage
 				mcp.Enum(dto.ViewStateDraft, dto.ViewStateCompleted),
 				mcp.Description("State of view. Set to completed if it is not provided."),
 			),
-			///// RULES
-			mcp.WithArray("view_rules",
-				mcp.Description("State of view. Set to completed if it is not provided."),
-				mcp.Items(map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"view_conditions": map[string]any{
-							"type": "array",
-							"items": map[string]any{
-								"type": "object",
-								"properties": map[string]any{
-									"type": map[string]any{
-										"type": "string",
-										"enum": []string{"ViewIdCondition"},
-									},
-									"viewField": map[string]any{
-										"type": "object",
-										"properties": map[string]any{
-											"field_id": map[string]any{
-												"type": "string",
-											},
-											"field_name": map[string]any{
-												"type": "string",
-											},
-											"identifier": map[string]any{
-												"type": "string",
-												"enum": []string{
-													"CLUSTER", "AWS", "GCP", "AZURE", "EXTERNAL_DATA",
-													"COMMON", "CUSTOM", "BUSINESS_MAPPING", "LABEL", "LABEL_V2",
-												},
-											},
-											"identifier_name": map[string]any{
-												"type": "string",
-											},
-										},	
-									},
-								},
-							},
-							"view_operator": map[string]any{
-								"type": "string",
-								"enum": []string{"NOT_IN", "IN", "EQUALS", "NOT_NULL", "NULL", "LIKE"},
-							},
-							"values": map[string]any{
-								"type": "array",
-								"items": map[string]any{
-									"type": "string",
-								},
-							},
-						},
-					},
-				},
-			),
-		),
-			//// END RULES
 		)
 }
 
@@ -664,6 +610,69 @@ func createPerspectiveHandler(config *config.Config, client *client.CloudCostMan
 
 	return mcp.NewToolResultText(string(r)), nil
 }
+
+
+/*
+ - Agregate function?
+ - view_id 
+ - time_filter
+   * LAST_7
+   * THIS_MONTH
+   * LAST_30_DAYS
+   * THIS_QUARTER
+   * THIS_YEAR
+   * LAST_MONTH
+   * LAST_QUARTER
+   * LAST_YEAR
+   * LAST_3_MONTHS
+   * LAST_6_MONTHS
+   * LAST_12_MONTHS	
+- is_cluster_only
+- is_cluster_hourly_data
+- limit
+- offset
+- group_by
+   * COST_CATEGORY (custom)
+   * AWS
+     - ACCOUNT
+	 - BILLING_ENTITY
+	 - INSTANCE_TYPE
+	 - LINE_ITEM_TYPE
+	 - PAYER_ACCOUNT
+	 - SERVICE
+	 - USAGE_TYPE
+   * REGION
+   * PRODUCT
+   * CLOUD_PROVIDER
+   * LABEL (custom)
+   * LABEL_V2 (custom)
+   * NONE
+- include_others (showOthers)
+- include_anomalies (showAnomalies)
+- include_unallocated_cost (showUnallocatedCost)
+- aws_include_discounts
+- aws_include_credits
+- aws_include_refunds
+- aws_include_taxes
+- aws_cost
+   * AMORTISED
+   * NET_AMORTISED
+   * UNBLENDED
+   * BLENDED
+   * EFFECTIVE
+
+  
+*/
+
+
+
+
+
+
+
+
+
+
 
 func getSupportedDataSources() string {
 	return strings.Join([]string{
