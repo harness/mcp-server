@@ -67,3 +67,9 @@ type ServiceChatResponse struct {
 	Response          string            `json:"response,omitempty"`
 	Error             string            `json:"error,omitempty"`
 }
+
+type ProgressUpdate struct {
+	Progress int    `json:"progress"`          // Current progress step
+	Total    int    `json:"total"`             // Total number of steps
+	Message  string `json:"message,omitempty"` // Progress message
+}

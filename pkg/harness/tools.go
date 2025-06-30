@@ -2,7 +2,6 @@ package harness
 
 import (
 	"context"
-	"encoding/json" // Added missing import
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -10,12 +9,9 @@ import (
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/ar"
-	"github.com/harness/harness-mcp/client/dto" // Added missing import
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness/auth"
 	"github.com/harness/harness-mcp/pkg/toolsets"
-	"github.com/mark3labs/mcp-go/mcp"    // Added missing import
-	"github.com/mark3labs/mcp-go/server" // Added for server.ToolHandlerFunc
 )
 
 // Default tools to enable
@@ -27,89 +23,8 @@ const serviceIdentity = "genaiservice" // TODO: can change once we have our own 
 // Default JWT token lifetime
 var defaultJWTLifetime = 1 * time.Hour
 
-// ListConnectorCatalogueTool creates a new mcp.Tool and handler for listing the connector catalogue.
-func ListConnectorCatalogueTool(harnessConfig *config.Config, c *client.Client) (mcp.Tool, server.ToolHandlerFunc) {
-	return mcp.NewTool("list_connector_catalogue",
-			mcp.WithDescription("List the Harness connector catalogue."),
-			// Define scope parameters (org_id, project_id) similar to other tools if needed by API
-			// For getConnectorCatalogue, it seems to primarily use AccountID from scope, but org/project might be for filtering or future use.
-			mcp.WithString("org_id",
-				mcp.Description("Optional ID of the organization."),
-			),
-			mcp.WithString("project_id",
-				mcp.Description("Optional ID of the project."),
-			),
-		),
-		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			orgID, _ := OptionalParam[string](request, "org_id") // Allow empty if not provided
-			projectID, _ := OptionalParam[string](request, "project_id")
-
-			scope := dto.Scope{
-				AccountID: harnessConfig.AccountID,
-				OrgID:     orgID,
-				ProjectID: projectID,
-			}
-
-			// If OrgID or ProjectID are not provided in params, use defaults from config
-			if scope.OrgID == "" {
-				scope.OrgID = harnessConfig.DefaultOrgID
-			}
-			if scope.ProjectID == "" {
-				scope.ProjectID = harnessConfig.DefaultProjectID
-			}
-
-			connectorService := client.ConnectorService{Client: c}
-			catalogue, err := connectorService.ListConnectorCatalogue(ctx, scope)
-			if err != nil {
-				// Using fmt.Errorf for the error that will be wrapped by the MCP framework
-				return nil, fmt.Errorf("failed to list connector catalogue: %w", err)
-			}
-
-			responseBytes, err := json.Marshal(catalogue)
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal connector catalogue: %w", err)
-			}
-
-			return mcp.NewToolResultText(string(responseBytes)), nil
-		}
-}
-
-// GetConnectorDetailsTool creates a tool for getting details of a specific connector
-// https://apidocs.harness.io/tag/Connectors#operation/getConnector
-func GetConnectorDetailsTool(config *config.Config, c *client.Client) (mcp.Tool, server.ToolHandlerFunc) {
-	return mcp.NewTool("get_connector_details",
-			mcp.WithDescription("Get detailed information about a specific connector."),
-			mcp.WithString("connector_identifier",
-				mcp.Required(),
-				mcp.Description("The identifier of the connector"),
-			),
-			WithScope(config, false),
-		),
-		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			connectorIdentifier, err := requiredParam[string](request, "connector_identifier")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-
-			scope, err := fetchScope(config, request, false)
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-
-			connectorService := client.ConnectorService{Client: c}
-			data, err := connectorService.GetConnector(ctx, scope, connectorIdentifier)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get connector: %w", err)
-			}
-
-			r, err := json.Marshal(data)
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal connector: %w", err)
-			}
-
-			return mcp.NewToolResultText(string(r)), nil
-		}
-}
+// Default timeout for GenAI service
+const defaultGenaiTimeout = 60 * time.Second
 
 // InitToolsets initializes and returns the toolset groups
 func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
@@ -305,14 +220,23 @@ func registerRepositories(config *config.Config, tsg *toolsets.ToolsetGroup) err
 func registerRegistries(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for registries
 	baseURL := config.BaseURL
+	secret := config.ArtifactRegistrySecret
 	if config.Internal {
-		return nil
+		baseURL = config.ArtifactRegistryBaseURL
 	}
 
-	authProvider := auth.NewAPIKeyProvider(config.APIKey)
+	// Create client with appropriate auth based on internal mode
+	var c *client.Client
+	var err error
 
-	// Create base client for registries
-	c, err := client.NewWithAuthProvider(baseURL, authProvider)
+	if config.Internal {
+		authProvider := auth.NewJWTProvider(secret, "Basic", &defaultJWTLifetime)
+		c, err = client.NewWithAuthProvider(baseURL, authProvider)
+	} else {
+		authProvider := auth.NewAPIKeyProvider(config.APIKey)
+		c, err = client.NewWithAuthProvider(baseURL, authProvider)
+	}
+
 	if err != nil {
 		return err
 	}
@@ -323,10 +247,17 @@ func registerRegistries(config *config.Config, tsg *toolsets.ToolsetGroup) error
 			return err
 		}
 		req.Header.Set(k, v)
+		req.Header.Set("Accept", "application/json")
 		return nil
 	}
 
-	arClient, err := ar.NewClientWithResponses(baseURL+"/har/api/v1", ar.WithHTTPClient(c),
+	// Different API paths for internal vs external mode
+	apiPath := "/har/api/v1"
+	if config.Internal {
+		apiPath = "/api/v1"
+	}
+
+	arClient, err := ar.NewClientWithResponses(baseURL+apiPath, ar.WithHTTPClient(c),
 		ar.WithRequestEditorFn(requestEditorFn))
 	if err != nil {
 		return err
@@ -522,9 +453,9 @@ func registerLogs(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 func registerCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for CCM
 	baseURL := config.BaseURL
-	secret := ""
+	secret := config.NextgenCESecret
 	if config.Internal {
-		return nil
+		baseURL = config.NextgenCEBaseURL
 	}
 
 	// Create base client for CCM
@@ -533,7 +464,9 @@ func registerCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGro
 		return err
 	}
 
-	ccmClient := &client.CloudCostManagementService{Client: c}
+	ccmClient := &client.CloudCostManagementService{
+		Client: c,
+	}
 
 	// Create the CCM toolset
 	ccm := toolsets.NewToolset("ccm", "Harness Cloud Cost Management related tools").
@@ -560,11 +493,8 @@ func registerGenai(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	baseURL := config.GenaiBaseURL
 	secret := config.GenaiSecret
 
-	// Use a custom timeout for GenAI service (40 seconds)
-	timeout := 40 * time.Second
-
-	// Create base client for genai with the custom timeout
-	c, err := createClient(baseURL, config, secret, timeout)
+	// Create base client for genai with the default timeout
+	c, err := createClient(baseURL, config, secret, defaultGenaiTimeout)
 	if err != nil {
 		return err
 	}

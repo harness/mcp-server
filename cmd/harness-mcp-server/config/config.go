@@ -18,14 +18,18 @@ type Config struct {
 	APIKey           string
 
 	// Only used for internal mode
-	BearerToken        string
-	PipelineSvcBaseURL string
-	PipelineSvcSecret  string
-	NgManagerBaseURL   string
-	NgManagerSecret    string
-	ChatbotBaseURL     string
-	ChatbotSecret      string
-	GenaiBaseURL       string
-	GenaiSecret        string
-	McpSvcSecret       string
+	BearerToken             string
+	PipelineSvcBaseURL      string
+	PipelineSvcSecret       string
+	NgManagerBaseURL        string
+	NgManagerSecret         string
+	ChatbotBaseURL          string
+	ChatbotSecret           string
+	GenaiBaseURL            string
+	GenaiSecret             string
+	ArtifactRegistryBaseURL string
+	ArtifactRegistrySecret  string
+	NextgenCEBaseURL        string
+	NextgenCESecret         string
+	McpSvcSecret            string
 }

@@ -132,16 +132,20 @@ var (
 				Internal:    true,
 				AccountID:   session.Principal.AccountID,
 				// Internal mode specific fields
-				BearerToken:        viper.GetString("bearer_token"),
-				PipelineSvcBaseURL: viper.GetString("pipeline_svc_base_url"),
-				PipelineSvcSecret:  viper.GetString("pipeline_svc_secret"),
-				NgManagerBaseURL:   viper.GetString("ng_manager_base_url"),
-				NgManagerSecret:    viper.GetString("ng_manager_secret"),
-				ChatbotBaseURL:     viper.GetString("chatbot_base_url"),
-				ChatbotSecret:      viper.GetString("chatbot_secret"),
-				GenaiBaseURL:       viper.GetString("genai_base_url"),
-				GenaiSecret:        viper.GetString("genai_secret"),
-				McpSvcSecret:       viper.GetString("mcp_svc_secret"),
+				BearerToken:             viper.GetString("bearer_token"),
+				PipelineSvcBaseURL:      viper.GetString("pipeline_svc_base_url"),
+				PipelineSvcSecret:       viper.GetString("pipeline_svc_secret"),
+				NgManagerBaseURL:        viper.GetString("ng_manager_base_url"),
+				NgManagerSecret:         viper.GetString("ng_manager_secret"),
+				ChatbotBaseURL:          viper.GetString("chatbot_base_url"),
+				ChatbotSecret:           viper.GetString("chatbot_secret"),
+				GenaiBaseURL:            viper.GetString("genai_base_url"),
+				GenaiSecret:             viper.GetString("genai_secret"),
+				ArtifactRegistryBaseURL: viper.GetString("artifact_registry_base_url"),
+				ArtifactRegistrySecret:  viper.GetString("artifact_registry_secret"),
+				NextgenCEBaseURL:        viper.GetString("nextgen_ce_base_url"),
+				NextgenCESecret:         viper.GetString("nextgen_ce_secret"),
+				McpSvcSecret:            viper.GetString("mcp_svc_secret"),
 			}
 
 			if err := runStdioServer(ctx, cfg); err != nil {
@@ -183,6 +187,10 @@ func init() {
 	internalCmd.Flags().String("genai-base-url", "", "Base URL for genai service")
 	internalCmd.Flags().String("genai-secret", "", "Secret for genai service")
 	internalCmd.Flags().String("mcp-svc-secret", "", "Secret for MCP service")
+	internalCmd.Flags().String("artifact-registry-base-url", "", "Base URL for artifact registry service")
+	internalCmd.Flags().String("artifact-registry-secret", "", "Secret for artifact registry service")
+	internalCmd.Flags().String("nextgen-ce-base-url", "", "Base URL for Nextgen CE service")
+	internalCmd.Flags().String("nextgen-ce-secret", "", "Secret for Nextgen CE service")
 
 	// Bind global flags to viper
 	_ = viper.BindPFlag("toolsets", rootCmd.PersistentFlags().Lookup("toolsets"))
@@ -207,6 +215,10 @@ func init() {
 	_ = viper.BindPFlag("genai_base_url", internalCmd.Flags().Lookup("genai-base-url"))
 	_ = viper.BindPFlag("genai_secret", internalCmd.Flags().Lookup("genai-secret"))
 	_ = viper.BindPFlag("mcp_svc_secret", internalCmd.Flags().Lookup("mcp-svc-secret"))
+	_ = viper.BindPFlag("artifact_registry_base_url", internalCmd.Flags().Lookup("artifact-registry-base-url"))
+	_ = viper.BindPFlag("artifact_registry_secret", internalCmd.Flags().Lookup("artifact-registry-secret"))
+	_ = viper.BindPFlag("nextgen_ce_base_url", internalCmd.Flags().Lookup("nextgen-ce-base-url"))
+	_ = viper.BindPFlag("nextgen_ce_secret", internalCmd.Flags().Lookup("nextgen-ce-secret"))
 
 	// Add subcommands
 	rootCmd.AddCommand(stdioCmd)
