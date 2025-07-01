@@ -8,10 +8,11 @@ import (
 
 const (
 	// Base API paths
-	chaosListExperimentsPath  = "api/rest/v2/experiment?accountIdentifier=%s&projectIdentifier=%s&organizationIdentifier=%s"
-	chaosGetExperimentPath    = "api/rest/v2/experiments/%s?accountIdentifier=%s&projectIdentifier=%s&organizationIdentifier=%s"
-	chaosGetExperimentRunPath = "api/rest/v2/experiments/%s/run?accountIdentifier=%s&projectIdentifier=%s&organizationIdentifier=%s&experimentRunId=%s"
-	chaosExperimentRunPath    = "api/rest/v2/experiments/%s/run?accountIdentifier=%s&projectIdentifier=%s&organizationIdentifier=%s&isIdentity=false"
+	chaosListExperimentsPath = "api/rest/v2/experiment?accountIdentifier=%s&projectIdentifier=%s&organizationIdentifier=%s"
+	chaosGetExperimentPath   = "api/rest/v2/experiments/%s?accountIdentifier=%s&projectIdentifier=%s&organizationIdentifier=%s"
+	//chaosGetExperimentRunPath = "api/rest/v2/experiments/%s/run?accountIdentifier=%s&projectIdentifier=%s&organizationIdentifier=%s&experimentRunId=%s"
+	chaosGetExperimentRunPipelinePath = "api/rest/v2/chaos-pipeline/%s?accountIdentifier=%s&projectIdentifier=%s&organizationIdentifier=%s&experimentRunId=%s"
+	chaosExperimentRunPath            = "api/rest/v2/experiments/%s/run?accountIdentifier=%s&projectIdentifier=%s&organizationIdentifier=%s&isIdentity=false"
 
 	// Prefix to prepend for external API calls
 	externalChaosManagerPathPrefix = "chaos/manager/"
@@ -63,7 +64,7 @@ func (c *ChaosService) GetExperiment(ctx context.Context, scope dto.Scope, exper
 
 func (c *ChaosService) GetExperimentRun(ctx context.Context, scope dto.Scope, experimentID, experimentRunID string) (*dto.ChaosExperimentRun, error) {
 	var (
-		pathTemplate = c.buildPath(chaosGetExperimentRunPath)
+		pathTemplate = c.buildPath(chaosGetExperimentRunPipelinePath)
 		path         = fmt.Sprintf(pathTemplate, experimentID, scope.AccountID, scope.ProjectID, scope.OrgID, experimentRunID)
 		params       = make(map[string]string)
 	)
