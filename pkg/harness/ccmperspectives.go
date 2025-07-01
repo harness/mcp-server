@@ -19,9 +19,6 @@ import (
 func ListCcmPerspectivesDetailTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_ccm_perspectives_detail",
 			mcp.WithDescription("List the cost perspectives with advanced options in Harness Cloud Cost Management"),
-			mcp.WithString("account_id",
-				mcp.Description("The account identifier"),
-			),
 			mcp.WithString("search_key",
 				mcp.Description("Optional search key to filter perspectives"),
 			),
@@ -51,10 +48,7 @@ func ListCcmPerspectivesDetailTool(config *config.Config, client *client.CloudCo
 			WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			accountId, err := OptionalParam[string](request, "account_id")
-			if accountId == "" {
-				accountId, err = getAccountID(config, request)
-			}
+			accountId, err := getAccountID(config, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -129,16 +123,13 @@ func ListCcmPerspectivesDetailTool(config *config.Config, client *client.CloudCo
 func GetCcmPerspectiveTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_ccm_perspective",
 			mcp.WithDescription("Get a perspective with advanced options in Harness Cloud Cost Management"),
-			mcp.WithString("account_id",
-				mcp.Description("The account identifier"),
-			),
 			mcp.WithString("perspective_id",
 				mcp.Description("Required perspective identifier."),
 			),
 			WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			accountId, err := OptionalParam[string](request, "account_id")
+			accountId, err := getAccountID(config, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -195,7 +186,8 @@ func GetLastPeriodCostCcmPerspectiveTool(config *config.Config, client *client.C
 			WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			accountId, err := OptionalParam[string](request, "account_id")
+
+			accountId, err := getAccountID(config, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -247,9 +239,6 @@ func GetLastTwelveMonthsCostCcmPerspectiveTool(config *config.Config, client *cl
 	defaultStartTime := utils.CurrentMMDDYYYY() 
 	return mcp.NewTool("get_last_twelve_months_cost_ccm_perspective",
 			mcp.WithDescription("Get the last twelve months cost for a perspective in Harness Cloud Cost Management"),
-			mcp.WithString("account_id",
-				mcp.Description("The account identifier"),
-			),
 			mcp.WithString("perspective_id",
 				mcp.Description("Required perspective identifier."),
 			),
@@ -265,7 +254,8 @@ func GetLastTwelveMonthsCostCcmPerspectiveTool(config *config.Config, client *cl
 			WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			accountId, err := OptionalParam[string](request, "account_id")
+
+			accountId, err := getAccountID(config, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
