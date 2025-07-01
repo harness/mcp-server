@@ -62,14 +62,14 @@ func (c *ChaosService) GetExperiment(ctx context.Context, scope dto.Scope, exper
 	return getExperiment, nil
 }
 
-func (c *ChaosService) GetExperimentRun(ctx context.Context, scope dto.Scope, experimentID, experimentRunID string) (*dto.ChaosExperimentRun, error) {
+func (c *ChaosService) GetExperimentRun(ctx context.Context, scope dto.Scope, experimentID, experimentRunID string) (*dto.ChaosExecutionResponse, error) {
 	var (
 		pathTemplate = c.buildPath(chaosGetExperimentRunPipelinePath)
 		path         = fmt.Sprintf(pathTemplate, experimentID, scope.AccountID, scope.ProjectID, scope.OrgID, experimentRunID)
 		params       = make(map[string]string)
 	)
 
-	getExperimentRun := new(dto.ChaosExperimentRun)
+	getExperimentRun := new(dto.ChaosExecutionResponse)
 	err := c.Client.Get(ctx, path, params, nil, getExperimentRun)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get experiment run: %w", err)

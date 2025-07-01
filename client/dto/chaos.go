@@ -129,37 +129,37 @@ type ProbeData struct {
 }
 
 type ProbeIterations struct {
-	Duration     int           `json:"duration" bson:"duration"`
-	Phase        string        `json:"phase" bson:"phase"`
-	Timestamp    int64         `json:"timestamp" bson:"timestamp"`
-	HTTPProbe    *HTTPProbe    `json:"httpProbe,omitempty" bson:"http_probe"`
-	CommandProbe *CommandProbe `json:"commandProbe,omitempty" bson:"command_probe"`
-	PromProbe    *PromProbe    `json:"promProbe,omitempty" bson:"prom_probe"`
+	Duration     int           `json:"duration"`
+	Phase        string        `json:"phase"`
+	Timestamp    int64         `json:"timestamp"`
+	HTTPProbe    *HTTPProbe    `json:"httpProbe"`
+	CommandProbe *CommandProbe `json:"commandProbe"`
+	PromProbe    *PromProbe    `json:"promProbe"`
 }
 
 type HTTPProbe struct {
-	StatusCode   int    `json:"statusCode" bson:"status_code"`
-	ResponseBody []byte `json:"responseBody,omitempty" bson:"response_body"`
-	ResponseTime int    `json:"responseTime" bson:"response_time"`
+	StatusCode   int    `json:"statusCode"`
+	ResponseBody []byte `json:"responseBody"`
+	ResponseTime int    `json:"responseTime"`
 }
 
 type CommandProbe struct {
-	Output []byte `json:"output" bson:"output"`
+	Output []byte `json:"output"`
 }
 
 type PromProbe struct {
-	Metrics string `json:"metrics" bson:"metrics"`
+	Metrics string `json:"metrics"`
 }
 
 type ActionData struct {
-	Name string `json:"name" bson:"name"`
+	Name string `json:"name"`
 }
 
 type Targets struct {
-	ID        string `json:"ID,omitempty"`
-	Name      string `json:"name,omitempty"`
-	Type      string `json:"type,omitempty"`
-	SubType   string `json:"subType,omitempty"`
-	Kind      string `json:"kind,omitempty"`
-	Namespace string `json:"namespace,omitempty"`
+	ID        string `json:"ID"`
+	Name      string `json:"name"`
+	Type      string `json:"type"`
+	SubType   string `json:"subType"`
+	Kind      string `json:"kind"`
+	Namespace string `json:"namespace"`
 }
