@@ -550,9 +550,9 @@ func registerDashboards(config *config.Config, tsg *toolsets.ToolsetGroup) error
 func registerChaos(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for CHAOS
 	baseURL := config.BaseURL
-	secret := ""
+	secret := config.ChaosManagerSvcSecret
 	if config.Internal {
-		return nil
+		baseURL = config.ChaosManagerSvcBaseURL
 	}
 
 	// Create base client for CHAOS
@@ -562,7 +562,10 @@ func registerChaos(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 		return err
 	}
 
-	chaosClient := &client.ChaosService{Client: c}
+	chaosClient := &client.ChaosService{
+		Client:           c,
+		UseInternalPaths: config.Internal,
+	}
 
 	// Create the CHAOS toolset
 	chaos := toolsets.NewToolset("chaos", "Harness Chaos Engineering related tools").

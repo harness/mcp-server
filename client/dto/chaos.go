@@ -54,6 +54,8 @@ type ExperimentV2 struct {
 	WorkflowID    string        `json:"workflowID"`
 	Name          string        `json:"name"`
 	Description   string        `json:"description"`
+	UpdatedAt     string        `json:"updatedAt"`
+	CreatedAt     string        `json:"createdAt"`
 }
 
 type ChaosInfraV2 struct {

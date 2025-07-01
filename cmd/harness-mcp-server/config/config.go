@@ -32,4 +32,6 @@ type Config struct {
 	NextgenCEBaseURL        string
 	NextgenCESecret         string
 	McpSvcSecret            string
+	ChaosManagerSvcBaseURL  string
+	ChaosManagerSvcSecret   string
 }

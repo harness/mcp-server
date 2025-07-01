@@ -7,20 +7,34 @@ import (
 )
 
 const (
-	chaosBasePath             = "chaos/manager/api"
-	chaosListExperimentsPath  = chaosBasePath + "/rest/v2/experiment?accountIdentifier=%s&projectIdentifier=%s&organizationIdentifier=%s"
-	chaosGetExperimentPath    = chaosBasePath + "/rest/v2/experiments/%s?accountIdentifier=%s&projectIdentifier=%s&organizationIdentifier=%s"
-	chaosGetExperimentRunPath = chaosBasePath + "/rest/v2/experiments/%s/run?accountIdentifier=%s&projectIdentifier=%s&organizationIdentifier=%s&experimentRunId=%s"
-	chaosExperimentRunPath    = chaosBasePath + "/rest/v2/experiments/%s/run?accountIdentifier=%s&projectIdentifier=%s&organizationIdentifier=%s&isIdentity=false"
+	// Base API paths
+	chaosListExperimentsPath  = "api/rest/v2/experiment?accountIdentifier=%s&projectIdentifier=%s&organizationIdentifier=%s"
+	chaosGetExperimentPath    = "api/rest/v2/experiments/%s?accountIdentifier=%s&projectIdentifier=%s&organizationIdentifier=%s"
+	chaosGetExperimentRunPath = "api/rest/v2/experiments/%s/run?accountIdentifier=%s&projectIdentifier=%s&organizationIdentifier=%s&experimentRunId=%s"
+	chaosExperimentRunPath    = "api/rest/v2/experiments/%s/run?accountIdentifier=%s&projectIdentifier=%s&organizationIdentifier=%s&isIdentity=false"
+
+	// Prefix to prepend for external API calls
+	externalChaosManagerPathPrefix = "chaos/manager/"
 )
 
 type ChaosService struct {
-	Client *Client
+	Client           *Client
+	UseInternalPaths bool
+}
+
+func (c *ChaosService) buildPath(basePath string) string {
+	if c.UseInternalPaths {
+		return basePath
+	}
+	return externalChaosManagerPathPrefix + basePath
 }
 
 func (c *ChaosService) ListExperiments(ctx context.Context, scope dto.Scope) (*dto.ListExperimentResponse, error) {
-	path := fmt.Sprintf(chaosListExperimentsPath, scope.AccountID, scope.ProjectID, scope.OrgID)
-	params := make(map[string]string)
+	var (
+		pathTemplate = c.buildPath(chaosListExperimentsPath)
+		path         = fmt.Sprintf(pathTemplate, scope.AccountID, scope.ProjectID, scope.OrgID)
+		params       = make(map[string]string)
+	)
 
 	listExperiments := new(dto.ListExperimentResponse)
 	err := c.Client.Get(ctx, path, params, nil, listExperiments)
@@ -32,8 +46,11 @@ func (c *ChaosService) ListExperiments(ctx context.Context, scope dto.Scope) (*d
 }
 
 func (c *ChaosService) GetExperiment(ctx context.Context, scope dto.Scope, experimentID string) (*dto.GetExperimentResponse, error) {
-	path := fmt.Sprintf(chaosGetExperimentPath, experimentID, scope.AccountID, scope.ProjectID, scope.OrgID)
-	params := make(map[string]string)
+	var (
+		pathTemplate = c.buildPath(chaosGetExperimentPath)
+		path         = fmt.Sprintf(pathTemplate, experimentID, scope.AccountID, scope.ProjectID, scope.OrgID)
+		params       = make(map[string]string)
+	)
 
 	getExperiment := new(dto.GetExperimentResponse)
 	err := c.Client.Get(ctx, path, params, nil, getExperiment)
@@ -45,8 +62,11 @@ func (c *ChaosService) GetExperiment(ctx context.Context, scope dto.Scope, exper
 }
 
 func (c *ChaosService) GetExperimentRun(ctx context.Context, scope dto.Scope, experimentID, experimentRunID string) (*dto.ChaosExperimentRun, error) {
-	path := fmt.Sprintf(chaosGetExperimentRunPath, experimentID, scope.AccountID, scope.ProjectID, scope.OrgID, experimentRunID)
-	params := make(map[string]string)
+	var (
+		pathTemplate = c.buildPath(chaosGetExperimentRunPath)
+		path         = fmt.Sprintf(pathTemplate, experimentID, scope.AccountID, scope.ProjectID, scope.OrgID, experimentRunID)
+		params       = make(map[string]string)
+	)
 
 	getExperimentRun := new(dto.ChaosExperimentRun)
 	err := c.Client.Get(ctx, path, params, nil, getExperimentRun)
@@ -58,8 +78,11 @@ func (c *ChaosService) GetExperimentRun(ctx context.Context, scope dto.Scope, ex
 }
 
 func (c *ChaosService) RunExperiment(ctx context.Context, scope dto.Scope, experimentID string) (*dto.RunChaosExperimentResponse, error) {
-	path := fmt.Sprintf(chaosExperimentRunPath, experimentID, scope.AccountID, scope.ProjectID, scope.OrgID)
-	params := make(map[string]string)
+	var (
+		pathTemplate = c.buildPath(chaosExperimentRunPath)
+		path         = fmt.Sprintf(pathTemplate, experimentID, scope.AccountID, scope.ProjectID, scope.OrgID)
+		params       = make(map[string]string)
+	)
 
 	experimentRun := new(dto.RunChaosExperimentResponse)
 	err := c.Client.Post(ctx, path, params, nil, experimentRun)
