@@ -32,22 +32,36 @@ const (
 )
 
 type CCMPerspectiveGridOptions struct {
-	AccountId      		   string
-	ViewId                 string
-	TimeFilter             string
-	IsClusterOnly          bool
-	IsClusterHourlyData    bool
-	Limit                  int32
-	Offset                 int32
-	GroupBy                string
-	IncludeOthers          bool
-	IncludeAnomalies       bool
-	IncludeUnallocatedCost bool
-	AwsIncludeDiscounts    bool
-	AwsIncludeCredits      bool
-	AwsIncludeRefunds      bool
-	AwsIncludeTaxes        bool
-	AwsCost                string
+
+	AccountId             string `json:"account_id"`
+	ViewId                string `json:"view_id"`
+	TimeFilter            string `json:"time_filter"`
+	IsClusterOnly         bool   `json:"is_cluster_only"`
+	IsClusterHourlyData   bool   `json:"is_cluster_hourly_data"`
+	Limit                 int32  `json:"limit"`
+	Offset                int32  `json:"offset"`
+	GroupBy               string `json:"group_by"`
+	IncludeOthers         bool   `json:"include_others"`
+	IncludeAnomalies      bool   `json:"include_anomalies"`
+	IncludeUnallocatedCost bool  `json:"include_unallocated_cost"`
+	AwsIncludeDiscounts   bool   `json:"aws_include_discounts"`
+	AwsIncludeCredits     bool   `json:"aws_include_credits"`
+	AwsIncludeRefunds     bool   `json:"aws_include_refunds"`
+	AwsIncludeTaxes       bool   `json:"aws_include_taxes"`
+	AwsCost               string `json:"aws_cost"`
+
+	// Filters
+	// AwsAccount       []string `json:"aws_account"`
+	// AwsBillingEntity []string `json:"aws_billing_entity"`
+	// AwsInstanceType  []string `json:"aws_instance_type"`
+	// AwsLineItemType  []string `json:"aws_line_item_type"`
+	// AwsPayerAccount  []string `json:"aws_payer_account"`
+	// AwsService       []string `json:"aws_service"`
+	// AwsUsageType     []string `json:"aws_usage_type"`
+	// Region           []string `json:"region"`
+	// CloudProvider    []string `json:"cloud_provider"`
+	// Product          []string `json:"product"`
+	Filters map[string][]string
 }
 
 type CCMPerspectiveGridResponse struct {
