@@ -12,7 +12,7 @@ import (
 
 // ListExperimentsTool creates a tool for listing the experiments
 func ListExperimentsTool(config *config.Config, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("list_chaos_experiments",
+	return mcp.NewTool("chaos_experiments_list",
 			mcp.WithDescription("List the chaos experiments"),
 			WithScope(config, false),
 		),
@@ -38,7 +38,7 @@ func ListExperimentsTool(config *config.Config, client *client.ChaosService) (to
 
 // GetExperimentsTool creates a tool to get the experiment details
 func GetExperimentsTool(config *config.Config, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("get_chaos_experiment_details",
+	return mcp.NewTool("chaos_experiment_describe",
 			mcp.WithDescription("Retrieves information about chaos experiment, allowing users to get an overview and detailed insights for each experiment"),
 			WithScope(config, false),
 		),
@@ -69,8 +69,8 @@ func GetExperimentsTool(config *config.Config, client *client.ChaosService) (too
 
 // GetExperimentRunsTool creates a tool to get the experiment run details
 func GetExperimentRunsTool(config *config.Config, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("get_chaos_experiment_execution_data",
-			mcp.WithDescription("Retrieves execution data of chaos experiment runs, helping to describe and summarize the details of each experiment execution"),
+	return mcp.NewTool("chaos_experiment_run_result",
+			mcp.WithDescription("Retrieves run data of chaos experiment runs, helping to describe and summarize the details of each experiment run"),
 			WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -105,7 +105,7 @@ func GetExperimentRunsTool(config *config.Config, client *client.ChaosService) (
 
 // RunExperimentTool creates a tool to run the experiment
 func RunExperimentTool(config *config.Config, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("run_chaos_experiment",
+	return mcp.NewTool("chaos_experiment_run",
 			mcp.WithDescription("Run the chaos experiment"),
 			WithScope(config, false),
 		),

@@ -43,6 +43,12 @@ func (c *ChaosService) ListExperiments(ctx context.Context, scope dto.Scope) (*d
 		return nil, fmt.Errorf("failed to list experiments: %w", err)
 	}
 
+	for i := range listExperiments.Data {
+		if listExperiments.Data[i].ExperimentID == "" {
+			listExperiments.Data[i].ExperimentID = listExperiments.Data[i].WorkflowID
+		}
+	}
+
 	return listExperiments, nil
 }
 
