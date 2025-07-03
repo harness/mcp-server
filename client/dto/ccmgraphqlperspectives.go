@@ -31,6 +31,11 @@ const (
 	GridGroupByNone             = "NONE"
 )
 
+type CCMKeyValue struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
 type CCMPerspectiveGridOptions struct {
 
 	AccountId             string `json:"account_id"`
@@ -40,7 +45,7 @@ type CCMPerspectiveGridOptions struct {
 	IsClusterHourlyData   bool   `json:"is_cluster_hourly_data"`
 	Limit                 int32  `json:"limit"`
 	Offset                int32  `json:"offset"`
-	GroupBy               string `json:"group_by"`
+	GroupBy               map[string]any `json:"group_by"`
 	IncludeOthers         bool   `json:"include_others"`
 	IncludeAnomalies      bool   `json:"include_anomalies"`
 	IncludeUnallocatedCost bool  `json:"include_unallocated_cost"`
@@ -50,18 +55,8 @@ type CCMPerspectiveGridOptions struct {
 	AwsIncludeTaxes       bool   `json:"aws_include_taxes"`
 	AwsCost               string `json:"aws_cost"`
 
-	// Filters
-	// AwsAccount       []string `json:"aws_account"`
-	// AwsBillingEntity []string `json:"aws_billing_entity"`
-	// AwsInstanceType  []string `json:"aws_instance_type"`
-	// AwsLineItemType  []string `json:"aws_line_item_type"`
-	// AwsPayerAccount  []string `json:"aws_payer_account"`
-	// AwsService       []string `json:"aws_service"`
-	// AwsUsageType     []string `json:"aws_usage_type"`
-	// Region           []string `json:"region"`
-	// CloudProvider    []string `json:"cloud_provider"`
-	// Product          []string `json:"product"`
 	Filters map[string][]string
+	KeyValueFilters map[string]map[string]any
 }
 
 type CCMPerspectiveGridResponse struct {

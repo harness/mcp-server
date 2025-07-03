@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"time"
+	"strings"
 	"log/slog"
 	"github.com/harness/harness-mcp/client/dto"
 	//"github.com/harness/harness-mcp/pkg/utils"
@@ -59,7 +60,7 @@ func (r *CloudCostManagementService) PerspectiveGrid(ctx context.Context, scope 
 
 	variables := map[string]any{
 		"filters":            buildFilters(options),
-		"groupBy":            buildGroupBy(options.GroupBy, outputFields),
+		"groupBy":            buildGroupBy(options.GroupBy, outputFields, outputKeyValueFields),
 		"limit":              15,
 		"offset":             0,
 		"aggregateFunction":  buildAggregateFunction(),
@@ -98,7 +99,7 @@ func buildFilters(options *dto.CCMPerspectiveGridOptions) ([]map[string]any) {
 	filters = append(filters, viewFilter...)
 	filters = append(filters, buildTimeFilters(options)...)
 	filters = append(filters, buildFieldFilters(options.Filters, outputFields)...)
-
+	filters = append(filters, buildKeyValueFieldFilters(options.KeyValueFilters, outputKeyValueFields)...)
 
 	slog.Debug("PerspectiveGrid", "FILTERS", filters)
 
@@ -225,20 +226,27 @@ var outputFields = []map[string]string{
 		"identifier":     "COMMON",
 		"identifierName": "Common",
 	},
-	// labels field name has to be queried from another ENDPOINT, so no labels for now
-	// {
-	// 	"fieldId":        "labels.value",
-	// 	"fieldName":      "aws_eks_cluster_name",
-	// 	"identifier":     "LABEL",
-	// 	"identifierName": "Label",
-	// },
+}
 
-	// {
-	// 	"fieldId":        "labels.value",
-	// 	"fieldName":      "Name",
-	// 	"identifier":     "LABEL_V2",
-	// 	"identifierName": "Label V2",
-	// },
+var outputKeyValueFields = []map[string]string{
+	{
+		"fieldId":        "labels.value",
+		"fieldName":      "", // Label name
+		"identifier":     "LABEL",
+		"identifierName": "Label",
+	},
+	{
+		"fieldId":        "labels.value",
+		"fieldName":      "", // Label name
+		"identifier":     "LABEL_V2",
+		"identifierName": "Label V2",
+	},
+	{
+		"fieldId":        "", // Cost Category Id
+		"fieldName":      "", // Cost Category Name
+		"identifier":     "BUSINESS_MAPPING",
+		"identifierName": "Cost Categories",
+	},
 }
 
 func buildFieldFilters(input map[string][]string, output []map[string]string) []map[string]any {
@@ -247,7 +255,7 @@ func buildFieldFilters(input map[string][]string, output []map[string]string) []
 		slog.Debug("PerspectiveGrid", "Field ID ", fName)
 		for _, out := range output {
 			slog.Debug("PerspectiveGrid", "Field ID OUT", out["fieldId"])
-			if fName == out["fieldId"] {
+			if strings.EqualFold(fName, out["fieldId"]) {
 				var idFilterMap = map[string]any{
 					"idFilter": map[string]any{
 						"values":   values,
@@ -261,30 +269,64 @@ func buildFieldFilters(input map[string][]string, output []map[string]string) []
 		}
 	}
 
-
 	slog.Debug("PerspectiveGrid", "Field ID filters", result)
 	return result
 }
 
-    // {
-    //     "idFilter": {
-    //       "values": [
-    //         "Amazon CloudFront"
-    //       ],
-    //       "operator": "IN",
-    //       "field": {
-    //         "fieldId": "product",
-    //         "fieldName": "Product",
-    //         "identifier": "COMMON",
-    //         "identifierName": "Common"
-    //       }
-    //     }
-    //   },
+func buildKeyValueFieldFilters(input map[string]map[string]any, output []map[string]string) []map[string]any {
+	result := make([]map[string]any, 0)
+	for fName, values := range input {
+		slog.Debug("PerspectiveGrid", "KV Field ID ", fName)
+		for _, out := range output {
+			slog.Debug("PerspectiveGrid", "KV Field ID OUT", out["fieldId"])
+			slog.Debug("PerspectiveGrid", "KV Field identifier OUT", out["identifier"])
+			if strings.EqualFold(fName, out["identifier"]) {
+				fieldName, ok := values["filterL1"].(string)
+				slog.Debug("PerspectiveGrid", "KV Field filterL1 OK", fieldName)
+				if ok {
+					slog.Debug("PerspectiveGrid", "Is OK", fieldName)
+					out["fieldName"] = fieldName 
+					var idFilterMap = map[string]any{
+						"idFilter": map[string]any{
+							"values":   values["filterL2"],
+							"operator": "LIKE",
+							"field": out,
+						},
+					}
+				result = append(result, idFilterMap)
+				}
+			}
+		}
+	}
+	slog.Debug("PerspectiveGrid", "KV Field ID filters", result)
+	return result
+}
 
+func buildGroupBy(input map[string]any, outputFields []map[string]string, outputKeyValueFields []map[string]string) []map[string]any {
+	// Get the value when grouping by field only.
+	field, ok1 := input["field"].(string)
+	if ok1 == false {
+		return nil
+	}	
 
-func buildGroupBy(field string, outputFields []map[string]string) []map[string]any {
 	for _, out := range outputFields {
-		if out["fieldId"] == field {
+		if strings.EqualFold(field, out["fieldId"]) {
+			return []map[string]any{
+				{
+					"entityGroupBy": out,
+				},
+			}
+		}
+	}
+
+	// Get the value when grouping by key,value.
+	value, ok2 := input["value"].(string)
+	if ok2 == false {
+		return nil
+	}
+	for _, out := range outputKeyValueFields {
+		if strings.EqualFold(field, out["identifier"]) {
+			out["fieldName"] = value
 			return []map[string]any{
 				{
 					"entityGroupBy": out,
