@@ -89,8 +89,8 @@ func buildFilters(options *dto.CCMPerspectiveGridOptions) ([]map[string]any) {
 	viewFilter := []map[string]any{
 		{
 			"viewMetadataFilter": map[string]any{
-				//"viewId": options.ViewId,
-				"viewId": "VZf-WROOTyeczYa4FMkhYg",
+				"viewId": options.ViewId,
+				//"viewId": "VZf-WROOTyeczYa4FMkhYg",
 				"isPreview": false,
 			},
 		},

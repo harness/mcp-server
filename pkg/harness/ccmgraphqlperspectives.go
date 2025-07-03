@@ -24,10 +24,10 @@ func CcmPerspectiveGridTool(config *config.Config, client *client.CloudCostManag
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		// viewId, err := OptionalParam[string](request, "view_id")
-		// if err != nil {
-		// 	return mcp.NewToolResultError(err.Error()), nil
-		// }
+		viewId, err := OptionalParam[string](request, "view_id")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
 
 		timeFilter, err := OptionalParam[string](request, "time_filter")
 		if err != nil {
@@ -75,7 +75,7 @@ func CcmPerspectiveGridTool(config *config.Config, client *client.CloudCostManag
 		
 		params := new(dto.CCMPerspectiveGridOptions)
 		params.AccountId = accountId
-		//params.ViewId = viewId
+		params.ViewId = viewId
 		params.TimeFilter = timeFilter
 		params.Filters = filters
 		params.KeyValueFilters = keyValueFilters
@@ -166,10 +166,10 @@ var keyValueFilterFields = []map[string]string{
 func filterMcpOptionsJSONSchema() json.RawMessage {
 	group_by_options := fmt.Sprintf("value is in (%s, %q, %q)", dto.GridGroupByLabel, dto.GridGroupByLabelV2, dto.GridGroupByCostCategory)
 	properties := map[string]any{
-		// "view_id": map[string]any{
-		// 	"type":        "string",
-		// 	"description": "The perspective (view) identifier",
-		// },
+		"view_id": map[string]any{
+			"type":        "string",
+			"description": "The perspective (view) identifier",
+		},
 		"time_filter": map[string]any{
 			"type":        "string",
 			"description": "Time filter for the query",
