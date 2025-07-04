@@ -157,19 +157,19 @@ var common_kv_filter_desc = `Values are provided in the format '{"filterL1": "va
 var keyValueFilterFields = []map[string]string{
 	{
 		"name":        "bussines_mapping",
-		"description": fmt.Sprintf("Filter results by Cost Category and Bucket. %s Cost Category and 'filterL2' corresponds to the Buckets within that category.", common_kv_filter_desc),
+		"description": fmt.Sprintf("Filter results by Cost Category and Bucket. Values have to be retrieved from list of Cost Categories names. %s Cost Category and 'filterL2' corresponds to the Buckets within that category.", common_kv_filter_desc),
 		"filterL2": "bucket",
 		"l2Description": "Buckets corresponding to the Cost Category",
 	},
 	{
 		"name":        "label",
-		"description": fmt.Sprintf("Filter results by  Label and Sub Label. %s Label and 'filterL2' corresponds to the Sub Label within that Label.", common_kv_filter_desc),
+		"description": fmt.Sprintf("Filter results by  Label and Sub Label. Values for this field corresponds to labels list .%s Label and 'filterL2' corresponds to the Sub Label within that Label.", common_kv_filter_desc),
 		"filterL2": "value",
 		"l2Description": "Value within the label.",
 	},
 	{
 		"name":        "label_v2",
-		"description": fmt.Sprintf("Filter results by Label V2 and Sub Label. %s Label and 'filterL2' corresponds to the Sub Label within that Label.", common_kv_filter_desc),
+		"description": fmt.Sprintf("Filter results by Label V2 and Sub Label. Values for this field are listed in label v2 list. %s Label and 'filterL2' corresponds to the Sub Label within that Label.", common_kv_filter_desc),
 		"filterL2": "value",
 		"l2Description": "Value within the label.",
 	},
@@ -201,10 +201,6 @@ func filterMcpOptionsJSONSchema() json.RawMessage {
 				dto.TimeFilterLast12Months,
 			},
 		},
-		// "group_by": map[string]any{
-		// 	"type":        "string",
-		//  	"description": "Group by field or field and value when field " + group_by_options,
-		// },
 		"group_by": map[string]any{
 			"type": "object",
 			"description": "Group by field or field and value when field " + group_by_options,
