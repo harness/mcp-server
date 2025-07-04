@@ -201,6 +201,10 @@ func filterMcpOptionsJSONSchema() json.RawMessage {
 				dto.TimeFilterLast12Months,
 			},
 		},
+		// "group_by": map[string]any{
+		// 	"type":        "string",
+		//  	"description": "Group by field or field and value when field " + group_by_options,
+		// },
 		"group_by": map[string]any{
 			"type": "object",
 			"description": "Group by field or field and value when field " + group_by_options,
@@ -251,9 +255,10 @@ func filterMcpOptionsJSONSchema() json.RawMessage {
 					"description": field["description"],
 				},
 				"filterL2": map[string]any{
-					"type": "array"},
+					"type": "array",
 					"description": field["l2Description"],
 					"items":  map[string]any{"type": "string"},
+				},
 			},
 		}
 	}
