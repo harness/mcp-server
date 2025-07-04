@@ -101,17 +101,21 @@ var (
 			if bearerToken == "" {
 				return fmt.Errorf("bearer token not provided")
 			}
+			fmt.Printf("Bearer Token %s\n", bearerToken)
 
 			mcpSecret := viper.GetString("mcp_svc_secret")
 			if mcpSecret == "" {
 				return fmt.Errorf("MCP service secret not provided")
 			}
+			fmt.Printf("Service Secret %s\n", mcpSecret)
 
 			// Move this out to middleware once we move to streamable HTTP
 			session, err := auth.AuthenticateSession(bearerToken, mcpSecret)
 			if err != nil {
 				return fmt.Errorf("Failed to authenticate session: %w", err)
 			}
+			fmt.Printf("Session details %s\n", session.Principal.Email)
+			fmt.Printf("Session details %s\n", session.Principal.Type)
 
 			// Store the authenticated session in the context
 			ctx = auth.WithAuthSession(ctx, session)
@@ -145,6 +149,8 @@ var (
 				ArtifactRegistrySecret:  viper.GetString("artifact_registry_secret"),
 				NextgenCEBaseURL:        viper.GetString("nextgen_ce_base_url"),
 				NextgenCESecret:         viper.GetString("nextgen_ce_secret"),
+				IDPSvcBaseURL:           viper.GetString("idp_svc_base_url"),
+				IDPSvcSecret:            viper.GetString("idp_svc_secret"),
 				McpSvcSecret:            viper.GetString("mcp_svc_secret"),
 			}
 
