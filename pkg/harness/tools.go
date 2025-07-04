@@ -87,6 +87,10 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 		return nil, err
 	}
 
+	if err := registerChaos(config, tsg); err != nil {
+		return nil, err
+	}
+
 	// Enable requested toolsets
 	if err := tsg.EnableToolsets(config.Toolsets); err != nil {
 		return nil, err
@@ -539,5 +543,40 @@ func registerDashboards(config *config.Config, tsg *toolsets.ToolsetGroup) error
 
 	// Add toolset to the group
 	tsg.AddToolset(dashboards)
+	return nil
+}
+
+// registerChaos registers the chaos toolset
+func registerChaos(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Determine the base URL and secret for CHAOS
+	baseURL := config.BaseURL
+	secret := config.ChaosManagerSvcSecret
+	if config.Internal {
+		baseURL = config.ChaosManagerSvcBaseURL
+	}
+
+	// Create base client for CHAOS
+	customTimeout := 30 * time.Second
+	c, err := createClient(baseURL, config, secret, customTimeout)
+	if err != nil {
+		return err
+	}
+
+	chaosClient := &client.ChaosService{
+		Client:           c,
+		UseInternalPaths: config.Internal,
+	}
+
+	// Create the CHAOS toolset
+	chaos := toolsets.NewToolset("chaos", "Harness Chaos Engineering related tools").
+		AddReadTools(
+			toolsets.NewServerTool(ListExperimentsTool(config, chaosClient)),
+			toolsets.NewServerTool(GetExperimentsTool(config, chaosClient)),
+			toolsets.NewServerTool(GetExperimentRunsTool(config, chaosClient)),
+			toolsets.NewServerTool(RunExperimentTool(config, chaosClient)),
+		)
+
+	// Add toolset to the group
+	tsg.AddToolset(chaos)
 	return nil
 }
