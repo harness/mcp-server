@@ -14,7 +14,7 @@ import (
 
 func GetEntityTool(config *config.Config, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_entity",
-			mcp.WithDescription("Get details of a specific entity(services, APIs, user groups, resources) in a Harness IDP Catalog. Entities can represent services, APIs, user groups, resources, and more. The tool returns metadata for the Harness entities matching the filter criteria, including their identifier, scope, kind, reference type (INLINE/GIT), YAML definition, Git details (branch, path, repo), ownership, tags, lifecycle, scorecards, status, and group. Use the list_entities tool to first to get the id."),
+			mcp.WithDescription("Get details of a specific entity(services, APIs, user groups, resources) in the Harness IDP Catalog. Entities can represent services, APIs, user groups, resources, and more. The tool returns metadata for the Harness entities matching the filter criteria, including their identifier, scope, kind, reference type (INLINE/GIT), YAML definition, Git details (branch, path, repo), ownership, tags, lifecycle, scorecards, status, and group. Use the list_entities tool to first to get the id."),
 			WithScope(config, false),
 			mcp.WithString("entity_id",
 				mcp.Required(),
@@ -173,7 +173,7 @@ func ListEntitiesTool(config *config.Config, client *client.IDPService) (tool mc
 
 func GetScorecardTool(config *config.Config, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_scorecard",
-			mcp.WithDescription("Get details of a specific scorecard in a Harness IDP Catalog. Use this only when the **id** is provided or known."),
+			mcp.WithDescription("Get details of a specific scorecard in the Harness IDP Catalog. Use this only when the **id** is provided or known."),
 			WithScope(config, false),
 			mcp.WithString("scorecard_id",
 				mcp.Required(),
@@ -205,7 +205,7 @@ func GetScorecardTool(config *config.Config, client *client.IDPService) (tool mc
 
 func ListScorecardsTool(config *config.Config, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_scorecards",
-			mcp.WithDescription("List scorecards in a Harness Internal Developer Portal Catalog."),
+			mcp.WithDescription("List scorecards in the Harness Internal Developer Portal Catalog."),
 			WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
