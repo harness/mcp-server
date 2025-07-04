@@ -36,6 +36,11 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 		return nil, err
 	}
 
+	// Register chatbot
+	if err := registerChatbot(config, tsg); err != nil {
+		return nil, err
+	}
+
 	// Register genai
 	if err := registerGenai(config, tsg); err != nil {
 		return nil, err
@@ -79,11 +84,6 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 	}
 
 	if err := registerDashboards(config, tsg); err != nil {
-		return nil, err
-	}
-
-	if err := registerInternalDeveloperPortal(config, tsg); err != nil {
-		slog.Info("Check Log", "entities", "added")
 		return nil, err
 	}
 
@@ -539,40 +539,5 @@ func registerDashboards(config *config.Config, tsg *toolsets.ToolsetGroup) error
 
 	// Add toolset to the group
 	tsg.AddToolset(dashboards)
-	return nil
-}
-
-// registerInternalDeveloperPortal registers the internal developer portal toolset
-func registerInternalDeveloperPortal(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-	// Determine the base URL and secret for pipeline service
-	baseURL := config.BaseURL
-	secret := config.IDPSvcSecret
-	if config.Internal {
-		baseURL = config.IDPSvcBaseURL
-	}
-
-	c, err := createClient(baseURL, config, secret)
-	if err != nil {
-		return err
-	}
-
-	idpClient := &client.IDPService{
-		Client:           c,
-		UseInternalPaths: config.Internal,
-	}
-
-	idp := toolsets.NewToolset("Internal Developer Portal", "Harness Internal Developer Portal catalog related tools for managing catalog Entities which represent the core components of your system").
-		AddReadTools(
-			toolsets.NewServerTool(ListEntitiesTool(config, idpClient)),
-			toolsets.NewServerTool(GetEntityTool(config, idpClient)),
-			toolsets.NewServerTool(GetScorecardTool(config, idpClient)),
-			toolsets.NewServerTool(ListScorecardsTool(config, idpClient)),
-			toolsets.NewServerTool(GetScoreSummaryTool(config, idpClient)),
-			toolsets.NewServerTool(GetScoresTool(config, idpClient)),
-		)
-
-	// Add toolset to the group
-	tsg.AddToolset(idp)
-	slog.Info("Check Log", "entities", "added")
 	return nil
 }

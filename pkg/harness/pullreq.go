@@ -16,7 +16,7 @@ import (
 
 // GetPullRequestTool creates a tool for getting a specific pull request
 func GetPullRequestTool(config *config.Config, client *client.PullRequestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("harness_get_pull_request",
+	return mcp.NewTool("get_pull_request",
 			mcp.WithDescription("Get details of a specific pull request in a Harness repository."),
 			mcp.WithString("repo_id",
 				mcp.Required(),
@@ -62,7 +62,7 @@ func GetPullRequestTool(config *config.Config, client *client.PullRequestService
 // ListPullRequestsTool creates a tool for listing pull requests
 // TODO: more options can be added (sort, order, timestamps, etc)
 func ListPullRequestsTool(config *config.Config, client *client.PullRequestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("harness_list_pull_requests",
+	return mcp.NewTool("list_pull_requests",
 			mcp.WithDescription("List pull requests in a Harness repository."),
 			mcp.WithString("repo_id",
 				mcp.Required(),
@@ -217,7 +217,7 @@ func splitAndTrim(s, sep string) []string {
 
 // GetPullRequestChecksTool creates a tool for getting pull request status checks
 func GetPullRequestChecksTool(config *config.Config, client *client.PullRequestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("harness_get_pull_request_checks",
+	return mcp.NewTool("get_pull_request_checks",
 			mcp.WithDescription("Get status checks for a specific pull request in a Harness repository."),
 			mcp.WithString("repo_identifier",
 				mcp.Required(),
@@ -262,7 +262,7 @@ func GetPullRequestChecksTool(config *config.Config, client *client.PullRequestS
 
 // CreatePullRequestTool creates a tool for creating a new pull request
 func CreatePullRequestTool(config *config.Config, client *client.PullRequestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("harness_create_pull_request",
+	return mcp.NewTool("create_pull_request",
 			mcp.WithDescription("Create a new pull request in a Harness repository."),
 			mcp.WithString("repo_identifier",
 				mcp.Required(),
@@ -349,7 +349,7 @@ func CreatePullRequestTool(config *config.Config, client *client.PullRequestServ
 
 // GetPullRequestActivitiesTool creates a tool for getting activities (including comments) for a specific pull request
 func GetPullRequestActivitiesTool(config *config.Config, client *client.PullRequestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("harness_get_pull_request_activities",
+	return mcp.NewTool("get_pull_request_activities",
 			mcp.WithDescription("Get activities and comments for a specific pull request in a Harness repository."),
 			mcp.WithString("repo_id",
 				mcp.Required(),
