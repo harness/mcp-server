@@ -12,8 +12,21 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+
+var ccmPerspectiveGridDescription = `
+Query detailed cost perspective grid data in Harness Cloud Cost Management.
+This tool allows you to retrieve tabular cost data for a given perspective (view) with advanced filtering, grouping, and aggregation options.
+You can filter by AWS account, service, region, product, and custom labels, as well as group results by fields such as product, region, or cost category.
+
+For example, you can:
+- Get the total AWS EC2 cost per region for the last 30 days.
+- Retrieve cost trends for specific products or business mappings across multiple accounts.
+
+Supports LIKE-style filtering for arrays and key-value filters for business mappings and labels.
+`
+
 func CcmPerspectiveGridTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewToolWithRawSchema("ccm_perspective_grid", "Query perspective grid data in Harness Cloud Cost Management",
+	return mcp.NewToolWithRawSchema("ccm_perspective_grid", ccmPerspectiveGridDescription,
 		filterMcpOptionsJSONSchema(),
 		),
 	func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
