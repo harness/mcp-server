@@ -29,7 +29,7 @@ func maxMin(val, min, max int) int {
     return val
 }
 
-// ListAuditsOfUser creates a tool for listing the audit trail of a specific user.
+// ListUserAuditTrail creates a tool for listing the audit trail of a specific user.
 func ListUserAuditTrail(config *config.Config, auditClient *client.AuditService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
     return mcp.NewTool("list_user_audits",
         mcp.WithDescription("List the audit trail of the user."),
