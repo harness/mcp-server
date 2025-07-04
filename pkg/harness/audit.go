@@ -29,8 +29,8 @@ func maxMin(val, min, max int) int {
     return val
 }
 
-// ListUserPipelineRunsTool creates a tool for listing all pipeline IDs run by a specific user.
-func ListUserPipelineRunsTool(config *config.Config, auditClient *client.AuditService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+// ListAuditsOfUser creates a tool for listing the audit trail of a specific user.
+func ListUserAuditTrail(config *config.Config, auditClient *client.AuditService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
     return mcp.NewTool("list_user_audits",
         mcp.WithDescription("List the audit trail of the user."),
         mcp.WithString("user_id",
@@ -70,13 +70,7 @@ func ListUserPipelineRunsTool(config *config.Config, auditClient *client.AuditSe
 		startTime, _ := OptionalParam[int64](request, "start_time")
 		endTime, _ := OptionalParam[int64](request, "end_time")
 
-        toGetModules := []string{"PMS", "CORE"}
-        modules, _ := OptionalParam[[]string](request, "modules")
-        if modules != nil {
-            toGetModules = modules
-        }
-
-        data, err := auditClient.ListPipelineExecutionsByUser(ctx, scope, userID, toGetModules, page, size, startTime, endTime, nil)
+        data, err := auditClient.ListUserAuditTrail(ctx, scope, userID, page, size, startTime, endTime, nil)
         if err != nil {
             return nil, fmt.Errorf("failed to list the audit logs: %w", err)
         }
