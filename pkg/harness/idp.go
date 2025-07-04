@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
@@ -158,7 +157,6 @@ func ListEntitiesTool(config *config.Config, client *client.IDPService) (tool mc
 				Tags:       tags,
 			}
 
-			slog.Info("Using list entities tool", "params", params.SearchTerm)
 			data, err := client.ListEntities(ctx, scope, params)
 			if err != nil {
 				return nil, fmt.Errorf("failed to list entities: %w", err)

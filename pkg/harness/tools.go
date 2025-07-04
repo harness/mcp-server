@@ -36,6 +36,11 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 		return nil, err
 	}
 
+	// Register chatbot
+	if err := registerChatbot(config, tsg); err != nil {
+		return nil, err
+	}
+
 	// Register genai
 	if err := registerGenai(config, tsg); err != nil {
 		return nil, err
@@ -83,7 +88,6 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 	}
 
 	if err := registerInternalDeveloperPortal(config, tsg); err != nil {
-		slog.Info("Check Log", "entities", "added")
 		return nil, err
 	}
 
@@ -572,6 +576,5 @@ func registerInternalDeveloperPortal(config *config.Config, tsg *toolsets.Toolse
 
 	// Add toolset to the group
 	tsg.AddToolset(idp)
-	slog.Info("Check Log", "entities", "added")
 	return nil
 }
