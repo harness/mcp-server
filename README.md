@@ -61,6 +61,15 @@ Toolset Name: `cloudcostmanagement`
 - `list_ccm_cost_categories_detail`:  List all cost categories details for a specified account.
 - `get_ccm_cost_category`:  Retrieve a cost category detail by Id  for a specified account.
 
+#### Chaos Engineering Toolset
+
+Toolset Name: `chaos`
+
+- `chaos_experiments_list`: List all the chaos experiments for a specific account.
+- `chaos_experiment_describe`: Get details of a specific chaos experiment.
+- `chaos_experiment_run`:  Run a specific chaos experiment.
+- `chaos_experiment_run_result`:  Get the result of a specific chaos experiment run.
+
 #### Logs Toolset
 
 Toolset Name: `logs`

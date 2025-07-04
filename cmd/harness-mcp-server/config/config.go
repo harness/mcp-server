@@ -34,4 +34,6 @@ type Config struct {
 	IDPSvcBaseURL           string
 	IDPSvcSecret            string
 	McpSvcSecret            string
+	ChaosManagerSvcBaseURL  string
+	ChaosManagerSvcSecret   string
 }
