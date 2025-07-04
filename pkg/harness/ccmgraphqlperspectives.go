@@ -98,45 +98,45 @@ var common_filter_desc = `It is applied using LIKE operator in an array. Example
 var filterFields = []map[string]string{
 	{
 		"name":        "aws_account",
-		"description": fmt.Sprintf("Filter results by AWS account identifier.", common_filter_desc),
+		"description": fmt.Sprintf("Filter results by AWS account identifier. %s", common_filter_desc),
 	},
 	{
 		"name":        "aws_billing_entity",
-		"description": fmt.Sprintf("Filter results by AWS billing entity.", common_filter_desc),
+		"description": fmt.Sprintf("Filter results by AWS billing entity. %s", common_filter_desc),
 
 	},
 	{
 		"name":        "aws_instance_type",
-		"description": fmt.Sprintf("Filter results by AWS instance type.", common_filter_desc),
+		"description": fmt.Sprintf("Filter results by AWS instance type. %s", common_filter_desc),
 
 	},
 	{
 		"name":        "aws_line_item_type",
-		"description": fmt.Sprintf("Filter results by AWS line item type.", common_filter_desc),
+		"description": fmt.Sprintf("Filter results by AWS line item type. %s", common_filter_desc),
 	},
 	{
 		"name":        "aws_payer_account",
-		"description": fmt.Sprintf("Filter results by AWS payer account.", common_filter_desc),
+		"description": fmt.Sprintf("Filter results by AWS payer account. %s", common_filter_desc),
 	},
 	{
 		"name":        "aws_service",
-		"description": fmt.Sprintf("Filter results by AWS service.", common_filter_desc),
+		"description": fmt.Sprintf("Filter results by AWS service. %s", common_filter_desc),
 	},
 	{
 		"name":        "aws_usage_type",
-		"description": fmt.Sprintf("Filter results by AWS usage type.", common_filter_desc),
+		"description": fmt.Sprintf("Filter results by AWS usage type. %s", common_filter_desc),
 	},
 	{
 		"name":        "region",
-		"description": fmt.Sprintf("Filter results by region.", common_filter_desc),
+		"description": fmt.Sprintf("Filter results by region. %s", common_filter_desc),
 	},
 	{
 		"name":        "cloud_provider",
-		"description": fmt.Sprintf("Filter results by cloud provider.", common_filter_desc),
+		"description": fmt.Sprintf("Filter results by cloud provider. %s", common_filter_desc),
 	},
 	{
 		"name":        "product",
-		"description": fmt.Sprintf("Filter results by product.", common_filter_desc),
+		"description": fmt.Sprintf("Filter results by product. %s", common_filter_desc),
 	},
 }
 
