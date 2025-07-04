@@ -574,6 +574,8 @@ func registerChaos(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 			toolsets.NewServerTool(GetExperimentsTool(config, chaosClient)),
 			toolsets.NewServerTool(GetExperimentRunsTool(config, chaosClient)),
 			toolsets.NewServerTool(RunExperimentTool(config, chaosClient)),
+			toolsets.NewServerTool(ListProbesTool(config, chaosClient)),
+			toolsets.NewServerTool(GetProbeTool(config, chaosClient)),
 		)
 
 	// Add toolset to the group

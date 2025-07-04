@@ -13,6 +13,8 @@ const (
 	//chaosGetExperimentRunPath = "api/rest/v2/experiments/%s/run?accountIdentifier=%s&projectIdentifier=%s&organizationIdentifier=%s&experimentRunId=%s"
 	chaosGetExperimentRunPipelinePath = "api/rest/v2/chaos-pipeline/%s?accountIdentifier=%s&projectIdentifier=%s&organizationIdentifier=%s&experimentRunId=%s"
 	chaosExperimentRunPath            = "api/rest/v2/experiments/%s/run?accountIdentifier=%s&projectIdentifier=%s&organizationIdentifier=%s&isIdentity=false"
+	chaosListProbesPath               = "api/rest/v2/probes?accountIdentifier=%s&projectIdentifier=%s&organizationIdentifier=%s"
+	chaosGetProbePath                 = "api/rest/v2/probes/%s?accountIdentifier=%s&projectIdentifier=%s&organizationIdentifier=%s"
 
 	// Prefix to prepend for external API calls
 	externalChaosManagerPathPrefix = "chaos/manager/"
@@ -98,4 +100,36 @@ func (c *ChaosService) RunExperiment(ctx context.Context, scope dto.Scope, exper
 	}
 
 	return experimentRun, nil
+}
+
+func (c *ChaosService) ListProbes(ctx context.Context, scope dto.Scope) (*dto.ListProbeResponse, error) {
+	var (
+		pathTemplate = c.buildPath(chaosListProbesPath)
+		path         = fmt.Sprintf(pathTemplate, scope.AccountID, scope.ProjectID, scope.OrgID)
+		params       = make(map[string]string)
+	)
+
+	listExperiments := new(dto.ListProbeResponse)
+	err := c.Client.Get(ctx, path, params, nil, listExperiments)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list probes: %w", err)
+	}
+
+	return listExperiments, nil
+}
+
+func (c *ChaosService) GetProbe(ctx context.Context, scope dto.Scope, experimentID string) (*dto.GetProbeResponse, error) {
+	var (
+		pathTemplate = c.buildPath(chaosGetProbePath)
+		path         = fmt.Sprintf(pathTemplate, experimentID, scope.AccountID, scope.ProjectID, scope.OrgID)
+		params       = make(map[string]string)
+	)
+
+	getExperiment := new(dto.GetProbeResponse)
+	err := c.Client.Get(ctx, path, params, nil, getExperiment)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get probes: %w", err)
+	}
+
+	return getExperiment, nil
 }

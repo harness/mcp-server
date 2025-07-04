@@ -1,5 +1,7 @@
 package dto
 
+import probeSdk "github.com/harness/hce-saas/hce-sdk/template/schema/probe"
+
 type ListExperimentResponse struct {
 	Data []ExperimentV2 `json:"data"`
 }
@@ -162,4 +164,61 @@ type Targets struct {
 	SubType   string `json:"subType"`
 	Kind      string `json:"kind"`
 	Namespace string `json:"namespace"`
+}
+
+type ListProbeResponse struct {
+	TotalNoOfProbes int                `json:"totalNoOfProbes"`
+	Probes          []GetProbeResponse `json:"data"`
+}
+
+type GetProbeResponse struct {
+	ProbeRequest `json:",inline"`
+	CreatedAt    int64 `json:"createdAt"`
+	UpdatedAt    int64 `json:"updatedAt"`
+}
+
+type ProbeRequest struct {
+	Identity            string                              `json:"identity"`
+	ProbeID             string                              `json:"probeId"`
+	Name                string                              `json:"name"`
+	Description         *string                             `json:"description,omitempty"`
+	Tags                []string                            `json:"tags,omitempty"`
+	Type                string                              `json:"type"`
+	IsEnabled           *bool                               `json:"isEnabled"`
+	InfrastructureType  string                              `json:"infrastructureType"`
+	RunProperties       probeSdk.ProbeTemplateRunProperties `json:"runProperties,omitempty"`
+	ProbeProperties     probeSdk.ProbeTemplateProperties    `json:"probeProperties,omitempty"`
+	RecentProbeRuns     []*ProbeRecentExecutions            `json:"recentProbeRuns,omitempty"`
+	ProbeReferenceCount *int64                              `json:"probeReferenceCount,omitempty"`
+}
+
+type ProbeRecentExecutions struct {
+	FaultName            string                `json:"faultName"`
+	Status               *Status               `json:"status"`
+	ExecutedByExperiment *ExecutedByExperiment `json:"executedByExperiment"`
+}
+
+type Status struct {
+	Verdict     string  `json:"verdict"`
+	Description *string `json:"description"`
+}
+
+type ExecutedByExperiment struct {
+	ExperimentID    string `json:"experimentID"`
+	ExperimentRunID string `json:"experimentRunID"`
+	NotifyID        string `json:"notifyID"`
+	ExperimentName  string `json:"experimentName"`
+	ExperimentType  string `json:"experimentType"`
+	UpdatedAt       int    `json:"updatedAt"`
+}
+
+type ProbeTemplateRunProperties struct {
+	ProbeTimeout         string       `json:"timeout,omitempty" yaml:"timeout,omitempty"`
+	Interval             string       `json:"interval,omitempty" yaml:"interval,omitempty"`
+	Attempt              interface{}  `json:"attempt,omitempty" yaml:"attempt,omitempty" jsonschema:"required,description=Value of the variable it can be static or runtime,title=Value of the variable,oneof_type=string;number"`
+	ProbePollingInterval string       `json:"pollingInterval,omitempty" yaml:"pollingInterval,omitempty"`
+	InitialDelay         string       `json:"initialDelay,omitempty" yaml:"initialDelay,omitempty"`
+	StopOnFailure        bool         `json:"stopOnFailure,omitempty" yaml:"stopOnFailure,omitempty"`
+	Verbosity            *string      `json:"verbosity,omitempty" yaml:"verbosity,omitempty" jsonschema:"required,description=Value of the variable it can be static or runtime,title=Value of the variable,oneof_type=string;number"`
+	Retry                *interface{} `json:"retry,omitempty" yaml:"retry,omitempty"`
 }
