@@ -15,20 +15,20 @@ const (
 )
 
 const (
-	GridGroupByCostCategory     = "COST_CATEGORY"      // custom
-	GridGroupByAWSAccount       = "AWS_ACCOUNT"
-	GridGroupByAWSBillingEntity = "AWS_BILLING_ENTITY"
-	GridGroupByAWSInstanceType  = "AWS_INSTANCE_TYPE"
-	GridGroupByAWSLineItemType  = "AWS_LINE_ITEM_TYPE"
-	GridGroupByAWSPayerAccount  = "AWS_PAYER_ACCOUNT"
-	GridGroupByAWSService       = "AWS_SERVICE"
-	GridGroupByAWSUsageType     = "AWS_USAGE_TYPE"
-	GridGroupByRegion           = "REGION"
-	GridGroupByProduct          = "PRODUCT"
-	GridGroupByCloudProvider    = "CLOUD_PROVIDER"
-	GridGroupByLabel            = "LABEL"              // custom
-	GridGroupByLabelV2          = "LABEL_V2"           // custom
-	GridGroupByNone             = "NONE"
+	GridGroupByCostCategory     = "business_mapping"
+	GridGroupByAWSAccount       = "awsUsageaccountid"
+	GridGroupByAWSBillingEntity = "awsBillingEntity"
+	GridGroupByAWSInstanceType  = "awsInstancetype"
+	GridGroupByAWSLineItemType  = "awsLineItemType"
+	GridGroupByAWSPayerAccount  = "awspayeraccountid"
+	GridGroupByAWSService       = "awsServicecode"
+	GridGroupByAWSUsageType     = "awsUsageType"
+	GridGroupByRegion           = "region"
+	GridGroupByProduct          = "product"
+	GridGroupByCloudProvider    = "cloudProvider"
+	GridGroupByLabel            = "label" 
+	GridGroupByLabelV2          = "label_v2"
+	GridGroupByNone             = "none"
 )
 
 type CCMKeyValue struct {
