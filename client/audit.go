@@ -10,14 +10,14 @@ type AuditService struct {
 	Client *Client
 }
 
-// ListPipelineExecutionsByUser fetches pipeline executions triggered by a specific user.
-func (a *AuditService) ListPipelineExecutionsByUser(ctx context.Context, scope dto.Scope, userID string, modules []string, page int, size int, startTime int64, endTime int64, opts *dto.ListAuditEventsFilter) (*dto.AuditOutput[dto.AuditListItem], error) {
+// ListUserAuditTrail fetches the audit trail of a specific user.
+func (a *AuditService) ListUserAuditTrail(ctx context.Context, scope dto.Scope, userID string, page int, size int, startTime int64, endTime int64, opts *dto.ListAuditEventsFilter) (*dto.AuditOutput[dto.AuditListItem], error) {
     if opts == nil {
         opts = &dto.ListAuditEventsFilter{}
     }
 
     params := make(map[string]string)
-    params["routingId"] = scope.AccountID // required for Harness gateway APIs
+    params["routingId"] = scope.AccountID
     params["accountIdentifier"] = scope.AccountID
     params["pageIndex"] = fmt.Sprintf("%d", page)
     params["pageSize"] = fmt.Sprintf("%d", size)
@@ -37,8 +37,7 @@ func (a *AuditService) ListPipelineExecutionsByUser(ctx context.Context, scope d
         ProjectIdentifier: scope.ProjectID,
     }}
 
-    opts.Modules = modules
-    opts.StartTime = startTime // or use a date range with UnixMillis
+    opts.StartTime = startTime
 	opts.EndTime = endTime
 
     resp := &dto.AuditOutput[dto.AuditListItem]{}
