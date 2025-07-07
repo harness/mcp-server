@@ -326,6 +326,8 @@ func runStdioServer(ctx context.Context, config config.Config) error {
 }
 
 func main() {
+	fmt.Println("hello")
+	fmt.Println("world")
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
