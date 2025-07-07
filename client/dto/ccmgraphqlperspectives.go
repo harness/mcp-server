@@ -31,10 +31,19 @@ const (
 	GridGroupByNone             = "none"
 )
 
+const (
+	TimeGroupByDay   = "DAY"
+	TimeGroupByWeek  = "WEEK"
+	TimeGroupByMonth = "MONTH"
+)
+
 type CCMKeyValue struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
 }
+
+type CCMGraphQLFilters  = map[string][]string
+type CCMGraphQLKeyValueFilters = map[string]map[string]any
 
 type CCMPerspectiveGridOptions struct {
 
@@ -55,8 +64,13 @@ type CCMPerspectiveGridOptions struct {
 	AwsIncludeTaxes       bool   `json:"aws_include_taxes"`
 	AwsCost               string `json:"aws_cost"`
 
-	Filters map[string][]string
-	KeyValueFilters map[string]map[string]any
+	Filters CCMGraphQLFilters 
+	KeyValueFilters CCMGraphQLKeyValueFilters
+}
+
+type CCMPerspectiveTimeSeriesOptions struct {
+	CCMPerspectiveGridOptions
+	TimeGroupBy string `json:"time_group_by"`
 }
 
 type CCMPerspectiveGridResponse struct {
@@ -79,4 +93,30 @@ type CCMPerspectiveGridDataPoint struct {
 	Cost      float64 `json:"cost"`
 	CostTrend float64 `json:"costTrend"`
 	Typename  string  `json:"__typename"`
+}
+
+
+type CCMPerspectiveTimeSeriesResponse struct {
+	Data struct {
+		PerspectiveTimeSeriesStats struct {
+			Stats []CCMPerspectiveTimeSeriesStat `json:"stats"`
+		} `json:"perspectiveTimeSeriesStats"`
+	} `json:"data"`
+}
+
+type CCMPerspectiveTimeSeriesStat struct {
+	Values []CCMPerspectiveTimeSeriesValue `json:"values"`
+}
+
+type CCMPerspectiveTimeSeriesValue struct {
+	Key       CCMPerspectiveReference `json:"key"`
+	Value     float64              `json:"value"`
+	Typename  string               `json:"__typename"`
+}
+
+type CCMPerspectiveReference struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Type      string `json:"type"`
+	Typename  string `json:"__typename"`
 }
