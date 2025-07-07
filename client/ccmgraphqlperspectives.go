@@ -23,7 +23,7 @@ func (r *CloudCostManagementService) PerspectiveGrid(ctx context.Context, scope 
 
 	gqlQuery := ccmcommons.CCMPerspectiveGridQuery
 	variables := map[string]any{
-		"filters":            buildFilters(options.TimeFilter, options.Filters, options.KeyValueFilters),
+		"filters":            buildFilters(options.ViewId, options.TimeFilter, options.Filters, options.KeyValueFilters),
 		"groupBy":            buildGroupBy(options.GroupBy, outputFields, outputKeyValueFields),
 		"limit":              15,
 		"offset":             0,
@@ -63,7 +63,7 @@ func (r *CloudCostManagementService) PerspectiveTimeSeries(ctx context.Context, 
 	}
 
 	variables := map[string]any{
-		"filters":            buildFilters(options.TimeFilter, options.Filters, options.KeyValueFilters),
+		"filters":            buildFilters(options.ViewId, options.TimeFilter, options.Filters, options.KeyValueFilters),
 		"groupBy":           []map[string]any{timeTruncGroupBy, entityGroupBy[0]},
 		"limit":              15,
 		"offset":             0,
@@ -88,13 +88,12 @@ func (r *CloudCostManagementService) PerspectiveTimeSeries(ctx context.Context, 
 	return result, nil
 }
 
-//func buildFilters(options *dto.CCMPerspectiveGridOptions) ([]map[string]any) {
-func buildFilters(timeFilters string, idFilters dto.CCMGraphQLFilters, keyValueFilters dto.CCMGraphQLKeyValueFilters) ([]map[string]any) {
+func buildFilters(viewId string, timeFilters string, idFilters dto.CCMGraphQLFilters, keyValueFilters dto.CCMGraphQLKeyValueFilters) ([]map[string]any) {
 	filters := []map[string]any{}
 	viewFilter := []map[string]any{
 		{
 			"viewMetadataFilter": map[string]any{
-				"viewId": options.ViewId,
+				"viewId": viewId,
 				//"viewId": "VZf-WROOTyeczYa4FMkhYg",
 				"isPreview": false,
 			},
