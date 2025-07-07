@@ -7,59 +7,23 @@ import (
 	"strings"
 	"log/slog"
 	"github.com/harness/harness-mcp/client/dto"
+	"github.com/harness/harness-mcp/client/ccmcommons"
 	//"github.com/harness/harness-mcp/pkg/utils"
 )
 
 const (
 	ccmGraphQLBasePath = "gateway/" + ccmBasePath + "/graphql"
-	ccmPerspectiveGridPath = ccmGraphQLBasePath + "?accountIdentifier=%s&routingId=%s"
+	ccmPerspectiveGraphQLPath = ccmGraphQLBasePath + "?accountIdentifier=%s&routingId=%s"
 )
 
 //https://qa.harness.io/gateway/ccm/api/graphql?accountIdentifier=Z60xsRGoTeqOoAFRCsmlBQ&routingId=Z60xsRGoTeqOoAFRCsmlBQ
 
 func (r *CloudCostManagementService) PerspectiveGrid(ctx context.Context, scope dto.Scope, options *dto.CCMPerspectiveGridOptions) (*dto.CCMPerspectiveGridResponse, error) {
-	path := fmt.Sprintf(ccmPerspectiveGridPath, options.AccountId, options.AccountId) 
+	path := fmt.Sprintf(ccmPerspectiveGraphQLPath, options.AccountId, options.AccountId) 
 
-	const gqlQuery = `
-	query FetchperspectiveGrid(
-		$filters: [QLCEViewFilterWrapperInput], 
-		$groupBy: [QLCEViewGroupByInput], 
-		$limit: Int, 
-		$offset: Int, 
-		$aggregateFunction: [QLCEViewAggregationInput], 
-		$isClusterOnly: Boolean!, 
-		$isClusterHourlyData: Boolean = null, 
-		$preferences: ViewPreferencesInput
-	) {
-		perspectiveGrid(
-			aggregateFunction: $aggregateFunction
-			filters: $filters
-			groupBy: $groupBy
-			limit: $limit
-			offset: $offset
-			preferences: $preferences
-			isClusterHourlyData: $isClusterHourlyData
-			sortCriteria: [{sortType: COST, sortOrder: DESCENDING}]
-		) {
-			data {
-				name
-				id
-				cost
-				costTrend
-				__typename
-			}
-			__typename
-		}
-		perspectiveTotalCount(
-			filters: $filters
-			groupBy: $groupBy
-			isClusterQuery: $isClusterOnly
-			isClusterHourlyData: $isClusterHourlyData
-		)
-	}`
-
+	gqlQuery := ccmcommons.CCMPerspectiveGridQuery
 	variables := map[string]any{
-		"filters":            buildFilters(options),
+		"filters":            buildFilters(options.TimeFilter, options.Filters, options.KeyValueFilters),
 		"groupBy":            buildGroupBy(options.GroupBy, outputFields, outputKeyValueFields),
 		"limit":              15,
 		"offset":             0,
@@ -84,7 +48,48 @@ func (r *CloudCostManagementService) PerspectiveGrid(ctx context.Context, scope 
 	return result, nil
 }
 
-func buildFilters(options *dto.CCMPerspectiveGridOptions) ([]map[string]any) {
+func (r *CloudCostManagementService) PerspectiveTimeSeries(ctx context.Context, scope dto.Scope, options *dto.CCMPerspectiveTimeSeriesOptions) (*dto.CCMPerspectiveTimeSeriesResponse, error) {
+	path := fmt.Sprintf(ccmPerspectiveGraphQLPath, options.AccountId, options.AccountId) 
+
+	gqlQuery := ccmcommons.CCMPerspectiveTimeSeriesQuery
+	timeTruncGroupBy := map[string]any{
+		"timeTruncGroupBy": map[string]any{"resolution": options.TimeGroupBy},
+	}
+
+
+	entityGroupBy := buildGroupBy(options.GroupBy, outputFields, outputKeyValueFields)
+	if len(entityGroupBy) == 0 {
+		return nil, fmt.Errorf("Missing Group by entity clause")
+	}
+
+	variables := map[string]any{
+		"filters":            buildFilters(options.TimeFilter, options.Filters, options.KeyValueFilters),
+		"groupBy":           []map[string]any{timeTruncGroupBy, entityGroupBy[0]},
+		"limit":              15,
+		"offset":             0,
+		"aggregateFunction":  buildAggregateFunction(),
+		"isClusterOnly":      false,
+		"isClusterHourlyData": false,
+		"preferences":        buildPreferences(),
+	}
+
+	payload := map[string]any{
+		"query":         gqlQuery,
+		"operationName": "FetchPerspectiveTimeSeries",
+		"variables":     variables,
+	}
+
+	slog.Debug("PerspectiveTimeSeries", "Payload", payload)
+	result := new(dto.CCMPerspectiveTimeSeriesResponse)
+	err := r.Client.Post(ctx, path, nil, payload, &result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get perspective grid: %w", err)
+	}
+	return result, nil
+}
+
+//func buildFilters(options *dto.CCMPerspectiveGridOptions) ([]map[string]any) {
+func buildFilters(timeFilters string, idFilters dto.CCMGraphQLFilters, keyValueFilters dto.CCMGraphQLKeyValueFilters) ([]map[string]any) {
 	filters := []map[string]any{}
 	viewFilter := []map[string]any{
 		{
@@ -97,17 +102,17 @@ func buildFilters(options *dto.CCMPerspectiveGridOptions) ([]map[string]any) {
 	}
 
 	filters = append(filters, viewFilter...)
-	filters = append(filters, buildTimeFilters(options)...)
-	filters = append(filters, buildFieldFilters(options.Filters, outputFields)...)
-	filters = append(filters, buildKeyValueFieldFilters(options.KeyValueFilters, outputKeyValueFields)...)
+	filters = append(filters, buildTimeFilters(timeFilters)...)
+	filters = append(filters, buildFieldFilters(idFilters, outputFields)...)
+	filters = append(filters, buildKeyValueFieldFilters(keyValueFilters, outputKeyValueFields)...)
 
 	slog.Debug("PerspectiveGrid", "FILTERS", filters)
 
 	return filters
 }
 
-func buildTimeFilters(options *dto.CCMPerspectiveGridOptions) []map[string]any {
-	start, end := GetTimeRangeFromFilter(options.TimeFilter, time.Now())
+func buildTimeFilters(timeFilter string) []map[string]any {
+	start, end := GetTimeRangeFromFilter(timeFilter, time.Now())
 	return []map[string]any{
 		{
 			"timeFilter": map[string]any{
@@ -321,7 +326,7 @@ func buildFieldFilters(input map[string][]string, output []map[string]string) []
 	return result
 }
 
-func buildKeyValueFieldFilters(input map[string]map[string]any, output []map[string]string) []map[string]any {
+func buildKeyValueFieldFilters(input dto.CCMGraphQLKeyValueFilters, output []map[string]string) []map[string]any {
 	result := make([]map[string]any, 0)
 	for fName, values := range input {
 		slog.Debug("PerspectiveGrid", "KV Field ID ", fName)
@@ -350,11 +355,21 @@ func buildKeyValueFieldFilters(input map[string]map[string]any, output []map[str
 	return result
 }
 
+var defaultGroupBy = []map[string]any{ 
+		{	
+			"entityGroupBy": map[string]any{
+				"fieldId":        "product",
+				"fieldName":      "Product",
+				"identifier":     "COMMON",
+				"identifierName": "Common",
+			},
+		},
+	}
 func buildGroupBy(input map[string]any, outputFields []map[string]string, outputKeyValueFields []map[string]string) []map[string]any {
 	// Get the value when grouping by field only.
 	field, ok1 := input["field"].(string)
 	if ok1 == false {
-		return nil
+		return defaultGroupBy 
 	}	
 
 	for _, out := range outputFields {
@@ -370,7 +385,7 @@ func buildGroupBy(input map[string]any, outputFields []map[string]string, output
 	// Get the value when grouping by key,value.
 	value, ok2 := input["value"].(string)
 	if ok2 == false {
-		return nil
+		return defaultGroupBy 
 	}
 	for _, out := range outputKeyValueFields {
 		if strings.EqualFold(field, out["identifier"]) {
@@ -382,5 +397,5 @@ func buildGroupBy(input map[string]any, outputFields []map[string]string, output
 			}
 		}
 	}
-	return nil
+	return defaultGroupBy 
 }
