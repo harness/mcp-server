@@ -87,6 +87,10 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 		return nil, err
 	}
 
+	if err := registerAudit(config, tsg); err != nil {
+		return nil, err
+	}
+
 	// Enable requested toolsets
 	if err := tsg.EnableToolsets(config.Toolsets); err != nil {
 		return nil, err
@@ -539,5 +543,19 @@ func registerDashboards(config *config.Config, tsg *toolsets.ToolsetGroup) error
 
 	// Add toolset to the group
 	tsg.AddToolset(dashboards)
+	return nil
+}
+
+func registerAudit(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	c, err := createClient(config.BaseURL, config, "")
+	if err != nil {
+		return err
+	}
+	auditService := &client.AuditService{Client: c}
+	audit := toolsets.NewToolset("audit", "Audit log related tools").
+		AddReadTools(
+			toolsets.NewServerTool(ListUserAuditTrailTool(config, auditService)),
+		)
+	tsg.AddToolset(audit)
 	return nil
 }
