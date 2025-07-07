@@ -21,7 +21,7 @@ const (
 )
 
 // ListAuditsOfUser creates a tool for listing the audit trail.
-func ListUserAuditTrail(config *config.Config, auditClient *client.AuditService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListUserAuditTrailTool(config *config.Config, auditClient *client.AuditService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_user_audits",
 			mcp.WithDescription("List the audit trail of the user."),
 			mcp.WithString("user_id",
