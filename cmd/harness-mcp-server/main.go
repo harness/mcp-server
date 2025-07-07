@@ -146,6 +146,8 @@ var (
 				NextgenCEBaseURL:        viper.GetString("nextgen_ce_base_url"),
 				NextgenCESecret:         viper.GetString("nextgen_ce_secret"),
 				McpSvcSecret:            viper.GetString("mcp_svc_secret"),
+				ChaosManagerSvcBaseURL:  viper.GetString("chaos_manager_svc_base_url"),
+				ChaosManagerSvcSecret:   viper.GetString("chaos_manager_svc_secret"),
 			}
 
 			if err := runStdioServer(ctx, cfg); err != nil {
