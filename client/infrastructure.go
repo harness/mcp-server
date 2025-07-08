@@ -9,7 +9,7 @@ import (
 
 const (
 	extInfrastructureBasePath     = "ng/api/infrastructures"
-	intInfrastructureBasePath     = "api/infrastructures"
+	intInfrastructureBasePath     = "infrastructures"
 	infrastructureMoveConfigsPath = "/move-config/%s"
 )
 

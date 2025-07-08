@@ -9,7 +9,7 @@ import (
 
 const (
 	extEnvironmentBasePath       = "ng/api/environments"
-	intEnvironmentBasePath       = "api/environments"
+	intEnvironmentBasePath       = "environments"
 	environmentGetPathSuffix     = "/%s"
 	environmentMoveConfigsSuffix = "V2/move-config/%s"
 )

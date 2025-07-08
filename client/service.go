@@ -9,7 +9,7 @@ import (
 
 const (
 	extServiceBasePath   = "ng/api/services"
-	intServiceBasePath   = "api/services"
+	intServiceBasePath   = "services"
 	serviceGetPathSuffix = "/%s"
 )
 

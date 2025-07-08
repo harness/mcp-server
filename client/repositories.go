@@ -9,7 +9,7 @@ import (
 
 const (
 	extRepositoryBasePath   = "code/api/v1/repos"
-	intRepositoryBasePath   = "api/code/v1/repos"
+	intRepositoryBasePath   = "api/v1/repos"
 	repositoryGetPathSuffix = "/%s"
 )
 

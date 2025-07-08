@@ -19,6 +19,7 @@ var DefaultTools = []string{"all"}
 
 // Service identity for JWT auth
 const serviceIdentity = "genaiservice" // TODO: can change once we have our own service, not needed at the moment
+const aiServiceIdentity = "aifoundation"
 
 // Default JWT token lifetime
 var defaultJWTLifetime = 1 * time.Hour
@@ -105,7 +106,13 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 
 // createClient creates a client with the appropriate authentication method based on the config
 // An optional customTimeout can be provided to override the config's DefaultTimeout
+// An optional custom service identity can be provided to override the default service identity
 func createClient(baseURL string, config *config.Config, secret string, timeout ...time.Duration) (*client.Client, error) {
+	return createClientWithIdentity(baseURL, config, secret, serviceIdentity, timeout...)
+}
+
+// createClientWithIdentity is like createClient but allows specifying a custom service identity
+func createClientWithIdentity(baseURL string, config *config.Config, secret string, serviceIdentity string, timeout ...time.Duration) (*client.Client, error) {
 	var authProvider auth.Provider
 	var err error
 
@@ -170,8 +177,8 @@ func registerPullRequests(config *config.Config, tsg *toolsets.ToolsetGroup) err
 		baseURL = config.CodeSvcBaseURL
 	}
 
-	// Create base client for pull requests
-	c, err := createClient(baseURL, config, secret)
+	// Create base client for pull requests with code service identity
+	c, err := createClientWithIdentity(baseURL, config, secret, aiServiceIdentity)
 	if err != nil {
 		return err
 	}
@@ -204,8 +211,8 @@ func registerRepositories(config *config.Config, tsg *toolsets.ToolsetGroup) err
 		baseURL = config.CodeSvcBaseURL
 	}
 
-	// Create base client for repositories
-	c, err := createClient(baseURL, config, secret)
+	// Create base client for repositories with code service identity
+	c, err := createClientWithIdentity(baseURL, config, secret, aiServiceIdentity)
 	if err != nil {
 		return err
 	}

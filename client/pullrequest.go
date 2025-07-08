@@ -10,7 +10,7 @@ import (
 
 const (
 	extPullRequestBasePath          = "code/api/v1/repos"
-	intPullRequestBasePath          = "api/code/v1/repos"
+	intPullRequestBasePath          = "api/v1/repos"
 	pullRequestGetPathSuffix        = "/%s/pullreq/%d"
 	pullRequestListPathSuffix       = "/%s/pullreq"
 	pullRequestCreatePathSuffix     = "/%s/pullreq"
