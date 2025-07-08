@@ -8,20 +8,25 @@ import (
 )
 
 const (
-	environmentBasePath        = "ng/api/environments"
-	environmentGetPath         = environmentBasePath + "/%s"
-	environmentListPath        = environmentBasePath
-	environmentMoveConfigsPath = environmentBasePath + "V2/move-config/%s"
+	extEnvironmentBasePath       = "ng/api/environments"
+	intEnvironmentBasePath       = "api/environments"
+	environmentGetPathSuffix     = "/%s"
+	environmentMoveConfigsSuffix = "V2/move-config/%s"
 )
 
 type EnvironmentClient struct {
-	Client *Client
+	Client           *Client
+	UseInternalPaths bool
 }
 
 // Get retrieves an environment by its identifier
 // https://apidocs.harness.io/tag/Environments#operation/getEnvironmentV2
 func (e *EnvironmentClient) Get(ctx context.Context, scope dto.Scope, environmentIdentifier string) (*dto.Environment, error) {
-	path := fmt.Sprintf(environmentGetPath, environmentIdentifier)
+	basePath := extEnvironmentBasePath
+	if e.UseInternalPaths {
+		basePath = intEnvironmentBasePath
+	}
+	path := fmt.Sprintf(basePath+environmentGetPathSuffix, environmentIdentifier)
 	params := make(map[string]string)
 	addScope(scope, params)
 
@@ -53,7 +58,10 @@ func setDefaultPaginationForEnvironment(opts *dto.EnvironmentOptions) {
 // List retrieves a list of environments based on the provided options
 // https://apidocs.harness.io/tag/Environments#operation/getEnvironmentList
 func (e *EnvironmentClient) List(ctx context.Context, scope dto.Scope, opts *dto.EnvironmentOptions) ([]dto.Environment, int, error) {
-	path := environmentListPath
+	path := extEnvironmentBasePath
+	if e.UseInternalPaths {
+		path = intEnvironmentBasePath
+	}
 	params := make(map[string]string)
 	addScope(scope, params)
 
@@ -87,7 +95,11 @@ func (e *EnvironmentClient) List(ctx context.Context, scope dto.Scope, opts *dto
 // https://apidocs.harness.io/tag/Environments#operation/moveEnvironmentConfig
 // Note: REMOTE_TO_INLINE operations are not supported for environments
 func (e *EnvironmentClient) MoveConfigs(ctx context.Context, scope dto.Scope, request *dto.MoveEnvironmentConfigsRequest) (bool, error) {
-	path := fmt.Sprintf(environmentMoveConfigsPath, request.EnvironmentIdentifier)
+	basePath := extEnvironmentBasePath
+	if e.UseInternalPaths {
+		basePath = intEnvironmentBasePath
+	}
+	path := fmt.Sprintf(basePath+environmentMoveConfigsSuffix, request.EnvironmentIdentifier)
 
 	params := make(map[string]string)
 	addScope(scope, params)

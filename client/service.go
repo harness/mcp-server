@@ -8,19 +8,24 @@ import (
 )
 
 const (
-	serviceBasePath = "ng/api/services"
-	serviceGetPath  = serviceBasePath + "/%s"
-	serviceListPath = serviceBasePath
+	extServiceBasePath   = "ng/api/services"
+	intServiceBasePath   = "api/services"
+	serviceGetPathSuffix = "/%s"
 )
 
 type ServiceClient struct {
-	Client *Client
+	Client           *Client
+	UseInternalPaths bool
 }
 
 // Get retrieves a service by its identifier
 // https://apidocs.harness.io/tag/Services#operation/getServiceV2
 func (s *ServiceClient) Get(ctx context.Context, scope dto.Scope, serviceIdentifier string) (*dto.Service, error) {
-	path := fmt.Sprintf(serviceGetPath, serviceIdentifier)
+	basePath := extServiceBasePath
+	if s.UseInternalPaths {
+		basePath = intServiceBasePath
+	}
+	path := fmt.Sprintf(basePath+serviceGetPathSuffix, serviceIdentifier)
 	params := make(map[string]string)
 	// Ensure accountIdentifier is always set
 	if scope.AccountID == "" {
@@ -56,7 +61,10 @@ func setDefaultPaginationForService(opts *dto.ServiceOptions) {
 // List retrieves a list of services based on the provided options
 // https://apidocs.harness.io/tag/Services#operation/getServiceList
 func (s *ServiceClient) List(ctx context.Context, scope dto.Scope, opts *dto.ServiceOptions) ([]dto.Service, int, error) {
-	path := serviceListPath
+	path := extServiceBasePath
+	if s.UseInternalPaths {
+		path = intServiceBasePath
+	}
 	params := make(map[string]string)
 	// Ensure accountIdentifier is always set
 	if scope.AccountID == "" {

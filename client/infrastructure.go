@@ -8,13 +8,14 @@ import (
 )
 
 const (
-	infrastructureBasePath        = "ng/api/infrastructures"
-	infrastructureListPath        = infrastructureBasePath
-	infrastructureMoveConfigsPath = infrastructureBasePath + "/move-config/%s"
+	extInfrastructureBasePath     = "ng/api/infrastructures"
+	intInfrastructureBasePath     = "api/infrastructures"
+	infrastructureMoveConfigsPath = "/move-config/%s"
 )
 
 type InfrastructureClient struct {
-	Client *Client
+	Client           *Client
+	UseInternalPaths bool
 }
 
 // setDefaultPaginationForInfrastructure sets default pagination values for InfrastructureOptions
@@ -36,7 +37,10 @@ func setDefaultPaginationForInfrastructure(opts *dto.InfrastructureOptions) {
 // List retrieves a list of infrastructures based on the provided options
 // https://apidocs.harness.io/tag/Infrastructures#operation/getInfrastructureList
 func (i *InfrastructureClient) List(ctx context.Context, scope dto.Scope, opts *dto.InfrastructureOptions) ([]dto.Infrastructure, int, error) {
-	path := infrastructureListPath
+	path := extInfrastructureBasePath
+	if i.UseInternalPaths {
+		path = intInfrastructureBasePath
+	}
 	params := make(map[string]string)
 	addScope(scope, params)
 
@@ -81,7 +85,11 @@ func (i *InfrastructureClient) List(ctx context.Context, scope dto.Scope, opts *
 // MoveConfigs moves infrastructure YAML from inline to remote or vice versa
 // https://apidocs.harness.io/tag/Infrastructures#operation/moveConfig
 func (i *InfrastructureClient) MoveConfigs(ctx context.Context, scope dto.Scope, request *dto.MoveInfraConfigsRequest) (*dto.MoveInfraConfigsResponse, error) {
-	path := fmt.Sprintf(infrastructureMoveConfigsPath, request.InfraIdentifier)
+	basePath := extInfrastructureBasePath
+	if i.UseInternalPaths {
+		basePath = intInfrastructureBasePath
+	}
+	path := fmt.Sprintf(basePath+infrastructureMoveConfigsPath, request.InfraIdentifier)
 	params := make(map[string]string)
 	// Add scope to parameters
 	addScope(scope, params)

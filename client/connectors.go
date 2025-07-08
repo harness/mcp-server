@@ -9,13 +9,17 @@ import (
 )
 
 type ConnectorService struct {
-	Client *Client
+	Client           *Client
+	UseInternalPaths bool
 }
 
 // ListConnectorCatalogue fetches the connector catalogue.
 // API Documentation: https://apidocs.harness.io/tag/Connectors#operation/getConnectorCatalogue
 func (c *ConnectorService) ListConnectorCatalogue(ctx context.Context, scope dto.Scope) ([]pkgDTO.ConnectorCatalogueItem, error) {
 	path := "/ng/api/connectors/catalogue"
+	if c.UseInternalPaths {
+		path = "/api/connectors/catalogue"
+	}
 	params := make(map[string]string)
 	params["accountIdentifier"] = scope.AccountID
 	if scope.OrgID != "" {
@@ -62,6 +66,9 @@ func (c *ConnectorService) ListConnectorCatalogue(ctx context.Context, scope dto
 // https://apidocs.harness.io/tag/Connectors#operation/getConnector
 func (c *ConnectorService) GetConnector(ctx context.Context, scope dto.Scope, connectorIdentifier string) (*pkgDTO.ConnectorDetail, error) {
 	path := fmt.Sprintf("/ng/api/connectors/%s", connectorIdentifier)
+	if c.UseInternalPaths {
+		path = fmt.Sprintf("/api/connectors/%s", connectorIdentifier)
+	}
 	params := make(map[string]string)
 	// Ensure accountIdentifier is always set
 	if scope.AccountID == "" {

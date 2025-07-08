@@ -165,9 +165,9 @@ func registerPipelines(config *config.Config, tsg *toolsets.ToolsetGroup) error 
 func registerPullRequests(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for pull requests
 	baseURL := config.BaseURL
-	secret := ""
+	secret := config.CodeSvcSecret
 	if config.Internal {
-		return nil
+		baseURL = config.CodeSvcBaseURL
 	}
 
 	// Create base client for pull requests
@@ -176,7 +176,7 @@ func registerPullRequests(config *config.Config, tsg *toolsets.ToolsetGroup) err
 		return err
 	}
 
-	pullRequestClient := &client.PullRequestService{Client: c}
+	pullRequestClient := &client.PullRequestService{Client: c, UseInternalPaths: config.Internal}
 
 	// Create the pull requests toolset
 	pullrequests := toolsets.NewToolset("pullrequests", "Harness Pull Request related tools").
@@ -199,9 +199,9 @@ func registerPullRequests(config *config.Config, tsg *toolsets.ToolsetGroup) err
 func registerRepositories(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for repositories
 	baseURL := config.BaseURL
-	secret := ""
+	secret := config.CodeSvcSecret
 	if config.Internal {
-		return nil
+		baseURL = config.CodeSvcBaseURL
 	}
 
 	// Create base client for repositories
@@ -210,7 +210,7 @@ func registerRepositories(config *config.Config, tsg *toolsets.ToolsetGroup) err
 		return err
 	}
 
-	repositoryClient := &client.RepositoryService{Client: c}
+	repositoryClient := &client.RepositoryService{Client: c, UseInternalPaths: config.Internal}
 
 	// Create the repositories toolset
 	repositories := toolsets.NewToolset("repositories", "Harness Repository related tools").
@@ -318,20 +318,24 @@ func registerChatbot(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 // registerConnectors registers the connectors toolset
 func registerConnectors(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-	// Connector catalogue API uses standard auth and doesn't have a specific service URL or secret beyond the main client config.
 	baseURL := config.BaseURL
-	secret := "" // No specific secret for this general API endpoint
+	secret := config.NgManagerSecret
+	if config.Internal {
+		baseURL = config.NgManagerBaseURL
+	}
 
 	c, err := createClient(baseURL, config, secret)
 	if err != nil {
 		return fmt.Errorf("failed to create client for connectors: %w", err)
 	}
 
+	connectorService := &client.ConnectorService{Client: c, UseInternalPaths: config.Internal}
+
 	// Create the connectors toolset
 	connectors := toolsets.NewToolset("connectors", "Harness Connector related tools").
 		AddReadTools(
-			toolsets.NewServerTool(ListConnectorCatalogueTool(config, c)),
-			toolsets.NewServerTool(GetConnectorDetailsTool(config, c)),
+			toolsets.NewServerTool(ListConnectorCatalogueTool(config, connectorService)),
+			toolsets.NewServerTool(GetConnectorDetailsTool(config, connectorService)),
 		)
 
 	tsg.AddToolset(connectors)
@@ -342,9 +346,9 @@ func registerConnectors(config *config.Config, tsg *toolsets.ToolsetGroup) error
 func registerInfrastructure(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for infrastructure
 	baseURL := config.BaseURL
-	secret := ""
+	secret := config.NgManagerSecret
 	if config.Internal {
-		return nil
+		baseURL = config.NgManagerBaseURL
 	}
 
 	// Create base client for infrastructure
@@ -353,7 +357,7 @@ func registerInfrastructure(config *config.Config, tsg *toolsets.ToolsetGroup) e
 		return err
 	}
 
-	infrastructureClient := &client.InfrastructureClient{Client: c}
+	infrastructureClient := &client.InfrastructureClient{Client: c, UseInternalPaths: config.Internal}
 
 	// Create the infrastructure toolset
 	infrastructure := toolsets.NewToolset("infrastructure", "Harness Infrastructure related tools").
@@ -373,9 +377,9 @@ func registerInfrastructure(config *config.Config, tsg *toolsets.ToolsetGroup) e
 func registerEnvironments(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for environments
 	baseURL := config.BaseURL
-	secret := ""
+	secret := config.NgManagerSecret
 	if config.Internal {
-		return nil
+		baseURL = config.NgManagerBaseURL
 	}
 
 	// Create base client for environments
@@ -405,9 +409,9 @@ func registerEnvironments(config *config.Config, tsg *toolsets.ToolsetGroup) err
 func registerServices(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for services
 	baseURL := config.BaseURL
-	secret := ""
+	secret := config.NgManagerSecret
 	if config.Internal {
-		return nil
+		baseURL = config.NgManagerBaseURL
 	}
 
 	// Create base client for services
@@ -434,9 +438,9 @@ func registerServices(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 func registerLogs(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for logs
 	baseURL := config.BaseURL
-	secret := ""
+	secret := config.LogSvcSecret
 	if config.Internal {
-		return nil
+		baseURL = config.LogSvcBaseURL
 	}
 
 	// Create base client for logs
