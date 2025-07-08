@@ -78,6 +78,14 @@ type CCMListCostCategoriesOptions struct {
 	SearchTerm        string `json:"search,omitempty"`
 }
 
+type CCMCommitmentOptions struct {
+	AccountIdentifier *string  `json:"accountIdentifier,omitempty"`
+	CloudAccountIDs   []string `json:"cloudAccountId,omitempty"`
+	Service           *string  `json:"service,omitempty"`
+	StartDate         *string  `json:"startDate,omitempty"`
+	EndDate           *string  `json:"endDate,omitempty"`
+}
+
 // CcmCostCategoryList represents a list of cost categories in CCM
 type CCMCostCategoryList struct {
 	CCMBaseResponse
@@ -205,4 +213,16 @@ type CCMCostCategory struct {
 type CCMGetCostCategoryOptions struct {
 	AccountIdentifier string `json:"accountIdentifier,omitempty"`
 	CostCategoryId    string `json:"id,omitempty"`
+}
+
+type CCMCommitmentBaseResponse struct {
+	Ts       int64    `json:"ts"`
+	Success  bool     `json:"success"`
+	Errors   []string `json:"errors"`
+	Response any      `json:"response"`
+}
+
+type CCMCommitmentAPIFilter struct {
+	CloudAccounts []string `json:"cloud_account_ids,omitempty"`
+	Service       string   `json:"service,omitempty"`
 }

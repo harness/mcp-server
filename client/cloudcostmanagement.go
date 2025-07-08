@@ -4,17 +4,22 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/pkg/utils"
 )
 
 const (
-	ccmBasePath                   = "ccm/api"
-	ccmGetOverviewPath            = ccmBasePath + "/overview?accountIdentifier=%s&startTime=%d&endTime=%d&groupBy=%s"
-	ccmCostCategoryListPath       = ccmBasePath + "/business-mapping/filter-panel?accountIdentifier=%s"
-	ccmCostCategoryDetailListPath = ccmBasePath + "/business-mapping?accountIdentifier=%s"    // This endpoint lists cost categories
-	ccmGetCostCategoryPath        = ccmBasePath + "/business-mapping/%s?accountIdentifier=%s" // This endpoint lists cost categories
+	ccmBasePath                      = "ccm/api"
+	ccmCommitmentBasePath            = "/lw/co/api"
+	ccmGetOverviewPath               = ccmBasePath + "/overview?accountIdentifier=%s&startTime=%d&endTime=%d&groupBy=%s"
+	ccmCostCategoryListPath          = ccmBasePath + "/business-mapping/filter-panel?accountIdentifier=%s"
+	ccmCostCategoryDetailListPath    = ccmBasePath + "/business-mapping?accountIdentifier=%s"    // This endpoint lists cost categories
+	ccmGetCostCategoryPath           = ccmBasePath + "/business-mapping/%s?accountIdentifier=%s" // This endpoint lists cost categories
+	ccmCommitmentCoverageDetailsPath = ccmCommitmentBasePath + "/accounts/%s/v1/detail/compute_coverage?accountIdentifier=%s"
+
+	ccmCommitmentComputeService string = "Amazon Elastic Compute Cloud - Compute"
 )
 
 type CloudCostManagementService struct {
@@ -130,4 +135,51 @@ func setCCMPaginationDefault(opts *dto.CCMPaginationOptions) {
 	} else if opts.Limit > safeMaxPageSize {
 		opts.Limit = safeMaxPageSize
 	}
+}
+
+func (r *CloudCostManagementService) GetComputeCoverage(ctx context.Context, scope dto.Scope, opts *dto.CCMCommitmentOptions) (*dto.CCMCommitmentBaseResponse, error) {
+	path := fmt.Sprintf(ccmCommitmentCoverageDetailsPath, scope.AccountID, scope.AccountID)
+	params := make(map[string]string)
+	addScope(scope, params)
+
+	// Handle nil options by creating default options
+	if opts == nil {
+		opts = &dto.CCMCommitmentOptions{}
+	}
+
+	if opts.StartDate != nil && *opts.StartDate != "" {
+		params["start_date"] = *opts.StartDate
+	} else {
+		// Default to last 30 days
+		params["start_date"] = utils.FormatUnixToMMDDYYYY(time.Now().AddDate(0, 0, -30).Unix())
+	}
+	if opts.EndDate != nil && *opts.EndDate != "" {
+		params["end_date"] = *opts.EndDate
+	} else {
+		// Default to last 30 days
+		params["end_date"] = utils.CurrentMMDDYYYY()
+	}
+
+	var requestPayload = dto.CCMCommitmentAPIFilter{
+		Service: ccmCommitmentComputeService, // Default value
+
+	}
+
+	if opts.Service != nil && *opts.Service != "" {
+		requestPayload.Service = *opts.Service
+	}
+
+	if len(opts.CloudAccountIDs) > 0 {
+		requestPayload.CloudAccounts = opts.CloudAccountIDs
+	}
+
+	// Temporary slice to hold the strings
+	coverageRespone := new(dto.CCMCommitmentBaseResponse)
+
+	err := r.Client.Post(ctx, path, params, requestPayload, coverageRespone)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cloud cost managment compute coverage with path %s: %w", path, err)
+	}
+
+	return coverageRespone, nil
 }
