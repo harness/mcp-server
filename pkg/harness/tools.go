@@ -388,7 +388,7 @@ func registerEnvironments(config *config.Config, tsg *toolsets.ToolsetGroup) err
 		return err
 	}
 
-	environmentClient := &client.EnvironmentClient{Client: c}
+	environmentClient := &client.EnvironmentClient{Client: c, UseInternalPaths: config.Internal}
 
 	// Create the environments toolset
 	environments := toolsets.NewToolset("environments", "Harness Environment related tools").
@@ -420,7 +420,7 @@ func registerServices(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 		return err
 	}
 
-	serviceClient := &client.ServiceClient{Client: c}
+	serviceClient := &client.ServiceClient{Client: c, UseInternalPaths: config.Internal}
 
 	// Create the services toolset
 	services := toolsets.NewToolset("services", "Harness Service related tools").
