@@ -37,6 +37,7 @@ const (
 	UpdateConnector RequestAction = "UPDATE_CONNECTOR"
 	CreateStepGroup RequestAction = "CREATE_STEP_GROUP"
 	UpdateStepGroup RequestAction = "UPDATE_STEP_GROUP"
+	CreateProcess   RequestAction = "CREATE_PROCESS"
 )
 
 type ServiceChatParameters struct {
