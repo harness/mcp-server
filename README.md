@@ -77,6 +77,18 @@ Toolset Name: `logs`
 
 - `download_execution_logs`: Download logs for a pipeline execution
 
+
+#### Internal Developer Portal Toolset
+
+Toolset Name: `idp`
+
+- `get_entity`: Get details of a specific entity in the Harness IDP Catalog
+- `list_entities`: List entities in the Harness Internal Developer Portal Catalog
+- `get_scorecard`: Get details of a specific entity in the Harness IDP Catalog
+- `list_scorecards`: List scorecards in the Harness Internal Developer Portal Catalog
+- `get_score_summary`: Get Score Summary for Scorecards in the Harness Internal Developer Portal Catalog.
+- `get_scores`: Get Scores for Scorecards in the Harness Internal Developer Portal Catalog.
+
 ## Prerequisites
 
 1. You will need to have Go 1.23 or later installed on your system.

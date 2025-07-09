@@ -31,6 +31,8 @@ type Config struct {
 	ArtifactRegistrySecret  string
 	NextgenCEBaseURL        string
 	NextgenCESecret         string
+	IDPSvcBaseURL           string
+	IDPSvcSecret            string
 	McpSvcSecret            string
 	ChaosManagerSvcBaseURL  string
 	ChaosManagerSvcSecret   string
