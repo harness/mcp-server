@@ -286,7 +286,7 @@ func getAccountID(config *config.Config, request mcp.CallToolRequest) (string, e
 }
 
 func FetchCommitmentCoverageTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("get_commitment_coverage",
+	return mcp.NewTool("get_ccm_commitment_coverage",
 			mcp.WithDescription("Get commitment coverage information for an account in Harness Cloud Cost Management"),
 			mcp.WithString("start_date",
 				mcp.Required(),

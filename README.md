@@ -60,7 +60,7 @@ Toolset Name: `cloudcostmanagement`
 - `list_ccm_cost_categories`:  List all cost categories names for a specified account.
 - `list_ccm_cost_categories_detail`:  List all cost categories details for a specified account.
 - `get_ccm_cost_category`:  Retrieve a cost category detail by Id  for a specified account.
-- `get_commitment_coverage`: Get commitment coverage information for an account in Harness Cloud Cost Management
+- `get_ccm_commitment_coverage`: Get commitment coverage information for an account in Harness Cloud Cost Management
 
 #### Chaos Engineering Toolset
 
