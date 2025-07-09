@@ -82,9 +82,13 @@ func AIDevOpsAgentTool(config *config.Config, client *client.GenaiService) (tool
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+			
+			conversationID, err := requiredParam[string](request, "conversation_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
 			// Extract optional parameters
-			conversationID, _ := OptionalParam[string](request, "conversation_id")
 			interactionID, _ := OptionalParam[string](request, "interaction_id")
 			contextRaw, _ := OptionalParam[[]any](request, "context")
 			conversationRaw, _ := OptionalParam[[]any](request, "conversation_raw")
