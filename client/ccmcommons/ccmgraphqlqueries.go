@@ -38,7 +38,7 @@ const CCMPerspectiveGridQuery = `
 		)
 	}`
 
-	const CCMPerspectiveTimeSeriesQuery = ` 
+const CCMPerspectiveTimeSeriesQuery = ` 
 	query FetchPerspectiveTimeSeries(
 		$filters: [QLCEViewFilterWrapperInput], 
 		$groupBy: [QLCEViewGroupByInput], 
@@ -73,3 +73,75 @@ const CCMPerspectiveGridQuery = `
 		}
 	}
 	`
+
+const CCMPerspectiveSummaryWithBudgetQuery = `
+	query FetchPerspectiveDetailsSummaryWithBudget(
+		$filters: [QLCEViewFilterWrapperInput], 
+		$aggregateFunction: [QLCEViewAggregationInput], 
+		$isClusterQuery: Boolean, 
+		$isClusterHourlyData: Boolean = null, 
+		$groupBy: [QLCEViewGroupByInput], 
+		$preferences: ViewPreferencesInput
+	) {
+		perspectiveTrendStats(
+			filters: $filters
+			aggregateFunction: $aggregateFunction
+			isClusterQuery: $isClusterQuery
+			isClusterHourlyData: $isClusterHourlyData
+			groupBy: $groupBy
+			preferences: $preferences
+		) {
+			cost {
+				statsDescription
+				statsLabel
+				statsTrend
+				statsValue
+				value
+				__typename
+			}
+			idleCost {
+				statsLabel
+				statsValue
+				value
+				__typename
+			}
+			unallocatedCost {
+				statsLabel
+				statsValue
+				value
+				__typename
+			}
+			utilizedCost {
+				statsLabel
+				statsValue
+				value
+				__typename
+			}
+			efficiencyScoreStats {
+				statsLabel
+				statsTrend
+				statsValue
+				__typename
+			}
+			__typename
+		}
+		perspectiveForecastCost(
+			filters: $filters
+			aggregateFunction: $aggregateFunction
+			isClusterQuery: $isClusterQuery
+			isClusterHourlyData: $isClusterHourlyData
+			groupBy: $groupBy
+			preferences: $preferences
+		) {
+			cost {
+				statsLabel
+				statsTrend
+				statsValue
+				statsDescription
+				value
+				__typename
+			}
+			__typename
+		}
+	}
+`

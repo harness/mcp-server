@@ -16,8 +16,11 @@ For example, you can:
 Supports LIKE-style filtering for arrays and key-value filters for business mappings and labels.
 `
 
-
 var CCMPerspectiveTimeSeriesDescription = `
+Query detailed time series perspective data in Harness Cloud Cost Management.
+`
+
+var CCMPerspectiveSummaryWithBudgetDescription = `
 Query detailed time series perspective data in Harness Cloud Cost Management.
 `
 
