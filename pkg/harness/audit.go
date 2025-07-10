@@ -36,7 +36,7 @@ func ListUserAuditTrailTool(config *config.Config, auditClient *client.AuditServ
 				mcp.Description("Optional end time in milliseconds"),
 				mcp.DefaultNumber(float64(time.Now().UnixMilli())),
 			),
-			WithScope(config, true),
+			WithScope(config, false),
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -45,7 +45,7 @@ func ListUserAuditTrailTool(config *config.Config, auditClient *client.AuditServ
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := fetchScope(config, request, true)
+			scope, err := fetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

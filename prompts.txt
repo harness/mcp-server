@@ -55,3 +55,9 @@
         location *time.Location,
     )
     ```
+
+
+### 5. When some question related to roles or permissions is asked and the user id(email id) of any user is given, for example the question asked can be that does this user have this permission, etc.
+Then first get all the users, then from that response find that user whose email id matches with the given email id, then extract the user id from that user object,
+then use this user id to get the detailed information of the user, and then from that response, see the different roles of the user, extract the role identifiers from those objects and fetch the detailed information about each of those roles.
+Using this detailed information, you can see what permissions the user has, and then answer that question.
