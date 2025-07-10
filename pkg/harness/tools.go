@@ -418,6 +418,10 @@ func registerServices(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 // registerLogs registers the logs toolset
 func registerLogs(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Skip registration for internal mode for now
+	if config.Internal {
+		return nil
+	}
 	// Determine the base URL and secret for logs
 	logServiceBaseURL := buildServiceURL(config, config.LogSvcBaseURL, config.BaseURL, "log-service")
 	logServiceSecret := config.LogSvcSecret
