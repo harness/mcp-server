@@ -42,4 +42,6 @@ type Config struct {
 	LogSvcSecret            string
 	DashboardSvcBaseURL     string
 	DashboardSvcSecret      string
+	AuditSvcBaseURL         string
+	AuditSvcSecret          string
 }

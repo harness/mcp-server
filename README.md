@@ -124,6 +124,7 @@ Toolset Name: `audit`
 
 - `list_user_audits`: Retrieve the complete audit trail for a specified user.
 
+
 ## Prerequisites
 
 1. You will need to have Go 1.23 or later installed on your system.

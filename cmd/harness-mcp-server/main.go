@@ -154,6 +154,8 @@ var (
 				CodeSvcSecret:           viper.GetString("code_svc_secret"),
 				LogSvcBaseURL:           viper.GetString("log_svc_base_url"),
 				LogSvcSecret:            viper.GetString("log_svc_secret"),
+				AuditSvcBaseURL:         viper.GetString("audit_svc_base_url"),
+				AuditSvcSecret:          viper.GetString("audit_svc_secret"),
 			}
 
 			if err := runStdioServer(ctx, cfg); err != nil {
@@ -207,6 +209,8 @@ func init() {
 	internalCmd.Flags().String("dashboard-svc-secret", "", "Secret for dashboard service")
 	internalCmd.Flags().String("log-svc-base-url", "", "Base URL for log service")
 	internalCmd.Flags().String("log-service-secret", "", "Secret for log service")
+	internalCmd.Flags().String("audit-svc-base-url", "", "Base URL for audit service")
+	internalCmd.Flags().String("audit-svc-secret", "", "Secret for audit service")
 
 	// Bind global flags to viper
 	_ = viper.BindPFlag("toolsets", rootCmd.PersistentFlags().Lookup("toolsets"))
@@ -243,6 +247,8 @@ func init() {
 	_ = viper.BindPFlag("dashboard_svc_secret", internalCmd.Flags().Lookup("dashboard-svc-secret"))
 	_ = viper.BindPFlag("log_svc_base_url", internalCmd.Flags().Lookup("log-svc-base-url"))
 	_ = viper.BindPFlag("log_svc_secret", internalCmd.Flags().Lookup("log-svc-secret"))
+	_ = viper.BindPFlag("audit_svc_base_url", internalCmd.Flags().Lookup("audit-svc-base-url"))
+	_ = viper.BindPFlag("audit_svc_secret", internalCmd.Flags().Lookup("audit-svc-secret"))
 
 	// Add subcommands
 	rootCmd.AddCommand(stdioCmd)

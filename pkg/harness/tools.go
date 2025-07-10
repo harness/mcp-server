@@ -96,6 +96,10 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 		return nil, err
 	}
 
+	if err := registerInternalDeveloperPortal(config, tsg); err != nil {
+		return nil, err
+	}
+
 	// Enable requested toolsets
 	if err := tsg.EnableToolsets(config.Toolsets); err != nil {
 		return nil, err
@@ -108,7 +112,7 @@ func buildServiceURL(config *config.Config, internalBaseURL, externalBaseURL str
 	if config.Internal {
 		return internalBaseURL
 	}
-	return externalBaseURL + externalPathPrefix
+	return externalBaseURL + "/" + externalPathPrefix
 }
 
 // createClient creates a client with the appropriate authentication method based on the config
@@ -596,5 +600,24 @@ func registerInternalDeveloperPortal(config *config.Config, tsg *toolsets.Toolse
 
 	// Add toolset to the group
 	tsg.AddToolset(idp)
+	return nil
+}
+func registerAudit(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Determine the base URL and secret for audit service
+	baseURL := buildServiceURL(config, config.AuditSvcBaseURL, config.BaseURL, "audit")
+	secret := config.AuditSvcSecret
+
+	c, err := createClient(baseURL, config, secret)
+	if err != nil {
+		return err
+	}
+	auditService := &client.AuditService{Client: c}
+	audit := toolsets.NewToolset("audit", "Audit log related tools").
+		AddReadTools(
+			toolsets.NewServerTool(ListUserAuditTrailTool(config, auditService)),
+		)
+
+	// Add toolset to the group
+	tsg.AddToolset(audit)
 	return nil
 }

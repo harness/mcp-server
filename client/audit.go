@@ -8,17 +8,11 @@ import (
 )
 
 const (
-	auditPath = "api/audits/list"
-
-	externalAuditPathPrefix = "audit/"
+	auditPath = "/api/audits/list"
 )
 
 type AuditService struct {
 	Client *Client
-}
-
-func (a *AuditService) buildPath(basePath string) string {
-	return externalAuditPathPrefix + basePath
 }
 
 // ListUserAuditTrail fetches the audit trail.
@@ -26,8 +20,6 @@ func (a *AuditService) ListUserAuditTrail(ctx context.Context, scope dto.Scope, 
 	if opts == nil {
 		opts = &dto.ListAuditEventsFilter{}
 	}
-
-	path := a.buildPath(auditPath)
 
 	params := make(map[string]string)
 	params["accountIdentifier"] = scope.AccountID
@@ -53,7 +45,7 @@ func (a *AuditService) ListUserAuditTrail(ctx context.Context, scope dto.Scope, 
 	opts.EndTime = endTime
 
 	resp := &dto.AuditOutput[dto.AuditListItem]{}
-	err := a.Client.Post(ctx, path, params, opts, resp)
+	err := a.Client.Post(ctx, auditPath, params, opts, resp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list the audit trail: %w", err)
 	}
