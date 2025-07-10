@@ -8,22 +8,16 @@ import (
 )
 
 const (
-	extRepositoryBasePath   = "code/api/v1/repos"
-	intRepositoryBasePath   = "api/v1/repos"
-	repositoryGetPathSuffix = "/%s"
+	repositoryBasePath = "/api/v1/repos"
+	repositoryGetPath  = "/api/v1/repos/%s"
 )
 
 type RepositoryService struct {
-	Client           *Client
-	UseInternalPaths bool
+	Client *Client
 }
 
 func (r *RepositoryService) Get(ctx context.Context, scope dto.Scope, repoIdentifier string) (*dto.Repository, error) {
-	basePath := extRepositoryBasePath
-	if r.UseInternalPaths {
-		basePath = intRepositoryBasePath
-	}
-	path := fmt.Sprintf(basePath+repositoryGetPathSuffix, repoIdentifier)
+	path := fmt.Sprintf(repositoryGetPath, repoIdentifier)
 	params := make(map[string]string)
 	addScope(scope, params)
 
@@ -53,10 +47,7 @@ func setDefaultPaginationForRepo(opts *dto.RepositoryOptions) {
 }
 
 func (r *RepositoryService) List(ctx context.Context, scope dto.Scope, opts *dto.RepositoryOptions) ([]*dto.Repository, error) {
-	path := extRepositoryBasePath
-	if r.UseInternalPaths {
-		path = intRepositoryBasePath
-	}
+	path := repositoryBasePath
 	params := make(map[string]string)
 	addScope(scope, params)
 

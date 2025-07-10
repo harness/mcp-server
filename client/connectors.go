@@ -8,18 +8,19 @@ import (
 	pkgDTO "github.com/harness/harness-mcp/pkg/harness/dto" // Alias for the other DTOs
 )
 
+const (
+	listConnectorCataloguePath = "/api/connectors/catalogue"
+	getConnectorPath           = "/api/connectors/%s"
+)
+
 type ConnectorService struct {
-	Client           *Client
-	UseInternalPaths bool
+	Client *Client
 }
 
 // ListConnectorCatalogue fetches the connector catalogue.
 // API Documentation: https://apidocs.harness.io/tag/Connectors#operation/getConnectorCatalogue
 func (c *ConnectorService) ListConnectorCatalogue(ctx context.Context, scope dto.Scope) ([]pkgDTO.ConnectorCatalogueItem, error) {
-	path := "/ng/api/connectors/catalogue"
-	if c.UseInternalPaths {
-		path = "/connectors/catalogue"
-	}
+	path := listConnectorCataloguePath
 	params := make(map[string]string)
 	params["accountIdentifier"] = scope.AccountID
 	if scope.OrgID != "" {
@@ -65,10 +66,7 @@ func (c *ConnectorService) ListConnectorCatalogue(ctx context.Context, scope dto
 // GetConnector retrieves a connector by its identifier
 // https://apidocs.harness.io/tag/Connectors#operation/getConnector
 func (c *ConnectorService) GetConnector(ctx context.Context, scope dto.Scope, connectorIdentifier string) (*pkgDTO.ConnectorDetail, error) {
-	path := fmt.Sprintf("/ng/api/connectors/%s", connectorIdentifier)
-	if c.UseInternalPaths {
-		path = fmt.Sprintf("/connectors/%s", connectorIdentifier)
-	}
+	path := fmt.Sprintf(getConnectorPath, connectorIdentifier)
 	params := make(map[string]string)
 	// Ensure accountIdentifier is always set
 	if scope.AccountID == "" {

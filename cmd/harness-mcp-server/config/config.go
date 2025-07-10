@@ -40,4 +40,6 @@ type Config struct {
 	CodeSvcSecret           string
 	LogSvcBaseURL           string
 	LogSvcSecret            string
+	DashboardSvcBaseURL     string
+	DashboardSvcSecret      string
 }

@@ -9,26 +9,19 @@ import (
 )
 
 const (
-	extPullRequestBasePath          = "code/api/v1/repos"
-	intPullRequestBasePath          = "api/v1/repos"
-	pullRequestGetPathSuffix        = "/%s/pullreq/%d"
-	pullRequestListPathSuffix       = "/%s/pullreq"
-	pullRequestCreatePathSuffix     = "/%s/pullreq"
-	pullRequestChecksPathSuffix     = "/%s/pullreq/%d/checks"
-	pullRequestActivitiesPathSuffix = "/%s/pullreq/%d/activities"
+	pullRequestGetPath        = "/api/v1/repos/%s/pullreq/%d"
+	pullRequestListPath       = "/api/v1/repos/%s/pullreq"
+	pullRequestCreatePath     = "/api/v1/repos/%s/pullreq"
+	pullRequestChecksPath     = "/api/v1/repos/%s/pullreq/%d/checks"
+	pullRequestActivitiesPath = "/api/v1/repos/%s/pullreq/%d/activities"
 )
 
 type PullRequestService struct {
-	Client           *Client
-	UseInternalPaths bool
+	Client *Client
 }
 
 func (p *PullRequestService) Get(ctx context.Context, scope dto.Scope, repoID string, prNumber int) (*dto.PullRequest, error) {
-	basePath := extPullRequestBasePath
-	if p.UseInternalPaths {
-		basePath = intPullRequestBasePath
-	}
-	path := fmt.Sprintf(basePath+pullRequestGetPathSuffix, repoID, prNumber)
+	path := fmt.Sprintf(pullRequestGetPath, repoID, prNumber)
 	params := make(map[string]string)
 	addScope(scope, params)
 
@@ -60,11 +53,7 @@ func setDefaultPaginationForPR(opts *dto.PullRequestOptions) {
 }
 
 func (p *PullRequestService) List(ctx context.Context, scope dto.Scope, repoID string, opts *dto.PullRequestOptions) ([]*dto.PullRequest, error) {
-	basePath := extPullRequestBasePath
-	if p.UseInternalPaths {
-		basePath = intPullRequestBasePath
-	}
-	path := fmt.Sprintf(basePath+pullRequestListPathSuffix, repoID)
+	path := fmt.Sprintf(pullRequestListPath, repoID)
 	params := make(map[string]string)
 	addScope(scope, params)
 
@@ -136,11 +125,7 @@ func (p *PullRequestService) List(ctx context.Context, scope dto.Scope, repoID s
 
 // Create creates a new pull request in the specified repository
 func (p *PullRequestService) Create(ctx context.Context, scope dto.Scope, repoID string, createPR *dto.CreatePullRequest) (*dto.PullRequest, error) {
-	basePath := extPullRequestBasePath
-	if p.UseInternalPaths {
-		basePath = intPullRequestBasePath
-	}
-	path := fmt.Sprintf(basePath+pullRequestCreatePathSuffix, repoID)
+	path := fmt.Sprintf(pullRequestCreatePath, repoID)
 	params := make(map[string]string)
 	addScope(scope, params)
 
@@ -159,11 +144,7 @@ func (p *PullRequestService) Create(ctx context.Context, scope dto.Scope, repoID
 
 // GetChecks retrieves the status checks for a specific pull request
 func (p *PullRequestService) GetChecks(ctx context.Context, scope dto.Scope, repoID string, prNumber int) (*dto.PullRequestChecksResponse, error) {
-	basePath := extPullRequestBasePath
-	if p.UseInternalPaths {
-		basePath = intPullRequestBasePath
-	}
-	path := fmt.Sprintf(basePath+pullRequestChecksPathSuffix, repoID, prNumber)
+	path := fmt.Sprintf(pullRequestChecksPath, repoID, prNumber)
 	params := make(map[string]string)
 	addScope(scope, params)
 
@@ -194,11 +175,7 @@ func setDefaultPaginationForPRActivities(opts *dto.PullRequestActivityOptions) {
 
 // GetActivities retrieves the activities (including comments) for a specific pull request
 func (p *PullRequestService) GetActivities(ctx context.Context, scope dto.Scope, repoID string, prNumber int, opts *dto.PullRequestActivityOptions) (dto.PullRequestActivitiesResponse, error) {
-	basePath := extPullRequestBasePath
-	if p.UseInternalPaths {
-		basePath = intPullRequestBasePath
-	}
-	path := fmt.Sprintf(basePath+pullRequestActivitiesPathSuffix, repoID, prNumber)
+	path := fmt.Sprintf(pullRequestActivitiesPath, repoID, prNumber)
 	params := make(map[string]string)
 	addScope(scope, params)
 

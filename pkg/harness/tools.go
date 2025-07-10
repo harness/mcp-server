@@ -104,6 +104,13 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 	return tsg, nil
 }
 
+func buildServiceURL(config *config.Config, internalBaseURL, externalBaseURL string, externalPathPrefix string) string {
+	if config.Internal {
+		return internalBaseURL
+	}
+	return externalBaseURL + externalPathPrefix
+}
+
 // createClient creates a client with the appropriate authentication method based on the config
 // An optional customTimeout can be provided to override the config's DefaultTimeout
 // An optional custom service identity can be provided to override the default service identity
@@ -136,11 +143,8 @@ func createClientWithIdentity(baseURL string, config *config.Config, secret stri
 // registerPipelines registers the pipelines toolset
 func registerPipelines(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for pipeline service
-	baseURL := config.BaseURL
+	baseURL := buildServiceURL(config, config.PipelineSvcBaseURL, config.BaseURL, "pipeline")
 	secret := config.PipelineSvcSecret
-	if config.Internal {
-		baseURL = config.PipelineSvcBaseURL
-	}
 
 	// Create base client for pipelines
 	c, err := createClient(baseURL, config, secret)
@@ -148,10 +152,7 @@ func registerPipelines(config *config.Config, tsg *toolsets.ToolsetGroup) error 
 		return err
 	}
 
-	pipelineClient := &client.PipelineService{
-		Client:           c,
-		UseInternalPaths: config.Internal,
-	}
+	pipelineClient := &client.PipelineService{Client: c}
 
 	// Create the pipelines toolset
 	pipelines := toolsets.NewToolset("pipelines", "Harness Pipeline related tools").
@@ -171,11 +172,8 @@ func registerPipelines(config *config.Config, tsg *toolsets.ToolsetGroup) error 
 // registerPullRequests registers the pull requests toolset
 func registerPullRequests(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for pull requests
-	baseURL := config.BaseURL
+	baseURL := buildServiceURL(config, config.CodeSvcBaseURL, config.BaseURL, "code")
 	secret := config.CodeSvcSecret
-	if config.Internal {
-		baseURL = config.CodeSvcBaseURL
-	}
 
 	// Create base client for pull requests with code service identity
 	c, err := createClientWithIdentity(baseURL, config, secret, aiServiceIdentity)
@@ -183,7 +181,7 @@ func registerPullRequests(config *config.Config, tsg *toolsets.ToolsetGroup) err
 		return err
 	}
 
-	pullRequestClient := &client.PullRequestService{Client: c, UseInternalPaths: config.Internal}
+	pullRequestClient := &client.PullRequestService{Client: c}
 
 	// Create the pull requests toolset
 	pullrequests := toolsets.NewToolset("pullrequests", "Harness Pull Request related tools").
@@ -205,11 +203,8 @@ func registerPullRequests(config *config.Config, tsg *toolsets.ToolsetGroup) err
 // registerRepositories registers the repositories toolset
 func registerRepositories(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for repositories
-	baseURL := config.BaseURL
+	baseURL := buildServiceURL(config, config.CodeSvcBaseURL, config.BaseURL, "code")
 	secret := config.CodeSvcSecret
-	if config.Internal {
-		baseURL = config.CodeSvcBaseURL
-	}
 
 	// Create base client for repositories with code service identity
 	c, err := createClientWithIdentity(baseURL, config, secret, aiServiceIdentity)
@@ -217,7 +212,7 @@ func registerRepositories(config *config.Config, tsg *toolsets.ToolsetGroup) err
 		return err
 	}
 
-	repositoryClient := &client.RepositoryService{Client: c, UseInternalPaths: config.Internal}
+	repositoryClient := &client.RepositoryService{Client: c}
 
 	// Create the repositories toolset
 	repositories := toolsets.NewToolset("repositories", "Harness Repository related tools").
@@ -234,11 +229,9 @@ func registerRepositories(config *config.Config, tsg *toolsets.ToolsetGroup) err
 // registerRegistries registers the registries toolset
 func registerRegistries(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for registries
-	baseURL := config.BaseURL
+	// The AR client expects the full base URL including API version path
+	baseURL := buildServiceURL(config, config.ArtifactRegistryBaseURL+"/api/v1", config.BaseURL, "har/api/v1")
 	secret := config.ArtifactRegistrySecret
-	if config.Internal {
-		baseURL = config.ArtifactRegistryBaseURL
-	}
 
 	// Create client with appropriate auth based on internal mode
 	var c *client.Client
@@ -266,13 +259,7 @@ func registerRegistries(config *config.Config, tsg *toolsets.ToolsetGroup) error
 		return nil
 	}
 
-	// Different API paths for internal vs external mode
-	apiPath := "/har/api/v1"
-	if config.Internal {
-		apiPath = "/api/v1"
-	}
-
-	arClient, err := ar.NewClientWithResponses(baseURL+apiPath, ar.WithHTTPClient(c),
+	arClient, err := ar.NewClientWithResponses(baseURL, ar.WithHTTPClient(c),
 		ar.WithRequestEditorFn(requestEditorFn))
 	if err != nil {
 		return err
@@ -325,18 +312,15 @@ func registerChatbot(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 // registerConnectors registers the connectors toolset
 func registerConnectors(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-	baseURL := config.BaseURL
+	baseURL := buildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng")
 	secret := config.NgManagerSecret
-	if config.Internal {
-		baseURL = config.NgManagerBaseURL
-	}
 
 	c, err := createClient(baseURL, config, secret)
 	if err != nil {
 		return fmt.Errorf("failed to create client for connectors: %w", err)
 	}
 
-	connectorService := &client.ConnectorService{Client: c, UseInternalPaths: config.Internal}
+	connectorService := &client.ConnectorService{Client: c}
 
 	// Create the connectors toolset
 	connectors := toolsets.NewToolset("connectors", "Harness Connector related tools").
@@ -352,11 +336,8 @@ func registerConnectors(config *config.Config, tsg *toolsets.ToolsetGroup) error
 // registerInfrastructure registers the infrastructure toolset
 func registerInfrastructure(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for infrastructure
-	baseURL := config.BaseURL
+	baseURL := buildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng")
 	secret := config.NgManagerSecret
-	if config.Internal {
-		baseURL = config.NgManagerBaseURL
-	}
 
 	// Create base client for infrastructure
 	c, err := createClient(baseURL, config, secret)
@@ -364,7 +345,7 @@ func registerInfrastructure(config *config.Config, tsg *toolsets.ToolsetGroup) e
 		return err
 	}
 
-	infrastructureClient := &client.InfrastructureClient{Client: c, UseInternalPaths: config.Internal}
+	infrastructureClient := &client.InfrastructureClient{Client: c}
 
 	// Create the infrastructure toolset
 	infrastructure := toolsets.NewToolset("infrastructure", "Harness Infrastructure related tools").
@@ -383,11 +364,8 @@ func registerInfrastructure(config *config.Config, tsg *toolsets.ToolsetGroup) e
 // registerEnvironments registers the environments toolset
 func registerEnvironments(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for environments
-	baseURL := config.BaseURL
+	baseURL := buildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng")
 	secret := config.NgManagerSecret
-	if config.Internal {
-		baseURL = config.NgManagerBaseURL
-	}
 
 	// Create base client for environments
 	c, err := createClient(baseURL, config, secret)
@@ -395,7 +373,7 @@ func registerEnvironments(config *config.Config, tsg *toolsets.ToolsetGroup) err
 		return err
 	}
 
-	environmentClient := &client.EnvironmentClient{Client: c, UseInternalPaths: config.Internal}
+	environmentClient := &client.EnvironmentClient{Client: c}
 
 	// Create the environments toolset
 	environments := toolsets.NewToolset("environments", "Harness Environment related tools").
@@ -415,11 +393,8 @@ func registerEnvironments(config *config.Config, tsg *toolsets.ToolsetGroup) err
 // registerServices registers the services toolset
 func registerServices(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for services
-	baseURL := config.BaseURL
+	baseURL := buildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng")
 	secret := config.NgManagerSecret
-	if config.Internal {
-		baseURL = config.NgManagerBaseURL
-	}
 
 	// Create base client for services
 	c, err := createClient(baseURL, config, secret)
@@ -427,7 +402,7 @@ func registerServices(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 		return err
 	}
 
-	serviceClient := &client.ServiceClient{Client: c, UseInternalPaths: config.Internal}
+	serviceClient := &client.ServiceClient{Client: c}
 
 	// Create the services toolset
 	services := toolsets.NewToolset("services", "Harness Service related tools").
@@ -444,19 +419,26 @@ func registerServices(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 // registerLogs registers the logs toolset
 func registerLogs(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for logs
-	baseURL := config.BaseURL
-	secret := config.LogSvcSecret
-	if config.Internal {
-		baseURL = config.LogSvcBaseURL
-	}
+	logServiceBaseURL := buildServiceURL(config, config.LogSvcBaseURL, config.BaseURL, "log-service")
+	logServiceSecret := config.LogSvcSecret
 
 	// Create base client for logs
-	c, err := createClient(baseURL, config, secret)
+	logServiceClient, err := createClient(logServiceBaseURL, config, logServiceSecret)
 	if err != nil {
 		return err
 	}
 
-	logClient := &client.LogService{Client: c}
+	// Determine the base URL and secret for pipeline service
+	baseURL := buildServiceURL(config, config.PipelineSvcBaseURL, config.BaseURL, "pipeline")
+	pipelineServiceSecret := config.PipelineSvcSecret
+
+	// Create base client for pipelines
+	pipelineClient, err := createClient(baseURL, config, pipelineServiceSecret)
+	if err != nil {
+		return err
+	}
+
+	logClient := &client.LogService{LogServiceClient: logServiceClient, PipelineClient: pipelineClient}
 
 	// Create the logs toolset
 	logs := toolsets.NewToolset("logs", "Harness Logs related tools").
@@ -471,11 +453,8 @@ func registerLogs(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 func registerCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for CCM
-	baseURL := config.BaseURL
+	baseURL := buildServiceURL(config, config.NextgenCEBaseURL, config.BaseURL, "")
 	secret := config.NextgenCESecret
-	if config.Internal {
-		baseURL = config.NextgenCEBaseURL
-	}
 
 	// Create base client for CCM
 	c, err := createClient(baseURL, config, secret)
@@ -510,7 +489,7 @@ func registerGenai(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	}
 
 	// Determine the base URL and secret for genai service
-	baseURL := config.GenaiBaseURL
+	baseURL := config.GenaiBaseURL // Only used in internal mode
 	secret := config.GenaiSecret
 
 	// Create base client for genai with the default timeout
@@ -534,12 +513,8 @@ func registerGenai(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 // registerDashboards registers the dashboards toolset
 func registerDashboards(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-	// Determine the base URL for dashboards
-	baseURL := config.BaseURL
-	secret := ""
-	if config.Internal {
-		return nil
-	}
+	baseURL := buildServiceURL(config, config.DashboardSvcBaseURL, config.BaseURL, "dashboard")
+	secret := config.DashboardSvcSecret
 
 	// Create base client for dashboards
 	customTimeout := 30 * time.Second
@@ -565,11 +540,8 @@ func registerDashboards(config *config.Config, tsg *toolsets.ToolsetGroup) error
 // registerChaos registers the chaos toolset
 func registerChaos(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for CHAOS
-	baseURL := config.BaseURL
+	baseURL := buildServiceURL(config, config.ChaosManagerSvcBaseURL, config.BaseURL, "chaos/manager")
 	secret := config.ChaosManagerSvcSecret
-	if config.Internal {
-		baseURL = config.ChaosManagerSvcBaseURL
-	}
 
 	// Create base client for CHAOS
 	customTimeout := 30 * time.Second
@@ -578,10 +550,7 @@ func registerChaos(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 		return err
 	}
 
-	chaosClient := &client.ChaosService{
-		Client:           c,
-		UseInternalPaths: config.Internal,
-	}
+	chaosClient := &client.ChaosService{Client: c}
 
 	// Create the CHAOS toolset
 	chaos := toolsets.NewToolset("chaos", "Harness Chaos Engineering related tools").
