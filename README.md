@@ -118,6 +118,8 @@ Toolset Name: `idp`
 - `get_score_summary`: Get Score Summary for Scorecards in the Harness Internal Developer Portal Catalog.
 - `get_scores`: Get Scores for Scorecards in the Harness Internal Developer Portal Catalog.
 
+#### Audit Trail Toolset
+
 Toolset Name: `audit`
 
 - `list_user_audits`: Retrieve the complete audit trail for a specified user.
