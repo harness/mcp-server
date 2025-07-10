@@ -567,12 +567,9 @@ func registerChaos(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 }
 
 func registerInternalDeveloperPortal(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-	// Determine the base URL and secret for pipeline service
-	baseURL := config.BaseURL
+	// Determine the base URL and secret for IDP service
+	baseURL := buildServiceURL(config, config.IDPSvcBaseURL, config.BaseURL, "")
 	secret := config.IDPSvcSecret
-	if config.Internal {
-		baseURL = config.IDPSvcBaseURL
-	}
 
 	c, err := createClient(baseURL, config, secret)
 	if err != nil {
@@ -580,8 +577,7 @@ func registerInternalDeveloperPortal(config *config.Config, tsg *toolsets.Toolse
 	}
 
 	idpClient := &client.IDPService{
-		Client:           c,
-		UseInternalPaths: config.Internal,
+		Client: c,
 	}
 
 	idp := toolsets.NewToolset("Internal Developer Portal", "Harness Internal Developer Portal catalog related tools for managing catalog Entities which represent the core components of your system").
