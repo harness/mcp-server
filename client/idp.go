@@ -27,8 +27,7 @@ const (
 )
 
 type IDPService struct {
-	Client           *Client
-	UseInternalPaths bool
+	Client *Client
 }
 
 func (i *IDPService) GetEntity(ctx context.Context, scope dto.Scope, kind string, identifier string) (*dto.EntityResponse, error) {

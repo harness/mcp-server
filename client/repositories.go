@@ -8,9 +8,8 @@ import (
 )
 
 const (
-	repositoryBasePath = "code/api/v1/repos"
-	repositoryGetPath  = repositoryBasePath + "/%s"
-	repositoryListPath = repositoryBasePath
+	repositoryBasePath = "/api/v1/repos"
+	repositoryGetPath  = "/api/v1/repos/%s"
 )
 
 type RepositoryService struct {
@@ -48,7 +47,7 @@ func setDefaultPaginationForRepo(opts *dto.RepositoryOptions) {
 }
 
 func (r *RepositoryService) List(ctx context.Context, scope dto.Scope, opts *dto.RepositoryOptions) ([]*dto.Repository, error) {
-	path := repositoryListPath
+	path := repositoryBasePath
 	params := make(map[string]string)
 	addScope(scope, params)
 

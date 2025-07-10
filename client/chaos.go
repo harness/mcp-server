@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+
 	"github.com/harness/harness-mcp/client/dto"
 )
 
@@ -12,28 +13,16 @@ const (
 	chaosGetExperimentPath    = "api/rest/v2/experiments/%s"
 	chaosGetExperimentRunPath = "api/rest/v2/experiments/%s/run"
 	chaosExperimentRunPath    = "api/rest/v2/experiments/%s/run"
-
-	// Prefix to prepend for external API calls
-	externalChaosManagerPathPrefix = "chaos/manager/"
 )
 
 type ChaosService struct {
-	Client           *Client
-	UseInternalPaths bool
-}
-
-func (c *ChaosService) buildPath(basePath string) string {
-	if c.UseInternalPaths {
-		return basePath
-	}
-	return externalChaosManagerPathPrefix + basePath
+	Client *Client
 }
 
 func (c *ChaosService) ListExperiments(ctx context.Context, scope dto.Scope, pagination *dto.PaginationOptions) (*dto.ListExperimentResponse, error) {
 	var (
-		pathTemplate = c.buildPath(chaosListExperimentsPath)
-		path         = fmt.Sprintf(pathTemplate)
-		params       = make(map[string]string)
+		path   = chaosListExperimentsPath
+		params = make(map[string]string)
 	)
 
 	// Set default pagination
@@ -56,9 +45,8 @@ func (c *ChaosService) ListExperiments(ctx context.Context, scope dto.Scope, pag
 
 func (c *ChaosService) GetExperiment(ctx context.Context, scope dto.Scope, experimentID string) (*dto.GetExperimentResponse, error) {
 	var (
-		pathTemplate = c.buildPath(chaosGetExperimentPath)
-		path         = fmt.Sprintf(pathTemplate, experimentID)
-		params       = make(map[string]string)
+		path   = fmt.Sprintf(chaosGetExperimentPath, experimentID)
+		params = make(map[string]string)
 	)
 
 	// Add scope parameters
@@ -75,9 +63,8 @@ func (c *ChaosService) GetExperiment(ctx context.Context, scope dto.Scope, exper
 
 func (c *ChaosService) GetExperimentRun(ctx context.Context, scope dto.Scope, experimentID, experimentRunID string) (*dto.ChaosExperimentRun, error) {
 	var (
-		pathTemplate = c.buildPath(chaosGetExperimentRunPath)
-		path         = fmt.Sprintf(pathTemplate, experimentID)
-		params       = make(map[string]string)
+		path   = fmt.Sprintf(chaosGetExperimentRunPath, experimentID)
+		params = make(map[string]string)
 	)
 
 	params["experimentRunId"] = experimentRunID
@@ -95,9 +82,8 @@ func (c *ChaosService) GetExperimentRun(ctx context.Context, scope dto.Scope, ex
 
 func (c *ChaosService) RunExperiment(ctx context.Context, scope dto.Scope, experimentID string) (*dto.RunChaosExperimentResponse, error) {
 	var (
-		pathTemplate = c.buildPath(chaosExperimentRunPath)
-		path         = fmt.Sprintf(pathTemplate, experimentID)
-		params       = make(map[string]string)
+		path   = fmt.Sprintf(chaosExperimentRunPath, experimentID)
+		params = make(map[string]string)
 	)
 
 	// Add scope parameters

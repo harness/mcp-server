@@ -8,9 +8,8 @@ import (
 )
 
 const (
-	serviceBasePath = "ng/api/services"
-	serviceGetPath  = serviceBasePath + "/%s"
-	serviceListPath = serviceBasePath
+	serviceListPath = "/api/services"
+	serviceGetPath  = "/api/services/%s"
 )
 
 type ServiceClient struct {

@@ -8,10 +8,9 @@ import (
 )
 
 const (
-	environmentBasePath        = "ng/api/environments"
-	environmentGetPath         = environmentBasePath + "/%s"
-	environmentListPath        = environmentBasePath
-	environmentMoveConfigsPath = environmentBasePath + "V2/move-config/%s"
+	environmentListPath        = "/api/environments"
+	environmentGetPath         = "/api/environments/%s"
+	environmentMoveConfigsPath = "/api/environments/V2/move-config/%s"
 )
 
 type EnvironmentClient struct {
