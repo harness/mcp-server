@@ -25,11 +25,11 @@ func (r *CloudCostManagementService) PerspectiveGrid(ctx context.Context, scope 
 	variables := map[string]any{
 		"filters":            buildFilters(options.TimeFilter, options.Filters, options.KeyValueFilters),
 		"groupBy":            buildGroupBy(options.GroupBy, outputFields, outputKeyValueFields),
-		"limit":              15,
-		"offset":             0,
+		"limit":              options.Limit,
+		"offset":             options.Offset,
 		"aggregateFunction":  buildAggregateFunction(),
-		"isClusterOnly":      false,
-		"isClusterHourlyData": false,
+		"isClusterOnly":     false, 
+		"isClusterHourlyData": false, 
 		"preferences":        buildPreferences(),
 	}
 
@@ -65,11 +65,11 @@ func (r *CloudCostManagementService) PerspectiveTimeSeries(ctx context.Context, 
 	variables := map[string]any{
 		"filters":            buildFilters(options.TimeFilter, options.Filters, options.KeyValueFilters),
 		"groupBy":           []map[string]any{timeTruncGroupBy, entityGroupBy[0]},
-		"limit":              15,
-		"offset":             0,
+		"limit":              options.Limit,
+		"offset":             options.Offset,
 		"aggregateFunction":  buildAggregateFunction(),
-		"isClusterOnly":      false,
-		"isClusterHourlyData": false,
+		"isClusterOnly":     false, 
+		"isClusterHourlyData": false, 
 		"preferences":        buildPreferences(),
 	}
 
@@ -81,6 +81,36 @@ func (r *CloudCostManagementService) PerspectiveTimeSeries(ctx context.Context, 
 
 	slog.Debug("PerspectiveTimeSeries", "Payload", payload)
 	result := new(dto.CCMPerspectiveTimeSeriesResponse)
+	err := r.Client.Post(ctx, path, nil, payload, &result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get perspective grid: %w", err)
+	}
+	return result, nil
+}
+
+func (r *CloudCostManagementService) PerspectiveSummaryWithBudget(ctx context.Context, scope dto.Scope, options *dto.CCMPerspectiveSummaryWithBudgetOptions) (*dto.CCMPerspectiveSummaryWithBudgetResponse, error) {
+	path := fmt.Sprintf(ccmPerspectiveGraphQLPath, options.AccountId, options.AccountId) 
+
+	gqlQuery := ccmcommons.CCMPerspectiveSummaryWithBudgetQuery
+	variables := map[string]any{
+		"filters":            buildFilters(options.TimeFilter, options.Filters, options.KeyValueFilters),
+		"groupBy":            buildGroupBy(options.GroupBy, outputFields, outputKeyValueFields),
+		"limit":              options.Limit,
+		"offset":             options.Offset,
+		"aggregateFunction":  buildAggregateFunction(),
+		"isClusterOnly":     false, 
+		"isClusterHourlyData": false, 
+		"preferences":        buildPreferences(),
+	}
+
+	payload := map[string]any{
+		"query":         gqlQuery,
+		"operationName": "FetchPerspectiveDetailsSummaryWithBudget",
+		"variables":     variables,
+	}
+
+	slog.Debug("PerspectiveSummaryWithBudget", "Payload", payload)
+	result := new(dto.CCMPerspectiveSummaryWithBudgetResponse)
 	err := r.Client.Post(ctx, path, nil, payload, &result)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get perspective grid: %w", err)

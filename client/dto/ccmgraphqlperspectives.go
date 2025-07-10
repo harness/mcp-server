@@ -120,3 +120,35 @@ type CCMPerspectiveReference struct {
 	Type      string `json:"type"`
 	Typename  string `json:"__typename"`
 }
+
+type CCMPerspectiveSummaryWithBudgetOptions = CCMPerspectiveGridOptions
+
+type CCMStatsInfo struct {
+	StatsDescription string   `json:"statsDescription"`
+	StatsLabel       string   `json:"statsLabel"`
+	StatsTrend       float64  `json:"statsTrend"`
+	StatsValue       string   `json:"statsValue"`
+	Value            *float64 `json:"value"`
+	Typename         string   `json:"__typename"`
+}
+
+type CCMPerspectiveTrendStats struct {
+	Cost                 CCMStatsInfo  `json:"cost"`
+	IdleCost             CCMStatsInfo  `json:"idleCost"`
+	UnallocatedCost      CCMStatsInfo  `json:"unallocatedCost"`
+	UtilizedCost         CCMStatsInfo  `json:"utilizedCost"`
+	EfficiencyScoreStats *CCMStatsInfo `json:"efficiencyScoreStats"`
+	Typename             string        `json:"__typename"`
+}
+
+type CCMPerspectiveForecastCost struct {
+	Cost     CCMStatsInfo `json:"cost"`
+	Typename string       `json:"__typename"`
+}
+
+type CCMPerspectiveSummaryWithBudgetResponse struct {
+	Data struct {
+		PerspectiveTrendStats   CCMPerspectiveTrendStats   `json:"perspectiveTrendStats"`
+		PerspectiveForecastCost CCMPerspectiveForecastCost `json:"perspectiveForecastCost"`
+	} `json:"data"`
+}

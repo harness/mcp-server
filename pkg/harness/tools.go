@@ -482,6 +482,7 @@ func registerCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGro
 			toolsets.NewServerTool(CreateCcmPerspectiveTool(config, ccmClient)),
 			toolsets.NewServerTool(CcmPerspectiveGridTool(config, ccmClient)),
 			toolsets.NewServerTool(CcmPerspectiveTimeSeriesTool(config, ccmClient)),
+			toolsets.NewServerTool(CcmPerspectiveSummaryWithBudgetTool(config, ccmClient)),
 		)
 
 	// Add toolset to the group
