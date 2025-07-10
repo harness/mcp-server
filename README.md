@@ -57,8 +57,6 @@ Toolset Name: `connectors`
 - **list_connector_catalogue**: List the Harness connector catalogue
 - **get_connector_details**: Get details of a specific connector
 
-
-
 #### Repositories Toolset
 
 Toolset Name: `repositories`
