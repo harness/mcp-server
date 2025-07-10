@@ -28,6 +28,35 @@ Toolset Name: `pullrequests`
 - `get_pull_request_activities`: Get activities and comments for a specific pull request
 - `create_pull_request`: Create a new pull request
 
+#### Services Toolset
+
+Toolset Name: `service` 
+
+- **get_service**: Get details of a specific service
+- **list_services**: List services
+
+#### Environments Toolset
+
+Toolset Name: `environment` 
+
+- **get_environment**: Get details of a specific environment
+- **list_environments**: List environments
+- **move_environment_configs**: Move environment YAML from inline to remote
+
+#### Infrastructure Toolset
+
+Toolset Name: `infrastructure` 
+
+- **list_infrastructures**: List infrastructure definitions
+- **move_infrastructure_configs**: Move infrastructure YAML between inline and remote
+
+#### Connectors Toolset
+
+Toolset Name: `connectors`
+
+- **list_connector_catalogue**: List the Harness connector catalogue
+- **get_connector_details**: Get details of a specific connector
+
 #### Repositories Toolset
 
 Toolset Name: `repositories`
