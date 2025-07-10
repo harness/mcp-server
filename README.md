@@ -32,30 +32,30 @@ Toolset Name: `pullrequests`
 
 Toolset Name: `service` 
 
-- **get_service**: Get details of a specific service
-- **list_services**: List services
+- `get_service`: Get details of a specific service
+- `list_services`: List services
 
 #### Environments Toolset
 
 Toolset Name: `environment` 
 
-- **get_environment**: Get details of a specific environment
-- **list_environments**: List environments
-- **move_environment_configs**: Move environment YAML from inline to remote
+- `get_environment`: Get details of a specific environment
+- `list_environments`: List environments
+- `move_environment_configs`: Move environment YAML from inline to remote
 
 #### Infrastructure Toolset
 
 Toolset Name: `infrastructure` 
 
-- **list_infrastructures**: List infrastructure definitions
-- **move_infrastructure_configs**: Move infrastructure YAML between inline and remote
+- `list_infrastructures`: List infrastructure definitions
+- `move_infrastructure_configs`: Move infrastructure YAML between inline and remote
 
 #### Connectors Toolset
 
 Toolset Name: `connectors`
 
-- **list_connector_catalogue**: List the Harness connector catalogue
-- **get_connector_details**: Get details of a specific connector
+- `list_connector_catalogue`: List the Harness connector catalogue
+- `get_connector_details`: Get details of a specific connector
 
 #### Repositories Toolset
 
