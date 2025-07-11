@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"time"
 	"strings"
-	"strconv"
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
@@ -164,8 +162,7 @@ func GetCcmPerspectiveTool(config *config.Config, client *client.CloudCostManage
 
 func GetLastPeriodCostCcmPerspectiveTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 
-	now := time.Now()
-	defaultStartTime := now.AddDate(0, 0, -60).UnixMilli()
+	defaultStartTime := utils.CurrentMMDDYYYY()
 	return mcp.NewTool("get_last_period_cost_ccm_perspective",
 			mcp.WithDescription("Get the last period cost for a perspective in Harness Cloud Cost Management"),
 			mcp.WithString("account_id",
@@ -175,8 +172,9 @@ func GetLastPeriodCostCcmPerspectiveTool(config *config.Config, client *client.C
 				mcp.Description("Required perspective identifier."),
 			),
 			mcp.WithString("start_time",
-				mcp.DefaultString(fmt.Sprintf("%d", defaultStartTime)),
-				mcp.Description("Start time of the period in Unix epoch **milliseconds** (e.g. 1743465600000 for April 1, 2025)"),
+				mcp.Required(),
+				mcp.DefaultString(defaultStartTime),
+				mcp.Description("Start time of the period in format MM/DD/YYYY. (e.g. 10/30/2025)"),
 			),
 			mcp.WithString("period",
 				mcp.Description("Required period to get the cost for"),
@@ -200,7 +198,9 @@ func GetLastPeriodCostCcmPerspectiveTool(config *config.Config, client *client.C
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			startTime, err := strconv.ParseInt(startTimeStr, 10, 64) 
+
+			startTime, err := utils.FormatMMDDYYYYToUnixMillis(startTimeStr)
+
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

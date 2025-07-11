@@ -8,15 +8,12 @@ import (
 	"log/slog"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/client/ccmcommons"
-	//"github.com/harness/harness-mcp/pkg/utils"
 )
 
 const (
 	ccmGraphQLBasePath = "gateway/" + ccmBasePath + "/graphql"
 	ccmPerspectiveGraphQLPath = ccmGraphQLBasePath + "?accountIdentifier=%s&routingId=%s"
 )
-
-//https://qa.harness.io/gateway/ccm/api/graphql?accountIdentifier=Z60xsRGoTeqOoAFRCsmlBQ&routingId=Z60xsRGoTeqOoAFRCsmlBQ
 
 func (r *CloudCostManagementService) PerspectiveGrid(ctx context.Context, scope dto.Scope, options *dto.CCMPerspectiveGridOptions) (*dto.CCMPerspectiveGridResponse, error) {
 	path := fmt.Sprintf(ccmPerspectiveGraphQLPath, options.AccountId, options.AccountId) 
