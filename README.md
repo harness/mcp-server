@@ -100,6 +100,25 @@ Toolset Name: `chaos`
 - `chaos_experiment_run`:  Run a specific chaos experiment.
 - `chaos_experiment_run_result`:  Get the result of a specific chaos experiment run.
 
+#### Supply Chain Security (SCS) Toolset
+
+Toolset Name: `scs`
+
+- `list_artifact_sources`: List all artifact sources available in Harness SCS for a specific organization and project.
+- `list_artifacts_per_source`: List all artifacts within a specific artifact source.
+- `get_artifact_overview`: Get metadata, security findings, SBOM, and compliance status for a specific artifact.
+- `get_artifact_chain_of_custody`: Retrieve the full chain of custody (event history) for a specific artifact.
+- `fetch_compliance_results_by_artifact`: Fetch compliance results for a specific artifact.
+- `get_code_repository_overview`: Get an overview of vulnerabilities, SBOM, compliance issues, and policy violations for a code repository.
+- `list_scs_code_repos`: List all code repositories scanned by Harness SCS.
+
+#### Security Test Orchestration (STO) Toolset
+
+Toolset Name: `sto`
+
+- `frontend_all_issues_list`: List and filter security issues in Harness STO by target, pipeline, tool, severity, exemption status, and type.
+
+
 #### Logs Toolset
 
 Toolset Name: `logs`
