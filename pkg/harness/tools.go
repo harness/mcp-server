@@ -25,7 +25,7 @@ const aiServiceIdentity = "aifoundation"
 var defaultJWTLifetime = 1 * time.Hour
 
 // Default timeout for GenAI service
-const defaultGenaiTimeout = 60 * time.Second
+const defaultGenaiTimeout = 300 * time.Second
 
 // InitToolsets initializes and returns the toolset groups
 func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {

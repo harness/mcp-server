@@ -38,10 +38,12 @@ func AIDevOpsAgentTool(config *config.Config, client *client.GenaiService) (tool
 					"properties": map[string]any{
 						"type": map[string]any{
 							"type":        "string",
-							"description": "The type of context item",
+							"description": "The type of context item (other)",
+							"enum":        []string{string(dto.ContextTypeOther)},
 						},
 						"payload": map[string]any{
-							"description": "The payload for this context item",
+							"type":        []string{"object", "array", "string", "number", "boolean"},
+							"description": "The payload for this context item, accepts any valid JSON value. Example: {\"stage_type\": \"Custom\"}",
 						},
 					},
 					"required": []string{"type", "payload"},
@@ -112,7 +114,7 @@ func AIDevOpsAgentTool(config *config.Config, client *client.GenaiService) (tool
 					ctxType, _ := ctxMap["type"].(string)
 					ctxPayload := ctxMap["payload"]
 					contextItems = append(contextItems, dto.ContextItem{
-						Type:    ctxType,
+						Type:    dto.ContextType(ctxType),
 						Payload: ctxPayload,
 					})
 				}

@@ -1,13 +1,19 @@
 package dto
 
+type ContextType string
+
+const (
+	ContextTypeOther ContextType = "other"
+)
+
 type Capability struct {
 	Type    string `json:"type"`
 	Version string `json:"version"`
 }
 
 type ContextItem struct {
-	Type    string `json:"type"`
-	Payload any    `json:"payload"`
+	Type    ContextType `json:"type"`
+	Payload any         `json:"payload"`
 }
 
 type HarnessContext struct {
