@@ -96,7 +96,7 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 		return nil, err
 	}
 
-	if err := registerInternalDeveloperPortal(config, tsg); err != nil {
+	if err := registerAudit(config, tsg); err != nil {
 		return nil, err
 	}
 
