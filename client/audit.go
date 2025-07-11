@@ -41,7 +41,7 @@ func (a *AuditService) ListUserAuditTrail(ctx context.Context, scope dto.Scope, 
 		ProjectIdentifier: scope.ProjectID,
 	}}
 
-	opts.StartTime = startTime // or use a date range with UnixMillis
+	opts.StartTime = startTime
 	opts.EndTime = endTime
 
 	resp := &dto.AuditOutput[dto.AuditListItem]{}
