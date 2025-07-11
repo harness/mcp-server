@@ -106,6 +106,11 @@ Toolset Name: `logs`
 
 - `download_execution_logs`: Download logs for a pipeline execution
 
+#### Templates Toolset
+
+Toolset Name: `templates`
+
+- `list_templates`: List templates at a given scope
 
 #### Internal Developer Portal Toolset
 

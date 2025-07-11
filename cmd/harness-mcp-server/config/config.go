@@ -36,6 +36,8 @@ type Config struct {
 	McpSvcSecret            string
 	ChaosManagerSvcBaseURL  string
 	ChaosManagerSvcSecret   string
+	TemplateSvcBaseURL      string
+	TemplateSvcSecret       string
 	CodeSvcBaseURL          string
 	CodeSvcSecret           string
 	LogSvcBaseURL           string

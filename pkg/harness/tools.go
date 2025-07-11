@@ -92,6 +92,10 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 		return nil, err
 	}
 
+	if err := registerTemplates(config, tsg); err != nil {
+		return nil, err
+	}
+
 	if err := registerInternalDeveloperPortal(config, tsg); err != nil {
 		return nil, err
 	}
@@ -567,6 +571,37 @@ func registerChaos(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 	// Add toolset to the group
 	tsg.AddToolset(chaos)
+	return nil
+}
+
+// registerTemplates registers the templates toolset
+func registerTemplates(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Determine the base URL and secret for templates
+	baseURL := config.BaseURL
+	secret := config.TemplateSvcSecret
+	if config.Internal {
+		baseURL = config.TemplateSvcBaseURL
+	}
+
+	// Create base client for templates
+	c, err := createClient(baseURL, config, secret)
+	if err != nil {
+		return err
+	}
+
+	templateClient := &client.TemplateService{
+		Client:           c,
+		UseInternalPaths: config.Internal,
+	}
+
+	// Create the templates toolset
+	templates := toolsets.NewToolset("templates", "Harness Template related tools").
+		AddReadTools(
+			toolsets.NewServerTool(ListTemplates(config, templateClient)),
+		)
+
+	// Add toolset to the group
+	tsg.AddToolset(templates)
 	return nil
 }
 
