@@ -1,0 +1,25 @@
+version: '3'
+
+dotenv: ['.env']
+
+tasks:
+  scs-codegen:
+    summary: Generate Go structs from openapi spec for Supply Chain Security
+    cmds:
+      - |
+          oapi-codegen \
+            --package=generated \
+            --generate types,client \
+            "-include-operation-ids=codeRepositoriesList,getCodeRepositoryOverview,getAllRepositoriesSummary,fetchComplianceResultsByArtifact,listArtifactSources,artifactListV2,getArtifactV2Overview,getArtifactChainOfCustodyV2" \
+            client/scs/openapi.yaml \
+            > client/scs/generated/scs.gen.go
+  sto-codegen:
+    summary: Generate Go structs from openapi spec for Supply Chain Security
+    cmds:
+      - |
+          oapi-codegen \
+            --package=generated \
+            --generate types,client \
+            "-include-operation-ids=Frontend#AllIssuesList" \
+            client/sto/openapi.yaml \
+            > client/sto/generated/sto.gen.go
