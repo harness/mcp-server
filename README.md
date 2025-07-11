@@ -97,6 +97,7 @@ Toolset Name: `cloudcostmanagement`
 - `ccm_perspective_grid`: Query detailed cost perspective data in Harness Cloud Cost Management.
 - `ccm_perspective_time_series`: Query detailed cost perspective data, grouped by time in Harness Cloud Cost Management.
 - `ccm_perspective_summary_with_budget`: Query a summary of cost perspectives with budget information in Harness Cloud Cost Management, including detailed cost and budget data grouped by time.
+- `ccm_perspective_budget`: Query the budget information for a perspective in Harness Cloud Cost Management.
 - `get_ccm_commitment_coverage`: Get commitment coverage information for an account in Harness Cloud Cost Management
 
 #### Chaos Engineering Toolset

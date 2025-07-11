@@ -145,3 +145,20 @@ const CCMPerspectiveSummaryWithBudgetQuery = `
 		}
 	}
 `
+
+const CCMPerspectiveBudgetQuery = `
+query FetchPerspectiveBudget($perspectiveId: String) {
+	budgetSummaryList(perspectiveId: $perspectiveId) {
+		id
+		name
+		budgetAmount
+		actualCost
+		timeLeft
+		timeUnit
+		timeScope
+		period
+		folderId
+		__typename
+	}
+}
+`

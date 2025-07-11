@@ -225,6 +225,48 @@ func CcmPerspectiveSummaryWithBudgetTool(config *config.Config, client *client.C
 	}
 }
 
+func CcmPerspectiveBudgetTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("ccm_perspective_budget",
+			mcp.WithDescription("Get the budget information for a perspective in Harness Cloud Cost Management"),
+			mcp.WithString("perspective_id",
+				mcp.Description("Required perspective identifier."),
+			),
+			WithScope(config, false),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			accountId, err := getAccountID(config, request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			perspectiveId, err := OptionalParam[string](request, "perspective_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			params := &dto.CCMPerspectiveBudgetOptions{}
+			params.AccountId = accountId
+			params.PerspectiveId = perspectiveId
+
+			scope, err := fetchScope(config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.PerspectiveBudget(ctx, scope, params)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get CCM Perspective Budget: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal CCM Perspective Budget: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+	}
+
 func buildFilters(filterFields []map[string]string, request mcp.CallToolRequest) (map[string][]string, error) {
 
 	filters := make(map[string][]string)

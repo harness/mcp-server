@@ -152,3 +152,28 @@ type CCMPerspectiveSummaryWithBudgetResponse struct {
 		PerspectiveForecastCost CCMPerspectiveForecastCost `json:"perspectiveForecastCost"`
 	} `json:"data"`
 }
+
+type CCMPerspectiveBudget struct {
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	BudgetAmount float64 `json:"budgetAmount"`
+	ActualCost  float64 `json:"actualCost"`
+	TimeLeft    int     `json:"timeLeft"`
+	TimeUnit    string  `json:"timeUnit"`
+	TimeScope   string  `json:"timeScope"`
+	Period      string  `json:"period"`
+	FolderID    string  `json:"folderId"`
+	Typename    string  `json:"__typename"`
+}
+
+type CCMPerspectiveBudgetResponse struct {
+	Data struct {
+		BudgetSummaryList []CCMPerspectiveBudget `json:"budgetSummaryList"`
+	} `json:"data"`
+}
+
+type CCMPerspectiveBudgetOptions struct {
+	AccountId             string `json:"account_id"`
+	PerspectiveId         string `json:"perspective_id"`
+}
+
