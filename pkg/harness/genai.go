@@ -88,6 +88,7 @@ func AIDevOpsAgentTool(config *config.Config, client *client.GenaiService) (tool
 			interactionID, _ := OptionalParam[string](request, "interaction_id")
 			contextRaw, _ := OptionalParam[[]any](request, "context")
 			conversationRaw, _ := OptionalParam[[]any](request, "conversation_raw")
+			harnessContextRaw, _ := OptionalParam[map[string]interface{}](request, "harness_context")
 			stream := true // default value
 			if streamArg, ok := request.Params.Arguments["stream"].(bool); ok {
 				stream = streamArg
@@ -122,6 +123,19 @@ func AIDevOpsAgentTool(config *config.Config, client *client.GenaiService) (tool
 				AccountID: scope.AccountID,
 				OrgID:     scope.OrgID,
 				ProjectID: scope.ProjectID,
+			}
+
+			// Override with values from request if provided
+			if harnessContextRaw != nil {
+				if accountID, ok := harnessContextRaw["accountID"].(string); ok && accountID != "" {
+					harnessContext.AccountID = accountID
+				}
+				if orgID, ok := harnessContextRaw["orgID"].(string); ok && orgID != "" {
+					harnessContext.OrgID = orgID
+				}
+				if projectID, ok := harnessContextRaw["projectID"].(string); ok && projectID != "" {
+					harnessContext.ProjectID = projectID
+				}
 			}
 
 			// Generate or use provided IDs

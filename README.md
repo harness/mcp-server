@@ -385,6 +385,35 @@ Environment variables are prefixed with `HARNESS_`:
 
 The server uses a Harness API key for authentication. This can be set via the `HARNESS_API_KEY` environment variable.
 
+## Notes for Local Testing
+
+There might be certain tools that are not added in external mode or vice-versa, for local testing, following changes in `pkg/harness/tools.go` need to be done in mcp-server code to enable that certain tool in both internal and external modes.
+
+```
+baseURL := "https://localhost:8000"
+secret := <SERVICE_SECRET>
+```
+
+### Example
+
+```
+// registerGenai registers the genai toolset
+func registerGenai(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+
+	// Determine the base URL and secret for genai service
+	baseURL := "http://localhost:8000"
+	secret := <GENAI_SECRET>
+
+	// Create base client for genai with the default timeout
+	c, err := createClient(baseURL, config, secret, defaultGenaiTimeout)
+	if err != nil {
+		return err
+	}
+  .
+  .
+  .
+```
+
 ## Debugging
 
 Since MCP servers run over stdio, debugging can be challenging. For the best debugging experience, we strongly recommend using the [MCP Inspector](https://github.com/modelcontextprotocol/inspector).
