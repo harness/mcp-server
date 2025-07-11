@@ -252,8 +252,6 @@ func buildKeyValueFilters(keyValueFilterFields []map[string]string, request mcp.
 			// return mcp.NewToolResultError(err.Error()), nil
 			return nil, err
 		}
-		// slog.Debug("PGridTool", "KV Field ID filter", name)
-		// slog.Debug("PGridTool", "KV Field ID value", val)
 		if val != nil && len(val) > 0 {
 			keyValueFilters[name] = val
 		}
@@ -295,11 +293,13 @@ func commonGraphQLJSONSchema(extras map[string]any) json.RawMessage {
 		},
 		"limit": map[string]any{
 			"type":        "number",
+			"default": defaultLimit, 
 			"description": "Rows page limit",
 		},
 		"offset": map[string]any{
 			"type":        "number",
 			"description": "Rows page offset",
+			"default": defaultOffset, 
 		},
 		"time_filter": map[string]any{
 			"type":        "string",
@@ -321,7 +321,7 @@ func commonGraphQLJSONSchema(extras map[string]any) json.RawMessage {
 		},
 		"group_by": map[string]any{
 			"type": "object",
-			"description": "Group by field or field and value when field " + group_by_options,
+			"description": fmt.Sprintf("Group by field or field and value when field %s. The format for this field is: {\"field\": \"field_name\", \"value\": \"field_value\"}.",group_by_options),
 			"properties": map[string]any{
 				"field": map[string]any{
 					"type": "string",
@@ -386,7 +386,7 @@ func commonGraphQLJSONSchema(extras map[string]any) json.RawMessage {
 	schema := map[string]any{
 		"type":       "object",
 		"properties": properties,
-		"required":   []string{"view_id", "group_by"},
+		"required":   []string{"view_id", "time_filter", "limit", "offset", "group_by"},
 	}
 	b, _ := json.Marshal(schema)
 	return json.RawMessage(b)

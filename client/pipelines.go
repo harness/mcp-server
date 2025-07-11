@@ -8,35 +8,22 @@ import (
 )
 
 const (
-	// Base API paths
-	pipelinePath                 = "api/pipelines/%s"
-	pipelineListPath             = "api/pipelines/list"
-	pipelineExecutionPath        = "api/pipelines/execution/url"
-	pipelineExecutionGetPath     = "api/pipelines/execution/v2/%s"
-	pipelineExecutionSummaryPath = "api/pipelines/execution/summary"
-
-	// Prefix to prepend for external API calls
-	externalPathPrefix = "pipeline/"
+	pipelinePath                 = "/api/pipelines/%s"
+	pipelineListPath             = "/api/pipelines/list"
+	pipelineExecutionPath        = "/api/pipelines/execution/url"
+	pipelineExecutionGetPath     = "/api/pipelines/execution/v2/%s"
+	pipelineExecutionSummaryPath = "/api/pipelines/execution/summary"
 )
 
 type PipelineService struct {
-	Client           *Client
-	UseInternalPaths bool
-}
-
-func (p *PipelineService) buildPath(basePath string) string {
-	if p.UseInternalPaths {
-		return basePath
-	}
-	return externalPathPrefix + basePath
+	Client *Client
 }
 
 func (p *PipelineService) Get(ctx context.Context, scope dto.Scope, pipelineID string) (
 	*dto.Entity[dto.PipelineData],
 	error,
 ) {
-	pathTemplate := p.buildPath(pipelinePath)
-	path := fmt.Sprintf(pathTemplate, pipelineID)
+	path := fmt.Sprintf(pipelinePath, pipelineID)
 
 	// Prepare query parameters
 	params := make(map[string]string)
@@ -59,7 +46,7 @@ func (p *PipelineService) List(
 	scope dto.Scope,
 	opts *dto.PipelineListOptions,
 ) (*dto.ListOutput[dto.PipelineListItem], error) {
-	path := p.buildPath(pipelineListPath)
+	path := pipelineListPath
 	// Prepare query parameters
 	params := make(map[string]string)
 	addScope(scope, params)
@@ -103,7 +90,7 @@ func (p *PipelineService) ListExecutions(
 	scope dto.Scope,
 	opts *dto.PipelineExecutionOptions,
 ) (*dto.ListOutput[dto.PipelineExecution], error) {
-	path := p.buildPath(pipelineExecutionSummaryPath)
+	path := pipelineExecutionSummaryPath
 	// Prepare query parameters
 	params := make(map[string]string)
 	addScope(scope, params)
@@ -161,8 +148,7 @@ func (p *PipelineService) GetExecution(
 	scope dto.Scope,
 	planExecutionID string,
 ) (*dto.Entity[dto.PipelineExecution], error) {
-	pathTemplate := p.buildPath(pipelineExecutionGetPath)
-	path := fmt.Sprintf(pathTemplate, planExecutionID)
+	path := fmt.Sprintf(pipelineExecutionGetPath, planExecutionID)
 
 	// Prepare query parameters
 	params := make(map[string]string)
@@ -191,7 +177,7 @@ func (p *PipelineService) FetchExecutionURL(
 	scope dto.Scope,
 	pipelineID, planExecutionID string,
 ) (string, error) {
-	path := p.buildPath(pipelineExecutionPath)
+	path := pipelineExecutionPath
 
 	// Prepare query parameters
 	params := make(map[string]string)

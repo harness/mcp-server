@@ -28,6 +28,35 @@ Toolset Name: `pullrequests`
 - `get_pull_request_activities`: Get activities and comments for a specific pull request
 - `create_pull_request`: Create a new pull request
 
+#### Services Toolset
+
+Toolset Name: `service` 
+
+- `get_service`: Get details of a specific service
+- `list_services`: List services
+
+#### Environments Toolset
+
+Toolset Name: `environment` 
+
+- `get_environment`: Get details of a specific environment
+- `list_environments`: List environments
+- `move_environment_configs`: Move environment YAML from inline to remote
+
+#### Infrastructure Toolset
+
+Toolset Name: `infrastructure` 
+
+- `list_infrastructures`: List infrastructure definitions
+- `move_infrastructure_configs`: Move infrastructure YAML between inline and remote
+
+#### Connectors Toolset
+
+Toolset Name: `connectors`
+
+- `list_connector_catalogue`: List the Harness connector catalogue
+- `get_connector_details`: Get details of a specific connector
+
 #### Repositories Toolset
 
 Toolset Name: `repositories`
@@ -68,12 +97,34 @@ Toolset Name: `cloudcostmanagement`
 - `ccm_perspective_grid`: Query detailed cost perspective data in Harness Cloud Cost Management.
 - `ccm_perspective_time_series`: Query detailed cost perspective data, grouped by time in Harness Cloud Cost Management.
 - `ccm_perspective_summary_with_budget`: Query a summary of cost perspectives with budget information in Harness Cloud Cost Management, including detailed cost and budget data grouped by time.
+- `get_ccm_commitment_coverage`: Get commitment coverage information for an account in Harness Cloud Cost Management
+
+#### Chaos Engineering Toolset
+
+Toolset Name: `chaos`
+
+- `chaos_experiments_list`: List all the chaos experiments for a specific account.
+- `chaos_experiment_describe`: Get details of a specific chaos experiment.
+- `chaos_experiment_run`:  Run a specific chaos experiment.
+- `chaos_experiment_run_result`:  Get the result of a specific chaos experiment run.
 
 #### Logs Toolset
 
 Toolset Name: `logs`
 
 - `download_execution_logs`: Download logs for a pipeline execution
+
+
+#### Internal Developer Portal Toolset
+
+Toolset Name: `idp`
+
+- `get_entity`: Get details of a specific entity in the Harness IDP Catalog
+- `list_entities`: List entities in the Harness Internal Developer Portal Catalog
+- `get_scorecard`: Get details of a specific entity in the Harness IDP Catalog
+- `list_scorecards`: List scorecards in the Harness Internal Developer Portal Catalog
+- `get_score_summary`: Get Score Summary for Scorecards in the Harness Internal Developer Portal Catalog.
+- `get_scores`: Get Scores for Scorecards in the Harness Internal Developer Portal Catalog.
 
 ## Prerequisites
 

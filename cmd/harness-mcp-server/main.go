@@ -145,7 +145,15 @@ var (
 				ArtifactRegistrySecret:  viper.GetString("artifact_registry_secret"),
 				NextgenCEBaseURL:        viper.GetString("nextgen_ce_base_url"),
 				NextgenCESecret:         viper.GetString("nextgen_ce_secret"),
+				IDPSvcBaseURL:           viper.GetString("idp_svc_base_url"),
+				IDPSvcSecret:            viper.GetString("idp_svc_secret"),
 				McpSvcSecret:            viper.GetString("mcp_svc_secret"),
+				ChaosManagerSvcBaseURL:  viper.GetString("chaos_manager_svc_base_url"),
+				ChaosManagerSvcSecret:   viper.GetString("chaos_manager_svc_secret"),
+				CodeSvcBaseURL:          viper.GetString("code_svc_base_url"),
+				CodeSvcSecret:           viper.GetString("code_svc_secret"),
+				LogSvcBaseURL:           viper.GetString("log_svc_base_url"),
+				LogSvcSecret:            viper.GetString("log_svc_secret"),
 			}
 
 			if err := runStdioServer(ctx, cfg); err != nil {
@@ -191,6 +199,14 @@ func init() {
 	internalCmd.Flags().String("artifact-registry-secret", "", "Secret for artifact registry service")
 	internalCmd.Flags().String("nextgen-ce-base-url", "", "Base URL for Nextgen CE service")
 	internalCmd.Flags().String("nextgen-ce-secret", "", "Secret for Nextgen CE service")
+	internalCmd.Flags().String("chaos-manager-svc-base-url", "", "Base URL for chaos manager service")
+	internalCmd.Flags().String("chaos-manager-svc-secret", "", "Secret for chaos manager service")
+	internalCmd.Flags().String("code-svc-base-url", "", "Base URL for code service")
+	internalCmd.Flags().String("code-svc-secret", "", "Secret for code service")
+	internalCmd.Flags().String("dashboard-svc-base-url", "", "Base URL for dashboard service")
+	internalCmd.Flags().String("dashboard-svc-secret", "", "Secret for dashboard service")
+	internalCmd.Flags().String("log-svc-base-url", "", "Base URL for log service")
+	internalCmd.Flags().String("log-service-secret", "", "Secret for log service")
 
 	// Bind global flags to viper
 	_ = viper.BindPFlag("toolsets", rootCmd.PersistentFlags().Lookup("toolsets"))
@@ -219,6 +235,14 @@ func init() {
 	_ = viper.BindPFlag("artifact_registry_secret", internalCmd.Flags().Lookup("artifact-registry-secret"))
 	_ = viper.BindPFlag("nextgen_ce_base_url", internalCmd.Flags().Lookup("nextgen-ce-base-url"))
 	_ = viper.BindPFlag("nextgen_ce_secret", internalCmd.Flags().Lookup("nextgen-ce-secret"))
+	_ = viper.BindPFlag("chaos_manager_svc_base_url", internalCmd.Flags().Lookup("chaos-manager-svc-base-url"))
+	_ = viper.BindPFlag("chaos_manager_svc_secret", internalCmd.Flags().Lookup("chaos-manager-svc-secret"))
+	_ = viper.BindPFlag("code_svc_base_url", internalCmd.Flags().Lookup("code-svc-base-url"))
+	_ = viper.BindPFlag("code_svc_secret", internalCmd.Flags().Lookup("code-svc-secret"))
+	_ = viper.BindPFlag("dashboard_svc_base_url", internalCmd.Flags().Lookup("dashboard-svc-base-url"))
+	_ = viper.BindPFlag("dashboard_svc_secret", internalCmd.Flags().Lookup("dashboard-svc-secret"))
+	_ = viper.BindPFlag("log_svc_base_url", internalCmd.Flags().Lookup("log-svc-base-url"))
+	_ = viper.BindPFlag("log_svc_secret", internalCmd.Flags().Lookup("log-svc-secret"))
 
 	// Add subcommands
 	rootCmd.AddCommand(stdioCmd)

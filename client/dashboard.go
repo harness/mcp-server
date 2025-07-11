@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	dashboardSearchPath = "dashboard/v1/search"
-	dashboardDataPath   = "dashboard/download/dashboards/%s/csv"
+	dashboardSearchPath = "/v1/search"
+	dashboardDataPath   = "/download/dashboards/%s/csv"
 )
 
 // DashboardService handles all dashboard-related API interactions

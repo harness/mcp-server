@@ -282,3 +282,89 @@ func getAccountID(config *config.Config, request mcp.CallToolRequest) (string, e
 	}
 	return "", fmt.Errorf("Account ID is required")
 }
+
+func FetchCommitmentCoverageTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("get_ccm_commitment_coverage",
+			mcp.WithDescription("Get commitment coverage information for an account in Harness Cloud Cost Management"),
+			mcp.WithString("start_date",
+				mcp.Required(),
+				mcp.Description("Start date to filter commitment coverage"),
+			),
+			mcp.WithString("end_date",
+				mcp.Required(),
+				mcp.Description("End date to filter commitment coverage"),
+			),
+			mcp.WithString("service",
+				mcp.Description("Optional service to filter commitment coverage"),
+			),
+			mcp.WithArray("cloud_account_ids",
+				mcp.Description("Optional cloud account IDs to filter commitment coverage"),
+				mcp.Items(map[string]any{
+					"type": "string",
+				}),
+			),
+			WithScope(config, false),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			accountId, err := getAccountID(config, request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			params := &dto.CCMCommitmentOptions{}
+			params.AccountIdentifier = &accountId
+
+			// Handle service parameter
+			service, ok, err := OptionalParamOK[string](request, "service")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if ok && service != "" {
+				params.Service = &service
+			}
+
+			// Handle cloud account IDs parameter
+			cloudAccountIDs, ok, err := OptionalParamOK[[]string](request, "cloud_account_ids")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if ok && len(cloudAccountIDs) > 0 {
+				params.CloudAccountIDs = cloudAccountIDs
+			}
+
+			// Handle start date parameter
+			startDate, ok, err := OptionalParamOK[string](request, "start_date")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if ok && startDate != "" {
+				params.StartDate = &startDate
+			}
+
+			// Handle end date parameter
+			endDate, ok, err := OptionalParamOK[string](request, "end_date")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if ok && endDate != "" {
+				params.EndDate = &endDate
+			}
+
+			scope, err := fetchScope(config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.GetComputeCoverage(ctx, scope, params)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get commitment coverage: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal commitment coverage: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}

@@ -9,12 +9,11 @@ import (
 )
 
 const (
-	pullRequestBasePath       = "code/api/v1/repos"
-	pullRequestGetPath        = pullRequestBasePath + "/%s/pullreq/%d"
-	pullRequestListPath       = pullRequestBasePath + "/%s/pullreq"
-	pullRequestCreatePath     = pullRequestBasePath + "/%s/pullreq"
-	pullRequestChecksPath     = pullRequestBasePath + "/%s/pullreq/%d/checks"
-	pullRequestActivitiesPath = pullRequestBasePath + "/%s/pullreq/%d/activities"
+	pullRequestGetPath        = "/api/v1/repos/%s/pullreq/%d"
+	pullRequestListPath       = "/api/v1/repos/%s/pullreq"
+	pullRequestCreatePath     = "/api/v1/repos/%s/pullreq"
+	pullRequestChecksPath     = "/api/v1/repos/%s/pullreq/%d/checks"
+	pullRequestActivitiesPath = "/api/v1/repos/%s/pullreq/%d/activities"
 )
 
 type PullRequestService struct {

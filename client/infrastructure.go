@@ -8,9 +8,8 @@ import (
 )
 
 const (
-	infrastructureBasePath        = "ng/api/infrastructures"
-	infrastructureListPath        = infrastructureBasePath
-	infrastructureMoveConfigsPath = infrastructureBasePath + "/move-config/%s"
+	infrastructureListPath        = "/api/infrastructures"
+	infrastructureMoveConfigsPath = "/api/infrastructures/move-config/%s"
 )
 
 type InfrastructureClient struct {
