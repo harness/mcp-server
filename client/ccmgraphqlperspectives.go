@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	ccmGraphQLBasePath = "gateway/" + ccmBasePath + "/graphql"
+	ccmGraphQLBasePath = ccmBasePath + "/graphql"
 	ccmPerspectiveGraphQLPath = ccmGraphQLBasePath + "?accountIdentifier=%s&routingId=%s"
 )
 
