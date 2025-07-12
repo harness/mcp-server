@@ -3,9 +3,16 @@ package client
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/harness/harness-mcp/client/dto"
 )
+
+func convertMillisecondsToDate(unixMillis int64) time.Time {
+	seconds := unixMillis / 1000
+	nanoseconds := (unixMillis % 1000) * int64(time.Millisecond)
+	return time.Unix(seconds, nanoseconds).In(time.Local)
+}
 
 const (
 	auditPath = "/api/audits/list"
@@ -48,6 +55,12 @@ func (a *AuditService) ListUserAuditTrail(ctx context.Context, scope dto.Scope, 
 	err := a.Client.Post(ctx, auditPath, params, opts, resp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list the audit trail: %w", err)
+	}
+
+	for i := range resp.Data.Content {
+		timestamp := resp.Data.Content[i].Timestamp
+		timeObj := convertMillisecondsToDate(timestamp)
+		resp.Data.Content[i].Time = timeObj.Format(time.RFC3339)
 	}
 
 	return resp, nil

@@ -45,6 +45,7 @@ type AuditListItem struct {
 	Timestamp          int64                   `json:"timestamp,omitempty"`
 	AuthenticationInfo AuditAuthenticationInfo `json:"authenticationInfo,omitempty"`
 	ResourceScope      AuditResourceScope      `json:"resourceScope,omitempty"`
+	Time               string
 }
 
 type AuditResource struct {
