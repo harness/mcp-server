@@ -44,4 +44,8 @@ type Config struct {
 	LogSvcSecret            string
 	DashboardSvcBaseURL     string
 	DashboardSvcSecret      string
+	SCSSvcSecret            string // Added for SCS toolset
+	SCSSvcBaseURL           string // Added for SCS toolset
+	STOSvcSecret            string // Added for STO toolset
+	STOSvcBaseURL           string // Added for STO toolset
 }
