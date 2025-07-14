@@ -138,6 +138,28 @@ func (r *CloudCostManagementService) PerspectiveBudget(ctx context.Context, scop
 	return result, nil
 }
 
+func (r *CloudCostManagementService) GetCcmMetadata(ctx context.Context, scope dto.Scope, accountId string) (*dto.CCMMetadataResponse, error) {
+	path := fmt.Sprintf(ccmPerspectiveGraphQLPath, accountId, accountId) 
+
+	gqlQuery := ccmcommons.CCMMetadataQuery
+	variables := map[string]any{
+	}
+
+	payload := map[string]any{
+		"query":         gqlQuery,
+		"operationName": "FetchCcmMetaData",
+		"variables":     variables,
+	}
+
+	slog.Debug("FetchCcmMetadata", "Payload", payload)
+	result := new(dto.CCMMetadataResponse)
+	err := r.Client.Post(ctx, path, nil, payload, &result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get perspective budget: %w", err)
+	}
+	return result, nil
+}
+
 func buildFilters(timeFilters string, idFilters dto.CCMGraphQLFilters, keyValueFilters dto.CCMGraphQLKeyValueFilters) ([]map[string]any) {
 	filters := []map[string]any{}
 	viewFilter := []map[string]any{

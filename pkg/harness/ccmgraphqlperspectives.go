@@ -267,6 +267,36 @@ func CcmPerspectiveBudgetTool(config *config.Config, client *client.CloudCostMan
 		}
 	}
 
+func CcmMetadataTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("fetch_ccm_metadata",
+	mcp.WithDescription("Get metadata about available cloud connectors, cost data sources, default perspectives, and currency preferences in Harness Cloud Cost Management."),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			accountId, err := getAccountID(config, request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			scope, err := fetchScope(config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.GetCcmMetadata(ctx, scope, accountId)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get CCM Metadata: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal CCM Metadata: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+	}
+
+
 func buildFilters(filterFields []map[string]string, request mcp.CallToolRequest) (map[string][]string, error) {
 
 	filters := make(map[string][]string)
