@@ -9,6 +9,8 @@ import (
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/ar"
+	scs "github.com/harness/harness-mcp/client/scs/generated"
+	sto "github.com/harness/harness-mcp/client/sto/generated"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness/auth"
 	"github.com/harness/harness-mcp/pkg/toolsets"
@@ -25,7 +27,7 @@ const aiServiceIdentity = "aifoundation"
 var defaultJWTLifetime = 1 * time.Hour
 
 // Default timeout for GenAI service
-const defaultGenaiTimeout = 60 * time.Second
+const defaultGenaiTimeout = 300 * time.Second
 
 // InitToolsets initializes and returns the toolset groups
 func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
@@ -92,7 +94,19 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 		return nil, err
 	}
 
+	if err := registerTemplates(config, tsg); err != nil {
+		return nil, err
+	}
+
 	if err := registerInternalDeveloperPortal(config, tsg); err != nil {
+		return nil, err
+	}
+
+	if err := registerSCS(config, tsg); err != nil {
+		return nil, err
+	}
+
+	if err := registerSTO(config, tsg); err != nil {
 		return nil, err
 	}
 
@@ -146,6 +160,7 @@ func createClientWithIdentity(baseURL string, config *config.Config, secret stri
 
 // registerPipelines registers the pipelines toolset
 func registerPipelines(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+
 	// Determine the base URL and secret for pipeline service
 	baseURL := buildServiceURL(config, config.PipelineSvcBaseURL, config.BaseURL, "pipeline")
 	secret := config.PipelineSvcSecret
@@ -170,6 +185,78 @@ func registerPipelines(config *config.Config, tsg *toolsets.ToolsetGroup) error 
 
 	// Add toolset to the group
 	tsg.AddToolset(pipelines)
+	return nil
+}
+
+// registerSCS registers the Supply Chain Security toolset
+func registerSCS(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	baseURL := buildServiceURL(config, config.SCSSvcBaseURL, config.BaseURL, "/ssca-manager")
+	secret := config.SCSSvcSecret
+
+	// Create base client for SCS
+	c, err := createClient(baseURL, config, secret)
+	if err != nil {
+		return err
+	}
+
+	requestEditorFn := func(ctx context.Context, req *http.Request) error {
+		k, v, err := c.AuthProvider.GetHeader(ctx)
+		if err != nil {
+			return err
+		}
+		req.Header.Set(k, v)
+		return nil
+	}
+
+	scsClient, err := scs.NewClientWithResponses(baseURL, scs.WithHTTPClient(c),
+		scs.WithRequestEditorFn(requestEditorFn))
+	if err != nil {
+		return fmt.Errorf("failed to create generated SCS client: %w", err)
+	}
+
+	scs := toolsets.NewToolset("scs", "Harness Supply Chain Security tools").
+		AddReadTools(
+			toolsets.NewServerTool(ListSCSCodeReposTool(config, scsClient)),
+			toolsets.NewServerTool(GetCodeRepositoryOverviewTool(config, scsClient)),
+			toolsets.NewServerTool(FetchComplianceResultsByArtifactTool(config, scsClient)),
+			toolsets.NewServerTool(ListArtifactSourcesTool(config, scsClient)),
+			toolsets.NewServerTool(ArtifactListV2Tool(config, scsClient)),
+			toolsets.NewServerTool(GetArtifactV2OverviewTool(config, scsClient)),
+			toolsets.NewServerTool(GetArtifactChainOfCustodyV2Tool(config, scsClient)),
+		)
+	tsg.AddToolset(scs)
+	return nil
+}
+
+// registerSTO registers the Security Test Orchestration toolset
+func registerSTO(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	baseURL := buildServiceURL(config, config.STOSvcBaseURL, config.BaseURL, "/sto")
+	secret := config.STOSvcSecret
+
+	c, err := createClient(baseURL, config, secret)
+	if err != nil {
+		return err
+	}
+
+	requestEditorFn := func(ctx context.Context, req *http.Request) error {
+		k, v, err := c.AuthProvider.GetHeader(ctx)
+		if err != nil {
+			return err
+		}
+		req.Header.Set(k, v)
+		return nil
+	}
+
+	stoClient, err := sto.NewClientWithResponses(baseURL, sto.WithHTTPClient(c),
+		sto.WithRequestEditorFn(requestEditorFn))
+	if err != nil {
+		return fmt.Errorf("failed to create generated STO client: %w", err)
+	}
+	sto := toolsets.NewToolset("sto", "Harness Security Test Orchestration tools").
+		AddReadTools(
+			toolsets.NewServerTool(FrontendAllIssuesListTool(config, stoClient)),
+		)
+	tsg.AddToolset(sto)
 	return nil
 }
 
@@ -571,6 +658,37 @@ func registerChaos(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 	// Add toolset to the group
 	tsg.AddToolset(chaos)
+	return nil
+}
+
+// registerTemplates registers the templates toolset
+func registerTemplates(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Determine the base URL and secret for templates
+	baseURL := config.BaseURL
+	secret := config.TemplateSvcSecret
+	if config.Internal {
+		baseURL = config.TemplateSvcBaseURL
+	}
+
+	// Create base client for templates
+	c, err := createClient(baseURL, config, secret)
+	if err != nil {
+		return err
+	}
+
+	templateClient := &client.TemplateService{
+		Client:           c,
+		UseInternalPaths: config.Internal,
+	}
+
+	// Create the templates toolset
+	templates := toolsets.NewToolset("templates", "Harness Template related tools").
+		AddReadTools(
+			toolsets.NewServerTool(ListTemplates(config, templateClient)),
+		)
+
+	// Add toolset to the group
+	tsg.AddToolset(templates)
 	return nil
 }
 

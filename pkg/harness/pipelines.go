@@ -14,7 +14,7 @@ import (
 
 func GetPipelineTool(config *config.Config, client *client.PipelineService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_pipeline",
-			mcp.WithDescription("Get details of a specific pipeline in a Harness repository."),
+			mcp.WithDescription("Get details of a specific pipeline in a Harness repository. Use list_pipelines (if available) first to find the correct pipeline_id if you're unsure of the exact ID."),
 			mcp.WithString("pipeline_id",
 				mcp.Required(),
 				mcp.Description("The ID of the pipeline"),

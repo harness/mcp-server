@@ -100,12 +100,36 @@ Toolset Name: `chaos`
 - `chaos_experiment_run`:  Run a specific chaos experiment.
 - `chaos_experiment_run_result`:  Get the result of a specific chaos experiment run.
 
+#### Supply Chain Security (SCS) Toolset
+
+Toolset Name: `scs`
+
+- `list_artifact_sources`: List all artifact sources available in Harness SCS for a specific organization and project.
+- `list_artifacts_per_source`: List all artifacts within a specific artifact source.
+- `get_artifact_overview`: Get metadata, security findings, SBOM, and compliance status for a specific artifact.
+- `get_artifact_chain_of_custody`: Retrieve the full chain of custody (event history) for a specific artifact.
+- `fetch_compliance_results_by_artifact`: Fetch compliance results for a specific artifact.
+- `get_code_repository_overview`: Get an overview of vulnerabilities, SBOM, compliance issues, and policy violations for a code repository.
+- `list_scs_code_repos`: List all code repositories scanned by Harness SCS.
+
+#### Security Test Orchestration (STO) Toolset
+
+Toolset Name: `sto`
+
+- `frontend_all_issues_list`: List and filter security issues in Harness STO by target, pipeline, tool, severity, exemption status, and type.
+
+
 #### Logs Toolset
 
 Toolset Name: `logs`
 
 - `download_execution_logs`: Download logs for a pipeline execution
 
+#### Templates Toolset
+
+Toolset Name: `templates`
+
+- `list_templates`: List templates at a given scope
 
 #### Internal Developer Portal Toolset
 
@@ -386,6 +410,35 @@ Environment variables are prefixed with `HARNESS_`:
 ### Authentication
 
 The server uses a Harness API key for authentication. This can be set via the `HARNESS_API_KEY` environment variable.
+
+## Notes for Local Testing
+
+There might be certain tools that are not added in external mode or vice-versa, for local testing, following changes in `pkg/harness/tools.go` need to be done in mcp-server code to enable that certain tool in both internal and external modes.
+
+```
+baseURL := "https://localhost:8000"
+secret := <SERVICE_SECRET>
+```
+
+### Example
+
+```
+// registerGenai registers the genai toolset
+func registerGenai(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+
+	// Determine the base URL and secret for genai service
+	baseURL := "http://localhost:8000"
+	secret := <GENAI_SECRET>
+
+	// Create base client for genai with the default timeout
+	c, err := createClient(baseURL, config, secret, defaultGenaiTimeout)
+	if err != nil {
+		return err
+	}
+  .
+  .
+  .
+```
 
 ## Debugging
 
