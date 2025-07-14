@@ -48,4 +48,6 @@ type Config struct {
 	SCSSvcBaseURL           string // Added for SCS toolset
 	STOSvcSecret            string // Added for STO toolset
 	STOSvcBaseURL           string // Added for STO toolset
+	AuditSvcBaseURL         string
+	AuditSvcSecret          string
 }
