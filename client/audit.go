@@ -59,8 +59,7 @@ func (a *AuditService) ListUserAuditTrail(ctx context.Context, scope dto.Scope, 
 
 	for i := range resp.Data.Content {
 		timestamp := resp.Data.Content[i].Timestamp
-		timeObj := convertMillisecondsToDate(timestamp)
-		resp.Data.Content[i].Time = timeObj.Format(time.RFC3339)
+		resp.Data.Content[i].Time = dto.FormatUnixMillisToRFC3339(timestamp)
 	}
 
 	return resp, nil
