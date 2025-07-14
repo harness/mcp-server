@@ -1,7 +1,9 @@
 package harness
 
 import (
+	"encoding/json"
 	"fmt"
+	"strconv"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -93,6 +95,44 @@ func OptionalParam[T any](r mcp.CallToolRequest, p string) (T, error) {
 	}
 
 	return r.Params.Arguments[p].(T), nil
+}
+
+func ExtractParam[T any](r mcp.CallToolRequest, key string) (T, error) {
+	var zero T
+
+	raw, ok := r.Params.Arguments[key]
+	if !ok {
+		return zero, nil
+	}
+
+	switch v := raw.(type) {
+	case string:
+		// Try unmarshaling the string directly into T.
+		// This works for T == string AND T == alias of string.
+		jsonStr := fmt.Sprintf(`"%s"`, v)
+		if err := json.Unmarshal([]byte(jsonStr), &zero); err == nil {
+			return zero, nil
+		}
+
+		// If that fails, maybe it was a stringified JSON value (e.g. "[{...}]")
+		unquoted, err := strconv.Unquote(v)
+		if err != nil {
+			unquoted = v // fallback
+		}
+		raw = json.RawMessage(unquoted)
+	}
+
+	// For all other cases (or fallthrough from above), marshal and unmarshal
+	bytes, err := json.Marshal(raw)
+	if err != nil {
+		return zero, fmt.Errorf("parameter %s is not valid JSON (raw=%v): %w", key, raw, err)
+	}
+
+	if err := json.Unmarshal(bytes, &zero); err != nil {
+		return zero, fmt.Errorf("parameter %s is not of expected type %T: %w", key, zero, err)
+	}
+
+	return zero, nil
 }
 
 // OptionalIntParam is a helper function that can be used to fetch a requested parameter from the request.

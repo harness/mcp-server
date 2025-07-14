@@ -145,7 +145,6 @@ const CCMPerspectiveSummaryWithBudgetQuery = `
 		}
 	}
 `
-
 const CCMPerspectiveBudgetQuery = `
 query FetchPerspectiveBudget($perspectiveId: String) {
 	budgetSummaryList(perspectiveId: $perspectiveId) {

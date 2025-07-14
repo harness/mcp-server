@@ -355,6 +355,13 @@ func unmarshalResponse(resp *http.Response, data interface{}) error {
 		// If we couldn't parse it as an error response, continue with normal unmarshaling
 	}
 
+	// Special handling for string responses: if data is a string pointer, directly assign the body content
+	if strPtr, ok := data.(*string); ok {
+		*strPtr = string(body)
+		return nil
+	}
+
+	// Otherwise try to unmarshal as JSON
 	err = json.Unmarshal(body, data)
 	if err != nil {
 		return fmt.Errorf("error deserializing response body : %w - original response: %s", err, string(body))

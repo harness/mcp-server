@@ -38,10 +38,12 @@ func AIDevOpsAgentTool(config *config.Config, client *client.GenaiService) (tool
 					"properties": map[string]any{
 						"type": map[string]any{
 							"type":        "string",
-							"description": "The type of context item",
+							"description": "The type of context item (other)",
+							"enum":        []string{string(dto.ContextTypeOther)},
 						},
 						"payload": map[string]any{
-							"description": "The payload for this context item",
+							"type":        []string{"object", "array", "string", "number", "boolean"},
+							"description": "The payload for this context item, accepts any valid JSON value. Example: {\"stage_type\": \"Custom\"}",
 						},
 					},
 					"required": []string{"type", "payload"},
@@ -88,6 +90,7 @@ func AIDevOpsAgentTool(config *config.Config, client *client.GenaiService) (tool
 			interactionID, _ := OptionalParam[string](request, "interaction_id")
 			contextRaw, _ := OptionalParam[[]any](request, "context")
 			conversationRaw, _ := OptionalParam[[]any](request, "conversation_raw")
+			harnessContextRaw, _ := OptionalParam[map[string]interface{}](request, "harness_context")
 			stream := true // default value
 			if streamArg, ok := request.Params.Arguments["stream"].(bool); ok {
 				stream = streamArg
@@ -111,7 +114,7 @@ func AIDevOpsAgentTool(config *config.Config, client *client.GenaiService) (tool
 					ctxType, _ := ctxMap["type"].(string)
 					ctxPayload := ctxMap["payload"]
 					contextItems = append(contextItems, dto.ContextItem{
-						Type:    ctxType,
+						Type:    dto.ContextType(ctxType),
 						Payload: ctxPayload,
 					})
 				}
@@ -122,6 +125,19 @@ func AIDevOpsAgentTool(config *config.Config, client *client.GenaiService) (tool
 				AccountID: scope.AccountID,
 				OrgID:     scope.OrgID,
 				ProjectID: scope.ProjectID,
+			}
+
+			// Override with values from request if provided
+			if harnessContextRaw != nil {
+				if accountID, ok := harnessContextRaw["accountID"].(string); ok && accountID != "" {
+					harnessContext.AccountID = accountID
+				}
+				if orgID, ok := harnessContextRaw["orgID"].(string); ok && orgID != "" {
+					harnessContext.OrgID = orgID
+				}
+				if projectID, ok := harnessContextRaw["projectID"].(string); ok && projectID != "" {
+					harnessContext.ProjectID = projectID
+				}
 			}
 
 			// Generate or use provided IDs

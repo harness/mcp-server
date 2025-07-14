@@ -36,10 +36,18 @@ type Config struct {
 	McpSvcSecret            string
 	ChaosManagerSvcBaseURL  string
 	ChaosManagerSvcSecret   string
+	TemplateSvcBaseURL      string
+	TemplateSvcSecret       string
 	CodeSvcBaseURL          string
 	CodeSvcSecret           string
 	LogSvcBaseURL           string
 	LogSvcSecret            string
 	DashboardSvcBaseURL     string
 	DashboardSvcSecret      string
+	SCSSvcSecret            string // Added for SCS toolset
+	SCSSvcBaseURL           string // Added for SCS toolset
+	STOSvcSecret            string // Added for STO toolset
+	STOSvcBaseURL           string // Added for STO toolset
+	AuditSvcBaseURL         string
+	AuditSvcSecret          string
 }

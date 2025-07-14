@@ -138,7 +138,6 @@ func (r *CloudCostManagementService) PerspectiveBudget(ctx context.Context, scop
 	return result, nil
 }
 
-//func buildFilters(options *dto.CCMPerspectiveGridOptions) ([]map[string]any) {
 func buildFilters(timeFilters string, idFilters dto.CCMGraphQLFilters, keyValueFilters dto.CCMGraphQLKeyValueFilters) ([]map[string]any) {
 	filters := []map[string]any{}
 	viewFilter := []map[string]any{
