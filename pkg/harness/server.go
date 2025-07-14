@@ -54,6 +54,11 @@ func OptionalParamOK[T any](r mcp.CallToolRequest, p string) (value T, ok bool, 
 	return
 }
 
+// RequiredParamOK is a helper function to make requiredParam public without removing it to avoid conflicts.
+func RequiredParamOK[T comparable](r mcp.CallToolRequest, p string) (T, error) {
+	return requiredParam[T](r, p)
+}
+
 // requiredParam is a helper function that can be used to fetch a required parameter from the request.
 func requiredParam[T comparable](r mcp.CallToolRequest, p string) (T, error) {
 	var zero T

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
-
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
@@ -274,7 +273,6 @@ func GetCcmCostCategoryTool(config *config.Config, client *client.CloudCostManag
 		}
 }
 
-// getAccountID retrieves AccountID from the config file
 func getAccountID(config *config.Config, request mcp.CallToolRequest) (string, error) {
 	scope, _ := fetchScope(config, request, true)
 	// Error ignored because it can be related to project or org id

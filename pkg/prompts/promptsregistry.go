@@ -3,7 +3,6 @@ package prompts
 import (
 	"context"
 	"log/slog"
-
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )

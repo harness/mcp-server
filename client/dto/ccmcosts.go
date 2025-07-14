@@ -20,6 +20,8 @@ const (
 )
 
 // CCMBaseResponse represents a basic ccm response.
+// CEView represents a basic ccm response.
+// The `data` field contains the response data.
 type CCMBaseResponse struct {
 	Status        string     `json:"state,omitempty"`
 	Message       string     `json:"message,omitempty"`
@@ -33,7 +35,7 @@ type CCMError struct {
 	Error   string `json:"error,omitempty"`
 }
 
-// CEView represents a basic Cost Overview response.
+// CEView represents a basic ccm response.
 // The `data` field contains the response data.
 type CEView struct {
 	CCMBaseResponse
@@ -120,8 +122,7 @@ type CCMCostCategoryResource struct {
 	TotalCount       int                  `json:"totalCount"`
 }
 
-type CCMBusinessMapping struct {
-	UUID            string             `json:"uuid"`
+type CCMBusinessMapping struct { UUID            string             `json:"uuid"`
 	Name            string             `json:"name"`
 	AccountID       string             `json:"accountId"`
 	CostTargets     []CCMCostTarget    `json:"costTargets"`
@@ -202,6 +203,9 @@ type CCMSuppressed struct {
 	LocalizedMessage string                 `json:"localizedMessage"`
 }
 
+// ***************************
+// Get Cost Category
+// ***************************
 // CCMCostCategory represents the details of a cost category in CCM
 type CCMCostCategory struct {
 	MetaData         map[string]interface{} `json:"metaData"`

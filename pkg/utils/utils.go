@@ -4,7 +4,6 @@ import (
 	"math"
 	"strings"
 	"time"
-
 	"github.com/harness/harness-mcp/client/dto"
 )
 
@@ -54,4 +53,11 @@ func SafeFloatToInt32(value float64, valueIfOverflow int32) int32 {
 		return valueIfOverflow
 	}
 	return int32(value)
+}
+
+func BoolToString(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
 }

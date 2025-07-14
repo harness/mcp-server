@@ -85,10 +85,18 @@ Toolset Name: `dashboards`
 
 Toolset Name: `cloudcostmanagement`
 
-- `get_ccm_overview`: Retrieve the cost overview for a specific account.
-- `list_ccm_cost_categories`:  List all cost categories names for a specified account.
-- `list_ccm_cost_categories_detail`:  List all cost categories details for a specified account.
-- `get_ccm_cost_category`:  Retrieve a cost category detail by Id  for a specified account.
+- `get_ccm_overview`: Retrieves the cost overview for a specific account.
+- `list_ccm_cost_categories`: List all cost categories names for a specified account.
+- `list_ccm_cost_categories_detail`: List all cost categories details for a specified account.
+- `get_ccm_cost_category`: Retrieve a cost category detail by Id  for a specified account.
+- `list_ccm_perspectives_detail`: List all perspectives for a specified account.
+- `get_ccm_perspective`: Retrieves a perspective by Id for a specified account.
+- `get_last_period_cost_ccm_perspective`:  Retrieves the cost for a specified period and perspective within a given account.
+- `get_last_twelve_months_cost_ccm_perspective`:  Retrieves a monthly cost breakdown for the past 12 months for a perspective within a specified account.
+- `create_ccm_perspective`: Creates a perspective for a specified account. 
+- `ccm_perspective_grid`: Query detailed cost perspective data in Harness Cloud Cost Management.
+- `ccm_perspective_time_series`: Query detailed cost perspective data, grouped by time in Harness Cloud Cost Management.
+- `ccm_perspective_summary_with_budget`: Query a summary of cost perspectives with budget information in Harness Cloud Cost Management, including detailed cost and budget data grouped by time.
 - `get_ccm_commitment_coverage`: Get commitment coverage information for an account in Harness Cloud Cost Management
 
 #### Chaos Engineering Toolset
