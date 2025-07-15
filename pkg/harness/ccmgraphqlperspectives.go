@@ -71,12 +71,12 @@ func CcmPerspectiveGridTool(config *config.Config, client *client.CloudCostManag
 		params.GroupBy = groupBy
 		data, err := client.PerspectiveGrid(ctx, scope, params)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get CCM Perspective Grid: %w", err)
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		r, err := json.Marshal(data)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal CCM Perspective Grid: %w", err)
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		return mcp.NewToolResultText(string(r)), nil
@@ -145,12 +145,12 @@ func CcmPerspectiveTimeSeriesTool(config *config.Config, client *client.CloudCos
 		params.GroupBy = groupBy
 		data, err := client.PerspectiveTimeSeries(ctx, scope, params)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get CCM Perspective Grid: %w", err)
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		r, err := json.Marshal(data)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal CCM Perspective Grid: %w", err)
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		return mcp.NewToolResultText(string(r)), nil
@@ -213,12 +213,12 @@ func CcmPerspectiveSummaryWithBudgetTool(config *config.Config, client *client.C
 		params.GroupBy = groupBy
 		data, err := client.PerspectiveSummaryWithBudget(ctx, scope, params)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get CCM Perspective Summary With Budget: %w", err)
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		r, err := json.Marshal(data)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal CCM Perspective Summary With Budget: %w", err)
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		return mcp.NewToolResultText(string(r)), nil
@@ -255,12 +255,12 @@ func CcmPerspectiveBudgetTool(config *config.Config, client *client.CloudCostMan
 
 			data, err := client.PerspectiveBudget(ctx, scope, params)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get CCM Perspective Budget: %w", err)
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			r, err := json.Marshal(data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal CCM Perspective Budget: %w", err)
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
@@ -284,12 +284,12 @@ func CcmMetadataTool(config *config.Config, client *client.CloudCostManagementSe
 
 			data, err := client.GetCcmMetadata(ctx, scope, accountId)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get CCM Metadata: %w", err)
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			r, err := json.Marshal(data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal CCM Metadata: %w", err)
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
@@ -348,12 +348,12 @@ func CcmPerspectiveRecommendationsTool(config *config.Config, client *client.Clo
 		params.RecommendationStates = []string{"OPEN"}
 		data, err := client.PerspectiveRecommendations(ctx, scope, params)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get CCM Perspective Recommendations: %w", err)
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		r, err := json.Marshal(data)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal CCM Perspective Recomendations: %w", err)
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		return mcp.NewToolResultText(string(r)), nil
