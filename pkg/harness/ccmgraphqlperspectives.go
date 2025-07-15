@@ -528,7 +528,7 @@ func commonGraphQLJSONSchema(extras map[string]any, removeFields []string) json.
 		}
 	}
 
-	if removeFields == nil {
+	if removeFields != nil {
 		for _, field := range removeFields {
 			delete(properties, field)
 		}
