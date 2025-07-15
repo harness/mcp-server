@@ -115,7 +115,51 @@ func (r *CloudCostManagementService) PerspectiveSummaryWithBudget(ctx context.Co
 	return result, nil
 }
 
-//func buildFilters(options *dto.CCMPerspectiveGridOptions) ([]map[string]any) {
+func (r *CloudCostManagementService) PerspectiveBudget(ctx context.Context, scope dto.Scope, options *dto.CCMPerspectiveBudgetOptions) (*dto.CCMPerspectiveBudgetResponse, error) {
+	path := fmt.Sprintf(ccmPerspectiveGraphQLPath, options.AccountId, options.AccountId) 
+
+	gqlQuery := ccmcommons.CCMPerspectiveBudgetQuery
+	variables := map[string]any{
+		"perspectiveId":     options.PerspectiveId, 
+	}
+
+	payload := map[string]any{
+		"query":         gqlQuery,
+		"operationName": "FetchPerspectiveBudget",
+		"variables":     variables,
+	}
+
+	slog.Debug("PerspectiveBudget", "Payload", payload)
+	result := new(dto.CCMPerspectiveBudgetResponse)
+	err := r.Client.Post(ctx, path, nil, payload, &result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get perspective budget: %w", err)
+	}
+	return result, nil
+}
+
+func (r *CloudCostManagementService) GetCcmMetadata(ctx context.Context, scope dto.Scope, accountId string) (*dto.CCMMetadataResponse, error) {
+	path := fmt.Sprintf(ccmPerspectiveGraphQLPath, accountId, accountId) 
+
+	gqlQuery := ccmcommons.CCMMetadataQuery
+	variables := map[string]any{
+	}
+
+	payload := map[string]any{
+		"query":         gqlQuery,
+		"operationName": "FetchCcmMetaData",
+		"variables":     variables,
+	}
+
+	slog.Debug("FetchCcmMetadata", "Payload", payload)
+	result := new(dto.CCMMetadataResponse)
+	err := r.Client.Post(ctx, path, nil, payload, &result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get perspective budget: %w", err)
+	}
+	return result, nil
+}
+
 func buildFilters(timeFilters string, idFilters dto.CCMGraphQLFilters, keyValueFilters dto.CCMGraphQLKeyValueFilters) ([]map[string]any) {
 	filters := []map[string]any{}
 	viewFilter := []map[string]any{

@@ -580,6 +580,8 @@ func registerCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGro
 			toolsets.NewServerTool(CcmPerspectiveGridTool(config, ccmClient)),
 			toolsets.NewServerTool(CcmPerspectiveTimeSeriesTool(config, ccmClient)),
 			toolsets.NewServerTool(CcmPerspectiveSummaryWithBudgetTool(config, ccmClient)),
+			toolsets.NewServerTool(CcmPerspectiveBudgetTool(config, ccmClient)),
+			toolsets.NewServerTool(CcmMetadataTool(config, ccmClient)),
 			toolsets.NewServerTool(FetchCommitmentCoverageTool(config, ccmClient)),
 		)
 

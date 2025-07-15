@@ -152,3 +152,62 @@ type CCMPerspectiveSummaryWithBudgetResponse struct {
 		PerspectiveForecastCost CCMPerspectiveForecastCost `json:"perspectiveForecastCost"`
 	} `json:"data"`
 }
+
+type CCMPerspectiveBudget struct {
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	BudgetAmount float64 `json:"budgetAmount"`
+	ActualCost  float64 `json:"actualCost"`
+	TimeLeft    int     `json:"timeLeft"`
+	TimeUnit    string  `json:"timeUnit"`
+	TimeScope   string  `json:"timeScope"`
+	Period      string  `json:"period"`
+	FolderID    string  `json:"folderId"`
+	Typename    string  `json:"__typename"`
+}
+
+type CCMPerspectiveBudgetResponse struct {
+	Data struct {
+		BudgetSummaryList []CCMPerspectiveBudget `json:"budgetSummaryList"`
+	} `json:"data"`
+}
+
+type CCMPerspectiveBudgetOptions struct {
+	AccountId             string `json:"account_id"`
+	PerspectiveId         string `json:"perspective_id"`
+}
+
+type CCMCurrencyPreference struct {
+	DestinationCurrency string `json:"destinationCurrency"`
+	Symbol              string `json:"symbol"`
+	Locale              string `json:"locale"`
+	SetupTime           int64  `json:"setupTime"`
+	Typename            string `json:"__typename"`
+}
+
+type CCMMetadata struct {
+	K8sClusterConnectorPresent      bool                `json:"k8sClusterConnectorPresent"`
+	CloudDataPresent                bool                `json:"cloudDataPresent"`
+	AwsConnectorsPresent            bool                `json:"awsConnectorsPresent"`
+	GcpConnectorsPresent            bool                `json:"gcpConnectorsPresent"`
+	AzureConnectorsPresent          bool                `json:"azureConnectorsPresent"`
+	ApplicationDataPresent          bool                `json:"applicationDataPresent"`
+	InventoryDataPresent            bool                `json:"inventoryDataPresent"`
+	ClusterDataPresent              bool                `json:"clusterDataPresent"`
+	ExternalDataPresent             bool                `json:"externalDataPresent"`
+	IsSampleClusterPresent          bool                `json:"isSampleClusterPresent"`
+	DefaultAzurePerspectiveId       string              `json:"defaultAzurePerspectiveId"`
+	DefaultAwsPerspectiveId         string              `json:"defaultAwsPerspectiveId"`
+	DefaultGcpPerspectiveId         string              `json:"defaultGcpPerspectiveId"`
+	DefaultClusterPerspectiveId     string              `json:"defaultClusterPerspectiveId"`
+	DefaultExternalDataPerspectiveId string             `json:"defaultExternalDataPerspectiveId"`
+	ShowCostOverview                bool                `json:"showCostOverview"`
+	CurrencyPreference              CCMCurrencyPreference `json:"currencyPreference"`
+	Typename                        string              `json:"__typename"`
+}
+
+type CCMMetadataResponse struct {
+	Data struct {
+		CCMMetadata CCMMetadata `json:"ccmMetaData"`
+	} `json:"data"`
+}

@@ -145,3 +145,50 @@ const CCMPerspectiveSummaryWithBudgetQuery = `
 		}
 	}
 `
+const CCMPerspectiveBudgetQuery = `
+query FetchPerspectiveBudget($perspectiveId: String) {
+	budgetSummaryList(perspectiveId: $perspectiveId) {
+		id
+		name
+		budgetAmount
+		actualCost
+		timeLeft
+		timeUnit
+		timeScope
+		period
+		folderId
+		__typename
+	}
+}
+`
+
+const CCMMetadataQuery = `
+query FetchCcmMetaData {
+  ccmMetaData {
+    k8sClusterConnectorPresent
+    cloudDataPresent
+    awsConnectorsPresent
+    gcpConnectorsPresent
+    azureConnectorsPresent
+    applicationDataPresent
+    inventoryDataPresent
+    clusterDataPresent
+    externalDataPresent
+    isSampleClusterPresent
+    defaultAzurePerspectiveId
+    defaultAwsPerspectiveId
+    defaultGcpPerspectiveId
+    defaultClusterPerspectiveId
+    defaultExternalDataPerspectiveId
+    showCostOverview
+    currencyPreference {
+      destinationCurrency
+      symbol
+      locale
+      setupTime
+      __typename
+    }
+    __typename
+  }
+}
+`
