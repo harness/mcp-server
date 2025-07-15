@@ -192,3 +192,27 @@ query FetchCcmMetaData {
   }
 }
 `
+
+const CCMPerspectiveRecommendationsQuery = `
+query PerspectiveRecommendations($filter: RecommendationFilterDTOInput) {
+	recommendationStatsV2(filter: $filter) {
+		totalMonthlyCost
+		totalMonthlySaving
+		count
+		__typename
+	}
+	recommendationsV2(filter: $filter) {
+		items {
+			clusterName
+			namespace
+			id
+			resourceType
+			resourceName
+			monthlyCost
+			monthlySaving
+			__typename
+		}
+		__typename
+	}
+}
+`

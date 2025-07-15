@@ -211,3 +211,34 @@ type CCMMetadataResponse struct {
 		CCMMetadata CCMMetadata `json:"ccmMetaData"`
 	} `json:"data"`
 }
+
+type CCMPerspectiveRecommendationsOptions struct {
+	AccountId             string `json:"account_id"`
+	ViewId                string `json:"view_id"`
+	TimeFilter            string `json:"time_filter"`
+	Limit                 int32  `json:"limit"`
+	Offset                int32  `json:"offset"`
+	MinSaving int 		`json:"min_saving"`
+	Filters CCMGraphQLFilters 
+	KeyValueFilters CCMGraphQLKeyValueFilters
+	RecommendationStates []string
+}
+
+type CCMRecommendationStatsV2 struct {
+	TotalMonthlyCost   float64 `json:"totalMonthlyCost"`
+	TotalMonthlySaving float64 `json:"totalMonthlySaving"`
+	Count              int     `json:"count"`
+	Typename           string  `json:"__typename"`
+}
+
+type CCMRecommendationsV2 struct {
+	Items    []any  `json:"items"`
+	Typename string `json:"__typename"`
+}
+
+type CCMPerspectiveRecommendationsResponse struct {
+	Data struct {
+		RecommendationStatsV2 CCMRecommendationStatsV2 `json:"recommendationStatsV2"`
+		RecommendationsV2     CCMRecommendationsV2     `json:"recommendationsV2"`
+	} `json:"data"`
+}

@@ -160,6 +160,38 @@ func (r *CloudCostManagementService) GetCcmMetadata(ctx context.Context, scope d
 	return result, nil
 }
 
+func (r *CloudCostManagementService) PerspectiveRecommendations(ctx context.Context, scope dto.Scope, options *dto.CCMPerspectiveRecommendationsOptions) (*dto.CCMPerspectiveRecommendationsResponse, error) {
+	path := fmt.Sprintf(ccmPerspectiveGraphQLPath, options.AccountId, options.AccountId) 
+
+	gqlQuery := ccmcommons.CCMPerspectiveRecommendationsQuery
+
+	variables := map[string]any{
+		"filter": map[string]any{
+			"perspectiveFilters": buildFilters(options.TimeFilter, options.Filters, options.KeyValueFilters),
+			"limit":              options.Limit,
+			"offset":             options.Offset,
+			"minSaving":     options.MinSaving, 
+			"recomendationStates": options.RecommendationStates,
+		},
+	}
+
+	payload := map[string]any{
+		"query":         gqlQuery,
+		"operationName": "PerspectiveRecommendations",
+		"variables":     variables,
+	}
+
+	slog.Debug("PerspectiveRecommendations", "Payload", payload)
+	result := new(dto.CCMPerspectiveRecommendationsResponse)
+	err := r.Client.Post(ctx, path, nil, payload, &result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get perspective recommendations: %w", err)
+	}
+	return result, nil
+}
+
+
+
 func buildFilters(timeFilters string, idFilters dto.CCMGraphQLFilters, keyValueFilters dto.CCMGraphQLKeyValueFilters) ([]map[string]any) {
 	filters := []map[string]any{}
 	viewFilter := []map[string]any{
