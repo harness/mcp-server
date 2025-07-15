@@ -98,6 +98,10 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 		return nil, err
 	}
 
+	if err := registerIntelligence(config, tsg); err != nil {
+		return nil, err
+	}
+
 	if err := registerInternalDeveloperPortal(config, tsg); err != nil {
 		return nil, err
 	}
@@ -697,6 +701,33 @@ func registerTemplates(config *config.Config, tsg *toolsets.ToolsetGroup) error 
 
 	// Add toolset to the group
 	tsg.AddToolset(templates)
+	return nil
+}
+
+// registerIntelligence registers the intelligence toolset
+func registerIntelligence(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Determine the base URL and secret for intelligence
+	baseURL := buildServiceURL(config, config.IntelligenceSvcBaseURL, config.BaseURL, "harness-intelligence")
+	secret := config.IntelligenceSvcSecret
+
+	// Create base client for intelligence service
+	c, err := createClient(baseURL, config, secret)
+	if err != nil {
+		return err
+	}
+
+	intelligenceClient := &client.IntelligenceService{
+		Client: c,
+	}
+
+	// Create the intelligence toolset
+	intelligence := toolsets.NewToolset("intelligence", "Harness Intelligence related tools").
+		AddReadTools(
+			toolsets.NewServerTool(FindSimilarTemplates(config, intelligenceClient)),
+		)
+
+	// Add toolset to the group
+	tsg.AddToolset(intelligence)
 	return nil
 }
 

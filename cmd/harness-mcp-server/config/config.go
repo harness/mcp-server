@@ -38,6 +38,8 @@ type Config struct {
 	ChaosManagerSvcSecret   string
 	TemplateSvcBaseURL      string
 	TemplateSvcSecret       string
+	IntelligenceSvcBaseURL  string
+	IntelligenceSvcSecret   string
 	CodeSvcBaseURL          string
 	CodeSvcSecret           string
 	LogSvcBaseURL           string

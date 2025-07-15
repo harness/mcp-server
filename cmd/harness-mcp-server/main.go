@@ -152,6 +152,8 @@ var (
 				ChaosManagerSvcSecret:   viper.GetString("chaos_manager_svc_secret"),
 				TemplateSvcBaseURL:      viper.GetString("template_svc_base_url"),
 				TemplateSvcSecret:       viper.GetString("template_svc_secret"),
+				IntelligenceSvcBaseURL:  viper.GetString("intelligence_svc_base_url"),
+				IntelligenceSvcSecret:   viper.GetString("intelligence_svc_secret"),
 				CodeSvcBaseURL:          viper.GetString("code_svc_base_url"),
 				CodeSvcSecret:           viper.GetString("code_svc_secret"),
 				LogSvcBaseURL:           viper.GetString("log_svc_base_url"),
@@ -251,6 +253,8 @@ func init() {
 	_ = viper.BindPFlag("nextgen_ce_secret", internalCmd.Flags().Lookup("nextgen-ce-secret"))
 	_ = viper.BindPFlag("template_svc_base_url", internalCmd.Flags().Lookup("template-svc-base-url"))
 	_ = viper.BindPFlag("template_svc_secret", internalCmd.Flags().Lookup("template-svc-secret"))
+	_ = viper.BindPFlag("intelligence_svc_base_url", internalCmd.Flags().Lookup("intelligence-svc-base-url"))
+	_ = viper.BindPFlag("intelligence_svc_secret", internalCmd.Flags().Lookup("intelligence-svc-secret"))
 	_ = viper.BindPFlag("chaos_manager_svc_base_url", internalCmd.Flags().Lookup("chaos-manager-svc-base-url"))
 	_ = viper.BindPFlag("chaos_manager_svc_secret", internalCmd.Flags().Lookup("chaos-manager-svc-secret"))
 	_ = viper.BindPFlag("code_svc_base_url", internalCmd.Flags().Lookup("code-svc-base-url"))
