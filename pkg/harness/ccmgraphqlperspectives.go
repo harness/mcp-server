@@ -268,7 +268,7 @@ func CcmPerspectiveBudgetTool(config *config.Config, client *client.CloudCostMan
 	}
 
 func CcmMetadataTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("fetch_ccm_metadata",
+	return mcp.NewTool("get_ccm_metadata",
 	mcp.WithDescription("Get metadata about available cloud connectors, cost data sources, default perspectives, and currency preferences in Harness Cloud Cost Management."),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
