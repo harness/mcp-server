@@ -192,7 +192,6 @@ query FetchCcmMetaData {
   }
 }
 `
-
 const CCMPerspectiveRecommendationsQuery = `
 query PerspectiveRecommendations($filter: RecommendationFilterDTOInput) {
 	recommendationStatsV2(filter: $filter) {

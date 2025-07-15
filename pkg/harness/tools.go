@@ -98,6 +98,10 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 		return nil, err
 	}
 
+	if err := registerIntelligence(config, tsg); err != nil {
+		return nil, err
+	}
+
 	if err := registerInternalDeveloperPortal(config, tsg); err != nil {
 		return nil, err
 	}
@@ -403,7 +407,7 @@ func registerChatbot(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 // registerConnectors registers the connectors toolset
 func registerConnectors(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-	baseURL := buildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng")
+	baseURL := buildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng/api")
 	secret := config.NgManagerSecret
 
 	c, err := createClient(baseURL, config, secret)
@@ -427,7 +431,7 @@ func registerConnectors(config *config.Config, tsg *toolsets.ToolsetGroup) error
 // registerInfrastructure registers the infrastructure toolset
 func registerInfrastructure(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for infrastructure
-	baseURL := buildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng")
+	baseURL := buildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng/api")
 	secret := config.NgManagerSecret
 
 	// Create base client for infrastructure
@@ -455,7 +459,7 @@ func registerInfrastructure(config *config.Config, tsg *toolsets.ToolsetGroup) e
 // registerEnvironments registers the environments toolset
 func registerEnvironments(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for environments
-	baseURL := buildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng")
+	baseURL := buildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng/api")
 	secret := config.NgManagerSecret
 
 	// Create base client for environments
@@ -484,7 +488,7 @@ func registerEnvironments(config *config.Config, tsg *toolsets.ToolsetGroup) err
 // registerServices registers the services toolset
 func registerServices(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for services
-	baseURL := buildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng")
+	baseURL := buildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng/api")
 	secret := config.NgManagerSecret
 
 	// Create base client for services
@@ -700,6 +704,33 @@ func registerTemplates(config *config.Config, tsg *toolsets.ToolsetGroup) error 
 
 	// Add toolset to the group
 	tsg.AddToolset(templates)
+	return nil
+}
+
+// registerIntelligence registers the intelligence toolset
+func registerIntelligence(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Determine the base URL and secret for intelligence
+	baseURL := buildServiceURL(config, config.IntelligenceSvcBaseURL, config.BaseURL, "harness-intelligence")
+	secret := config.IntelligenceSvcSecret
+
+	// Create base client for intelligence service
+	c, err := createClient(baseURL, config, secret)
+	if err != nil {
+		return err
+	}
+
+	intelligenceClient := &client.IntelligenceService{
+		Client: c,
+	}
+
+	// Create the intelligence toolset
+	intelligence := toolsets.NewToolset("intelligence", "Harness Intelligence related tools").
+		AddReadTools(
+			toolsets.NewServerTool(FindSimilarTemplates(config, intelligenceClient)),
+		)
+
+	// Add toolset to the group
+	tsg.AddToolset(intelligence)
 	return nil
 }
 

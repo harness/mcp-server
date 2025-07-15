@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	infrastructureListPath        = "/api/infrastructures"
-	infrastructureMoveConfigsPath = "/api/infrastructures/move-config/%s"
+	infrastructureListPath        = "/infrastructures"
+	infrastructureMoveConfigsPath = "/infrastructures/move-config/%s"
 )
 
 type InfrastructureClient struct {

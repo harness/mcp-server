@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	listConnectorCataloguePath = "/api/connectors/catalogue"
-	getConnectorPath           = "/api/connectors/%s"
+	listConnectorCataloguePath = "/connectors/catalogue"
+	getConnectorPath           = "/connectors/%s"
 )
 
 type ConnectorService struct {

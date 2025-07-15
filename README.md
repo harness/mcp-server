@@ -141,6 +141,7 @@ Toolset Name: `logs`
 Toolset Name: `templates`
 
 - `list_templates`: List templates at a given scope
+- `intelligent_template_search`: Find the most relevant templates based on a natural language description.
 
 #### Internal Developer Portal Toolset
 

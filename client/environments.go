@@ -8,9 +8,9 @@ import (
 )
 
 const (
-	environmentListPath        = "/api/environments"
-	environmentGetPath         = "/api/environments/%s"
-	environmentMoveConfigsPath = "/api/environments/V2/move-config/%s"
+	environmentListPath        = "/environments"
+	environmentGetPath         = "/environments/%s"
+	environmentMoveConfigsPath = "/environments/V2/move-config/%s"
 )
 
 type EnvironmentClient struct {
