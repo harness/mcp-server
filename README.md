@@ -99,6 +99,7 @@ Toolset Name: `cloudcostmanagement`
 - `ccm_perspective_summary_with_budget`: Query a summary of cost perspectives with budget information in Harness Cloud Cost Management, including detailed cost and budget data grouped by time.
 - `ccm_perspective_budget`: Query the budget information for a perspective in Harness Cloud Cost Management.
 - `get_ccm_metadata`: Retrieves metadata about available cloud connectors, cost data sources, default perspectives, and currency preferences in Harness Cloud Cost Management.
+- `ccm_perspective_recommendations`: PerspectiveRecommendations: Returns monthly cost, savings, and a list of open recommendations for a perspective in Harness Cloud Cost Management.
 - `get_ccm_commitment_coverage`: Get commitment coverage information for an account in Harness Cloud Cost Management
 
 #### Chaos Engineering Toolset

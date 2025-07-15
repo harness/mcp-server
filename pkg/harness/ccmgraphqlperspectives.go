@@ -71,12 +71,12 @@ func CcmPerspectiveGridTool(config *config.Config, client *client.CloudCostManag
 		params.GroupBy = groupBy
 		data, err := client.PerspectiveGrid(ctx, scope, params)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get CCM Perspective Grid: %w", err)
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		r, err := json.Marshal(data)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal CCM Perspective Grid: %w", err)
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		return mcp.NewToolResultText(string(r)), nil
@@ -145,12 +145,12 @@ func CcmPerspectiveTimeSeriesTool(config *config.Config, client *client.CloudCos
 		params.GroupBy = groupBy
 		data, err := client.PerspectiveTimeSeries(ctx, scope, params)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get CCM Perspective Grid: %w", err)
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		r, err := json.Marshal(data)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal CCM Perspective Grid: %w", err)
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		return mcp.NewToolResultText(string(r)), nil
@@ -213,12 +213,12 @@ func CcmPerspectiveSummaryWithBudgetTool(config *config.Config, client *client.C
 		params.GroupBy = groupBy
 		data, err := client.PerspectiveSummaryWithBudget(ctx, scope, params)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get CCM Perspective Summary With Budget: %w", err)
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		r, err := json.Marshal(data)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal CCM Perspective Summary With Budget: %w", err)
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		return mcp.NewToolResultText(string(r)), nil
@@ -255,12 +255,12 @@ func CcmPerspectiveBudgetTool(config *config.Config, client *client.CloudCostMan
 
 			data, err := client.PerspectiveBudget(ctx, scope, params)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get CCM Perspective Budget: %w", err)
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			r, err := json.Marshal(data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal CCM Perspective Budget: %w", err)
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
@@ -269,7 +269,7 @@ func CcmPerspectiveBudgetTool(config *config.Config, client *client.CloudCostMan
 
 func CcmMetadataTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_ccm_metadata",
-	mcp.WithDescription("Get metadata about available cloud connectors, cost data sources, default perspectives, and currency preferences in Harness Cloud Cost Management."),
+	mcp.WithDescription(ccmcommons.CCMGetCcmMetadataDescription),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			accountId, err := getAccountID(config, request)
@@ -284,18 +284,81 @@ func CcmMetadataTool(config *config.Config, client *client.CloudCostManagementSe
 
 			data, err := client.GetCcmMetadata(ctx, scope, accountId)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get CCM Metadata: %w", err)
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			r, err := json.Marshal(data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal CCM Metadata: %w", err)
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
 		}
 	}
 
+func CcmPerspectiveRecommendationsTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewToolWithRawSchema("ccm_perspective_recommendations", ccmcommons.CCMPerspectiveRecommendationsDescription,
+		perspectiveRecommendationsJsonSchema(),
+		),
+	func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+
+		// Account Id for querystring.
+		accountId, err := getAccountID(config, request)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		viewId, err := RequiredParamOK[string](request, "view_id")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		limit := getLimit(request)
+		offset := getOffset(request)
+
+		timeFilter, err := OptionalParam[string](request, "time_filter")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		scope, err := fetchScope(config, request, false)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		filters, err := buildFilters(ccmcommons.CCMFilterFields, request) 
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		keyValueFilters, err := buildKeyValueFilters(ccmcommons.CCMKeyValueFilterFields, request) 
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		
+		params := new(dto.CCMPerspectiveRecommendationsOptions)
+		params.AccountId = accountId
+		params.ViewId = viewId
+		params.Limit = limit
+		params.Offset = offset
+		params.TimeFilter = timeFilter
+		params.Filters = filters
+		params.KeyValueFilters = keyValueFilters
+		params.MinSaving = 1
+		params.RecommendationStates = []string{"OPEN"}
+		data, err := client.PerspectiveRecommendations(ctx, scope, params)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		r, err := json.Marshal(data)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		return mcp.NewToolResultText(string(r)), nil
+	}
+}
 
 func buildFilters(filterFields []map[string]string, request mcp.CallToolRequest) (map[string][]string, error) {
 
@@ -304,7 +367,6 @@ func buildFilters(filterFields []map[string]string, request mcp.CallToolRequest)
 		name := field["name"]
 		val, err := OptionalStringArrayParam(request, name)
 		if err != nil {
-			// return mcp.NewToolResultError(err.Error()), nil
 			return nil, err
 		}
 		if val != nil && len(val) > 0 {
@@ -321,7 +383,6 @@ func buildKeyValueFilters(keyValueFilterFields []map[string]string, request mcp.
 		name := field["name"]
 		val, err := OptionalParam[map[string]any](request, name)
 		if err != nil {
-			// return mcp.NewToolResultError(err.Error()), nil
 			return nil, err
 		}
 		if val != nil && len(val) > 0 {
@@ -333,7 +394,7 @@ func buildKeyValueFilters(keyValueFilterFields []map[string]string, request mcp.
 }
 
 func perspectiveGridJsonSchema() json.RawMessage {
-	return commonGraphQLJSONSchema(nil)
+	return commonGraphQLJSONSchema(nil, nil)
 }
 
 func perspectiveTimeSeriesJsonSchema() json.RawMessage {	
@@ -349,14 +410,26 @@ func perspectiveTimeSeriesJsonSchema() json.RawMessage {
 			},
 		},
 	}
-	return commonGraphQLJSONSchema(timeGroupBy)
+	return commonGraphQLJSONSchema(timeGroupBy, nil)
 }
 
 func perspectiveSummaryWithBudgetJsonSchema() json.RawMessage {
-	return commonGraphQLJSONSchema(nil)
+	return commonGraphQLJSONSchema(nil, nil)
 }
 
-func commonGraphQLJSONSchema(extras map[string]any) json.RawMessage {
+func perspectiveRecommendationsJsonSchema() json.RawMessage {	
+	states := map[string]any{
+	"recomendation_status": map[string]any{
+			"type":        "array",
+			"description": "Array respresenting the status of the recommendation to query", 
+			"items":       map[string]any{"type": "string"},
+		},
+	}
+
+	return commonGraphQLJSONSchema(states, []string{"group_by"})
+}
+
+func commonGraphQLJSONSchema(extras map[string]any, removeFields []string) json.RawMessage {
 	group_by_options := fmt.Sprintf("value is in (%s, %q, %q)", dto.GridGroupByLabel, dto.GridGroupByLabelV2, dto.GridGroupByCostCategory)
 	properties := map[string]any{
 		"view_id": map[string]any{
@@ -452,6 +525,12 @@ func commonGraphQLJSONSchema(extras map[string]any) json.RawMessage {
 	if extras != nil && len(extras) > 0 {
 		for k, v := range extras {
 			properties[k] = v
+		}
+	}
+
+	if removeFields != nil {
+		for _, field := range removeFields {
+			delete(properties, field)
 		}
 	}
 

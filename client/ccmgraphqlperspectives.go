@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 	"strings"
+	"encoding/json"
 	"log/slog"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/client/ccmcommons"
@@ -20,7 +21,7 @@ func (r *CloudCostManagementService) PerspectiveGrid(ctx context.Context, scope 
 
 	gqlQuery := ccmcommons.CCMPerspectiveGridQuery
 	variables := map[string]any{
-		"filters":            buildFilters(options.TimeFilter, options.Filters, options.KeyValueFilters),
+		"filters":            buildFilters(options.ViewId, options.TimeFilter, options.Filters, options.KeyValueFilters),
 		"groupBy":            buildGroupBy(options.GroupBy, outputFields, outputKeyValueFields),
 		"limit":              options.Limit,
 		"offset":             options.Offset,
@@ -36,7 +37,7 @@ func (r *CloudCostManagementService) PerspectiveGrid(ctx context.Context, scope 
 		"variables":     variables,
 	}
 
-	slog.Debug("PerspectiveGrid", "Payload", payload)
+	debugPayload("PerspectiveGrid", payload)
 	result := new(dto.CCMPerspectiveGridResponse)
 	err := r.Client.Post(ctx, path, nil, payload, &result)
 	if err != nil {
@@ -60,7 +61,7 @@ func (r *CloudCostManagementService) PerspectiveTimeSeries(ctx context.Context, 
 	}
 
 	variables := map[string]any{
-		"filters":            buildFilters(options.TimeFilter, options.Filters, options.KeyValueFilters),
+		"filters":            buildFilters(options.ViewId, options.TimeFilter, options.Filters, options.KeyValueFilters),
 		"groupBy":           []map[string]any{timeTruncGroupBy, entityGroupBy[0]},
 		"limit":              options.Limit,
 		"offset":             options.Offset,
@@ -90,7 +91,7 @@ func (r *CloudCostManagementService) PerspectiveSummaryWithBudget(ctx context.Co
 
 	gqlQuery := ccmcommons.CCMPerspectiveSummaryWithBudgetQuery
 	variables := map[string]any{
-		"filters":            buildFilters(options.TimeFilter, options.Filters, options.KeyValueFilters),
+		"filters":            buildFilters(options.ViewId, options.TimeFilter, options.Filters, options.KeyValueFilters),
 		"groupBy":            buildGroupBy(options.GroupBy, outputFields, outputKeyValueFields),
 		"limit":              options.Limit,
 		"offset":             options.Offset,
@@ -106,7 +107,7 @@ func (r *CloudCostManagementService) PerspectiveSummaryWithBudget(ctx context.Co
 		"variables":     variables,
 	}
 
-	slog.Debug("PerspectiveSummaryWithBudget", "Payload", payload)
+	debugPayload("PerspectiveSummaryWithBudget", payload)
 	result := new(dto.CCMPerspectiveSummaryWithBudgetResponse)
 	err := r.Client.Post(ctx, path, nil, payload, &result)
 	if err != nil {
@@ -129,7 +130,7 @@ func (r *CloudCostManagementService) PerspectiveBudget(ctx context.Context, scop
 		"variables":     variables,
 	}
 
-	slog.Debug("PerspectiveBudget", "Payload", payload)
+	debugPayload("PerspectiveBudget", payload)
 	result := new(dto.CCMPerspectiveBudgetResponse)
 	err := r.Client.Post(ctx, path, nil, payload, &result)
 	if err != nil {
@@ -151,7 +152,7 @@ func (r *CloudCostManagementService) GetCcmMetadata(ctx context.Context, scope d
 		"variables":     variables,
 	}
 
-	slog.Debug("FetchCcmMetadata", "Payload", payload)
+	debugPayload("FetchCcmMetadata", payload)
 	result := new(dto.CCMMetadataResponse)
 	err := r.Client.Post(ctx, path, nil, payload, &result)
 	if err != nil {
@@ -160,13 +161,42 @@ func (r *CloudCostManagementService) GetCcmMetadata(ctx context.Context, scope d
 	return result, nil
 }
 
-func buildFilters(timeFilters string, idFilters dto.CCMGraphQLFilters, keyValueFilters dto.CCMGraphQLKeyValueFilters) ([]map[string]any) {
+func (r *CloudCostManagementService) PerspectiveRecommendations(ctx context.Context, scope dto.Scope, options *dto.CCMPerspectiveRecommendationsOptions) (*dto.CCMPerspectiveRecommendationsResponse, error) {
+	path := fmt.Sprintf(ccmPerspectiveGraphQLPath, options.AccountId, options.AccountId) 
+
+	gqlQuery := ccmcommons.CCMPerspectiveRecommendationsQuery
+
+	variables := map[string]any{
+		"filter": map[string]any{
+			"perspectiveFilters": buildFilters(options.ViewId, options.TimeFilter, options.Filters, options.KeyValueFilters),
+			"limit":              options.Limit,
+			"offset":             options.Offset,
+			"minSaving":     options.MinSaving, 
+			"recommendationStates": options.RecommendationStates,
+		},
+	}
+
+	payload := map[string]any{
+		"query":         gqlQuery,
+		"operationName": "PerspectiveRecommendations",
+		"variables":     variables,
+	}
+
+	debugPayload("PerspectiveRecommendations", payload)
+	result := new(dto.CCMPerspectiveRecommendationsResponse)
+	err := r.Client.Post(ctx, path, nil, payload, &result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get perspective recommendations: %w", err)
+	}
+	return result, nil
+}
+
+func buildFilters(viewId string ,timeFilters string, idFilters dto.CCMGraphQLFilters, keyValueFilters dto.CCMGraphQLKeyValueFilters) ([]map[string]any) {
 	filters := []map[string]any{}
 	viewFilter := []map[string]any{
 		{
 			"viewMetadataFilter": map[string]any{
-				//"viewId": options.ViewId,
-				"viewId": "VZf-WROOTyeczYa4FMkhYg",
+				"viewId": viewId,
 				"isPreview": false,
 			},
 		},
@@ -176,8 +206,6 @@ func buildFilters(timeFilters string, idFilters dto.CCMGraphQLFilters, keyValueF
 	filters = append(filters, buildTimeFilters(timeFilters)...)
 	filters = append(filters, buildFieldFilters(idFilters, outputFields)...)
 	filters = append(filters, buildKeyValueFieldFilters(keyValueFilters, outputKeyValueFields)...)
-
-	slog.Debug("PerspectiveGrid", "FILTERS", filters)
 
 	return filters
 }
@@ -469,4 +497,19 @@ func buildGroupBy(input map[string]any, outputFields []map[string]string, output
 		}
 	}
 	return defaultGroupBy 
+}
+
+func debugPayload(operation string, payload map[string]any) {
+	jsonPayload := mapToJSONString(payload)
+	slog.Debug("-----------", "----------", "--------------")
+	slog.Debug(operation, "Payload", jsonPayload)
+	slog.Debug("-----------", "----------", "--------------")
+}
+
+func mapToJSONString(m map[string]any) (string) {
+	b, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }

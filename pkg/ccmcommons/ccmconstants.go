@@ -23,6 +23,13 @@ Query detailed time series perspective data in Harness Cloud Cost Management.
 var CCMPerspectiveSummaryWithBudgetDescription = `
 Query detailed time series perspective data in Harness Cloud Cost Management.
 `
+var CCMGetCcmMetadataDescription = `
+Get metadata about available cloud connectors, cost data sources, default perspectives, and currency preferences in Harness Cloud Cost Management.
+`
+
+var CCMPerspectiveRecommendationsDescription = `
+Returns monthly cost, savings, and a list of open recommendations for a perspective in Harness Cloud Cost Management.
+`
 
 var commonFilterDesc = `It is applied using LIKE operator in an array. Example: ["value1", "value2", ...]`
 var CCMFilterFields = []map[string]string{
