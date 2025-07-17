@@ -176,6 +176,9 @@ func (c *Client) PostRaw(
 
 		resp, err := c.Do(req)
 
+		slog.Debug("Response", "url", req.URL.String())
+		slog.Debug("Response", "value", resp)
+
 		if resp != nil && resp.Body != nil {
 			defer resp.Body.Close()
 		}
@@ -266,12 +269,15 @@ func (c *Client) PostRawStream(
 
 		resp, err = c.Do(req)
 
+		slog.Debug("Response", "url", req.URL.String())
+
 		if err != nil || resp == nil {
 			return fmt.Errorf("request failed: %w", err)
 		}
 
 		if isRetryable(resp.StatusCode) {
 			if resp.Body != nil {
+				slog.Debug("Response", "Body", resp.Body)
 				resp.Body.Close()
 			}
 			return fmt.Errorf("retryable status code: %d", resp.StatusCode)

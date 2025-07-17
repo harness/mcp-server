@@ -31,6 +31,10 @@ var CCMPerspectiveRecommendationsDescription = `
 Returns monthly cost, savings, and a list of open recommendations for a perspective in Harness Cloud Cost Management.
 `
 
+var CCMPerspectiveFilterValuesDescription = `
+Returns available filter values for a given cost perspective in Harness Cloud Cost Management, allowing you to dynamically discover valid filter options (such as AWS accounts, regions, products, or cost categories) based on your selected perspective, time range, and other criteria. This tool helps you build advanced queries by listing all possible values for a filter field.
+`
+
 var commonFilterDesc = `It is applied using LIKE operator in an array. Example: ["value1", "value2", ...]`
 var CCMFilterFields = []map[string]string{
 	{

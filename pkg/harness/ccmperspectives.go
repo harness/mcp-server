@@ -601,69 +601,6 @@ func createPerspectiveHandler(config *config.Config, client *client.CloudCostMan
 	return mcp.NewToolResultText(string(r)), nil
 }
 
-
-/*
- - Agregate function?
- - view_id 
- - time_filter
-   * LAST_7
-   * THIS_MONTH
-   * LAST_30_DAYS
-   * THIS_QUARTER
-   * THIS_YEAR
-   * LAST_MONTH
-   * LAST_QUARTER
-   * LAST_YEAR
-   * LAST_3_MONTHS
-   * LAST_6_MONTHS
-   * LAST_12_MONTHS	
-- is_cluster_only
-- is_cluster_hourly_data
-- limit
-- offset
-- group_by
-   * COST_CATEGORY (custom)
-   * AWS
-     - ACCOUNT
-	 - BILLING_ENTITY
-	 - INSTANCE_TYPE
-	 - LINE_ITEM_TYPE
-	 - PAYER_ACCOUNT
-	 - SERVICE
-	 - USAGE_TYPE
-   * REGION
-   * PRODUCT
-   * CLOUD_PROVIDER
-   * LABEL (custom)
-   * LABEL_V2 (custom)
-   * NONE
-- include_others (showOthers)
-- include_anomalies (showAnomalies)
-- include_unallocated_cost (showUnallocatedCost)
-- aws_include_discounts
-- aws_include_credits
-- aws_include_refunds
-- aws_include_taxes
-- aws_cost
-   * AMORTISED
-   * NET_AMORTISED
-   * UNBLENDED
-   * BLENDED
-   * EFFECTIVE
-
-  
-*/
-
-
-
-
-
-
-
-
-
-
-
 func getSupportedDataSources() string {
 	return strings.Join([]string{
 					dto.DataSourceAws,

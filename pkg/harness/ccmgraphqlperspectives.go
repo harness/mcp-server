@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"strings"
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
@@ -231,7 +233,6 @@ func CcmPerspectiveBudgetTool(config *config.Config, client *client.CloudCostMan
 			mcp.WithString("perspective_id",
 				mcp.Description("Required perspective identifier."),
 			),
-			WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			accountId, err := getAccountID(config, request)
@@ -360,6 +361,143 @@ func CcmPerspectiveRecommendationsTool(config *config.Config, client *client.Clo
 	}
 }
 
+func CcmPerspectiveFilterValuesTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	var valueTypes = []string{
+		dto.ValueTypeCostCategory,
+		dto.ValueTypeAWSAccount,
+		dto.ValueTypeAWSBillingEntity,
+		dto.ValueTypeAWSInstanceType,
+		dto.ValueTypeAWSLineItemType,
+		dto.ValueTypeAWSPayerAccount,
+		dto.ValueTypeAWSService,
+		dto.ValueTypeAWSUsageType,
+		dto.ValueTypeRegion,
+		dto.ValueTypeProduct,
+		dto.ValueTypeCloudProvider,
+		dto.ValueTypeLabel,
+		dto.ValueTypeLabelV2,
+	}
+
+	var timeFilterValues = []string{
+				dto.TimeFilterLast7,
+				dto.TimeFilterThisMonth,
+				dto.TimeFilterLast30Days,
+				dto.TimeFilterThisQuarter,
+				dto.TimeFilterThisYear,
+				dto.TimeFilterLastMonth,
+				dto.TimeFilterLastQuarter,
+				dto.TimeFilterLastYear,
+				dto.TimeFilterLast3Months,
+				dto.TimeFilterLast6Months,
+				dto.TimeFilterLast12Months,
+			}
+
+	return mcp.NewTool("ccm_perspective_filter_values", 
+			mcp.WithDescription(ccmcommons.CCMPerspectiveFilterValuesDescription),
+			mcp.WithString("perspective_id",
+				mcp.Description("Required perspective identifier."),
+			),
+			mcp.WithString("time_filter",
+			mcp.Description("Time filter for the query. Values: "+strings.Join(timeFilterValues, ", ")+ ". Default: "+dto.TimeFilterLast30Days),
+				mcp.DefaultString(dto.TimeFilterLast30Days),
+				mcp.Enum(timeFilterValues...),
+			),
+			mcp.WithString("value_type",
+				mcp.Description("Required. Defines the type of values to include in the data list, such as categories."+strings.Join(valueTypes, ", ")),
+				mcp.Required(),
+				mcp.Enum(valueTypes...),
+			),
+			mcp.WithString("value_subtype",
+				mcp.Description("Used when filter by Label, LabelV2 and Cost Categories."),
+			),
+			mcp.WithBoolean("is_cluster_hourly_data",
+				mcp.Description("Specify if you want to filter results cluster hourly data."),
+				mcp.DefaultBool(false),
+			),
+			mcp.WithNumber("limit",
+				mcp.DefaultNumber(30),
+				mcp.Max(50),
+				mcp.Description("Number of items per page"),
+			),
+			mcp.WithNumber("offset",
+				mcp.DefaultNumber(1),
+				mcp.Description("Offset or page number for pagination"),
+			),
+	),
+	func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+
+		// Account Id for querystring.
+		accountId, err := getAccountID(config, request)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		viewId, err := RequiredParamOK[string](request, "perspective_id")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		limit := getLimit(request)
+		offset := getOffset(request)
+
+		timeFilter, err := OptionalParam[string](request, "time_filter")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		valueType, err := OptionalParam[string](request, "value_type")
+		if valueType == "" {
+			return mcp.NewToolResultError("value_type is required"), nil
+		}
+
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		valueSubType, err := OptionalParam[string](request, "value_subtype")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		if valueType == dto.ValueTypeCostCategory || valueType == dto.ValueTypeLabel || valueType == dto.ValueTypeLabelV2 {
+			if valueSubType == "" {
+				return mcp.NewToolResultError("value_subtype is required"), nil
+			}
+		}
+
+		isClusterHourlyData, err := OptionalParam[bool](request, "is_cluster_hourly_data")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		scope, err := fetchScope(config, request, false)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		
+		params := new(dto.CCMPerspectiveFilterValuesOptions)
+		params.AccountId = accountId
+		params.ViewId = viewId
+		params.Limit = limit
+		params.Offset = offset
+		params.TimeFilter = timeFilter
+		params.ValueType = valueType
+		params.ValueSubType = valueSubType
+		params.IsClusterHourlyData = isClusterHourlyData
+		data, err := client.PerspectiveFilterValues(ctx, scope, params)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		r, err := json.Marshal(data)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		return mcp.NewToolResultText(string(r)), nil
+	}
+}
+
 func buildFilters(filterFields []map[string]string, request mcp.CallToolRequest) (map[string][]string, error) {
 
 	filters := make(map[string][]string)
@@ -373,6 +511,8 @@ func buildFilters(filterFields []map[string]string, request mcp.CallToolRequest)
 			filters[name] = val
 		}
 	}
+
+	slog.Debug("buildFilters", "filters", filters)
 	return filters, nil
 }
 
@@ -389,12 +529,24 @@ func buildKeyValueFilters(keyValueFilterFields []map[string]string, request mcp.
 			keyValueFilters[name] = val
 		}
 	}
-
+	slog.Debug("buildKeyValueFilters", "keyValueFilters", keyValueFilters)
 	return keyValueFilters, nil
 }
 
 func perspectiveGridJsonSchema() json.RawMessage {
 	return commonGraphQLJSONSchema(nil, nil)
+}
+
+func perspectiveFilterValuesJsonSchema() json.RawMessage {
+
+	field := map[string]any{
+	"is_cluster_hourly_data": map[string]any{
+			"type":        "bool",
+			"default":     false,
+			"description": "Filter results by is_cluster_hourly_data", 
+		},
+	}
+	return commonGraphQLJSONSchema(field, []string{"group_by"})
 }
 
 func perspectiveTimeSeriesJsonSchema() json.RawMessage {	

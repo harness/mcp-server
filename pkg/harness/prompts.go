@@ -21,7 +21,7 @@ func RegisterPrompts(mcpServer *server.MCPServer) {
 			Build())
 	// The prompt below improves perspective creation flow
 	prompts.Append(
-		p.NewPrompt().SetName("get_ccm_overview").
+		p.NewPrompt().SetName("create_ccm_perspective").
 			SetDescription("Ensure parameters are provided correctly and in the right format. ").
 			SetResultDescription("Input parameters validation").
 			SetText(createPerspectivePrompt).
