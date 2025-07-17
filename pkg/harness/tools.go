@@ -17,7 +17,7 @@ import (
 )
 
 // Default tools to enable
-var DefaultTools = []string{"all"}
+var DefaultTools = []string{}
 
 // Service identity for JWT auth
 const serviceIdentity = "genaiservice" // TODO: can change once we have our own service, not needed at the moment
@@ -29,10 +29,81 @@ var defaultJWTLifetime = 1 * time.Hour
 // Default timeout for GenAI service
 const defaultGenaiTimeout = 300 * time.Second
 
+// registerDefault registers the default toolset with essential tools from various services
+func registerDefault(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+
+	// Determine the base URL and secret for pipeline service
+	pipelineBaseURL := buildServiceURL(config, config.PipelineSvcBaseURL, config.BaseURL, "pipeline")
+	pipelineSecret := config.PipelineSvcSecret
+	pipelineClient, err := createClient(pipelineBaseURL, config, pipelineSecret)
+	if err != nil {
+		return err
+	}
+	pipelineServiceClient := &client.PipelineService{Client: pipelineClient}
+
+	// Determine the base URL and secret for connector service
+	connectorBaseURL := buildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng/api")
+	connectorSecret := config.NgManagerSecret
+	connectorClient, err := createClient(connectorBaseURL, config, connectorSecret)
+	if err != nil {
+		return fmt.Errorf("failed to create client for connectors: %w", err)
+	}
+	connectorServiceClient := &client.ConnectorService{Client: connectorClient}
+
+	// Determine the base URL and secret for dashboard service
+	dashboardBaseURL := buildServiceURL(config, config.DashboardSvcBaseURL, config.BaseURL, "dashboard")
+	dashboardSecret := config.DashboardSvcSecret
+	customTimeout := 30 * time.Second
+	dashboardClient, err := createClient(dashboardBaseURL, config, dashboardSecret, customTimeout)
+	if err != nil {
+		return err
+	}
+	dashboardServiceClient := &client.DashboardService{Client: dashboardClient}
+
+	// Determine the base URL and secret for logs
+	logServiceBaseURL := buildServiceURL(config, config.LogSvcBaseURL, config.BaseURL, "log-service")
+	logServiceSecret := config.LogSvcSecret
+	logClient, err := createClient(logServiceBaseURL, config, logServiceSecret)
+	if err != nil {
+		return err
+	}
+	logServiceClient := &client.LogService{LogServiceClient: logClient, PipelineClient: pipelineClient}
+
+	// Create the default toolset with essential tools
+	defaultToolset := toolsets.NewToolset("default", "Default essential Harness tools").AddReadTools(
+		// Connector Management tools
+		toolsets.NewServerTool(GetConnectorDetailsTool(config, connectorServiceClient)),
+		toolsets.NewServerTool(ListConnectorCatalogueTool(config, connectorServiceClient)),
+
+		// Pipeline Management tools
+		toolsets.NewServerTool(ListPipelinesTool(config, pipelineServiceClient)),
+		toolsets.NewServerTool(GetPipelineTool(config, pipelineServiceClient)),
+		toolsets.NewServerTool(FetchExecutionURLTool(config, pipelineServiceClient)),
+		toolsets.NewServerTool(GetExecutionTool(config, pipelineServiceClient)),
+		toolsets.NewServerTool(ListExecutionsTool(config, pipelineServiceClient)),
+
+		// Log tools
+		toolsets.NewServerTool(DownloadExecutionLogsTool(config, logServiceClient)),
+
+		// Dashboard tools
+		toolsets.NewServerTool(ListDashboardsTool(config, dashboardServiceClient)),
+		toolsets.NewServerTool(GetDashboardDataTool(config, dashboardServiceClient)),
+	)
+
+	// Add the default toolset to the group
+	tsg.AddToolset(defaultToolset)
+	return nil
+}
+
 // InitToolsets initializes and returns the toolset groups
 func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 	// Create a toolset group
 	tsg := toolsets.NewToolsetGroup(config.ReadOnly)
+
+	// Register default toolset with essential tools
+	if err := registerDefault(config, tsg); err != nil {
+		return nil, err
+	}
 
 	// Register pipelines
 	if err := registerPipelines(config, tsg); err != nil {
@@ -594,10 +665,6 @@ func registerCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGro
 
 // registerGenai registers the genai toolset
 func registerGenai(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-	// Skip registration for external mode for now
-	if !config.Internal {
-		return nil
-	}
 
 	// Determine the base URL and secret for genai service
 	baseURL := config.GenaiBaseURL // Only used in internal mode

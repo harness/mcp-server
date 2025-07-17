@@ -124,6 +124,13 @@ func (tg *ToolsetGroup) IsEnabled(name string) bool {
 
 // EnableToolsets enables multiple toolsets by name
 func (tg *ToolsetGroup) EnableToolsets(names []string) error {
+	if len(names) == 0 {
+		err := tg.EnableToolset("default")
+		if err != nil {
+			return err
+		}
+		return nil
+	}
 	for _, name := range names {
 		if name == "all" {
 			tg.everythingOn = true
