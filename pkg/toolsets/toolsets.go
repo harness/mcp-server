@@ -18,7 +18,7 @@ type Toolset struct {
 	Description string
 	Enabled     bool
 	readOnly    bool
-	writeTools  []server.ServerTool
+	writeTools  []server.ServerT
 	readTools   []server.ServerTool
 }
 
