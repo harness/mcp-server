@@ -57,8 +57,7 @@ func ListUserAuditTrailTool(config *config.Config, auditClient *client.AuditServ
 	return mcp.NewTool("list_user_audits",
 			mcp.WithDescription("List the audit trail of the user."),
 			mcp.WithString("user_id",
-				mcp.Required(),
-				mcp.Description("The user id(emailId) used to retrieve the audit trail."),
+				mcp.Description("The user id(emailId) used to retrieve the audit trail. For multiple users, use comma-separated values."),
 			),
 			mcp.WithString("start_time",
 				mcp.Description("Optional start time in ISO 8601 format (e.g., '2025-07-10T08:00:00Z')"),
@@ -68,11 +67,19 @@ func ListUserAuditTrailTool(config *config.Config, auditClient *client.AuditServ
 				mcp.Description("Optional end time in ISO 8601 format (e.g., '2025-07-10T08:00:00Z')"),
 				mcp.DefaultString(getCurrentTime()),
 			),
+			mcp.WithString("actions",
+				mcp.Description("Optional actions to filter by. For multiple actions, use comma-separated values."),
+			),
 			WithScope(config, false),
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			userID, err := requiredParam[string](request, "user_id")
+			userIDList, err := OptionalParam[string](request, "user_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			actionsList, err := OptionalParam[string](request, "actions")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -96,7 +103,7 @@ func ListUserAuditTrailTool(config *config.Config, auditClient *client.AuditServ
 			startTimeMilliseconds := convertDateToMilliseconds(startTime)
 			endTimeMilliseconds := convertDateToMilliseconds(endTime)
 
-			data, err := auditClient.ListUserAuditTrail(ctx, scope, userID, page, size, startTimeMilliseconds, endTimeMilliseconds, nil)
+			data, err := auditClient.ListUserAuditTrail(ctx, scope, userIDList, actionsList, page, size, startTimeMilliseconds, endTimeMilliseconds, nil)
 			if err != nil {
 				return nil, fmt.Errorf("failed to list the audit logs: %w", err)
 			}
