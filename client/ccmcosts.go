@@ -3,7 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
-	"log/slog"
+	"log"
 	"time"
 
 	"github.com/harness/harness-mcp/client/dto"
@@ -30,7 +30,7 @@ type CloudCostManagementService struct {
 func (c *CloudCostManagementService) GetOverview(ctx context.Context, accID string, startTime int64, endTime int64, groupBy string) (*dto.CEView, error) {
 	path := fmt.Sprintf(ccmGetOverviewPath, accID, startTime, endTime, groupBy)
 
-	slog.Debug("GetOverView", "Path", path)
+	log.Printf("GetOverView Path: %s", path)
 	params := make(map[string]string)
 
 	ccmOverview := new(dto.CEView)

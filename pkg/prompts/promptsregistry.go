@@ -2,7 +2,7 @@ package prompts
 
 import (
 	"context"
-	"log/slog"
+	"log"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -89,7 +89,7 @@ func AddPrompts(prompts Prompts, mcpServer *server.MCPServer) {
 	// Register the prompts with the MCP server
 	for _, prompt := range prompts.GetPrompts() {
 		mcpServer.AddPrompt(createPrompt(prompt))
-		slog.Debug("Registered prompt", "name", prompt.Name, "description", prompt.Description)
+		log.Printf("Registered prompt: %s - %s", prompt.Name, prompt.Description)
 	}
 }
 

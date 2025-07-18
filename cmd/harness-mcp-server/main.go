@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"log/slog"
+	"log"
 	"os"
 	"os/signal"
 	"strings"
@@ -291,13 +291,8 @@ func initLogger(outPath string, debug bool) error {
 		return fmt.Errorf("failed to open log file: %w", err)
 	}
 
-	handlerOpts := &slog.HandlerOptions{}
-	if debug {
-		handlerOpts.Level = slog.LevelDebug
-	}
-
-	logger := slog.New(slog.NewTextHandler(file, handlerOpts))
-	slog.SetDefault(logger)
+	logger := log.New(file, "", log.LstdFlags)
+	log.SetOutput(file)
 	return nil
 }
 
@@ -314,12 +309,12 @@ func runStdioServer(ctx context.Context, config config.Config) error {
 		return fmt.Errorf("failed to initialize logger: %w", err)
 	}
 
-	slog.Info("Starting server", "url", config.BaseURL)
-	slog.Debug("Using ", "Config ->", config)
+	log.Printf("Starting server with URL: %s", config.BaseURL)
+	log.Printf("Using config: %+v", config)
 
 	// Define beforeInit function to add client info to user agent
 	beforeInit := func(_ context.Context, _ any, message *mcp.InitializeRequest) {
-		slog.Info("Client connected", "name", message.Params.ClientInfo.Name, "version",
+		log.Printf("Client connected: %s version %s", message.Params.ClientInfo.Name,
 			message.Params.ClientInfo.Version)
 	}
 
@@ -335,7 +330,7 @@ func runStdioServer(ctx context.Context, config config.Config) error {
 	// Initialize toolsets
 	toolsets, err := harness.InitToolsets(&config)
 	if err != nil {
-		slog.Error("Failed to initialize toolsets", "error", err)
+		log.Printf("Failed to initialize toolsets: %v", err)
 	}
 
 	// Register the tools with the server
@@ -348,7 +343,7 @@ func runStdioServer(ctx context.Context, config config.Config) error {
 	stdioServer := server.NewStdioServer(harnessServer)
 
 	// Set error logger
-	stdioServer.SetErrorLogger(slog.NewLogLogger(slog.Default().Handler(), slog.LevelError))
+	stdioServer.SetErrorLogger(log.New(log.Writer(), "", log.LstdFlags))
 
 	// Start listening for messages
 	errC := make(chan error, 1)
@@ -359,12 +354,12 @@ func runStdioServer(ctx context.Context, config config.Config) error {
 	}()
 
 	// Output startup message
-	slog.Info("Harness MCP Server running on stdio", "version", version)
+	log.Printf("Harness MCP Server running on stdio, version: %s", version)
 
 	// Wait for shutdown signal
 	select {
 	case <-ctx.Done():
-		slog.Info("shutting down server...")
+		log.Printf("shutting down server...")
 	case err := <-errC:
 		if err != nil {
 			slog.Error("error running server", "error", err)

@@ -3,7 +3,7 @@ package harness
 import (
 	"context"
 	"fmt"
-	"log/slog"
+	"log"
 	"net/http"
 	"time"
 
@@ -155,7 +155,7 @@ func createClientWithIdentity(baseURL string, config *config.Config, secret stri
 
 	client, err := client.NewWithAuthProvider(baseURL, authProvider, timeout...)
 	if err != nil {
-		slog.Error("Failed to create client", "error", err)
+		log.Printf("Failed to create client: %v", err)
 		return nil, fmt.Errorf("failed to create client: %w", err)
 	}
 

@@ -3,7 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
-	"log/slog"
+	"log"
 
 	"github.com/harness/harness-mcp/client/dto"
 )
@@ -203,7 +203,7 @@ func generateScopeParamVal(scope dto.Scope) string {
 
 func addHarnessAccountToHeaders(scope dto.Scope, headers map[string]string) {
 	if scope.AccountID == "" {
-		slog.Error("Account ID is empty in scope")
+		log.Printf("Account ID is empty in scope")
 	} else {
 		headers["Harness-Account"] = scope.AccountID
 	}
