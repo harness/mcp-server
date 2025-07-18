@@ -29,43 +29,40 @@ var defaultJWTLifetime = 1 * time.Hour
 // Default timeout for GenAI service
 const defaultGenaiTimeout = 300 * time.Second
 
+// createServiceClient is a helper function to create a service client with the given parameters
+func createServiceClient(config *config.Config, serviceBaseURL, baseURL, path, secret string, timeouts ...time.Duration) (*client.Client, error) {
+	url := buildServiceURL(config, serviceBaseURL, baseURL, path)
+	return createClient(url, config, secret, timeouts...)
+}
+
 // registerDefault registers the default toolset with essential tools from various services
 func registerDefault(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-
-	// Determine the base URL and secret for pipeline service
-	pipelineBaseURL := buildServiceURL(config, config.PipelineSvcBaseURL, config.BaseURL, "pipeline")
-	pipelineSecret := config.PipelineSvcSecret
-	pipelineClient, err := createClient(pipelineBaseURL, config, pipelineSecret)
+	// Create pipeline service client
+	pipelineClient, err := createServiceClient(config, config.PipelineSvcBaseURL, config.BaseURL, "pipeline", config.PipelineSvcSecret)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create client for pipeline service: %w", err)
 	}
 	pipelineServiceClient := &client.PipelineService{Client: pipelineClient}
 
-	// Determine the base URL and secret for connector service
-	connectorBaseURL := buildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng/api")
-	connectorSecret := config.NgManagerSecret
-	connectorClient, err := createClient(connectorBaseURL, config, connectorSecret)
+	// Create connector service client
+	connectorClient, err := createServiceClient(config, config.NgManagerBaseURL, config.BaseURL, "ng/api", config.NgManagerSecret)
 	if err != nil {
 		return fmt.Errorf("failed to create client for connectors: %w", err)
 	}
 	connectorServiceClient := &client.ConnectorService{Client: connectorClient}
 
-	// Determine the base URL and secret for dashboard service
-	dashboardBaseURL := buildServiceURL(config, config.DashboardSvcBaseURL, config.BaseURL, "dashboard")
-	dashboardSecret := config.DashboardSvcSecret
+	// Create dashboard service client
 	customTimeout := 30 * time.Second
-	dashboardClient, err := createClient(dashboardBaseURL, config, dashboardSecret, customTimeout)
+	dashboardClient, err := createServiceClient(config, config.DashboardSvcBaseURL, config.BaseURL, "dashboard", config.DashboardSvcSecret, customTimeout)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create client for dashboard service: %w", err)
 	}
 	dashboardServiceClient := &client.DashboardService{Client: dashboardClient}
 
-	// Determine the base URL and secret for logs
-	logServiceBaseURL := buildServiceURL(config, config.LogSvcBaseURL, config.BaseURL, "log-service")
-	logServiceSecret := config.LogSvcSecret
-	logClient, err := createClient(logServiceBaseURL, config, logServiceSecret)
+	// Create log service client
+	logClient, err := createServiceClient(config, config.LogSvcBaseURL, config.BaseURL, "log-service", config.LogSvcSecret)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create client for log service: %w", err)
 	}
 	logServiceClient := &client.LogService{LogServiceClient: logClient, PipelineClient: pipelineClient}
 
@@ -665,6 +662,11 @@ func registerCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGro
 
 // registerGenai registers the genai toolset
 func registerGenai(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+
+	// Skip registration for external mode for now
+	if !config.Internal {
+		return nil
+	}
 
 	// Determine the base URL and secret for genai service
 	baseURL := config.GenaiBaseURL // Only used in internal mode

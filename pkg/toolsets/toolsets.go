@@ -167,7 +167,13 @@ func (tg *ToolsetGroup) EnableToolset(name string) error {
 
 // RegisterTools registers all enabled toolsets with the server
 func (tg *ToolsetGroup) RegisterTools(s *server.MCPServer) {
+	if tg == nil || len(tg.Toolsets) == 0 {
+		return
+	}
+
 	for _, toolset := range tg.Toolsets {
-		toolset.RegisterTools(s)
+		if toolset != nil {
+			toolset.RegisterTools(s)
+		}
 	}
 }

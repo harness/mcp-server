@@ -8,6 +8,23 @@ The Harness MCP Server is a [Model Context Protocol (MCP)](https://modelcontextp
 
 The server implements several toolsets:
 
+#### Default Toolset
+
+The default toolset contains essential tools from various services:
+
+Toolset Name: `default`
+
+- `get_connector_details`: Get details of a specific connector
+- `list_connector_catalogue`: List the Harness connector catalogue
+- `list_pipelines`: List pipelines in a repository
+- `get_pipeline`: Get details of a specific pipeline
+- `get_execution`: Get details of a specific pipeline execution
+- `list_executions`: List pipeline executions
+- `fetch_execution_url`: Fetch the execution URL for a pipeline execution
+- `download_execution_logs`: Download logs for a pipeline execution
+- `list_dashboards`: Lists all available Harness dashboards
+- `get_dashboard_data`: Retrieves the data from a specific Harness dashboard
+
 #### Pipelines Toolset 
 
 Toolset Name: `pipelines`
@@ -399,7 +416,7 @@ To use the Harness MCP Server with Amazon Q Developer CLI:
 
 The Harness MCP Server supports the following command line arguments:
 
-- `--toolsets`: Comma-separated list of tool groups to enable (default: "all")
+- `--toolsets`: Comma-separated list of tool groups to enable, if the list is empty or flag is not set, only default toolset is enabled (default: "")
 - `--read-only`: Run the server in read-only mode
 - `--log-file`: Path to log file for debugging
 - `--log-level`: Set the logging level (debug, info, warn, error)
