@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
+	"github.com/rs/zerolog/log"
 	"net/http"
 	"strings"
 
@@ -71,7 +71,7 @@ func (g *GenaiService) SendAIDevOpsChat(ctx context.Context, scope dto.Scope, re
 	// Execute the streaming request
 	resp, err := g.Client.PostStream(ctx, aiDevopsChatPath, params, request)
 	if err != nil {
-		slog.Warn("Failed to execute streaming request", "error", err.Error())
+		log.Warn().Err(err).Msg("Failed to execute streaming request")
 		return nil, fmt.Errorf("failed to execute streaming request: %w", err)
 	}
 	defer resp.Body.Close()
@@ -90,7 +90,7 @@ func (g *GenaiService) SendAIDevOpsChat(ctx context.Context, scope dto.Scope, re
 	// Process the streaming response
 	err = g.processStreamingResponse(resp.Body, finalResponse, progressCB)
 	if err != nil {
-		slog.Warn("Error processing streaming response", "error", err.Error())
+		log.Warn().Err(err).Msg("Error processing streaming response")
 		return finalResponse, fmt.Errorf("error processing streaming response: %w", err)
 	}
 
@@ -134,14 +134,14 @@ func (g *GenaiService) processStreamingResponse(body io.ReadCloser, finalRespons
 				// Convert to JSON string
 				jsonPayload, err := json.Marshal(eventPayload)
 				if err != nil {
-					slog.Warn("Error creating JSON payload", "error", err.Error())
+					log.Warn().Err(err).Msg("Error creating JSON payload")
 				} else {
 					progress := dto.ProgressUpdate{
 						Message: string(jsonPayload),
 					}
 
 					if err := onProgress(progress); err != nil {
-						slog.Warn("Error forwarding event", "type", eventType, "error", err.Error())
+						log.Warn().Str("type", eventType).Err(err).Msg("Error forwarding event")
 					}
 				}
 
@@ -165,7 +165,7 @@ func (g *GenaiService) processStreamingResponse(body io.ReadCloser, finalRespons
 	finalResponse.Response = instructionNote + allContent.String()
 
 	if err := scanner.Err(); err != nil {
-		slog.Warn("Error in scanner", "error", err.Error())
+		log.Warn().Err(err).Msg("Error in scanner")
 		return fmt.Errorf("error reading response stream: %w", err)
 	}
 

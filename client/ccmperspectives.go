@@ -3,7 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
-	"log/slog"
+	"github.com/rs/zerolog/log"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/pkg/utils"
 )
@@ -186,7 +186,7 @@ func (r *CloudCostManagementService) CreatePerspective(ctx context.Context, scop
 		body["folderId"] = opts.Body.FolderId
 	}	
 
-	slog.Debug("Create Perspective", "Body", body)
+	log.Debug().Interface("Body", body).Msg("Create Perspective")
 	item := new(dto.CCMCreatePerspectiveResponse)
 	err := r.Client.Post(ctx, path, params, body, &item)
 	if err != nil {

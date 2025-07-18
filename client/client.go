@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -311,7 +310,7 @@ func (c *Client) PostRawStream(
 
 // Do is a wrapper of http.Client.Do that injects the auth header in the request.
 func (c *Client) Do(r *http.Request) (*http.Response, error) {
-	slog.Debug("Request", "method", r.Method, "url", r.URL.String())
+	log.Debug().Str("method", r.Method).Str("url", r.URL.String()).Msg("Request")
 
 	// set the auth header
 	ctx := r.Context()
@@ -415,7 +414,7 @@ func addQueryParams(req *http.Request, params map[string]string) {
 
 func addScope(scope dto.Scope, params map[string]string) {
 	if scope.AccountID == "" {
-		slog.Error("Account ID is empty in scope")
+		log.Error().Msg("Account ID is empty in scope")
 	} else {
 		params["accountIdentifier"] = scope.AccountID
 		params["accountId"] = scope.AccountID

@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"log/slog"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"os"
 	"os/signal"
 	"strings"
@@ -291,13 +292,13 @@ func initLogger(outPath string, debug bool) error {
 		return fmt.Errorf("failed to open log file: %w", err)
 	}
 
-	handlerOpts := &slog.HandlerOptions{}
+	// Configure zerolog to write to file
+	log.Logger = log.Output(file)
 	if debug {
-		handlerOpts.Level = slog.LevelDebug
+		log.Logger = log.Logger.Level(zerolog.DebugLevel)
+	} else {
+		log.Logger = log.Logger.Level(zerolog.InfoLevel)
 	}
-
-	logger := slog.New(slog.NewTextHandler(file, handlerOpts))
-	slog.SetDefault(logger)
 	return nil
 }
 
@@ -314,13 +315,12 @@ func runStdioServer(ctx context.Context, config config.Config) error {
 		return fmt.Errorf("failed to initialize logger: %w", err)
 	}
 
-	slog.Info("Starting server", "url", config.BaseURL)
-	slog.Debug("Using ", "Config ->", config)
+	log.Info().Str("url", config.BaseURL).Msg("Starting server")
+	log.Debug().Interface("Config ->", config).Msg("Using")
 
 	// Define beforeInit function to add client info to user agent
 	beforeInit := func(_ context.Context, _ any, message *mcp.InitializeRequest) {
-		slog.Info("Client connected", "name", message.Params.ClientInfo.Name, "version",
-			message.Params.ClientInfo.Version)
+		log.Info().Str("name", message.Params.ClientInfo.Name).Str("version", message.Params.ClientInfo.Version).Msg("Client connected")
 	}
 
 	// Setup server hooks
@@ -335,7 +335,7 @@ func runStdioServer(ctx context.Context, config config.Config) error {
 	// Initialize toolsets
 	toolsets, err := harness.InitToolsets(&config)
 	if err != nil {
-		slog.Error("Failed to initialize toolsets", "error", err)
+		log.Error().Err(err).Msg("Failed to initialize toolsets")
 	}
 
 	// Register the tools with the server
@@ -348,7 +348,7 @@ func runStdioServer(ctx context.Context, config config.Config) error {
 	stdioServer := server.NewStdioServer(harnessServer)
 
 	// Set error logger
-	stdioServer.SetErrorLogger(slog.NewLogLogger(slog.Default().Handler(), slog.LevelError))
+	// Error logging handled by zerolog
 
 	// Start listening for messages
 	errC := make(chan error, 1)
@@ -359,15 +359,15 @@ func runStdioServer(ctx context.Context, config config.Config) error {
 	}()
 
 	// Output startup message
-	slog.Info("Harness MCP Server running on stdio", "version", version)
+	log.Info().Str("version", version).Msg("Harness MCP Server running on stdio")
 
 	// Wait for shutdown signal
 	select {
 	case <-ctx.Done():
-		slog.Info("shutting down server...")
+		log.Info().Msg("shutting down server...")
 	case err := <-errC:
 		if err != nil {
-			slog.Error("error running server", "error", err)
+			log.Error().Err(err).Msg("error running server")
 			return fmt.Errorf("error running server: %w", err)
 		}
 	}

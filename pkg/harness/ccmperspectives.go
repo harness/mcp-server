@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
+	"github.com/rs/zerolog/log"
 	"strings"
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
@@ -573,7 +573,7 @@ func createPerspectiveHandler(config *config.Config, client *client.CloudCostMan
 
 
 	viewRules, err := OptionalParam[map[string]any](request, "rules")
-	slog.Debug("pgk create", "viewConditions", viewRules) 
+	log.Debug().Interface("viewConditions", viewRules).Msg("pgk create") 
 	if viewRules != nil {
 		//params.Body.ViewRules = viewRules
 	}
@@ -696,13 +696,13 @@ func getSupportedFieldId() string {
 func MapToViewRule(m map[string]any) (*[]dto.CCMViewRule, error) {
     b, err := json.Marshal(m)
     if err != nil {
-		slog.Debug("MapToViewRule", "rules", err) 
+		log.Debug().Err(err).Msg("MapToViewRule") 
         return nil, err
     }
 	rules := new([]dto.CCMViewRule)
     err = json.Unmarshal(b, rules)
     if err != nil {
-		slog.Debug("MapToViewRule", "rules", err) 
+		log.Debug().Err(err).Msg("MapToViewRule") 
         return nil, err
     }
 	return rules, nil

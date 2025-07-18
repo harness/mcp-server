@@ -6,7 +6,7 @@ import (
 	"time"
 	"strings"
 	"encoding/json"
-	"log/slog"
+	"github.com/rs/zerolog/log"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/client/ccmcommons"
 )
@@ -77,7 +77,7 @@ func (r *CloudCostManagementService) PerspectiveTimeSeries(ctx context.Context, 
 		"variables":     variables,
 	}
 
-	slog.Debug("PerspectiveTimeSeries", "Payload", payload)
+	log.Debug().Interface("Payload", payload).Msg("PerspectiveTimeSeries")
 	result := new(dto.CCMPerspectiveTimeSeriesResponse)
 	err := r.Client.Post(ctx, path, nil, payload, &result)
 	if err != nil {
@@ -404,9 +404,9 @@ var outputKeyValueFields = []map[string]string{
 func buildFieldFilters(input map[string][]string, output []map[string]string) []map[string]any {
 	result := make([]map[string]any, 0)
 	for fName, values := range input {
-		slog.Debug("PerspectiveGrid", "Field ID ", fName)
+		log.Debug().Str("Field ID", fName).Msg("PerspectiveGrid")
 		for _, out := range output {
-			slog.Debug("PerspectiveGrid", "Field ID OUT", out["fieldId"])
+			log.Debug().Interface("Field ID OUT", out["fieldId"]).Msg("PerspectiveGrid")
 			if strings.EqualFold(fName, out["fieldId"]) {
 				var idFilterMap = map[string]any{
 					"idFilter": map[string]any{
@@ -421,22 +421,22 @@ func buildFieldFilters(input map[string][]string, output []map[string]string) []
 		}
 	}
 
-	slog.Debug("PerspectiveGrid", "Field ID filters", result)
+	log.Debug().Interface("Field ID filters", result).Msg("PerspectiveGrid")
 	return result
 }
 
 func buildKeyValueFieldFilters(input dto.CCMGraphQLKeyValueFilters, output []map[string]string) []map[string]any {
 	result := make([]map[string]any, 0)
 	for fName, values := range input {
-		slog.Debug("PerspectiveGrid", "KV Field ID ", fName)
+		log.Debug().Str("KV Field ID", fName).Msg("PerspectiveGrid")
 		for _, out := range output {
-			slog.Debug("PerspectiveGrid", "KV Field ID OUT", out["fieldId"])
-			slog.Debug("PerspectiveGrid", "KV Field identifier OUT", out["identifier"])
+			log.Debug().Interface("KV Field ID OUT", out["fieldId"]).Msg("PerspectiveGrid")
+			log.Debug().Interface("KV Field identifier OUT", out["identifier"]).Msg("PerspectiveGrid")
 			if strings.EqualFold(fName, out["identifier"]) {
 				fieldName, ok := values["filterL1"].(string)
-				slog.Debug("PerspectiveGrid", "KV Field filterL1 OK", fieldName)
+				log.Debug().Str("KV Field filterL1 OK", fieldName).Msg("PerspectiveGrid")
 				if ok {
-					slog.Debug("PerspectiveGrid", "Is OK", fieldName)
+					log.Debug().Str("Is OK", fieldName).Msg("PerspectiveGrid")
 					out["fieldName"] = fieldName 
 					var idFilterMap = map[string]any{
 						"idFilter": map[string]any{
@@ -450,7 +450,7 @@ func buildKeyValueFieldFilters(input dto.CCMGraphQLKeyValueFilters, output []map
 			}
 		}
 	}
-	slog.Debug("PerspectiveGrid", "KV Field ID filters", result)
+	log.Debug().Interface("KV Field ID filters", result).Msg("PerspectiveGrid")
 	return result
 }
 
@@ -501,9 +501,9 @@ func buildGroupBy(input map[string]any, outputFields []map[string]string, output
 
 func debugPayload(operation string, payload map[string]any) {
 	jsonPayload := mapToJSONString(payload)
-	slog.Debug("-----------", "----------", "--------------")
-	slog.Debug(operation, "Payload", jsonPayload)
-	slog.Debug("-----------", "----------", "--------------")
+	log.Debug().Msg("-----------")
+	log.Debug().Str("operation", operation).Interface("Payload", jsonPayload).Msg("GraphQL Request")
+	log.Debug().Msg("-----------")
 }
 
 func mapToJSONString(m map[string]any) (string) {

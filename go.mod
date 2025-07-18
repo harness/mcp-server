@@ -2,7 +2,6 @@ module github.com/harness/harness-mcp
 
 go 1.23
 
-toolchain go1.23.8
 
 require (
 	github.com/cenkalti/backoff/v4 v4.3.0
