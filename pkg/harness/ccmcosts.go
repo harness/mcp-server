@@ -16,7 +16,7 @@ import (
 // GetCcmOverview creates a tool for getting a ccm overview from an account
 func GetCcmOverviewTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	now := time.Now()
-	defaultStartTime := utils.FormatUnixToMMDDYYYY(now.AddDate(0, 0, -60).Unix())
+	defaultStartTime := utils.FormatUnixToMMDDYY(now.AddDate(0, 0, -60).Unix())
 	defaultEndTime := utils.CurrentMMDDYYYY()
 	return mcp.NewTool("get_ccm_overview",
 			mcp.WithDescription("Get an overview for an specific account in Harness Cloud Cost Management"),
