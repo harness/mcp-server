@@ -9,6 +9,8 @@ import (
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/ar"
+	"github.com/harness/harness-mcp/client/dbops"
+	"github.com/harness/harness-mcp/client/dbops/generated"
 	scs "github.com/harness/harness-mcp/client/scs/generated"
 	sto "github.com/harness/harness-mcp/client/sto/generated"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
@@ -173,6 +175,10 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 	}
 
 	if err := registerAudit(config, tsg); err != nil {
+		return nil, err
+	}
+
+	if err := registerDbops(config, tsg); err != nil {
 		return nil, err
 	}
 
@@ -463,17 +469,25 @@ func registerChatbot(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	return nil
 }
 
-// registerConnectors registers the connectors toolset
-func registerConnectors(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+// createConnectorClient creates and returns a connector client
+func createConnectorClient(config *config.Config) (*client.ConnectorService, error) {
 	baseURL := buildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng/api")
 	secret := config.NgManagerSecret
 
 	c, err := createClient(baseURL, config, secret)
 	if err != nil {
-		return fmt.Errorf("failed to create client for connectors: %w", err)
+		return nil, fmt.Errorf("failed to create client for connectors: %w", err)
 	}
 
-	connectorService := &client.ConnectorService{Client: c}
+	return &client.ConnectorService{Client: c}, nil
+}
+
+// registerConnectors registers the connectors toolset
+func registerConnectors(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	connectorService, err := createConnectorClient(config)
+	if err != nil {
+		return err
+	}
 
 	// Create the connectors toolset
 	connectors := toolsets.NewToolset("connectors", "Harness Connector related tools").
@@ -839,5 +853,55 @@ func registerAudit(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 	// Add toolset to the group
 	tsg.AddToolset(audit)
+	return nil
+}
+
+// registerDbops registers the database operations toolset
+func registerDbops(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Determine the base URL and secret for dbops service
+	baseURL := buildServiceURL(config, config.DBOpsSvcBaseURL, config.BaseURL, "dbops")
+	secret := config.DBOpsSvcSecret
+
+	// Create base client for dbops
+	c, err := createClient(baseURL, config, secret)
+	if err != nil {
+		return fmt.Errorf("failed to create client for dbops: %w", err)
+	}
+
+	// Create the generated client for dbops
+	requestEditorFn := func(ctx context.Context, req *http.Request) error {
+		if c.AuthProvider == nil {
+			return fmt.Errorf("auth provider is not initialized")
+		}
+		k, v, err := c.AuthProvider.GetHeader(ctx)
+		if err != nil {
+			return err
+		}
+		req.Header.Set(k, v)
+		return nil
+	}
+
+	dbopsGenClient, err := generated.NewClientWithResponses(baseURL, generated.WithRequestEditorFn(requestEditorFn))
+	if err != nil {
+		return err
+	}
+
+	// Create connector client for JDBC connector operations
+	connectorClient, err := createConnectorClient(config)
+	if err != nil {
+		return err
+	}
+
+	// Create the dbops client
+	dbopsClient := dbops.NewClient(dbopsGenClient, connectorClient)
+
+	// Create the dbops toolset
+	dbopsToolset := toolsets.NewToolset("dbops", "Database operations related tools").
+		AddReadTools(
+			toolsets.NewServerTool(GetDatabaseInfoTool(config, dbopsClient)),
+		)
+
+	// Add toolset to the group
+	tsg.AddToolset(dbopsToolset)
 	return nil
 }

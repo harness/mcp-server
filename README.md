@@ -119,6 +119,12 @@ Toolset Name: `cloudcostmanagement`
 - `get_ccm_commitment_coverage`: Get commitment coverage information for an account in Harness Cloud Cost Management
 - `get_ccm_commitment_savings`: Get commitment savings information for an account in Harness Cloud Cost Management
 
+#### Database Operations Toolset
+
+Toolset Name: `dbops`
+
+- `get_database_schema_info`: Retrieves metadata about a database schema including its identifier, instance identifier, and database type.
+
 #### Chaos Engineering Toolset
 
 Toolset Name: `chaos`

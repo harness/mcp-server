@@ -52,4 +52,6 @@ type Config struct {
 	STOSvcBaseURL           string // Added for STO toolset
 	AuditSvcBaseURL         string
 	AuditSvcSecret          string
+	DBOpsSvcBaseURL         string
+	DBOpsSvcSecret          string
 }
