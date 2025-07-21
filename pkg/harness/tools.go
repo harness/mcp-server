@@ -17,7 +17,7 @@ import (
 )
 
 // Default tools to enable
-var DefaultTools = []string{"all"}
+var DefaultTools = []string{}
 
 // Service identity for JWT auth
 const serviceIdentity = "genaiservice" // TODO: can change once we have our own service, not needed at the moment
@@ -29,10 +29,68 @@ var defaultJWTLifetime = 1 * time.Hour
 // Default timeout for GenAI service
 const defaultGenaiTimeout = 300 * time.Second
 
+// createServiceClient is a helper function to create a service client with the given parameters
+func createServiceClient(config *config.Config, serviceBaseURL, baseURL, path, secret string, timeouts ...time.Duration) (*client.Client, error) {
+	url := buildServiceURL(config, serviceBaseURL, baseURL, path)
+	return createClient(url, config, secret, timeouts...)
+}
+
+// registerDefault registers the default toolset with essential tools from various services
+func registerDefault(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Create pipeline service client
+	pipelineClient, err := createServiceClient(config, config.PipelineSvcBaseURL, config.BaseURL, "pipeline", config.PipelineSvcSecret)
+	if err != nil {
+		return fmt.Errorf("failed to create client for pipeline service: %w", err)
+	}
+	pipelineServiceClient := &client.PipelineService{Client: pipelineClient}
+
+	// Create connector service client
+	connectorClient, err := createServiceClient(config, config.NgManagerBaseURL, config.BaseURL, "ng/api", config.NgManagerSecret)
+	if err != nil {
+		return fmt.Errorf("failed to create client for connectors: %w", err)
+	}
+	connectorServiceClient := &client.ConnectorService{Client: connectorClient}
+
+	// Create dashboard service client
+	customTimeout := 30 * time.Second
+	dashboardClient, err := createServiceClient(config, config.DashboardSvcBaseURL, config.BaseURL, "dashboard", config.DashboardSvcSecret, customTimeout)
+	if err != nil {
+		return fmt.Errorf("failed to create client for dashboard service: %w", err)
+	}
+	dashboardServiceClient := &client.DashboardService{Client: dashboardClient}
+
+	// Create the default toolset with essential tools
+	defaultToolset := toolsets.NewToolset("default", "Default essential Harness tools").AddReadTools(
+		// Connector Management tools
+		toolsets.NewServerTool(GetConnectorDetailsTool(config, connectorServiceClient)),
+		toolsets.NewServerTool(ListConnectorCatalogueTool(config, connectorServiceClient)),
+
+		// Pipeline Management tools
+		toolsets.NewServerTool(ListPipelinesTool(config, pipelineServiceClient)),
+		toolsets.NewServerTool(GetPipelineTool(config, pipelineServiceClient)),
+		toolsets.NewServerTool(FetchExecutionURLTool(config, pipelineServiceClient)),
+		toolsets.NewServerTool(GetExecutionTool(config, pipelineServiceClient)),
+		toolsets.NewServerTool(ListExecutionsTool(config, pipelineServiceClient)),
+
+		// Dashboard tools
+		toolsets.NewServerTool(ListDashboardsTool(config, dashboardServiceClient)),
+		toolsets.NewServerTool(GetDashboardDataTool(config, dashboardServiceClient)),
+	)
+
+	// Add the default toolset to the group
+	tsg.AddToolset(defaultToolset)
+	return nil
+}
+
 // InitToolsets initializes and returns the toolset groups
 func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 	// Create a toolset group
 	tsg := toolsets.NewToolsetGroup(config.ReadOnly)
+
+	// Register default toolset with essential tools
+	if err := registerDefault(config, tsg); err != nil {
+		return nil, err
+	}
 
 	// Register pipelines
 	if err := registerPipelines(config, tsg); err != nil {
@@ -594,6 +652,7 @@ func registerCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGro
 
 // registerGenai registers the genai toolset
 func registerGenai(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+
 	// Skip registration for external mode for now
 	if !config.Internal {
 		return nil

@@ -124,6 +124,13 @@ func (tg *ToolsetGroup) IsEnabled(name string) bool {
 
 // EnableToolsets enables multiple toolsets by name
 func (tg *ToolsetGroup) EnableToolsets(names []string) error {
+	if len(names) == 0 {
+		err := tg.EnableToolset("default")
+		if err != nil {
+			return err
+		}
+		return nil
+	}
 	for _, name := range names {
 		if name == "all" {
 			tg.everythingOn = true
@@ -160,7 +167,13 @@ func (tg *ToolsetGroup) EnableToolset(name string) error {
 
 // RegisterTools registers all enabled toolsets with the server
 func (tg *ToolsetGroup) RegisterTools(s *server.MCPServer) {
+	if tg == nil || len(tg.Toolsets) == 0 {
+		return
+	}
+
 	for _, toolset := range tg.Toolsets {
-		toolset.RegisterTools(s)
+		if toolset != nil {
+			toolset.RegisterTools(s)
+		}
 	}
 }
