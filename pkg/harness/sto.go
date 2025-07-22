@@ -8,6 +8,8 @@ import (
 
 	"github.com/harness/harness-mcp/client/sto/generated"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/appseccommons"
+	builder "github.com/harness/harness-mcp/pkg/harness/event/scs"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -41,6 +43,7 @@ func FrontendAllIssuesListTool(config *config.Config, client *generated.ClientWi
 			mcp.WithNumber("pageSize",
 				mcp.Description("Number of results per page"),
 				mcp.DefaultNumber(5),
+				mcp.Max(20),
 			),
 			mcp.WithString("targetIds",
 				mcp.Description("Comma-separated target IDs to filter")),
@@ -122,72 +125,6 @@ func FrontendAllIssuesListTool(config *config.Config, client *generated.ClientWi
 			paramsJson, _ := json.Marshal(params)
 			slog.Info("Params JSON", "params_json", string(paramsJson))
 
-			// Print base URL and query params if accessible
-			if client != nil {
-				if c, ok := client.ClientInterface.(*generated.Client); ok {
-					serverUrl := ""
-					if c.Server != "" {
-						serverUrl = c.Server
-					}
-					// Try to print the full URL as constructed by the generator
-					if params != nil {
-						if req, err := generated.NewFrontendAllIssuesListRequest(serverUrl, params); err == nil {
-							// Prepare the information needed for Postman
-							slog.Info("Postman URL", "url", req.URL.String())
-							slog.Info("Postman Method", "method", req.Method)
-
-							// Print headers for Postman
-							// Start with actual headers in the request (if any)
-							headers := make(map[string][]string)
-							for k, v := range req.Header {
-								headers[k] = v
-							}
-
-							// Add commonly expected headers for completeness in Postman
-							// Note: These are examples and may need to be adjusted for your specific API
-							if _, exists := headers["Authorization"]; !exists {
-								headers["Authorization"] = []string{"Bearer YOUR_API_TOKEN"}
-							}
-							if _, exists := headers["x-api-key"]; !exists {
-								headers["x-api-key"] = []string{"Bearer x-api-key"}
-							}
-							if _, exists := headers["APIKey"]; !exists {
-								headers["APIKey"] = []string{"Bearer APIKey"}
-							}
-							if _, exists := headers["Content-Type"]; !exists {
-								headers["Content-Type"] = []string{"application/json"}
-							}
-							if _, exists := headers["Accept"]; !exists {
-								headers["Accept"] = []string{"application/json"}
-							}
-							if _, exists := headers["User-Agent"]; !exists {
-								headers["User-Agent"] = []string{"Harness-MCP-Client"}
-							}
-
-							// Convert to JSON for logging
-							headersJson, _ := json.Marshal(headers)
-							slog.Info("Postman Headers", "headers", string(headersJson))
-
-							// Also log individual headers for easy copy-paste
-							for k, v := range headers {
-								if len(v) > 0 {
-									slog.Info("Header", "name", k, "value", v[0])
-								}
-							}
-
-							// Create a complete curl command for easy testing (without escaped quotes for easier copy/paste)
-							curlCmd := fmt.Sprintf("curl -X %s '%s'", req.Method, req.URL.String())
-							for k, v := range req.Header {
-								if len(v) > 0 {
-									curlCmd += fmt.Sprintf(" -H '%s: %s'", k, v[0])
-								}
-							}
-							slog.Info("Curl Command", "cmd", curlCmd)
-						}
-					}
-				}
-			}
-
 			resp, err := client.FrontendAllIssuesListWithResponse(ctx, params)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -199,29 +136,60 @@ func FrontendAllIssuesListTool(config *config.Config, client *generated.ClientWi
 				}
 				return mcp.NewToolResultError("No data returned from STO service"), nil
 			}
-			data, err := json.Marshal(resp.JSON200)
-			if err != nil {
-				return mcp.NewToolResultError("Failed to marshal response: " + err.Error()), nil
+			// Build table rows from issues
+			rows := []map[string]interface{}{}
+			for _, issue := range resp.JSON200.Issues {
+				row := map[string]interface{}{
+					"SEVERITY":         issue.SeverityCode,
+					"ISSUE TYPE":       issue.IssueType,
+					"TITLE":            issue.Title,
+					"TARGETS IMPACTED": issue.NumTargetsImpacted,
+					"OCCURRENCES":      issue.NumOccurrences,
+					"LAST DETECTED":    issue.LastDetected,
+					"EXEMPTION STATUS": issue.ExemptionStatus,
+					"ISSUE_ID":         issue.Id,
+					"EXEMPTION_ID":     issue.ExemptionId,
+				}
+				rows = append(rows, row)
 			}
-			return mcp.NewToolResultText(string(data)), nil
+
+			tableData, err := json.Marshal(rows)
+			if err != nil {
+				return mcp.NewToolResultError("Failed to marshal table data: " + err.Error()), nil
+			}
+			var prompts []string
+			prompts = append(prompts,
+				"Filter issues by status, e.g., show only Approved or Pending issues?",
+				"Show only SAST or SCA issues?",
+				"Show issues detected in the last 7 days?",
+				"Approve or reject exemption for a specific issue?",
+				"Get more details about why an exemption was approved or is pending?",
+				"See all issues with more than 10 occurrences?",
+				"Find all Critical severity issues without an exemption?",
+			)
+			return appseccommons.NewToolResultTextWithPrompts(
+				string(builder.GenericTableEvent),
+				string(tableData),
+				prompts,
+			), nil
 		}
 }
 
 func FrontendGlobalExemptionsTool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("frontend_global_exemptions",
 			mcp.WithDescription(`
-List global exemptions from the STO Frontend. Filter by status (Pending, Approved, Rejected, Expired), project, or search term. Use this to audit or review all exemption requests across your organization.
+		List global exemptions from the STO Frontend. Filter by status (Pending, Approved, Rejected, Expired), project, or search term. Use this to audit or review all exemption requests across your organization.
 
-Filters:
-- Status: Pending, Approved, Rejected, Expired
-- Project: Comma-separated org:project pairs
-- Search: Free-text search for issues or requesters
+		Filters:
+		- Status: Pending, Approved, Rejected, Expired
+		- Project: Comma-separated org:project pairs
+		- Search: Free-text search for issues or requesters
 `),
 			mcp.WithString("accountId", mcp.Required(), mcp.Description("Harness Account ID")),
 			mcp.WithString("orgId", mcp.Required(), mcp.Description("Harness Organization ID")),
 			mcp.WithString("projectId", mcp.Required(), mcp.Description("Harness Project ID")),
 			mcp.WithNumber("page", mcp.Description("Page number to fetch (starting from 0)"), mcp.Min(0), mcp.DefaultNumber(0)),
-			mcp.WithNumber("pageSize", mcp.Description("Number of results per page"), mcp.DefaultNumber(10)),
+			mcp.WithNumber("pageSize", mcp.Description("Number of results per page"), mcp.DefaultNumber(5)),
 			mcp.WithString("matchesProject", mcp.Description("Comma-separated list of organization:project pairs to filter exemptions by project scope.")),
 			mcp.WithString("status", mcp.Description("Exemption status: Pending, Approved, Rejected, Expired")),
 			mcp.WithString("search", mcp.Description("Free-text search for issues, requesters, or reasons.")),
@@ -262,24 +230,113 @@ Filters:
 				}
 				return mcp.NewToolResultError("No data returned from STO service"), nil
 			}
-			data, err := json.Marshal(resp.JSON200)
-			if err != nil {
-				return mcp.NewToolResultError("Failed to marshal response: " + err.Error()), nil
+
+			// Build table rows from exemptions
+			rows := []map[string]interface{}{}
+			for _, e := range resp.JSON200.Exemptions {
+				// Calculate exemption duration (as string)
+				duration := ""
+				if e.Expiration != nil {
+					// If Expiration is present, compute duration from Created to Expiration
+					seconds := *e.Expiration - e.Created
+					days := seconds / 86400
+					duration = fmt.Sprintf("%dd", days)
+				} else if e.PendingChanges.DurationDays != nil {
+					// If PendingChanges has durationDays, use it
+					duration = fmt.Sprintf("%dd", *e.PendingChanges.DurationDays)
+				}
+
+				row := map[string]interface{}{
+					"ExemptionId":        e.Id,
+					"SEVERITY":           "",
+					"ISSUE":              "",
+					"SCOPE":              e.Scope,
+					"REASON":             e.Reason,
+					"EXEMPTION DURATION": duration,
+					"REQUESTED BY":       e.RequesterId,
+					"OrgId":              e.OrgId,
+					"ProjectId":          e.ProjectId,
+					"PipelineId":         e.PipelineId,
+					"TargetId":           e.TargetId,
+				}
+				row["SEVERITY"] = e.IssueSummary.SeverityCode
+				row["ISSUE"] = e.IssueSummary.Title
+				rows = append(rows, row)
 			}
-			return mcp.NewToolResultText(string(data)), nil
+
+			// Build dynamic suggestions for exemption actions and details
+			var suggestions []string
+
+			// Suggest approve/reject and details for up to the first 2 exemptions, if present
+			maxSuggestions := 2
+			for i := 0; i < len(rows) && i < maxSuggestions; i++ {
+				id, idOk := rows[i]["ExemptionId"].(string)
+				issue, issueOk := rows[i]["ISSUE"].(string)
+				if idOk {
+					suggestions = append(suggestions, "Approve exemption "+id)
+					suggestions = append(suggestions, "Reject exemption "+id)
+				}
+				if idOk && issueOk {
+					suggestions = append(suggestions, "Get more details about exemption \""+issue+"\" (ID: "+id+")")
+				}
+			}
+
+			// Add general suggestions
+			suggestions = append(suggestions,
+				"See exemptions with a different status (Approved, Rejected, Expired)?",
+				"Get more details about a specific exemption?",
+			)
+
+			// Marshal only the rows, not the whole response
+			tableData, err := json.Marshal(rows)
+			if err != nil {
+				return mcp.NewToolResultError("Failed to marshal table data: " + err.Error()), nil
+			}
+			return appseccommons.NewToolResultTextWithPrompts(
+				string(builder.GenericTableEvent),
+				string(tableData),
+				suggestions,
+			), nil
 		}
 }
 
 // ExemptionsPromoteExemptionTool promotes a pending exemption to approval/rejection.
 func ExemptionsPromoteExemptionTool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("exemptions_promote_exemption",
+	return mcp.NewTool("exemptions_promote_and_approve",
 			mcp.WithDescription(`
-Promote a pending exemption to approval or rejection. Use this tool to approve or reject an exemption request, providing approver ID, optional comment, and optionally associating it with a pipeline or target.
+				Promote (approve) an exemption request at its current scope or at a higher scope (Project, Org, or Account).
+
+			**Usage Guidance:**
+			- Use this endpoint to approve an exemption at the requested scope, or to promote (escalate) it to a higher scope.
+			- Do NOT use this endpoint to reject an exemption (see exemptions_reject_and_approve).
+			- The required identifiers depend on the scope you are promoting to:
+				- **Account-level Promotion:** Provide only accountId.
+				- **Org-level Promotion:** Provide accountId and orgId.
+				- **Project-level Promotion:** Provide accountId, orgId, and projectId.
+				- **Pipeline-level Approval:** Provide accountId, orgId, projectId, and pipelineId.
+				- **Target-level Approval:** Provide accountId, orgId, projectId, and targetId.
+			- You must provide the exemption id to promote.
+			- Optionally, you may provide a comment, pipelineId, or targetId.
+
+			**When to Use:**
+			- To approve an exemption at the same or a higher scope than requested.
+			- To escalate an exemption from Target/Pipeline/Project to Org or Account.
+
+			**Parameters:**
+			- id: Exemption ID to promote (required)
+			- accountId: Harness Account ID (required)
+			- orgId: Harness Organization ID (required for org/project promotion)
+			- projectId: Harness Project ID (required for project promotion)
+			- comment: Optional comment for the approval
+			- pipelineId: Optional pipeline ID if relevant
+			- targetId: Optional target ID if relevant
+
+			**Do NOT use this endpoint for rejection.**
 `),
 			mcp.WithString("id", mcp.Required(), mcp.Description("Exemption ID to promote, generally present in id field of exemption")),
 			mcp.WithString("accountId", mcp.Required(), mcp.Description("Harness Account ID")),
-			mcp.WithString("orgId", mcp.Description("Harness Organization ID")),
-			mcp.WithString("projectId", mcp.Description("Harness Project ID")),
+			mcp.WithString("orgId", mcp.Required(), mcp.Description("Harness Organization ID")),
+			mcp.WithString("projectId", mcp.Required(), mcp.Description("Harness Project ID")),
 			mcp.WithString("comment", mcp.Description("Optional comment for the approval or rejection")),
 			mcp.WithString("pipelineId", mcp.Description("Optional pipeline ID to associate with the exemption")),
 			mcp.WithString("targetId", mcp.Description("Optional target ID to associate with the exemption")),
@@ -332,9 +389,32 @@ Promote a pending exemption to approval or rejection. Use this tool to approve o
 
 // ExemptionsApproveExemptionTool approves or rejects an exemption request.
 func ExemptionsApproveExemptionTool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("exemptions_approve_exemption",
+	return mcp.NewTool("exemptions_reject_and_approve",
 			mcp.WithDescription(`
-Approve or reject an exemption request. Use this tool to take action on an exemption by specifying the action (approve/reject), approver ID, and optional comment.
+Approve or reject an exemption request at its current (requested) scope.
+
+**Usage Guidance:**
+- Use this endpoint to approve or reject an exemption at the requested scope.
+- Provide Action to take: approve or reject
+- Do NOT use this endpoint to promote an exemption to a higher scope (see exemptions_promote_and_approve).
+- You must provide the exemption id, the action (approve or reject), and the relevant scope identifiers.
+- Optionally, you may provide a comment.
+
+**When to Use:**
+- To approve or reject an exemption at the current/requested scope.
+- To reject an exemption at any scope.
+
+**Parameters:**
+- id: Exemption ID to approve or reject (required)
+- action: "approve" or "reject" (required)
+- accountId: Harness Account ID (required)
+- orgId: Harness Organization ID (required for org/project scope)
+- projectId: Harness Project ID (required for project scope)
+- pipelineId: Exemption's pipeline Id (required for pipeline scope)
+- targetId: Exemption's target Id (required for target scope)
+- comment: Optional comment for the approval or rejection
+
+**Do NOT use this endpoint to promote to a higher scope.**
 `),
 			mcp.WithString("id", mcp.Required(), mcp.Description("Exemption ID to approve or reject, generally present in id field of exemption")),
 			mcp.WithString("action", mcp.Required(), mcp.Description("Action to take: approve or reject")),
