@@ -69,6 +69,7 @@ var (
 
 			cfg := config.Config{
 				Version:          version,
+				BearerToken:      viper.GetString("bearer_token"),
 				BaseURL:          viper.GetString("base_url"),
 				AccountID:        accountID,
 				DefaultOrgID:     viper.GetString("default_org_id"),
