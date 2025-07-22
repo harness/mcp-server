@@ -110,11 +110,7 @@ var (
 			// Move this out to middleware once we move to streamable HTTP
 			session, err := auth.AuthenticateSession(bearerToken, mcpSecret)
 			if err != nil {
-				session = &auth.Session{ // dummy session
-					Principal: auth.Principal{
-						UID: "unknown",
-					},
-				}
+				return fmt.Errorf("Failed to authenticate session: %w", err)
 			}
 
 			// Store the authenticated session in the context
