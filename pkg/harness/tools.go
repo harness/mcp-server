@@ -319,6 +319,7 @@ func registerSTO(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 			return err
 		}
 		req.Header.Set(k, v)
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", config.BearerToken))
 		return nil
 	}
 
@@ -330,6 +331,9 @@ func registerSTO(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	sto := toolsets.NewToolset("sto", "Harness Security Test Orchestration tools").
 		AddReadTools(
 			toolsets.NewServerTool(FrontendAllIssuesListTool(config, stoClient)),
+			toolsets.NewServerTool(FrontendGlobalExemptionsTool(config, stoClient)),
+			toolsets.NewServerTool(ExemptionsPromoteExemptionTool(config, stoClient)),
+			toolsets.NewServerTool(ExemptionsApproveExemptionTool(config, stoClient)),
 		)
 	tsg.AddToolset(sto)
 	return nil
