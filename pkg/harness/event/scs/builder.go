@@ -7,9 +7,18 @@ import (
 	builder "github.com/harness/harness-mcp/pkg/harness/event"
 )
 
+// EventType defines the type of SCS event
+type EventType string
+
+// SCS event types
+const (
+	GenericTableEvent EventType = "table"
+	OPAEvent          EventType = "opa"
+)
+
 var Reg = builder.Registry{
-	"generic_table": GenericTableBuilder{},
-	"opa":           OPABuilder{},
+	string(GenericTableEvent): GenericTableBuilder{},
+	string(OPAEvent):          OPABuilder{},
 }
 
 type GenericTableBuilder struct{}
@@ -30,49 +39,38 @@ func (GenericTableBuilder) Build(raw json.RawMessage, tool string) string {
 		}
 	}
 
-	env := map[string]interface{}{
-		"actions": []string{"REGENERATE", "ACCEPT"},
-		"entity_info": map[string]string{
-			"entity_type": tool,
-		},
-		"type": tool,
-		"table": map[string]interface{}{
-			"columns": cols,
-			"rows":    rows,
-		},
+	// Create base response with consistent structure
+	env := builder.CreateBaseResponse(string(GenericTableEvent), tool)
+	// Add table-specific data
+	env["table"] = map[string]interface{}{
+		"columns": cols,
+		"rows":    rows,
 	}
-	out, _ := json.MarshalIndent(env, "", "  ")
-	return "event: generic_table\n" + string(out)
+	// Format the response using the common formatter
+	return builder.FormatEventResponse(string(GenericTableEvent), env)
 }
 
 type OPABuilder struct{}
 
 func (OPABuilder) Build(raw json.RawMessage, tool string) string {
-	// Use hardcoded event type for OPA policies
-	const eventType = "opa"
-	
+	// Use the event type constant for OPA policies
+	eventType := string(OPAEvent)
+
 	// Parse the raw JSON into a map
 	var data map[string]interface{}
 	if err := json.Unmarshal(raw, &data); err != nil {
 		// If parsing fails, return the raw data with the event type
 		return fmt.Sprintf("event: %s\n%s", eventType, string(raw))
 	}
-	
-	// Format the response with the policy and metadata
-	env := map[string]interface{}{
-		"actions": []string{"REGENERATE", "ACCEPT"},
-		"entity_info": map[string]string{
-			"entity_type": tool,
-		},
-		"type": eventType,
-		"policy": data["policy"],
-		"metadata": map[string]interface{}{
-			"denied_licenses": data["denied_licenses"],
-		},
-	}
-	
 
-	
-	out, _ := json.MarshalIndent(env, "", "  ")
-	return fmt.Sprintf("event: %s\n%s", eventType, string(out))
+	// Create base response with consistent structure
+	env := builder.CreateBaseResponse(eventType, tool)
+	// Add OPA-specific data
+	env["policy"] = data["policy"]
+	env["metadata"] = map[string]interface{}{
+		"denied_licenses": data["denied_licenses"],
+	}
+
+	// Format the response using the common formatter
+	return builder.FormatEventResponse(eventType, env)
 }
