@@ -65,8 +65,11 @@ func (OPABuilder) Build(raw json.RawMessage, tool string) string {
 
 	// Create base response with consistent structure
 	env := builder.CreateBaseResponse(eventType, tool)
-	// Add OPA-specific data
-	env["policy"] = data["policy"]
+	// Add OPA-specific data with the new format
+	env["policy"] = map[string]interface{}{
+		"name":    "deny-list",
+		"content": data["policy"],
+	}
 	env["metadata"] = map[string]interface{}{
 		"denied_licenses": data["denied_licenses"],
 	}
