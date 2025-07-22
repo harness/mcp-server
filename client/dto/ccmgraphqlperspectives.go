@@ -44,7 +44,9 @@ const (
 	ValueTypeProduct          = "product"
 	ValueTypeCloudProvider    = "cloudProvider"
 	ValueTypeLabel            = "label"
+	ValueTypeLabelKey         = "label_key"
 	ValueTypeLabelV2          = "label_v2"
+	ValueTypeLabelV2Key       = "label_v2_key"
 )
 
 const (

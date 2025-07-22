@@ -96,6 +96,19 @@ var OutputKeyValueFields = []map[string]string{
 	},
 }
 
+var OutputKeyFields = []map[string]string{
+	{
+		"fieldId":        "labels.key",
+		"fieldName":      "",
+		"identifier":     "LABEL",
+	},
+	{
+		"fieldId":        "labels.key",
+		"fieldName":      "",
+		"identifier":     "LABEL_V2",
+	},
+}
+
 var DefaultGroupBy = []map[string]any{ 
 		{	
 			"entityGroupBy": map[string]any{
@@ -106,3 +119,5 @@ var DefaultGroupBy = []map[string]any{
 			},
 		},
 	}
+
+

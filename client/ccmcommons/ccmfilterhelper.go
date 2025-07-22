@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"github.com/harness/harness-mcp/client/dto"
+	"fmt"
 )
 
 func BuildFilters(viewId string ,timeFilters string, idFilters dto.CCMGraphQLFilters, keyValueFilters dto.CCMGraphQLKeyValueFilters) ([]map[string]any) {
@@ -42,6 +43,13 @@ func BuildFilterValues(options  *dto.CCMPerspectiveFilterValuesOptions) []map[st
 		filter := BuildKeyValueFieldFilters(buildFilterForKeyValue(options.ValueType, options.ValueSubType), OutputKeyValueFields)
 		filters = append(filters, filter...)
 	
+	} else if options.ValueType == dto.ValueTypeLabelKey || 
+		options.ValueType == dto.ValueTypeLabelV2Key {
+		filter, ok := BuildKeyFieldFilter(options.ValueType, BuildOutputFieldsMap())
+		if ok == nil {
+			filters = append(filters, filter...)
+		}
+		
 	} else {
 		filter := BuildFieldFilters(buildFilterForValue(options.ValueType), OutputFields)
 		filters = append(filters, filter...)
@@ -50,7 +58,7 @@ func BuildFilterValues(options  *dto.CCMPerspectiveFilterValuesOptions) []map[st
 }
 
 func buildFilterForValue(valueType string) dto.CCMGraphQLFilters {
-	return map[string][]string{valueType: []string{""}}
+	return map[string][]string{valueType: {""}}
 }
 
 func buildFilterForKeyValue(valueType string, valueSubtype string) dto.CCMGraphQLKeyValueFilters {
@@ -163,7 +171,6 @@ func GetTimeRangeFromFilter(filter string, now time.Time) (start, end time.Time)
 	return start, end
 }
 
-
 func BuildFieldFilters(input map[string][]string, output []map[string]string) []map[string]any {
 	return BuildFieldFiltersWithOperator(input, output, "IN")
 }
@@ -199,10 +206,7 @@ func BuildKeyValueFieldFilters(input dto.CCMGraphQLKeyValueFilters, output []map
 func BuildKeyValueFieldFiltersWithOperator(input dto.CCMGraphQLKeyValueFilters, output []map[string]string, operator string) []map[string]any {
 	result := make([]map[string]any, 0)
 	for fName, values := range input {
-		slog.Debug("PerspectiveGraphQL", "KV Field ID ", fName)
 		for _, out := range output {
-			slog.Debug("PerspectiveGraphQL", "KV Field ID OUT", out["fieldId"])
-			slog.Debug("PerspectiveGraphQL", "KV Field identifier OUT", out["identifier"])
 			if strings.EqualFold(fName, out["identifier"]) {
 				fieldName, ok := values["filterL1"].(string)
 				slog.Debug("PerspectiveGraphQL", "KV Field filterL1 OK", fieldName)
@@ -223,6 +227,34 @@ func BuildKeyValueFieldFiltersWithOperator(input dto.CCMGraphQLKeyValueFilters, 
 	}
 	slog.Debug("PerspectiveGraphQL", "KV Field ID filters", result)
 	return result
+}
+
+func BuildKeyFieldFilter(input string, output map[string]map[string]any) ([]map[string]any, error) {
+	return BuildKeyFieldFilterWithOperator(input, output, "LIKE")
+}
+
+func BuildKeyFieldFilterWithOperator(fieldKey string, output map[string]map[string]any, operator string) ([]map[string]any, error) {
+	result := make([]map[string]any, 0)
+	
+	fieldOut, ok := output[fieldKey]
+	if !ok {
+		return nil, fmt.Errorf("Field key not found when building filter %s", fieldKey)
+	}
+
+	out, ok := fieldOut["field"]
+	if !ok {
+		return nil, fmt.Errorf("Field 'field' key not found in object %s building filter.", fieldKey)
+	}
+	var idFilterMap = map[string]any{
+		"idFilter": map[string]any{
+			"values":  []string{""},
+			"operator": operator,
+			"field": out,
+		},
+	}
+	result = append(result, idFilterMap)
+	slog.Debug("PerspectiveGraphQL", "Key Field ID filters", result)
+	return result, nil
 }
 
 func BuildGroupBy(input map[string]any, outputFields []map[string]string, outputKeyValueFields []map[string]string) []map[string]any {
@@ -282,4 +314,36 @@ func GetFilterFieldByType(fieldType string) map[string]string {
 		}
 	}
 	return nil
+}
+
+func BuildOutputFieldsMap() map[string]map[string]any {
+	result := make(map[string]map[string]any)
+	// regular type from OutputFieldsList
+	for _, field := range OutputFields {
+		if id, ok := field["fieldId"]; ok {
+			result[id] = map[string]any{
+				"field": field,
+				"type":  "regular",
+			}
+		}
+	}
+	// keyValue type from OutputKeyValueFields
+	for _, field := range OutputKeyValueFields {
+		if id, ok := field["identifier"]; ok {
+			result[strings.ToLower(id)] = map[string]any{
+				"field": field,
+				"type":  "keyValue",
+			}
+		}
+	}
+	// key type from OutputKeyFields
+	for _, field := range OutputKeyFields {
+		if id, ok := field["identifier"]; ok {
+			result[strings.ToLower(id)+"_key"] = map[string]any{
+				"field": field,
+				"type":  "key",
+			}
+		}
+	}
+	return result
 }

@@ -79,6 +79,14 @@ var CCMFilterFields = []map[string]string{
 		"name":        "product",
 		"description": fmt.Sprintf("Filter results by product. %s", commonFilterDesc),
 	},
+	{
+		"name":        "label_key",
+		"description": fmt.Sprintf("Filter results by label. %s", commonFilterDesc),
+	},
+	{
+		"name":        "label_v2_key",
+		"description": fmt.Sprintf("Filter results by label v2. %s", commonFilterDesc),
+	},
 }
 
 var commonKvFilterDesc = `Values are provided in the format '{"filterL1": "value1", "filterL2": ["value2", "value3", ...]}', where 'filterL1' represents the selected `
@@ -103,4 +111,199 @@ var CCMKeyValueFilterFields = []map[string]string{
 	},
 }
 
+var OperatorsDescription = `
+	Operators used to filters values in the perspective	
 
+	**IN / NOT_IN**
+	These operators check whether a field’s value exists (or does not exist) within a provided list.
+
+	**IN** returns true if the value matches any in the list.
+
+	**NOT_IN** returns true if the value matches none of the list.
+	This is efficient for matching or excluding multiple specific values 
+
+	**EQUALS**
+	A simple equality check: returns true if the field equals the provided value exactly.
+
+	**NULL / NOT_NULL**
+	These handle missing or present values.
+
+	**NULL** checks if the field has no value.
+
+	**NOT_NULL** checks if the field contains any value.
+	Unlike standard comparisons, = NULL or != NULL don’t work correctly in SQL—you must use IS NULL or IS NOT NULL 
+
+	**LIKE**
+	Pattern matching using wildcards: % (any sequence of characters) or _ (single character).
+	Returns true if the field’s value matches the specified pattern. Conversely, NOT LIKE matches if it does not match the pattern
+	`
+
+
+var CreateConditionsInstructions = `
+To genere rules for filtering views in a cloud cost management system. Your output must be a JSON object matching the <CONDITIONS> format below, which will be transformed into a Go struct format described by the MCP Server.
+
+<CONDITIONS>
+{
+  "view_conditions": [
+    {
+      "view_field": {
+        "field_id": "<string>",
+        "field2_id": "<string>"
+      },
+      "view_operator": "<string>",
+      "values": ["<string>", ...]
+    }
+  ]
+}
+</CONDITIONS>
+
+Instructions:
+1. For each rule, create a condition object in the "view_conditions" array.
+2. For "view_field":
+<<VIEW_FIELD_INSTRUCTIONS>>
+3. For "view_operator",
+<<VIEW_OPERATOR_INSTRUCTIONS>>
+4. "values" is an array of strings to filter against.
+5. Ensure all required fields are present: "view_field", "view_operator", "values".
+6. The output must be valid JSON matching the <CONDITIONS> format.
+
+Use the provided field_id values and descriptions to select the correct field identifiers and values.`
+
+// var createConditionsInstructions = `
+// To genere rules for filtering views in a cloud cost management system. Your output must be a JSON object matching the <CONDITIONS> format below, which will be transformed into a Go struct format described by the MCP Server.
+
+// <CONDITIONS>
+// {
+//   "view_conditions": [
+//     {
+//       "view_field": {
+//         "field_id": "<string>",
+//         "field2_id": "<string>"
+//       },
+//       "view_operator": "<string>",
+//       "values": ["<string>", ...]
+//     }
+//   ]
+// }
+// </CONDITIONS>
+
+// Instructions:
+// 1. For each rule, create a condition object in the "view_conditions" array.
+// 2. For "view_field":
+//    - If "field_id" is "label", "label_v2", or "business_mapping", use one of these values for "field_id":
+//      - "label": for Label filters
+//      - "label_v2": for Label V2 filters
+//      - "business_mapping": for Cost Category filters
+//      Set "field2_id" to a value from the ccm_filter_values tool (field_type = 'label', 'label_v2', or 'business_mapping').
+//    - For other fields, use one of the following values for "field_id":
+//      - "region"
+//      - "awsUsageaccountid"
+//      - "awsServicecode"
+//      - "awsBillingEntity"
+//      - "awsInstancetype"
+//      - "awsLineItemType"
+//      - "awspayeraccountid"
+//      - "awsUsageType"
+//      - "cloudProvider"
+//      - "none"
+//      - "product"
+// 3. For "view_operator", use one of: IN, NOT_IN, EQUALS, NULL, NOT_NULL, LIKE.
+//    - IN/NOT_IN: checks if the field value is (not) in the provided list.
+//    - EQUALS: checks for exact match.
+//    - NULL/NOT_NULL: checks for missing/present value.
+//    - LIKE: pattern match using % or _ wildcards.
+// 4. "values" is an array of strings to filter against.
+// 5. Ensure all required fields are present: "view_field", "view_operator", "values".
+// 6. The output must be valid JSON matching the <FROM> format.
+
+// Use the provided field_id values and descriptions to select the correct field identifiers and values.`
+
+
+var ConditionFieldDescriptions = []map[string]string{
+	{
+		"fieldId":     "region",
+		"description": "Use this field to create a view filter rule to filter by cloud region.",
+	},
+	{
+		"fieldId":     "awsUsageaccountid",
+		"description": "Use this field to create a view filter rule to filter by AWS usage account ID.",
+	},
+	{
+		"fieldId":     "awsServicecode",
+		"description": "Use this field to create a view filter rule to filter by AWS service code.",
+	},
+	{
+		"fieldId":     "awsBillingEntity",
+		"description": "Use this field to create a view filter rule to filter by AWS billing entity.",
+	},
+	{
+		"fieldId":     "awsInstancetype",
+		"description": "Use this field to create a view filter rule to filter by AWS instance type.",
+	},
+	{
+		"fieldId":     "awsLineItemType",
+		"description": "Use this field to create a view filter rule to filter by AWS line item type.",
+	},
+	{
+		"fieldId":     "awspayeraccountid",
+		"description": "Use this field to create a view filter rule to filter by AWS payer account ID.",
+	},
+	{
+		"fieldId":     "awsUsageType",
+		"description": "Use this field to create a view filter rule to filter by AWS usage type.",
+	},
+	{
+		"fieldId":     "cloudprovider",
+		"description": "use this field to create a view filter rule to filter by cloud provider.",
+	},
+	{
+		"fieldId":     "none",
+		"description": "use this field to create a view filter rule with no filter or grouping applied.",
+	},
+	{
+		"fieldId":     "product",
+		"description": "use this field to create a view filter rule to filter by product.",
+	},
+}
+
+var labelDescription = `
+Use this field to create a view filter rule to filter by Label.
+Use the following Map format:
+{
+	"field1_id": "label",
+	"field2_id": Select a value from the list returned by the 'ccm_filter_values' tool with field_type set to 'label'
+}
+`
+
+var labelV2Description = `
+Use this field to create a view filter rule to filter by Label V2.
+Use the following Map format:
+{
+	"field1_id": "label_v2",
+	"field2_id": Select a value from the list returned by the 'ccm_filter_values' tool with field_type set to 'label_v2'
+}
+`
+var costCategoryDescription = `
+Use this field to create a view filter rule to filter by Cost Category.
+Use the following Map format:
+{
+	"field1_id": "business_mapping",
+	"field2_id": "Select a value from the 'uuid' field returned by the tool list_ccm_cost_categories_detail.",
+	"field3_id": Select the value from 'name' field corresonding to the 'uuid' field returned by the list_ccm_cost_categories_detail used in 'field_id'
+}
+`
+
+var ConditionKeyValueFieldDescriptions = []map[string]string{
+	{
+		"fieldId":     "label",
+		"description": labelDescription,
+	},
+	{
+		"fieldId":     "label_v2",
+		"description": labelV2Description, 
+	},
+	{
+		"fieldId":     "business_mapping",
+		"description": costCategoryDescription, 
+	},
+}

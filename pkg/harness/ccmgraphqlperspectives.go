@@ -375,7 +375,9 @@ func CcmPerspectiveFilterValuesTool(config *config.Config, client *client.CloudC
 		dto.ValueTypeProduct,
 		dto.ValueTypeCloudProvider,
 		dto.ValueTypeLabel,
+		dto.ValueTypeLabelKey,
 		dto.ValueTypeLabelV2,
+		dto.ValueTypeLabelV2Key,
 	}
 
 	var timeFilterValues = []string{
@@ -437,9 +439,6 @@ func CcmPerspectiveFilterValuesTool(config *config.Config, client *client.CloudC
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		limit := getLimit(request)
-		offset := getOffset(request)
-
 		timeFilter, err := OptionalParam[string](request, "time_filter")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -474,12 +473,12 @@ func CcmPerspectiveFilterValuesTool(config *config.Config, client *client.CloudC
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		
+
 		params := new(dto.CCMPerspectiveFilterValuesOptions)
 		params.AccountId = accountId
 		params.ViewId = viewId
-		params.Limit = limit
-		params.Offset = offset
+		params.Limit = getLimitWithDefault(request, 100)
+		params.Offset = getOffset(request)
 		params.TimeFilter = timeFilter
 		params.ValueType = valueType
 		params.ValueSubType = valueSubType
@@ -696,9 +695,14 @@ func commonGraphQLJSONSchema(extras map[string]any, removeFields []string) json.
 }
 
 func getLimit(request mcp.CallToolRequest) int32 {
+	return getLimitWithDefault(request, defaultLimit)
+}
+
+
+func getLimitWithDefault(request mcp.CallToolRequest, defaultValue int32) int32 {
 	limit, err := OptionalParam[int32](request, "limit")
 	if err != nil || limit == 0 {
-		limit = defaultLimit
+		limit = defaultValue
 	}
 	return limit
 }
@@ -706,8 +710,9 @@ func getLimit(request mcp.CallToolRequest) int32 {
 func getOffset(request mcp.CallToolRequest) int32 {
 	offset, err := OptionalParam[int32](request, "offset")
 
-	if err != nil || offset == 0 {
+	if err != nil {
 		offset = defaultOffset 
 	}
 	return offset
 }
+

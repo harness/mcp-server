@@ -12,6 +12,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/harness/harness-mcp/pkg/utils"
+	"github.com/harness/harness-mcp/pkg/ccmcommons"
 )
 
 func ListCcmPerspectivesDetailTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
@@ -572,14 +573,11 @@ func createPerspectiveHandler(config *config.Config, client *client.CloudCostMan
 	params.Body.ViewPreferences.AzureViewPreferences.CostType = viewPrefAzureViewPrefCostType
 
 
-	viewRules, err := OptionalParam[map[string]any](request, "rules")
+	viewRules, err := OptionalParam[map[string]any](request, "view_rules")
 	slog.Debug("pgk create", "viewConditions", viewRules) 
 	if viewRules != nil {
-		//params.Body.ViewRules = viewRules
+		params.Body.ViewRules = ccmcommons.AdaptToCCMViewRules(viewRules) 
 	}
-
-
-
 
 	params.Body.ViewType = viewType
 	params.Body.ViewState = viewState
@@ -643,4 +641,80 @@ func MapToViewRule(m map[string]any) (*[]dto.CCMViewRule, error) {
         return nil, err
     }
 	return rules, nil
+}
+
+func createPerspecvieRules() mcp.ToolOption {
+	// option_description := fmt.Sprintf(" field %s. The format for this field is: {\"field\": \"field_name\", \"value\": \"field_value\"}.",group_by_options),
+
+var fieldDescription = `
+A list of view rules that define the filtering logic for this Perspective. Each rule contains one or more view conditions specifying which data to include or exclude from the Perspective. These conditions allow filtering by dimensions such as Kubernetes clusters, cloud providers (AWS, GCP, Azure), business mappings, custom fields, and labels.
+
+Each viewCondition includes:
+
+The filter type (currently only ViewIdCondition is supported),
+
+A viewField specifying the dimension to filter on (e.g., cost category or resource type),
+
+An identifier defining the field source (e.g., "CLUSTER", "AWS", "LABEL_V2", etc.),
+
+An operator such as "IN", "EQUALS", or "LIKE",
+
+A list of values used in the condition.
+
+Use this field to define precise inclusion/exclusion logic for data shown in the Perspective.
+`
+
+   return mcp.WithArray(
+        "view_rules",
+        mcp.Description(fieldDescription),
+        mcp.Items(map[string]any{
+            "view_conditions": map[string]any{
+                "type":        "array",
+                "description": ccmcommons.GetConditionInstructions(), 
+                "items": map[string]any{
+                    "type": "object",
+                    "properties": map[string]any{
+                        "view_field": map[string]any{
+                            "type":        "object",
+                            "description": getFilterInstructions(), 
+                            "properties": map[string]any{
+                                "field_id":         map[string]any{"type": "string"},
+                                "field2_id":       map[string]any{"type": "string"},
+                            },
+                            "required": []string{"field_id"},
+                        },
+                        "view_operator": map[string]any{
+                            "type": "string",
+							"description": getOperatorsDescription(), 
+                            "enum": getSupportedOperators(), 
+                        },
+                        "values": map[string]any{
+                            "type":  "array",
+                            "items": map[string]any{"type": "string"},
+                        },
+                    },
+                    "required": []string{"type", "view_field", "view_operator", "values"},
+                },
+				},
+        }),
+    )
+}
+
+func getFilterInstructions() string {
+	return ccmcommons.GetFilterInstructions()
+}
+
+func getSupportedOperators() []string {
+	return ccmcommons.GetSupportedOperators()
+}
+
+func getConditionInstructions() string {
+	return ccmcommons.GetConditionInstructions()
+}
+
+func getOperatorsDescription() string {
+	return ccmcommons.OperatorsDescription
+}
+func GetOperatorsDescription() string {
+	return ccmcommons.OperatorsDescription
 }
