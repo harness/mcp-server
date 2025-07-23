@@ -573,10 +573,14 @@ func createPerspectiveHandler(config *config.Config, client *client.CloudCostMan
 	params.Body.ViewPreferences.AzureViewPreferences.CostType = viewPrefAzureViewPrefCostType
 
 
-	viewRules, err := OptionalParam[map[string]any](request, "view_rules")
+	viewRules, err := OptionalParam[[]map[string]any](request, "view_rules")
 	slog.Debug("pgk create", "viewConditions", viewRules) 
 	if viewRules != nil {
-		params.Body.ViewRules = ccmcommons.AdaptToCCMViewRules(viewRules) 
+		rules, ok := ccmcommons. AdaptViewRulesMap(viewRules) 
+		if ok != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		params.Body.ViewRules = rules
 	}
 
 	params.Body.ViewType = viewType
@@ -670,7 +674,7 @@ Use this field to define precise inclusion/exclusion logic for data shown in the
         mcp.Items(map[string]any{
             "view_conditions": map[string]any{
                 "type":        "array",
-                "description": ccmcommons.GetConditionInstructions(), 
+                "description": getConditionInstructions(), 
                 "items": map[string]any{
                     "type": "object",
                     "properties": map[string]any{

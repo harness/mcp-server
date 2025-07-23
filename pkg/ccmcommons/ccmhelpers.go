@@ -3,6 +3,7 @@ package ccmcommons
 import (
 	"strings"
 	"github.com/harness/harness-mcp/client/ccmcommons"
+	"github.com/harness/harness-mcp/client/dto"
 	"github.com/google/uuid"
 )
 
@@ -75,7 +76,7 @@ func GetSupportedOperators() []string {
 // buildFieldMetaMaps builds lookup maps for OutputFields
 func buildFieldMetaMaps() (map[string]map[string]string) {
 	fieldMetaMap := make(map[string]map[string]string)
-	for _, f := range OutputFields {
+	for _, f := range ccmcommons.OutputFields {
 		if id, ok := f["fieldId"]; ok {
 			fieldMetaMap[id] = f
 		}
@@ -86,7 +87,7 @@ func buildFieldMetaMaps() (map[string]map[string]string) {
 // buildFieldMetaMaps builds lookup maps for OutputKeyValueFields
 func buildKeyValueFieldMetaMaps() (map[string]map[string]string) {
 	keyValueMetaMap := make(map[string]map[string]string)
-	for _, f := range OutputKeyValueFields {
+	for _, f := range ccmcommons.OutputKeyValueFields {
 		if id, ok := f["fieldId"]; ok {
 			keyValueMetaMap[id] = f
 		}
@@ -96,16 +97,17 @@ func buildKeyValueFieldMetaMaps() (map[string]map[string]string) {
 
 // AdaptViewRulesMap converts an array of rule maps (each with conditions) to []*CCMViewRule.
 // Uses OutputFields and OutputKeyValueFields for field metadata.
-func AdaptViewRulesMap(input []map[string]any) ([]*CCMViewRule, error) {
-	fieldMetaMap, keyValueMetaMap := buildFieldMetaMaps()
+func AdaptViewRulesMap(input []map[string]any) ([]dto.CCMViewRule, error) {
+	fieldMetaMap := buildFieldMetaMaps() 
+	keyValueMetaMap := buildKeyValueFieldMetaMaps()
 
-	var rules []*CCMViewRule
+	var rules []dto.CCMViewRule
 	for _, ruleMap := range input {
 		conditionsIface, ok := ruleMap["conditions"].([]any)
 		if !ok {
 			continue
 		}
-		var rule CCMViewRule
+		var rule dto.CCMViewRule
 		for _, condIface := range conditionsIface {
 			cond, ok := condIface.(map[string]any)
 			if !ok {
@@ -116,7 +118,7 @@ func AdaptViewRulesMap(input []map[string]any) ([]*CCMViewRule, error) {
 			valuesIface, _ := cond["values"].([]string)
 			var values []string
 			for _, v := range valuesIface {
-				values = append(values, s)
+				values = append(values, v)
 			}
 
 			var fieldMeta map[string]string
@@ -130,11 +132,11 @@ func AdaptViewRulesMap(input []map[string]any) ([]*CCMViewRule, error) {
 				continue	
 			}
 
-			rule.ViewConditions = append(rule.ViewConditions, CCMViewCondition{
+			rule.ViewConditions = append(rule.ViewConditions, dto.CCMViewCondition{
 				Type:         uuid.New().String(),
 				ViewOperator: operator,
 				Values:       values,
-				ViewField: CCMViewField{
+				ViewField: dto.CCMViewField{
 					FieldId:        fieldMeta["fieldId"],
 					FieldName:      fieldMeta["fieldName"],
 					Identifier:     fieldMeta["identifier"],
@@ -142,7 +144,7 @@ func AdaptViewRulesMap(input []map[string]any) ([]*CCMViewRule, error) {
 				},
 			})
 		}
-		rules = append(rules, &rule)
+		rules = append(rules, rule)
 	}
 	return rules, nil
 }

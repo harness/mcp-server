@@ -40,9 +40,12 @@ func BuildFilterValues(options  *dto.CCMPerspectiveFilterValuesOptions) []map[st
 	if options.ValueType == dto.ValueTypeCostCategory || 
 		options.ValueType == dto.ValueTypeLabel || 
 		options.ValueType == dto.ValueTypeLabelV2 {
-		filter := BuildKeyValueFieldFilters(buildFilterForKeyValue(options.ValueType, options.ValueSubType), OutputKeyValueFields)
-		filters = append(filters, filter...)
-	
+
+		filter, ok := BuildKeyValueFieldFilter(options.ValueType, options.ValueSubType, BuildOutputFieldsMap())
+		if ok == nil {
+			slog.Debug("PerspectiveGraphQL", "Adding filter KV", filter)
+			filters = append(filters, filter...)
+		}
 	} else if options.ValueType == dto.ValueTypeLabelKey || 
 		options.ValueType == dto.ValueTypeLabelV2Key {
 		filter, ok := BuildKeyFieldFilter(options.ValueType, BuildOutputFieldsMap())
@@ -71,7 +74,7 @@ func buildFilterForKeyValue(valueType string, valueSubtype string) dto.CCMGraphQ
 	return map[string]map[string]any{
 		filterType: {
 			"filterL1": valueSubtype, 
-			"filterL2": []string{""},
+			"filterL2": filterType,
 		},
 	}
 }
@@ -205,6 +208,7 @@ func BuildKeyValueFieldFilters(input dto.CCMGraphQLKeyValueFilters, output []map
 
 func BuildKeyValueFieldFiltersWithOperator(input dto.CCMGraphQLKeyValueFilters, output []map[string]string, operator string) []map[string]any {
 	result := make([]map[string]any, 0)
+	slog.Debug("PerspectiveGraphQL", "KV Input", input)
 	for fName, values := range input {
 		for _, out := range output {
 			if strings.EqualFold(fName, out["identifier"]) {
@@ -245,6 +249,40 @@ func BuildKeyFieldFilterWithOperator(fieldKey string, output map[string]map[stri
 	if !ok {
 		return nil, fmt.Errorf("Field 'field' key not found in object %s building filter.", fieldKey)
 	}
+	var idFilterMap = map[string]any{
+		"idFilter": map[string]any{
+			"values":  []string{""},
+			"operator": operator,
+			"field": out,
+		},
+	}
+	result = append(result, idFilterMap)
+	slog.Debug("PerspectiveGraphQL", "Key Field ID filters", result)
+	return result, nil
+}
+
+func BuildKeyValueFieldFilter(fieldKey string, fieldSubKey string, output map[string]map[string]any) ([]map[string]any, error) {
+	return BuildKeyValueFieldFilterWithOperator(fieldKey, fieldSubKey, output, "LIKE")
+}
+
+func BuildKeyValueFieldFilterWithOperator(fieldKey string, fieldSubKey string, output map[string]map[string]any, operator string) ([]map[string]any, error) {
+	result := make([]map[string]any, 0)
+	
+	slog.Debug("PerspectiveGraphQL", "BuildKeyValueFieldFilterWithOperator", fieldKey, fieldSubKey, "")
+	fieldOut, ok := output[fieldKey]
+
+	slog.Debug("BuildKeyValueFieldFilterWithOperator", "fieldOut", fieldOut)
+
+	if !ok {
+		return nil, fmt.Errorf("Field key not found when building filter %s", fieldKey)
+	}
+
+	out, ok := fieldOut["field"].(map[string]string)
+
+	if !ok {
+		return nil, fmt.Errorf("Field 'field' key not found in object %s building filter.", fieldKey)
+	}
+	out["fieldName"] = fieldSubKey
 	var idFilterMap = map[string]any{
 		"idFilter": map[string]any{
 			"values":  []string{""},
