@@ -9,7 +9,7 @@ import (
 	"github.com/harness/harness-mcp/client/sto/generated"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/appseccommons"
-	builder "github.com/harness/harness-mcp/pkg/harness/event/scs"
+	builder "github.com/harness/harness-mcp/pkg/harness/event/common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
