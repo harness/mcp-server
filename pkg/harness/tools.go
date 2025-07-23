@@ -319,7 +319,6 @@ func registerSTO(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 			return err
 		}
 		req.Header.Set(k, v)
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", config.BearerToken))
 		return nil
 	}
 
