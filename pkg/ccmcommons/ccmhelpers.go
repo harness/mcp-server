@@ -1,10 +1,8 @@
 package ccmcommons
 
 import (
-	"log/slog"
 	"strings"
 	"fmt"
-	"reflect"
 	"github.com/harness/harness-mcp/client/ccmcommons"
 	"github.com/harness/harness-mcp/client/dto"
 )
@@ -102,7 +100,6 @@ func GetSupportedOperators() []string {
 func AdaptViewRulesMap(input []any) ([]dto.CCMViewRule, error) {
 	fieldMap := ccmcommons.BuildOutputFieldsMap()
 
-	slog.Debug("AdaptViewRulesMap", "input", input)
 	var rules []dto.CCMViewRule
 	for _, ruleMap := range input {
 		ruleMapTyped, ok := ruleMap.(map[string]any)
@@ -139,9 +136,6 @@ func AdaptViewRulesMap(input []any) ([]dto.CCMViewRule, error) {
 				return nil, fmt.Errorf("Missing field 'view_operator' when adapting perspecive rules for field %s", fieldId)
 			}
 
-			slog.Debug("AdaptViewRulesMap", "condition", cond)
-			slog.Debug("AdaptViewRulesMap", "values", cond["values"])
-			slog.Debug("AdaptViewRulesMap", "values type", reflect.TypeOf(cond["values"]))
 			valuesIface, ok := cond["values"].([]any)
 			if !ok {
 				return nil, fmt.Errorf("Missing field 'values' when adapting perspecive rules for field %s", fieldId)

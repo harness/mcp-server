@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"strings"
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
@@ -578,12 +577,10 @@ func createPerspectiveHandler(config *config.Config, client *client.CloudCostMan
 	params.Body.ViewPreferences.AzureViewPreferences.CostType = viewPrefAzureViewPrefCostType
 
 	viewRules, err := OptionalAnyArrayParam(request, "view_rules")
-	slog.Debug("pgk create", "viewRules ERROR", err)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	slog.Debug("pgk create", "viewConditions", viewRules) 
 	if viewRules != nil {
 		rules, err := ccmcommons. AdaptViewRulesMap(viewRules) 
 		if err != nil {
@@ -644,13 +641,11 @@ func getSupportedFieldId() string {
 func MapToViewRule(m map[string]any) (*[]dto.CCMViewRule, error) {
     b, err := json.Marshal(m)
     if err != nil {
-		slog.Debug("MapToViewRule", "rules", err) 
         return nil, err
     }
 	rules := new([]dto.CCMViewRule)
     err = json.Unmarshal(b, rules)
     if err != nil {
-		slog.Debug("MapToViewRule", "rules", err) 
         return nil, err
     }
 	return rules, nil
