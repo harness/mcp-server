@@ -37,19 +37,3 @@ func FormatEventResponse(eventType string, responseData map[string]interface{}) 
 	}
 	return string(out)
 }
-
-// CreateBaseResponse creates a base response with consistent entity info and event type
-func CreateBaseResponse(eventType string, tool string) map[string]interface{} {
-	return map[string]interface{}{
-		"entity_info": map[string]string{
-			"entity_type": tool,
-		},
-		"type": eventType,
-	}
-}
-
-// FormatEventResponse formats a response map into a consistent event format
-func FormatEventResponse(eventType string, responseData map[string]interface{}) string {
-	out, _ := json.MarshalIndent(responseData, "", "  ")
-	return fmt.Sprintf("event: %s\n%s", eventType, string(out))
-}
