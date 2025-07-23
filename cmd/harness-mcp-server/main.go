@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/harness/harness-mcp/pkg/harness/tools"
 	"io"
 	"log"
 	"log/slog"
@@ -78,6 +79,7 @@ var (
 				Toolsets:         toolsets,
 				LogFilePath:      viper.GetString("log_file"),
 				Debug:            viper.GetBool("debug"),
+				EnabledModules:   harness.EnabledModules,
 			}
 
 			if err := runStdioServer(ctx, cfg); err != nil {
@@ -124,13 +126,14 @@ var (
 
 			cfg := config.Config{
 				// Common fields
-				Version:     version,
-				ReadOnly:    true, // we keep it read-only for now
-				Toolsets:    toolsets,
-				LogFilePath: viper.GetString("log_file"),
-				Debug:       viper.GetBool("debug"),
-				Internal:    true,
-				AccountID:   session.Principal.AccountID,
+				Version:        version,
+				ReadOnly:       true, // we keep it read-only for now
+				Toolsets:       toolsets,
+				EnabledModules: harness.EnabledModules,
+				LogFilePath:    viper.GetString("log_file"),
+				Debug:          viper.GetBool("debug"),
+				Internal:       true,
+				AccountID:      session.Principal.AccountID,
 				// Internal mode specific fields
 				BearerToken:             viper.GetString("bearer_token"),
 				PipelineSvcBaseURL:      viper.GetString("pipeline_svc_base_url"),
@@ -336,7 +339,7 @@ func runStdioServer(ctx context.Context, config config.Config) error {
 
 	// Create server
 	// WithRecovery makes sure panics are logged and don't crash the server
-	harnessServer := harness.NewServer(version, server.WithHooks(hooks), server.WithRecovery())
+	harnessServer := tools.NewServer(version, server.WithHooks(hooks), server.WithRecovery())
 
 	// Initialize toolsets
 	toolsets, err := harness.InitToolsets(&config)
@@ -348,7 +351,7 @@ func runStdioServer(ctx context.Context, config config.Config) error {
 	toolsets.RegisterTools(harnessServer)
 
 	// Set the guidelines prompts
-	harness.RegisterPrompts(harnessServer)
+	tools.RegisterPrompts(harnessServer)
 
 	// Create stdio server
 	stdioServer := server.NewStdioServer(harnessServer)

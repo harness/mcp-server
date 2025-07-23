@@ -2,11 +2,12 @@ package config
 
 type Config struct {
 	// Common fields for both modes
-	Version     string
-	ReadOnly    bool
-	Toolsets    []string
-	LogFilePath string
-	Debug       bool
+	Version        string
+	ReadOnly       bool
+	Toolsets       []string
+	EnabledModules []string
+	LogFilePath    string
+	Debug          bool
 
 	Internal bool
 
