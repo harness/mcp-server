@@ -298,7 +298,6 @@ func GetLastTwelveMonthsCostCcmPerspectiveTool(config *config.Config, client *cl
 		}
 	}
 
-
 // Create perspective
 func CreateCcmPerspectiveTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return createPerspectiveTool(config, client), 
@@ -313,6 +312,7 @@ func createPerspectiveTool(config *config.Config, client *client.CloudCostManage
 			mcp.WithDescription("Get the last twelve months cost for a perspective in Harness Cloud Cost Management"),
 			mcp.WithString("account_id",
 				mcp.Description("The account identifier owner of the perspective"),
+				mcp.DefaultString("Z60xsRGoTeqOoAFRCsmlBQ"), // REMOVEEE, just for testing!!!
 			),
 			mcp.WithString("clone",
 				mcp.DefaultBool(false),
@@ -327,15 +327,18 @@ func createPerspectiveTool(config *config.Config, client *client.CloudCostManage
 				mcp.Description("Required perspective name"),
 			),
 			mcp.WithString("folder_id",
+				mcp.DefaultString("rO1Spt18TXGQEw9eS9CLYg"), // REMOVEEE, just for testing!!!
 				mcp.Description("Idenfifier for the containing folder of the perspective"),
 			),
 			mcp.WithString("view_version",
 				mcp.Required(),
+				mcp.DefaultString("1"),
 				mcp.Description("Required. Version of the view"),
 			),
 			mcp.WithString("view_time_range_type",
 				mcp.Required(),
 				mcp.Enum(dto.TimeRangeTypeLast7Days, dto.TimeRangeTypeLast30Days, dto.TimeRangeTypeLastMonth, dto.TimeRangeTypeCurrentMonth, dto.TimeRangeTypeCustom),
+				mcp.DefaultString(dto.TimeRangeTypeLast7Days),
 				mcp.Description("Containing folder identifier of the perspective"),
 			),
 			mcp.WithString("view_time_range_start",
@@ -379,6 +382,7 @@ func createPerspectiveTool(config *config.Config, client *client.CloudCostManage
 			mcp.WithString("view_pref_aws_pref_aws_cost",
 				mcp.Enum(dto.AwsCostUnblended, dto.AwsCostBlended),
 				mcp.Description(fmt.Sprintf("How to show AWS cost (%s, %s)", dto.AwsCostUnblended, dto.AwsCostBlended)),
+				mcp.DefaultString(dto.AwsCostUnblended),
 			),
 			mcp.WithBoolean("view_pref_gcp_pref_include_discounts",
 				mcp.DefaultBool(false),
@@ -395,7 +399,7 @@ func createPerspectiveTool(config *config.Config, client *client.CloudCostManage
 			mcp.WithString("view_type",
 				mcp.Required(),
 				mcp.Description(fmt.Sprintf("View type (%s, %s, %s)", dto.ViewTypeSample, dto.ViewTypeCustomer, dto.ViewTypeDefault)),
-				mcp.Description("Type of view"),
+				mcp.DefaultString(dto.ViewTypeDefault),
 			),
 			mcp.WithString("view_state",
 				mcp.Required(),
@@ -403,6 +407,7 @@ func createPerspectiveTool(config *config.Config, client *client.CloudCostManage
 				mcp.Enum(dto.ViewStateDraft, dto.ViewStateCompleted),
 				mcp.Description("State of view. Set to completed if it is not provided."),
 			),
+			createPerspectiveRules(),
 		)
 }
 
@@ -572,12 +577,16 @@ func createPerspectiveHandler(config *config.Config, client *client.CloudCostMan
 	params.Body.ViewPreferences.GcpPreferences.IncludeTaxes = viewPrefGcpPrefIncludeTaxes
 	params.Body.ViewPreferences.AzureViewPreferences.CostType = viewPrefAzureViewPrefCostType
 
+	viewRules, err := OptionalAnyArrayParam(request, "view_rules")
+	slog.Debug("pgk create", "viewRules ERROR", err)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
 
-	viewRules, err := OptionalParam[[]map[string]any](request, "view_rules")
 	slog.Debug("pgk create", "viewConditions", viewRules) 
 	if viewRules != nil {
-		rules, ok := ccmcommons. AdaptViewRulesMap(viewRules) 
-		if ok != nil {
+		rules, err := ccmcommons. AdaptViewRulesMap(viewRules) 
+		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		params.Body.ViewRules = rules
@@ -647,7 +656,7 @@ func MapToViewRule(m map[string]any) (*[]dto.CCMViewRule, error) {
 	return rules, nil
 }
 
-func createPerspecvieRules() mcp.ToolOption {
+func createPerspectiveRules() mcp.ToolOption {
 	// option_description := fmt.Sprintf(" field %s. The format for this field is: {\"field\": \"field_name\", \"value\": \"field_value\"}.",group_by_options),
 
 var fieldDescription = `
@@ -682,10 +691,11 @@ Use this field to define precise inclusion/exclusion logic for data shown in the
                             "type":        "object",
                             "description": getFilterInstructions(), 
                             "properties": map[string]any{
-                                "field_id":         map[string]any{"type": "string"},
+                                "field1_id":         map[string]any{"type": "string"},
                                 "field2_id":       map[string]any{"type": "string"},
+                                "field3_id":       map[string]any{"type": "string"},
                             },
-                            "required": []string{"field_id"},
+                            "required": []string{"field1_id"},
                         },
                         "view_operator": map[string]any{
                             "type": "string",

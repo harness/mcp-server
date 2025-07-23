@@ -169,56 +169,6 @@ Instructions:
 
 Use the provided field_id values and descriptions to select the correct field identifiers and values.`
 
-// var createConditionsInstructions = `
-// To genere rules for filtering views in a cloud cost management system. Your output must be a JSON object matching the <CONDITIONS> format below, which will be transformed into a Go struct format described by the MCP Server.
-
-// <CONDITIONS>
-// {
-//   "view_conditions": [
-//     {
-//       "view_field": {
-//         "field_id": "<string>",
-//         "field2_id": "<string>"
-//       },
-//       "view_operator": "<string>",
-//       "values": ["<string>", ...]
-//     }
-//   ]
-// }
-// </CONDITIONS>
-
-// Instructions:
-// 1. For each rule, create a condition object in the "view_conditions" array.
-// 2. For "view_field":
-//    - If "field_id" is "label", "label_v2", or "business_mapping", use one of these values for "field_id":
-//      - "label": for Label filters
-//      - "label_v2": for Label V2 filters
-//      - "business_mapping": for Cost Category filters
-//      Set "field2_id" to a value from the ccm_filter_values tool (field_type = 'label', 'label_v2', or 'business_mapping').
-//    - For other fields, use one of the following values for "field_id":
-//      - "region"
-//      - "awsUsageaccountid"
-//      - "awsServicecode"
-//      - "awsBillingEntity"
-//      - "awsInstancetype"
-//      - "awsLineItemType"
-//      - "awspayeraccountid"
-//      - "awsUsageType"
-//      - "cloudProvider"
-//      - "none"
-//      - "product"
-// 3. For "view_operator", use one of: IN, NOT_IN, EQUALS, NULL, NOT_NULL, LIKE.
-//    - IN/NOT_IN: checks if the field value is (not) in the provided list.
-//    - EQUALS: checks for exact match.
-//    - NULL/NOT_NULL: checks for missing/present value.
-//    - LIKE: pattern match using % or _ wildcards.
-// 4. "values" is an array of strings to filter against.
-// 5. Ensure all required fields are present: "view_field", "view_operator", "values".
-// 6. The output must be valid JSON matching the <FROM> format.
-
-// Use the provided field_id values and descriptions to select the correct field identifiers and values.`
-
-
 var ConditionFieldDescriptions = []map[string]string{
 	{
 		"fieldId":     "region",
