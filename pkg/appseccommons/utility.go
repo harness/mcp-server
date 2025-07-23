@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"log/slog"
 
-	builder "github.com/harness/harness-mcp/pkg/harness/event/scs"
+	builder "github.com/harness/harness-mcp/pkg/harness/event/common"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
+// NewToolResultTextWithPrompts creates a new CallToolResult with a text content and optional prompts
 func NewToolResultTextWithPrompts(eventType string, event string, prompts []string) *mcp.CallToolResult {
 	// Create the base content with the text
 	contents := []mcp.Content{
@@ -19,16 +20,17 @@ func NewToolResultTextWithPrompts(eventType string, event string, prompts []stri
 
 	// Only add prompts resource if prompts are provided
 	if len(prompts) > 0 {
-		data, err := json.Marshal(prompts)
+		// Use the PromptBuilder to format the prompts
+		promptData, err := json.Marshal(prompts)
 		if err != nil {
 			slog.Error("Failed to marshal prompts", "error", err)
-			data = []byte("[]")
+			promptData = []byte("[]")
 		}
 
-		contents = append(contents, mcp.NewEmbeddedResource(mcp.TextResourceContents{
-			URI:  "followup://prompts",
-			Text: string(data),
-		}))
+		contents = append(contents, mcp.TextContent{
+			Type: "text",
+			Text: builder.Reg.Build(string(builder.PromptEvent), promptData, "scs_result"),
+		})
 	}
 
 	return &mcp.CallToolResult{
