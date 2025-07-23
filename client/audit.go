@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/harness/harness-mcp/client/dto"
 )
@@ -16,7 +17,7 @@ type AuditService struct {
 }
 
 // ListUserAuditTrail fetches the audit trail.
-func (a *AuditService) ListUserAuditTrail(ctx context.Context, scope dto.Scope, userID string, page int, size int, startTime int64, endTime int64, opts *dto.ListAuditEventsFilter) (*dto.AuditOutput[dto.AuditListItem], error) {
+func (a *AuditService) ListUserAuditTrail(ctx context.Context, scope dto.Scope, userIDList string, actionsList string, page int, size int, startTime int64, endTime int64, opts *dto.ListAuditEventsFilter) (*dto.AuditOutput[dto.AuditListItem], error) {
 	if opts == nil {
 		opts = &dto.ListAuditEventsFilter{}
 	}
@@ -28,12 +29,47 @@ func (a *AuditService) ListUserAuditTrail(ctx context.Context, scope dto.Scope, 
 
 	addScope(scope, params)
 
-	// Required fields
 	opts.FilterType = "Audit"
-	opts.Principals = []dto.AuditPrincipal{{
-		Type:       "USER",
-		Identifier: userID,
-	}}
+	if strings.TrimSpace(userIDList) != "" {
+		rawIDs := strings.Split(userIDList, ",")
+		userIDs := make([]string, 0)
+		for _, id := range rawIDs {
+			id = strings.TrimSpace(id)
+			if id != "" {
+				userIDs = append(userIDs, id)
+			}
+		}
+
+		if len(userIDs) > 0 {
+			principals := make([]dto.AuditPrincipal, 0, len(userIDs))
+			for _, uid := range userIDs {
+				principals = append(principals, dto.AuditPrincipal{
+					Type:       "USER",
+					Identifier: uid,
+				})
+			}
+			opts.Principals = principals
+		}
+	}
+
+	if strings.TrimSpace(actionsList) != "" {
+		rawActions := strings.Split(actionsList, ",")
+		actions := make([]string, 0)
+		for _, action := range rawActions {
+			action = strings.ToUpper(strings.TrimSpace(action))
+			if action != "" {
+				if _, ok := dto.AllowedActions[action]; ok {
+					actions = append(actions, action)
+				} else {
+					return nil, fmt.Errorf("Invalid action: %s\n", action)
+				}
+			}
+		}
+
+		if len(actions) > 0 {
+			opts.Actions = actions
+		}
+	}
 
 	opts.Scopes = []dto.AuditResourceScope{{
 		AccountIdentifier: scope.AccountID,

@@ -9,6 +9,8 @@ import (
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/ar"
+	"github.com/harness/harness-mcp/client/dbops"
+	"github.com/harness/harness-mcp/client/dbops/generated"
 	scs "github.com/harness/harness-mcp/client/scs/generated"
 	sto "github.com/harness/harness-mcp/client/sto/generated"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
@@ -17,7 +19,7 @@ import (
 )
 
 // Default tools to enable
-var DefaultTools = []string{"all"}
+var DefaultTools = []string{}
 
 // Service identity for JWT auth
 const serviceIdentity = "genaiservice" // TODO: can change once we have our own service, not needed at the moment
@@ -29,10 +31,68 @@ var defaultJWTLifetime = 1 * time.Hour
 // Default timeout for GenAI service
 const defaultGenaiTimeout = 300 * time.Second
 
+// createServiceClient is a helper function to create a service client with the given parameters
+func createServiceClient(config *config.Config, serviceBaseURL, baseURL, path, secret string, timeouts ...time.Duration) (*client.Client, error) {
+	url := buildServiceURL(config, serviceBaseURL, baseURL, path)
+	return createClient(url, config, secret, timeouts...)
+}
+
+// registerDefault registers the default toolset with essential tools from various services
+func registerDefault(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Create pipeline service client
+	pipelineClient, err := createServiceClient(config, config.PipelineSvcBaseURL, config.BaseURL, "pipeline", config.PipelineSvcSecret)
+	if err != nil {
+		return fmt.Errorf("failed to create client for pipeline service: %w", err)
+	}
+	pipelineServiceClient := &client.PipelineService{Client: pipelineClient}
+
+	// Create connector service client
+	connectorClient, err := createServiceClient(config, config.NgManagerBaseURL, config.BaseURL, "ng/api", config.NgManagerSecret)
+	if err != nil {
+		return fmt.Errorf("failed to create client for connectors: %w", err)
+	}
+	connectorServiceClient := &client.ConnectorService{Client: connectorClient}
+
+	// Create dashboard service client
+	customTimeout := 30 * time.Second
+	dashboardClient, err := createServiceClient(config, config.DashboardSvcBaseURL, config.BaseURL, "dashboard", config.DashboardSvcSecret, customTimeout)
+	if err != nil {
+		return fmt.Errorf("failed to create client for dashboard service: %w", err)
+	}
+	dashboardServiceClient := &client.DashboardService{Client: dashboardClient}
+
+	// Create the default toolset with essential tools
+	defaultToolset := toolsets.NewToolset("default", "Default essential Harness tools").AddReadTools(
+		// Connector Management tools
+		toolsets.NewServerTool(GetConnectorDetailsTool(config, connectorServiceClient)),
+		toolsets.NewServerTool(ListConnectorCatalogueTool(config, connectorServiceClient)),
+
+		// Pipeline Management tools
+		toolsets.NewServerTool(ListPipelinesTool(config, pipelineServiceClient)),
+		toolsets.NewServerTool(GetPipelineTool(config, pipelineServiceClient)),
+		toolsets.NewServerTool(FetchExecutionURLTool(config, pipelineServiceClient)),
+		toolsets.NewServerTool(GetExecutionTool(config, pipelineServiceClient)),
+		toolsets.NewServerTool(ListExecutionsTool(config, pipelineServiceClient)),
+
+		// Dashboard tools
+		toolsets.NewServerTool(ListDashboardsTool(config, dashboardServiceClient)),
+		toolsets.NewServerTool(GetDashboardDataTool(config, dashboardServiceClient)),
+	)
+
+	// Add the default toolset to the group
+	tsg.AddToolset(defaultToolset)
+	return nil
+}
+
 // InitToolsets initializes and returns the toolset groups
 func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 	// Create a toolset group
 	tsg := toolsets.NewToolsetGroup(config.ReadOnly)
+
+	// Register default toolset with essential tools
+	if err := registerDefault(config, tsg); err != nil {
+		return nil, err
+	}
 
 	// Register pipelines
 	if err := registerPipelines(config, tsg); err != nil {
@@ -115,6 +175,14 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 	}
 
 	if err := registerAudit(config, tsg); err != nil {
+		return nil, err
+	}
+
+	if err := registerDbops(config, tsg); err != nil {
+		return nil, err
+	}
+
+	if err := registerAccessControl(config, tsg); err != nil {
 		return nil, err
 	}
 
@@ -405,17 +473,25 @@ func registerChatbot(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	return nil
 }
 
-// registerConnectors registers the connectors toolset
-func registerConnectors(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+// createConnectorClient creates and returns a connector client
+func createConnectorClient(config *config.Config) (*client.ConnectorService, error) {
 	baseURL := buildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng/api")
 	secret := config.NgManagerSecret
 
 	c, err := createClient(baseURL, config, secret)
 	if err != nil {
-		return fmt.Errorf("failed to create client for connectors: %w", err)
+		return nil, fmt.Errorf("failed to create client for connectors: %w", err)
 	}
 
-	connectorService := &client.ConnectorService{Client: c}
+	return &client.ConnectorService{Client: c}, nil
+}
+
+// registerConnectors registers the connectors toolset
+func registerConnectors(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	connectorService, err := createConnectorClient(config)
+	if err != nil {
+		return err
+	}
 
 	// Create the connectors toolset
 	connectors := toolsets.NewToolset("connectors", "Harness Connector related tools").
@@ -585,6 +661,7 @@ func registerCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGro
 			toolsets.NewServerTool(CcmPerspectiveRecommendationsTool(config, ccmClient)),
 			toolsets.NewServerTool(CcmPerspectiveFilterValuesTool(config, ccmClient)),
 			toolsets.NewServerTool(FetchCommitmentCoverageTool(config, ccmClient)),
+			toolsets.NewServerTool(FetchCommitmentSavingsTool(config, ccmClient)),
 		)
 
 	// Add toolset to the group
@@ -594,6 +671,7 @@ func registerCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGro
 
 // registerGenai registers the genai toolset
 func registerGenai(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+
 	// Skip registration for external mode for now
 	if !config.Internal {
 		return nil
@@ -780,5 +858,93 @@ func registerAudit(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 	// Add toolset to the group
 	tsg.AddToolset(audit)
+	return nil
+}
+
+// registerDbops registers the database operations toolset
+func registerDbops(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Determine the base URL and secret for dbops service
+	baseURL := buildServiceURL(config, config.DBOpsSvcBaseURL, config.BaseURL, "dbops")
+	secret := config.DBOpsSvcSecret
+
+	// Create base client for dbops
+	c, err := createClient(baseURL, config, secret)
+	if err != nil {
+		return fmt.Errorf("failed to create client for dbops: %w", err)
+	}
+
+	// Create the generated client for dbops
+	requestEditorFn := func(ctx context.Context, req *http.Request) error {
+		if c.AuthProvider == nil {
+			return fmt.Errorf("auth provider is not initialized")
+		}
+		k, v, err := c.AuthProvider.GetHeader(ctx)
+		if err != nil {
+			return err
+		}
+		req.Header.Set(k, v)
+		return nil
+	}
+
+	dbopsGenClient, err := generated.NewClientWithResponses(baseURL, generated.WithRequestEditorFn(requestEditorFn))
+	if err != nil {
+		return err
+	}
+
+	// Create connector client for JDBC connector operations
+	connectorClient, err := createConnectorClient(config)
+	if err != nil {
+		return err
+	}
+
+	// Create the dbops client
+	dbopsClient := dbops.NewClient(dbopsGenClient, connectorClient)
+
+	// Create the dbops toolset
+	dbopsToolset := toolsets.NewToolset("dbops", "Database operations related tools").
+		AddReadTools(
+			toolsets.NewServerTool(GetDatabaseInfoTool(config, dbopsClient)),
+		)
+
+	// Add toolset to the group
+	tsg.AddToolset(dbopsToolset)
+	return nil
+}
+
+func registerAccessControl(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Determine the base URL and secret for access control service
+	baseURLRBAC := buildServiceURL(config, config.RBACSvcBaseURL, config.BaseURL, "authz")
+	secret := config.RBACSvcSecret
+
+	baseURLPrincipal := buildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng/api")
+	principalSecret := config.NgManagerSecret
+
+	c, err := createClient(baseURLRBAC, config, secret)
+	if err != nil {
+		return err
+	}
+
+	principalC, err := createClient(baseURLPrincipal, config, principalSecret)
+	if err != nil {
+		return err
+	}
+
+	rbacClient := &client.RBACService{Client: c}
+	principalClient := &client.PrincipalService{Client: principalC}
+
+	accessControl := toolsets.NewToolset("access_control", "Access control related tools").
+		AddReadTools(
+			toolsets.NewServerTool(ListAvailableRolesTool(config, rbacClient)),
+			toolsets.NewServerTool(ListAvailablePermissions(config, rbacClient)),
+			toolsets.NewServerTool(ListRoleAssignmentsTool(config, rbacClient)),
+			toolsets.NewServerTool(GetUserInfoTool(config, principalClient)),
+			toolsets.NewServerTool(GetUserGroupInfoTool(config, principalClient)),
+			toolsets.NewServerTool(GetServiceAccountTool(config, principalClient)),
+			toolsets.NewServerTool(GetAllUsersTool(config, principalClient)),
+			toolsets.NewServerTool(GetRoleInfoTool(config, rbacClient)),
+		)
+
+	// Add toolset to the group
+	tsg.AddToolset(accessControl)
 	return nil
 }

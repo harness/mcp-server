@@ -216,7 +216,6 @@ query PerspectiveRecommendations($filter: RecommendationFilterDTOInput) {
 	}
 }
 `
-
 const CCMFetchPerspectiveFiltersValueQuery = `
 query FetchPerspectiveFiltersValue(
 	$filters: [QLCEViewFilterWrapperInput], 

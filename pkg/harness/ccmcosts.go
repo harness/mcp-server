@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/utils"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"time"
 )
 
 // GetCcmOverview creates a tool for getting a ccm overview from an account
@@ -363,6 +363,103 @@ func FetchCommitmentCoverageTool(config *config.Config, client *client.CloudCost
 			r, err := json.Marshal(data)
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal commitment coverage: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+func FetchCommitmentSavingsTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("get_ccm_commitment_savings",
+			mcp.WithDescription("Get commitment savings information for an account in Harness Cloud Cost Management"),
+			mcp.WithString("start_date",
+				mcp.Required(),
+				mcp.Description("Start date to filter commitment savings"),
+			),
+			mcp.WithString("end_date",
+				mcp.Required(),
+				mcp.Description("End date to filter commitment savings"),
+			),
+			mcp.WithBoolean("is_harness_managed",
+				mcp.Description("Filter results to show only Harness-managed commitments when set to true. When false or omitted, shows all commitments including both Harness-managed and non-Harness-managed ones."),
+			),
+			mcp.WithString("service",
+				mcp.Description("Optional service to filter commitment savings"),
+			),
+			mcp.WithArray("cloud_account_ids",
+				mcp.Description("Optional cloud account IDs to filter commitment savings"),
+				mcp.Items(map[string]any{
+					"type": "string",
+				}),
+			),
+			WithScope(config, false),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			accountId, err := getAccountID(config, request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			params := &dto.CCMCommitmentOptions{}
+			params.AccountIdentifier = &accountId
+
+			// Handle service parameter
+			service, ok, err := OptionalParamOK[string](request, "service")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if ok && service != "" {
+				params.Service = &service
+			}
+
+			// Handle cloud account IDs parameter
+			cloudAccountIDs, ok, err := OptionalParamOK[[]string](request, "cloud_account_ids")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if ok && len(cloudAccountIDs) > 0 {
+				params.CloudAccountIDs = cloudAccountIDs
+			}
+
+			// Handle start date parameter
+			startDate, ok, err := OptionalParamOK[string](request, "start_date")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if ok && startDate != "" {
+				params.StartDate = &startDate
+			}
+
+			// Handle end date parameter
+			endDate, ok, err := OptionalParamOK[string](request, "end_date")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if ok && endDate != "" {
+				params.EndDate = &endDate
+			}
+			// Handle is_harness_managed parameter
+			isHarnessManaged, ok, err := OptionalParamOK[bool](request, "is_harness_managed")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if ok {
+				params.IsHarnessManaged = &isHarnessManaged
+			}
+
+			scope, err := fetchScope(config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.GetCommitmentSavings(ctx, scope, params)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get commitment savings: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal commitment savings: %w", err)
 			}
 
 			return mcp.NewToolResultText(string(r)), nil

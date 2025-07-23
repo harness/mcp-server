@@ -86,6 +86,7 @@ type CCMCommitmentOptions struct {
 	Service           *string  `json:"service,omitempty"`
 	StartDate         *string  `json:"startDate,omitempty"`
 	EndDate           *string  `json:"endDate,omitempty"`
+	IsHarnessManaged  *bool    `json:"isHarnessManaged,omitempty"`
 }
 
 // CcmCostCategoryList represents a list of cost categories in CCM
@@ -227,6 +228,7 @@ type CCMCommitmentBaseResponse struct {
 }
 
 type CCMCommitmentAPIFilter struct {
-	CloudAccounts []string `json:"cloud_account_ids,omitempty"`
-	Service       string   `json:"service,omitempty"`
+	CloudAccounts    []string `json:"cloud_account_ids,omitempty"`
+	Service          string   `json:"service,omitempty"`
+	IsHarnessManaged *bool    `json:"is_harness_managed,omitempty"`
 }
