@@ -182,6 +182,10 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 		return nil, err
 	}
 
+	if err := registerAccessControl(config, tsg); err != nil {
+		return nil, err
+	}
+
 	// Enable requested toolsets
 	if err := tsg.EnableToolsets(config.Toolsets); err != nil {
 		return nil, err
@@ -903,5 +907,43 @@ func registerDbops(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 	// Add toolset to the group
 	tsg.AddToolset(dbopsToolset)
+	return nil
+}
+
+func registerAccessControl(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Determine the base URL and secret for access control service
+	baseURLRBAC := buildServiceURL(config, config.RBACSvcBaseURL, config.BaseURL, "authz")
+	secret := config.RBACSvcSecret
+
+	baseURLPrincipal := buildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng/api")
+	principalSecret := config.NgManagerSecret
+
+	c, err := createClient(baseURLRBAC, config, secret)
+	if err != nil {
+		return err
+	}
+
+	principalC, err := createClient(baseURLPrincipal, config, principalSecret)
+	if err != nil {
+		return err
+	}
+
+	rbacClient := &client.RBACService{Client: c}
+	principalClient := &client.PrincipalService{Client: principalC}
+
+	accessControl := toolsets.NewToolset("access_control", "Access control related tools").
+		AddReadTools(
+			toolsets.NewServerTool(ListAvailableRolesTool(config, rbacClient)),
+			toolsets.NewServerTool(ListAvailablePermissions(config, rbacClient)),
+			toolsets.NewServerTool(ListRoleAssignmentsTool(config, rbacClient)),
+			toolsets.NewServerTool(GetUserInfoTool(config, principalClient)),
+			toolsets.NewServerTool(GetUserGroupInfoTool(config, principalClient)),
+			toolsets.NewServerTool(GetServiceAccountTool(config, principalClient)),
+			toolsets.NewServerTool(GetAllUsersTool(config, principalClient)),
+			toolsets.NewServerTool(GetRoleInfoTool(config, rbacClient)),
+		)
+
+	// Add toolset to the group
+	tsg.AddToolset(accessControl)
 	return nil
 }
