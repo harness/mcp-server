@@ -10,6 +10,7 @@ import (
 
 	generated "github.com/harness/harness-mcp/client/scs/generated"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/appseccommons"
 	builder "github.com/harness/harness-mcp/pkg/harness/event/common"
 	"github.com/harness/harness-mcp/pkg/resources"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -346,7 +347,7 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 			if enrichedArtifacts != nil {
 				suggestions = artifactRuleBasedFollowUps(enrichedArtifacts, &*body.LicenseFilterList)
 			}
-			return NewToolResultTextWithPrompts(string(builder.GenericTableEvent), string(pretty), suggestions), nil
+			return appseccommons.NewToolResultTextWithPrompts(string(builder.GenericTableEvent), string(pretty), suggestions), nil
 		}
 }
 
@@ -854,7 +855,7 @@ func CreateOPAPolicyTool(config *config.Config, client *generated.ClientWithResp
 			}
 
 			// Use the OPA builder to format the response
-			return NewToolResultTextWithPrompts(string(builder.OPAEvent), string(out), suggestions), nil
+			return appseccommons.NewToolResultTextWithPrompts(string(builder.OPAEvent), string(out), suggestions), nil
 		}
 }
 
@@ -983,34 +984,4 @@ func ListSCSCodeReposTool(config *config.Config, client *generated.ClientWithRes
 			return mcp.NewToolResultText(string(out)), nil
 		}
 
-}
-
-// NewToolResultTextWithPrompts creates a new CallToolResult with a text content and optional prompts
-func NewToolResultTextWithPrompts(eventType string, event string, prompts []string) *mcp.CallToolResult {
-	// Create the base content with the text
-	contents := []mcp.Content{
-		mcp.TextContent{
-			Type: "text",
-			Text: builder.Reg.Build(eventType, []byte(event), "scs_result", []string{"name", "tags", "components_count", "Scorecard", "StoIssueCount", "Signing", "deployments", "digest"}),
-		},
-	}
-
-	// Only add prompts resource if prompts are provided
-	if len(prompts) > 0 {
-		// Use the PromptBuilder to format the prompts
-		promptData, err := json.Marshal(prompts)
-		if err != nil {
-			slog.Error("Failed to marshal prompts", "error", err)
-			promptData = []byte("[]")
-		}
-
-		contents = append(contents, mcp.TextContent{
-			Type: "text",
-			Text: builder.Reg.Build(string(builder.PromptEvent), promptData, "scs_result"),
-		})
-	}
-
-	return &mcp.CallToolResult{
-		Content: contents,
-	}
 }

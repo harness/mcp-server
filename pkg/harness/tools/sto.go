@@ -14,8 +14,8 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-// FrontendAllIssuesListTool returns a tool for listing all issues from the STO Frontend.
-func FrontendAllIssuesListTool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+// StoAllIssuesListTool returns a tool for listing all issues from the STO Frontend.
+func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("sto_all_issues_list",
 			mcp.WithDescription(`
 				List all issues or vulnerabilities from the STO. Show in data table format unless otherwise specified.
@@ -175,7 +175,7 @@ func FrontendAllIssuesListTool(config *config.Config, client *generated.ClientWi
 		}
 }
 
-func FrontendGlobalExemptionsTool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("sto_global_exemptions",
 			mcp.WithDescription(`
 		List global exemptions. Filter by status (Pending, Approved, Rejected, Expired), project, or search term. Use this to audit or review all exemption requests across your organization.
