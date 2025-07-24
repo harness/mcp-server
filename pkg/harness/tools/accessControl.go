@@ -396,6 +396,7 @@ func CreateRoleAssignmentTool(config *config.Config, roleAssignmentsClient *clie
 			),
 			mcp.WithString("principal_scope_level",
 				mcp.Description("The scope level of the principal to create."),
+				mcp.Enum("account", "organization", "project"),
 			),
 			mcp.WithString("principal_identifier",
 				mcp.Required(),
@@ -404,6 +405,7 @@ func CreateRoleAssignmentTool(config *config.Config, roleAssignmentsClient *clie
 			mcp.WithString("principal_type",
 				mcp.Required(),
 				mcp.Description("The type of the principal to create."),
+				mcp.Enum("USER", "USER_GROUP", "SERVICE_ACCOUNT"),
 			),
 			mcp.WithString("principal_unique_id",
 				mcp.Required(),
@@ -445,12 +447,24 @@ func CreateRoleAssignmentTool(config *config.Config, roleAssignmentsClient *clie
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			if principal_scope_level != "" {
+				if _, ok := dto.AllowedScopeLevels[strings.ToLower(principal_scope_level)]; !ok {
+					return mcp.NewToolResultError(fmt.Sprintf("invalid principal scope level: %s. Allowed values: account, organization, project", principal_scope_level)), nil
+				}
+			}
+
+			if principal_type != "" {
+				if _, ok := dto.AllowedPrincipalTypes[strings.ToUpper(principal_type)]; !ok {
+					return mcp.NewToolResultError(fmt.Sprintf("invalid principal type: %s. Allowed values: USER, USER_GROUP, SERVICE_ACCOUNT", principal_type)), nil
+				}
+			}
+
 			requestBody := &dto.CreateRoleAssignmentRequestBody{
 				ResourceGroupIdentifier: role_assignment_resource_group_identifier,
 				RoleIdentifier:          role_assignment_role_identifier,
 				Principal: dto.AccessControlPrincipal{
 					Identifier: principal_identifier,
-					Type:       principal_type,
+					Type:       strings.ToUpper(principal_type),
 					UniqueId:   principal_unique_id,
 				},
 			}
@@ -460,7 +474,7 @@ func CreateRoleAssignmentTool(config *config.Config, roleAssignmentsClient *clie
 			}
 
 			if principal_scope_level != "" {
-				requestBody.Principal.ScopeLevel = principal_scope_level
+				requestBody.Principal.ScopeLevel = strings.ToLower(principal_scope_level)
 			}
 
 			data, err := roleAssignmentsClient.CreateRoleAssignment(ctx, scope, requestBody)
@@ -611,7 +625,7 @@ func CreateRoleTool(config *config.Config, rolesClient *client.RBACService) (too
 			mcp.WithString("role_name", mcp.Required(), mcp.Description("The name of the role to create.")),
 			mcp.WithString("role_description", mcp.Description("The description of the role to create.")),
 			mcp.WithString("role_permissions", mcp.Description("The permissions of the role to create, separated by comma.")),
-			mcp.WithString("role_allowed_scope_levels", mcp.Description("The allowed scope levels of the role to create, separated by comma.")),
+			mcp.WithString("role_allowed_scope_levels", mcp.Description("The allowed scope levels of the role to create, separated by comma."), mcp.Enum("account", "organization", "project")),
 			WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -649,6 +663,9 @@ func CreateRoleTool(config *config.Config, rolesClient *client.RBACService) (too
 			var allowedScopeLevels []string
 			if roleAllowedScopeLevels != "" {
 				allowedScopeLevels = strings.Split(roleAllowedScopeLevels, ",")
+				for i, scopeLevel := range allowedScopeLevels {
+					allowedScopeLevels[i] = strings.ToLower(scopeLevel)
+				}
 			}
 
 			opts := &dto.Role{
@@ -866,7 +883,11 @@ func InviteUsersTool(config *config.Config, usersClient *client.PrincipalService
 							}
 							if roleScope, exists := roleBindingMap["roleScopeLevel"]; exists {
 								if roleScopeStr, ok := roleScope.(string); ok {
-									roleBinding.RoleScopeLevel = roleScopeStr
+									if _, ok := dto.AllowedScopeLevels[strings.ToLower(roleScopeStr)]; ok {
+										roleBinding.RoleScopeLevel = strings.ToLower(roleScopeStr)
+									} else {
+										return nil, fmt.Errorf("invalid role scope level: %s", roleScopeStr)
+									}
 								}
 							}
 							if roleName, exists := roleBindingMap["roleName"]; exists {
