@@ -181,7 +181,7 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 		**Filters (choose one):**
 		- Status: Pending, Approved, Rejected, Expired
 		- Project: Comma-separated org:project pairs
-		- Search: Free-text search for issues
+		- Search: Free-text search for issue title or exemption title
 
 		Use this tool to audit or review all exemption requests across your project or organization or account
 `),
@@ -192,7 +192,7 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 			mcp.WithNumber("pageSize", mcp.Description("Number of results per page"), mcp.DefaultNumber(5)),
 			mcp.WithString("matchesProject", mcp.Description("Comma-separated list of organization:project pairs to filter exemptions by project scope.")),
 			mcp.WithString("status", mcp.Description("Exemption status: Pending, Approved, Rejected, Expired")),
-			mcp.WithString("search", mcp.Description("Free-text search for issues, requesters, or reasons.")),
+			mcp.WithString("search", mcp.Description("Free-text search for issue title or exemption title.")),
 		), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			params := &generated.FrontendGlobalExemptionsParams{
 				AccountId: config.AccountID,
@@ -393,7 +393,7 @@ func ExemptionsPromoteExemptionTool(config *config.Config, client *generated.Cli
 			if v, _ := OptionalParam[string](request, "targetId"); v != "" {
 				body.TargetId = &v
 			}
-			id, _ := requiredParam[string](request, "id")
+			id, _ := RequiredParam[string](request, "id")
 
 			resp, err := client.ExemptionsPromoteExemptionWithResponse(ctx, id, params, body)
 			if err != nil {
@@ -421,7 +421,9 @@ func ExemptionsApproveExemptionTool(config *config.Config, client *generated.Cli
 
 			**Usage Guidance:**
 			- Use this endpoint to approve or reject an exemption at the requested scope.
-			- Provide Action to take: approve or reject
+			- Always provide one Action to take: approve or reject
+			- Provide approve as an action to approve an exemption
+			- Provide reject as an action to reject an exemption
 			- Do NOT use this endpoint to promote an exemption to a higher scope (see exemptions_promote_and_approve).
 			- You must provide the exemption id, the action (approve or reject), and the relevant scope identifiers.
 			- Optionally, you may provide a comment.
@@ -468,8 +470,9 @@ func ExemptionsApproveExemptionTool(config *config.Config, client *generated.Cli
 			} else {
 				body.Comment = &defaultComment
 			}
-			id, _ := requiredParam[string](request, "id")
-			action, _ := ExtractParam[generated.ExemptionsApproveExemptionParamsAction](request, "action")
+			actionStr, _ := RequiredParam[string](request, "action")
+			action := generated.ExemptionsApproveExemptionParamsAction(actionStr)
+			id, _ := RequiredParam[string](request, "id")
 			resp, err := client.ExemptionsApproveExemptionWithResponse(ctx, id, action, params, body)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
