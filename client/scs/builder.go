@@ -36,6 +36,12 @@ func (bb *artifactListingRequestBodyBuilder) WithLicenseFilter(v generated.Licen
 	}
 	return bb
 }
+func (bb *artifactListingRequestBodyBuilder) WithLicenseFilterList(v []generated.LicenseFilter) *artifactListingRequestBodyBuilder {
+	if len(v) > 0 {
+		bb.b.LicenseFilterList = &v
+	}
+	return bb
+}
 func (bb *artifactListingRequestBodyBuilder) WithPolicyViolation(v generated.ArtifactListingRequestBodyPolicyViolation) *artifactListingRequestBodyBuilder {
 	if v != "" {
 		bb.b.PolicyViolation = &v

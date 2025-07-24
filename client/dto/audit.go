@@ -80,8 +80,8 @@ type AuditOutputData[T any] struct {
 	PageIndex     int    `json:"pageIndex,omitempty"`
 	HasNext       bool   `json:"hasNext,omitempty"`
 	PageToken     string `json:"pageToken,omitempty"`
-	TotalItems    int    `json:totalItems, omitempty`
-	TotalPages    int    `json:totalPages, omitempty`
+	TotalItems    int    `json:"totalItems,omitempty"`
+	TotalPages    int    `json:"totalPages,omitempty"`
 }
 
 type AuditListItem struct {

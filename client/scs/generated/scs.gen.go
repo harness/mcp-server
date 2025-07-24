@@ -66,10 +66,10 @@ const (
 
 // Defines values for ArtifactVariantType.
 const (
-	ArtifactVariantTypeBranch ArtifactVariantType = "branch"
-	ArtifactVariantTypeCommit ArtifactVariantType = "commit"
-	ArtifactVariantTypeGitTag ArtifactVariantType = "gitTag"
-	ArtifactVariantTypeTag    ArtifactVariantType = "tag"
+	Branch ArtifactVariantType = "branch"
+	Commit ArtifactVariantType = "commit"
+	GitTag ArtifactVariantType = "gitTag"
+	Tag    ArtifactVariantType = "tag"
 )
 
 // Defines values for ComplianceCheckSeverity.
@@ -210,13 +210,15 @@ type ArtifactChainOfCustodyV2 struct {
 
 // ArtifactListingRequestBody defines model for ArtifactListingRequestBody.
 type ArtifactListingRequestBody struct {
-	ArtifactType       *[]ArtifactType                            `json:"artifact_type,omitempty"`
-	ComponentFilter    *[]ComponentFilter                         `json:"component_filter,omitempty"`
-	EnvironmentType    *ArtifactListingRequestBodyEnvironmentType `json:"environment_type,omitempty"`
-	LicenseFilter      *LicenseFilter                             `json:"license_filter,omitempty"`
-	PolicyViolation    *ArtifactListingRequestBodyPolicyViolation `json:"policy_violation,omitempty"`
-	SearchTerm         *string                                    `json:"search_term,omitempty"`
-	VerificationStatus *VerificationStatus                        `json:"verification_status,omitempty"`
+	ArtifactType        *[]ArtifactType                            `json:"artifact_type,omitempty"`
+	ComponentFilter     *[]ComponentFilter                         `json:"component_filter,omitempty"`
+	ComponentFilterList *[]ComponentFilter                         `json:"component_filter_list,omitempty"`
+	EnvironmentType     *ArtifactListingRequestBodyEnvironmentType `json:"environment_type,omitempty"`
+	LicenseFilter       *LicenseFilter                             `json:"license_filter,omitempty"`
+	LicenseFilterList   *[]LicenseFilter                           `json:"license_filter_list,omitempty"`
+	PolicyViolation     *ArtifactListingRequestBodyPolicyViolation `json:"policy_violation,omitempty"`
+	SearchTerm          *string                                    `json:"search_term,omitempty"`
+	VerificationStatus  *VerificationStatus                        `json:"verification_status,omitempty"`
 }
 
 // ArtifactListingRequestBodyEnvironmentType defines model for ArtifactListingRequestBody.EnvironmentType.
@@ -225,8 +227,8 @@ type ArtifactListingRequestBodyEnvironmentType string
 // ArtifactListingRequestBodyPolicyViolation defines model for ArtifactListingRequestBody.PolicyViolation.
 type ArtifactListingRequestBodyPolicyViolation string
 
-// ArtifactSourcesListingResponse defines model for ArtifactSourcesListingResponse.
-type ArtifactSourcesListingResponse struct {
+// ArtifactSourcesListingResponse1 defines model for ArtifactSourcesListingResponse.
+type ArtifactSourcesListingResponse1 struct {
 	ArtifactType *ArtifactTypeData `json:"artifact_type,omitempty"`
 
 	// Count Count of artifacts with the given url and name.
@@ -377,9 +379,11 @@ type ArtifactVariantType string
 
 // CodeRepositoryListingRequest defines model for CodeRepositoryListingRequest.
 type CodeRepositoryListingRequest struct {
-	DependencyFilter *[]ComponentFilter `json:"dependency_filter,omitempty"`
-	LicenseFilter    *LicenseFilter     `json:"license_filter,omitempty"`
-	SearchTerm       *string            `json:"search_term,omitempty"`
+	DependencyFilter     *[]ComponentFilter `json:"dependency_filter,omitempty"`
+	DependencyFilterList *[]ComponentFilter `json:"dependency_filter_list,omitempty"`
+	LicenseFilter        *LicenseFilter     `json:"license_filter,omitempty"`
+	LicenseFilterList    *[]LicenseFilter   `json:"license_filter_list,omitempty"`
+	SearchTerm           *string            `json:"search_term,omitempty"`
 }
 
 // CodeRepositoryListingResponse defines model for CodeRepositoryListingResponse.
@@ -419,6 +423,7 @@ type CodeRepositoryOverview struct {
 	Scorecard          *Scorecard                   `json:"scorecard,omitempty"`
 	Url                string                       `json:"url"`
 	Variant            *ArtifactVariant             `json:"variant,omitempty"`
+	Violations         *Violations                  `json:"violations,omitempty"`
 
 	// Vulnerabilities The count of Security Issues, by severity code, for a given Harness Pipeline Execution along with this execution info
 	Vulnerabilities *StoIssueCount `json:"vulnerabilities,omitempty"`
@@ -534,8 +539,10 @@ type FetchComplianceResultByArtifactResponseBody struct {
 // IntegrityVerification defines model for IntegrityVerification.
 type IntegrityVerification struct {
 	ErrorMessage        *string             `json:"error_message,omitempty"`
+	OrgId               *string             `json:"org_id,omitempty"`
 	PipelineExecutionId *string             `json:"pipeline_execution_id,omitempty"`
 	PipelineId          *string             `json:"pipeline_id,omitempty"`
+	ProjectId           *string             `json:"project_id,omitempty"`
 	Rekor               *RekorLog           `json:"rekor,omitempty"`
 	Status              *VerificationStatus `json:"status,omitempty"`
 	Version             *string             `json:"version,omitempty"`
@@ -750,9 +757,6 @@ type AccountHeader = string
 // Artifact defines model for Artifact.
 type Artifact = string
 
-// Exemption defines model for Exemption.
-type Exemption = string
-
 // Limit defines model for Limit.
 type Limit = int
 
@@ -780,11 +784,8 @@ type ProvenanceId = string
 // SignatureId defines model for SignatureId.
 type SignatureId = string
 
-// Tag defines model for Tag.
-type Tag = string
-
-// ArtifactSourcesListingResponse1 defines model for ArtifactSourcesListingResponse.
-type ArtifactSourcesListingResponse1 = []ArtifactSourcesListingResponse
+// ArtifactSourcesListingResponse defines model for ArtifactSourcesListingResponse.
+type ArtifactSourcesListingResponse = []ArtifactSourcesListingResponse1
 
 // ArtifactV2ListingResponseBody defines model for ArtifactV2ListingResponseBody.
 type ArtifactV2ListingResponseBody = []ArtifactV2ListingResponse
@@ -2065,7 +2066,7 @@ type ClientWithResponsesInterface interface {
 type ListArtifactSourcesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *ArtifactSourcesListingResponse1
+	JSON200      *ArtifactSourcesListingResponse
 }
 
 // Status returns HTTPResponse.Status
@@ -2357,7 +2358,7 @@ func ParseListArtifactSourcesResponse(rsp *http.Response) (*ListArtifactSourcesR
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ArtifactSourcesListingResponse1
+		var dest ArtifactSourcesListingResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
