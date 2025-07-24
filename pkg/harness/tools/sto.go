@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"net/http"
 
 	"github.com/harness/harness-mcp/client"
+	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/client/sto/generated"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/appseccommons"
@@ -119,14 +119,6 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 			if v, _ := OptionalParam[string](request, "issueTypes"); v != "" {
 				params.IssueTypes = &v
 			}
-
-			slog.Info("FrontendAllIssuesListTool called with params", "params", params)
-			slog.Info("FrontendAllIssuesListTool called with request", "request", request)
-
-			// Print params as map for easier viewing
-			paramsJson, _ := json.Marshal(params)
-			slog.Info("Params JSON", "params_json", string(paramsJson))
-
 			resp, err := client.FrontendAllIssuesListWithResponse(ctx, params)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -138,7 +130,6 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 				}
 				return mcp.NewToolResultError("No data returned from STO service"), nil
 			}
-			// Build table rows from issues
 			rows := []map[string]interface{}{}
 			for _, issue := range resp.JSON200.Issues {
 				row := map[string]interface{}{
@@ -230,7 +221,6 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 				params.Search = &v
 			}
 
-			slog.Info("FrontendGlobalExemptionsTool called with params", "params", params)
 			resp, err := client.FrontendGlobalExemptionsWithResponse(ctx, params)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -257,11 +247,11 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 			userNameMap := make(map[string]string)
 			for userID := range userIDs {
 				name := ""
-				scope, _ := fetchScope(config, request, false)
+				scope := dto.Scope{
+					AccountID: config.AccountID,
+				}
 				// PrincipalService: GetUserInfo(ctx, scope, userID, page, size)
 				userInfo, err := principalClient.GetUserInfo(ctx, scope, userID, 0, 1)
-				userInfoJSON, _ := json.Marshal(userInfo)
-				slog.Info("UserInfo", "userInfo", string(userInfoJSON))
 				if err == nil && userInfo != nil && &userInfo.Data != nil && &userInfo.Data.User != nil {
 					if userInfo.Data.User.Name != "" {
 						name = userInfo.Data.User.Name
@@ -304,10 +294,7 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 				rows = append(rows, row)
 			}
 
-			// Build dynamic suggestions for exemption actions and details
 			var suggestions []string
-
-			// Suggest approve/reject and details for up to the first 2 exemptions, if present
 			maxSuggestions := 2
 			for i := 0; i < len(rows) && i < maxSuggestions; i++ {
 				id, idOk := rows[i]["ExemptionId"].(string)
@@ -321,15 +308,12 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 				}
 			}
 
-			// Add general suggestions
 			suggestions = append(suggestions,
 				"See exemptions with a different status (Approved, Rejected, Expired)?",
 				"Get more details about a specific exemption?",
 			)
 
-			// Marshal only the rows, not the whole response
 			tableData, err := json.Marshal(rows)
-			slog.Info("FrontendGlobalExemptionsTool call response table data", "tableData", string(tableData))
 			if err != nil {
 				return mcp.NewToolResultError("Failed to marshal table data: " + err.Error()), nil
 			}
@@ -344,7 +328,7 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 }
 
 // ExemptionsPromoteExemptionTool promotes a pending exemption to approval/rejection.
-func ExemptionsPromoteExemptionTool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ExemptionsPromoteExemptionTool(config *config.Config, client *generated.ClientWithResponses, principalClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("sto_exemptions_promote_and_approve",
 			mcp.WithDescription(`
 				Promote (approve) an exemption request at its current scope or at a higher scope (Project, Org, or Account).
@@ -387,7 +371,7 @@ func ExemptionsPromoteExemptionTool(config *config.Config, client *generated.Cli
 			params := &generated.ExemptionsPromoteExemptionParams{
 				AccountId: config.AccountID,
 			}
-			approverId := getCurrentUserUUID(ctx, config)
+			approverId := getCurrentUserUUID(ctx, config, principalClient)
 			defaultComment := "This is done by Harness Agent"
 			if v, _ := OptionalParam[string](request, "orgId"); v != "" {
 				params.OrgId = &v
@@ -411,7 +395,6 @@ func ExemptionsPromoteExemptionTool(config *config.Config, client *generated.Cli
 			}
 			id, _ := requiredParam[string](request, "id")
 
-			slog.Info("ExemptionsPromoteExemptionTool called with params", "params", params, "body", body)
 			resp, err := client.ExemptionsPromoteExemptionWithResponse(ctx, id, params, body)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -431,33 +414,33 @@ func ExemptionsPromoteExemptionTool(config *config.Config, client *generated.Cli
 }
 
 // ExemptionsApproveExemptionTool approves or rejects an exemption request.
-func ExemptionsApproveExemptionTool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ExemptionsApproveExemptionTool(config *config.Config, client *generated.ClientWithResponses, principalClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("exemptions_reject_and_approve",
 			mcp.WithDescription(`
-Approve or reject an exemption request at its current (requested) scope.
+			Approve or reject an exemption request at its current (requested) scope.
 
-**Usage Guidance:**
-- Use this endpoint to approve or reject an exemption at the requested scope.
-- Provide Action to take: approve or reject
-- Do NOT use this endpoint to promote an exemption to a higher scope (see exemptions_promote_and_approve).
-- You must provide the exemption id, the action (approve or reject), and the relevant scope identifiers.
-- Optionally, you may provide a comment.
+			**Usage Guidance:**
+			- Use this endpoint to approve or reject an exemption at the requested scope.
+			- Provide Action to take: approve or reject
+			- Do NOT use this endpoint to promote an exemption to a higher scope (see exemptions_promote_and_approve).
+			- You must provide the exemption id, the action (approve or reject), and the relevant scope identifiers.
+			- Optionally, you may provide a comment.
 
-**When to Use:**
-- To approve or reject an exemption at the current/requested scope.
-- To reject an exemption at any scope.
+			**When to Use:**
+			- To approve or reject an exemption at the current/requested scope.
+			- To reject an exemption at any scope.
 
-**Parameters:**
-- id: Exemption ID to approve or reject (required)
-- action: "approve" or "reject" (required)
-- accountId: Harness Account ID (required)
-- orgId: Harness Organization ID (required for org/project scope)
-- projectId: Harness Project ID (required for project scope)
-- pipelineId: Exemption's pipeline Id (required for pipeline scope)
-- targetId: Exemption's target Id (required for target scope)
-- comment: Optional comment for the approval or rejection
+			**Parameters:**
+			- id: Exemption ID to approve or reject (required)
+			- action: "approve" or "reject" (required)
+			- accountId: Harness Account ID (required)
+			- orgId: Harness Organization ID (required for org/project scope)
+			- projectId: Harness Project ID (required for project scope)
+			- pipelineId: Exemption's pipeline Id (required for pipeline scope)
+			- targetId: Exemption's target Id (required for target scope)
+			- comment: Optional comment for the approval or rejection
 
-**Do NOT use this endpoint to promote to a higher scope.**
+			**Do NOT use this endpoint to promote to a higher scope.**
 `),
 			mcp.WithString("id", mcp.Required(), mcp.Description("Exemption ID to approve or reject, generally present in id field of exemption")),
 			mcp.WithString("action", mcp.Required(), mcp.Description("Action to take: approve or reject")),
@@ -475,10 +458,7 @@ Approve or reject an exemption request at its current (requested) scope.
 			if v, _ := OptionalParam[string](request, "projectId"); v != "" {
 				params.ProjectId = &v
 			}
-			approverId, err := requiredParam[string](request, "approverId")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
+			approverId := getCurrentUserUUID(ctx, config, principalClient)
 			defaultComment := "This is done by Harness Agent"
 			body := generated.ApproveExemptionRequestBody{
 				ApproverId: approverId,
@@ -490,7 +470,6 @@ Approve or reject an exemption request at its current (requested) scope.
 			}
 			id, _ := requiredParam[string](request, "id")
 			action, _ := ExtractParam[generated.ExemptionsApproveExemptionParamsAction](request, "action")
-			slog.Info("ExemptionsApproveExemptionTool called with params", "params", params, "body", body, "action", action)
 			resp, err := client.ExemptionsApproveExemptionWithResponse(ctx, id, action, params, body)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -509,27 +488,14 @@ Approve or reject an exemption request at its current (requested) scope.
 		}
 }
 
-func getCurrentUserUUID(ctx context.Context, config *config.Config) string {
-	slog.Info("getCurrentUserUUID called")
-	url := config.BaseURL + "/gateway/ng/api/user/currentUser?routingId=" + config.AccountID + "&accountIdentifier=" + config.AccountID
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return ""
+func getCurrentUserUUID(ctx context.Context, config *config.Config, principalClient *client.PrincipalService) string {
+	scope := dto.Scope{
+		AccountID: config.AccountID,
 	}
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return ""
-	}
-	defer resp.Body.Close()
-	var result struct {
-		Data struct {
-			UUID string `json:"uuid"`
-		} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return ""
-	}
-	slog.Info("getCurrentUserUUID response", "result", result)
-	return result.Data.UUID
+	resp, err := principalClient.GetCurrentUser(ctx, scope)
+    if err != nil {
+        slog.Error("getCurrentUserUUIDFromAPIClient error", "error", err)
+        return ""
+    }
+    return resp.Data.UUID
 }
