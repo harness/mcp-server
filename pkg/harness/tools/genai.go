@@ -23,7 +23,7 @@ func AIDevOpsAgentTool(config *config.Config, client *client.GenaiService) (tool
 			mcp.WithBoolean("stream", mcp.Description("Whether to stream the response or not"), mcp.DefaultBool(true)),
 			mcp.WithString("action",
 				mcp.Required(),
-				mcp.Description("The action type to perform (CREATE_STEP, UPDATE_STEP, CREATE_STAGE, etc.)"),
+				mcp.Description("The action type to perform (CREATE_STEP, UPDATE_STEP, CREATE_STAGE, UPDATE_STAGE, CREATE_PIPELINE, UPDATE_PIPELINE, CREATE_ENVIRONMENT, UPDATE_ENVIRONMENT, CREATE_SECRET, UPDATE_SECRET, CREATE_SERVICE, UPDATE_SERVICE, CREATE_CONNECTOR, UPDATE_CONNECTOR, CREATE_PROCESS, etc.)"),
 			),
 			mcp.WithString("conversation_id",
 				mcp.Description("Optional conversation ID to maintain conversation context (if not provided, a new ID will be generated)"),
