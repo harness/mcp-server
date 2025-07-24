@@ -311,7 +311,6 @@ func createPerspectiveTool(config *config.Config, client *client.CloudCostManage
 			mcp.WithDescription("Get the last twelve months cost for a perspective in Harness Cloud Cost Management"),
 			mcp.WithString("account_id",
 				mcp.Description("The account identifier owner of the perspective"),
-				mcp.DefaultString("Z60xsRGoTeqOoAFRCsmlBQ"), // REMOVEEE, just for testing!!!
 			),
 			mcp.WithString("clone",
 				mcp.DefaultBool(false),
@@ -326,7 +325,6 @@ func createPerspectiveTool(config *config.Config, client *client.CloudCostManage
 				mcp.Description("Required perspective name"),
 			),
 			mcp.WithString("folder_id",
-				mcp.DefaultString("rO1Spt18TXGQEw9eS9CLYg"), // REMOVEEE, just for testing!!!
 				mcp.Description("Idenfifier for the containing folder of the perspective"),
 			),
 			mcp.WithString("view_version",
