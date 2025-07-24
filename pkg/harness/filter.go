@@ -48,6 +48,9 @@ func BuildArtifactListingBody(request mcp.CallToolRequest) (generated.ArtifactLi
 	if err := bindParam(request, "license_filter", func(v generated.LicenseFilter) { bb.WithLicenseFilter(v) }); err != nil {
 		return generated.ArtifactListingRequestBody{}, err
 	}
+	if err := bindParam(request, "license_filter_list", func(v []generated.LicenseFilter) { bb.WithLicenseFilterList(v) }); err != nil {
+		return generated.ArtifactListingRequestBody{}, err
+	}
 	if err := bindParam(request, "policy_violation", func(v generated.ArtifactListingRequestBodyPolicyViolation) { bb.WithPolicyViolation(v) }); err != nil {
 		return generated.ArtifactListingRequestBody{}, err
 	}

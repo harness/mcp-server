@@ -264,9 +264,8 @@ func registerPipelines(config *config.Config, tsg *toolsets.ToolsetGroup) error 
 func registerSCS(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	baseURL := buildServiceURL(config, config.SCSSvcBaseURL, config.BaseURL, "/ssca-manager")
 	secret := config.SCSSvcSecret
-
 	// Create base client for SCS
-	c, err := createClient(baseURL, config, secret)
+	c, err := createClient(baseURL, config, secret, 30*time.Second)
 	if err != nil {
 		return err
 	}
@@ -292,9 +291,9 @@ func registerSCS(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 			toolsets.NewServerTool(GetCodeRepositoryOverviewTool(config, scsClient)),
 			toolsets.NewServerTool(FetchComplianceResultsByArtifactTool(config, scsClient)),
 			toolsets.NewServerTool(ListArtifactSourcesTool(config, scsClient)),
-			toolsets.NewServerTool(ArtifactListV2Tool(config, scsClient)),
 			toolsets.NewServerTool(GetArtifactV2OverviewTool(config, scsClient)),
 			toolsets.NewServerTool(GetArtifactChainOfCustodyV2Tool(config, scsClient)),
+			toolsets.NewServerTool(CreateOPAPolicyTool(config, scsClient)),
 		)
 	tsg.AddToolset(scs)
 	return nil

@@ -92,7 +92,7 @@ func AIDevOpsAgentTool(config *config.Config, client *client.GenaiService) (tool
 			conversationRaw, _ := OptionalParam[[]any](request, "conversation_raw")
 			harnessContextRaw, _ := OptionalParam[map[string]interface{}](request, "harness_context")
 			stream := true // default value
-			if streamArg, ok := request.Params.Arguments["stream"].(bool); ok {
+			if streamArg, ok := request.GetArguments()["stream"].(bool); ok {
 				stream = streamArg
 			}
 
