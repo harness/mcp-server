@@ -210,3 +210,54 @@ type ResourceGroup struct {
 	Color             string `json:"color,omitempty"`
 	Description       string `json:"description,omitempty"`
 }
+
+type CurrentUserData struct {
+    UUID                        string      `json:"uuid,omitempty"`
+    Name                        string      `json:"name,omitempty"`
+    Email                       string      `json:"email,omitempty"`
+    Token                       interface{} `json:"token,omitempty"`
+    DefaultAccountId            string      `json:"defaultAccountId,omitempty"`
+    Intent                      interface{} `json:"intent,omitempty"`
+    Accounts                    []AccountInfo `json:"accounts,omitempty"`
+    Admin                       bool        `json:"admin,omitempty"`
+    TwoFactorAuthenticationEnabled bool     `json:"twoFactorAuthenticationEnabled,omitempty"`
+    EmailVerified               bool        `json:"emailVerified,omitempty"`
+    Locked                      bool        `json:"locked,omitempty"`
+    Disabled                    bool        `json:"disabled,omitempty"`
+    SignupAction                interface{} `json:"signupAction,omitempty"`
+    Edition                     interface{} `json:"edition,omitempty"`
+    BillingFrequency            interface{} `json:"billingFrequency,omitempty"`
+    UTMInfo                     UTMInfo     `json:"utmInfo,omitempty"`
+    ExternallyManaged           bool        `json:"externallyManaged,omitempty"`
+    GivenName                   interface{} `json:"givenName,omitempty"`
+    FamilyName                  interface{} `json:"familyName,omitempty"`
+    ExternalId                  interface{} `json:"externalId,omitempty"`
+    CreatedAt                   int64       `json:"createdAt,omitempty"`
+    LastUpdatedAt               int64       `json:"lastUpdatedAt,omitempty"`
+    UserPreferences             UserPreferences `json:"userPreferences,omitempty"`
+    IsEnrichedInfoCollected     bool        `json:"isEnrichedInfoCollected,omitempty"`
+    LastLogin                   int64       `json:"lastLogin,omitempty"`
+}
+
+type AccountInfo struct {
+    UUID             string `json:"uuid,omitempty"`
+    AccountName      string `json:"accountName,omitempty"`
+    CompanyName      string `json:"companyName,omitempty"`
+    DefaultExperience string `json:"defaultExperience,omitempty"`
+    CreatedFromNG    bool   `json:"createdFromNG,omitempty"`
+    NextGenEnabled   bool   `json:"nextGenEnabled,omitempty"`
+}
+
+type UTMInfo struct {
+    UTMSource   interface{} `json:"utmSource,omitempty"`
+    UTMContent  interface{} `json:"utmContent,omitempty"`
+    UTMMedium   interface{} `json:"utmMedium,omitempty"`
+    UTMTerm     interface{} `json:"utmTerm,omitempty"`
+    UTMCampaign interface{} `json:"utmCampaign,omitempty"`
+}
+
+type UserPreferences struct {
+    RecentSelectedScopes string      `json:"recent_selected_scopes,omitempty"`
+    EnableNewNav         string      `json:"enable_new_nav,omitempty"`
+    LandingPageURL       interface{} `json:"landing_page_url,omitempty"`
+}
