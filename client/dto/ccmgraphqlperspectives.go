@@ -1,7 +1,7 @@
 package dto
 
 const (
-	TimeFilterLast7         = "LAST_7_DAYS"
+	TimeFilterLast7         = "LAST_7" // It doesn't work using "LAST_7_DAYS"
 	TimeFilterThisMonth     = "THIS_MONTH"
 	TimeFilterLast30Days    = "LAST_30_DAYS"
 	TimeFilterThisQuarter   = "THIS_QUARTER"
