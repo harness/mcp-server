@@ -16,6 +16,7 @@ const (
 	listRoleAssignmentsPath  = "/api/roleassignments/filter"
 	getUserGroupPath         = "/v2/user-groups"
 	getServiceAccountPath    = "/serviceaccount/aggregate"
+	getCurrentUserPath      = "/user/currentUser"
 	createRoleAssignmentPath = "/api/roleassignments"
 	createRolePath           = "/api/roles"
 	createUserGroupPath      = "/v2/user-groups"
@@ -214,6 +215,22 @@ func (sAccount *PrincipalService) GetServiceAccount(ctx context.Context, scope d
 	err := sAccount.Client.Get(ctx, path, params, map[string]string{}, resp)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to list the service account info: %w", err)
+	}
+
+	return resp, nil
+}
+
+func (currentUserInfo *PrincipalService) GetCurrentUser(ctx context.Context, scope dto.Scope) (*dto.AccessControlOutput[dto.CurrentUserData], error) {
+
+	params := make(map[string]string)
+	path := fmt.Sprintf(getCurrentUserPath)
+
+	addScope(scope, params)
+
+	resp := &dto.AccessControlOutput[dto.CurrentUserData]{}
+	err := currentUserInfo.Client.Get(ctx, path, params, map[string]string{}, resp)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to list the user info: %w", err)
 	}
 
 	return resp, nil

@@ -217,10 +217,19 @@ func RegisterSTO(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	baseURL := utils.BuildServiceURL(config, config.STOSvcBaseURL, config.BaseURL, "/sto")
 	secret := config.STOSvcSecret
 
+	baseURLPrincipal := utils.BuildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng/api")
+	principalSecret := config.NgManagerSecret
+
 	c, err := utils.CreateClient(baseURL, config, secret)
 	if err != nil {
 		return err
 	}
+
+	cPrincipal, err := utils.CreateClient(baseURLPrincipal, config, principalSecret)
+	if err != nil {
+		return err
+	}
+	principalClient := &client.PrincipalService{Client: cPrincipal}
 
 	requestEditorFn := func(ctx context.Context, req *http.Request) error {
 		k, v, err := c.AuthProvider.GetHeader(ctx)
@@ -238,7 +247,10 @@ func RegisterSTO(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	}
 	sto := toolsets.NewToolset("sto", "Harness Security Test Orchestration tools").
 		AddReadTools(
-			toolsets.NewServerTool(tools.FrontendAllIssuesListTool(config, stoClient)),
+			toolsets.NewServerTool(tools.StoAllIssuesListTool(config, stoClient)),
+			toolsets.NewServerTool(tools.StoGlobalExemptionsTool(config, stoClient, principalClient)),
+			toolsets.NewServerTool(tools.ExemptionsPromoteExemptionTool(config, stoClient, principalClient)),
+			toolsets.NewServerTool(tools.ExemptionsApproveExemptionTool(config, stoClient, principalClient)),
 		)
 	tsg.AddToolset(sto)
 	return nil
