@@ -57,4 +57,6 @@ type Config struct {
 	DBOpsSvcSecret          string
 	RBACSvcBaseURL          string
 	RBACSvcSecret           string
+	ResourceGroupSvcBaseURL string
+	ResourceGroupSvcSecret  string
 }

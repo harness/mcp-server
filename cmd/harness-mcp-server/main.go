@@ -171,6 +171,8 @@ var (
 				DBOpsSvcSecret:          viper.GetString("dbops_svc_secret"),
 				RBACSvcBaseURL:          viper.GetString("rbac_svc_base_url"),
 				RBACSvcSecret:           viper.GetString("rbac_svc_secret"),
+				ResourceGroupSvcBaseURL: viper.GetString("resource_group_svc_base_url"),
+				ResourceGroupSvcSecret:  viper.GetString("resource_group_svc_secret"),
 			}
 
 			if err := runStdioServer(ctx, cfg); err != nil {
@@ -234,6 +236,8 @@ func init() {
 	internalCmd.Flags().String("dbops-svc-secret", "", "Secret for dbops service")
 	internalCmd.Flags().String("rbac-svc-base-url", "", "Base URL for RBAC service")
 	internalCmd.Flags().String("rbac-svc-secret", "", "Secret for RBAC service")
+	internalCmd.Flags().String("resource-group-svc-base-url", "", "Base URL for resource group service")
+	internalCmd.Flags().String("resource-group-svc-secret", "", "Secret for resource group service")
 
 	// Bind global flags to viper
 	_ = viper.BindPFlag("toolsets", rootCmd.PersistentFlags().Lookup("toolsets"))
@@ -284,6 +288,8 @@ func init() {
 	_ = viper.BindPFlag("dbops_svc_secret", internalCmd.Flags().Lookup("dbops-svc-secret"))
 	_ = viper.BindPFlag("rbac_svc_base_url", internalCmd.Flags().Lookup("rbac-svc-base-url"))
 	_ = viper.BindPFlag("rbac_svc_secret", internalCmd.Flags().Lookup("rbac-svc-secret"))
+	_ = viper.BindPFlag("resource_group_svc_base_url", internalCmd.Flags().Lookup("resource-group-svc-base-url"))
+	_ = viper.BindPFlag("resource_group_svc_secret", internalCmd.Flags().Lookup("resource-group-svc-secret"))
 
 	// Add subcommands
 	rootCmd.AddCommand(stdioCmd)

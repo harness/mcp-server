@@ -826,6 +826,9 @@ func registerAccessControl(config *config.Config, tsg *toolsets.ToolsetGroup) er
 	baseURLPrincipal := utils.BuildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng/api")
 	principalSecret := config.NgManagerSecret
 
+	baseURLResourceGroup := utils.BuildServiceURL(config, config.ResourceGroupSvcBaseURL, config.BaseURL, "resourcegroup")
+	resourceGroupSecret := config.ResourceGroupSvcSecret
+
 	c, err := utils.CreateClient(baseURLRBAC, config, secret)
 	if err != nil {
 		return err
@@ -836,8 +839,14 @@ func registerAccessControl(config *config.Config, tsg *toolsets.ToolsetGroup) er
 		return err
 	}
 
+	resourceGroupC, err := utils.CreateClient(baseURLResourceGroup, config, resourceGroupSecret)
+	if err != nil {
+		return err
+	}
+
 	rbacClient := &client.RBACService{Client: c}
 	principalClient := &client.PrincipalService{Client: principalC}
+	resourceGroupClient := &client.ResourceGroupService{Client: resourceGroupC}
 
 	accessControl := toolsets.NewToolset("access_control", "Access control related tools").
 		AddReadTools(
@@ -849,6 +858,12 @@ func registerAccessControl(config *config.Config, tsg *toolsets.ToolsetGroup) er
 			toolsets.NewServerTool(tools.GetServiceAccountTool(config, principalClient)),
 			toolsets.NewServerTool(tools.GetAllUsersTool(config, principalClient)),
 			toolsets.NewServerTool(tools.GetRoleInfoTool(config, rbacClient)),
+			toolsets.NewServerTool(tools.CreateServiceAccountTool(config, principalClient)),
+			toolsets.NewServerTool(tools.InviteUsersTool(config, principalClient)),
+			toolsets.NewServerTool(tools.CreateUserGroupTool(config, principalClient)),
+			toolsets.NewServerTool(tools.CreateResourceGroupTool(config, resourceGroupClient)),
+			toolsets.NewServerTool(tools.CreateRoleTool(config, rbacClient)),
+			toolsets.NewServerTool(tools.CreateRoleAssignmentTool(config, rbacClient)),
 		)
 
 	// Add toolset to the group
