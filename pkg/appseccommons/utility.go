@@ -14,7 +14,7 @@ func NewToolResultTextWithPrompts(eventType string, event string, prompts []stri
 	contents := []mcp.Content{
 		mcp.TextContent{
 			Type: "text",
-			Text: builder.Reg.Build(eventType, []byte(event), "scs_result"),
+			Text: builder.Reg.Build(eventType, []byte(event), "scs_result", []string{"name", "tags", "components_count", "Scorecard", "StoIssueCount", "Signing", "deployments", "digest"}),
 		},
 	}
 

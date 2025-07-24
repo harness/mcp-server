@@ -294,10 +294,7 @@ func registerSCS(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 			toolsets.NewServerTool(GetArtifactV2OverviewTool(config, scsClient)),
 			toolsets.NewServerTool(GetArtifactChainOfCustodyV2Tool(config, scsClient)),
 			toolsets.NewServerTool(CreateOPAPolicyTool(config, scsClient)),
-<<<<<<< HEAD
-=======
 			toolsets.NewServerTool(SummarizeSCSTool(config, scsClient)),
->>>>>>> b97932a (Added changes for sampling)
 		)
 	tsg.AddToolset(scs)
 	return nil
@@ -329,8 +326,8 @@ func registerSTO(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	}
 	sto := toolsets.NewToolset("sto", "Harness Security Test Orchestration tools").
 		AddReadTools(
-			toolsets.NewServerTool(FrontendAllIssuesListTool(config, stoClient)),
-			toolsets.NewServerTool(FrontendGlobalExemptionsTool(config, stoClient)),
+			toolsets.NewServerTool(StoAllIssuesListTool(config, stoClient)),
+			toolsets.NewServerTool(StoGlobalExemptionsTool(config, stoClient)),
 			toolsets.NewServerTool(ExemptionsPromoteExemptionTool(config, stoClient)),
 			toolsets.NewServerTool(ExemptionsApproveExemptionTool(config, stoClient)),
 		)
