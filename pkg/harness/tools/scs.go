@@ -792,6 +792,9 @@ func CreateOPAPolicyTool(config *config.Config, client *generated.ClientWithResp
 				- ["GPL-2.0-only", "BSD-2-Clause", "AGPL-3.0"]
 				- ["MIT", "Apache-2.0"]
 				`),
+				mcp.Items(map[string]any{
+					"type": "string",
+				}),
 			),
 
 			WithScope(config, true),
