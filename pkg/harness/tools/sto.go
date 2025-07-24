@@ -16,9 +16,9 @@ import (
 
 // FrontendAllIssuesListTool returns a tool for listing all issues from the STO Frontend.
 func FrontendAllIssuesListTool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("frontend_all_issues_list",
+	return mcp.NewTool("sto_all_issues_list",
 			mcp.WithDescription(`
-				List all issues or vulnerabilities from the STO Frontend. Show in data table format unless otherwise specified.
+				List all issues or vulnerabilities from the STO. Show in data table format unless otherwise specified.
 
 				Usage Guidance:
 				- Use this tool to retrieve a list of issues or vulnerabilities in your project.
@@ -176,9 +176,9 @@ func FrontendAllIssuesListTool(config *config.Config, client *generated.ClientWi
 }
 
 func FrontendGlobalExemptionsTool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("frontend_global_exemptions",
+	return mcp.NewTool("sto_global_exemptions",
 			mcp.WithDescription(`
-		List global exemptions from the STO Frontend. Filter by status (Pending, Approved, Rejected, Expired), project, or search term. Use this to audit or review all exemption requests across your organization.
+		List global exemptions. Filter by status (Pending, Approved, Rejected, Expired), project, or search term. Use this to audit or review all exemption requests across your organization.
 
 		Filters:
 		- Status: Pending, Approved, Rejected, Expired
@@ -302,7 +302,7 @@ func FrontendGlobalExemptionsTool(config *config.Config, client *generated.Clien
 
 // ExemptionsPromoteExemptionTool promotes a pending exemption to approval/rejection.
 func ExemptionsPromoteExemptionTool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("exemptions_promote_and_approve",
+	return mcp.NewTool("sto_exemptions_promote_and_approve",
 			mcp.WithDescription(`
 				Promote (approve) an exemption request at its current scope or at a higher scope (Project, Org, or Account).
 
