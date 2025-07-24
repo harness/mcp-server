@@ -20,12 +20,16 @@ func ListTemplates(config *config.Config, client *client.TemplateService) (tool 
 			mcp.WithString("search_term",
 				mcp.Description("Optional search term to filter templates"),
 			),
-			mcp.WithString("template_list_type",
-				mcp.Description("Type of templates to list (e.g., Step, Stage, Pipeline)"),
+			mcp.WithString("entity_type",
+				mcp.Description("Type of Template - Enum: Step, Stage, Pipeline, CustomDeployment, MonitoredService, SecretManager"),
+				mcp.Enum("Step", "Stage", "Pipeline", "CustomDeployment", "MonitoredService", "SecretManager"),
 			),
 			mcp.WithString("scope",
 				mcp.Description("Scope level to query templates from (account, org, project). If not specified, defaults to project if org_id and project_id are provided, org if only org_id is provided, or account otherwise."),
 				mcp.Enum("account", "org", "project"),
+			),
+			mcp.WithBoolean("recursive",
+				mcp.Description("If true, returns all supported templates at the specified scope. Default: false"),
 			),
 			WithScope(config, false),
 			WithPagination(),
@@ -43,19 +47,29 @@ func ListTemplates(config *config.Config, client *client.TemplateService) (tool 
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			templateListType, err := OptionalParam[string](request, "template_list_type")
+			// Get entity_type parameter if provided
+			entityType, err := OptionalParam[string](request, "entity_type")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// Get recursive parameter (defaults to false if not provided)
+			recursive, err := OptionalParam[bool](request, "recursive")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			// Create options object
 			opts := &dto.TemplateListOptions{
-				SearchTerm:       searchTerm,
-				TemplateListType: templateListType,
-				PaginationOptions: dto.PaginationOptions{
-					Page: page,
-					Size: size,
-				},
+				SearchTerm: searchTerm,
+				Page:       page,
+				Limit:      size,
+				Recursive:  recursive,
+			}
+
+			// Add entity_type to EntityTypes array if provided
+			if entityType != "" {
+				opts.EntityTypes = []string{entityType}
 			}
 
 			// Determine scope from parameters

@@ -2,9 +2,24 @@ package dto
 
 // TemplateListOptions represents options for listing templates
 type TemplateListOptions struct {
-	SearchTerm       string `json:"search_term,omitempty"`
-	TemplateListType string `json:"template_list_type,omitempty"`
-	PaginationOptions
+	// Pagination parameters
+	Page  int `json:"page,omitempty"`  // Default: 0
+	Limit int `json:"limit,omitempty"` // Default: 30
+
+	// Sorting parameters
+	Sort  string `json:"sort,omitempty"`  // Enum: "identifier" "name" "updated"
+	Order string `json:"order,omitempty"` // Enum: "ASC" "DESC"
+
+	// Filtering parameters
+	SearchTerm string `json:"search_term,omitempty"` // Filter resources having attributes matching with search term
+	Type       string `json:"type,omitempty"`        // Template List Type: Enum: "STABLE_TEMPLATE" "LAST_UPDATES_TEMPLATE" "ALL"
+	Recursive  bool   `json:"recursive,omitempty"`   // Default: false - Specify true if all accessible Templates are to be included
+
+	// List filtering
+	Names       []string `json:"names,omitempty"`        // Template names for filtering
+	Identifiers []string `json:"identifiers,omitempty"`  // Template Ids for Filtering
+	EntityTypes []string `json:"entity_types,omitempty"` // Type of Template - Enum: "Step" "Stage" "Pipeline" "CustomDeployment" "MonitoredService" "SecretManager"
+	ChildTypes  []string `json:"child_types,omitempty"`  // Child types describe the type of Step or stage
 }
 
 // TemplateMetadataSummaryResponse represents a template metadata summary

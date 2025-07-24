@@ -756,11 +756,8 @@ func registerChaos(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 // registerTemplates registers the templates toolset
 func registerTemplates(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for templates
-	baseURL := config.BaseURL
+	baseURL := buildServiceURL(config, config.TemplateSvcBaseURL, config.BaseURL, "")
 	secret := config.TemplateSvcSecret
-	if config.Internal {
-		baseURL = config.TemplateSvcBaseURL
-	}
 
 	// Create base client for templates
 	c, err := createClient(baseURL, config, secret)
@@ -769,8 +766,7 @@ func registerTemplates(config *config.Config, tsg *toolsets.ToolsetGroup) error 
 	}
 
 	templateClient := &client.TemplateService{
-		Client:           c,
-		UseInternalPaths: config.Internal,
+		Client: c,
 	}
 
 	// Create the templates toolset
@@ -791,7 +787,7 @@ func registerIntelligence(config *config.Config, tsg *toolsets.ToolsetGroup) err
 	secret := config.IntelligenceSvcSecret
 
 	// Create base client for intelligence service
-	c, err := createClient(baseURL, config, secret)
+	c, err := createClientWithIdentity(baseURL, config, secret, aiServiceIdentity)
 	if err != nil {
 		return err
 	}
