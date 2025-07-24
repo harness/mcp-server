@@ -334,7 +334,7 @@ func ListRoleAssignmentsTool(config *config.Config, roleAssignmentsClient *clien
 			}
 
 			var principalFilter []dto.RoleAssignmentPrincipalFilter
-			if filterParam, exists := request.Params.Arguments["principal_filter"]; exists {
+			if filterParam, exists := request.GetArguments()["principal_filter"]; exists {
 				if filterArray, ok := filterParam.([]interface{}); ok && len(filterArray) > 0 {
 					principalFilter = make([]dto.RoleAssignmentPrincipalFilter, len(filterArray))
 					for i, item := range filterArray {
