@@ -269,12 +269,8 @@ func (cRole *RBACService) CreateRole(ctx context.Context, scope dto.Scope, opts 
 
 	resp := &dto.AccessControlOutput[dto.CreateRoleOutputData]{}
 	err := cRole.Client.Post(ctx, createRolePath, params, opts, resp)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("failed to create role: %w", err)
-	// }
 	if err != nil {
-		optsJSON, _ := json.MarshalIndent(opts, "", "  ")
-		return nil, fmt.Errorf("failed to create role: %w\nRequest body: %s", err, string(optsJSON))
+		return nil, fmt.Errorf("failed to create role: %w", err)
 	}
 
 	return resp, nil
