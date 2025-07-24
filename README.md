@@ -466,7 +466,7 @@ func registerGenai(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	secret := <GENAI_SECRET>
 
 	// Create base client for genai with the default timeout
-	c, err := createClient(baseURL, config, secret, defaultGenaiTimeout)
+	c, err := CreateClient(baseURL, config, secret, defaultGenaiTimeout)
 	if err != nil {
 		return err
 	}
