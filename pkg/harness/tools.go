@@ -178,7 +178,7 @@ func RegisterSCS(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	baseURL := utils.BuildServiceURL(config, config.SCSSvcBaseURL, config.BaseURL, "/ssca-manager")
 	secret := config.SCSSvcSecret
 	// Create base client for SCS
-	c, err := createClient(baseURL, config, secret, 30*time.Second)
+	c, err := utils.CreateClient(baseURL, config, secret, 30*time.Second)
 	if err != nil {
 		return err
 	}
@@ -200,13 +200,13 @@ func RegisterSCS(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 	scs := toolsets.NewToolset("scs", "Harness Supply Chain Security tools").
 		AddReadTools(
-			toolsets.NewServerTool(ListSCSCodeReposTool(config, scsClient)),
-			toolsets.NewServerTool(GetCodeRepositoryOverviewTool(config, scsClient)),
-			toolsets.NewServerTool(FetchComplianceResultsByArtifactTool(config, scsClient)),
-			toolsets.NewServerTool(ListArtifactSourcesTool(config, scsClient)),
-			toolsets.NewServerTool(GetArtifactV2OverviewTool(config, scsClient)),
-			toolsets.NewServerTool(GetArtifactChainOfCustodyV2Tool(config, scsClient)),
-			toolsets.NewServerTool(CreateOPAPolicyTool(config, scsClient)),
+			toolsets.NewServerTool(tools.ListSCSCodeReposTool(config, scsClient)),
+			toolsets.NewServerTool(tools.GetCodeRepositoryOverviewTool(config, scsClient)),
+			toolsets.NewServerTool(tools.FetchComplianceResultsByArtifactTool(config, scsClient)),
+			toolsets.NewServerTool(tools.ListArtifactSourcesTool(config, scsClient)),
+			toolsets.NewServerTool(tools.GetArtifactV2OverviewTool(config, scsClient)),
+			toolsets.NewServerTool(tools.GetArtifactChainOfCustodyV2Tool(config, scsClient)),
+			toolsets.NewServerTool(tools.CreateOPAPolicyTool(config, scsClient)),
 		)
 	tsg.AddToolset(scs)
 	return nil
@@ -824,18 +824,18 @@ func RegisterDbops(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 func registerAccessControl(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for access control service
-	baseURLRBAC := buildServiceURL(config, config.RBACSvcBaseURL, config.BaseURL, "authz")
+	baseURLRBAC := utils.BuildServiceURL(config, config.RBACSvcBaseURL, config.BaseURL, "authz")
 	secret := config.RBACSvcSecret
 
-	baseURLPrincipal := buildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng/api")
+	baseURLPrincipal := utils.BuildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng/api")
 	principalSecret := config.NgManagerSecret
 
-	c, err := createClient(baseURLRBAC, config, secret)
+	c, err := utils.CreateClient(baseURLRBAC, config, secret)
 	if err != nil {
 		return err
 	}
 
-	principalC, err := createClient(baseURLPrincipal, config, principalSecret)
+	principalC, err := utils.CreateClient(baseURLPrincipal, config, principalSecret)
 	if err != nil {
 		return err
 	}
