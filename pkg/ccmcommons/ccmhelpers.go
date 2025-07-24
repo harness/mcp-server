@@ -73,28 +73,6 @@ func GetSupportedOperators() []string {
 }
 
 
-// // buildFieldMetaMaps builds lookup maps for OutputFields
-// func buildFieldMetaMaps() (map[string]map[string]string) {
-// 	fieldMetaMap := make(map[string]map[string]string)
-// 	for _, f := range ccmcommons.OutputFields {
-// 		if id, ok := f["fieldId"]; ok {
-// 			fieldMetaMap[id] = f
-// 		}
-// 	}
-// 	return fieldMetaMap
-// }
-
-// // buildFieldMetaMaps builds lookup maps for OutputKeyValueFields
-// func buildKeyValueFieldMetaMaps() (map[string]map[string]string) {
-// 	keyValueMetaMap := make(map[string]map[string]string)
-// 	for _, f := range ccmcommons.OutputKeyValueFields {
-// 		if id, ok := f["fieldId"]; ok {
-// 			keyValueMetaMap[id] = f
-// 		}
-// 	}
-// 	return keyValueMetaMap
-// }
-
 // AdaptViewRulesMap converts an array of rule maps (each with conditions) to []*CCMViewRule.
 // Uses OutputFields and OutputKeyValueFields for field metadata.
 func AdaptViewRulesMap(input []any) ([]dto.CCMViewRule, error) {
@@ -126,10 +104,6 @@ func AdaptViewRulesMap(input []any) ([]dto.CCMViewRule, error) {
 			if !ok {
 				return nil, fmt.Errorf("Missing view field 'field1_id' when adapting perspecive rules for field ")
 			}
-			// condType, ok := cond["type"].(string)
-			// if !ok {
-			// 	return nil, fmt.Errorf("Missing condition field 'type' when adapting perspecive rules for field %s", fieldId)
-			// }
 
 			operator, ok := cond["view_operator"].(string)
 			if !ok {
@@ -200,6 +174,3 @@ func AdaptViewRulesMap(input []any) ([]dto.CCMViewRule, error) {
 	}
 	return rules, nil
 }
-
-
-// func BuildOutputFieldsMap() map[string]map[string]any {
