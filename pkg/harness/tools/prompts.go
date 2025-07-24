@@ -20,5 +20,18 @@ func RegisterPrompts(mcpServer *server.MCPServer) {
 					- If no dates are supplied, default startDate to 60 days ago and endDate to now.`).
 			Build())
 
+	prompts.Append(
+		p.NewPrompt().
+			SetName("list_artifact_sources").
+			SetDescription("Hints for formatting the list_artifact_sources results.").
+			SetResultDescription("Markdown-table instructions").
+			SetText(`When you call list_artifact_sources, always present the final answer as a markdown table with columns:
+
+		| Type | Sub-Type | Name | Source ID | Prod Deployments | Non-Prod Deployments | Count | STO Total |
+
+		Leave any unsupported field empty if it is missing.
+		Also generate follow on prompts to get more details about the artifacts.`).
+			Build())
+
 	p.AddPrompts(prompts, mcpServer)
 }

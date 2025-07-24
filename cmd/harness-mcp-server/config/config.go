@@ -55,4 +55,6 @@ type Config struct {
 	AuditSvcSecret          string
 	DBOpsSvcBaseURL         string
 	DBOpsSvcSecret          string
+	RBACSvcBaseURL          string
+	RBACSvcSecret           string
 }

@@ -268,12 +268,12 @@ func MoveEnvironmentConfigsTool(config *config.Config, client *client.Environmen
 			}
 
 			// Set boolean pointers if values were provided
-			if isNewBranchProvided, ok := request.Params.Arguments["is_new_branch"]; ok && isNewBranchProvided != nil {
+			if isNewBranchProvided, ok := request.GetArguments()["is_new_branch"]; ok && isNewBranchProvided != nil {
 				val := isNewBranch
 				moveRequest.IsNewBranch = &val
 			}
 
-			if isHarnessCodeRepoProvided, ok := request.Params.Arguments["is_harness_code_repo"]; ok && isHarnessCodeRepoProvided != nil {
+			if isHarnessCodeRepoProvided, ok := request.GetArguments()["is_harness_code_repo"]; ok && isHarnessCodeRepoProvided != nil {
 				val := isHarnessCodeRepo
 				moveRequest.IsHarnessCodeRepo = &val
 			}

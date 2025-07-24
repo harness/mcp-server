@@ -3,11 +3,12 @@ package harness
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"time"
+
 	"github.com/harness/harness-mcp/pkg/harness/tools"
 	"github.com/harness/harness-mcp/pkg/modules"
 	"github.com/harness/harness-mcp/pkg/modules/utils"
-	"net/http"
-	"time"
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/ar"
@@ -130,6 +131,10 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 		return nil, err
 	}
 
+	if err := registerAccessControl(config, tsg); err != nil {
+		return nil, err
+	}
+
 	// Enable requested toolsets
 	if err := tsg.EnableToolsets(config.Toolsets); err != nil {
 		return nil, err
@@ -172,9 +177,8 @@ func RegisterPipelines(config *config.Config, tsg *toolsets.ToolsetGroup) error 
 func RegisterSCS(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	baseURL := utils.BuildServiceURL(config, config.SCSSvcBaseURL, config.BaseURL, "/ssca-manager")
 	secret := config.SCSSvcSecret
-
 	// Create base client for SCS
-	c, err := utils.CreateClient(baseURL, config, secret)
+	c, err := createClient(baseURL, config, secret, 30*time.Second)
 	if err != nil {
 		return err
 	}
@@ -196,13 +200,13 @@ func RegisterSCS(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 	scs := toolsets.NewToolset("scs", "Harness Supply Chain Security tools").
 		AddReadTools(
-			toolsets.NewServerTool(tools.ListSCSCodeReposTool(config, scsClient)),
-			toolsets.NewServerTool(tools.GetCodeRepositoryOverviewTool(config, scsClient)),
-			toolsets.NewServerTool(tools.FetchComplianceResultsByArtifactTool(config, scsClient)),
-			toolsets.NewServerTool(tools.ListArtifactSourcesTool(config, scsClient)),
-			toolsets.NewServerTool(tools.ArtifactListV2Tool(config, scsClient)),
-			toolsets.NewServerTool(tools.GetArtifactV2OverviewTool(config, scsClient)),
-			toolsets.NewServerTool(tools.GetArtifactChainOfCustodyV2Tool(config, scsClient)),
+			toolsets.NewServerTool(ListSCSCodeReposTool(config, scsClient)),
+			toolsets.NewServerTool(GetCodeRepositoryOverviewTool(config, scsClient)),
+			toolsets.NewServerTool(FetchComplianceResultsByArtifactTool(config, scsClient)),
+			toolsets.NewServerTool(ListArtifactSourcesTool(config, scsClient)),
+			toolsets.NewServerTool(GetArtifactV2OverviewTool(config, scsClient)),
+			toolsets.NewServerTool(GetArtifactChainOfCustodyV2Tool(config, scsClient)),
+			toolsets.NewServerTool(CreateOPAPolicyTool(config, scsClient)),
 		)
 	tsg.AddToolset(scs)
 	return nil
@@ -815,5 +819,43 @@ func RegisterDbops(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 	// Add toolset to the group
 	tsg.AddToolset(dbopsToolset)
+	return nil
+}
+
+func registerAccessControl(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Determine the base URL and secret for access control service
+	baseURLRBAC := buildServiceURL(config, config.RBACSvcBaseURL, config.BaseURL, "authz")
+	secret := config.RBACSvcSecret
+
+	baseURLPrincipal := buildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng/api")
+	principalSecret := config.NgManagerSecret
+
+	c, err := createClient(baseURLRBAC, config, secret)
+	if err != nil {
+		return err
+	}
+
+	principalC, err := createClient(baseURLPrincipal, config, principalSecret)
+	if err != nil {
+		return err
+	}
+
+	rbacClient := &client.RBACService{Client: c}
+	principalClient := &client.PrincipalService{Client: principalC}
+
+	accessControl := toolsets.NewToolset("access_control", "Access control related tools").
+		AddReadTools(
+			toolsets.NewServerTool(tools.ListAvailableRolesTool(config, rbacClient)),
+			toolsets.NewServerTool(tools.ListAvailablePermissions(config, rbacClient)),
+			toolsets.NewServerTool(tools.ListRoleAssignmentsTool(config, rbacClient)),
+			toolsets.NewServerTool(tools.GetUserInfoTool(config, principalClient)),
+			toolsets.NewServerTool(tools.GetUserGroupInfoTool(config, principalClient)),
+			toolsets.NewServerTool(tools.GetServiceAccountTool(config, principalClient)),
+			toolsets.NewServerTool(tools.GetAllUsersTool(config, principalClient)),
+			toolsets.NewServerTool(tools.GetRoleInfoTool(config, rbacClient)),
+		)
+
+	// Add toolset to the group
+	tsg.AddToolset(accessControl)
 	return nil
 }
