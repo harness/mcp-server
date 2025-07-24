@@ -347,7 +347,8 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 			if enrichedArtifacts != nil {
 				suggestions = artifactRuleBasedFollowUps(enrichedArtifacts, &*body.LicenseFilterList)
 			}
-			return appseccommons.NewToolResultTextWithPrompts(string(builder.GenericTableEvent), string(pretty), suggestions), nil
+
+			return appseccommons.NewToolResultTextWithPrompts(string(builder.GenericTableEvent), string(pretty), suggestions, "scs_result", []string{"name", "tags", "components_count", "Scorecard", "StoIssueCount", "Signing", "deployments", "digest"}), nil
 		}
 }
 
@@ -855,7 +856,7 @@ func CreateOPAPolicyTool(config *config.Config, client *generated.ClientWithResp
 			}
 
 			// Use the OPA builder to format the response
-			return appseccommons.NewToolResultTextWithPrompts(string(builder.OPAEvent), string(out), suggestions), nil
+			return appseccommons.NewToolResultTextWithPrompts(string(builder.OPAEvent), string(out), suggestions, "scs_result", []string{"policy", "denied_licenses"}), nil
 		}
 }
 

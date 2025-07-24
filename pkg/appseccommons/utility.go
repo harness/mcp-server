@@ -9,12 +9,12 @@ import (
 )
 
 // NewToolResultTextWithPrompts creates a new CallToolResult with a text content and optional prompts
-func NewToolResultTextWithPrompts(eventType string, event string, prompts []string) *mcp.CallToolResult {
+func NewToolResultTextWithPrompts(eventType string, event string, prompts []string, module string, columns []string) *mcp.CallToolResult {
 	// Create the base content with the text
 	contents := []mcp.Content{
 		mcp.TextContent{
 			Type: "text",
-			Text: builder.Reg.Build(eventType, []byte(event), "scs_result", []string{"name", "tags", "components_count", "Scorecard", "StoIssueCount", "Signing", "deployments", "digest"}),
+			Text: builder.Reg.Build(eventType, []byte(event), module, columns),
 		},
 	}
 
@@ -29,7 +29,7 @@ func NewToolResultTextWithPrompts(eventType string, event string, prompts []stri
 
 		contents = append(contents, mcp.TextContent{
 			Type: "text",
-			Text: builder.Reg.Build(string(builder.PromptEvent), promptData, "scs_result"),
+			Text: builder.Reg.Build(string(builder.PromptEvent), promptData, module),
 		})
 	}
 

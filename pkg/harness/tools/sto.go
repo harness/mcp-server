@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 
+	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/sto/generated"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/appseccommons"
@@ -171,19 +173,26 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 				string(builder.GenericTableEvent),
 				string(tableData),
 				prompts,
+				"STO",
+				nil,
 			), nil
 		}
 }
 
-func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWithResponses, principalClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("sto_global_exemptions",
 			mcp.WithDescription(`
-		List global exemptions. Filter by status (Pending, Approved, Rejected, Expired), project, or search term. Use this to audit or review all exemption requests across your organization.
+		List global exemptions. **You must always provide exactly one status filter**
 
-		Filters:
+		**Important Guidance:**
+		- Always provide the status filter (Pending, Approved, Rejected, or Expired)
+
+		**Filters (choose one):**
 		- Status: Pending, Approved, Rejected, Expired
 		- Project: Comma-separated org:project pairs
-		- Search: Free-text search for issues or requesters
+		- Search: Free-text search for issues
+
+		Use this tool to audit or review all exemption requests across your project or organization or account
 `),
 			mcp.WithString("accountId", mcp.Required(), mcp.Description("Harness Account ID")),
 			mcp.WithString("orgId", mcp.Required(), mcp.Description("Harness Organization ID")),
@@ -196,6 +205,8 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 		), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			params := &generated.FrontendGlobalExemptionsParams{
 				AccountId: config.AccountID,
+				OrgId:     &config.DefaultOrgID,
+				ProjectId: &config.DefaultProjectID,
 			}
 			if v, _ := OptionalParam[string](request, "orgId"); v != "" {
 				params.OrgId = &v
@@ -231,36 +242,65 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 				return mcp.NewToolResultError("No data returned from STO service"), nil
 			}
 
-			// Build table rows from exemptions
+			// 1. Collect all unique user IDs
+			userIDs := make(map[string]struct{})
+			for _, e := range resp.JSON200.Exemptions {
+				if e.RequesterId != "" {
+					userIDs[e.RequesterId] = struct{}{}
+				}
+				if e.ApproverId != nil && *e.ApproverId != "" {
+					userIDs[*e.ApproverId] = struct{}{}
+				}
+			}
+
+			// 2. Fetch user info for each unique user ID
+			userNameMap := make(map[string]string)
+			for userID := range userIDs {
+				name := ""
+				scope, _ := fetchScope(config, request, false)
+				// PrincipalService: GetUserInfo(ctx, scope, userID, page, size)
+				userInfo, err := principalClient.GetUserInfo(ctx, scope, userID, 0, 1)
+				userInfoJSON, _ := json.Marshal(userInfo)
+				slog.Info("UserInfo", "userInfo", string(userInfoJSON))
+				if err == nil && userInfo != nil && &userInfo.Data != nil && &userInfo.Data.User != nil {
+					if userInfo.Data.User.Name != "" {
+						name = userInfo.Data.User.Name
+					} else if userInfo.Data.User.Email != "" {
+						name = userInfo.Data.User.Email
+					}
+				}
+				// If lookup fails, name remains ""
+				userNameMap[userID] = name
+			}
+
+			// 3. Build table rows from exemptions
 			rows := []map[string]interface{}{}
 			for _, e := range resp.JSON200.Exemptions {
-				// Calculate exemption duration (as string)
 				duration := ""
 				if e.Expiration != nil {
-					// If Expiration is present, compute duration from Created to Expiration
 					seconds := *e.Expiration - e.Created
 					days := seconds / 86400
 					duration = fmt.Sprintf("%dd", days)
 				} else if e.PendingChanges.DurationDays != nil {
-					// If PendingChanges has durationDays, use it
 					duration = fmt.Sprintf("%dd", *e.PendingChanges.DurationDays)
 				}
 
 				row := map[string]interface{}{
 					"ExemptionId":        e.Id,
-					"SEVERITY":           "",
-					"ISSUE":              "",
+					"SEVERITY":           e.IssueSummary.SeverityCode,
+					"ISSUE":              e.IssueSummary.Title,
 					"SCOPE":              e.Scope,
 					"REASON":             e.Reason,
 					"EXEMPTION DURATION": duration,
-					"REQUESTED BY":       e.RequesterId,
 					"OrgId":              e.OrgId,
 					"ProjectId":          e.ProjectId,
 					"PipelineId":         e.PipelineId,
 					"TargetId":           e.TargetId,
 				}
-				row["SEVERITY"] = e.IssueSummary.SeverityCode
-				row["ISSUE"] = e.IssueSummary.Title
+				row["REQUESTED BY"] = userNameMap[e.RequesterId]
+				if e.ApproverId != nil && *e.ApproverId != "" {
+					row["APPROVED BY"] = userNameMap[*e.ApproverId]
+				}
 				rows = append(rows, row)
 			}
 
@@ -289,6 +329,7 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 
 			// Marshal only the rows, not the whole response
 			tableData, err := json.Marshal(rows)
+			slog.Info("FrontendGlobalExemptionsTool call response table data", "tableData", string(tableData))
 			if err != nil {
 				return mcp.NewToolResultError("Failed to marshal table data: " + err.Error()), nil
 			}
@@ -296,6 +337,8 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 				string(builder.GenericTableEvent),
 				string(tableData),
 				suggestions,
+				"STO",
+				[]string{"ExemptionId", "SEVERITY", "ISSUE", "SCOPE", "REASON", "EXEMPTION DURATION", "OrgId", "ProjectId", "PipelineId", "TargetId", "REQUESTED BY", "APPROVED BY"},
 			), nil
 		}
 }
@@ -344,7 +387,7 @@ func ExemptionsPromoteExemptionTool(config *config.Config, client *generated.Cli
 			params := &generated.ExemptionsPromoteExemptionParams{
 				AccountId: config.AccountID,
 			}
-			userID := "baCzBls7TumXnxvAyOHkUA"
+			approverId := getCurrentUserUUID(ctx, config)
 			defaultComment := "This is done by Harness Agent"
 			if v, _ := OptionalParam[string](request, "orgId"); v != "" {
 				params.OrgId = &v
@@ -353,7 +396,7 @@ func ExemptionsPromoteExemptionTool(config *config.Config, client *generated.Cli
 				params.ProjectId = &v
 			}
 			body := generated.PromoteExemptionRequestBody{
-				ApproverId: userID,
+				ApproverId: approverId,
 			}
 			if v, _ := OptionalParam[string](request, "comment"); v != "" {
 				body.Comment = &v
@@ -432,10 +475,13 @@ Approve or reject an exemption request at its current (requested) scope.
 			if v, _ := OptionalParam[string](request, "projectId"); v != "" {
 				params.ProjectId = &v
 			}
-			userID := "baCzBls7TumXnxvAyOHkUA"
+			approverId, err := requiredParam[string](request, "approverId")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 			defaultComment := "This is done by Harness Agent"
 			body := generated.ApproveExemptionRequestBody{
-				ApproverId: userID,
+				ApproverId: approverId,
 			}
 			if v, _ := OptionalParam[string](request, "comment"); v != "" {
 				body.Comment = &v
@@ -461,4 +507,29 @@ Approve or reject an exemption request at its current (requested) scope.
 			}
 			return mcp.NewToolResultText(string(data)), nil
 		}
+}
+
+func getCurrentUserUUID(ctx context.Context, config *config.Config) string {
+	slog.Info("getCurrentUserUUID called")
+	url := config.BaseURL + "/gateway/ng/api/user/currentUser?routingId=" + config.AccountID + "&accountIdentifier=" + config.AccountID
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return ""
+	}
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	var result struct {
+		Data struct {
+			UUID string `json:"uuid"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return ""
+	}
+	slog.Info("getCurrentUserUUID response", "result", result)
+	return result.Data.UUID
 }
