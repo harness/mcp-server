@@ -421,13 +421,16 @@ To use the Harness MCP Server with Amazon Q Developer CLI:
 
 The Harness MCP Server supports the following command line arguments:
 
-- `--toolsets`: Comma-separated list of tool groups to enable, if the list is empty or flag is not set, only default toolset is enabled (default: "")
+- `--toolsets`: Comma-separated list of tool groups to enable, if the list is empty or flag is not set, only default toolset is enabled. Use `--toolsets=all` to enable all available toolsets. Note: This flag is only effective when `--enable-license` is false (the default).
+- `--enable-license`: Enable license validation and module-based toolset management (default is false, i.e OSS version). When set to true, toolsets are managed through modules.
+- `--enable-modules`: Comma-separated list of modules to enable (only used when `--enable-license` is true). Use `--enable-modules=all` to enable all available modules, or specify individual modules like `--enable-modules=CORE,CI,CD`.
 - `--read-only`: Run the server in read-only mode
 - `--log-file`: Path to log file for debugging
 - `--log-level`: Set the logging level (debug, info, warn, error)
 - `--version`: Show version information
 - `--help`: Show help message
 - `--base-url`: Base URL for Harness (default: "https://app.harness.io")
+
 
 ### Environment Variables
 

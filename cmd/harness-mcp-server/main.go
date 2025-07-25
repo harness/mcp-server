@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/harness/harness-mcp/pkg/harness/tools"
 	"io"
 	"log"
 	"log/slog"
@@ -11,6 +10,8 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+
+	"github.com/harness/harness-mcp/pkg/harness/tools"
 
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness"
@@ -68,6 +69,12 @@ var (
 				return fmt.Errorf("Failed to unmarshal toolsets: %w", err)
 			}
 
+			var enabledModules []string
+			err = viper.UnmarshalKey("enable_modules", &enabledModules)
+			if err != nil {
+				return fmt.Errorf("Failed to unmarshal enabled modules: %w", err)
+			}
+
 			cfg := config.Config{
 				Version:          version,
 				BaseURL:          viper.GetString("base_url"),
@@ -79,7 +86,8 @@ var (
 				Toolsets:         toolsets,
 				LogFilePath:      viper.GetString("log_file"),
 				Debug:            viper.GetBool("debug"),
-				EnabledModules:   harness.EnabledModules,
+				EnableModules:    enabledModules,
+				EnableLicense:    viper.GetBool("enable_license"),
 			}
 
 			if err := runStdioServer(ctx, cfg); err != nil {
@@ -124,16 +132,23 @@ var (
 				return fmt.Errorf("Failed to unmarshal toolsets: %w", err)
 			}
 
+			var enabledModules []string
+			err = viper.UnmarshalKey("enable_modules", &enabledModules)
+			if err != nil {
+				return fmt.Errorf("Failed to unmarshal enabled modules: %w", err)
+			}
+
 			cfg := config.Config{
 				// Common fields
-				Version:        version,
-				ReadOnly:       true, // we keep it read-only for now
-				Toolsets:       toolsets,
-				EnabledModules: harness.EnabledModules,
-				LogFilePath:    viper.GetString("log_file"),
-				Debug:          viper.GetBool("debug"),
-				Internal:       true,
-				AccountID:      session.Principal.AccountID,
+				Version:       version,
+				ReadOnly:      true, // we keep it read-only for now
+				Toolsets:      toolsets,
+				EnableModules: enabledModules,
+				LogFilePath:   viper.GetString("log_file"),
+				Debug:         viper.GetBool("debug"),
+				EnableLicense: viper.GetBool("enable_license"),
+				Internal:      true,
+				AccountID:     session.Principal.AccountID,
 				// Internal mode specific fields
 				BearerToken:             viper.GetString("bearer_token"),
 				PipelineSvcBaseURL:      viper.GetString("pipeline_svc_base_url"),
@@ -189,6 +204,8 @@ func init() {
 	// Add global flags
 	rootCmd.PersistentFlags().StringSlice("toolsets", harness.DefaultTools,
 		"An optional comma separated list of groups of tools to allow, defaults to enabling all")
+	rootCmd.PersistentFlags().StringSlice("enable-modules", []string{}, "Comma separated list of modules to enable")
+	rootCmd.PersistentFlags().Bool("enable-license", false, "Enable license validation")
 	rootCmd.PersistentFlags().Bool("read-only", false, "Restrict the server to read-only operations")
 	rootCmd.PersistentFlags().String("log-file", "", "Path to log file")
 	rootCmd.PersistentFlags().Bool("debug", false, "Enable debug logging")
@@ -237,6 +254,8 @@ func init() {
 
 	// Bind global flags to viper
 	_ = viper.BindPFlag("toolsets", rootCmd.PersistentFlags().Lookup("toolsets"))
+	_ = viper.BindPFlag("enable_modules", rootCmd.PersistentFlags().Lookup("enable-modules"))
+	_ = viper.BindPFlag("enable_license", rootCmd.PersistentFlags().Lookup("enable-license"))
 	_ = viper.BindPFlag("read_only", rootCmd.PersistentFlags().Lookup("read-only"))
 	_ = viper.BindPFlag("log_file", rootCmd.PersistentFlags().Lookup("log-file"))
 	_ = viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
