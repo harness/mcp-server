@@ -64,6 +64,9 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 
 		if allToolsets {
 			// Register all available toolsets
+			if err := RegisterDefault(config, tsg); err != nil {
+				return err
+			}
 			if err := modules.RegisterPipelines(config, tsg); err != nil {
 				return err
 			}
@@ -154,6 +157,34 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 					}
 				case "services":
 					if err := modules.RegisterServices(config, tsg); err != nil {
+						return err
+					}
+				case "connectors":
+					if err := modules.RegisterConnectors(config, tsg); err != nil {
+						return err
+					}
+				case "dashboards":
+					if err := modules.RegisterDashboards(config, tsg); err != nil {
+						return err
+					}
+				case "audit":
+					if err := modules.RegisterAudit(config, tsg); err != nil {
+						return err
+					}
+				case "templates":
+					if err := modules.RegisterTemplates(config, tsg); err != nil {
+						return err
+					}
+				case "intelligence":
+					if err := modules.RegisterIntelligence(config, tsg); err != nil {
+						return err
+					}
+				case "dbops":
+					if err := modules.RegisterDbops(config, tsg); err != nil {
+						return err
+					}
+				case "access_control":
+					if err := modules.RegisterAccessControl(config, tsg); err != nil {
 						return err
 					}
 				}
