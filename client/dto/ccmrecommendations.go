@@ -45,3 +45,15 @@ type CCMCostCategoryDetail struct {
 	CostCategory string `json:"costCategory,omitempty"`
 	CostBucket   string `json:"costBucket,omitempty"`
 }
+
+type CCMListRecommendationsByResourceResponse struct {
+	CCMBaseResponse
+	Data          CCMRecommendationsResponseData `json:"data,omitempty"`
+}
+
+type CCMRecommendationSummaryItem struct {
+	Count             int    `json:"count,omitempty"`
+	TotalMonthlyCost  float64    `json:"totalMonthlyCost,omitempty"`
+	TotalMonthlySaving float64    `json:"totalMonthlySaving,omitempty"`
+	ResourceType      string `json:"resourceType,omitempty"`
+}

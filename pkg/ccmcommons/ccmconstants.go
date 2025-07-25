@@ -234,3 +234,11 @@ Lists recommendation items with metadata such as resource identifiers, potential
 Supports rich filtering (for example by cloud account, Kubernetes attributes, resource type) so teams only fetch what’s relevant to them or their Perspective/RBAC scope. 
 Harness
 `
+
+var ListRecommendationsByResourceTypeDescription = `
+Retrieves aggregated statistics of cloud cost optimization recommendations grouped by resource type within a given account. This includes counts and potential savings information for each resource type, helping to understand which resource categories offer the most cost optimization opportunities. Ideal for monitoring and prioritizing cloud resource cost-saving actions.
+`
+
+var GetRecommendationsStatsDescription = `
+Retrieves overall statistics for cloud cost optimization recommendations within a given account. The response provides aggregated metrics such as the total number of recommendations, total estimated cost savings, and the count of open and applied recommendations. This helps track the overall state and impact of cost optimization efforts across all resources.
+`

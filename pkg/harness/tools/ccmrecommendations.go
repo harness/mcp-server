@@ -8,140 +8,176 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/harness/harness-mcp/pkg/ccmcommons"
+	"github.com/harness/harness-mcp/client/dto"
 )
 
-func ListCcmRecommendationsTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+type ClientFunctionRecommendationsInterface func(ctx context.Context, scope dto.Scope, accountId string, params map[string]any) (*map[string]any, error)
+
+func ListCcmRecommendationsTool(config *config.Config, client *client.CloudCostManagementService,
+) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 
 	return mcp.NewToolWithRawSchema("list_ccm_recommendations", ccmcommons.ListRecommendationsDescription,
-			recommendationsCountDefinition(),
-		),
-		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-
-			// Account Id for querystring.
-			accountId, err := getAccountID(config, request)
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-
-			scope, err := FetchScope(config, request, false)
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-
-			k8sProps, err := OptionalParam[map[string]any](request, "k8sRecommendationFilterPropertiesDTO")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			awsProps, err := OptionalParam[map[string]any](request, "awsRecommendationFilterPropertiesDTO")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			azureProps, err := OptionalParam[map[string]any](request, "azureRecommendationFilterProperties")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			containerProps, err := OptionalParam[map[string]any](request, "containerRecommendationFilterPropertiesDTO")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			governanceProps, err := OptionalParam[map[string]any](request, "governanceRecommendationFilterPropertiesDTO")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			baseProps, err := OptionalParam[map[string]any](request, "baseRecommendationFilterPropertiesDTO")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			perspectiveFilters, err := OptionalParam[[]any](request, "perspectiveFilters")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			minSaving, err := OptionalParam[float64](request, "minSaving")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			minCost, err := OptionalParam[float64](request, "minCost")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			daysBack, err := OptionalParam[float64](request, "daysBack")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			offset, err := OptionalParam[float64](request, "offset")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			limit, err := OptionalParam[float64](request, "limit")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			childRecommendation, err := OptionalParam[bool](request, "childRecommendation")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			includeIgnoredRecommendation, err := OptionalParam[bool](request, "includeIgnoredRecommendation")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			parentRecommendation, err := OptionalParam[bool](request, "parentRecommendation")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			tagDTOs, err := OptionalParam[[]any](request, "tagDTOs")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			costCategoryDTOs, err := OptionalParam[[]any](request, "costCategoryDTOs")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			tags, err := OptionalParam[map[string]any](request, "tags")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			filterType, err := OptionalParam[string](request, "filterType")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-
-			params := map[string]any{
-				"k8sRecommendationFilterPropertiesDTO":      k8sProps,
-				"awsRecommendationFilterPropertiesDTO":      awsProps,
-				"azureRecommendationFilterProperties":       azureProps,
-				"containerRecommendationFilterPropertiesDTO": containerProps,
-				"governanceRecommendationFilterPropertiesDTO": governanceProps,
-				"baseRecommendationFilterPropertiesDTO":     baseProps,
-				"perspectiveFilters":                        perspectiveFilters,
-				"minSaving":                                 minSaving,
-				"minCost":                                   minCost,
-				"daysBack":                                  daysBack,
-				"offset":                                    offset,
-				"limit":                                     limit,
-				"childRecommendation":                       childRecommendation,
-				"includeIgnoredRecommendation":              includeIgnoredRecommendation,
-				"parentRecommendation":                      parentRecommendation,
-				"tagDTOs":                                   tagDTOs,
-				"costCategoryDTOs":                          costCategoryDTOs,
-				"tags":                                      tags,
-				"filterType":                                filterType,
-			}
-
-			data, err := client.ListRecommendations(ctx, scope, accountId, params)
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-
-			r, err := json.Marshal(data)
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-
-			return mcp.NewToolResultText(string(r)), nil
-		}
+		recommendationsListDefinition(),
+	),
+	func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return recommendationsHandler(config, ctx, request, client.ListRecommendations)
+	}
 }
 
-func recommendationsCountDefinition() json.RawMessage {
+func ListCcmRecommendationsByResourceTypeTool(config *config.Config, client *client.CloudCostManagementService,
+) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+
+	return mcp.NewToolWithRawSchema("list_ccm_recommendations_by_resource_type", ccmcommons.ListRecommendationsByResourceTypeDescription,
+		recommendationsListDefinition(),
+	),
+	func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return recommendationsHandler(config, ctx, request, client.ListRecommendationsByResourceType)
+	}
+}
+
+func GetCcmRecommendationsStatsTool(config *config.Config, client *client.CloudCostManagementService,
+) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+
+	return mcp.NewToolWithRawSchema("get_ccm_recommendations_stats", ccmcommons.GetRecommendationsStatsDescription,
+		recommendationsListDefinition(),
+	),
+	func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return recommendationsHandler(config, ctx, request, client.GetRecommendationsStats)
+	}
+}
+
+func recommendationsHandler(
+	config *config.Config, 
+	ctx context.Context, 
+	request mcp.CallToolRequest,
+	clientFunction ClientFunctionRecommendationsInterface,
+) (*mcp.CallToolResult, error) {
+
+	// Account Id for querystring.
+	accountId, err := getAccountID(config, request)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	scope, err := FetchScope(config, request, false)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	k8sProps, err := OptionalParam[map[string]any](request, "k8sRecommendationFilterPropertiesDTO")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	awsProps, err := OptionalParam[map[string]any](request, "awsRecommendationFilterPropertiesDTO")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	azureProps, err := OptionalParam[map[string]any](request, "azureRecommendationFilterProperties")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	containerProps, err := OptionalParam[map[string]any](request, "containerRecommendationFilterPropertiesDTO")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	governanceProps, err := OptionalParam[map[string]any](request, "governanceRecommendationFilterPropertiesDTO")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	baseProps, err := OptionalParam[map[string]any](request, "baseRecommendationFilterPropertiesDTO")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	perspectiveFilters, err := OptionalParam[[]any](request, "perspectiveFilters")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	minSaving, err := OptionalParam[float64](request, "minSaving")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	minCost, err := OptionalParam[float64](request, "minCost")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	daysBack, err := OptionalParam[float64](request, "daysBack")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	offset, err := OptionalParam[float64](request, "offset")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	limit, err := OptionalParam[float64](request, "limit")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	childRecommendation, err := OptionalParam[bool](request, "childRecommendation")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	includeIgnoredRecommendation, err := OptionalParam[bool](request, "includeIgnoredRecommendation")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	parentRecommendation, err := OptionalParam[bool](request, "parentRecommendation")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	tagDTOs, err := OptionalParam[[]any](request, "tagDTOs")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	costCategoryDTOs, err := OptionalParam[[]any](request, "costCategoryDTOs")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	tags, err := OptionalParam[map[string]any](request, "tags")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	filterType, err := OptionalParam[string](request, "filterType")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	params := map[string]any{
+		"k8sRecommendationFilterPropertiesDTO":      k8sProps,
+		"awsRecommendationFilterPropertiesDTO":      awsProps,
+		"azureRecommendationFilterProperties":       azureProps,
+		"containerRecommendationFilterPropertiesDTO": containerProps,
+		"governanceRecommendationFilterPropertiesDTO": governanceProps,
+		"baseRecommendationFilterPropertiesDTO":     baseProps,
+		"perspectiveFilters":                        perspectiveFilters,
+		"minSaving":                                 minSaving,
+		"minCost":                                   minCost,
+		"daysBack":                                  daysBack,
+		"offset":                                    offset,
+		"limit":                                     limit,
+		"childRecommendation":                       childRecommendation,
+		"includeIgnoredRecommendation":              includeIgnoredRecommendation,
+		"parentRecommendation":                      parentRecommendation,
+		"tagDTOs":                                   tagDTOs,
+		"costCategoryDTOs":                          costCategoryDTOs,
+		"tags":                                      tags,
+		"filterType":                                filterType,
+	}
+
+	data, err := clientFunction(ctx, scope, accountId, params)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	r, err := json.Marshal(data)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultText(string(r)), nil
+}
+
+
+func recommendationsListDefinition() json.RawMessage {
 	return toRawMessage(commonRecommendationsSchema(), []string{})
 }
 
