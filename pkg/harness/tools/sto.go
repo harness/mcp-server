@@ -405,7 +405,7 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 				string(tableData),
 				suggestions,
 				"ExemptionsList",
-				[]string{"ExemptionId", "SEVERITY", "ISSUE", "SCOPE", "REASON", "EXEMPTION DURATION", "OrgId", "ProjectId", "PipelineId", "TargetId", "REQUESTED BY", "APPROVED BY"},
+				"ExemptionId", "SEVERITY", "ISSUE", "SCOPE", "REASON", "EXEMPTION DURATION", "OrgId", "ProjectId", "PipelineId", "TargetId", "REQUESTED BY", "APPROVED BY",
 			), nil
 		}
 }

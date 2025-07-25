@@ -306,7 +306,7 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 				suggestions = artifactRuleBasedFollowUps(enrichedArtifacts, &*body.LicenseFilterList)
 			}
 
-			return appseccommons.NewToolResultTextWithPrompts(string(builder.GenericTableEvent), string(pretty), suggestions, "Artifact Report", []string{"name", "tags", "components", "vulnerabilities", "scorecard", "deployment", "sbom violations", "digest", "signing", "updated", "orchestration"}), nil
+			return appseccommons.NewToolResultTextWithPrompts(string(builder.GenericTableEvent), string(pretty), suggestions, "Artifact Report", "name", "tags", "components", "vulnerabilities", "scorecard", "deployment", "sbom violations", "digest", "signing", "updated", "orchestration"), nil
 		}
 }
 
@@ -1059,7 +1059,7 @@ func ListSCSCodeReposTool(config *config.Config, client *generated.ClientWithRes
 				"Show me compliance risk of 1st repository",
 			}
 
-			return appseccommons.NewToolResultTextWithPrompts(string(builder.GenericTableEvent), string(out), suggestions, "Repositories Report", []string{"name", "compliance", "vulnerabilities", "sbom_score", "repo_path", "last_scan", "dependencies", "last_scan"}), nil
+			return appseccommons.NewToolResultTextWithPrompts(string(builder.GenericTableEvent), string(out), suggestions, "Repositories Report", "name", "compliance", "vulnerabilities", "sbom_score", "repo_path", "last_scan", "dependencies", "last_scan"), nil
 		}
 
 }
