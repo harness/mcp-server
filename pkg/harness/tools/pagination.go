@@ -13,7 +13,7 @@ func WithPagination() mcp.ToolOption {
 			mcp.DefaultNumber(0),
 		)(tool)
 		mcp.WithNumber("size",
-			mcp.Description("Number of items per page"),
+			mcp.Description("Number of items per page - take 5 items per page unless specified otherwise"),
 			mcp.DefaultNumber(5),
 			mcp.Max(20),
 		)(tool)

@@ -9,12 +9,12 @@ import (
 )
 
 // NewToolResultTextWithPrompts creates a new CallToolResult with a text content and optional prompts
-func NewToolResultTextWithPrompts(eventType string, event string, prompts []string, module string, columns []string) *mcp.CallToolResult {
+func NewToolResultTextWithPrompts(eventType string, event string, prompts []string, module string, args ...any) *mcp.CallToolResult {
 	// Create the base content with the text
 	contents := []mcp.Content{
 		mcp.TextContent{
 			Type: "text",
-			Text: builder.Reg.Build(eventType, []byte(event), module, columns),
+			Text: builder.Reg.Build(eventType, []byte(event), module, args...),
 		},
 	}
 
