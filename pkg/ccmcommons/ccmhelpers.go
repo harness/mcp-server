@@ -9,31 +9,24 @@ import (
 
 func GetFilterInstructions() string {
 	// Build a map for fast lookup by fieldId
-	fieldsMap := make(map[string]map[string]string)
-	for _, field := range ccmcommons.OutputFields {
-		fieldsMap[field["fieldId"]] = field
-	}
-
-	instructions := "To create a filter rule in a perspective for a specific field, use the corresponding map entry and all its properties as shown below:\n\n"
+	fieldsMap :=  ccmcommons.BuildOutputFieldsMap()
+	instructions := "To create a filter rule in a perspective for a specific field, use the descriptions shown below:\n\n"
 	for _, desc := range ConditionFieldDescriptions {
 		fieldId := desc["fieldId"]
 		description := desc["description"]
-		if field, ok := fieldsMap[fieldId]; ok {
+		if field, ok := fieldsMap[fieldId]["field"]; ok {
+			fieldObj := field.(map[string]string)
 			instructions += description + "\n"
 			instructions += `
 			Map: {
-				"fieldId": "` + field["fieldId"] + `",
+				"fieldId": "` + fieldObj["fieldId"] + `",
+				"fieldName": "` + fieldObj["fieldName"] + `",
+				"identifier": "` + fieldObj["identifier"] + `",
+				"identifierName": "` + fieldObj["identifierName"] + `",
 			}`
 		}
 	}
-
-	for _, desc := range ConditionKeyValueFieldDescriptions {
-		fieldId := desc["fieldId"]
-		description := desc["description"]
-		if _, ok := fieldsMap[fieldId]; ok {
-			instructions += description + "\n"
-			}
-	}
+	
 	return instructions
 }
 
@@ -76,7 +69,6 @@ func GetSupportedOperators() []string {
 // AdaptViewRulesMap converts an array of rule maps (each with conditions) to []*CCMViewRule.
 // Uses OutputFields and OutputKeyValueFields for field metadata.
 func AdaptViewRulesMap(input []any) ([]dto.CCMViewRule, error) {
-	fieldMap := ccmcommons.BuildOutputFieldsMap()
 
 	var rules []dto.CCMViewRule
 	for _, ruleMap := range input {
@@ -100,10 +92,26 @@ func AdaptViewRulesMap(input []any) ([]dto.CCMViewRule, error) {
 				return nil, fmt.Errorf("Couldn't extract view field from perspective rules map when adapting %s", cond)
 			}
 
-			fieldId, ok := viewField["field1_id"].(string)
+			fieldId, ok := viewField["field_id"].(string)
 			if !ok {
 				return nil, fmt.Errorf("Missing view field 'field1_id' when adapting perspecive rules for field ")
 			}
+
+			fieldName, ok := viewField["field_name"].(string)
+			if !ok {
+				return nil, fmt.Errorf("Missing view field 'field_name' when adapting perspecive rules for field ")
+			}
+
+			identifier, ok := viewField["identifier"].(string)
+			if !ok {
+				return nil, fmt.Errorf("Missing view field 'identifier' when adapting perspecive rules for field ")
+			}
+
+			identifierName, ok := viewField["identifier_name"].(string)
+			if !ok {
+				return nil, fmt.Errorf("Missing view field 'identifier' when adapting perspecive rules for field ")
+			}
+
 
 			operator, ok := cond["view_operator"].(string)
 			if !ok {
@@ -118,57 +126,19 @@ func AdaptViewRulesMap(input []any) ([]dto.CCMViewRule, error) {
 			for _, v := range valuesIface {
 				values = append(values, v.(string))
 			}
-			var metaField = "field"
-			var fieldMeta map[string]string
-			switch fieldId {
-			case "label", "label_v2":
-				fieldMeta, ok = fieldMap[fieldId][metaField].(map[string]string)
-				if !ok {
-					return nil, fmt.Errorf("field %s not found in view rules map when adapting", fieldId)
-				}
-				labelId, ok := viewField["field2_id"].(string)
-				if !ok {
-					return nil, fmt.Errorf("field2_id not found in view rules map when adapting %s", fieldId)
-				}
-				fieldMeta["fieldName"] = labelId
-
-			case "business_mapping":
-				fieldMeta, ok = fieldMap[fieldId][metaField].(map[string]string)
-				if !ok {
-					return nil, fmt.Errorf("field %s not found in view rules map when adapting", fieldId)
-				}
-				costCategoryId, ok := viewField["field2_id"].(string)
-				if !ok {
-					return nil, fmt.Errorf("field2_id not found in perspective rules map when adapting %s", fieldId)
-				}
-				costCategoryName, ok := viewField["field3_id"].(string)
-				if !ok {
-					return nil, fmt.Errorf("field3_id not found in perspective rules map when adapting %s", fieldId)
-				}
-				fieldMeta["fieldId"] = costCategoryId
-				fieldMeta["fieldName"] = costCategoryName
-
-			default:
-				fieldMeta, ok = fieldMap[fieldId][metaField].(map[string]string)
-				if !ok {
-					return nil, fmt.Errorf("field %s not found in perspective rules map when adapting", fieldId)
-				}
-			}
-			if fieldMeta == nil {
-				return nil, fmt.Errorf("Error adapting perspective rules for field %s", fieldId)
-			}
-
-			rule.ViewConditions = append(rule.ViewConditions, dto.CCMViewCondition{
+			viewCondition := dto.CCMViewCondition{
 				Type:         "VIEW_ID_CONDITION",
 				ViewOperator: operator,
 				Values:       values,
 				ViewField: dto.CCMViewField{
-					FieldId:        fieldMeta["fieldId"],
-					FieldName:      fieldMeta["fieldName"],
-					Identifier:     fieldMeta["identifier"],
-					IdentifierName: fieldMeta["identifierName"],
+					FieldId:        fieldId,
+					FieldName:      fieldName,
+					Identifier:     identifier,
+					IdentifierName: identifierName,
 				},
-			})
+			}
+
+			rule.ViewConditions = append(rule.ViewConditions, viewCondition)
 		}
 		rules = append(rules, rule)
 	}

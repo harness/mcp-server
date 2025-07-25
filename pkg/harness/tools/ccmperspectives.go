@@ -671,11 +671,12 @@ Use this field to define precise inclusion/exclusion logic for data shown in the
                             "type":        "object",
                             "description": getFilterInstructions(), 
                             "properties": map[string]any{
-                                "field1_id":         map[string]any{"type": "string"},
-                                "field2_id":       map[string]any{"type": "string"},
-                                "field3_id":       map[string]any{"type": "string"},
+                                "field_id":         map[string]any{"type": "string"},
+                                "field_name":       map[string]any{"type": "string"},
+                                "identifier":       map[string]any{"type": "string"},
+                                "identifier_name":       map[string]any{"type": "string"},
                             },
-                            "required": []string{"field1_id"},
+                            "required": []string{"field_id", "field_name", "identifier"},
                         },
                         "view_operator": map[string]any{
                             "type": "string",

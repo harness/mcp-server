@@ -214,46 +214,16 @@ var ConditionFieldDescriptions = []map[string]string{
 		"fieldId":     "product",
 		"description": "use this field to create a view filter rule to filter by product.",
 	},
-}
-
-var labelDescription = `
-Use this field to create a view filter rule to filter by Label.
-Use the following Map format:
-{
-	"field1_id": "label",
-	"field2_id": Select a value from the list returned by the 'ccm_filter_values' tool with field_type set to 'label'
-}
-`
-
-var labelV2Description = `
-Use this field to create a view filter rule to filter by Label V2.
-Use the following Map format:
-{
-	"field1_id": "label_v2",
-	"field2_id": Select a value from the list returned by the 'ccm_filter_values' tool with field_type set to 'label_v2'
-}
-`
-var costCategoryDescription = `
-Use this field to create a view filter rule to filter by Cost Category.
-Use the following Map format:
-{
-	"field1_id": "business_mapping",
-	"field2_id": "Select a value from the 'uuid' field returned by the tool list_ccm_cost_categories_detail.",
-	"field3_id": Select the value from 'name' field corresonding to the 'uuid' field returned by the list_ccm_cost_categories_detail used in 'field_id'
-}
-`
-
-var ConditionKeyValueFieldDescriptions = []map[string]string{
 	{
 		"fieldId":     "label",
-		"description": labelDescription,
+		"description": "Use this field to create a view filter rule to filter by Labels",
 	},
 	{
 		"fieldId":     "label_v2",
-		"description": labelV2Description, 
+		"description": "Use this field to create a view filter rule to filter by Labels",
 	},
 	{
 		"fieldId":     "business_mapping",
-		"description": costCategoryDescription, 
+		"description": "Use this field to create a view filter rule to filter by Labels", 
 	},
 }
