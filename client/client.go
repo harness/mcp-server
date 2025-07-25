@@ -277,7 +277,6 @@ func (c *Client) PostRawStream(
 
 		if isRetryable(resp.StatusCode) {
 			if resp.Body != nil {
-				slog.Debug("Response", "Body", resp.Body)
 				resp.Body.Close()
 			}
 			return fmt.Errorf("retryable status code: %d", resp.StatusCode)

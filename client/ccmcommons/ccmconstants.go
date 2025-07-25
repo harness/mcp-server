@@ -26,12 +26,6 @@ var OutputFields = []map[string]string{
 		"identifierName": "AWS",
 	},
 	{
-		"fieldId":        "awsUsageaccountid",
-		"fieldName":      "Account",
-		"identifier":     "AWS",
-		"identifierName": "AWS",
-	},
-	{
 		"fieldId":        "awsInstancetype",
 		"fieldName":      "Instance Type",
 		"identifier":     "AWS",
