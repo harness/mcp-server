@@ -210,7 +210,7 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 					row["name"] = *artifact.Name
 				}
 				if artifact.Tags != nil {
-					row["tags"] = strings.Join(*artifact.Tags, ", ")
+					row["tags"] = strings.Join(*artifact.Tags, "\n")
 				}
 				if artifact.Url != nil {
 					row["url"] = *artifact.Url
@@ -219,7 +219,7 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 					row["metadata"] = *artifact.Metadata
 				}
 				if artifact.ComponentsCount != nil {
-					row["components_count"] = *artifact.ComponentsCount
+					row["components"] = *artifact.ComponentsCount
 				}
 				if artifact.Updated != nil {
 					// Try to parse millis and format as date, fallback to raw string
@@ -237,20 +237,20 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 				if artifact.PolicyEnforcement != nil {
 					pe := map[string]interface{}{}
 					if artifact.PolicyEnforcement.AllowListViolationCount != nil {
-						pe["allow list violation count"] = *artifact.PolicyEnforcement.AllowListViolationCount
+						pe["allow list"] = *artifact.PolicyEnforcement.AllowListViolationCount
 					}
 					if artifact.PolicyEnforcement.DenyListViolationCount != nil {
-						pe["deny list violation count"] = *artifact.PolicyEnforcement.DenyListViolationCount
+						pe["deny list"] = *artifact.PolicyEnforcement.DenyListViolationCount
 					}
-					row["policy_enforcement"] = pe
+					row["sbom violations"] = pe
 				}
 				if artifact.Deployment != nil {
 					dep := map[string]interface{}{}
 					if artifact.Deployment.ProdEnvCount != nil {
-						dep["prod env count"] = *artifact.Deployment.ProdEnvCount
+						dep["Prod"] = *artifact.Deployment.ProdEnvCount
 					}
 					if artifact.Deployment.NonProdEnvCount != nil {
-						dep["non prod env count"] = *artifact.Deployment.NonProdEnvCount
+						dep["Non Prod"] = *artifact.Deployment.NonProdEnvCount
 					}
 					row["deployment"] = dep
 				}
@@ -295,7 +295,7 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 				rows = append(rows, row)
 			}
 			// Transform enrichedArtifacts into a table-like structure
-			pretty, err := json.MarshalIndent(enrichedArtifacts, "", "  ")
+			pretty, err := json.MarshalIndent(rows, "", "  ")
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal response: %w", err)
 			}
@@ -306,7 +306,7 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 				suggestions = artifactRuleBasedFollowUps(enrichedArtifacts, &*body.LicenseFilterList)
 			}
 
-			return appseccommons.NewToolResultTextWithPrompts(string(builder.GenericTableEvent), string(pretty), suggestions, "scs_result", []string{"name", "tags", "url", "components_count", "vulnerabilities", "scorecard", "deployment", "policy_enforcement", "digest", "signing", "artifact_type", "orchestration"}), nil
+			return appseccommons.NewToolResultTextWithPrompts(string(builder.GenericTableEvent), string(pretty), suggestions, "Artifact Report", []string{"name", "tags", "components", "vulnerabilities", "scorecard", "deployment", "sbom violations", "digest", "signing", "updated", "orchestration"}), nil
 		}
 }
 
@@ -1059,7 +1059,7 @@ func ListSCSCodeReposTool(config *config.Config, client *generated.ClientWithRes
 				"Show me compliance risk of 1st repository",
 			}
 
-			return appseccommons.NewToolResultTextWithPrompts(string(builder.GenericTableEvent), string(out), suggestions, "scs_result", []string{"name", "compliance", "vulnerabilities", "sbom_score", "repo_path", "last_scan", "dependencies", "platform"}), nil
+			return appseccommons.NewToolResultTextWithPrompts(string(builder.GenericTableEvent), string(out), suggestions, "Repositories Report", []string{"name", "compliance", "vulnerabilities", "sbom_score", "repo_path", "last_scan", "dependencies", "last_scan"}), nil
 		}
 
 }
