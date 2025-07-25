@@ -7,10 +7,10 @@ import (
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
-	"github.com/harness/harness-mcp/pkg/utils"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"log/slog"
+	"github.com/harness/harness-mcp/pkg/utils"
+	"github.com/harness/harness-mcp/pkg/ccmcommons"
 	"strings"
 )
 
@@ -295,7 +295,7 @@ func GetLastTwelveMonthsCostCcmPerspectiveTool(config *config.Config, client *cl
 
 			return mcp.NewToolResultText(string(r)), nil
 		}
-}
+	}
 
 // Create perspective
 func CreateCcmPerspectiveTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
@@ -308,100 +308,104 @@ func CreateCcmPerspectiveTool(config *config.Config, client *client.CloudCostMan
 func createPerspectiveTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool) {
 
 	return mcp.NewTool("create_ccm_perspective",
-		mcp.WithDescription("Get the last twelve months cost for a perspective in Harness Cloud Cost Management"),
-		mcp.WithString("account_id",
-			mcp.Description("The account identifier owner of the perspective"),
-		),
-		mcp.WithString("clone",
-			mcp.DefaultBool(false),
-			mcp.Description("Whether to clone the perspective or create a new one"),
-		),
-		mcp.WithString("update_total_cost",
-			mcp.DefaultBool(false),
-			mcp.Description("Whether to clone the perspective or create a new one"),
-		),
-		mcp.WithString("name",
-			mcp.Required(),
-			mcp.Description("Required perspective name"),
-		),
-		mcp.WithString("folder_id",
-			mcp.Description("Idenfifier for the containing folder of the perspective"),
-		),
-		mcp.WithString("view_version",
-			mcp.Required(),
-			mcp.Description("Required. Version of the view"),
-		),
-		mcp.WithString("view_time_range_type",
-			mcp.Required(),
-			mcp.Enum(dto.TimeRangeTypeLast7Days, dto.TimeRangeTypeLast30Days, dto.TimeRangeTypeLastMonth, dto.TimeRangeTypeCurrentMonth, dto.TimeRangeTypeCustom),
-			mcp.Description("Containing folder identifier of the perspective"),
-		),
-		mcp.WithString("view_time_range_start",
-			mcp.Description("Start time when using view_time_range_type=Custom. In format MM/DD/YYYY. ie: 04/30/2023 for April 30, 2023"),
-		),
-		mcp.WithString("view_time_range_end",
-			mcp.Description("End time when using view_time_range_type=Custom. In format MM/DD/YYYY. ie: 04/30/2023 for April 30, 2023"),
-		),
-		mcp.WithArray("data_sources",
+			mcp.WithDescription("Get the last twelve months cost for a perspective in Harness Cloud Cost Management"),
+			mcp.WithString("account_id",
+				mcp.Description("The account identifier owner of the perspective"),
+			),
+			mcp.WithString("clone",
+				mcp.DefaultBool(false),
+				mcp.Description("Whether to clone the perspective or create a new one"),
+			),
+			mcp.WithString("update_total_cost",
+				mcp.DefaultBool(false),
+				mcp.Description("Whether to clone the perspective or create a new one"),
+			),
+			mcp.WithString("name",
+				mcp.Required(),
+				mcp.Description("Required perspective name"),
+			),
+			mcp.WithString("folder_id",
+				mcp.Description("Idenfifier for the containing folder of the perspective"),
+			),
+			mcp.WithString("view_version",
+				mcp.Required(),
+				mcp.DefaultString("1"),
+				mcp.Description("Required. Version of the view"),
+			),
+			mcp.WithString("view_time_range_type",
+				mcp.Required(),
+				mcp.Enum(dto.TimeRangeTypeLast7Days, dto.TimeRangeTypeLast30Days, dto.TimeRangeTypeLastMonth, dto.TimeRangeTypeCurrentMonth, dto.TimeRangeTypeCustom),
+				mcp.DefaultString(dto.TimeRangeTypeLast7Days),
+				mcp.Description("Containing folder identifier of the perspective"),
+			),
+			mcp.WithString("view_time_range_start",
+				mcp.Description("Start time when using view_time_range_type=Custom. In format MM/DD/YYYY. ie: 04/30/2023 for April 30, 2023"),
+			),
+			mcp.WithString("view_time_range_end",
+				mcp.Description("End time when using view_time_range_type=Custom. In format MM/DD/YYYY. ie: 04/30/2023 for April 30, 2023"),
+			),
+			mcp.WithArray("data_sources",
 			mcp.Description(fmt.Sprintf("Supported data sources: %s", getSupportedDataSources())),
-			mcp.Enum(dto.DataSourceAws, dto.DataSourceGcp, dto.DataSourceAzure, dto.DataSourceExternalData, dto.DataSourceCommon, dto.DataSourceCustom, dto.DataSourceBusinessMapping, dto.DataSourceLabel, dto.DataSourceLabelV2),
-		),
-		mcp.WithBoolean("view_pref_show_anomalies",
-			mcp.DefaultBool(false),
-			mcp.Description("Whether to show anomalies in the view"),
-		),
-		mcp.WithBoolean("view_pref_include_others",
-			mcp.DefaultBool(false),
-			mcp.Description("Whether to include other data in the view"),
-		),
-		mcp.WithBoolean("view_pref_include_unallocated_cost",
-			mcp.DefaultBool(false),
-			mcp.Description("Whether to include discounts in the view"),
-		),
-		mcp.WithBoolean("view_pref_aws_pref_include_discounts",
-			mcp.DefaultBool(false),
-			mcp.Description("Whether to include discounts in AWS view"),
-		),
-		mcp.WithBoolean("view_pref_aws_pref_include_credits",
-			mcp.DefaultBool(false),
-			mcp.Description("Whether to include credits in AWS view"),
-		),
-		mcp.WithBoolean("view_pref_aws_pref_include_refunds",
-			mcp.DefaultBool(false),
-			mcp.Description("Whether to include refunds in AWS view"),
-		),
-		mcp.WithBoolean("view_pref_aws_pref_include_taxes",
-			mcp.DefaultBool(false),
-			mcp.Description("Whether to include taxes in AWS view"),
-		),
-		mcp.WithString("view_pref_aws_pref_aws_cost",
-			mcp.Enum(dto.AwsCostUnblended, dto.AwsCostBlended),
-			mcp.Description(fmt.Sprintf("How to show AWS cost (%s, %s)", dto.AwsCostUnblended, dto.AwsCostBlended)),
-		),
-		mcp.WithBoolean("view_pref_gcp_pref_include_discounts",
-			mcp.DefaultBool(false),
-			mcp.Description("Whether to include discounts"),
-		),
-		mcp.WithBoolean("view_pref_gcp_pref_include_taxes",
-			mcp.DefaultBool(false),
-			mcp.Description("Whether to include taxes"),
-		),
-		mcp.WithString("view_pref_azure_pref_cost_type",
-			mcp.Enum(dto.AzureCostTypeActual, dto.AzureCostTypeAmortized),
-			mcp.Description(fmt.Sprintf("How to show AZURE cost (%s, %s)", dto.AzureCostTypeActual, dto.AzureCostTypeAmortized)),
-		),
-		mcp.WithString("view_type",
-			mcp.Required(),
-			mcp.Description(fmt.Sprintf("View type (%s, %s, %s)", dto.ViewTypeSample, dto.ViewTypeCustomer, dto.ViewTypeDefault)),
-			mcp.Description("Type of view"),
-		),
-		mcp.WithString("view_state",
-			mcp.Required(),
-			mcp.DefaultString(dto.ViewStateCompleted),
-			mcp.Enum(dto.ViewStateDraft, dto.ViewStateCompleted),
-			mcp.Description("State of view. Set to completed if it is not provided."),
-		),
-	)
+				mcp.Enum(dto.DataSourceAws, dto.DataSourceGcp, dto.DataSourceAzure, dto.DataSourceExternalData, dto.DataSourceCommon, dto.DataSourceCustom, dto.DataSourceBusinessMapping, dto.DataSourceLabel, dto.DataSourceLabelV2),
+			),
+			mcp.WithBoolean("view_pref_show_anomalies",
+				mcp.DefaultBool(false),
+				mcp.Description("Whether to show anomalies in the view"),
+			),
+			mcp.WithBoolean("view_pref_include_others",
+				mcp.DefaultBool(false),
+				mcp.Description("Whether to include other data in the view"),
+			),
+			mcp.WithBoolean("view_pref_include_unallocated_cost",
+				mcp.DefaultBool(false),
+				mcp.Description("Whether to include discounts in the view"),
+			),
+			mcp.WithBoolean("view_pref_aws_pref_include_discounts",
+				mcp.DefaultBool(false),
+				mcp.Description("Whether to include discounts in AWS view"),
+			),
+			mcp.WithBoolean("view_pref_aws_pref_include_credits",
+				mcp.DefaultBool(false),
+				mcp.Description("Whether to include credits in AWS view"),
+			),
+			mcp.WithBoolean("view_pref_aws_pref_include_refunds",
+				mcp.DefaultBool(false),
+				mcp.Description("Whether to include refunds in AWS view"),
+			),
+			mcp.WithBoolean("view_pref_aws_pref_include_taxes",
+				mcp.DefaultBool(false),
+				mcp.Description("Whether to include taxes in AWS view"),
+			),
+			mcp.WithString("view_pref_aws_pref_aws_cost",
+				mcp.Enum(dto.AwsCostUnblended, dto.AwsCostBlended),
+				mcp.Description(fmt.Sprintf("How to show AWS cost (%s, %s)", dto.AwsCostUnblended, dto.AwsCostBlended)),
+				mcp.DefaultString(dto.AwsCostUnblended),
+			),
+			mcp.WithBoolean("view_pref_gcp_pref_include_discounts",
+				mcp.DefaultBool(false),
+				mcp.Description("Whether to include discounts"),
+			),
+			mcp.WithBoolean("view_pref_gcp_pref_include_taxes",
+				mcp.DefaultBool(false),
+				mcp.Description("Whether to include taxes"),
+			),
+			mcp.WithString("view_pref_azure_pref_cost_type",
+				mcp.Enum(dto.AzureCostTypeActual, dto.AzureCostTypeAmortized),
+				mcp.Description(fmt.Sprintf("How to show AZURE cost (%s, %s)", dto.AzureCostTypeActual, dto.AzureCostTypeAmortized)),
+			),
+			mcp.WithString("view_type",
+				mcp.Required(),
+				mcp.Description(fmt.Sprintf("View type (%s, %s, %s)", dto.ViewTypeSample, dto.ViewTypeCustomer, dto.ViewTypeDefault)),
+				mcp.DefaultString(dto.ViewTypeDefault),
+			),
+			mcp.WithString("view_state",
+				mcp.Required(),
+				mcp.DefaultString(dto.ViewStateCompleted),
+				mcp.Enum(dto.ViewStateDraft, dto.ViewStateCompleted),
+				mcp.Description("State of view. Set to completed if it is not provided."),
+			),
+			createPerspectiveRules(),
+		)
 }
 
 func createPerspectiveHandler(config *config.Config, client *client.CloudCostManagementService, ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -570,10 +574,17 @@ func createPerspectiveHandler(config *config.Config, client *client.CloudCostMan
 	params.Body.ViewPreferences.GcpPreferences.IncludeTaxes = viewPrefGcpPrefIncludeTaxes
 	params.Body.ViewPreferences.AzureViewPreferences.CostType = viewPrefAzureViewPrefCostType
 
-	viewRules, err := OptionalParam[map[string]any](request, "rules")
-	slog.Debug("pgk create", "viewConditions", viewRules)
+	viewRules, err := OptionalAnyArrayParam(request, "view_rules")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	if viewRules != nil {
-		//params.Body.ViewRules = viewRules
+		rules, err := ccmcommons. AdaptViewRulesMap(viewRules) 
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		params.Body.ViewRules = rules
 	}
 
 	params.Body.ViewType = viewType
@@ -595,58 +606,6 @@ func createPerspectiveHandler(config *config.Config, client *client.CloudCostMan
 
 	return mcp.NewToolResultText(string(r)), nil
 }
-
-/*
- - Agregate function?
- - view_id
- - time_filter
-   * LAST_7
-   * THIS_MONTH
-   * LAST_30_DAYS
-   * THIS_QUARTER
-   * THIS_YEAR
-   * LAST_MONTH
-   * LAST_QUARTER
-   * LAST_YEAR
-   * LAST_3_MONTHS
-   * LAST_6_MONTHS
-   * LAST_12_MONTHS
-- is_cluster_only
-- is_cluster_hourly_data
-- limit
-- offset
-- group_by
-   * COST_CATEGORY (custom)
-   * AWS
-     - ACCOUNT
-	 - BILLING_ENTITY
-	 - INSTANCE_TYPE
-	 - LINE_ITEM_TYPE
-	 - PAYER_ACCOUNT
-	 - SERVICE
-	 - USAGE_TYPE
-   * REGION
-   * PRODUCT
-   * CLOUD_PROVIDER
-   * LABEL (custom)
-   * LABEL_V2 (custom)
-   * NONE
-- include_others (showOthers)
-- include_anomalies (showAnomalies)
-- include_unallocated_cost (showUnallocatedCost)
-- aws_include_discounts
-- aws_include_credits
-- aws_include_refunds
-- aws_include_taxes
-- aws_cost
-   * AMORTISED
-   * NET_AMORTISED
-   * UNBLENDED
-   * BLENDED
-   * EFFECTIVE
-
-
-*/
 
 func getSupportedDataSources() string {
 	return strings.Join([]string{
@@ -677,17 +636,80 @@ func getSupportedFieldId() string {
 	}, ", ")
 }
 
-func MapToViewRule(m map[string]any) (*[]dto.CCMViewRule, error) {
-	b, err := json.Marshal(m)
-	if err != nil {
-		slog.Debug("MapToViewRule", "rules", err)
-		return nil, err
-	}
-	rules := new([]dto.CCMViewRule)
-	err = json.Unmarshal(b, rules)
-	if err != nil {
-		slog.Debug("MapToViewRule", "rules", err)
-		return nil, err
-	}
-	return rules, nil
+func createPerspectiveRules() mcp.ToolOption {
+	// option_description := fmt.Sprintf(" field %s. The format for this field is: {\"field\": \"field_name\", \"value\": \"field_value\"}.",group_by_options),
+
+var fieldDescription = `
+A list of view rules that define the filtering logic for this Perspective. Each rule contains one or more view conditions specifying which data to include or exclude from the Perspective. These conditions allow filtering by dimensions such as Kubernetes clusters, cloud providers (AWS, GCP, Azure), business mappings, custom fields, and labels.
+
+Each viewCondition includes:
+
+The filter type (currently only ViewIdCondition is supported),
+
+A viewField specifying the dimension to filter on (e.g., cost category or resource type),
+
+An identifier defining the field source (e.g., "CLUSTER", "AWS", "LABEL_V2", etc.),
+
+An operator such as "IN", "EQUALS", or "LIKE",
+
+A list of values used in the condition.
+
+Use this field to define precise inclusion/exclusion logic for data shown in the Perspective.
+`
+
+   return mcp.WithArray(
+        "view_rules",
+        mcp.Description(fieldDescription),
+        mcp.Items(map[string]any{
+            "view_conditions": map[string]any{
+                "type":        "array",
+                "description": getConditionInstructions(), 
+                "items": map[string]any{
+                    "type": "object",
+                    "properties": map[string]any{
+                        "view_field": map[string]any{
+                            "type":        "object",
+                            "description": getFilterInstructions(), 
+                            "properties": map[string]any{
+                                "field_id":         map[string]any{"type": "string"},
+                                "field_name":       map[string]any{"type": "string"},
+                                "identifier":       map[string]any{"type": "string"},
+                                "identifier_name":       map[string]any{"type": "string"},
+                            },
+                            "required": []string{"field_id", "field_name", "identifier"},
+                        },
+                        "view_operator": map[string]any{
+                            "type": "string",
+							"description": getOperatorsDescription(), 
+                            "enum": getSupportedOperators(), 
+                        },
+                        "values": map[string]any{
+                            "type":  "array",
+                            "items": map[string]any{"type": "string"},
+                        },
+                    },
+                    "required": []string{"type", "view_field", "view_operator", "values"},
+                },
+				},
+        }),
+    )
+}
+
+func getFilterInstructions() string {
+	return ccmcommons.GetFilterInstructions()
+}
+
+func getSupportedOperators() []string {
+	return ccmcommons.GetSupportedOperators()
+}
+
+func getConditionInstructions() string {
+	return ccmcommons.GetConditionInstructions()
+}
+
+func getOperatorsDescription() string {
+	return ccmcommons.OperatorsDescription
+}
+func GetOperatorsDescription() string {
+	return ccmcommons.OperatorsDescription
 }

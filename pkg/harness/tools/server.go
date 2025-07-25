@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
-
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -111,6 +110,7 @@ func ExtractParam[T any](r mcp.CallToolRequest, key string) (T, error) {
 		// Try unmarshaling the string directly into T.
 		// This works for T == string AND T == alias of string.
 		jsonStr := fmt.Sprintf(`"%s"`, v)
+
 		if err := json.Unmarshal([]byte(jsonStr), &zero); err == nil {
 			return zero, nil
 		}
@@ -185,5 +185,23 @@ func OptionalStringArrayParam(r mcp.CallToolRequest, p string) ([]string, error)
 		return strSlice, nil
 	default:
 		return []string{}, fmt.Errorf("parameter %s could not be coerced to []string, is %T", p, r.GetArguments()[p])
+	}
+}
+
+func OptionalAnyArrayParam(r mcp.CallToolRequest, p string) ([]any, error) {
+	// Check if the parameter is present in the request
+	value, ok := r.GetArguments()[p]
+
+	if !ok {
+		return nil, fmt.Errorf("missing parameter: %s", p)
+	}
+
+	switch v := value.(type) {
+	case nil:
+		return []any{}, nil
+	case []any:
+		return v, nil
+	default:
+		return nil, fmt.Errorf("parameter %s could not be coerced to []any, is %T", p, value)
 	}
 }

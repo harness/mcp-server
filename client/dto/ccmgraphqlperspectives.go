@@ -1,7 +1,7 @@
 package dto
 
 const (
-	TimeFilterLast7         = "LAST_7"
+	TimeFilterLast7         = "LAST_7" // It doesn't work using "LAST_7_DAYS"
 	TimeFilterThisMonth     = "THIS_MONTH"
 	TimeFilterLast30Days    = "LAST_30_DAYS"
 	TimeFilterThisQuarter   = "THIS_QUARTER"
@@ -32,6 +32,24 @@ const (
 )
 
 const (
+	ValueTypeCostCategory     = "business_mapping"
+	ValueTypeAWSAccount       = "awsUsageaccountid"
+	ValueTypeAWSBillingEntity = "awsBillingEntity"
+	ValueTypeAWSInstanceType  = "awsInstancetype"
+	ValueTypeAWSLineItemType  = "awsLineItemType"
+	ValueTypeAWSPayerAccount  = "awspayeraccountid"
+	ValueTypeAWSService       = "awsServicecode"
+	ValueTypeAWSUsageType     = "awsUsageType"
+	ValueTypeRegion           = "region"
+	ValueTypeProduct          = "product"
+	ValueTypeCloudProvider    = "cloudProvider"
+	ValueTypeLabel            = "label"
+	ValueTypeLabelKey         = "label_key"
+	ValueTypeLabelV2          = "label_v2"
+	ValueTypeLabelV2Key       = "label_v2_key"
+)
+
+const (
 	TimeGroupByDay   = "DAY"
 	TimeGroupByWeek  = "WEEK"
 	TimeGroupByMonth = "MONTH"
@@ -40,6 +58,21 @@ const (
 type CCMKeyValue struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
+}
+
+type CCMGraphQLError struct {
+	Message    string                      `json:"message"`
+	Locations  []CCMGraphQLErrorLocation   `json:"locations"`
+	Extensions CCMGraphQLErrorExtensions   `json:"extensions"`
+}
+
+type CCMGraphQLErrorLocation struct {
+	Line   int `json:"line"`
+	Column int `json:"column"`
+}
+
+type CCMGraphQLErrorExtensions struct {
+	Classification string `json:"classification"`
 }
 
 type CCMGraphQLFilters  = map[string][]string
@@ -74,6 +107,7 @@ type CCMPerspectiveTimeSeriesOptions struct {
 }
 
 type CCMPerspectiveGridResponse struct {
+	Errors []CCMGraphQLError `json:"errors"`
 	Data CCMPerspectiveGridDataWrapper `json:"data"`
 }
 
@@ -97,6 +131,7 @@ type CCMPerspectiveGridDataPoint struct {
 
 
 type CCMPerspectiveTimeSeriesResponse struct {
+	Errors []CCMGraphQLError `json:"errors"`
 	Data struct {
 		PerspectiveTimeSeriesStats struct {
 			Stats []CCMPerspectiveTimeSeriesStat `json:"stats"`
@@ -147,6 +182,7 @@ type CCMPerspectiveForecastCost struct {
 }
 
 type CCMPerspectiveSummaryWithBudgetResponse struct {
+	Errors []CCMGraphQLError `json:"errors"`
 	Data struct {
 		PerspectiveTrendStats   CCMPerspectiveTrendStats   `json:"perspectiveTrendStats"`
 		PerspectiveForecastCost CCMPerspectiveForecastCost `json:"perspectiveForecastCost"`
@@ -167,6 +203,7 @@ type CCMPerspectiveBudget struct {
 }
 
 type CCMPerspectiveBudgetResponse struct {
+	Errors []CCMGraphQLError `json:"errors"`
 	Data struct {
 		BudgetSummaryList []CCMPerspectiveBudget `json:"budgetSummaryList"`
 	} `json:"data"`
@@ -207,6 +244,7 @@ type CCMMetadata struct {
 }
 
 type CCMMetadataResponse struct {
+	Errors []CCMGraphQLError `json:"errors"`
 	Data struct {
 		CCMMetadata CCMMetadata `json:"ccmMetaData"`
 	} `json:"data"`
@@ -237,8 +275,32 @@ type CCMRecommendationsV2 struct {
 }
 
 type CCMPerspectiveRecommendationsResponse struct {
+	Errors []CCMGraphQLError `json:"errors"`
 	Data struct {
 		RecommendationStatsV2 CCMRecommendationStatsV2 `json:"recommendationStatsV2"`
 		RecommendationsV2     CCMRecommendationsV2     `json:"recommendationsV2"`
+	} `json:"data"`
+}
+
+type CCMPerspectiveFilterValuesOptions struct {
+	AccountId             string `json:"account_id"`
+	ViewId                string `json:"view_id"`
+	TimeFilter            string `json:"time_filter"`
+	ValueType             string `json:"value_type"`
+	ValueSubType          string `json:"value_sub_type"`
+	Limit                 int32  `json:"limit"`
+	Offset                int32  `json:"offset"`
+	IsClusterHourlyData bool
+}
+
+type CCMPerspectiveFilterValues struct {
+	Values    []string `json:"values"`
+	Typename  string   `json:"__typename"`
+}
+
+type CCMPerspectiveFilterValuesResponse struct {
+	Errors []CCMGraphQLError `json:"errors"`
+	Data struct {
+		PerspectiveFilters CCMPerspectiveFilterValues `json:"perspectiveFilters"`
 	} `json:"data"`
 }

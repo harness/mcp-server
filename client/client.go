@@ -176,6 +176,9 @@ func (c *Client) PostRaw(
 
 		resp, err := c.Do(req)
 
+		slog.Debug("Response", "url", req.URL.String())
+		slog.Debug("Response", "value", resp)
+
 		if resp != nil && resp.Body != nil {
 			defer resp.Body.Close()
 		}
@@ -265,6 +268,8 @@ func (c *Client) PostRawStream(
 		addQueryParams(req, params)
 
 		resp, err = c.Do(req)
+
+		slog.Debug("Response", "url", req.URL.String())
 
 		if err != nil || resp == nil {
 			return fmt.Errorf("request failed: %w", err)
