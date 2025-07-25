@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
@@ -62,11 +63,13 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 				mcp.Description("Page number to fetch (starting from 0)"),
 				mcp.Min(0),
 				mcp.DefaultNumber(0),
+				mcp.Required(),
 			),
 			mcp.WithNumber("size",
 				mcp.Description("Number of results per page like 10"),
 				mcp.DefaultNumber(5),
 				mcp.Max(20),
+				mcp.Required(),
 			),
 			mcp.WithString("targetIds",
 				mcp.Description("Comma-separated target IDs to filter")),
@@ -118,13 +121,25 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 				OrgId:     scope.OrgID,
 				ProjectId: scope.ProjectID,
 			}
+			page := int64(0)
+			size := int64(5)
 
+			if v, _ := ExtractParam[string](request, "orgId"); v != "" {
+				params.OrgId = v
+			}
+			if v, _ := ExtractParam[string](request, "projectId"); v != "" {
+				params.ProjectId = v
+			}
 			// Optional params
 			if v, _ := OptionalParam[int64](request, "page"); v != 0 {
 				params.Page = &v
+			} else {
+				params.Page = &page
 			}
 			if v, _ := OptionalParam[int64](request, "size"); v != 0 {
 				params.PageSize = &v
+			} else {
+				params.PageSize = &size
 			}
 			if v, _ := OptionalParam[string](request, "targetIds"); v != "" {
 				params.TargetIds = &v
@@ -183,15 +198,32 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 			}
 			var prompts []string
 			prompts = append(prompts,
-				"Show me issues without Exemption",
 				"Show me only issues with secrets identified",
+				"Show me issues without Exemption",
 			)
+			// The tool name is "sto_all_issues_list", so we extract "STO" from it
+			moduleName := "AllIssuesList"
+			
+			if search, _ := OptionalParam[string](request, "search"); search != "" {
+				// Truncate if too long
+				if len(search) > 20 {
+					search = search[:17] + "..."
+				}
+				// Replace underscores with spaces for better readability
+				search = strings.ReplaceAll(search, "_", " ")
+				// Capitalize first letter for consistency
+				if len(search) > 0 {
+					search = strings.ToUpper(search[:1]) + search[1:]
+				}
+				moduleName = moduleName + ": " + search
+			}
+
 			return appseccommons.NewToolResultTextWithPrompts(
 				string(builder.GenericTableEvent),
 				string(tableData),
 				prompts,
-				"STO",
-				[]string{"TITLE", "SEVERITY", "ISSUE TYPE", "TARGETS IMPACTED", "OCCURRENCES", "LAST DETECTED", "EXEMPTION STATUS", "ISSUE_ID", "EXEMPTION_ID"},
+				moduleName,
+				nil,
 			), nil
 		}
 }
@@ -237,7 +269,8 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 		Note: For exact vulnerability IDs, use the complete ID without modifications.`)),
 			WithScope(config, true),
 		), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-
+			page := int64(0)
+			size := int64(5)
 			scope, err := FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -255,9 +288,13 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 			}
 			if v, _ := OptionalParam[int64](request, "page"); v != 0 {
 				params.Page = &v
+			} else {
+				params.Page = &page
 			}
 			if v, _ := OptionalParam[int64](request, "pageSize"); v != 0 {
 				params.PageSize = &v
+			} else {
+				params.PageSize = &size
 			}
 			if v, _ := OptionalParam[string](request, "matchesProject"); v != "" {
 				params.MatchesProject = &v
@@ -344,6 +381,9 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 
 			var suggestions []string
 			maxSuggestions := 2
+			suggestions = append(suggestions,
+				"Reject exemptions raised for issue type as secret",
+			)
 			for i := 0; i < len(rows) && i < maxSuggestions; i++ {
 				id, idOk := rows[i]["ExemptionId"].(string)
 				issue, issueOk := rows[i]["ISSUE"].(string)
@@ -356,11 +396,6 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 				}
 			}
 
-			suggestions = append(suggestions,
-				"See exemptions with a different status (Approved, Rejected, Expired)?",
-				"Get more details about a specific exemption?",
-			)
-
 			tableData, err := json.Marshal(rows)
 			if err != nil {
 				return mcp.NewToolResultError("Failed to marshal table data: " + err.Error()), nil
@@ -369,7 +404,7 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 				string(builder.GenericTableEvent),
 				string(tableData),
 				suggestions,
-				"STO",
+				"ExemptionsList",
 				[]string{"ExemptionId", "SEVERITY", "ISSUE", "SCOPE", "REASON", "EXEMPTION DURATION", "OrgId", "ProjectId", "PipelineId", "TargetId", "REQUESTED BY", "APPROVED BY"},
 			), nil
 		}
@@ -415,6 +450,7 @@ func ExemptionsPromoteExemptionTool(config *config.Config, client *generated.Cli
 			mcp.WithString("comment", mcp.Description("Optional comment for the approval or rejection")),
 			mcp.WithString("pipelineId", mcp.Description("Optional pipeline ID to associate with the exemption")),
 			mcp.WithString("targetId", mcp.Description("Optional target ID to associate with the exemption")),
+			WithScope(config, true),
 		), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			params := &generated.ExemptionsPromoteExemptionParams{
 				AccountId: config.AccountID,
@@ -498,6 +534,7 @@ func ExemptionsApproveExemptionTool(config *config.Config, client *generated.Cli
 			mcp.WithString("orgId", mcp.Description("Harness Organization ID")),
 			mcp.WithString("projectId", mcp.Description("Harness Project ID")),
 			mcp.WithString("comment", mcp.Description("Optional comment for the approval or rejection")),
+			WithScope(config, true),
 		), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			params := &generated.ExemptionsApproveExemptionParams{
 				AccountId: config.AccountID,
