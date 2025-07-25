@@ -193,7 +193,7 @@ func OptionalAnyArrayParam(r mcp.CallToolRequest, p string) ([]any, error) {
 	value, ok := r.GetArguments()[p]
 
 	if !ok {
-		return nil, fmt.Errorf("missing optional parameter: %s", p)
+		return nil, fmt.Errorf("missing parameter: %s", p)
 	}
 
 	switch v := value.(type) {

@@ -41,14 +41,14 @@ func BuildFilterValues(options  *dto.CCMPerspectiveFilterValuesOptions) []map[st
 		options.ValueType == dto.ValueTypeLabel || 
 		options.ValueType == dto.ValueTypeLabelV2 {
 
-		filter, ok := BuildKeyValueFieldFilter(options.ValueType, options.ValueSubType, BuildOutputFieldsMap())
-		if ok == nil {
+		filter, err := BuildKeyValueFieldFilter(options.ValueType, options.ValueSubType, BuildOutputFieldsMap())
+		if err == nil {
 			filters = append(filters, filter...)
 		}
 	} else if options.ValueType == dto.ValueTypeLabelKey || 
 		options.ValueType == dto.ValueTypeLabelV2Key {
-		filter, ok := BuildKeyFieldFilter(options.ValueType, BuildOutputFieldsMap())
-		if ok == nil {
+		filter, err := BuildKeyFieldFilter(options.ValueType, BuildOutputFieldsMap())
+		if err == nil {
 			filters = append(filters, filter...)
 		}
 		
@@ -67,7 +67,7 @@ func buildFilterForKeyValue(valueType string, valueSubtype string) dto.CCMGraphQ
 
 	filterType := "labels.value"
 	if strings.EqualFold(valueType, dto.ValueTypeCostCategory) {	
-		filterType = "bussines_mapping"
+		filterType = "business_mapping"
 	}
 
 	return map[string]map[string]any{
