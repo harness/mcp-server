@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
@@ -67,7 +68,7 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 			),
 			mcp.WithNumber("size",
 				mcp.Description("Number of results per page like 10"),
-				mcp.DefaultNumber(5),
+				mcp.DefaultNumber(10),
 				mcp.Max(20),
 				mcp.Required(),
 			),
@@ -122,7 +123,7 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 				ProjectId: scope.ProjectID,
 			}
 			page := int64(0)
-			size := int64(5)
+			size := int64(10)
 
 			if v, _ := ExtractParam[string](request, "orgId"); v != "" {
 				params.OrgId = v
@@ -178,14 +179,20 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 			}
 			rows := []map[string]interface{}{}
 			for _, issue := range resp.JSON200.Issues {
+				// Format the timestamp first
+				var formattedDate interface{} = issue.LastDetected
+				if tsInt, ok := formattedDate.(int64); ok {
+					t := time.Unix(tsInt, 0)
+					formattedDate = t.Format("02/01/2006 15:04")
+				}
 				row := map[string]interface{}{
 					"SEVERITY":         issue.SeverityCode,
-					"ISSUE TYPE":       issue.IssueType,
+					"ISSUE_TYPE":       issue.IssueType,
 					"TITLE":            issue.Title,
-					"TARGETS IMPACTED": issue.NumTargetsImpacted,
+					"TARGETS_IMPACTED": issue.NumTargetsImpacted,
 					"OCCURRENCES":      issue.NumOccurrences,
-					"LAST DETECTED":    issue.LastDetected,
-					"EXEMPTION STATUS": issue.ExemptionStatus,
+					"LAST_DETECTED":    formattedDate,
+					"EXEMPTION_STATUS": issue.ExemptionStatus,
 					"ISSUE_ID":         issue.Id,
 					"EXEMPTION_ID":     issue.ExemptionId,
 				}
@@ -202,7 +209,7 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 				"Show me issues without Exemption",
 			)
 			// The tool name is "sto_all_issues_list", so we extract "STO" from it
-			moduleName := "AllIssuesList"
+			moduleName := "All_Issue_Report"
 			
 			if search, _ := OptionalParam[string](request, "search"); search != "" {
 				// Truncate if too long
@@ -223,7 +230,7 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 				string(tableData),
 				prompts,
 				moduleName,
-				nil,
+				[]string{"TITLE", "SEVERITY", "ISSUE_TYPE", "TARGETS_IMPACTED", "OCCURRENCES", "LAST_DETECTED", "EXEMPTION_STATUS", "ISSUE_ID", "EXEMPTION_ID"},
 			), nil
 		}
 }
@@ -248,8 +255,18 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
         - Find by CVE: "CVE-2021-44228"
         - Find by exemption title: "Temporary exemption for production release"
 
-        Use this tool to audit or review all exemption requests across your project or organization or account.
-        Results will include exemption status, affected resources, severity, and approval information.
+		## Summary
+		-[Provide a 2-3 sentence summary. Don't heighlight the artifacts details]
+		
+		### DO NOT INCLUDE:
+		- TABLES, CODE BLOCKS, OR JSON.
+		- ANY OTHER SECTION NOT EXPLICITLY LISTED ABOVE.
+		- DETAILED LISTINGS OF ARTIFACTS, TAGS, OR COMPONENTS.
+		- RECOMMENDED ACTIONS SECTION.
+		- KEY FINDINGS SECTION.
+
+		Use this tool to audit or review all exemption requests across your project or organization or account.
+		Results will include exemption status, affected resources, severity, and approval information.
 `),
 			mcp.WithString("accountId", mcp.Required(), mcp.Description("Harness Account ID")),
 			mcp.WithString("orgId", mcp.Required(), mcp.Description("Harness Organization ID")),
@@ -317,6 +334,7 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 				return mcp.NewToolResultError("No data returned from STO service"), nil
 			}
 
+			showingApprovedExemptions := false
 			// 1. Collect all unique user IDs
 			userIDs := make(map[string]struct{})
 			for _, e := range resp.JSON200.Exemptions {
@@ -366,33 +384,33 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 					"ISSUE":              e.IssueSummary.Title,
 					"SCOPE":              e.Scope,
 					"REASON":             e.Reason,
-					"EXEMPTION DURATION": duration,
+					"EXEMPTION_DURATION": duration,
 					"OrgId":              e.OrgId,
 					"ProjectId":          e.ProjectId,
 					"PipelineId":         e.PipelineId,
 					"TargetId":           e.TargetId,
+					"STATUS":             e.Status,
 				}
-				row["REQUESTED BY"] = userNameMap[e.RequesterId]
+				row["REQUESTED_BY"] = userNameMap[e.RequesterId]
 				if e.ApproverId != nil && *e.ApproverId != "" {
-					row["APPROVED BY"] = userNameMap[*e.ApproverId]
+					showingApprovedExemptions = true
+					row["APPROVED_BY"] = userNameMap[*e.ApproverId]
 				}
 				rows = append(rows, row)
 			}
 
 			var suggestions []string
-			maxSuggestions := 2
+			maxSuggestions := 1
 			suggestions = append(suggestions,
 				"Reject exemptions raised for issue type as secret",
 			)
 			for i := 0; i < len(rows) && i < maxSuggestions; i++ {
-				id, idOk := rows[i]["ExemptionId"].(string)
 				issue, issueOk := rows[i]["ISSUE"].(string)
-				if idOk {
-					suggestions = append(suggestions, "Approve exemption "+issue+" (ID: "+id+")")
-					suggestions = append(suggestions, "Reject exemption "+issue+" (ID: "+id+")")
-				}
-				if idOk && issueOk {
-					suggestions = append(suggestions, "Get more details about exemption \""+issue+"\" (ID: "+id+")")
+				if issueOk {
+					if rows[i]["STATUS"] == "Pending" {
+						suggestions = append(suggestions, "Approve exemption "+issue)
+					}
+					suggestions = append(suggestions, "Reject exemption "+issue)
 				}
 			}
 
@@ -400,12 +418,19 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 			if err != nil {
 				return mcp.NewToolResultError("Failed to marshal table data: " + err.Error()), nil
 			}
+            columns := []string{}
+			if showingApprovedExemptions {
+				columns = []string{"ISSUE", "SEVERITY", "SCOPE", "REASON", "EXEMPTION_DURATION", "REQUESTED_BY", "APPROVED_BY", "STATUS", "ExemptionId", "OrgId", "ProjectId", "PipelineId", "TargetId"}
+			} else {
+				columns = []string{"ISSUE", "SEVERITY", "SCOPE", "REASON", "EXEMPTION_DURATION", "REQUESTED_BY", "STATUS", "ExemptionId", "OrgId", "ProjectId", "PipelineId", "TargetId"}
+			}
+			
 			return appseccommons.NewToolResultTextWithPrompts(
 				string(builder.GenericTableEvent),
 				string(tableData),
 				suggestions,
-				"ExemptionsList",
-				[]string{"ExemptionId", "SEVERITY", "ISSUE", "SCOPE", "REASON", "EXEMPTION DURATION", "OrgId", "ProjectId", "PipelineId", "TargetId", "REQUESTED BY", "APPROVED BY"},
+				"List_Exemptions",
+				columns,
 			), nil
 		}
 }
