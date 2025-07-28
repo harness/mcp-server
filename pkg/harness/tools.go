@@ -64,9 +64,6 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 
 		if allToolsets {
 			// Register all available toolsets
-			if err := RegisterDefault(config, tsg); err != nil {
-				return err
-			}
 			if err := modules.RegisterPipelines(config, tsg); err != nil {
 				return err
 			}
