@@ -25,6 +25,7 @@ const (
 type CCMBaseResponse struct {
 	Status        string     `json:"state,omitempty"`
 	Message       string     `json:"message,omitempty"`
+	MetaData      map[string]any `json:"metaData,omitempty"`
 	CorrelationID string     `json:"correlation_id,omitempty"`
 	Error         []CCMError `json:"error,omitempty"`
 }

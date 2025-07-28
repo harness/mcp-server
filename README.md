@@ -99,7 +99,7 @@ Toolset Name: `dashboards`
 
 #### Cloud Cost Management Toolset
 
-Toolset Name: `cloudcostmanagement`
+Toolset Name: `ccm`
 
 - `get_ccm_overview`: Retrieves the cost overview for a specific account.
 - `list_ccm_cost_categories`: List all cost categories names for a specified account.
@@ -115,8 +115,11 @@ Toolset Name: `cloudcostmanagement`
 - `ccm_perspective_summary_with_budget`: Query a summary of cost perspectives with budget information in Harness Cloud Cost Management, including detailed cost and budget data grouped by time.
 - `ccm_perspective_budget`: Query the budget information for a perspective in Harness Cloud Cost Management.
 - `get_ccm_metadata`: Retrieves metadata about available cloud connectors, cost data sources, default perspectives, and currency preferences in Harness Cloud Cost Management.
-- `ccm_perspective_recommendations`: PerspectiveRecommendations: Returns monthly cost, savings, and a list of open recommendations for a perspective in Harness Cloud Cost Management.
+- `ccm_perspective_recommendations`: Returns monthly cost, savings, and a list of open recommendations for a perspective in Harness Cloud Cost Management.
 - `ccm_perspective_filter_values`: Returns available filter values for a cost perspective, enabling dynamic discovery of valid options for advanced queries in Harness Cloud Cost Management.
+- `list_ccm_recommendations`: Returns a filterable list of cost-optimization recommendations in Harness Cloud Cost Management.
+- `list_ccm_recommendations_by_resource_type`: Returns a aggregated statistics of cloud cost optimization recommendations grouped by resource type within a given account in Harness Cloud Cost Management.
+- `get_ccm_recommendations_stats`: Returns overall statistics for cloud cost optimization recommendations within a given account in Harness Cloud Cost Management.
 - `get_ccm_commitment_coverage`: Get commitment coverage information for an account in Harness Cloud Cost Management
 - `get_ccm_commitment_savings`: Get commitment savings information for an account in Harness Cloud Cost Management
 

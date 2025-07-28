@@ -65,7 +65,6 @@ func GetSupportedOperators() []string {
 	}
 }
 
-
 // AdaptViewRulesMap converts an array of rule maps (each with conditions) to []*CCMViewRule.
 // Uses OutputFields and OutputKeyValueFields for field metadata.
 func AdaptViewRulesMap(input []any) ([]dto.CCMViewRule, error) {
