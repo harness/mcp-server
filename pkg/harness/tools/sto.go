@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
+	"time"
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
@@ -19,9 +21,15 @@ import (
 // StoAllIssuesListTool returns a tool for listing all issues from the STO Frontend.
 func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("sto_all_issues_list",
-            mcp.WithDescription(`
+			mcp.WithDescription(`
                 List all issues or vulnerabilities from the STO. Show in data table format unless otherwise specified.
 
+				Output Format:
+				Show output in the following format, other than this format don't show any other section:
+				
+				## Summary
+				-[Provide a 2-3 sentence summary. Don't highlight the issue details]
+				
                 Usage Guidance:
                 - Use this tool to retrieve a list of issues or vulnerabilities in your project.
                 - You can search for specific issues using exact issue IDs, component names, or keywords.
@@ -33,80 +41,99 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
                 - CVE ID: "CVE-2021-44228"
                 - General security concern: "hardcoded secret" or "sql injection"
                 `),
-            mcp.WithString("accountId",
-                mcp.Required(),
-                mcp.Description("Harness Account ID"),
-            ),
-            mcp.WithString("orgId",
-                mcp.Required(),
-                mcp.Description("Harness Organization ID"),
-            ),
-            mcp.WithString("projectId",
-                mcp.Required(),
-                mcp.Description("Harness Project ID"),
-            ),
-            mcp.WithNumber("page",
-                mcp.Description("Page number to fetch (starting from 0)"),
-                mcp.Min(0),
-                mcp.DefaultNumber(0),
-            ),
-            mcp.WithNumber("pageSize",
-                mcp.Description("Number of results per page"),
-                mcp.DefaultNumber(5),
-                mcp.Max(20),
-            ),
-            mcp.WithString("targetIds",
-                mcp.Description("Comma-separated target IDs to filter")),
-            mcp.WithString("targetTypes", mcp.Description(`Optional. Filter issues by target type.
+			mcp.WithString("accountId",
+				mcp.Required(),
+				mcp.Description("Harness Account ID"),
+			),
+			mcp.WithString("orgId",
+				mcp.Required(),
+				mcp.Description("Harness Organization ID"),
+			),
+			mcp.WithString("projectId",
+				mcp.Required(),
+				mcp.Description("Harness Project ID"),
+			),
+			mcp.WithNumber("page",
+				mcp.Description("Page number to fetch (starting from 0)"),
+				mcp.Min(0),
+				mcp.DefaultNumber(0),
+				mcp.Required(),
+			),
+			mcp.WithNumber("size",
+				mcp.Description("Number of results per page like 10"),
+				mcp.DefaultNumber(10),
+				mcp.Max(20),
+				mcp.Required(),
+			),
+			mcp.WithString("targetIds",
+				mcp.Description("Comma-separated target IDs to filter")),
+			mcp.WithString("targetTypes", mcp.Description(`Optional. Filter issues by target type.
                                                     - Accepts a comma-separated list of target types.
                                                     - Allowed values: configuration, container, instance, repository
                                                     - Example: "configuration,container"
                                                     - If not provided, all target types are included.
                                                 `)),
-            mcp.WithString("pipelineIds", mcp.Description("Comma-separated pipeline IDs to filter")),
-            mcp.WithString("scanTools", mcp.Description(`Optional. Filter issues by scan tool.
+			mcp.WithString("pipelineIds", mcp.Description("Comma-separated pipeline IDs to filter")),
+			mcp.WithString("scanTools", mcp.Description(`Optional. Filter issues by scan tool.
                                                     - Accepts a comma-separated list of scan tools.
                                                     - Allowed values: aqua-trivy, aws-ecr, blackduckhub, brakeman, burp, checkmarx, checkmarx-one, checkov, coverity, custom, fortify, gitleaks, grype, nexusiq, nikto, osv-scanner, owasp, semgrep, snyk, sonarqube, sysdig, traceable, twistlock, veracode, whitesource, wiz, zap, aqua-security
                                                     - Example: "aqua-trivy,semgrep"
                                                     - If not provided, all scan tools are included.
                                                 `)),
-            mcp.WithString("severityCodes", mcp.Description(`Optional. Filter issues by severity.
+			mcp.WithString("severityCodes", mcp.Description(`Optional. Filter issues by severity.
                                                     - Accepts a comma-separated list of severities.
                                                     - Allowed values: Critical, High, Medium, Low, Info
                                                     - Example: "Critical,High"
                                                     - If not provided, all severities are included.
                                                 `)),
-            mcp.WithString("exemptionStatuses", mcp.Description(`Optional. Filter issues by exemption status.
+			mcp.WithString("exemptionStatuses", mcp.Description(`Optional. Filter issues by exemption status.
                                                     - Accepts a comma-separated list of statuses.
                                                     - Allowed values: None, Pending, Approved, Rejected, Expired
                                                     - Example: "None,Pending"
                                                     - If not provided, all exemption statuses are included.
                                                 `)),
-            mcp.WithString("search", mcp.Description(`Search term for issues. Examples:
+			mcp.WithString("search", mcp.Description(`Search term for issues. Examples:
                                                     - Exact issue ID: "python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret"
                                                     - Component name: "alpine" or "log4j"
                                                     - CVE ID: "CVE-2021-44228"
                                                     - General security concern: "hardcoded secret"
                                                     Note: For exact issue IDs, ensure you use the complete ID without any modifications.`)),
-            mcp.WithString("issueTypes", mcp.Description(`Optional. Filter issues by type.
+			mcp.WithString("issueTypes", mcp.Description(`Optional. Filter issues by type.
                                                 - Accepts a comma-separated list of issue types.
                                                 - Allowed values: SAST,DAST,SCA,IAC,SECRET,MISCONFIG,BUG_SMELLS,CODE_SMELLS,CODE_COVERAGE,EXTERNAL_POLICY
                                                 - Example: "SCA,SAST"
                                                 - If not provided (field omitted), all issue types are included (default behavior, as in: ?issueTypes= omitted in the request).
                                             `)),
+			WithScope(config, true),
 		), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := FetchScope(config, request, true)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 			params := &generated.FrontendAllIssuesListParams{
 				AccountId: config.AccountID,
-				OrgId:     config.DefaultOrgID,
-				ProjectId: config.DefaultProjectID,
+				OrgId:     scope.OrgID,
+				ProjectId: scope.ProjectID,
 			}
+			page := int64(0)
+			size := int64(10)
 
+			if v, _ := ExtractParam[string](request, "orgId"); v != "" {
+				params.OrgId = v
+			}
+			if v, _ := ExtractParam[string](request, "projectId"); v != "" {
+				params.ProjectId = v
+			}
 			// Optional params
 			if v, _ := OptionalParam[int64](request, "page"); v != 0 {
 				params.Page = &v
+			} else {
+				params.Page = &page
 			}
-			if v, _ := OptionalParam[int64](request, "pageSize"); v != 0 {
+			if v, _ := OptionalParam[int64](request, "size"); v != 0 {
 				params.PageSize = &v
+			} else {
+				params.PageSize = &size
 			}
 			if v, _ := OptionalParam[string](request, "targetIds"); v != "" {
 				params.TargetIds = &v
@@ -145,14 +172,20 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 			}
 			rows := []map[string]interface{}{}
 			for _, issue := range resp.JSON200.Issues {
+				// Format the timestamp first
+				var formattedDate interface{} = issue.LastDetected
+				if tsInt, ok := formattedDate.(int64); ok {
+					t := time.Unix(tsInt, 0)
+					formattedDate = t.Format("02/01/2006 15:04")
+				}
 				row := map[string]interface{}{
 					"SEVERITY":         issue.SeverityCode,
-					"ISSUE TYPE":       issue.IssueType,
+					"ISSUE_TYPE":       issue.IssueType,
 					"TITLE":            issue.Title,
-					"TARGETS IMPACTED": issue.NumTargetsImpacted,
+					"TARGETS_IMPACTED": issue.NumTargetsImpacted,
 					"OCCURRENCES":      issue.NumOccurrences,
-					"LAST DETECTED":    issue.LastDetected,
-					"EXEMPTION STATUS": issue.ExemptionStatus,
+					"LAST_DETECTED":    formattedDate,
+					"EXEMPTION_STATUS": issue.ExemptionStatus,
 					"ISSUE_ID":         issue.Id,
 					"EXEMPTION_ID":     issue.ExemptionId,
 				}
@@ -165,18 +198,32 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 			}
 			var prompts []string
 			prompts = append(prompts,
-				"Create a policy to block critical issues",
-				"Filter issues by status, e.g., show only Approved or Pending issues?",
-				"Show only SAST or SCA issues?",
-				"Approve or reject exemption for a specific issue?",
-				"Find all Critical severity issues without an exemption?",
+				"Show me only issues with secrets identified",
+				"Show me issues without Exemption",
 			)
+			// The tool name is "sto_all_issues_list", so we extract "STO" from it
+			moduleName := "All_Issue_Report"
+
+			if search, _ := OptionalParam[string](request, "search"); search != "" {
+				// Truncate if too long
+				if len(search) > 20 {
+					search = search[:17] + "..."
+				}
+				// Replace underscores with spaces for better readability
+				search = strings.ReplaceAll(search, "_", " ")
+				// Capitalize first letter for consistency
+				if len(search) > 0 {
+					search = strings.ToUpper(search[:1]) + search[1:]
+				}
+				moduleName = moduleName + ": " + search
+			}
+
 			return appseccommons.NewToolResultTextWithPrompts(
 				string(builder.GenericTableEvent),
 				string(tableData),
 				prompts,
-				"STO",
-				nil,
+				moduleName,
+				"TITLE", "SEVERITY", "ISSUE_TYPE", "TARGETS_IMPACTED", "OCCURRENCES", "LAST_DETECTED", "EXEMPTION_STATUS", "ISSUE_ID", "EXEMPTION_ID",
 			), nil
 		}
 }
@@ -201,17 +248,20 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
         - Find by CVE: "CVE-2021-44228"
         - Find by exemption title: "Temporary exemption for production release"
 
-        Use this tool to audit or review all exemption requests across your project or organization or account.
-        Results will include exemption status, affected resources, severity, and approval information.
+		## Summary
+		-[Provide a 2-3 sentence summary. Don't heighlight the artifacts details
+		
+		Use this tool to audit or review all exemption requests across your project or organization or account.
+		Results will include exemption status, affected resources, severity, and approval information.
 `),
-	mcp.WithString("accountId", mcp.Required(), mcp.Description("Harness Account ID")),
-	mcp.WithString("orgId", mcp.Required(), mcp.Description("Harness Organization ID")),
-	mcp.WithString("projectId", mcp.Required(), mcp.Description("Harness Project ID")),
-	mcp.WithNumber("page", mcp.Description("Page number to fetch (starting from 0)"), mcp.Min(0), mcp.DefaultNumber(0)),
-	mcp.WithNumber("pageSize", mcp.Description("Number of results per page"), mcp.DefaultNumber(5)),
-	mcp.WithString("matchesProject", mcp.Description("Comma-separated list of organization:project pairs to filter exemptions by project scope (e.g., \"default:STO,default:CCM\").")),
-	mcp.WithString("status", mcp.Description("Required. Exemption status: Pending, Approved, Rejected, Expired. You must provide exactly one status.")),
-	mcp.WithString("search", mcp.Description(`Free-text search that matches both issue titles and exemption titles.
+			mcp.WithString("accountId", mcp.Required(), mcp.Description("Harness Account ID")),
+			mcp.WithString("orgId", mcp.Required(), mcp.Description("Harness Organization ID")),
+			mcp.WithString("projectId", mcp.Required(), mcp.Description("Harness Project ID")),
+			mcp.WithNumber("page", mcp.Description("Page number to fetch (starting from 0)"), mcp.Min(0), mcp.DefaultNumber(0)),
+			mcp.WithNumber("pageSize", mcp.Description("Number of results per page"), mcp.DefaultNumber(5)),
+			mcp.WithString("matchesProject", mcp.Description("Comma-separated list of organization:project pairs to filter exemptions by project scope (e.g., \"default:STO,default:CCM\").")),
+			mcp.WithString("status", mcp.Description("Required. Exemption status: Pending, Approved, Rejected, Expired. You must provide exactly one status.")),
+			mcp.WithString("search", mcp.Description(`Free-text search that matches both issue titles and exemption titles.
 		
 		Examples:
 		- Issue title: "Log4j vulnerability" or "hardcoded secret"
@@ -220,11 +270,18 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 		- Exemption title: "Temporary exemption for production release"
 		
 		Note: For exact vulnerability IDs, use the complete ID without modifications.`)),
-	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			WithScope(config, true),
+		), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			page := int64(0)
+			size := int64(5)
+			scope, err := FetchScope(config, request, true)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 			params := &generated.FrontendGlobalExemptionsParams{
 				AccountId: config.AccountID,
-				OrgId:     &config.DefaultOrgID,
-				ProjectId: &config.DefaultProjectID,
+				OrgId:     &scope.OrgID,
+				ProjectId: &scope.ProjectID,
 			}
 			if v, _ := OptionalParam[string](request, "orgId"); v != "" {
 				params.OrgId = &v
@@ -234,9 +291,13 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 			}
 			if v, _ := OptionalParam[int64](request, "page"); v != 0 {
 				params.Page = &v
+			} else {
+				params.Page = &page
 			}
 			if v, _ := OptionalParam[int64](request, "pageSize"); v != 0 {
 				params.PageSize = &v
+			} else {
+				params.PageSize = &size
 			}
 			if v, _ := OptionalParam[string](request, "matchesProject"); v != "" {
 				params.MatchesProject = &v
@@ -259,6 +320,7 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 				return mcp.NewToolResultError("No data returned from STO service"), nil
 			}
 
+			showingApprovedExemptions := false
 			// 1. Collect all unique user IDs
 			userIDs := make(map[string]struct{})
 			for _, e := range resp.JSON200.Exemptions {
@@ -308,48 +370,53 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 					"ISSUE":              e.IssueSummary.Title,
 					"SCOPE":              e.Scope,
 					"REASON":             e.Reason,
-					"EXEMPTION DURATION": duration,
+					"EXEMPTION_DURATION": duration,
 					"OrgId":              e.OrgId,
 					"ProjectId":          e.ProjectId,
 					"PipelineId":         e.PipelineId,
 					"TargetId":           e.TargetId,
+					"STATUS":             e.Status,
 				}
-				row["REQUESTED BY"] = userNameMap[e.RequesterId]
+				row["REQUESTED_BY"] = userNameMap[e.RequesterId]
 				if e.ApproverId != nil && *e.ApproverId != "" {
-					row["APPROVED BY"] = userNameMap[*e.ApproverId]
+					showingApprovedExemptions = true
+					row["APPROVED_BY"] = userNameMap[*e.ApproverId]
 				}
 				rows = append(rows, row)
 			}
 
 			var suggestions []string
-			maxSuggestions := 2
+			maxSuggestions := 1
+			suggestions = append(suggestions,
+				"Reject exemptions raised for issue type as secret",
+			)
 			for i := 0; i < len(rows) && i < maxSuggestions; i++ {
-				id, idOk := rows[i]["ExemptionId"].(string)
 				issue, issueOk := rows[i]["ISSUE"].(string)
-				if idOk {
-					suggestions = append(suggestions, "Approve exemption "+issue+" (ID: "+id+")")
-					suggestions = append(suggestions, "Reject exemption "+issue+" (ID: "+id+")")
-				}
-				if idOk && issueOk {
-					suggestions = append(suggestions, "Get more details about exemption \""+issue+"\" (ID: "+id+")")
+				if issueOk {
+					if rows[i]["STATUS"] == "Pending" {
+						suggestions = append(suggestions, "Approve exemption "+issue)
+					}
+					suggestions = append(suggestions, "Reject exemption "+issue)
 				}
 			}
-
-			suggestions = append(suggestions,
-				"See exemptions with a different status (Approved, Rejected, Expired)?",
-				"Get more details about a specific exemption?",
-			)
 
 			tableData, err := json.Marshal(rows)
 			if err != nil {
 				return mcp.NewToolResultError("Failed to marshal table data: " + err.Error()), nil
 			}
+			columns := []string{}
+			if showingApprovedExemptions {
+				columns = []string{"ISSUE", "SEVERITY", "SCOPE", "REASON", "EXEMPTION_DURATION", "REQUESTED_BY", "APPROVED_BY", "STATUS", "ExemptionId", "OrgId", "ProjectId", "PipelineId", "TargetId"}
+			} else {
+				columns = []string{"ISSUE", "SEVERITY", "SCOPE", "REASON", "EXEMPTION_DURATION", "REQUESTED_BY", "STATUS", "ExemptionId", "OrgId", "ProjectId", "PipelineId", "TargetId"}
+			}
+
 			return appseccommons.NewToolResultTextWithPrompts(
 				string(builder.GenericTableEvent),
 				string(tableData),
 				suggestions,
-				"STO",
-				[]string{"ExemptionId", "SEVERITY", "ISSUE", "SCOPE", "REASON", "EXEMPTION DURATION", "OrgId", "ProjectId", "PipelineId", "TargetId", "REQUESTED BY", "APPROVED BY"},
+				"List_Exemptions",
+				columns,
 			), nil
 		}
 }
@@ -394,6 +461,7 @@ func ExemptionsPromoteExemptionTool(config *config.Config, client *generated.Cli
 			mcp.WithString("comment", mcp.Description("Optional comment for the approval or rejection")),
 			mcp.WithString("pipelineId", mcp.Description("Optional pipeline ID to associate with the exemption")),
 			mcp.WithString("targetId", mcp.Description("Optional target ID to associate with the exemption")),
+			WithScope(config, true),
 		), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			params := &generated.ExemptionsPromoteExemptionParams{
 				AccountId: config.AccountID,
@@ -477,6 +545,7 @@ func ExemptionsApproveExemptionTool(config *config.Config, client *generated.Cli
 			mcp.WithString("orgId", mcp.Description("Harness Organization ID")),
 			mcp.WithString("projectId", mcp.Description("Harness Project ID")),
 			mcp.WithString("comment", mcp.Description("Optional comment for the approval or rejection")),
+			WithScope(config, true),
 		), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			params := &generated.ExemptionsApproveExemptionParams{
 				AccountId: config.AccountID,
@@ -523,9 +592,9 @@ func getCurrentUserUUID(ctx context.Context, config *config.Config, principalCli
 		AccountID: config.AccountID,
 	}
 	resp, err := principalClient.GetCurrentUser(ctx, scope)
-    if err != nil {
-        slog.Error("getCurrentUserUUIDFromAPIClient error", "error", err)
-        return ""
-    }
-    return resp.Data.UUID
+	if err != nil {
+		slog.Error("getCurrentUserUUIDFromAPIClient error", "error", err)
+		return ""
+	}
+	return resp.Data.UUID
 }

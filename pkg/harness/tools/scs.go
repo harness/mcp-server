@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,165 +18,21 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-// SummarizeSCSTool creates a tool that can summarize SCS tool results and generate follow-on prompts
-func SummarizeSCSTool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("summarize_scs_result",
-			mcp.WithDescription("Summarizes SCS tool results and generates follow-on prompts for further exploration. Call this after finishing all tool calls from scs"),
-			mcp.WithString("tool_result",
-				mcp.Required(),
-				mcp.Description("The result from a previous SCS tool call that you want to summarize"),
-			),
-			mcp.WithString("context",
-				mcp.Description("Additional context about what the user is trying to accomplish"),
-			),
-		),
-		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			// Extract parameters
-			toolResultStr, err := RequiredParam[string](request, "tool_result")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-
-			contextInfo, _ := OptionalParam[string](request, "context")
-
-			// Create sampling request with system prompt that instructs the model to summarize and generate prompts
-			systemPrompt := `You are an expert at analyzing Harness SCS (Supply Chain Security) data. 
-			Your task is to:
-			1. Provide a concise summary of the SCS tool result
-			2. Identify the most important security or compliance insights
-			3. Generate exactly 3 follow-on prompts that would help the user explore this data further
-
-			Format your response as follows:
-			
-			## Summary
-			[Provide a 2-3 sentence summary of the key information]
-			
-			## Key Insights
-			- [First key insight about security or compliance]
-			- [Second key insight]
-			- [Third key insight if applicable]
-			
-			## Follow-on Questions
-			1. [Specific, actionable follow-on question]
-			2. [Another specific follow-on question]
-			3. [Another specific follow-on question]`
-
-			// Prepare the user message with tool result and context
-			userMessage := "Tool Result:\n" + toolResultStr
-			if contextInfo != "" {
-				userMessage += "\n\nContext:\n" + contextInfo
-			}
-
-			// Create sampling request
-			samplingRequest := mcp.CreateMessageRequest{
-				CreateMessageParams: mcp.CreateMessageParams{
-					Messages: []mcp.SamplingMessage{
-						{
-							Role: mcp.RoleUser,
-							Content: mcp.TextContent{
-								Type: "text",
-								Text: userMessage,
-							},
-						},
-					},
-					SystemPrompt: systemPrompt,
-					MaxTokens:    1500,
-					Temperature:  0.5,
-				},
-			}
-
-			// Request sampling from the server
-			samplingCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-			defer cancel()
-			serverFromCtx := server.ServerFromContext(ctx)
-			sampling, err := serverFromCtx.RequestSampling(samplingCtx, samplingRequest)
-			if err != nil {
-				return mcp.NewToolResultError(fmt.Sprintf("Error generating summary: %v", err)), nil
-			}
-
-			// Extract the text from the content
-			responseText := ""
-			// Handle content as a slice of interface{}
-			contentSlice, ok := sampling.Content.([]interface{})
-			if !ok {
-				return mcp.NewToolResultError("Failed to parse sampling response content"), nil
-			}
-
-			// Process each content item
-			for _, item := range contentSlice {
-				// Try to extract text from the content item
-				if contentMap, ok := item.(map[string]interface{}); ok {
-					if textValue, ok := contentMap["text"].(string); ok {
-						responseText += textValue
-					}
-				}
-			}
-
-			// Extract follow-on questions to use as prompts
-			var prompts []string
-			followOnSection := false
-			lines := strings.Split(responseText, "\n")
-			for _, line := range lines {
-				if strings.Contains(line, "Follow-on Questions") {
-					followOnSection = true
-					continue
-				}
-				if followOnSection && (strings.HasPrefix(strings.TrimSpace(line), "1.") ||
-					strings.HasPrefix(strings.TrimSpace(line), "2.") ||
-					strings.HasPrefix(strings.TrimSpace(line), "3.")) {
-					// Extract the question part (remove the number and period)
-					question := strings.TrimSpace(line)
-					if idx := strings.Index(question, ". "); idx != -1 {
-						question = question[idx+2:]
-					}
-					prompts = append(prompts, question)
-				}
-			}
-
-			// Create the tool result with the summary text
-			result := mcp.NewToolResultText(responseText)
-
-			// If we found any prompts, add them as suggested responses
-			if len(prompts) > 0 {
-				// Since there's no direct method to add suggestions, we'll return the text with the prompts separately
-				var suggestionsText string
-				suggestionsText = "\n\n**Follow-up Questions:**\n"
-				for i, prompt := range prompts {
-					suggestionsText += fmt.Sprintf("%d. %s\n", i+1, prompt)
-				}
-
-				// Append the suggestions to the response text
-				return mcp.NewToolResultText(responseText + suggestionsText), nil
-			}
-
-			return result, nil
-		}
-}
-
 func artifactRuleBasedFollowUps(artifacts []generated.ArtifactV2ListingResponse, licenseFilterList *[]generated.LicenseFilter) []string {
 	var prompts []string
-	for i, a := range artifacts {
-		if i >= 3 {
-			break
-		}
-		name := "<unknown>"
-		licenseStr := "<unknown>"
-		if a.Name != nil {
-			name = *a.Name
-		}
-		if licenseFilterList != nil && len(*licenseFilterList) > 0 {
-			var licenses []string
-			for _, lf := range *licenseFilterList {
-				if lf.Value != "" {
-					licenses = append(licenses, lf.Value)
-				}
+	if licenseFilterList != nil && len(*licenseFilterList) > 0 {
+		var licenses []string
+		for _, lf := range *licenseFilterList {
+			if lf.Value != "" {
+				licenses = append(licenses, lf.Value)
 			}
-			licenseStr = strings.Join(licenses, ", ")
-			prompts = append(prompts, fmt.Sprintf("Enforce a opa policy to prevent artifact %s with %s licenses from being deployed?", name, licenseStr))
-		} else {
-			prompts = append(prompts, fmt.Sprintf("Summarise key risks for %s", name))
 		}
+		licenseStr := strings.Join(licenses, ", ")
+		prompts = append(prompts, fmt.Sprintf("Would you like to create a policy to prevent artifacts with %s licenses from being deployed?", licenseStr))
+	} else {
+		prompts = append(prompts, "Summarise key risks for 1 artifact")
 	}
+
 	return prompts
 }
 
@@ -185,16 +42,12 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 			mcp.WithDescription(`
 			Lists all artifact sources available in Harness SCS.
 
-			NOTE: Don't show any table format for the results . Just summarize the final results in the following format:
+			Output Format:
+			Show output in the following format, other than this format don't show any other section:
 			
 			## Summary
-			[Provide a 2-3 sentence summary of the key information]
-			
-			## Key Insights
-			- [First key insight about security or compliance]
-			- [Second key insight]
-			- [Third key insight if applicable]
-
+			-[Provide a 2-3 sentence summary. Don't heighlight the artifacts details]
+						
 			Usage Guidance:
 			- Use this tool to retrieve a list of artifact sources (such as container registries ) in your organization and project.
 			- Each artifact source returned will include a unique sourceId.
@@ -275,9 +128,9 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 				mcp.DefaultString("DESC"),
 			),
 			mcp.WithString("sort",
-				mcp.Description("Sort by field (severity, title)"),
-				mcp.Enum("severity", "title"),
-				mcp.DefaultString("severity"),
+				mcp.Description("Sort by field (severity, title,updated). Always go with updated unlesss specified otherwise"),
+				mcp.Enum("severity", "title", "updated"),
+				mcp.DefaultString("updated"),
 			),
 			WithScope(config, true),
 			WithPagination(),
@@ -337,7 +190,105 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 					}
 				}
 			}
-			pretty, err := json.MarshalIndent(enrichedArtifacts, "", "  ")
+			rows := []map[string]interface{}{}
+			for _, artifact := range enrichedArtifacts {
+				row := map[string]interface{}{}
+				if artifact.Id != nil {
+					row["id"] = *artifact.Id
+				}
+				if artifact.Digest != nil {
+					row["digest"] = *artifact.Digest
+				}
+				if artifact.Name != nil {
+					row["name"] = *artifact.Name
+				}
+				if artifact.Tags != nil {
+					row["tags"] = strings.Join(*artifact.Tags, "\n")
+				}
+				if artifact.Url != nil {
+					row["url"] = *artifact.Url
+				}
+				if artifact.Metadata != nil {
+					row["metadata"] = *artifact.Metadata
+				}
+				if artifact.ComponentsCount != nil {
+					row["components"] = *artifact.ComponentsCount
+				}
+				if artifact.Updated != nil {
+					// Try to parse millis and format as date, fallback to raw string
+					if tsMillis, err := strconv.ParseInt(*artifact.Updated, 10, 64); err == nil {
+						tsSecs := tsMillis / 1000
+						t := time.Unix(tsSecs, 0)
+						row["updated"] = t.Format("02/01/2006 15:04")
+					} else {
+						row["updated"] = *artifact.Updated
+					}
+				}
+				if artifact.Scorecard != nil {
+					row["scorecard"] = *artifact.Scorecard.AvgScore
+				}
+				if artifact.PolicyEnforcement != nil {
+					pe := map[string]interface{}{}
+					if artifact.PolicyEnforcement.AllowListViolationCount != nil {
+						pe["allow list"] = *artifact.PolicyEnforcement.AllowListViolationCount
+					}
+					if artifact.PolicyEnforcement.DenyListViolationCount != nil {
+						pe["deny list"] = *artifact.PolicyEnforcement.DenyListViolationCount
+					}
+					row["sbom violations"] = pe
+				}
+				if artifact.Deployment != nil {
+					dep := map[string]interface{}{}
+					if artifact.Deployment.ProdEnvCount != nil {
+						dep["Prod"] = *artifact.Deployment.ProdEnvCount
+					}
+					if artifact.Deployment.NonProdEnvCount != nil {
+						dep["Non Prod"] = *artifact.Deployment.NonProdEnvCount
+					}
+					row["deployment"] = dep
+				}
+				if artifact.Orchestration != nil {
+					orch := map[string]interface{}{}
+					if artifact.Orchestration.Id != nil {
+						orch["id"] = *artifact.Orchestration.Id
+					}
+					if artifact.Orchestration.PipelineId != nil {
+						orch["pipeline_id"] = *artifact.Orchestration.PipelineId
+					}
+					if artifact.Orchestration.PipelineExecutionId != nil {
+						orch["pipeline_execution_id"] = *artifact.Orchestration.PipelineExecutionId
+					}
+					row["orchestration"] = orch
+				}
+				if artifact.StoIssueCount != nil {
+					vuln := map[string]interface{}{}
+					if artifact.StoIssueCount.Critical != nil {
+						vuln["critical"] = *artifact.StoIssueCount.Critical
+					}
+					if artifact.StoIssueCount.High != nil {
+						vuln["high"] = *artifact.StoIssueCount.High
+					}
+					if artifact.StoIssueCount.Medium != nil {
+						vuln["medium"] = *artifact.StoIssueCount.Medium
+					}
+					if artifact.StoIssueCount.Low != nil {
+						vuln["low"] = *artifact.StoIssueCount.Low
+					}
+					if artifact.StoIssueCount.Total != nil {
+						vuln["total"] = *artifact.StoIssueCount.Total
+					}
+					row["vulnerabilities"] = vuln
+				}
+				if artifact.Signing != nil {
+					row["signing"] = artifact.Signing.Rekor.Signature
+				}
+				if artifact.ArtifactType != nil {
+					row["artifact_type"] = artifact.ArtifactType.Type
+				}
+				rows = append(rows, row)
+			}
+			// Transform enrichedArtifacts into a table-like structure
+			pretty, err := json.MarshalIndent(rows, "", "  ")
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal response: %w", err)
 			}
@@ -348,7 +299,7 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 				suggestions = artifactRuleBasedFollowUps(enrichedArtifacts, &*body.LicenseFilterList)
 			}
 
-			return appseccommons.NewToolResultTextWithPrompts(string(builder.GenericTableEvent), string(pretty), suggestions, "scs_result", []string{"name", "tags", "components_count", "Scorecard", "StoIssueCount", "Signing", "deployments", "digest"}), nil
+			return appseccommons.NewToolResultTextWithPrompts(string(builder.GenericTableEvent), string(pretty), suggestions, "Artifact Report", "name", "tags", "components", "vulnerabilities", "scorecard", "deployment", "sbom violations", "digest", "signing", "updated", "orchestration"), nil
 		}
 }
 
@@ -617,11 +568,17 @@ func GetArtifactChainOfCustodyV2Tool(config *config.Config, client *generated.Cl
 // FetchComplianceResultsByArtifactTool returns a tool for fetching compliance results by artifact from Harness SCS.
 func FetchComplianceResultsByArtifactTool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("fetch_compliance_results_for_repo_by_id",
-			mcp.WithDescription("Fetch compliance results for a specific CI/CD or repository from Harness SCS."),
-			mcp.WithString("artifact_identifier",
-				mcp.Required(),
-				mcp.Description(`
-				The identifier of the repo or ci/cd artifact (e.g., artifactId, UUID format).Show in data table format unless otherwise specified.
+			mcp.WithDescription(`
+				Fetch compliance results for a specific CI/CD build systems or repositories from Harness SCS. Show in data table format unless otherwise specified.
+
+				Usage Guidance:
+				- Use this tool to retrieve compliance results for a specific CI/CD build system or repository.
+				- The required input is artifact_identifier (artifactId, UUID format).
+
+				How to obtain artifact_identifier:
+				- If you do not know the artifact_identifier:
+				1. Use the 'list_scs_code_repos' tool with a relevant search_term (such as an repository name like 'harness-mcp').
+				2. Select the desired artifact and use its artifact_identifier as the input to this tool.
 
 
 				Filters Supported:
@@ -631,6 +588,13 @@ func FetchComplianceResultsByArtifactTool(config *config.Config, client *generat
 				- status (e.g., ["PASS", "FAIL"])
 				- order (ASC, DESC)
 				- sort (severity, title)
+
+				Tip: Use the artifactId with the 'get_artifact_overview' tool to retrieve detailed information about the artifact.
+				`),
+			mcp.WithString("artifact_identifier",
+				mcp.Required(),
+				mcp.Description(`
+				The identifier of the repo or ci/cd artifact (e.g., artifactId, UUID format).Show in data table format unless otherwise specified.
 
 				How to obtain artifactId:
 				- If you do not know the artifactId:
@@ -855,11 +819,10 @@ func CreateOPAPolicyTool(config *config.Config, client *generated.ClientWithResp
 			suggestions := []string{
 				"Show me more examples of OPA policies",
 				"How can I test this policy?",
-				"Create a policy to deny specific CVE severities",
 			}
 
 			// Use the OPA builder to format the response
-			return appseccommons.NewToolResultTextWithPrompts(string(builder.OPAEvent), string(out), suggestions, "scs_result", []string{"policy", "denied_licenses"}), nil
+			return appseccommons.NewToolResultTextWithPrompts(string(builder.OPAEvent), string(out), suggestions, "scs_result"), nil
 		}
 }
 
@@ -868,6 +831,16 @@ func ListSCSCodeReposTool(config *config.Config, client *generated.ClientWithRes
 	return mcp.NewTool("list_scs_code_repos",
 			mcp.WithDescription(`
 			Lists all code repositories that have been scanned by Harness SCS (Supply Chain Security).Show in data table format unless otherwise specified.
+
+			NOTE: Don't show any table format for the results . Just summarize the final results in the following format:
+			
+			## Summary
+			[Provide a 2-3 sentence summary of the key information]
+			
+			## Key Insights
+			- [First key insight about security or compliance]
+			- [Second key insight]
+			- [Third key insight if applicable]
 
 			Usage Guidance:
 			- Use this tool to retrieve a complete list of scanned code repositories in your organization and project.
@@ -981,11 +954,105 @@ func ListSCSCodeReposTool(config *config.Config, client *generated.ClientWithRes
 				return nil, fmt.Errorf("non-2xx status: %d", resp.StatusCode())
 			}
 
-			out, err := json.Marshal(resp.JSON200)
+			// Transform JSON200 (which is *[]generated.CodeRepositoryListingResponse) into a table-like structure
+			rows := []map[string]interface{}{}
+			if resp.JSON200 != nil {
+				for _, repo := range *resp.JSON200 {
+					row := map[string]interface{}{}
+					if repo.Name != nil {
+						variant := map[string]interface{}{}
+						variant["name"] = *repo.Name
+						if repo.Variant != nil {
+							if repo.Variant.Type != nil {
+								variant["type"] = *repo.Variant.Type
+							}
+							if repo.Variant.Value != nil {
+								variant["value"] = *repo.Variant.Value
+							}
+							row["name"] = variant
+						}
+					}
+					if repo.RepositoryPlatform != nil {
+						row["platform"] = repo.RepositoryPlatform // You may want to format this as string if needed
+					}
+					if repo.DependenciesCount != nil {
+						row["dependencies"] = *repo.DependenciesCount
+					}
+					if repo.RiskAndCompliance != nil {
+						compliance := map[string]interface{}{}
+						if repo.RiskAndCompliance.Critical != nil {
+							compliance["critical"] = *repo.RiskAndCompliance.Critical
+						}
+						if repo.RiskAndCompliance.High != nil {
+							compliance["high"] = *repo.RiskAndCompliance.High
+						}
+						if repo.RiskAndCompliance.Medium != nil {
+							compliance["medium"] = *repo.RiskAndCompliance.Medium
+						}
+						if repo.RiskAndCompliance.Low != nil {
+							compliance["low"] = *repo.RiskAndCompliance.Low
+						}
+						row["compliance"] = compliance
+					}
+					if repo.StoIssueCount != nil {
+						vuln := map[string]interface{}{}
+						if repo.StoIssueCount.Critical != nil {
+							vuln["critical"] = *repo.StoIssueCount.Critical
+						}
+						if repo.StoIssueCount.High != nil {
+							vuln["high"] = *repo.StoIssueCount.High
+						}
+						if repo.StoIssueCount.Medium != nil {
+							vuln["medium"] = *repo.StoIssueCount.Medium
+						}
+						if repo.StoIssueCount.Low != nil {
+							vuln["low"] = *repo.StoIssueCount.Low
+						}
+						if repo.StoIssueCount.Total != nil {
+							vuln["total"] = *repo.StoIssueCount.Total
+						}
+						row["vulnerabilities"] = vuln
+					}
+					if repo.Scorecard != nil {
+						row["sbom_score"] = repo.Scorecard.AvgScore // You may want to format this as string if needed
+					}
+					if repo.Url != nil {
+						row["repo_path"] = *repo.Url
+					}
+					if repo.LastScan != nil {
+						scan := map[string]interface{}{}
+						if repo.LastScan.Id != nil {
+							scan["pipeline"] = *repo.LastScan.Id
+						}
+						if repo.LastScan.ExecutionId != nil {
+							scan["execution"] = *repo.LastScan.ExecutionId
+						}
+						if repo.LastScan.Status != nil {
+							scan["status"] = *repo.LastScan.Status
+						}
+						if repo.LastScan.TriggeredAt != nil {
+							tsMillis := *repo.LastScan.TriggeredAt
+							tsSecs := tsMillis / 1000
+							t := time.Unix(tsSecs, 0)
+							scan["last_scan"] = t.Format("02/01/2006 15:04")
+						}
+						row["last_scan"] = scan
+					}
+					rows = append(rows, row)
+				}
+			}
+			out, err := json.Marshal(rows)
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal response: %w", err)
 			}
-			return mcp.NewToolResultText(string(out)), nil
+
+			// Compute suggestions for repo
+			suggestions := []string{
+				"Show all repositories that violate the compliance rule: Auto-merge must be disabled.",
+				"Show me compliance risk of 1st repository",
+			}
+
+			return appseccommons.NewToolResultTextWithPrompts(string(builder.GenericTableEvent), string(out), suggestions, "Repositories Report", "name", "compliance", "vulnerabilities", "sbom_score", "repo_path", "last_scan", "dependencies", "last_scan"), nil
 		}
 
 }
