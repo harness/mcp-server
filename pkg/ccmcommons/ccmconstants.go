@@ -228,7 +228,6 @@ var ConditionFieldDescriptions = []map[string]string{
 	},
 }
 
-
 var ListRecommendationsDescription = `
 Lists recommendation items with metadata such as resource identifiers, potential savings, current vs. recommended size, severity/status, and recommendation type.
 Supports rich filtering (for example by cloud account, Kubernetes attributes, resource type) so teams only fetch what’s relevant to them or their Perspective/RBAC scope. 

@@ -46,6 +46,12 @@ const (
 	CreateProcess   RequestAction = "CREATE_PROCESS"
 )
 
+type Caller string
+
+const (
+	CallerUnifiedAgent Caller = "unified_agent"
+)
+
 type ServiceChatParameters struct {
 	Prompt          string          `json:"prompt"`
 	Provider        string          `json:"provider,omitempty"`
@@ -58,6 +64,7 @@ type ServiceChatParameters struct {
 	Action          RequestAction   `json:"action,omitempty"`
 	HarnessContext  *HarnessContext `json:"harness_context,omitempty"`
 	Stream          bool            `json:"stream,omitempty"`
+	Caller          Caller          `json:"caller,omitempty"`
 }
 
 type CapabilityToRun struct {
