@@ -33,7 +33,7 @@ const (
 
 const (
 	TimeRangeTypeLast7Days string = "LAST_7"
-	TimeRangeTypeLast30Days string = "LAST_30"
+	TimeRangeTypeLast30Days string = "LAST_30_DAYS"
 	TimeRangeTypeLastMonth string = "LAST_MONTH"
 	TimeRangeTypeCurrentMonth string = "CURRENT_MONTH"
 	TimeRangeTypeCustom string = "CUSTOM"
@@ -87,6 +87,15 @@ const (
 	FieldIdBusinessMapping string = "BUSINESS_MAPPING"
 	FieldIdLabel string = "LABEL"
 	FieldIdLabelV2 string = "LABEL_V2"
+)
+
+const (
+	ConditionOperatorIn       = "IN"
+	ConditionOperatorNotIn    = "NOT_IN"
+	ConditionOperatorEquals   = "EQUALS"
+	ConditionOperatorNotNull  = "NOT_NULL"
+	ConditionOperatorNull     = "NULL"
+	ConditionOperatorLike     = "LIKE"
 )
 
 type CCMListPerspectivesDetailOptions struct {
@@ -160,7 +169,17 @@ type CCMViewRule struct {
 }
 
 type CCMViewCondition struct {
-	Type string `json:"type"`
+	Type         string         `json:"type"`
+	ViewField    CCMViewField   `json:"viewField"`
+	ViewOperator string         `json:"viewOperator"`
+	Values       []string       `json:"values"`
+}
+
+type CCMViewField struct {
+	FieldId        string `json:"fieldId"`
+	FieldName      string `json:"fieldName"`
+	Identifier     string `json:"identifier"`
+	IdentifierName string `json:"identifierName"`
 }
 
 type CCMViewVisualization struct {
@@ -170,7 +189,7 @@ type CCMViewVisualization struct {
 }
 
 type CCMGroupBy struct {
-	FieldID       string `json:"fieldId"`
+	FieldId       string `json:"fieldId"`
 	FieldName     string `json:"fieldName"`
 	Identifier    string `json:"identifier"`
 	IdentifierName string `json:"identifierName"`

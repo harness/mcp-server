@@ -44,6 +44,7 @@ func AIDevOpsAgentTool(config *config.Config, client *client.GenaiService) (tool
 						"payload": map[string]any{
 							"type":        []string{"object", "array", "string", "number", "boolean"},
 							"description": "The payload for this context item, accepts any valid JSON value. Example: {\"stage_type\": \"Custom\"}",
+							"items":       map[string]any{},
 						},
 					},
 					"required": []string{"type", "payload"},
@@ -164,6 +165,7 @@ func AIDevOpsAgentTool(config *config.Config, client *client.GenaiService) (tool
 				Action:          dto.RequestAction(strings.ToUpper(action)),
 				HarnessContext:  harnessContext,
 				Stream:          stream,
+				Caller:          dto.CallerUnifiedAgent,
 			}
 
 			shouldStream := stream && progressToken != nil

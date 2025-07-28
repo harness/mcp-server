@@ -145,6 +145,7 @@ const CCMPerspectiveSummaryWithBudgetQuery = `
 		}
 	}
 `
+
 const CCMPerspectiveBudgetQuery = `
 query FetchPerspectiveBudget($perspectiveId: String) {
 	budgetSummaryList(perspectiveId: $perspectiveId) {
@@ -211,6 +212,28 @@ query PerspectiveRecommendations($filter: RecommendationFilterDTOInput) {
 			monthlySaving
 			__typename
 		}
+		__typename
+	}
+}
+`
+const CCMFetchPerspectiveFiltersValueQuery = `
+query FetchPerspectiveFiltersValue(
+	$filters: [QLCEViewFilterWrapperInput], 
+	$offset: Int, 
+	$limit: Int, 
+	$sortCriteria: [QLCEViewSortCriteriaInput], 
+	$isClusterQuery: Boolean = null,
+	$isClusterHourlyData: Boolean = null
+) {
+	perspectiveFilters(
+		filters: $filters
+		offset: $offset
+		limit: $limit
+		sortCriteria: $sortCriteria
+		isClusterQuery: $isClusterQuery
+		isClusterHourlyData: $isClusterHourlyData
+	) {
+		values
 		__typename
 	}
 }

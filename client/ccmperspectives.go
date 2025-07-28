@@ -144,7 +144,7 @@ func (r *CloudCostManagementService) CreatePerspective(ctx context.Context, scop
 		},	
 		"viewType": opts.Body.ViewType,
 		"viewState": opts.Body.ViewState,
-
+		"viewRules": opts.Body.ViewRules,
 	}
 
 	awsPreferences := map[string]interface{}{
