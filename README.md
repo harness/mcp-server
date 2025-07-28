@@ -121,6 +121,7 @@ Toolset Name: `ccm`
 - `list_ccm_recommendations_by_resource_type`: Returns a aggregated statistics of cloud cost optimization recommendations grouped by resource type within a given account in Harness Cloud Cost Management.
 - `get_ccm_recommendations_stats`: Returns overall statistics for cloud cost optimization recommendations within a given account in Harness Cloud Cost Management.
 - `update_ccm_recommendation_state`: Marks a recommendation as Applied/Open/Ignored in Harness Cloud Cost Management
+- `override_ccm_recommendation_savings`: Overrides savings for a recommendation in Harness Cloud Cost Management
 - `get_ccm_commitment_coverage`: Get commitment coverage information for an account in Harness Cloud Cost Management
 - `get_ccm_commitment_savings`: Get commitment savings information for an account in Harness Cloud Cost Management
 

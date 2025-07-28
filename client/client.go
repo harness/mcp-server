@@ -130,6 +130,22 @@ func (c *Client) Get(
 	return err
 }
 
+func (c *Client) Put(
+	ctx context.Context,
+	path string,
+	params map[string]string,
+	body interface{},
+	out interface{},
+	b ...backoff.BackOff,
+) error {
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("failed to serialize body: %w", err)
+	}
+
+	return c.PutRaw(ctx, path, params, bytes.NewBuffer(bodyBytes), nil, out, b...)
+}
+
 // Post is a simple helper that builds up the request URL, adding the path and parameters.
 // The response from the request is unmarshalled into the out parameter.
 func (c *Client) Post(
@@ -159,71 +175,19 @@ func (c *Client) PostRaw(
 	out interface{},
 	b ...backoff.BackOff,
 ) error {
-	var retryCount int
+	return c.RequestRaw(ctx, path, params, body, headers, "POST", out, b ...)
+}
 
-	operation := func() error {
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, appendPath(c.BaseURL.String(), path), body)
-		if err != nil {
-			return backoff.Permanent(fmt.Errorf("unable to create HTTP request: %w", err))
-		}
-
-		req.Header.Set("Content-Type", "application/json")
-		// Add custom headers from the headers map
-		for key, value := range headers {
-			req.Header.Add(key, value)
-		}
-		addQueryParams(req, params)
-
-		resp, err := c.Do(req)
-
-		slog.Debug("Response", "url", req.URL.String())
-		slog.Debug("Response", "value", resp)
-
-		if resp != nil && resp.Body != nil {
-			defer resp.Body.Close()
-		}
-
-		if err != nil || resp == nil {
-			return fmt.Errorf("request failed: %w", err)
-		}
-
-		if isRetryable(resp.StatusCode) {
-			return fmt.Errorf("retryable status code: %d", resp.StatusCode)
-		}
-
-		if statusErr := mapStatusCodeToError(resp.StatusCode); statusErr != nil {
-			return backoff.Permanent(statusErr)
-		}
-
-		if out != nil && resp.Body != nil {
-			if err := unmarshalResponse(resp, out); err != nil {
-				return fmt.Errorf("unmarshal error: %w", err)
-			}
-		}
-
-		return nil
-	}
-
-	notify := func(err error, next time.Duration) {
-		retryCount++
-		log.Warn().
-			Int("retry_count", retryCount).
-			Dur("next_retry_in", next).
-			Err(err).
-			Msg("Retrying request due to error")
-	}
-
-	if len(b) > 0 {
-		if err := backoff.RetryNotify(operation, b[0], notify); err != nil {
-			return fmt.Errorf("request failed after %d retries: %w", retryCount, err)
-		}
-	} else {
-		if err := operation(); err != nil {
-			return err
-		}
-	}
-
-	return nil
+func (c *Client) PutRaw(
+	ctx context.Context,
+	path string,
+	params map[string]string,
+	body io.Reader,
+	headers map[string]string,
+	out interface{},
+	b ...backoff.BackOff,
+) error {
+	return c.RequestRaw(ctx, path, params, body, headers, "PUT", out, b ...)
 }
 
 // PostStream is similar to Post but returns the raw http.Response for streaming
@@ -313,6 +277,91 @@ func (c *Client) PostRawStream(
 
 	return resp, nil
 }
+
+
+// PutRaw is a simple helper that builds up the request URL, adding the path and parameters.
+// The response from the request is unmarshalled into the out parameter.
+func (c *Client) RequestRaw(
+	ctx context.Context,
+	path string,
+	params map[string]string,
+	body io.Reader,
+	headers map[string]string,
+	method string,
+	out interface{},
+	b ...backoff.BackOff,
+) error {
+	var retryCount int
+
+	httpMethod := http.MethodPost
+
+	if method == "PUT" {
+		httpMethod = http.MethodPut
+	}
+	operation := func() error {
+		req, err := http.NewRequestWithContext(ctx, httpMethod, appendPath(c.BaseURL.String(), path), body)
+		if err != nil {
+			return backoff.Permanent(fmt.Errorf("unable to create HTTP request: %w", err))
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+		// Add custom headers from the headers map
+		for key, value := range headers {
+			req.Header.Add(key, value)
+		}
+		addQueryParams(req, params)
+
+		resp, err := c.Do(req)
+
+		slog.Debug("Response", "url", req.URL.String())
+		slog.Debug("Response", "value", resp)
+
+		if resp != nil && resp.Body != nil {
+			defer resp.Body.Close()
+		}
+
+		if err != nil || resp == nil {
+			return fmt.Errorf("request failed: %w", err)
+		}
+
+		if isRetryable(resp.StatusCode) {
+			return fmt.Errorf("retryable status code: %d", resp.StatusCode)
+		}
+
+		if statusErr := mapStatusCodeToError(resp.StatusCode); statusErr != nil {
+			return backoff.Permanent(statusErr)
+		}
+
+		if out != nil && resp.Body != nil {
+			if err := unmarshalResponse(resp, out); err != nil {
+				return fmt.Errorf("unmarshal error: %w", err)
+			}
+		}
+
+		return nil
+	}
+	notify := func(err error, next time.Duration) {
+		retryCount++
+		log.Warn().
+			Int("retry_count", retryCount).
+			Dur("next_retry_in", next).
+			Err(err).
+			Msg("Retrying request due to error")
+	}
+
+	if len(b) > 0 {
+		if err := backoff.RetryNotify(operation, b[0], notify); err != nil {
+			return fmt.Errorf("request failed after %d retries: %w", retryCount, err)
+		}
+	} else {
+		if err := operation(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 
 // Do is a wrapper of http.Client.Do that injects the auth header in the request.
 func (c *Client) Do(r *http.Request) (*http.Response, error) {
