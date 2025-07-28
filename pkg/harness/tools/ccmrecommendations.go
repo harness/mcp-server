@@ -46,6 +46,55 @@ func GetCcmRecommendationsStatsTool(config *config.Config, client *client.CloudC
 	}
 }
 
+func UpdateCcmRecommendationStateTool(config *config.Config, client *client.CloudCostManagementService,
+) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+
+	return mcp.NewTool("update_ccm_recommendation_state",
+			mcp.WithDescription("Marks a recommendation as Applied/Open/Ignored in Harness Cloud Cost Management"),
+			mcp.WithString("recommendation_id",
+				mcp.Required(),
+				mcp.Description("Recommendation ID to update"),
+			),
+			mcp.WithString("state",
+				mcp.Enum(dto.RecommendationStateIgnored, dto.RecommendationStateOpen, dto.RecommendationStateApplied),
+				mcp.DefaultString(dto.RecommendationStateApplied),
+				mcp.Required(),
+				mcp.Description("New state for recommendation"),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			accountId, err := getAccountID(config, request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			recommendationId, err := OptionalParam[string](request, "recommendation_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			state, err := OptionalParam[string](request, "state")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			scope, err := FetchScope(config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.UpdateRecommendationState(ctx, scope, accountId, recommendationId, state)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
 func recommendationsHandler(
 	config *config.Config, 
 	ctx context.Context, 

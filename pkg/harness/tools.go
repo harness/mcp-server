@@ -587,6 +587,7 @@ func RegisterCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGro
 			toolsets.NewServerTool(tools.ListCcmRecommendationsTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.ListCcmRecommendationsByResourceTypeTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.GetCcmRecommendationsStatsTool(config, ccmClient)),
+			toolsets.NewServerTool(tools.UpdateCcmRecommendationStateTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.FetchCommitmentCoverageTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.FetchCommitmentSavingsTool(config, ccmClient)),
 		)
