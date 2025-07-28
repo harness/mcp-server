@@ -55,11 +55,7 @@ func (m *CoreModule) Toolsets() []string {
 		"logs",
 		"genai",
 		"intelligence",
-case "chatbot":
-	err := RegisterChatbot(m.config, m.tsg)
-	if err != nil {
-		return err
-	}
+		"chatbot",
 	}
 }
 
@@ -115,6 +111,11 @@ func (m *CoreModule) RegisterToolsets() error {
 			}
 		case "intelligence":
 			err := RegisterIntelligence(m.config, m.tsg)
+			if err != nil {
+				return err
+			}
+		case "chatbot":
+			err := RegisterChatbot(m.config, m.tsg)
 			if err != nil {
 				return err
 			}
