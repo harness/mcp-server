@@ -75,7 +75,7 @@ func (r *CloudCostManagementService)OverrideRecommendationSavings(
 	return resp, nil
 }
 
-func (r *CloudCostManagementService)getRecommendations(
+func (r *CloudCostManagementService) getRecommendations(
 	ctx context.Context, 
 	scope dto.Scope, 
 	accountId string, 
@@ -91,7 +91,7 @@ func (r *CloudCostManagementService)getRecommendations(
 
 	err := r.Client.Post(ctx, path, params, options, &items)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to list cloud cost management Recommendations: %w", err)
+			return nil, fmt.Errorf("Failed to list cloud cost management recommendations: %w", err)
 	}
 
 	return items, nil

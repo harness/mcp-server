@@ -11,6 +11,10 @@ import (
 	"github.com/harness/harness-mcp/client/dto"
 )
 
+const (
+	FilterTypeRecommendation = "CCMRecommendation"
+)
+
 type ClientFunctionRecommendationsInterface func(ctx context.Context, scope dto.Scope, accountId string, params map[string]any) (*map[string]any, error)
 
 func ListCcmRecommendationsTool(config *config.Config, client *client.CloudCostManagementService,
@@ -440,7 +444,7 @@ func commonRecommendationsSchema() map[string]any {
 			"type": "object",
 			"additionalProperties": map[string]any{"type": "string"},
 		},
-		"filterType": map[string]any{"type": "string", "default": "CCMRecommendation"},
+		"filterType": map[string]any{"type": "string", "default": FilterTypeRecommendation},
 	}
 }
 
