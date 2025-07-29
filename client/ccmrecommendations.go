@@ -63,7 +63,7 @@ func (r *CloudCostManagementService)OverrideRecommendationSavings(
 	path := fmt.Sprintf(ccmOverrideRecommendationSavings, accountId)
 	params := make(map[string]string)
 	params["recommendationId"] = recommendationId 
-	params["overridenSavings"] = strconv.FormatFloat(savings, 'f', -1, 64)
+	params["overriddenSavings"] = strconv.FormatFloat(savings, 'f', -1, 64)
 
 	resp := new(map[string]any)
 

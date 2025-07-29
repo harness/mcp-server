@@ -122,7 +122,7 @@ func OverrideCcmRecommendationSavingsTool(config *config.Config, client *client.
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			savings, err := OptionalParam[float64](request, "overriden_savings")
+			savings, err := OptionalParam[float64](request, "overridden_savings")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
