@@ -87,14 +87,3 @@ func CreateUIResource(componentType string, component any) mcp.TextResourceConte
         Text:     string(jsonData),
     }
 }
-
-// CreateDataResource creates a resource for structured data
-func CreateDataResource(dataType string, data any) mcp.TextResourceContents {
-    jsonData, _ := json.Marshal(data)
-    
-    return mcp.TextResourceContents{
-        URI:      fmt.Sprintf("harness:data/%s", dataType),
-        MIMEType: "application/json",
-        Text:     string(jsonData),
-    }
-}
