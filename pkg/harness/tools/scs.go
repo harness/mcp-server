@@ -314,7 +314,10 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 			}
 
 			// Create resource
-			resource := utils.CreateUIResource(tableComponent.ComponentType, tableComponent)
+			resource, err := utils.CreateUIResource(tableComponent.ComponentType, tableComponent)
+			if err != nil {
+				return mcp.NewToolResultError("Failed to create UI resource table: " + err.Error()), nil
+			}
 
 			// Create prompt components for follow-up suggestions
 			prompts := []dto.SelectOption{}
@@ -341,14 +344,17 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 				}
 
 				// Create prompt resource
-				promptResource := utils.CreateUIResource(promptComponent.ComponentType, promptComponent)
+				promptResource, err := utils.CreateUIResource(promptComponent.ComponentType, promptComponent)
+				if err != nil {
+					return mcp.NewToolResultError("Failed to create prompt resource: " + err.Error()), nil
+				}
 				resources = append(resources, promptResource)
 			}
 
 			// Serialize the table component for text fallback
 			tableJSON, err := json.Marshal(tableComponent)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal table component: %w", err)
+				return mcp.NewToolResultError("Failed to marshal table component: " + err.Error()), nil
 			}
 
 			// Return result with UI components
