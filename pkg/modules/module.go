@@ -64,19 +64,21 @@ func (r *ModuleRegistry) GetAllModules() []Module {
 
 // GetEnabledModules returns the list of enabled modules based on configuration
 func (r *ModuleRegistry) GetEnabledModules() []Module {
+	// Create a map for quick lookup of enabled module IDs
+	enabledModuleIDs := make(map[string]bool)
+
 	// If no specific modules are enabled, return all default modules
 	if len(r.config.EnableModules) == 0 {
 		var defaultModules []Module
 		for _, module := range r.modules {
 			if module.IsDefault() {
 				defaultModules = append(defaultModules, module)
+				enabledModuleIDs[module.ID()] = true
 			}
 		}
 		return defaultModules
 	}
 
-	// Create a map for quick lookup of enabled module IDs
-	enabledModuleIDs := make(map[string]bool)
 	for _, id := range r.config.EnableModules {
 		enabledModuleIDs[id] = true
 	}
@@ -85,8 +87,6 @@ func (r *ModuleRegistry) GetEnabledModules() []Module {
 	if enabledModuleIDs["all"] {
 		return r.modules
 	}
-
-	enabledModuleIDs["CORE"] = true
 
 	// Return only enabled modules
 	var enabledModules []Module
