@@ -3,7 +3,6 @@ package client
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/pkg/utils"
 )
@@ -121,7 +120,7 @@ func (r *CloudCostManagementService) GetLastTwelveMonthsCostPerspective(ctx cont
 	return items, nil
 }
 
-func (r *CloudCostManagementService) CreatePerspective(ctx context.Context, scope dto.Scope, opts *dto.CCMCreatePerspectiveOptions) (*dto.CCMCreatePerspectiveResponse, error) {
+func (r *CloudCostManagementService) CreateOrUpdatePerspective(ctx context.Context, scope dto.Scope, opts *dto.CCMCreatePerspectiveOptions, update bool) (*dto.CCMCreatePerspectiveResponse, error) {
 	path := ccmCreatePerspectivePath
 	params := make(map[string]string)
 	if opts == nil {
@@ -134,10 +133,10 @@ func (r *CloudCostManagementService) CreatePerspective(ctx context.Context, scop
 	params["updateTotalCost"] = utils.BoolToString(opts.UpdateTotalCost)
 
 	// Body payload
-	body := map[string]interface{}{
+	body := map[string]any{
 		"name": opts.Body.Name,
 		"viewVersion": opts.Body.ViewVersion,
-		"viewTimeRange": map[string]interface{}{
+		"viewTimeRange": map[string]any{
 			"viewTimeRangeType": opts.Body.ViewTimeRange.ViewTimeRangeType,
 			"startTime": opts.Body.ViewTimeRange.StartTime,
 			"endTime": opts.Body.ViewTimeRange.EndTime,
@@ -145,9 +144,14 @@ func (r *CloudCostManagementService) CreatePerspective(ctx context.Context, scop
 		"viewType": opts.Body.ViewType,
 		"viewState": opts.Body.ViewState,
 		"viewRules": opts.Body.ViewRules,
+		"viewVisualization": opts.Body.ViewVisualization,
 	}
 
-	awsPreferences := map[string]interface{}{
+	if update {
+		body["uuid"] = opts.Body.UUID
+	}
+
+	awsPreferences := map[string]any{
 		"includeDiscounts": opts.Body.ViewPreferences.AwsPreferences.IncludeDiscounts,
 		"includeCredits": opts.Body.ViewPreferences.AwsPreferences.IncludeCredits,
 		"includeRefunds": opts.Body.ViewPreferences.AwsPreferences.IncludeRefunds,
@@ -158,19 +162,19 @@ func (r *CloudCostManagementService) CreatePerspective(ctx context.Context, scop
 		awsPreferences["awsCost"] = opts.Body.ViewPreferences.AwsPreferences.AwsCost
 	}
 
-	viewPreferences := map[string]interface{}{
+	viewPreferences := map[string]any{
 		"showAnomalies":        opts.Body.ViewPreferences.ShowAnomalies,
 		"includeOthers":        opts.Body.ViewPreferences.IncludeOthers,
 		"includeUnallocatedCost": opts.Body.ViewPreferences.IncludeUnallocatedCost,
 		"awsPreferences": awsPreferences,	
-		"gcpPreferences": map[string]interface{}{
+		"gcpPreferences": map[string]any{
 			"includeDiscounts": opts.Body.ViewPreferences.GcpPreferences.IncludeDiscounts,
 			"includeTaxes": opts.Body.ViewPreferences.GcpPreferences.IncludeTaxes,
 		},
 	}
 
 	if opts.Body.ViewPreferences.AzureViewPreferences.CostType != "" {
-		azureViewPreferences := map[string]interface{}{
+		azureViewPreferences := map[string]any{
 			"costType": opts.Body.ViewPreferences.AzureViewPreferences.CostType,
 		}
 		viewPreferences["azureViewPreferences"] = azureViewPreferences
@@ -186,11 +190,17 @@ func (r *CloudCostManagementService) CreatePerspective(ctx context.Context, scop
 		body["folderId"] = opts.Body.FolderId
 	}	
 
-	slog.Debug("Create Perspective", "Body", body)
 	item := new(dto.CCMCreatePerspectiveResponse)
-	err := r.Client.Post(ctx, path, params, body, &item)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create cloud cost management perspective: %w", err)
+	if !update {
+		err := r.Client.Post(ctx, path, params, body, &item)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to create cloud cost management perspective: %w", err)
+		}
+	} else {
+		err := r.Client.Put(ctx, path, params, body, &item)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to update cloud cost management perspective: %w", err)
+		}
 	}
 
 	return item, nil

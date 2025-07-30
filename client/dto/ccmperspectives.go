@@ -98,6 +98,18 @@ const (
 	ConditionOperatorLike     = "LIKE"
 )
 
+const (
+	GraphTypeStackedTimeSeries = "STACKED_TIME_SERIES"
+	GraphTypeStackedLineChart = "STACKED_LINE_CHART"
+)
+
+const (
+	GranularityDay   = "DAY"
+	GranularityWeek  = "WEEK"
+	GranularityMonth = "MONTH"
+)
+
+
 type CCMListPerspectivesDetailOptions struct {
 	AccountIdentifier string
 	SearchKey         string

@@ -299,16 +299,33 @@ func GetLastTwelveMonthsCostCcmPerspectiveTool(config *config.Config, client *cl
 
 // Create perspective
 func CreateCcmPerspectiveTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return createPerspectiveTool(config, client),
+	return createOrUpdatePerspectiveTool(false),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			return createPerspectiveHandler(config, client, ctx, request)
+			return createOrUpdatePerspectiveHandler(config, client, ctx, request, false)
 		}
 }
 
-func createPerspectiveTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool) {
+// Update perspective
+func UpdateCcmPerspectiveTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return createOrUpdatePerspectiveTool(true),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return createOrUpdatePerspectiveHandler(config, client, ctx, request, true)
+		}
+}
 
-	return mcp.NewTool("create_ccm_perspective",
-			mcp.WithDescription("Get the last twelve months cost for a perspective in Harness Cloud Cost Management"),
+func createOrUpdatePerspectiveTool(update bool) (tool mcp.Tool) {
+
+	name := "create_ccm_perspective"
+	description := "Creates a cost perspective in Harness Cloud Cost Management"
+
+	if update {
+		name = "update_ccm_perspective"		
+		description = "Updates a cost perspective in Harness Cloud Cost Management"
+	}	
+
+	
+	options := []mcp.ToolOption{
+		mcp.WithDescription(description),
 			mcp.WithString("account_id",
 				mcp.Description("The account identifier owner of the perspective"),
 			),
@@ -405,15 +422,41 @@ func createPerspectiveTool(config *config.Config, client *client.CloudCostManage
 				mcp.Description("State of view. Set to completed if it is not provided."),
 			),
 			createPerspectiveRules(),
+			createPerspectiveVisualization(),
+	}
+
+	if update {
+		options = append(options, 
+			mcp.WithString("perspective_id",
+				mcp.Required(),
+				mcp.Description("The identifier of the perspective to update."),
+			),
 		)
+	}
+
+	return mcp.NewTool(name, options...)
 }
 
-func createPerspectiveHandler(config *config.Config, client *client.CloudCostManagementService, ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func createOrUpdatePerspectiveHandler(
+	config *config.Config, 
+	client *client.CloudCostManagementService, 
+	ctx context.Context, 
+	request mcp.CallToolRequest,
+	update bool,
+) (*mcp.CallToolResult, error) {
 
 	// Account Id for querystring.
 	accountId, err := getAccountID(config, request)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
+	}
+	
+	perspectiveId := "" 
+	if update {
+		perspectiveId, err = OptionalParam[string](request, "perspective_id")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
 	}
 
 	perspectiveAccountId, err := OptionalParam[string](request, "account_id")
@@ -462,6 +505,9 @@ func createPerspectiveHandler(config *config.Config, client *client.CloudCostMan
 	}
 
 	params := &dto.CCMCreatePerspectiveOptions{}
+	if update {
+		params.Body.UUID = perspectiveId
+	}
 	params.AccountId = accountId
 	params.Clone = clone
 	params.UpdateTotalCost = updateTotalCost
@@ -576,15 +622,28 @@ func createPerspectiveHandler(config *config.Config, client *client.CloudCostMan
 
 	viewRules, err := OptionalAnyArrayParam(request, "view_rules")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return mcp.NewToolResultError("Error extracting rules from request. Check JSON format: " + err.Error()), nil
 	}
 
 	if viewRules != nil {
 		rules, err := ccmcommons. AdaptViewRulesMap(viewRules) 
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return mcp.NewToolResultError("Error processing view rules from request. Check JSON format: " + err.Error()), nil
 		}
 		params.Body.ViewRules = rules
+	}
+
+	viewVisualization, err := OptionalParam[map[string]any](request, "view_visualization")
+	if err != nil {
+		return mcp.NewToolResultError("Error extracting visualization options from request. Check JSON format: " + err.Error()), nil
+	}
+	if viewVisualization != nil {
+		viewVisual, err := ccmcommons. AdaptViewVisualization(viewVisualization) 
+		
+		if err != nil {
+			return mcp.NewToolResultError("Error processing visualization options from request. Check JSON format: " + err.Error()), nil
+		}
+		params.Body.ViewVisualization = viewVisual
 	}
 
 	params.Body.ViewType = viewType
@@ -594,7 +653,7 @@ func createPerspectiveHandler(config *config.Config, client *client.CloudCostMan
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	data, err := client.CreatePerspective(ctx, scope, params)
+	data, err := client.CreateOrUpdatePerspective(ctx, scope, params, update)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CCM Perspective: %w", err)
 	}
@@ -712,4 +771,42 @@ func getOperatorsDescription() string {
 }
 func GetOperatorsDescription() string {
 	return ccmcommons.OperatorsDescription
+}
+
+func createPerspectiveVisualization() mcp.ToolOption {
+	var fieldDescription = `
+Defines how the Perspective data is visualized. This includes the granularity of data points, the grouping field, and the chart type.
+
+- granularity: The time interval for data aggregation (e.g., DAY).
+- groupBy: The field used to group data in the visualization, including fieldId, fieldName, identifier, and identifierName.
+- chartType: The type of chart to display (e.g., STACKED_TIME_SERIES).
+`
+	return mcp.WithObject(
+		"view_visualization",
+		mcp.Description(fieldDescription),
+		mcp.Properties(map[string]any{
+			"granularity": map[string]any{
+				"type":        "string",
+				"description": "The time interval for data aggregation (e.g., DAY).",
+				"enum":        []string{dto.GranularityDay, dto.GranularityWeek, dto.GranularityMonth},
+			},
+			"group_by": map[string]any{
+				"type":        "object",
+				"description": "The field used to group data in the visualization.",
+				"properties": map[string]any{
+					"field_id":         map[string]any{"type": "string"},
+					"field_name":       map[string]any{"type": "string"},
+					"identifier":       map[string]any{"type": "string"},
+					"identifier_name":  map[string]any{"type": "string"},
+				},
+				"required": []string{"field_id", "field_name", "identifier"},
+			},
+			"chart_type": map[string]any{
+				"type":        "string",
+				"description": "The type of chart to display.",
+				"default":     dto.GraphTypeStackedTimeSeries,
+				"enum":        []string{dto.GraphTypeStackedTimeSeries, dto.GraphTypeStackedLineChart},
+			},
+		}),
+	)
 }

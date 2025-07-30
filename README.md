@@ -110,6 +110,7 @@ Toolset Name: `ccm`
 - `get_last_period_cost_ccm_perspective`:  Retrieves the cost for a specified period and perspective within a given account.
 - `get_last_twelve_months_cost_ccm_perspective`:  Retrieves a monthly cost breakdown for the past 12 months for a perspective within a specified account.
 - `create_ccm_perspective`: Creates a perspective for a specified account. 
+- `update_ccm_perspective`: Updates a perspective for a specified account. 
 - `ccm_perspective_grid`: Query detailed cost perspective data in Harness Cloud Cost Management.
 - `ccm_perspective_time_series`: Query detailed cost perspective data, grouped by time in Harness Cloud Cost Management.
 - `ccm_perspective_summary_with_budget`: Query a summary of cost perspectives with budget information in Harness Cloud Cost Management, including detailed cost and budget data grouped by time.

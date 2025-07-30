@@ -143,3 +143,51 @@ func AdaptViewRulesMap(input []any) ([]dto.CCMViewRule, error) {
 	}
 	return rules, nil
 }
+
+func AdaptViewVisualization(input map[string]any) (dto.CCMViewVisualization, error) {
+	groupBy := dto.CCMGroupBy{}
+	gb, ok := input["group_by"].(map[string]any)
+	if !ok {
+		return dto.CCMViewVisualization{}, fmt.Errorf("groupBy field is missing or not an object")
+	}
+
+	var missingFields []string
+
+	if v, ok := gb["field_id"].(string); ok && v != "" {
+		groupBy.FieldId = v
+	} else {
+		missingFields = append(missingFields, "field_id")
+	}
+	if v, ok := gb["field_name"].(string); ok && v != "" {
+		groupBy.FieldName = v
+	} else {
+		missingFields = append(missingFields, "field_name")
+	}
+	if v, ok := gb["identifier"].(string); ok && v != "" {
+		groupBy.Identifier = v
+	} else {
+		missingFields = append(missingFields, "identifier")
+	}
+	if v, ok := gb["identifier_name"].(string); ok && v != "" {
+		groupBy.IdentifierName = v
+	} else {
+		missingFields = append(missingFields, "identifier_name")
+	}
+
+	if len(missingFields) > 0 {
+		return dto.CCMViewVisualization{}, fmt.Errorf("Missing or empty groupBy fields: %v", missingFields)
+	}
+
+	return dto.CCMViewVisualization{
+		Granularity: getStringFromMap(input, "granularity"),
+		GroupBy:     groupBy,
+		ChartType:   getStringFromMap(input, "chart_type"),
+	}, nil
+}
+
+func getStringFromMap(m map[string]any, key string) string {
+	if v, ok := m[key].(string); ok {
+		return v
+	}
+	return ""
+}
