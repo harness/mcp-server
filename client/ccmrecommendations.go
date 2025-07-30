@@ -91,7 +91,7 @@ func (r *CloudCostManagementService) getRecommendations(
 
 	err := r.Client.Post(ctx, path, params, options, &items)
 	if err != nil {
-			return nil, fmt.Errorf("Failed to list cloud cost management recommendations: %w", err)
+		return nil, fmt.Errorf("Failed to list cloud cost management recommendations: %w", err)
 	}
 
 	return items, nil

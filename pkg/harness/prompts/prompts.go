@@ -1,4 +1,4 @@
-package tools
+package prompts
 
 import (
 	p "github.com/harness/harness-mcp/pkg/prompts"
