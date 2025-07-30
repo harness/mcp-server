@@ -228,7 +228,7 @@ func (r *CloudCostManagementService) DeletePerspective(ctx context.Context, scop
 
 	err := r.Client.Delete(ctx, path, params, nil, &response)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list cloud cost management cost categories: %w", err)
+		return nil, fmt.Errorf("failed to delete a cloud cost management perspective: %w", err)
 	}
 
 	return response, nil

@@ -108,7 +108,7 @@ func OverrideCcmRecommendationSavingsTool(config *config.Config, client *client.
 				mcp.Required(),
 				mcp.Description("Recommendation ID to update"),
 			),
-			mcp.WithNumber("overriden_savings",
+			mcp.WithNumber("overridden_savings",
 				mcp.Required(),
 				mcp.Description("New savings for recommendation"),
 			),

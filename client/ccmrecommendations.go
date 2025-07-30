@@ -69,7 +69,7 @@ func (r *CloudCostManagementService)OverrideRecommendationSavings(
 
 	err := r.Client.Put(ctx, path, params, nil, &resp)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to update cloud cost management Recommendation state: %w", err)
+		return nil, fmt.Errorf("Failed to override cloud cost management Recommendation savings: %w", err)
 	}
 
 	return resp, nil

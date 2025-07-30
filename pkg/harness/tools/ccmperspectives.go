@@ -815,7 +815,7 @@ Defines how the Perspective data is visualized. This includes the granularity of
 
 
 func DeleteCcmPerspectiveTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("delete_ccm_perspectives",
+	return mcp.NewTool("delete_ccm_perspective",
 			mcp.WithDescription("Delete a cost perspective in Harness Cloud Cost Management"),
 			mcp.WithString("perspective_id",
 				mcp.Description("Identifier of the perspective to delete"),
