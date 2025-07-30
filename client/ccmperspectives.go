@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/pkg/utils"
+	"log/slog"
 )
 const (
 	ccmPerspetiveDetailListPath = ccmBasePath + "/perspective/getAllPerspectives?accountIdentifier=%s"
@@ -12,6 +13,7 @@ const (
 	ccmGetLastPeriodCostPerspectivePath = ccmBasePath + "/perspective/lastPeriodCost"
 	ccmGetLastTwelveMonthCostPerspectivePath = ccmBasePath + "/perspective/lastYearMonthlyCost"
 	ccmCreatePerspectivePath = ccmBasePath + "/perspective"
+	ccmDeletePerspectivePath = ccmCreatePerspectivePath 
 )
 
 func (r *CloudCostManagementService) ListPerspectivesDetail(ctx context.Context, scope dto.Scope, opts *dto.CCMListPerspectivesDetailOptions) (*dto.CCMPerspectivesDetailList, error) {
@@ -143,9 +145,15 @@ func (r *CloudCostManagementService) CreateOrUpdatePerspective(ctx context.Conte
 		},	
 		"viewType": opts.Body.ViewType,
 		"viewState": opts.Body.ViewState,
-		"viewRules": opts.Body.ViewRules,
-		"viewVisualization": opts.Body.ViewVisualization,
 	}
+
+	if len(opts.Body.ViewRules) > 0 {
+		body["viewRules"] = opts.Body.ViewRules
+	}
+
+	if opts.Body.ViewVisualization != (dto.CCMViewVisualization{}) {
+		body["viewVisualization"] = opts.Body.ViewVisualization
+	}	
 
 	if update {
 		body["uuid"] = opts.Body.UUID
@@ -192,11 +200,13 @@ func (r *CloudCostManagementService) CreateOrUpdatePerspective(ctx context.Conte
 
 	item := new(dto.CCMCreatePerspectiveResponse)
 	if !update {
+		slog.Debug("Creating perspective", "body", body)
 		err := r.Client.Post(ctx, path, params, body, &item)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to create cloud cost management perspective: %w", err)
 		}
 	} else {
+		slog.Debug("Updating perspective", "body", body)
 		err := r.Client.Put(ctx, path, params, body, &item)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to update cloud cost management perspective: %w", err)
@@ -204,4 +214,22 @@ func (r *CloudCostManagementService) CreateOrUpdatePerspective(ctx context.Conte
 	}
 
 	return item, nil
+}
+
+func (r *CloudCostManagementService) DeletePerspective(ctx context.Context, scope dto.Scope, accountId string, perspectiveId string) (*dto.CCMBaseResponse, error) {
+	path := ccmDeletePerspectivePath
+	params := make(map[string]string)
+	addScope(scope, params)
+
+	params["accountId"] = accountId
+	params["perspectiveId"] = perspectiveId
+
+	response := new(dto.CCMBaseResponse)
+
+	err := r.Client.Delete(ctx, path, params, nil, &response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list cloud cost management cost categories: %w", err)
+	}
+
+	return response, nil
 }

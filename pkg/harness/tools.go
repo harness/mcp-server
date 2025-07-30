@@ -578,6 +578,7 @@ func RegisterCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGro
 			toolsets.NewServerTool(tools.GetLastTwelveMonthsCostCcmPerspectiveTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.CreateCcmPerspectiveTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.UpdateCcmPerspectiveTool(config, ccmClient)),
+			toolsets.NewServerTool(tools.DeleteCcmPerspectiveTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.CcmPerspectiveGridTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.CcmPerspectiveTimeSeriesTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.CcmPerspectiveSummaryWithBudgetTool(config, ccmClient)),

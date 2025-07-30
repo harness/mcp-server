@@ -18,6 +18,12 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	HttpPost = "POST"
+	HttpPut  = "PUT"
+	HttpDelete = "DELETE"
+)
+
 var (
 	// these can be moved to a level above if we want to make this a generic
 	// client, keeping these here to ensure we don't end up returning too much info
@@ -175,7 +181,39 @@ func (c *Client) PostRaw(
 	out interface{},
 	b ...backoff.BackOff,
 ) error {
-	return c.RequestRaw(ctx, path, params, body, headers, "POST", out, b ...)
+	return c.RequestRaw(ctx, path, params, body, headers, HttpPost, out, b ...)
+}
+
+// Delete is a simple helper that builds up the request URL, adding the path and parameters.
+// The response from the request is unmarshalled into the out parameter.
+func (c *Client) Delete(
+	ctx context.Context,
+	path string,
+	params map[string]string,
+	body interface{},
+	out interface{},
+	b ...backoff.BackOff,
+) error {
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("failed to serialize body: %w", err)
+	}
+
+	return c.DeleteRaw(ctx, path, params, bytes.NewBuffer(bodyBytes), nil, out, b...)
+}
+
+// DeleteRaw is a simple helper that builds up the request URL, adding the path and parameters.
+// The response from the request is unmarshalled into the out parameter.
+func (c *Client) DeleteRaw(
+	ctx context.Context,
+	path string,
+	params map[string]string,
+	body io.Reader,
+	headers map[string]string,
+	out interface{},
+	b ...backoff.BackOff,
+) error {
+	return c.RequestRaw(ctx, path, params, body, headers, HttpDelete, out, b ...)
 }
 
 func (c *Client) PutRaw(
@@ -187,7 +225,7 @@ func (c *Client) PutRaw(
 	out interface{},
 	b ...backoff.BackOff,
 ) error {
-	return c.RequestRaw(ctx, path, params, body, headers, "PUT", out, b ...)
+	return c.RequestRaw(ctx, path, params, body, headers, HttpPut, out, b ...)
 }
 
 // PostStream is similar to Post but returns the raw http.Response for streaming
@@ -278,7 +316,6 @@ func (c *Client) PostRawStream(
 	return resp, nil
 }
 
-
 // PutRaw is a simple helper that builds up the request URL, adding the path and parameters.
 // The response from the request is unmarshalled into the out parameter.
 func (c *Client) RequestRaw(
@@ -288,16 +325,19 @@ func (c *Client) RequestRaw(
 	body io.Reader,
 	headers map[string]string,
 	method string,
-	out interface{},
+	out any,
 	b ...backoff.BackOff,
 ) error {
 	var retryCount int
 
 	httpMethod := http.MethodPost
-
-	if method == "PUT" {
+	switch method {
+	case HttpPut:
 		httpMethod = http.MethodPut
+	case HttpDelete:
+		httpMethod = http.MethodDelete
 	}
+
 	operation := func() error {
 		req, err := http.NewRequestWithContext(ctx, httpMethod, appendPath(c.BaseURL.String(), path), body)
 		if err != nil {

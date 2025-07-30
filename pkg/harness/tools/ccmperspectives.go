@@ -12,6 +12,7 @@ import (
 	"github.com/harness/harness-mcp/pkg/utils"
 	"github.com/harness/harness-mcp/pkg/ccmcommons"
 	"strings"
+	"log/slog"
 )
 
 func ListCcmPerspectivesDetailTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
@@ -625,7 +626,8 @@ func createOrUpdatePerspectiveHandler(
 		return mcp.NewToolResultError("Error extracting rules from request. Check JSON format: " + err.Error()), nil
 	}
 
-	if viewRules != nil {
+	if len(viewRules) > 0 {
+		slog.Debug("viewRules", "viewRules", viewRules)
 		rules, err := ccmcommons. AdaptViewRulesMap(viewRules) 
 		if err != nil {
 			return mcp.NewToolResultError("Error processing view rules from request. Check JSON format: " + err.Error()), nil
@@ -637,9 +639,9 @@ func createOrUpdatePerspectiveHandler(
 	if err != nil {
 		return mcp.NewToolResultError("Error extracting visualization options from request. Check JSON format: " + err.Error()), nil
 	}
-	if viewVisualization != nil {
+	if len(viewVisualization) > 0 {
+		slog.Debug("viewVisualization", "viewVisualization", viewVisualization)
 		viewVisual, err := ccmcommons. AdaptViewVisualization(viewVisualization) 
-		
 		if err != nil {
 			return mcp.NewToolResultError("Error processing visualization options from request. Check JSON format: " + err.Error()), nil
 		}
@@ -809,4 +811,43 @@ Defines how the Perspective data is visualized. This includes the granularity of
 			},
 		}),
 	)
+}
+
+
+func DeleteCcmPerspectiveTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("delete_ccm_perspectives",
+			mcp.WithDescription("Delete a cost perspective in Harness Cloud Cost Management"),
+			mcp.WithString("perspective_id",
+				mcp.Description("Identifier of the perspective to delete"),
+			),
+			WithScope(config, false),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			accountId, err := getAccountID(config, request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// Handle search key parameter
+			perspectiveId, err := OptionalParam[string](request, "perspective_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			scope, err := FetchScope(config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.DeletePerspective(ctx, scope, accountId, perspectiveId)
+			if err != nil {
+				return mcp.NewToolResultError("failed to delete a CCM Perspective:" + err.Error()), nil
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return mcp.NewToolResultError("Failed to marshal a CCM delete response:" + err.Error()), nil
+			}
+			return mcp.NewToolResultText(string(r)), nil
+		}
 }
