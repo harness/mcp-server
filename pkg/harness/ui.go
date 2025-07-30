@@ -24,18 +24,18 @@ func CreateUISelectFromListTool(config *config.Config) (tool mcp.Tool, handler s
 				mcp.Items(map[string]any{
 					"oneOf": []map[string]any{
 						{
-							"type": "string",
+							"type":        "string",
 							"description": "Simple string option to display in the list",
 						},
 						{
 							"type": "object",
 							"properties": map[string]any{
 								"value": map[string]any{
-									"type": "string",
+									"type":        "string",
 									"description": "Value for the option",
 								},
 								"label": map[string]any{
-									"type": "string",
+									"type":        "string",
 									"description": "Display text for the option",
 								},
 							},
@@ -56,12 +56,12 @@ func CreateUISelectFromListTool(config *config.Config) (tool mcp.Tool, handler s
 			if err != nil {
 				return mcp.NewToolResultError("Invalid options parameter: " + err.Error()), nil
 			}
-			
+
 			// Ensure we have at least one option
 			if len(optionsRaw) == 0 {
 				return mcp.NewToolResultError("At least one option is required"), nil
 			}
-			
+
 			title, err := tools.RequiredParam[string](request, "title")
 			if err != nil {
 				return mcp.NewToolResultError("Invalid title parameter: " + err.Error()), nil
@@ -78,12 +78,12 @@ func CreateUISelectFromListTool(config *config.Config) (tool mcp.Tool, handler s
 					// Object with value/label
 					value, _ := o["value"].(string)
 					label, _ := o["label"].(string)
-					
+
 					// If no label, use value as label
 					if label == "" {
 						label = value
 					}
-					
+
 					options[i] = dto.SelectOption{Value: value, Label: label}
 				default:
 					// For any other type, convert to string
@@ -96,15 +96,15 @@ func CreateUISelectFromListTool(config *config.Config) (tool mcp.Tool, handler s
 			selectComponent := dto.SelectComponent{
 				BaseUIComponent: dto.BaseUIComponent{
 					ComponentType: "select",
-					Title: title,
-					Description: "A select component rendered by the UI for the user to select an option",
+					Title:         title,
+					Description:   "A select component rendered by the UI for the user to select an option",
 				},
 				Options: options,
 			}
-			
+
 			// Create resources
 			resource := utils.CreateUIResource(selectComponent.ComponentType, selectComponent)
-			
+
 			// Return the result
 			return utils.NewToolResultWithResources(
 				config,
@@ -127,18 +127,18 @@ func CreateUIMultiSelectFromListTool(config *config.Config) (tool mcp.Tool, hand
 				mcp.Items(map[string]any{
 					"oneOf": []map[string]any{
 						{
-							"type": "string",
+							"type":        "string",
 							"description": "Simple string option to display in the list",
 						},
 						{
 							"type": "object",
 							"properties": map[string]any{
 								"value": map[string]any{
-									"type": "string",
+									"type":        "string",
 									"description": "Value for the option",
 								},
 								"label": map[string]any{
-									"type": "string",
+									"type":        "string",
 									"description": "Display text for the option",
 								},
 							},
@@ -155,7 +155,7 @@ func CreateUIMultiSelectFromListTool(config *config.Config) (tool mcp.Tool, hand
 			mcp.WithArray("default_values",
 				mcp.Description("Optional array of pre-selected values"),
 				mcp.Items(map[string]any{
-					"type": "string",
+					"type":        "string",
 					"description": "Value to be selected by default",
 				}),
 			),
@@ -166,12 +166,12 @@ func CreateUIMultiSelectFromListTool(config *config.Config) (tool mcp.Tool, hand
 			if err != nil {
 				return mcp.NewToolResultError("Invalid options parameter: " + err.Error()), nil
 			}
-			
+
 			// Ensure we have at least one option
 			if len(optionsRaw) == 0 {
 				return mcp.NewToolResultError("At least one option is required"), nil
 			}
-			
+
 			title, err := tools.RequiredParam[string](request, "title")
 			if err != nil {
 				return mcp.NewToolResultError("Invalid title parameter: " + err.Error()), nil
@@ -194,12 +194,12 @@ func CreateUIMultiSelectFromListTool(config *config.Config) (tool mcp.Tool, hand
 					// Object with value/label
 					value, _ := o["value"].(string)
 					label, _ := o["label"].(string)
-					
+
 					// If no label, use value as label
 					if label == "" {
 						label = value
 					}
-					
+
 					options[i] = dto.SelectOption{Value: value, Label: label}
 				default:
 					// For any other type, convert to string
@@ -212,16 +212,16 @@ func CreateUIMultiSelectFromListTool(config *config.Config) (tool mcp.Tool, hand
 			multiSelectComponent := dto.MultiSelectComponent{
 				BaseUIComponent: dto.BaseUIComponent{
 					ComponentType: "multi_select",
-					Title: title,
-					Description: "A multi-select component rendered by the UI for the user to select multiple options",
+					Title:         title,
+					Description:   "A multi-select component rendered by the UI for the user to select multiple options",
 				},
-				Options: options,
+				Options:       options,
 				DefaultValues: defaultValues,
 			}
-			
+
 			// Create resources
 			resource := utils.CreateUIResource(multiSelectComponent.ComponentType, multiSelectComponent)
-			
+
 			// Return the result
 			return utils.NewToolResultWithResources(
 				config,

@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/harness/harness-mcp/client/dto"
 	generated "github.com/harness/harness-mcp/client/scs/generated"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
-	"github.com/harness/harness-mcp/pkg/appseccommons"
-	builder "github.com/harness/harness-mcp/pkg/harness/event/common"
+	"github.com/harness/harness-mcp/pkg/modules/utils"
 	"github.com/harness/harness-mcp/pkg/resources"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -287,19 +287,77 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 				}
 				rows = append(rows, row)
 			}
-			// Transform enrichedArtifacts into a table-like structure
-			pretty, err := json.MarshalIndent(rows, "", "  ")
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal response: %w", err)
+			// Create table columns for our UI component
+			columns := []dto.TableColumn{
+				{Key: "name", Label: "Artifact Name"},
+				{Key: "tags", Label: "Tags"},
+				{Key: "components", Label: "Components"},
+				{Key: "vulnerabilities", Label: "Vulnerabilities"},
+				{Key: "scorecard", Label: "Scorecard"},
+				{Key: "deployment", Label: "Deployment"},
+				{Key: "sbom violations", Label: "SBOM Violations"},
+				{Key: "digest", Label: "Digest"},
+				{Key: "signing", Label: "Signing"},
+				{Key: "updated", Label: "Updated"},
+				{Key: "orchestration", Label: "Orchestration"},
 			}
 
-			// Compute suggestions
-			var suggestions []string
+			// Create the table component
+			tableComponent := dto.TableComponent{
+				BaseUIComponent: dto.BaseUIComponent{
+					ComponentType: "table",
+					Title:         "Artifact Sources",
+					Description:   "List of artifact sources available in Harness SCS",
+				},
+				Columns: columns,
+				Rows:    rows,
+			}
+
+			// Create resource
+			resource := utils.CreateUIResource(tableComponent.ComponentType, tableComponent)
+
+			// Create prompt components for follow-up suggestions
+			prompts := []dto.SelectOption{}
 			if enrichedArtifacts != nil {
-				suggestions = artifactRuleBasedFollowUps(enrichedArtifacts, &*body.LicenseFilterList)
+				suggestionStrings := artifactRuleBasedFollowUps(enrichedArtifacts, &*body.LicenseFilterList)
+				for i, suggestion := range suggestionStrings {
+					prompts = append(prompts, dto.SelectOption{
+						Value: fmt.Sprintf("suggestion_%d", i),
+						Label: suggestion,
+					})
+				}
 			}
 
-			return appseccommons.NewToolResultTextWithPrompts(string(builder.GenericTableEvent), string(pretty), suggestions, "Artifact Report", "name", "tags", "components", "vulnerabilities", "scorecard", "deployment", "sbom violations", "digest", "signing", "updated", "orchestration"), nil
+			// Only create prompt component if we have suggestions
+			resources := []mcp.ResourceContents{resource}
+			if len(prompts) > 0 {
+				promptComponent := dto.PromptComponent{
+					BaseUIComponent: dto.BaseUIComponent{
+						ComponentType: "prompts",
+						Title:         "Available Actions",
+						Description:   "Select an action to analyze the artifacts",
+					},
+					Prompts: prompts,
+				}
+
+				// Create prompt resource
+				promptResource := utils.CreateUIResource(promptComponent.ComponentType, promptComponent)
+				resources = append(resources, promptResource)
+			}
+
+			// Serialize the table component for text fallback
+			tableJSON, err := json.Marshal(tableComponent)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal table component: %w", err)
+			}
+
+			// Return result with UI components
+			return utils.NewToolResultWithResources(
+				config,
+				string(tableJSON),
+				resources,
+				nil,
+			), nil
 		}
 }
 
@@ -805,24 +863,59 @@ func CreateOPAPolicyTool(config *config.Config, client *generated.ClientWithResp
 			// Replace placeholder with deny list block
 			finalPolicy := strings.Replace(template, "{{DENY_LIST}}", denyListBlock, 1)
 
-			response := map[string]interface{}{
-				"policy":          finalPolicy,
-				"denied_licenses": licenses,
+			// We don't need to create the response JSON anymore since we're using the OPAComponent
+
+			// Create the OPA component
+			opaComponent := dto.OPAComponent{
+				BaseUIComponent: dto.BaseUIComponent{
+					ComponentType: "opa_policy",
+					Title:         "License Deny Policy",
+					Description:   "OPA policy to deny artifacts with specific licenses",
+				},
+				Policy: dto.OPAPolicy{
+					Name:    "deny-list",
+					Content: finalPolicy,
+				},
+				Metadata: map[string]interface{}{
+					"denied_licenses": licenses,
+				},
 			}
 
-			out, err := json.Marshal(response)
+			// Create OPA resource
+			opaResource := utils.CreateUIResource(opaComponent.ComponentType, opaComponent)
+
+			// Create prompts for suggestions
+			prompts := []dto.SelectOption{
+				{Value: "show_examples", Label: "Show me more examples of OPA policies"},
+				{Value: "test_policy", Label: "How can I test this policy?"},
+			}
+
+			// Create prompt component
+			promptComponent := dto.PromptComponent{
+				BaseUIComponent: dto.BaseUIComponent{
+					ComponentType: "prompts",
+					Title:         "Policy Options",
+					Description:   "Select an option to learn more about OPA policies",
+				},
+				Prompts: prompts,
+			}
+
+			// Create prompt resource
+			promptResource := utils.CreateUIResource(promptComponent.ComponentType, promptComponent)
+
+			// Serialize the OPA component for text fallback
+			opaJSON, err := json.Marshal(opaComponent)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal response: %w", err)
+				return nil, fmt.Errorf("failed to marshal OPA component: %w", err)
 			}
 
-			// Compute suggestions for OPA policies
-			suggestions := []string{
-				"Show me more examples of OPA policies",
-				"How can I test this policy?",
-			}
-
-			// Use the OPA builder to format the response
-			return appseccommons.NewToolResultTextWithPrompts(string(builder.OPAEvent), string(out), suggestions, "scs_result"), nil
+			// Return result with UI components
+			return utils.NewToolResultWithResources(
+				config,
+				string(opaJSON),
+				[]mcp.ResourceContents{opaResource, promptResource},
+				nil,
+			), nil
 		}
 }
 
@@ -1041,18 +1134,62 @@ func ListSCSCodeReposTool(config *config.Config, client *generated.ClientWithRes
 					rows = append(rows, row)
 				}
 			}
-			out, err := json.Marshal(rows)
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal response: %w", err)
+			// Create table columns for our UI component
+			columns := []dto.TableColumn{
+				{Key: "name", Label: "Repository Name"},
+				{Key: "platform", Label: "Platform"},
+				{Key: "dependencies", Label: "Dependencies"},
+				{Key: "compliance", Label: "Compliance Issues"},
+				{Key: "vulnerabilities", Label: "Vulnerabilities"},
+				{Key: "sbom_score", Label: "SBOM Score"},
+				{Key: "repo_path", Label: "Repository URL"},
+				{Key: "last_scan", Label: "Last Scan"},
 			}
+
+			// Create the table component
+			tableComponent := dto.TableComponent{
+				BaseUIComponent: dto.BaseUIComponent{
+					ComponentType: "table",
+					Title:         "Code Repositories",
+					Description:   "Displays code repositories scanned by Harness SCS",
+				},
+				Columns: columns,
+				Rows:    rows,
+			}
+
+			tableJSON, err := json.Marshal(tableComponent)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal table component: %w", err)
+			}
+
+			// Create resource
+			resource := utils.CreateUIResource(tableComponent.ComponentType, tableComponent)
 
 			// Compute suggestions for repo
-			suggestions := []string{
-				"Show all repositories that violate the compliance rule: Auto-merge must be disabled.",
-				"Show me compliance risk of 1st repository",
+			prompts := []dto.SelectOption{
+				{Value: "show_noncompliant", Label: "Show all repositories that violate the compliance rule: Auto-merge must be disabled."},
+				{Value: "show_first_repo_risk", Label: "Show me compliance risk of 1st repository"},
 			}
 
-			return appseccommons.NewToolResultTextWithPrompts(string(builder.GenericTableEvent), string(out), suggestions, "Repositories Report", "name", "compliance", "vulnerabilities", "sbom_score", "repo_path", "last_scan", "dependencies", "last_scan"), nil
+			// Create prompt component
+			promptComponent := dto.PromptComponent{
+				BaseUIComponent: dto.BaseUIComponent{
+					ComponentType: "prompts",
+					Title:         "Available Actions",
+					Description:   "Select an action to analyze the repositories",
+				},
+				Prompts: prompts,
+			}
+
+			// Create prompt resource
+			promptResource := utils.CreateUIResource(promptComponent.ComponentType, promptComponent)
+
+			return utils.NewToolResultWithResources(
+				config,
+				string(tableJSON),
+				[]mcp.ResourceContents{resource, promptResource},
+				nil,
+			), nil
 		}
 
 }

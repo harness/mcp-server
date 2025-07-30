@@ -135,6 +135,10 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 		return nil, err
 	}
 
+	if err := registerUI(config, tsg); err != nil {
+		return nil, err
+	}
+
 	// Enable requested toolsets
 	if err := tsg.EnableToolsets(config.Toolsets); err != nil {
 		return nil, err
@@ -869,5 +873,24 @@ func registerAccessControl(config *config.Config, tsg *toolsets.ToolsetGroup) er
 
 	// Add toolset to the group
 	tsg.AddToolset(accessControl)
+	return nil
+}
+
+
+
+func registerUI(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Skip registration for external mode
+	if !config.Internal {
+		return nil
+	}
+
+	// Create the UI toolset
+	ui := toolsets.NewToolset("ui", "Interactive UI components for displaying selectable options and collecting user input").
+		AddReadTools(
+			toolsets.NewServerTool(CreateUISelectFromListTool(config)),
+			toolsets.NewServerTool(CreateUIMultiSelectFromListTool(config)),
+		)
+	
+	tsg.AddToolset(ui)
 	return nil
 }

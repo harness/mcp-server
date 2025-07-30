@@ -12,8 +12,7 @@ import (
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/client/sto/generated"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
-	"github.com/harness/harness-mcp/pkg/appseccommons"
-	builder "github.com/harness/harness-mcp/pkg/harness/event/common"
+	"github.com/harness/harness-mcp/pkg/modules/utils"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -192,17 +191,22 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 				rows = append(rows, row)
 			}
 
-			tableData, err := json.Marshal(rows)
-			if err != nil {
-				return mcp.NewToolResultError("Failed to marshal table data: " + err.Error()), nil
+			// Create table columns for our UI component
+			columns := []dto.TableColumn{
+				{Key: "TITLE", Label: "Title"},
+				{Key: "SEVERITY", Label: "Severity"},
+				{Key: "ISSUE_TYPE", Label: "Issue Type"},
+				{Key: "TARGETS_IMPACTED", Label: "Targets Impacted"},
+				{Key: "OCCURRENCES", Label: "Occurrences"},
+				{Key: "LAST_DETECTED", Label: "Last Detected"},
+				{Key: "EXEMPTION_STATUS", Label: "Exemption Status"},
+				{Key: "ISSUE_ID", Label: "Issue ID"},
+				{Key: "EXEMPTION_ID", Label: "Exemption ID"},
 			}
-			var prompts []string
-			prompts = append(prompts,
-				"Show me only issues with secrets identified",
-				"Show me issues without Exemption",
-			)
-			// The tool name is "sto_all_issues_list", so we extract "STO" from it
-			moduleName := "All_Issue_Report"
+
+			// Prepare the title
+			title := "Security Issues Report"
+			description := "Security issues from STO"
 
 			if search, _ := OptionalParam[string](request, "search"); search != "" {
 				// Truncate if too long
@@ -215,15 +219,54 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 				if len(search) > 0 {
 					search = strings.ToUpper(search[:1]) + search[1:]
 				}
-				moduleName = moduleName + ": " + search
+				description = "Security issues related to: " + search
 			}
 
-			return appseccommons.NewToolResultTextWithPrompts(
-				string(builder.GenericTableEvent),
-				string(tableData),
-				prompts,
-				moduleName,
-				"TITLE", "SEVERITY", "ISSUE_TYPE", "TARGETS_IMPACTED", "OCCURRENCES", "LAST_DETECTED", "EXEMPTION_STATUS", "ISSUE_ID", "EXEMPTION_ID",
+			// Create the table component
+			tableComponent := dto.TableComponent{
+				BaseUIComponent: dto.BaseUIComponent{
+					ComponentType: "table",
+					Title:         title,
+					Description:   description,
+				},
+				Columns: columns,
+				Rows:    rows,
+			}
+
+			// Create table resource
+			tableResource := utils.CreateUIResource(tableComponent.ComponentType, tableComponent)
+
+			// Create prompt components for follow-up suggestions
+			prompts := []dto.SelectOption{
+				{Value: "show_secrets", Label: "Show me only issues with secrets identified"},
+				{Value: "show_no_exemption", Label: "Show me issues without Exemption"},
+			}
+
+			// Create prompt component
+			promptComponent := dto.PromptComponent{
+				BaseUIComponent: dto.BaseUIComponent{
+					ComponentType: "prompts",
+					Title:         "Available Actions",
+					Description:   "Select an action to filter security issues",
+				},
+				Prompts: prompts,
+			}
+
+			// Create prompt resource
+			promptResource := utils.CreateUIResource(promptComponent.ComponentType, promptComponent)
+
+			// Serialize the table component for text fallback
+			tableJSON, err := json.Marshal(tableComponent)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal table component: %w", err)
+			}
+
+			// Return result with UI components
+			return utils.NewToolResultWithResources(
+				config,
+				string(tableJSON),
+				[]mcp.ResourceContents{tableResource, promptResource},
+				nil,
 			), nil
 		}
 }
@@ -400,23 +443,107 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 				}
 			}
 
-			tableData, err := json.Marshal(rows)
-			if err != nil {
-				return mcp.NewToolResultError("Failed to marshal table data: " + err.Error()), nil
-			}
-			columns := []string{}
+			// Create table columns for our UI component
+			columns := []dto.TableColumn{}
 			if showingApprovedExemptions {
-				columns = []string{"ISSUE", "SEVERITY", "SCOPE", "REASON", "EXEMPTION_DURATION", "REQUESTED_BY", "APPROVED_BY", "STATUS", "ExemptionId", "OrgId", "ProjectId", "PipelineId", "TargetId"}
+				columns = []dto.TableColumn{
+					{Key: "ISSUE", Label: "Issue"},
+					{Key: "SEVERITY", Label: "Severity"},
+					{Key: "SCOPE", Label: "Scope"},
+					{Key: "REASON", Label: "Reason"},
+					{Key: "EXEMPTION_DURATION", Label: "Exemption Duration"},
+					{Key: "REQUESTED_BY", Label: "Requested By"},
+					{Key: "APPROVED_BY", Label: "Approved By"},
+					{Key: "STATUS", Label: "Status"},
+					{Key: "ExemptionId", Label: "Exemption ID"},
+					{Key: "OrgId", Label: "Org ID"},
+					{Key: "ProjectId", Label: "Project ID"},
+					{Key: "PipelineId", Label: "Pipeline ID"},
+					{Key: "TargetId", Label: "Target ID"},
+				}
 			} else {
-				columns = []string{"ISSUE", "SEVERITY", "SCOPE", "REASON", "EXEMPTION_DURATION", "REQUESTED_BY", "STATUS", "ExemptionId", "OrgId", "ProjectId", "PipelineId", "TargetId"}
+				columns = []dto.TableColumn{
+					{Key: "ISSUE", Label: "Issue"},
+					{Key: "SEVERITY", Label: "Severity"},
+					{Key: "SCOPE", Label: "Scope"},
+					{Key: "REASON", Label: "Reason"},
+					{Key: "EXEMPTION_DURATION", Label: "Exemption Duration"},
+					{Key: "REQUESTED_BY", Label: "Requested By"},
+					{Key: "STATUS", Label: "Status"},
+					{Key: "ExemptionId", Label: "Exemption ID"},
+					{Key: "OrgId", Label: "Org ID"},
+					{Key: "ProjectId", Label: "Project ID"},
+					{Key: "PipelineId", Label: "Pipeline ID"},
+					{Key: "TargetId", Label: "Target ID"},
+				}
 			}
 
-			return appseccommons.NewToolResultTextWithPrompts(
-				string(builder.GenericTableEvent),
-				string(tableData),
-				suggestions,
-				"List_Exemptions",
-				columns,
+			// Create the table component
+			tableComponent := dto.TableComponent{
+				BaseUIComponent: dto.BaseUIComponent{
+					ComponentType: "table",
+					Title:         "Security Exemptions",
+					Description:   "List of security exemptions and their status",
+				},
+				Columns: columns,
+				Rows:    rows,
+			}
+
+			// Create table resource
+			tableResource := utils.CreateUIResource(tableComponent.ComponentType, tableComponent)
+
+			// Create prompt components for follow-up suggestions
+			prompts := []dto.SelectOption{}
+			prompts = append(prompts, dto.SelectOption{
+				Value: "reject_secret_exemptions",
+				Label: "Reject exemptions raised for issue type as secret",
+			})
+
+			for i := 0; i < len(rows) && i < len(suggestions)-1; i++ {
+				issue, issueOk := rows[i]["ISSUE"].(string)
+				if issueOk {
+					if rows[i]["STATUS"] == "Pending" {
+						prompts = append(prompts, dto.SelectOption{
+							Value: fmt.Sprintf("approve_exemption_%d", i),
+							Label: "Approve exemption " + issue,
+						})
+					}
+					prompts = append(prompts, dto.SelectOption{
+						Value: fmt.Sprintf("reject_exemption_%d", i),
+						Label: "Reject exemption " + issue,
+					})
+				}
+			}
+
+			// Create prompt component if we have prompts
+			resources := []mcp.ResourceContents{tableResource}
+			if len(prompts) > 0 {
+				promptComponent := dto.PromptComponent{
+					BaseUIComponent: dto.BaseUIComponent{
+						ComponentType: "prompts",
+						Title:         "Available Actions",
+						Description:   "Select an action for exemption management",
+					},
+					Prompts: prompts,
+				}
+
+				// Create prompt resource
+				promptResource := utils.CreateUIResource(promptComponent.ComponentType, promptComponent)
+				resources = append(resources, promptResource)
+			}
+
+			// Serialize the table component for text fallback
+			tableJSON, err := json.Marshal(tableComponent)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal table component: %w", err)
+			}
+
+			// Return result with UI components
+			return utils.NewToolResultWithResources(
+				config,
+				string(tableJSON),
+				resources,
+				nil,
 			), nil
 		}
 }

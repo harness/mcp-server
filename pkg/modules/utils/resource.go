@@ -55,7 +55,7 @@ func NewToolResultWithResources(
 		if isInternal {
 			promptText = promptOpts.InternalPrompt
 		}
-		
+
 		// Only add prompt if non-empty
 		if promptText != "" {
 			contents = append(contents, mcp.TextContent{
@@ -64,14 +64,14 @@ func NewToolResultWithResources(
 			})
 		}
 	}
-	
+
 	// Add embedded resources in internal mode
 	if isInternal {
 		for _, resource := range resources {
 			contents = append(contents, mcp.NewEmbeddedResource(resource))
 		}
 	}
-	
+
 	return &mcp.CallToolResult{
 		Content: contents,
 	}
@@ -79,11 +79,11 @@ func NewToolResultWithResources(
 
 // CreateUIResource creates a UI component resource
 func CreateUIResource(componentType string, component any) mcp.TextResourceContents {
-    jsonData, _ := json.Marshal(component)
-    
-    return mcp.TextResourceContents{
-        URI:      fmt.Sprintf("harness:ui/component/%s", componentType),
-        MIMEType: "application/vnd.harness.ui+json",
-        Text:     string(jsonData),
-    }
+	jsonData, _ := json.Marshal(component)
+
+	return mcp.TextResourceContents{
+		URI:      fmt.Sprintf("harness:ui/component/%s", componentType),
+		MIMEType: "application/vnd.harness.ui+json",
+		Text:     string(jsonData),
+	}
 }
