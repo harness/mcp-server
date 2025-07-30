@@ -3,6 +3,7 @@ package modules
 import (
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/toolsets"
+	"github.com/mark3labs/mcp-go/server"
 )
 
 // CIModule implements the Module interface for Continuous Integration
@@ -43,6 +44,16 @@ func (m *CIModule) RegisterToolsets() error {
 // EnableToolsets enables all toolsets in the CI module
 func (m *CIModule) EnableToolsets(tsg *toolsets.ToolsetGroup) error {
 	return ModuleEnableToolsets(m, tsg)
+}
+
+// HasPrompts returns true if this module has prompts
+func (m *CIModule) HasPrompts() bool {
+	return true
+}
+
+// RegisterPrompts registers all prompts for this module
+func (m *CIModule) RegisterPrompts(mcpServer *server.MCPServer) error {
+	return ModuleRegisterPrompts(m.ID(), mcpServer, *m.config)
 }
 
 // IsDefault indicates if this module should be enabled by default

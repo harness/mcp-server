@@ -16,6 +16,7 @@ import (
 
 // UnlicensedModule implements the Module interface for "Unlicensed Module"
 type UnlicensedModule struct {
+	DefaultModulePrompts // Embed DefaultModulePrompts to satisfy the Module interface
 	config *config.Config
 	tsg    *toolsets.ToolsetGroup
 }

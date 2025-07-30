@@ -12,6 +12,7 @@ import (
 type CDModule struct {
 	config *config.Config
 	tsg    *toolsets.ToolsetGroup
+	DefaultModulePrompts // Embed DefaultModulePrompts to satisfy the Module interface
 }
 
 // NewCDModule creates a new instance of CDModule

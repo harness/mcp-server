@@ -7,6 +7,7 @@ import (
 
 // SEIModule implements the Module interface for Security and Compliance
 type SEIModule struct {
+	DefaultModulePrompts // Embed DefaultModulePrompts to satisfy the Module interface
 	config *config.Config
 	tsg    *toolsets.ToolsetGroup
 }

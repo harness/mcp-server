@@ -15,6 +15,7 @@ import (
 
 // SSCAModule implements the Module interface for Software Supply Chain Assurance
 type SSCAModule struct {
+	DefaultModulePrompts // Embed DefaultModulePrompts to satisfy the Module interface
 	config *config.Config
 	tsg    *toolsets.ToolsetGroup
 }

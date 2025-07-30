@@ -6,6 +6,7 @@ import (
 	"github.com/harness/harness-mcp/pkg/harness/tools"
 	"github.com/harness/harness-mcp/pkg/modules/utils"
 	"github.com/harness/harness-mcp/pkg/toolsets"
+	"github.com/mark3labs/mcp-go/server"
 )
 
 // CCMModule implements the Module interface for Cloud Cost Management
@@ -55,6 +56,16 @@ func (m *CCMModule) RegisterToolsets() error {
 // EnableToolsets enables all toolsets in the CCM module
 func (m *CCMModule) EnableToolsets(tsg *toolsets.ToolsetGroup) error {
 	return ModuleEnableToolsets(m, tsg)
+}
+
+// HasPrompts returns true if this module has prompts
+func (m *CCMModule) HasPrompts() bool {
+	return true
+}
+
+// RegisterPrompts registers all prompts for this module
+func (m *CCMModule) RegisterPrompts(mcpServer *server.MCPServer) error {
+	return ModuleRegisterPrompts(m.ID(), mcpServer, *m.config)
 }
 
 // IsDefault indicates if this module should be enabled by default

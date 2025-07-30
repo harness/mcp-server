@@ -19,6 +19,7 @@ const defaultGenaiTimeout = 300 * time.Second
 type CoreModule struct {
 	config *config.Config
 	tsg    *toolsets.ToolsetGroup
+	DefaultModulePrompts // Embed DefaultModulePrompts to satisfy the Module interface
 }
 
 // NewCoreModule creates a new instance of CoreModule

@@ -1,10 +1,15 @@
 package modules
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/prompts"
 	"github.com/harness/harness-mcp/pkg/toolsets"
+	"github.com/mark3labs/mcp-go/server"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestModuleInterface tests that modules implement the Module interface correctly
@@ -209,17 +214,19 @@ func TestModuleEnableToolsetsHelper(t *testing.T) {
 	defaultToolset := toolsets.NewToolset("default", "Default Toolset")
 	tsg.AddToolset(defaultToolset)
 
-	// Create a simple mock module that implements the Module interface
+	// Create a mock module
 	mockModule := &struct {
 		id        string
 		name      string
 		toolsets  []string
 		isDefault bool
+		hasPrompts bool
 	}{
-		id:        "MOCK",
+		id:        "test",
 		name:      "Mock Module",
 		toolsets:  []string{"test-toolset", "non-existent-toolset"},
 		isDefault: false,
+		hasPrompts: false,
 	}
 
 	// Implement the Module interface methods
@@ -227,6 +234,7 @@ func TestModuleEnableToolsetsHelper(t *testing.T) {
 		m:                mockModule,
 		registerToolsets: func() error { return nil },
 		enableToolsets:   func(tsg *toolsets.ToolsetGroup) error { return nil },
+		registerPrompts:  func(mcpServer *server.MCPServer) error { return nil },
 	})
 
 	// Call ModuleEnableToolsets with the mock module
@@ -254,9 +262,11 @@ type mockModuleAdapter struct {
 		name      string
 		toolsets  []string
 		isDefault bool
+		hasPrompts bool
 	}
 	registerToolsets func() error
 	enableToolsets   func(tsg *toolsets.ToolsetGroup) error
+	registerPrompts  func(mcpServer *server.MCPServer) error
 }
 
 func (a mockModuleAdapter) ID() string              { return a.m.id }
@@ -267,3 +277,9 @@ func (a mockModuleAdapter) EnableToolsets(tsg *toolsets.ToolsetGroup) error {
 	return a.enableToolsets(tsg)
 }
 func (a mockModuleAdapter) IsDefault() bool { return a.m.isDefault }
+// HasPrompts returns true if this module has prompts
+func (a mockModuleAdapter) HasPrompts() bool { return a.m.hasPrompts }
+// RegisterPrompts registers all prompts for this module
+func (a mockModuleAdapter) RegisterPrompts(mcpServer *server.MCPServer) error {
+	return a.registerPrompts(mcpServer)
+}

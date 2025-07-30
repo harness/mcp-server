@@ -10,6 +10,7 @@ import (
 
 // CODEModule implements the Module interface for Code Repository Management
 type CODEModule struct {
+	DefaultModulePrompts // Embed DefaultModulePrompts to satisfy the Module interface
 	config *config.Config
 	tsg    *toolsets.ToolsetGroup
 }

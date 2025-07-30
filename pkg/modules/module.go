@@ -1,8 +1,13 @@
 package modules
 
 import (
+	"strings"
+
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/prompts"
+	p "github.com/harness/harness-mcp/pkg/prompts"
 	"github.com/harness/harness-mcp/pkg/toolsets"
+	"github.com/mark3labs/mcp-go/server"
 )
 
 // Module interface defines the contract that all modules must implement
@@ -22,6 +27,12 @@ type Module interface {
 	// EnableToolsets enables all toolsets in this module in the toolset group
 	// This is called after RegisterToolsets to activate the toolsets
 	EnableToolsets(tsg *toolsets.ToolsetGroup) error
+
+	// HasPrompts returns true if this module has prompts
+	HasPrompts() bool
+
+	// RegisterPrompts registers all prompts for this module
+	RegisterPrompts(mcpServer *server.MCPServer) error
 
 	// IsDefault indicates if this module should be enabled by default
 	// when no specific modules are requested
@@ -98,6 +109,25 @@ func (r *ModuleRegistry) GetEnabledModules() []Module {
 	return enabledModules
 }
 
+// RegisterPrompts registers all prompts for enabled modules
+func (r *ModuleRegistry) RegisterPrompts(mcpServer *server.MCPServer) error {
+	// Get enabled modules
+	enabledModules := r.GetEnabledModules()
+
+	// Register prompts for each enabled module
+	for _, module := range enabledModules {
+		// Check if module has prompts
+		if module.HasPrompts() {
+			err := module.RegisterPrompts(mcpServer)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 // ModuleEnableToolsets is a helper function that safely enables toolsets
 // by only enabling toolsets that actually exist in the toolset group
 func ModuleEnableToolsets(m Module, tsg *toolsets.ToolsetGroup) error {
@@ -115,5 +145,41 @@ func ModuleEnableToolsets(m Module, tsg *toolsets.ToolsetGroup) error {
 	if len(existingToolsets) == 0 {
 		return nil
 	}
+
+	// Enable the toolsets
 	return tsg.EnableToolsets(existingToolsets)
+}
+
+// ModuleRegisterPrompts is a helper function for registering prompts for a module
+func ModuleRegisterPrompts(moduleID string, mcpServer *server.MCPServer, cfg config.Config) error {
+	// Get module-specific prompts
+	modulePrompts, err := prompts.GetModulePrompts(strings.ToLower(moduleID), cfg)
+	if err != nil {
+		return err
+	}
+
+	if len(modulePrompts) == 0 {
+		// No prompts for this module
+		return nil
+	}
+
+	// Convert to MCP prompts
+	mcpPrompts := p.Prompts{}
+	for _, promptFile := range modulePrompts {
+		if promptFile.Metadata.Name != "" && promptFile.Content != "" {
+			// Create MCP prompt
+			mcpPrompt := p.NewPrompt().
+				SetName(promptFile.Metadata.Name).
+				SetDescription(promptFile.Metadata.Description).
+				SetResultDescription(promptFile.Metadata.ResultDescription).
+				SetText(promptFile.Content).
+				Build()
+			mcpPrompts.Append(mcpPrompt)
+		}
+	}
+
+	// Register the prompts with the MCP server
+	p.AddPrompts(mcpPrompts, mcpServer)
+
+	return nil
 }

@@ -15,6 +15,7 @@ import (
 
 // STOModule implements the Module interface for Security Test Orchestration
 type STOModule struct {
+	DefaultModulePrompts // Embed DefaultModulePrompts to satisfy the Module interface
 	config *config.Config
 	tsg    *toolsets.ToolsetGroup
 }

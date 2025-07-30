@@ -10,6 +10,7 @@ import (
 
 // IDPModule implements the Module interface for Internal Developer Portal
 type IDPModule struct {
+	DefaultModulePrompts // Embed DefaultModulePrompts to satisfy the Module interface
 	config *config.Config
 	tsg    *toolsets.ToolsetGroup
 }
