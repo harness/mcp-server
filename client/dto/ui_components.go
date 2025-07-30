@@ -38,17 +38,26 @@ type TableColumn struct {
 	Label string `json:"label"`
 }
 
-// TableComponent represents a table UI component
+// TableRow represents a single row in a table
+// The keys in this map should correspond to the 'Key' fields defined in the TableColumn structs
+// For example, if columns include {Key: "id"} and {Key: "name"}, then each row should have
+// entries with those keys: {"id": "123", "name": "example"}
+type TableRow = map[string]any
+
+// TableComponent represents a table UI component with rows and columns
+// Each row in Rows contains values corresponding to the keys defined in Columns
 type TableComponent struct {
 	BaseUIComponent
-	Columns []TableColumn    `json:"columns"`
-	Rows    []map[string]any `json:"rows"`
+	Columns []TableColumn `json:"columns"`
+	Rows    []TableRow    `json:"rows"`
 }
 
 // OPAPolicy represents the policy content in an OPA component
 type OPAPolicy struct {
-	Name    string `json:"name"`
-	Content any    `json:"content"`
+	// Name is the identifier for the policy
+	Name string `json:"name"`
+	// Content is the Rego policy as a string
+	Content string `json:"content"`
 }
 
 // OPAComponent represents an OPA policy UI component
