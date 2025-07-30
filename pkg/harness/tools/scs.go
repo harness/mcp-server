@@ -316,7 +316,7 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 			// Create resource
 			resource, err := utils.CreateUIResource(tableComponent.ComponentType, tableComponent)
 			if err != nil {
-				return mcp.NewToolResultError("Failed to create UI resource table: " + err.Error()), nil
+				return nil, fmt.Errorf("failed to create UI resource table: %w", err)
 			}
 
 			// Create prompt components for follow-up suggestions
@@ -346,7 +346,7 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 				// Create prompt resource
 				promptResource, err := utils.CreateUIResource(promptComponent.ComponentType, promptComponent)
 				if err != nil {
-					return mcp.NewToolResultError("Failed to create prompt resource: " + err.Error()), nil
+					return nil, fmt.Errorf("failed to create prompt resource: %w", err)
 				}
 				resources = append(resources, promptResource)
 			}
@@ -354,7 +354,7 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 			// Serialize the table component for text fallback
 			tableJSON, err := json.Marshal(tableComponent)
 			if err != nil {
-				return mcp.NewToolResultError("Failed to marshal table component: " + err.Error()), nil
+				return nil, fmt.Errorf("failed to marshal table component: %w", err)
 			}
 
 			// Return result with UI components
@@ -890,7 +890,7 @@ func CreateOPAPolicyTool(config *config.Config, client *generated.ClientWithResp
 			// Create OPA resource
 			opaResource, err := utils.CreateUIResource(opaComponent.ComponentType, opaComponent)
 			if err != nil {
-				return mcp.NewToolResultError("Failed to create UI resource: " + err.Error()), nil
+				return nil, fmt.Errorf("failed to create UI resource: %w", err)
 			}
 
 			// Create prompts for suggestions
@@ -912,13 +912,13 @@ func CreateOPAPolicyTool(config *config.Config, client *generated.ClientWithResp
 			// Create prompt resource
 			promptResource, err := utils.CreateUIResource(promptComponent.ComponentType, promptComponent)
 			if err != nil {
-				return mcp.NewToolResultError("Failed to create UI resource: " + err.Error()), nil
+				return nil, fmt.Errorf("failed to create UI resource: %w", err)
 			}
 
 			// Serialize the OPA component for text fallback
 			opaJSON, err := json.Marshal(opaComponent)
 			if err != nil {
-				return mcp.NewToolResultError("Failed to marshal OPA component: " + err.Error()), nil
+				return nil, fmt.Errorf("failed to marshal OPA component: %w", err)
 			}
 
 			// Return result with UI components
@@ -1171,13 +1171,13 @@ func ListSCSCodeReposTool(config *config.Config, client *generated.ClientWithRes
 
 			tableJSON, err := json.Marshal(tableComponent)
 			if err != nil {
-				return mcp.NewToolResultError("Failed to marshal table component: " + err.Error()), nil
+				return nil, fmt.Errorf("failed to marshal table component: %w", err)
 			}
 
 			// Create resource
 			resource, err := utils.CreateUIResource(tableComponent.ComponentType, tableComponent)
 			if err != nil {
-				return mcp.NewToolResultError("Failed to create UI resource: " + err.Error()), nil
+				return nil, fmt.Errorf("failed to create UI resource: %w", err)
 			}
 
 			// Compute suggestions for repo
@@ -1199,7 +1199,7 @@ func ListSCSCodeReposTool(config *config.Config, client *generated.ClientWithRes
 			// Create prompt resource
 			promptResource, err := utils.CreateUIResource(promptComponent.ComponentType, promptComponent)
 			if err != nil {
-				return mcp.NewToolResultError("Failed to create UI resource: " + err.Error()), nil
+				return nil, fmt.Errorf("failed to create UI resource: %w", err)
 			}
 
 			return utils.NewToolResultWithResources(

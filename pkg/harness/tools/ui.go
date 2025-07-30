@@ -51,7 +51,7 @@ func CreateUISelectFromListTool(config *config.Config) (tool mcp.Tool, handler s
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			// Parse required parameters
-			optionsRaw, err := OptionalAnyArrayParam(request, "options")
+			optionsRaw, err := RequiredAnyArrayParam(request, "options")
 			if err != nil {
 				return mcp.NewToolResultError("Invalid options parameter: " + err.Error()), nil
 			}
@@ -104,7 +104,7 @@ func CreateUISelectFromListTool(config *config.Config) (tool mcp.Tool, handler s
 			// Create resources
 			resource, err := utils.CreateUIResource(selectComponent.ComponentType, selectComponent)
 			if err != nil {
-				return mcp.NewToolResultError("Failed to create UI resource: " + err.Error()), nil
+				return nil, fmt.Errorf("failed to create UI resource: %w", err)
 			}
 
 			// Return the result
@@ -164,7 +164,7 @@ func CreateUIMultiSelectFromListTool(config *config.Config) (tool mcp.Tool, hand
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			// Parse required parameters
-			optionsRaw, err := OptionalAnyArrayParam(request, "options")
+			optionsRaw, err := RequiredAnyArrayParam(request, "options")
 			if err != nil {
 				return mcp.NewToolResultError("Invalid options parameter: " + err.Error()), nil
 			}
@@ -224,7 +224,7 @@ func CreateUIMultiSelectFromListTool(config *config.Config) (tool mcp.Tool, hand
 			// Create resources
 			resource, err := utils.CreateUIResource(multiSelectComponent.ComponentType, multiSelectComponent)
 			if err != nil {
-				return mcp.NewToolResultError("Failed to create UI resource: " + err.Error()), nil
+				return nil, fmt.Errorf("failed to create UI resource: %w", err)
 			}
 
 			// Return the result

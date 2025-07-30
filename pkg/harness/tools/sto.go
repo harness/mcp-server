@@ -236,7 +236,7 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 			// Create table resource
 			tableResource, err := utils.CreateUIResource(tableComponent.ComponentType, tableComponent)
 			if err != nil {
-				return mcp.NewToolResultError("Failed to create UI resource table: " + err.Error()), nil
+				return nil, fmt.Errorf("failed to create UI resource table: %w", err)
 			}
 
 			// Create prompt components for follow-up suggestions
@@ -258,13 +258,13 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 			// Create prompt resource
 			promptResource, err := utils.CreateUIResource(promptComponent.ComponentType, promptComponent)
 			if err != nil {
-				return mcp.NewToolResultError("Failed to create UI resource prompt: " + err.Error()), nil
+				return nil, fmt.Errorf("failed to create UI resource prompt: %w", err)
 			}
 
 			// Serialize the table component for text fallback
 			tableJSON, err := json.Marshal(tableComponent)
 			if err != nil {
-				return mcp.NewToolResultError("Failed to marshal table component: " + err.Error()), nil
+				return nil, fmt.Errorf("failed to marshal table component: %w", err)
 			}
 
 			// Return result with UI components
@@ -498,7 +498,7 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 			// Create table resource
 			tableResource, err := utils.CreateUIResource(tableComponent.ComponentType, tableComponent)
 			if err != nil {
-				return mcp.NewToolResultError("Failed to create UI resource table: " + err.Error()), nil
+				return nil, fmt.Errorf("failed to create UI resource table: %w", err)
 			}
 
 			// Create prompt components for follow-up suggestions
@@ -539,7 +539,7 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 				// Create prompt resource
 				promptResource, err := utils.CreateUIResource(promptComponent.ComponentType, promptComponent)
 				if err != nil {
-					return mcp.NewToolResultError("Failed to create prompt resource: " + err.Error()), nil
+					return nil, fmt.Errorf("failed to create prompt resource: %w", err)
 				}
 				resources = append(resources, promptResource)
 			}
