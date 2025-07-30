@@ -415,3 +415,20 @@ func RegisterChatbot(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	tsg.AddToolset(chatbot)
 	return nil
 }
+
+func RegisterUI(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Skip registration for external mode
+	if !config.Internal {
+		return nil
+	}
+
+	// Create the UI toolset
+	ui := toolsets.NewToolset("ui", "Interactive UI components for displaying selectable options and collecting user input").
+		AddReadTools(
+			toolsets.NewServerTool(tools.CreateUISelectFromListTool(config)),
+			toolsets.NewServerTool(tools.CreateUIMultiSelectFromListTool(config)),
+		)
+	
+	tsg.AddToolset(ui)
+	return nil
+}

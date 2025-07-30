@@ -1,4 +1,4 @@
-package harness
+package tools
 
 import (
 	"context"
@@ -6,8 +6,7 @@ import (
 
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
-	"github.com/harness/harness-mcp/pkg/harness/tools"
-	"github.com/harness/harness-mcp/pkg/modules/utils"
+	"github.com/harness/harness-mcp/pkg/harness/tools/utils"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -52,7 +51,7 @@ func CreateUISelectFromListTool(config *config.Config) (tool mcp.Tool, handler s
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			// Parse required parameters
-			optionsRaw, err := tools.OptionalAnyArrayParam(request, "options")
+			optionsRaw, err := OptionalAnyArrayParam(request, "options")
 			if err != nil {
 				return mcp.NewToolResultError("Invalid options parameter: " + err.Error()), nil
 			}
@@ -62,7 +61,7 @@ func CreateUISelectFromListTool(config *config.Config) (tool mcp.Tool, handler s
 				return mcp.NewToolResultError("At least one option is required"), nil
 			}
 
-			title, err := tools.RequiredParam[string](request, "title")
+			title, err := RequiredParam[string](request, "title")
 			if err != nil {
 				return mcp.NewToolResultError("Invalid title parameter: " + err.Error()), nil
 			}
@@ -165,7 +164,7 @@ func CreateUIMultiSelectFromListTool(config *config.Config) (tool mcp.Tool, hand
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			// Parse required parameters
-			optionsRaw, err := tools.OptionalAnyArrayParam(request, "options")
+			optionsRaw, err := OptionalAnyArrayParam(request, "options")
 			if err != nil {
 				return mcp.NewToolResultError("Invalid options parameter: " + err.Error()), nil
 			}
@@ -175,13 +174,13 @@ func CreateUIMultiSelectFromListTool(config *config.Config) (tool mcp.Tool, hand
 				return mcp.NewToolResultError("At least one option is required"), nil
 			}
 
-			title, err := tools.RequiredParam[string](request, "title")
+			title, err := RequiredParam[string](request, "title")
 			if err != nil {
 				return mcp.NewToolResultError("Invalid title parameter: " + err.Error()), nil
 			}
 
 			// Get optional default values
-			defaultValues, err := tools.OptionalStringArrayParam(request, "default_values")
+			defaultValues, err := OptionalStringArrayParam(request, "default_values")
 			if err != nil {
 				return mcp.NewToolResultError("Invalid default_values parameter: " + err.Error()), nil
 			}

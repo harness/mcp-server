@@ -12,7 +12,7 @@ import (
 	"github.com/harness/harness-mcp/client/dto"
 	generated "github.com/harness/harness-mcp/client/scs/generated"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
-	"github.com/harness/harness-mcp/pkg/modules/utils"
+	"github.com/harness/harness-mcp/pkg/harness/tools/utils"
 	"github.com/harness/harness-mcp/pkg/resources"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"

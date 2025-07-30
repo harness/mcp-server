@@ -49,98 +49,98 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 	}
 
 	// Register pipelines
-	if err := RegisterPipelines(config, tsg); err != nil {
+	if err := modules.RegisterPipelines(config, tsg); err != nil {
 		return nil, err
 	}
 
 	// Register chatbot
-	if err := RegisterChatbot(config, tsg); err != nil {
+	if err := modules.RegisterChatbot(config, tsg); err != nil {
 		return nil, err
 	}
 
 	// Register genai
-	if err := registerGenai(config, tsg); err != nil {
+	if err := modules.RegisterGenAI(config, tsg); err != nil {
 		return nil, err
 	}
 
 	// TODO: support internal mode for other endpoints as well eventually
-	if err := RegisterPullRequests(config, tsg); err != nil {
+	if err := modules.RegisterPullRequests(config, tsg); err != nil {
 		return nil, err
 	}
 
-	if err := RegisterRepositories(config, tsg); err != nil {
+	if err := modules.RegisterRepositories(config, tsg); err != nil {
 		return nil, err
 	}
 
-	if err := RegisterRegistries(config, tsg); err != nil {
+	if err := modules.RegisterRegistries(config, tsg); err != nil {
 		return nil, err
 	}
 
-	if err := RegisterLogs(config, tsg); err != nil {
+	if err := modules.RegisterLogs(config, tsg); err != nil {
 		return nil, err
 	}
 
-	if err := RegisterCloudCostManagement(config, tsg); err != nil {
+	if err := modules.RegisterCloudCostManagement(config, tsg); err != nil {
 		return nil, err
 	}
 
-	if err := RegisterServices(config, tsg); err != nil {
+	if err := modules.RegisterServices(config, tsg); err != nil {
 		return nil, err
 	}
 
-	if err := RegisterEnvironments(config, tsg); err != nil {
+	if err := modules.RegisterEnvironments(config, tsg); err != nil {
 		return nil, err
 	}
 
-	if err := RegisterInfrastructure(config, tsg); err != nil {
+	if err := modules.RegisterInfrastructure(config, tsg); err != nil {
 		return nil, err
 	}
 
-	if err := RegisterConnectors(config, tsg); err != nil {
+	if err := modules.RegisterConnectors(config, tsg); err != nil {
 		return nil, err
 	}
 
-	if err := RegisterDashboards(config, tsg); err != nil {
+	if err := modules.RegisterDashboards(config, tsg); err != nil {
 		return nil, err
 	}
 
-	if err := RegisterChaos(config, tsg); err != nil {
+	if err := modules.RegisterChaos(config, tsg); err != nil {
 		return nil, err
 	}
 
-	if err := RegisterTemplates(config, tsg); err != nil {
+	if err := modules.RegisterTemplates(config, tsg); err != nil {
 		return nil, err
 	}
 
-	if err := RegisterIntelligence(config, tsg); err != nil {
+	if err := modules.RegisterIntelligence(config, tsg); err != nil {
 		return nil, err
 	}
 
-	if err := RegisterInternalDeveloperPortal(config, tsg); err != nil {
+	if err := modules.RegisterInternalDeveloperPortal(config, tsg); err != nil {
 		return nil, err
 	}
 
-	if err := RegisterSCS(config, tsg); err != nil {
+	if err := modules.RegisterSCS(config, tsg); err != nil {
 		return nil, err
 	}
 
-	if err := RegisterSTO(config, tsg); err != nil {
+	if err := modules.RegisterSTO(config, tsg); err != nil {
 		return nil, err
 	}
 
-	if err := RegisterAudit(config, tsg); err != nil {
+	if err := modules.RegisterAudit(config, tsg); err != nil {
 		return nil, err
 	}
 
-	if err := RegisterDbops(config, tsg); err != nil {
+	if err := modules.RegisterDbops(config, tsg); err != nil {
 		return nil, err
 	}
 
-	if err := registerAccessControl(config, tsg); err != nil {
+	if err := modules.RegisterAccessControl(config, tsg); err != nil {
 		return nil, err
 	}
 
-	if err := registerUI(config, tsg); err != nil {
+	if err := modules.RegisterUI(config, tsg); err != nil {
 		return nil, err
 	}
 
@@ -382,24 +382,5 @@ func RegisterDefault(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 	// Add the default toolset to the group
 	tsg.AddToolset(defaultToolset)
-	return nil
-}
-
-
-
-func registerUI(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-	// Skip registration for external mode
-	if !config.Internal {
-		return nil
-	}
-
-	// Create the UI toolset
-	ui := toolsets.NewToolset("ui", "Interactive UI components for displaying selectable options and collecting user input").
-		AddReadTools(
-			toolsets.NewServerTool(CreateUISelectFromListTool(config)),
-			toolsets.NewServerTool(CreateUIMultiSelectFromListTool(config)),
-		)
-	
-	tsg.AddToolset(ui)
 	return nil
 }
