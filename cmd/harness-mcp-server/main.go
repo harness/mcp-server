@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/harness/harness-mcp/pkg/harness/tools"
+	"github.com/harness/harness-mcp/pkg/harness/prompts"
 	"io"
 	"log"
 	"log/slog"
@@ -68,6 +68,12 @@ var (
 				return fmt.Errorf("Failed to unmarshal toolsets: %w", err)
 			}
 
+			var enableModules []string
+			err = viper.UnmarshalKey("enable_modules", &enableModules)
+			if err != nil {
+				return fmt.Errorf("Failed to unmarshal enabled modules: %w", err)
+			}
+
 			cfg := config.Config{
 				Version:          version,
 				BaseURL:          viper.GetString("base_url"),
@@ -79,7 +85,8 @@ var (
 				Toolsets:         toolsets,
 				LogFilePath:      viper.GetString("log_file"),
 				Debug:            viper.GetBool("debug"),
-				EnabledModules:   harness.EnabledModules,
+				EnableModules:    enableModules,
+				EnableLicense:    viper.GetBool("enable_license"),
 			}
 
 			if err := runStdioServer(ctx, cfg); err != nil {
@@ -124,16 +131,23 @@ var (
 				return fmt.Errorf("Failed to unmarshal toolsets: %w", err)
 			}
 
+			var enableModules []string
+			err = viper.UnmarshalKey("enable_modules", &enableModules)
+			if err != nil {
+				return fmt.Errorf("Failed to unmarshal enabled modules: %w", err)
+			}
+
 			cfg := config.Config{
 				// Common fields
-				Version:        version,
-				ReadOnly:       true, // we keep it read-only for now
-				Toolsets:       toolsets,
-				EnabledModules: harness.EnabledModules,
-				LogFilePath:    viper.GetString("log_file"),
-				Debug:          viper.GetBool("debug"),
-				Internal:       true,
-				AccountID:      session.Principal.AccountID,
+				Version:       version,
+				ReadOnly:      true, // we keep it read-only for now
+				Toolsets:      toolsets,
+				EnableModules: enableModules,
+				LogFilePath:   viper.GetString("log_file"),
+				Debug:         viper.GetBool("debug"),
+				EnableLicense: viper.GetBool("enable_license"),
+				Internal:      true,
+				AccountID:     session.Principal.AccountID,
 				// Internal mode specific fields
 				BearerToken:             viper.GetString("bearer_token"),
 				PipelineSvcBaseURL:      viper.GetString("pipeline_svc_base_url"),
@@ -189,6 +203,8 @@ func init() {
 	// Add global flags
 	rootCmd.PersistentFlags().StringSlice("toolsets", harness.DefaultTools,
 		"An optional comma separated list of groups of tools to allow, defaults to enabling all")
+	rootCmd.PersistentFlags().StringSlice("enable-modules", []string{}, "Comma separated list of modules to enable")
+	rootCmd.PersistentFlags().Bool("enable-license", false, "Enable license validation")
 	rootCmd.PersistentFlags().Bool("read-only", false, "Restrict the server to read-only operations")
 	rootCmd.PersistentFlags().String("log-file", "", "Path to log file")
 	rootCmd.PersistentFlags().Bool("debug", false, "Enable debug logging")
@@ -237,6 +253,8 @@ func init() {
 
 	// Bind global flags to viper
 	_ = viper.BindPFlag("toolsets", rootCmd.PersistentFlags().Lookup("toolsets"))
+	_ = viper.BindPFlag("enable_modules", rootCmd.PersistentFlags().Lookup("enable-modules"))
+	_ = viper.BindPFlag("enable_license", rootCmd.PersistentFlags().Lookup("enable-license"))
 	_ = viper.BindPFlag("read_only", rootCmd.PersistentFlags().Lookup("read-only"))
 	_ = viper.BindPFlag("log_file", rootCmd.PersistentFlags().Lookup("log-file"))
 	_ = viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
@@ -345,7 +363,7 @@ func runStdioServer(ctx context.Context, config config.Config) error {
 
 	// Create server
 	// WithRecovery makes sure panics are logged and don't crash the server
-	harnessServer := tools.NewServer(version, server.WithHooks(hooks), server.WithRecovery())
+	harnessServer := harness.NewServer(version, server.WithHooks(hooks), server.WithRecovery())
 
 	// Initialize toolsets
 	toolsets, err := harness.InitToolsets(&config)
@@ -357,7 +375,7 @@ func runStdioServer(ctx context.Context, config config.Config) error {
 	toolsets.RegisterTools(harnessServer)
 
 	// Set the guidelines prompts
-	tools.RegisterPrompts(harnessServer)
+	prompts.RegisterPrompts(harnessServer)
 
 	// Create stdio server
 	stdioServer := server.NewStdioServer(harnessServer)

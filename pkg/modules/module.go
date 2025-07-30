@@ -11,11 +11,20 @@ type Module interface {
 	ID() string
 	// Name returns the name of module
 	Name() string
+
 	// Toolsets returns the names of toolsets provided by this module
 	Toolsets() []string
-	// RegisterToolsets registers all toolsets in that module
+
+	// RegisterToolsets registers all toolsets in this module with the toolset group
+	// It creates necessary clients and adds tools to the toolset group
 	RegisterToolsets() error
+
+	// EnableToolsets enables all toolsets in this module in the toolset group
+	// This is called after RegisterToolsets to activate the toolsets
+	EnableToolsets(tsg *toolsets.ToolsetGroup) error
+
 	// IsDefault indicates if this module should be enabled by default
+	// when no specific modules are requested
 	IsDefault() bool
 }
 
@@ -30,19 +39,33 @@ type ModuleRegistry struct {
 func NewModuleRegistry(config *config.Config, tsg *toolsets.ToolsetGroup) *ModuleRegistry {
 	return &ModuleRegistry{
 		modules: []Module{
-			NewDefaultModule(config, tsg),
-			// In Phase 1, only register the DefaultModule
-			// Additional modules will be added in future phases
+			NewCoreModule(config, tsg),
+			NewCIModule(config, tsg),
+			NewCDModule(config, tsg),
+			NewUnlicensedModule(config, tsg),
+			NewCHAOSModule(config, tsg),
+			NewSEIModule(config, tsg),
+			NewSTOModule(config, tsg),
+			NewSSCAModule(config, tsg),
+			NewCODEModule(config, tsg),
+			NewCCMModule(config, tsg),
+			NewIDPModule(config, tsg),
+			NewHARModule(config, tsg),
 		},
 		config: config,
 		tsg:    tsg,
 	}
 }
 
-// GetEnabledModules returns modules that match the enabled module IDs
+// GetAllModules returns all available modules
+func (r *ModuleRegistry) GetAllModules() []Module {
+	return r.modules
+}
+
+// GetEnabledModules returns the list of enabled modules based on configuration
 func (r *ModuleRegistry) GetEnabledModules() []Module {
 	// If no specific modules are enabled, return all default modules
-	if len(r.config.EnabledModules) == 0 {
+	if len(r.config.EnableModules) == 0 {
 		var defaultModules []Module
 		for _, module := range r.modules {
 			if module.IsDefault() {
@@ -53,28 +76,44 @@ func (r *ModuleRegistry) GetEnabledModules() []Module {
 	}
 
 	// Create a map for quick lookup of enabled module IDs
-	enabledModuleMap := make(map[string]bool)
-	for _, id := range r.config.EnabledModules {
-		enabledModuleMap[id] = true
+	enabledModuleIDs := make(map[string]bool)
+	for _, id := range r.config.EnableModules {
+		enabledModuleIDs[id] = true
 	}
 
-	// Special case: if "all" is in the list, return all modules
-	if enabledModuleMap["all"] {
+	// Check if "all" is enabled
+	if enabledModuleIDs["all"] {
 		return r.modules
 	}
 
-	// Return only the modules that match the enabled module IDs
+	enabledModuleIDs["CORE"] = true
+
+	// Return only enabled modules
 	var enabledModules []Module
 	for _, module := range r.modules {
-		if enabledModuleMap[module.ID()] {
+		if enabledModuleIDs[module.ID()] {
 			enabledModules = append(enabledModules, module)
 		}
 	}
-
 	return enabledModules
 }
 
-// GetAllModules returns all registered modules
-func (r *ModuleRegistry) GetAllModules() []Module {
-	return r.modules
+// ModuleEnableToolsets is a helper function that safely enables toolsets
+// by only enabling toolsets that actually exist in the toolset group
+func ModuleEnableToolsets(m Module, tsg *toolsets.ToolsetGroup) error {
+	// Only enable toolsets that exist in the toolset group
+	var existingToolsets []string
+	for _, toolsetName := range m.Toolsets() {
+		// Check if toolset exists in the group
+		_, exists := tsg.Toolsets[toolsetName]
+		if exists {
+			existingToolsets = append(existingToolsets, toolsetName)
+		}
+	}
+
+	// Enable only the existing toolsets
+	if len(existingToolsets) == 0 {
+		return nil
+	}
+	return tsg.EnableToolsets(existingToolsets)
 }
