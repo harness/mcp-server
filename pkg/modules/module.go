@@ -83,6 +83,9 @@ func (r *ModuleRegistry) GetEnabledModules() []Module {
 		enabledModuleIDs[id] = true
 	}
 
+	// Always include CORE module when specific modules are enabled
+	enabledModuleIDs["CORE"] = true
+
 	// Check if "all" is enabled
 	if enabledModuleIDs["all"] {
 		return r.modules
