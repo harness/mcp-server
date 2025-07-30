@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/harness/harness-mcp/client"
@@ -204,59 +203,47 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 				{Key: "EXEMPTION_ID", Label: "Exemption ID"},
 			}
 
-			// Prepare the title
-			title := "Security Issues Report"
-			description := "Security issues from STO"
-
-			if search, _ := OptionalParam[string](request, "search"); search != "" {
-				// Truncate if too long
-				if len(search) > 20 {
-					search = search[:17] + "..."
-				}
-				// Replace underscores with spaces for better readability
-				search = strings.ReplaceAll(search, "_", " ")
-				// Capitalize first letter for consistency
-				if len(search) > 0 {
-					search = strings.ToUpper(search[:1]) + search[1:]
-				}
-				description = "Security issues related to: " + search
-			}
+			// if search, _ := OptionalParam[string](request, "search"); search != "" {
+			// 	// Truncate if too long
+			// 	if len(search) > 20 {
+			// 		search = search[:17] + "..."
+			// 	}
+			// 	// Replace underscores with spaces for better readability
+			// 	search = strings.ReplaceAll(search, "_", " ")
+			// 	// Capitalize first letter for consistency
+			// 	if len(search) > 0 {
+			// 		search = strings.ToUpper(search[:1]) + search[1:]
+			// 	}
+			// 	moduleName = moduleName + ": " + search
+			// }
 
 			// Create the table component
-			tableComponent := dto.TableComponent{
-				BaseUIComponent: dto.BaseUIComponent{
-					ComponentType: "table",
-					Title:         title,
-					Description:   description,
-				},
-				Columns: columns,
-				Rows:    rows,
-			}
+			tableComponent := dto.NewTableComponent(
+				"Security Issues",
+				columns,
+				rows,
+			)
 
 			// Create table resource
-			tableResource, err := utils.CreateUIResource(tableComponent.ComponentType, tableComponent)
+			tableResource, err := utils.CreateUIResource(tableComponent)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create UI resource table: %w", err)
 			}
 
-			// Create prompt components for follow-up suggestions
-			prompts := []dto.SelectOption{
-				{Value: "show_secrets", Label: "Show me only issues with secrets identified"},
-				{Value: "show_no_exemption", Label: "Show me issues without Exemption"},
+			// Create string array for prompts
+			prompts := []string{
+				"Show me only issues with secrets identified",
+				"Show me issues without Exemption",
 			}
 
-			// Create prompt component
-			promptComponent := dto.PromptComponent{
-				BaseUIComponent: dto.BaseUIComponent{
-					ComponentType: "prompts",
-					Title:         "Available Actions",
-					Description:   "Select an action to filter security issues",
-				},
-				Prompts: prompts,
-			}
+			// Create prompt component using the new helper function
+			promptComponent := dto.NewPromptComponent(
+				"Security Issues",
+				prompts,
+			)
 
 			// Create prompt resource
-			promptResource, err := utils.CreateUIResource(promptComponent.ComponentType, promptComponent)
+			promptResource, err := utils.CreateUIResource(promptComponent)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create UI resource prompt: %w", err)
 			}
@@ -485,18 +472,14 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 			}
 
 			// Create the table component
-			tableComponent := dto.TableComponent{
-				BaseUIComponent: dto.BaseUIComponent{
-					ComponentType: "table",
-					Title:         "Security Exemptions",
-					Description:   "List of security exemptions and their status",
-				},
-				Columns: columns,
-				Rows:    rows,
-			}
+			tableComponent := dto.NewTableComponent(
+				"Security Exemptions",
+				columns,
+				rows,
+			)
 
 			// Create table resource
-			tableResource, err := utils.CreateUIResource(tableComponent.ComponentType, tableComponent)
+			tableResource, err := utils.CreateUIResource(tableComponent)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create UI resource table: %w", err)
 			}
@@ -527,17 +510,20 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 			// Create prompt component if we have prompts
 			resources := []mcp.ResourceContents{tableResource}
 			if len(prompts) > 0 {
-				promptComponent := dto.PromptComponent{
-					BaseUIComponent: dto.BaseUIComponent{
-						ComponentType: "prompts",
-						Title:         "Available Actions",
-						Description:   "Select an action for exemption management",
-					},
-					Prompts: prompts,
+				// Convert SelectOption array to string array
+				stringPrompts := make([]string, len(prompts))
+				for i, p := range prompts {
+					stringPrompts[i] = p.Label
 				}
+				
+				// Use the new helper function
+				promptComponent := dto.NewPromptComponent(
+					"Exemption Management",
+					stringPrompts,
+				)
 
 				// Create prompt resource
-				promptResource, err := utils.CreateUIResource(promptComponent.ComponentType, promptComponent)
+				promptResource, err := utils.CreateUIResource(promptComponent)
 				if err != nil {
 					return nil, fmt.Errorf("failed to create prompt resource: %w", err)
 				}

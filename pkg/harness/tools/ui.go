@@ -92,17 +92,10 @@ func CreateUISelectFromListTool(config *config.Config) (tool mcp.Tool, handler s
 			}
 
 			// Create the select component
-			selectComponent := dto.SelectComponent{
-				BaseUIComponent: dto.BaseUIComponent{
-					ComponentType: "select",
-					Title:         title,
-					Description:   "A select component rendered by the UI for the user to select an option",
-				},
-				Options: options,
-			}
+			selectComponent := dto.NewSelectComponent("generic_select_component", title, options)
 
 			// Create resources
-			resource, err := utils.CreateUIResource(selectComponent.ComponentType, selectComponent)
+			resource, err := utils.CreateUIResource(selectComponent)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create UI resource: %w", err)
 			}
@@ -154,13 +147,6 @@ func CreateUIMultiSelectFromListTool(config *config.Config) (tool mcp.Tool, hand
 				mcp.MinLength(1),
 				mcp.MaxLength(100),
 			),
-			mcp.WithArray("default_values",
-				mcp.Description("Optional array of pre-selected values"),
-				mcp.Items(map[string]any{
-					"type":        "string",
-					"description": "Value to be selected by default",
-				}),
-			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			// Parse required parameters
@@ -177,12 +163,6 @@ func CreateUIMultiSelectFromListTool(config *config.Config) (tool mcp.Tool, hand
 			title, err := RequiredParam[string](request, "title")
 			if err != nil {
 				return mcp.NewToolResultError("Invalid title parameter: " + err.Error()), nil
-			}
-
-			// Get optional default values
-			defaultValues, err := OptionalStringArrayParam(request, "default_values")
-			if err != nil {
-				return mcp.NewToolResultError("Invalid default_values parameter: " + err.Error()), nil
 			}
 
 			// Convert options to SelectOption format
@@ -211,18 +191,14 @@ func CreateUIMultiSelectFromListTool(config *config.Config) (tool mcp.Tool, hand
 			}
 
 			// Create the multi-select component
-			multiSelectComponent := dto.MultiSelectComponent{
-				BaseUIComponent: dto.BaseUIComponent{
-					ComponentType: "multi_select",
-					Title:         title,
-					Description:   "A multi-select component rendered by the UI for the user to select multiple options",
-				},
-				Options:       options,
-				DefaultValues: defaultValues,
-			}
+			multiSelectComponent := dto.NewMultiSelectComponent(
+				"generic_multi_select_component",
+				title,
+				options,
+			)
 
 			// Create resources
-			resource, err := utils.CreateUIResource(multiSelectComponent.ComponentType, multiSelectComponent)
+			resource, err := utils.CreateUIResource(multiSelectComponent)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create UI resource: %w", err)
 			}
@@ -235,31 +211,4 @@ func CreateUIMultiSelectFromListTool(config *config.Config) (tool mcp.Tool, hand
 				nil,
 			), nil
 		}
-}
-
-// parseSelectOptions converts raw options to SelectOption format
-func parseSelectOptions(optionsRaw []interface{}) ([]dto.SelectOption, error) {
-	options := make([]dto.SelectOption, len(optionsRaw))
-	for i, opt := range optionsRaw {
-		switch o := opt.(type) {
-		case string:
-			// Simple string option
-			options[i] = dto.SelectOption{Value: o, Label: o}
-		case map[string]interface{}:
-			// Object with value/label
-			value, ok := o["value"].(string)
-			if !ok {
-				return nil, fmt.Errorf("invalid value type in option object")
-			}
-			label, ok := o["label"].(string)
-			if !ok {
-				label = value
-			}
-			options[i] = dto.SelectOption{Value: value, Label: label}
-		default:
-			s := fmt.Sprintf("%v", o)
-			options[i] = dto.SelectOption{Value: s, Label: s}
-		}
 	}
-	return options, nil
-}

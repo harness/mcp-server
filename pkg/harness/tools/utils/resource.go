@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/mark3labs/mcp-go/mcp"
 )
@@ -78,14 +79,14 @@ func NewToolResultWithResources(
 }
 
 // CreateUIResource creates a UI component resource
-func CreateUIResource(componentType string, component any) (*mcp.TextResourceContents, error) {
+func CreateUIResource(component dto.UIComponent) (*mcp.TextResourceContents, error) {
 	jsonData, err := json.Marshal(component)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal UI component: %w", err)
 	}
 
 	return &mcp.TextResourceContents{
-		URI:      fmt.Sprintf("harness:ui/component/%s", componentType),
+		URI:      fmt.Sprintf("harness:ui/component/%s", component.GetType()),
 		MIMEType: "application/vnd.harness.ui+json",
 		Text:     string(jsonData),
 	}, nil

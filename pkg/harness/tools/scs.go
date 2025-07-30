@@ -303,18 +303,14 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 			}
 
 			// Create the table component
-			tableComponent := dto.TableComponent{
-				BaseUIComponent: dto.BaseUIComponent{
-					ComponentType: "table",
-					Title:         "Artifact Sources",
-					Description:   "List of artifact sources available in Harness SCS",
-				},
-				Columns: columns,
-				Rows:    rows,
-			}
+			tableComponent := dto.NewTableComponent(
+				"artifact_source",
+				columns,
+				rows,
+			)
 
 			// Create resource
-			resource, err := utils.CreateUIResource(tableComponent.ComponentType, tableComponent)
+			resource, err := utils.CreateUIResource(tableComponent)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create UI resource table: %w", err)
 			}
@@ -334,17 +330,20 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 			// Only create prompt component if we have suggestions
 			resources := []mcp.ResourceContents{resource}
 			if len(prompts) > 0 {
-				promptComponent := dto.PromptComponent{
-					BaseUIComponent: dto.BaseUIComponent{
-						ComponentType: "prompts",
-						Title:         "Available Actions",
-						Description:   "Select an action to analyze the artifacts",
-					},
-					Prompts: prompts,
+				// Convert SelectOption array to string array
+				stringPrompts := make([]string, len(prompts))
+				for i, p := range prompts {
+					stringPrompts[i] = p.Label
 				}
+				
+				// Use the new helper function
+				promptComponent := dto.NewPromptComponent(
+					"Artifact Sources", 
+					stringPrompts,
+				)
 
 				// Create prompt resource
-				promptResource, err := utils.CreateUIResource(promptComponent.ComponentType, promptComponent)
+				promptResource, err := utils.CreateUIResource(promptComponent)
 				if err != nil {
 					return nil, fmt.Errorf("failed to create prompt resource: %w", err)
 				}
@@ -871,46 +870,37 @@ func CreateOPAPolicyTool(config *config.Config, client *generated.ClientWithResp
 
 			// We don't need to create the response JSON anymore since we're using the OPAComponent
 
-			// Create the OPA component
-			opaComponent := dto.OPAComponent{
-				BaseUIComponent: dto.BaseUIComponent{
-					ComponentType: "opa_policy",
-					Title:         "License Deny Policy",
-					Description:   "OPA policy to deny artifacts with specific licenses",
-				},
-				Policy: dto.OPAPolicy{
-					Name:    "deny-list",
-					Content: finalPolicy,
-				},
-				Metadata: map[string]interface{}{
+			// Create the OPA component using the constructor
+			opaComponent := dto.NewOPAComponent(
+				"scs_result",
+				"deny-list",
+				finalPolicy,
+				map[string]any{
 					"denied_licenses": licenses,
 				},
-			}
+			)
 
 			// Create OPA resource
-			opaResource, err := utils.CreateUIResource(opaComponent.ComponentType, opaComponent)
+			opaResource, err := utils.CreateUIResource(opaComponent)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create UI resource: %w", err)
 			}
 
 			// Create prompts for suggestions
-			prompts := []dto.SelectOption{
-				{Value: "show_examples", Label: "Show me more examples of OPA policies"},
-				{Value: "test_policy", Label: "How can I test this policy?"},
+			// Create string array for prompts
+			prompts := []string{
+				"Show me more examples of OPA policies",
+				"How can I test this policy?",
 			}
 
-			// Create prompt component
-			promptComponent := dto.PromptComponent{
-				BaseUIComponent: dto.BaseUIComponent{
-					ComponentType: "prompts",
-					Title:         "Policy Options",
-					Description:   "Select an option to learn more about OPA policies",
-				},
-				Prompts: prompts,
-			}
+			// Create prompt component using the new helper function
+			promptComponent := dto.NewPromptComponent(
+				"Policy Options",
+				prompts,
+			)
 
 			// Create prompt resource
-			promptResource, err := utils.CreateUIResource(promptComponent.ComponentType, promptComponent)
+			promptResource, err := utils.CreateUIResource(promptComponent)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create UI resource: %w", err)
 			}
@@ -1158,16 +1148,12 @@ func ListSCSCodeReposTool(config *config.Config, client *generated.ClientWithRes
 				{Key: "last_scan", Label: "Last Scan"},
 			}
 
-			// Create the table component
-			tableComponent := dto.TableComponent{
-				BaseUIComponent: dto.BaseUIComponent{
-					ComponentType: "table",
-					Title:         "Code Repositories",
-					Description:   "Displays code repositories scanned by Harness SCS",
-				},
-				Columns: columns,
-				Rows:    rows,
-			}
+			// Create the table component using the new helper function
+			tableComponent := dto.NewTableComponent(
+				"Repositories Report",
+				columns,
+				rows,
+			)
 
 			tableJSON, err := json.Marshal(tableComponent)
 			if err != nil {
@@ -1175,29 +1161,25 @@ func ListSCSCodeReposTool(config *config.Config, client *generated.ClientWithRes
 			}
 
 			// Create resource
-			resource, err := utils.CreateUIResource(tableComponent.ComponentType, tableComponent)
+			resource, err := utils.CreateUIResource(tableComponent)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create UI resource: %w", err)
 			}
 
-			// Compute suggestions for repo
-			prompts := []dto.SelectOption{
-				{Value: "show_noncompliant", Label: "Show all repositories that violate the compliance rule: Auto-merge must be disabled."},
-				{Value: "show_first_repo_risk", Label: "Show me compliance risk of 1st repository"},
+			// Create string array for prompts
+			prompts := []string{
+				"Show all repositories that violate the compliance rule: Auto-merge must be disabled.",
+				"Show me compliance risk of 1st repository",
 			}
 
-			// Create prompt component
-			promptComponent := dto.PromptComponent{
-				BaseUIComponent: dto.BaseUIComponent{
-					ComponentType: "prompts",
-					Title:         "Available Actions",
-					Description:   "Select an action to analyze the repositories",
-				},
-				Prompts: prompts,
-			}
+			// Create prompt component using the new helper function
+			promptComponent := dto.NewPromptComponent(
+				"Repositories Report",
+				prompts,
+			)
 
 			// Create prompt resource
-			promptResource, err := utils.CreateUIResource(promptComponent.ComponentType, promptComponent)
+			promptResource, err := utils.CreateUIResource(promptComponent)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create UI resource: %w", err)
 			}
