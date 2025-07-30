@@ -103,7 +103,10 @@ func CreateUISelectFromListTool(config *config.Config) (tool mcp.Tool, handler s
 			}
 
 			// Create resources
-			resource := utils.CreateUIResource(selectComponent.ComponentType, selectComponent)
+			resource, err := utils.CreateUIResource(selectComponent.ComponentType, selectComponent)
+			if err != nil {
+				return mcp.NewToolResultError("Failed to create UI resource: " + err.Error()), nil
+			}
 
 			// Return the result
 			return utils.NewToolResultWithResources(
@@ -220,7 +223,10 @@ func CreateUIMultiSelectFromListTool(config *config.Config) (tool mcp.Tool, hand
 			}
 
 			// Create resources
-			resource := utils.CreateUIResource(multiSelectComponent.ComponentType, multiSelectComponent)
+			resource, err := utils.CreateUIResource(multiSelectComponent.ComponentType, multiSelectComponent)
+			if err != nil {
+				return mcp.NewToolResultError("Failed to create UI resource: " + err.Error()), nil
+			}
 
 			// Return the result
 			return utils.NewToolResultWithResources(
@@ -230,4 +236,31 @@ func CreateUIMultiSelectFromListTool(config *config.Config) (tool mcp.Tool, hand
 				nil,
 			), nil
 		}
+}
+
+// parseSelectOptions converts raw options to SelectOption format
+func parseSelectOptions(optionsRaw []interface{}) ([]dto.SelectOption, error) {
+	options := make([]dto.SelectOption, len(optionsRaw))
+	for i, opt := range optionsRaw {
+		switch o := opt.(type) {
+		case string:
+			// Simple string option
+			options[i] = dto.SelectOption{Value: o, Label: o}
+		case map[string]interface{}:
+			// Object with value/label
+			value, ok := o["value"].(string)
+			if !ok {
+				return nil, fmt.Errorf("invalid value type in option object")
+			}
+			label, ok := o["label"].(string)
+			if !ok {
+				label = value
+			}
+			options[i] = dto.SelectOption{Value: value, Label: label}
+		default:
+			s := fmt.Sprintf("%v", o)
+			options[i] = dto.SelectOption{Value: s, Label: s}
+		}
+	}
+	return options, nil
 }

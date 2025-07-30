@@ -882,7 +882,10 @@ func CreateOPAPolicyTool(config *config.Config, client *generated.ClientWithResp
 			}
 
 			// Create OPA resource
-			opaResource := utils.CreateUIResource(opaComponent.ComponentType, opaComponent)
+			opaResource, err := utils.CreateUIResource(opaComponent.ComponentType, opaComponent)
+			if err != nil {
+				return mcp.NewToolResultError("Failed to create UI resource: " + err.Error()), nil
+			}
 
 			// Create prompts for suggestions
 			prompts := []dto.SelectOption{
@@ -901,12 +904,15 @@ func CreateOPAPolicyTool(config *config.Config, client *generated.ClientWithResp
 			}
 
 			// Create prompt resource
-			promptResource := utils.CreateUIResource(promptComponent.ComponentType, promptComponent)
+			promptResource, err := utils.CreateUIResource(promptComponent.ComponentType, promptComponent)
+			if err != nil {
+				return mcp.NewToolResultError("Failed to create UI resource: " + err.Error()), nil
+			}
 
 			// Serialize the OPA component for text fallback
 			opaJSON, err := json.Marshal(opaComponent)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal OPA component: %w", err)
+				return mcp.NewToolResultError("Failed to marshal OPA component: " + err.Error()), nil
 			}
 
 			// Return result with UI components
@@ -1159,11 +1165,14 @@ func ListSCSCodeReposTool(config *config.Config, client *generated.ClientWithRes
 
 			tableJSON, err := json.Marshal(tableComponent)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal table component: %w", err)
+				return mcp.NewToolResultError("Failed to marshal table component: " + err.Error()), nil
 			}
 
 			// Create resource
-			resource := utils.CreateUIResource(tableComponent.ComponentType, tableComponent)
+			resource, err := utils.CreateUIResource(tableComponent.ComponentType, tableComponent)
+			if err != nil {
+				return mcp.NewToolResultError("Failed to create UI resource: " + err.Error()), nil
+			}
 
 			// Compute suggestions for repo
 			prompts := []dto.SelectOption{
@@ -1182,7 +1191,10 @@ func ListSCSCodeReposTool(config *config.Config, client *generated.ClientWithRes
 			}
 
 			// Create prompt resource
-			promptResource := utils.CreateUIResource(promptComponent.ComponentType, promptComponent)
+			promptResource, err := utils.CreateUIResource(promptComponent.ComponentType, promptComponent)
+			if err != nil {
+				return mcp.NewToolResultError("Failed to create UI resource: " + err.Error()), nil
+			}
 
 			return utils.NewToolResultWithResources(
 				config,

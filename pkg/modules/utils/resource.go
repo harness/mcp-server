@@ -78,12 +78,15 @@ func NewToolResultWithResources(
 }
 
 // CreateUIResource creates a UI component resource
-func CreateUIResource(componentType string, component any) mcp.TextResourceContents {
-	jsonData, _ := json.Marshal(component)
+func CreateUIResource(componentType string, component any) (*mcp.TextResourceContents, error) {
+	jsonData, err := json.Marshal(component)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal UI component: %w", err)
+	}
 
-	return mcp.TextResourceContents{
+	return &mcp.TextResourceContents{
 		URI:      fmt.Sprintf("harness:ui/component/%s", componentType),
 		MIMEType: "application/vnd.harness.ui+json",
 		Text:     string(jsonData),
-	}
+	}, nil
 }
