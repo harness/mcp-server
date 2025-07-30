@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -1596,7 +1595,6 @@ func NewGetAccountLicensesRequest(server string, params *GetAccountLicensesParam
 		queryURL.RawQuery = queryValues.Encode()
 	}
 
-	slog.Info("getlicen"," url",queryURL.String())
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err

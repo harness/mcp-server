@@ -191,12 +191,12 @@ func InitToolsets(config *config.Config) (*toolsets.ToolsetGroup, error) {
 
 		// Get all modules that are enabled based on configuration
 		configEnabledModules := registry.GetEnabledModules()
-
 		// Get enabled modules based on configuration and license
-		enabledModules := getEnabledModules(configEnabledModules, licenseInfo)
 
+		enabledModules := getEnabledModules(configEnabledModules, licenseInfo)
 		// Register toolsets for enabled modules
 		for _, module := range enabledModules {
+			slog.Info("registering toolsets for", "modules: ", module.ID())
 			if err := module.RegisterToolsets(); err != nil {
 				return nil, fmt.Errorf("failed to register toolsets for module %s: %w", module.ID(), err)
 			}

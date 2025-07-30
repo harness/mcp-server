@@ -121,7 +121,7 @@ func TestModuleRegistry(t *testing.T) {
 			Internal:      true,
 		},
 		{
-			// Specific modules - should return only those modules
+			// Specific modules - should return only those modules and CORE module
 			EnableLicense: true,
 			EnableModules: []string{"CI"},
 			Internal:      true,
@@ -166,6 +166,7 @@ func TestModuleRegistry(t *testing.T) {
 				// Specific modules case - should only have CORE and CI
 				foundCore := false
 				foundCI := false
+				foundUnlicensed := false
 				for _, module := range enabledModules {
 					if module.ID() == "CORE" {
 						foundCore = true
@@ -173,15 +174,21 @@ func TestModuleRegistry(t *testing.T) {
 					if module.ID() == "CI" {
 						foundCI = true
 					}
+					if module.ID() == "UNLICENSED" {
+						foundUnlicensed = true
+					}
 				}
 				if !foundCore {
 					t.Errorf("CORE module not found")
 				}
+				if !foundUnlicensed {
+					t.Errorf("UNLICENSED module not found")
+				}
 				if !foundCI {
 					t.Errorf("CI module not found when specifically enabled")
 				}
-				if len(enabledModules) != 2 {
-					t.Errorf("Expected 2 modules, got %d", len(enabledModules))
+				if len(enabledModules) != 3 {
+					t.Errorf("Expected 3 modules, got %d", len(enabledModules))
 				}
 			case 2:
 				// All modules case - should have all modules
