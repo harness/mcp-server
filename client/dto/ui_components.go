@@ -1,10 +1,11 @@
 package dto
 
+// set continue to true if the component should not terminate the conversation
 type BaseUIComponent struct {
 	ComponentType string `json:"component_type"`
 	Title         string `json:"title,omitempty"`
 	Description   string `json:"description,omitempty"`
-	Terminate     bool   `json:"terminate,omitempty"`
+	Continue      bool   `json:"continue,omitempty"`
 }
 
 type SelectOption struct {
