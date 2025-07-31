@@ -471,43 +471,13 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 				return nil, fmt.Errorf("failed to create UI resource table: %w", err)
 			}
 
-			// Create prompt components for follow-up suggestions
-			prompts := []dto.SelectOption{}
-			prompts = append(prompts, dto.SelectOption{
-				Value: "reject_secret_exemptions",
-				Label: "Reject exemptions raised for issue type as secret",
-			})
-
-			for i := 0; i < len(rows) && i < len(suggestions)-1; i++ {
-				issue, issueOk := rows[i]["ISSUE"].(string)
-				status, statusOk := rows[i]["STATUS"]
-				if issueOk && statusOk {
-					if status == "Pending" {
-						prompts = append(prompts, dto.SelectOption{
-							Value: fmt.Sprintf("approve_exemption_%d", i),
-							Label: "Approve exemption " + issue,
-						})
-					}
-					prompts = append(prompts, dto.SelectOption{
-						Value: fmt.Sprintf("reject_exemption_%d", i),
-						Label: "Reject exemption " + issue,
-					})
-				}
-			}
-
 			// Create prompt component if we have prompts
 			resources := []mcp.ResourceContents{tableResource}
-			if len(prompts) > 0 {
-				// Convert SelectOption array to string array
-				stringPrompts := make([]string, len(prompts))
-				for i, p := range prompts {
-					stringPrompts[i] = p.Label
-				}
-				
+			if len(suggestions) > 0 {
 				// Use the new helper function
 				promptComponent := dto.NewPromptComponent(
 					"Exemption Management",
-					stringPrompts,
+					suggestions,
 				)
 
 				// Create prompt resource

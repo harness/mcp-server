@@ -124,14 +124,17 @@ type TableColumn struct {
 // entries with those keys: {"id": "123", "name": "example"}
 type TableRow = map[string]any
 
+// TableData represents the data structure for table contents
+type TableData struct {
+	Columns []TableColumn `json:"columns"`
+	Rows    []TableRow    `json:"rows"`
+}
+
 // TableComponent represents a table UI component with rows and columns
 // Each row in Rows contains values corresponding to the keys defined in Columns
 type TableComponent struct {
 	BaseUIComponent
-	Table struct {
-		Columns []TableColumn `json:"columns"`
-		Rows    []TableRow    `json:"rows"`
-	} `json:"table"`
+	Table TableData `json:"table"`
 }
 
 // NewTableComponent creates a table component
@@ -145,10 +148,7 @@ func NewTableComponent(entityType string, columns []TableColumn, rows []TableRow
 			Type: "table",
 			Continue: true,
 		},
-		Table: struct {
-			Columns []TableColumn `json:"columns"`
-			Rows    []TableRow    `json:"rows"`
-		}{
+		Table: TableData{
 			Columns: columns,
 			Rows:    rows,
 		},
