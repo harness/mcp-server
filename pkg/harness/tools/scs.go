@@ -315,31 +315,19 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 				return nil, fmt.Errorf("failed to create UI resource table: %w", err)
 			}
 
-			// Create prompt components for follow-up suggestions
-			prompts := []dto.SelectOption{}
+			// Compute suggestions
+			var suggestions []string
 			if enrichedArtifacts != nil {
-				suggestionStrings := artifactRuleBasedFollowUps(enrichedArtifacts, &*body.LicenseFilterList)
-				for i, suggestion := range suggestionStrings {
-					prompts = append(prompts, dto.SelectOption{
-						Value: fmt.Sprintf("suggestion_%d", i),
-						Label: suggestion,
-					})
-				}
+				suggestions = artifactRuleBasedFollowUps(enrichedArtifacts, &*body.LicenseFilterList)
 			}
 
 			// Only create prompt component if we have suggestions
 			resources := []mcp.ResourceContents{resource}
-			if len(prompts) > 0 {
-				// Convert SelectOption array to string array
-				stringPrompts := make([]string, len(prompts))
-				for i, p := range prompts {
-					stringPrompts[i] = p.Label
-				}
-				
+			if len(suggestions) > 0 {
 				// Use the new helper function
 				promptComponent := dto.NewPromptComponent(
 					"Artifact Sources", 
-					stringPrompts,
+					suggestions,
 				)
 
 				// Create prompt resource

@@ -1,5 +1,12 @@
 package dto
 
+// Display order constants for UI components
+// All components should be displayed in the order they are added to the response
+// Prompts are displayed last always
+const (
+	PromptDisplayOrder = 100
+)
+
 // UIComponent interface defines common behavior for all UI components
 type UIComponent interface {
 	GetType() string
@@ -163,7 +170,7 @@ func NewPromptComponent(entityType string, prompts []string) PromptComponent {
 			},
 			Type:   "prompt",
 			Continue: true,
-			DisplayOrder: 100,
+			DisplayOrder: PromptDisplayOrder,
 		},
 		Prompts: prompts,
 	}

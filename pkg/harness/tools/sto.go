@@ -203,20 +203,6 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 				{Key: "EXEMPTION_ID", Label: "Exemption ID"},
 			}
 
-			// if search, _ := OptionalParam[string](request, "search"); search != "" {
-			// 	// Truncate if too long
-			// 	if len(search) > 20 {
-			// 		search = search[:17] + "..."
-			// 	}
-			// 	// Replace underscores with spaces for better readability
-			// 	search = strings.ReplaceAll(search, "_", " ")
-			// 	// Capitalize first letter for consistency
-			// 	if len(search) > 0 {
-			// 		search = strings.ToUpper(search[:1]) + search[1:]
-			// 	}
-			// 	moduleName = moduleName + ": " + search
-			// }
-
 			// Create the table component
 			tableComponent := dto.NewTableComponent(
 				"Security Issues",
@@ -428,8 +414,9 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 			)
 			for i := 0; i < len(rows) && i < maxSuggestions; i++ {
 				issue, issueOk := rows[i]["ISSUE"].(string)
-				if issueOk {
-					if rows[i]["STATUS"] == "Pending" {
+				status, statusOk := rows[i]["STATUS"]
+				if issueOk && statusOk {
+					if status == "Pending" {
 						suggestions = append(suggestions, "Approve exemption "+issue)
 					}
 					suggestions = append(suggestions, "Reject exemption "+issue)
@@ -493,8 +480,9 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 
 			for i := 0; i < len(rows) && i < len(suggestions)-1; i++ {
 				issue, issueOk := rows[i]["ISSUE"].(string)
-				if issueOk {
-					if rows[i]["STATUS"] == "Pending" {
+				status, statusOk := rows[i]["STATUS"]
+				if issueOk && statusOk {
+					if status == "Pending" {
 						prompts = append(prompts, dto.SelectOption{
 							Value: fmt.Sprintf("approve_exemption_%d", i),
 							Label: "Approve exemption " + issue,
