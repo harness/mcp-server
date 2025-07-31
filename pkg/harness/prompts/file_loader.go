@@ -2,7 +2,9 @@ package prompts
 
 import (
 	"bufio"
+	"embed"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,39 +30,75 @@ type PromptFile struct {
 // FileLoader handles loading prompts from text files
 type FileLoader struct {
 	baseDir string
+	embedFS embed.FS
+	useEmbed bool
 }
 
 // NewFileLoader creates a new file loader with the specified base directory
 func NewFileLoader(baseDir string) *FileLoader {
 	return &FileLoader{
 		baseDir: baseDir,
+		useEmbed: false,
+	}
+}
+
+// NewEmbedFileLoader creates a new file loader with embedded filesystem
+func NewEmbedFileLoader(embedFS embed.FS) *FileLoader {
+	return &FileLoader{
+		embedFS: embedFS,
+		useEmbed: true,
 	}
 }
 
 // LoadPromptsFromDirectory loads all prompt files from a directory
 func (fl *FileLoader) LoadPromptsFromDirectory(dir string) ([]PromptFile, error) {
-	fullPath := filepath.Join(fl.baseDir, dir)
 	var prompts []PromptFile
 
-	err := filepath.Walk(fullPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		// Only process .txt files
-		if !info.IsDir() && strings.HasSuffix(path, ".txt") {
-			prompt, loadErr := fl.loadPromptFile(path)
-			if loadErr != nil {
-				return fmt.Errorf("failed to load prompt file %s: %w", path, loadErr)
+	if fl.useEmbed {
+		// Use embedded filesystem
+		err := fs.WalkDir(fl.embedFS, dir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
 			}
-			prompts = append(prompts, prompt)
+
+			// Only process .txt files
+			if !d.IsDir() && strings.HasSuffix(path, ".txt") {
+				prompt, loadErr := fl.loadPromptFileFromEmbed(path)
+				if loadErr != nil {
+					return fmt.Errorf("failed to load prompt file %s: %w", path, loadErr)
+				}
+				prompts = append(prompts, prompt)
+			}
+
+			return nil
+		})
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to walk embedded directory %s: %w", dir, err)
 		}
+	} else {
+		// Use regular filesystem
+		fullPath := filepath.Join(fl.baseDir, dir)
+		err := filepath.Walk(fullPath, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
 
-		return nil
-	})
+			// Only process .txt files
+			if !info.IsDir() && strings.HasSuffix(path, ".txt") {
+				prompt, loadErr := fl.loadPromptFile(path)
+				if loadErr != nil {
+					return fmt.Errorf("failed to load prompt file %s: %w", path, loadErr)
+				}
+				prompts = append(prompts, prompt)
+			}
 
-	if err != nil {
-		return nil, fmt.Errorf("failed to walk directory %s: %w", fullPath, err)
+			return nil
+		})
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to walk directory %s: %w", fullPath, err)
+		}
 	}
 
 	return prompts, nil
@@ -121,6 +159,58 @@ func (fl *FileLoader) loadPromptFile(filePath string) (PromptFile, error) {
 	return PromptFile{
 		Metadata: metadata,
 		Content:  content,
+		FilePath: filePath,
+	}, nil
+}
+
+// loadPromptFileFromEmbed loads a single prompt file from embedded filesystem with YAML frontmatter
+func (fl *FileLoader) loadPromptFileFromEmbed(filePath string) (PromptFile, error) {
+	data, err := fl.embedFS.ReadFile(filePath)
+	if err != nil {
+		return PromptFile{}, fmt.Errorf("failed to read embedded file: %w", err)
+	}
+
+	content := string(data)
+	lines := strings.Split(content, "\n")
+	
+	var inFrontmatter bool
+	var frontmatterLines []string
+	var contentLines []string
+
+	for _, line := range lines {
+		if line == "---" {
+			if !inFrontmatter {
+				inFrontmatter = true
+				continue
+			} else {
+				inFrontmatter = false
+				continue
+			}
+		}
+
+		if inFrontmatter {
+			frontmatterLines = append(frontmatterLines, line)
+		} else if !inFrontmatter && len(frontmatterLines) > 0 {
+			contentLines = append(contentLines, line)
+		}
+	}
+
+	// Parse YAML frontmatter
+	var metadata PromptMetadata
+	if len(frontmatterLines) > 0 {
+		yamlContent := strings.Join(frontmatterLines, "\n")
+		if err := yaml.Unmarshal([]byte(yamlContent), &metadata); err != nil {
+			return PromptFile{}, fmt.Errorf("failed to parse YAML frontmatter: %w", err)
+		}
+	}
+
+	// Join content lines
+	fileContent := strings.Join(contentLines, "\n")
+	fileContent = strings.TrimSpace(fileContent)
+
+	return PromptFile{
+		Metadata: metadata,
+		Content:  fileContent,
 		FilePath: filePath,
 	}, nil
 }

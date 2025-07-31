@@ -1,21 +1,19 @@
 package prompts
 
 import (
+	"embed"
 	"log"
-	"path/filepath"
 
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 )
 
+//go:embed files/*
+var promptFiles embed.FS
+
 // GetModulePrompts retrieves prompts for a specific module
 func GetModulePrompts(module string, cfg config.Config) ([]PromptFile, error) {
-	currentDir, err := filepath.Abs(".")
-	if err != nil {
-		return nil, err
-	}
-
-	promptsDir := filepath.Join(currentDir, "pkg", "harness", "prompts")
-	fileLoader := NewFileLoader(promptsDir)
+	// Use embedded filesystem instead of file system paths
+	fileLoader := NewEmbedFileLoader(promptFiles)
 
 	var allPrompts []PromptFile
 
