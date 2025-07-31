@@ -12,8 +12,8 @@ import (
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/client/sto/generated"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
-	"github.com/harness/harness-mcp/pkg/appseccommons"
 	builder "github.com/harness/harness-mcp/pkg/harness/event/common"
+	"github.com/harness/harness-mcp/pkg/harness/event/response"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -218,13 +218,13 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 				moduleName = moduleName + ": " + search
 			}
 
-			return appseccommons.NewToolResultTextWithPrompts(
-				string(builder.GenericTableEvent),
-				string(tableData),
-				prompts,
-				moduleName,
-				"TITLE", "SEVERITY", "ISSUE_TYPE", "TARGETS_IMPACTED", "OCCURRENCES", "LAST_DETECTED", "EXEMPTION_STATUS", "ISSUE_ID", "EXEMPTION_ID",
-			), nil
+			// Use the new ToolResultBuilder to build the result with multiple events
+			columns := []string{"TITLE", "SEVERITY", "ISSUE_TYPE", "TARGETS_IMPACTED", "OCCURRENCES", "LAST_DETECTED", "EXEMPTION_STATUS", "ISSUE_ID", "EXEMPTION_ID"}
+			resultBuilder := response.NewToolResultBuilder(moduleName).
+				AddStringEvent(string(builder.GenericTableEvent), string(tableData), columns).
+				AddPrompts(prompts)
+
+			return resultBuilder.Build(), nil
 		}
 }
 
@@ -411,13 +411,12 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 				columns = []string{"ISSUE", "SEVERITY", "SCOPE", "REASON", "EXEMPTION_DURATION", "REQUESTED_BY", "STATUS", "ExemptionId", "OrgId", "ProjectId", "PipelineId", "TargetId"}
 			}
 
-			return appseccommons.NewToolResultTextWithPrompts(
-				string(builder.GenericTableEvent),
-				string(tableData),
-				suggestions,
-				"List_Exemptions",
-				columns,
-			), nil
+			// Use the new ToolResultBuilder to build the result with multiple events
+			resultBuilder := response.NewToolResultBuilder("List_Exemptions").
+				AddStringEvent(string(builder.GenericTableEvent), string(tableData), columns).
+				AddPrompts(suggestions)
+
+			return resultBuilder.Build(), nil
 		}
 }
 

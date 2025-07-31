@@ -2,6 +2,7 @@ package tools
 
 import (
 	"fmt"
+
 	"github.com/harness/harness-mcp/client/scs"
 	generated "github.com/harness/harness-mcp/client/scs/generated"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -28,6 +29,7 @@ func ParseArtifactListParams(request mcp.CallToolRequest) (order string, sort st
 	}
 	sort, _ = OptionalParam[string](request, "sort")
 	page, size, _ = FetchPagination(request)
+	size = 5
 	sortVal = interface{}(sort)
 	return
 }
