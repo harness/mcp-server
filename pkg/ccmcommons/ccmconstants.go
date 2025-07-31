@@ -3,7 +3,6 @@ package ccmcommons
 import (
 	"fmt"
 )
-
 var CCMPerspectiveGridDescription = `
 Query detailed cost perspective grid data in Harness Cloud Cost Management.
 This tool allows you to retrieve tabular cost data for a given perspective (view) with advanced filtering, grouping, and aggregation options.

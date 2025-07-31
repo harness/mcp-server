@@ -276,6 +276,85 @@ func recommendationsHandler(
 	return mcp.NewToolResultText(string(r)), nil
 }
 
+func CreateCcmJiraIssueTool(config *config.Config, client *client.CloudCostManagementService,
+) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+
+	return mcp.NewTool("create_ccm_jira_issue",
+		mcp.WithDescription("Creates a Jira issue for a CCM recommendation"),
+		mcp.WithString("recommendation_id",
+			mcp.Required(),
+			mcp.Description("Recommendation ID"),
+		),
+		mcp.WithString("resource_type",
+			mcp.Enum(
+				dto.ResourceTypeWorkload,
+				dto.ResourceTypeNodePool,
+				dto.ResourceTypeECSService,
+				dto.ResourceTypeEC2Instance,
+				dto.ResourceTypeGovernance,
+				dto.ResourceTypeAzureInstance,
+			),
+			mcp.Required(),
+			mcp.Description("Resource type"),
+		),
+		mcp.WithString("connector_ref", mcp.Required(), mcp.Description("Jira connector reference")),
+		mcp.WithString("project_key", mcp.Required(), mcp.Description("Jira project key")),
+		mcp.WithString("ticket_type", mcp.Required(), mcp.Description("Jira issue type")),
+		mcp.WithObject("fields", mcp.Required(), mcp.Description("Additional Jira fields")),
+	),
+	func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		accountId, err := getAccountID(config, request)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		recommendationId, err := OptionalParam[string](request, "recommendation_id")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		resourceType, err := OptionalParam[string](request, "resource_type")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		connectorRef, err := OptionalParam[string](request, "connector_ref")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		projectKey, err := OptionalParam[string](request, "project_key")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		ticketType, err := OptionalParam[string](request, "ticket_type")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		fields, err := OptionalParam[map[string]any](request, "fields")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		jiraDetails := dto.CCMJiraDetails{
+			RecommendationId: recommendationId,
+			ResourceType:     resourceType,
+			ConnectorRef:     connectorRef,
+			ProjectKey:       projectKey,
+			TicketType:       ticketType,
+			Fields:           fields,
+		}
+
+		data, err := client.CreateJiraIssue(ctx, accountId, jiraDetails)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		r, err := json.Marshal(data)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		return mcp.NewToolResultText(string(r)), nil
+	}
+}
+
 
 func recommendationsListDefinition() json.RawMessage {
 	return toRawMessage(commonRecommendationsSchema(), []string{})

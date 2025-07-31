@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/harness/harness-mcp/client/dto"
 	"strconv"
+	"log/slog"
 )
 const (
 	ccmRecommendationsListPath = ccmBasePath + "/recommendation/overview/list?accountIdentifier=%s"
@@ -12,6 +13,8 @@ const (
 	ccmRecommendationsStatsPath = ccmBasePath + "/recommendation/overview/stats?accountIdentifier=%s"
 	ccmUpdateRecommendationState = ccmBasePath + "/recommendation/overview/change-state?accountIdentifier=%s"
 	ccmOverrideRecommendationSavings = ccmBasePath + "/recommendation/overview/override-savings?accountIdentifier=%s"
+	ccmCreateRecommendationJiraIssue = ccmBasePath + "/recommendation/servicenow/create?accountIdentifier=%s"
+
 )
 
 func (r *CloudCostManagementService) ListRecommendations(ctx context.Context, scope dto.Scope, accountId string, options map[string]any) (*map[string]any, error) {
@@ -90,9 +93,37 @@ func (r *CloudCostManagementService) getRecommendations(
 	items := new(map[string]any)
 
 	err := r.Client.Post(ctx, path, params, options, &items)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to list cloud cost management recommendations: %w", err)
+	if err != nil { return nil, fmt.Errorf("Failed to list cloud cost management recommendations: %w", err)
 	}
 
 	return items, nil
+}
+
+func (r *CloudCostManagementService) CreateJiraIssue(
+	ctx context.Context,
+	accountId string,
+	jiraDetails dto.CCMJiraDetails,
+) (*map[string]any, error) {
+
+	path := fmt.Sprintf(ccmCreateRecommendationJiraIssue, accountId) // Define ccmCreateJiraIssue as needed
+
+	body := map[string]any{
+		"recommendationId": jiraDetails.RecommendationId,
+		"resourceType":     jiraDetails.ResourceType,
+		"connectorRef":     jiraDetails.ConnectorRef,
+		"projectKey":       jiraDetails.ProjectKey,
+		"ticketType":        jiraDetails.TicketType,
+		"fields":           jiraDetails.Fields,
+	}
+
+	slog.Debug("Creating CCM Jira issue", "accountId", accountId, "jiraDetails", body)
+
+	resp := new(map[string]any)
+
+	err := r.Client.Post(ctx, path, nil, body, &resp)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to create CCM Jira issue: %w", err)
+	}
+
+	return resp, nil
 }
