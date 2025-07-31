@@ -737,7 +737,7 @@ func GetCcmPerspectiveRulesTool(config *config.Config) (tool mcp.Tool, handler s
 			}
 
 			//var rulesModel ccmcommons.PerspectiveRules
-			var rules []ccmcommons.ViewRule
+			var rules []dto.CCMViewRule
 			if err := json.Unmarshal(rulesJSONBytes, &rules); err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("invalid JSON format: %v", err)), nil
 			}
