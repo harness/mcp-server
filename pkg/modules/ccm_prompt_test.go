@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness"
 	"github.com/mark3labs/mcp-go/server"
 )
 
@@ -23,8 +24,8 @@ func TestCCMModule_RegisterPrompts(t *testing.T) {
 	cfg := &config.Config{}
 	ccmModule := NewCCMModule(cfg, nil)
 	
-	// Create a simple mock MCP server
-	mockServer := &server.MCPServer{}
+	// Create a properly initialized MCP server
+	mockServer := harness.NewServer("test-version")
 	
 	// Call RegisterPrompts
 	err := ccmModule.RegisterPrompts(mockServer)

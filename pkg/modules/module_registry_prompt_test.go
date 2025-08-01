@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness"
 	"github.com/harness/harness-mcp/pkg/harness/prompts"
 	p "github.com/harness/harness-mcp/pkg/prompts"
 	"github.com/harness/harness-mcp/pkg/toolsets"
@@ -31,7 +32,7 @@ func TestModuleRegisterPrompts_NoPrompts(t *testing.T) {
 	cfg := config.Config{}
 	
 	// Call the function with a non-existent module (should return no prompts)
-	err := ModuleRegisterPrompts("non-existent-module", &server.MCPServer{}, cfg)
+	err := ModuleRegisterPrompts("non-existent-module", harness.NewServer("test-version"), cfg)
 	
 	// Verify no error is returned (empty prompts should not cause error)
 	assert.NoError(t, err)
@@ -42,15 +43,15 @@ func TestModuleRegisterPrompts_WithValidModule(t *testing.T) {
 	cfg := config.Config{}
 	
 	// Call the function with a valid module
-	err := ModuleRegisterPrompts("ccm", &server.MCPServer{}, cfg)
+	err := ModuleRegisterPrompts("ccm", harness.NewServer("test-version"), cfg)
 	
 	// Verify no error is returned
 	assert.NoError(t, err)
 }
 
 func TestModuleRegistry_RegisterPrompts(t *testing.T) {
-	// Create a mock MCP server (using the real type)
-	mockServer := &server.MCPServer{}
+	// Create a properly initialized MCP server
+	mockServer := harness.NewServer("test-version")
 	
 	// Create modules with and without prompts
 	moduleWithPrompts := &mockModuleWithPrompts{
@@ -88,8 +89,8 @@ func TestModuleRegistry_RegisterPrompts(t *testing.T) {
 }
 
 func TestModuleRegistry_RegisterPrompts_Success(t *testing.T) {
-	// Create a mock MCP server (using the real type)
-	mockServer := &server.MCPServer{}
+	// Create a properly initialized MCP server
+	mockServer := harness.NewServer("test-version")
 	
 	// Create modules that should succeed
 	moduleWithPrompts := &mockModuleWithPrompts{

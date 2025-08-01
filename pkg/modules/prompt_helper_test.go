@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness"
 	"github.com/mark3labs/mcp-go/server"
 )
 
@@ -21,8 +22,8 @@ func TestDefaultModulePrompts_RegisterPrompts(t *testing.T) {
 	// Create a DefaultModulePrompts instance
 	d := &DefaultModulePrompts{}
 	
-	// Create a mock MCP server (we don't need a real one since the method should do nothing)
-	mockServer := &server.MCPServer{}
+	// Create a properly initialized MCP server
+	mockServer := harness.NewServer("test-version")
 	
 	// Test that RegisterPrompts returns nil (no error)
 	err := d.RegisterPrompts(mockServer)
@@ -51,8 +52,8 @@ func TestRegisterModulePrompts(t *testing.T) {
 		config: &config.Config{},
 	}
 	
-	// Create a mock MCP server
-	mockServer := &server.MCPServer{}
+	// Create a properly initialized MCP server
+	mockServer := harness.NewServer("test-version")
 	
 	// We can't easily test the actual registration since ModuleRegisterPrompts calls
 	// the package-level function ModuleRegisterPrompts, which we'd need to mock.
