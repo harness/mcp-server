@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"fmt"
-	"log/slog"
 
 	"github.com/golang-jwt/jwt"
 )
@@ -42,7 +41,6 @@ func AuthSessionFrom(ctx context.Context) (*Session, bool) {
 // validates the claims in JWTClaims, and returns a Session object.
 // It ensures that basic info is populated (type is USER and name/id are populated).
 func AuthenticateSession(bearerToken string, secret string) (*Session, error) {
-	slog.Info("Authenticating session", "bearerToken", bearerToken)
 	// Extract token from the bearer format
 	if bearerToken == "" {
 		return nil, fmt.Errorf("bearer token is empty")
@@ -63,7 +61,6 @@ func AuthenticateSession(bearerToken string, secret string) (*Session, error) {
 
 	// Validate claims
 	if claims, ok := token.Claims.(*JWTClaims); ok && token.Valid {
-		slog.Info("Token is valid", "claims", claims)
 		// Validate required fields
 		if claims.Type != "USER" {
 			return nil, fmt.Errorf("invalid token type: expected USER, got %s", claims.Type)
