@@ -161,7 +161,12 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 			}
 			resp, err := client.FrontendAllIssuesListWithResponse(ctx, params)
 			if err != nil {
+				slog.Error("Failed to get STO issues", "error", err)
 				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if resp.StatusCode() < 200 || resp.StatusCode() >= 300 {
+				slog.Error("Failed to get STO issues", "status code", resp.StatusCode())
+				return nil, fmt.Errorf("non-2xx status: %d", resp.StatusCode())
 			}
 			if resp.JSON200 == nil {
 				// Try to marshal error response if available
