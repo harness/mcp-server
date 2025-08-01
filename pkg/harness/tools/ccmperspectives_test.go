@@ -14,16 +14,16 @@ var (
 	// Define the input JSON for perspective rules
 	validInputJSON = `[
 		{
-			"viewConditions": [
+			"view_conditions": [
 				{
 					"type": "VIEW_ID_CONDITION",
-					"viewField": {
-						"fieldId": "awsUsageaccountid",
-						"fieldName": "Account",
+					"view_field": {
+						"field_id": "awsUsageaccountid",
+						"field_name": "Account",
 						"identifier": "AWS",
-						"identifierName": "AWS"
+						"identifier_name": "AWS"
 					},
-					"viewOperator": "IN",
+					"view_operator": "IN",
 					"values": ["test(test_id)"]
 				}
 			]
@@ -57,21 +57,21 @@ var (
 				]
 			}`
 		// Define the input JSON for perspective rules
-	invalidInputJSON = `{
-			"viewConditions": [
+	invalidInputJSON = `[{{
+			"view_conditions": [
 				{
 					"type": "VIEW_ID_CONDITION",
-					"viewField": {
-						"fieldId": "awsUsageaccountid",
-						"fieldName": "Account",
+					"view_field": {
+						"field_id": "awsUsageaccountid",
+						"field_name": "Account",
 						"identifier": "AWS",
-						"identifierName": "AWS"
+						"identifier_name": "AWS"
 					},
-					"viewOperator": "IN",
+					"view_operator": "IN",
 					"values": ["test(test_id)"]
 				}
 			]
-	}`
+	}}]`
 
 invalidExpectedOutput = `{
 	"entity_info": {
@@ -115,9 +115,14 @@ func TestGetCcmPerspectiveRulesTool(t *testing.T) {
 			// Create a mock request with the input JSON
 
 			// Parse input JSON for the request
-			var viewRules json.RawMessage
-			err := json.Unmarshal([]byte(tc.input), &viewRules)
-			assert.NoError(t, err, "Should parse input JSON without error")
+			var viewRulesArray []any
+			err := json.Unmarshal([]byte(tc.input), &viewRulesArray)
+			if tc.harError {
+				assert.Error(t, err, "Should parse input JSON with error")
+				return
+			} else {
+				assert.NoError(t, err, "Should parse input JSON without error")
+			}
 
 			// Create a valid CallToolRequest for get_ccm_perspective_rules tool
 			request := mcp.CallToolRequest{
@@ -127,7 +132,7 @@ func TestGetCcmPerspectiveRulesTool(t *testing.T) {
 				Params: mcp.CallToolParams{
 					Name: "get_ccm_perspective_rules",
 					Arguments: map[string]any{
-						"viewRules": viewRules,
+						"view_rules": viewRulesArray,
 					},
 				},
 			}

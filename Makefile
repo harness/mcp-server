@@ -21,6 +21,7 @@ build:
 	@echo "Building mcp-server"
 	go build -ldflags=${LDFLAGS} -o cmd/harness-mcp-server/harness-mcp-server ./cmd/harness-mcp-server
 
+
 ###############################################################################
 #
 # Code Formatting and linting
@@ -53,6 +54,22 @@ $(GOBIN)/gci:
 $(GOBIN)/goimports:
 	@echo "🔘 Installing goimports ... (`date '+%H:%M:%S'`)"
 	@go install golang.org/x/tools/cmd/goimports
+
+###############################################################################
+#
+# Test targets
+#
+###############################################################################
+
+test: 
+	@echo "Running tests..."
+	go test ./...
+	@echo "Testing complete"
+
+coverage:
+	@echo "Running tests with coverage..."
+	go test -coverprofile=coverage.out ./...
+	@echo "Coverage complete"
 
 help: ## show help message
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m\033[0m\n"} /^[$$()% 0-9a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
