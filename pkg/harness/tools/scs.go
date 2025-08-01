@@ -88,7 +88,7 @@ func mapVulnerabilities(stoIssueCount *generated.StoIssueCount) map[string]inter
 	return vuln
 }
 
-func artifactRuleBasedFollowUps(artifacts []generated.ArtifactV2ListingResponse, licenseFilterList *[]generated.LicenseFilter) []string {
+func artifactRuleBasedFollowUps(licenseFilterList *[]generated.LicenseFilter) []string {
 	var prompts []string
 	if licenseFilterList != nil && len(*licenseFilterList) > 0 {
 		var licenses []string
@@ -264,6 +264,7 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 					}
 				}
 			}
+
 			rows := []map[string]interface{}{}
 			for _, artifact := range enrichedArtifacts {
 				row := map[string]interface{}{}
@@ -345,6 +346,11 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 				}
 				rows = append(rows, row)
 			}
+
+			raw, err := json.Marshal(enrichedArtifacts)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal response: %w", err)
+			}
 			// Transform enrichedArtifacts into a table-like structure
 			pretty, err := json.MarshalIndent(rows, "", "  ")
 			if err != nil {
@@ -354,12 +360,13 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 			// Compute suggestions
 			var suggestions []string
 			if enrichedArtifacts != nil {
-				suggestions = artifactRuleBasedFollowUps(enrichedArtifacts, &*body.LicenseFilterList)
+				suggestions = artifactRuleBasedFollowUps(body.LicenseFilterList)
 			}
 
 			// Use the new ToolResultBuilder to build the result with multiple events
-			columns := []string{"name", "tags", "components", "vulnerabilities", "scorecard", "deployment", "sbom violations", "digest", "signing", "updated", "orchestration"}
+			columns := []string{"name", "tags", "components", "vulnerabilities", "scorecard", "deployment", "sbom violations", "digest", "signing", "updated"}
 			resultBuilder := response.NewToolResultBuilder("Artifact Report").
+				AddStringEvent(string(builder.RawEvent), string(raw)).
 				AddStringEvent(string(builder.GenericTableEvent), string(pretty), columns).
 				AddPrompts(suggestions)
 
@@ -887,7 +894,7 @@ func CreateOPAPolicyTool(config *config.Config, client *generated.ClientWithResp
 			}
 
 			// Use the OPA builder to format the response
-			return response.NewToolResultBuilder("OPA Policy").AddStringEvent(string(builder.OPAEvent), string(out), suggestions).Build(), nil
+			return response.NewToolResultBuilder("OPA Policy").AddStringEvent(string(builder.OPAEvent), string(out), suggestions).AddPrompts(suggestions).Build(), nil
 		}
 }
 
@@ -1072,8 +1079,14 @@ func ListSCSCodeReposTool(config *config.Config, client *generated.ClientWithRes
 				"Show me compliance risk of 1st repository",
 			}
 
+			raw, err := json.Marshal(resp.JSON200)
+			if err != nil {
+				return mcp.NewToolResultError("Failed to marshal table data: " + err.Error()), nil
+			}
+
 			// Use the new ToolResultBuilder to build the result with multiple events
 			resultBuilder := response.NewToolResultBuilder("Repositories Report").
+				AddStringEvent(string(builder.RawEvent), string(raw)).
 				AddStringEvent(string(builder.GenericTableEvent), string(out),
 					[]string{"name", "compliance", "vulnerabilities", "sbom_score", "repo_path", "last_scan", "dependencies", "last_scan"}).
 				AddPrompts(suggestions)

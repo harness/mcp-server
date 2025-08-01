@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/harness/harness-mcp/client"
@@ -191,10 +190,13 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 					"OCCURRENCES":      issue.NumOccurrences,
 					"LAST_DETECTED":    formattedDate,
 					"EXEMPTION_STATUS": issue.ExemptionStatus,
-					"ISSUE_ID":         issue.Id,
-					"EXEMPTION_ID":     issue.ExemptionId,
 				}
 				rows = append(rows, row)
+			}
+
+			raw, err := json.Marshal(resp.JSON200)
+			if err != nil {
+				return mcp.NewToolResultError("Failed to marshal table data: " + err.Error()), nil
 			}
 
 			tableData, err := json.Marshal(rows)
@@ -206,26 +208,10 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 				"Show me only issues with secrets identified",
 				"Show me issues without Exemption",
 			)
-			// The tool name is "sto_all_issues_list", so we extract "STO" from it
-			moduleName := "All_Issue_Report"
-
-			if search, _ := OptionalParam[string](request, "search"); search != "" {
-				// Truncate if too long
-				if len(search) > 20 {
-					search = search[:17] + "..."
-				}
-				// Replace underscores with spaces for better readability
-				search = strings.ReplaceAll(search, "_", " ")
-				// Capitalize first letter for consistency
-				if len(search) > 0 {
-					search = strings.ToUpper(search[:1]) + search[1:]
-				}
-				moduleName = moduleName + ": " + search
-			}
-
 			// Use the new ToolResultBuilder to build the result with multiple events
-			columns := []string{"TITLE", "SEVERITY", "ISSUE_TYPE", "TARGETS_IMPACTED", "OCCURRENCES", "LAST_DETECTED", "EXEMPTION_STATUS", "ISSUE_ID", "EXEMPTION_ID"}
-			resultBuilder := response.NewToolResultBuilder(moduleName).
+			columns := []string{"TITLE", "SEVERITY", "ISSUE_TYPE", "TARGETS_IMPACTED", "OCCURRENCES", "LAST_DETECTED", "EXEMPTION_STATUS"}
+			resultBuilder := response.NewToolResultBuilder("Issues Report").
+				AddStringEvent(string(builder.RawEvent), string(raw)).
 				AddStringEvent(string(builder.GenericTableEvent), string(tableData), columns).
 				AddPrompts(prompts)
 
@@ -411,13 +397,18 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 			}
 			columns := []string{}
 			if showingApprovedExemptions {
-				columns = []string{"ISSUE", "SEVERITY", "SCOPE", "REASON", "EXEMPTION_DURATION", "REQUESTED_BY", "APPROVED_BY", "STATUS", "ExemptionId", "OrgId", "ProjectId", "PipelineId", "TargetId"}
+				columns = []string{"ISSUE", "SEVERITY", "SCOPE", "REASON", "EXEMPTION_DURATION", "REQUESTED_BY", "APPROVED_BY", "STATUS"}
 			} else {
-				columns = []string{"ISSUE", "SEVERITY", "SCOPE", "REASON", "EXEMPTION_DURATION", "REQUESTED_BY", "STATUS", "ExemptionId", "OrgId", "ProjectId", "PipelineId", "TargetId"}
+				columns = []string{"ISSUE", "SEVERITY", "SCOPE", "REASON", "EXEMPTION_DURATION", "REQUESTED_BY", "STATUS"}
 			}
 
+			raw, err := json.Marshal(resp.JSON200)
+			if err != nil {
+				return mcp.NewToolResultError("Failed to marshal table data: " + err.Error()), nil
+			}
 			// Use the new ToolResultBuilder to build the result with multiple events
-			resultBuilder := response.NewToolResultBuilder("List_Exemptions").
+			resultBuilder := response.NewToolResultBuilder("Exemption Report").
+				AddStringEvent(string(builder.RawEvent), string(raw)).
 				AddStringEvent(string(builder.GenericTableEvent), string(tableData), columns).
 				AddPrompts(suggestions)
 
@@ -548,6 +539,7 @@ func ExemptionsApproveExemptionTool(config *config.Config, client *generated.Cli
 			mcp.WithString("accountId", mcp.Required(), mcp.Description("Harness Account ID")),
 			mcp.WithString("orgId", mcp.Description("Harness Organization ID")),
 			mcp.WithString("projectId", mcp.Description("Harness Project ID")),
+			mcp.WithString("userId", mcp.Description("User ID of the approver. Get the current userID from context")),
 			mcp.WithString("comment", mcp.Description("Optional comment for the approval or rejection")),
 			WithScope(config, true),
 		), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -560,7 +552,13 @@ func ExemptionsApproveExemptionTool(config *config.Config, client *generated.Cli
 			if v, _ := OptionalParam[string](request, "projectId"); v != "" {
 				params.ProjectId = &v
 			}
-			approverId := getCurrentUserUUID(ctx, config, principalClient)
+			approverId := ""
+			if v, _ := OptionalParam[string](request, "userId"); v != "" {
+				approverId = v
+			}
+			if approverId == "" {
+				approverId = getCurrentUserUUID(ctx, config, principalClient)
+			}
 			defaultComment := "This is done by Harness Agent"
 			body := generated.ApproveExemptionRequestBody{
 				ApproverId: approverId,

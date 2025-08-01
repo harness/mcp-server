@@ -19,7 +19,6 @@ type EventData struct {
 type ToolResultBuilder struct {
 	module string
 	events []EventData
-	raw    string
 }
 
 // NewToolResultBuilder creates a new ToolResultBuilder with the specified module
@@ -58,21 +57,9 @@ func (b *ToolResultBuilder) AddPrompts(prompts []string) *ToolResultBuilder {
 	return b
 }
 
-func (b *ToolResultBuilder) AddRawResult(raw string) *ToolResultBuilder {
-	b.raw = raw
-	return b
-}
-
 // Build creates a CallToolResult with all the added events
 func (b *ToolResultBuilder) Build() *mcp.CallToolResult {
 	var contents []mcp.Content
-
-	if b.raw != "" {
-		contents = append(contents, mcp.TextContent{
-			Type: "text",
-			Text: b.raw,
-		})
-	}
 
 	for _, eventData := range b.events {
 		contents = append(contents, mcp.TextContent{
@@ -80,6 +67,7 @@ func (b *ToolResultBuilder) Build() *mcp.CallToolResult {
 			Text: builder.Reg.Build(eventData.EventType, eventData.Event, b.module, eventData.Args...),
 		})
 	}
+	slog.Info("Building tool result", "module", b.module, "events", len(b.events))
 	return &mcp.CallToolResult{
 		Content: contents,
 	}

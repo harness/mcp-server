@@ -72,7 +72,7 @@ func (m *STOModule) IsDefault() bool {
 
 // RegisterSTO registers the Security Test Orchestration toolset
 func RegisterSTO(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-	baseURL := utils.BuildServiceURL(config, config.STOSvcBaseURL, config.BaseURL, "/sto")
+	baseURL := utils.BuildServiceURL(config, config.STOSvcBaseURL, config.BaseURL, "sto")
 	secret := config.STOSvcSecret
 	c := &http.Client{
 		Timeout: 30 * time.Second,
@@ -113,13 +113,14 @@ func RegisterSTO(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	return nil
 }
 
-
 // createSTORequestEditor creates a request editor function for STO API requests
 func createSTORequestEditor(config *config.Config, stoAPIKey string) func(context.Context, *http.Request) error {
 	return func(ctx context.Context, req *http.Request) error {
 		//Add STO plugin token as Authorization header if internal mode
 		if config.Internal && stoAPIKey != "" {
 			req.Header.Set("Authorization", "ApiKey "+stoAPIKey)
+		} else {
+			req.Header.Set("x-api-key", config.APIKey)
 		}
 		return nil
 	}
