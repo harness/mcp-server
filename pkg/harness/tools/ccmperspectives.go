@@ -660,27 +660,27 @@ Use this field to define precise inclusion/exclusion logic for data shown in the
 `
 
 	return mcp.WithArray(
-		"viewRules",
+		"view_rules",
 		mcp.Description(fieldDescription),
 		mcp.Items(map[string]any{
-			"viewConditions": map[string]any{
+			"view_conditions": map[string]any{
 				"type":        "array",
 				"description": getConditionInstructions(),
 				"items": map[string]any{
 					"type": "object",
 					"properties": map[string]any{
-						"viewField": map[string]any{
+						"view_field": map[string]any{
 							"type":        "object",
 							"description": getFilterInstructions(),
 							"properties": map[string]any{
-								"fieldId":        map[string]any{"type": "string"},
-								"fieldName":      map[string]any{"type": "string"},
-								"identifier":     map[string]any{"type": "string"},
-								"identifierName": map[string]any{"type": "string"},
+								"field_id":        map[string]any{"type": "string"},
+								"field_name":      map[string]any{"type": "string"},
+								"identifier":      map[string]any{"type": "string"},
+								"identifier_name": map[string]any{"type": "string"},
 							},
-							"required": []string{"fieldId", "fieldName", "identifier"},
+							"required": []string{"field_id", "field_name", "identifier"},
 						},
-						"viewOperator": map[string]any{
+						"view_operator": map[string]any{
 							"type":        "string",
 							"description": getOperatorsDescription(),
 							"enum":        getSupportedOperators(),
@@ -690,7 +690,7 @@ Use this field to define precise inclusion/exclusion logic for data shown in the
 							"items": map[string]any{"type": "string"},
 						},
 					},
-					"required": []string{"type", "viewField", "viewOperator", "values"},
+					"required": []string{"type", "view_field", "view_operator", "values"},
 				},
 			},
 		}),
@@ -724,30 +724,20 @@ func GetCcmPerspectiveRulesTool(config *config.Config) (tool mcp.Tool, handler s
 			createPerspectiveRules(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			// Extract the rules JSON - must match the parameter name from createPerspectiveRules()
-			rulesJSONRaw, ok := request.GetArguments()["viewRules"]
-			if !ok {
-				return mcp.NewToolResultError("missing required parameter 'viewRules'"), nil
-			}
 
-			// Convert to strongly typed struct - basic unmarshaling only
-			rulesJSONBytes, err := json.Marshal(rulesJSONRaw)
+			viewRules, err := OptionalAnyArrayParam(request, "view_rules")
 			if err != nil {
-				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal view_rules: %v", err)), nil
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			//var rulesModel ccmcommons.PerspectiveRules
-			var rules []dto.CCMViewRule
-			if err := json.Unmarshal(rulesJSONBytes, &rules); err != nil {
-				return mcp.NewToolResultError(fmt.Sprintf("invalid JSON format: %v", err)), nil
-			}
+			adaptedViewRules, err := ccmcommons.AdaptViewRulesMap(viewRules)
 
 			// Create base response with consistent entity info and event type
 			eventType := "perspective_rules_updated"
 			responseData := event.CreateBaseResponse(eventType, "get_ccm_perspective_rules")
 
 			// Add results to the response - directly include the model to avoid redundant nesting
-			responseData["viewRules"] = rules
+			responseData["viewRules"] = adaptedViewRules
 
 			// Format the response using the standard event formatter
 			eventResponse := event.FormatEventResponse(eventType, responseData)

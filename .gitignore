@@ -14,3 +14,4 @@ __debug_bin*
 vendor
 
 **/.DS_Store
+coverage.out
