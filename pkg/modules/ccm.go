@@ -101,6 +101,7 @@ func RegisterCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGro
 			toolsets.NewServerTool(tools.GetCcmRecommendationsStatsTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.FetchCommitmentCoverageTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.FetchCommitmentSavingsTool(config, ccmClient)),
+			toolsets.NewServerTool(tools.FetchCommitmentUtilisationTool(config, ccmClient)),
 		)
 
 	// Add toolset to the group
