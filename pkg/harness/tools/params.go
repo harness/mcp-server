@@ -185,25 +185,3 @@ func OptionalAnyArrayParam(r mcp.CallToolRequest, p string) ([]any, error) {
 		return nil, fmt.Errorf("parameter %s could not be coerced to []any, is %T", p, value)
 	}
 }
-
-// Ensures the parameter exists, is an array, and is not empty.
-func RequiredAnyArrayParam(r mcp.CallToolRequest, p string) ([]any, error) {
-	// Check if the parameter is present in the request
-	value, ok := r.GetArguments()[p]
-
-	if !ok {
-		return nil, fmt.Errorf("missing required parameter: %s", p)
-	}
-
-	switch v := value.(type) {
-	case nil:
-		return nil, fmt.Errorf("required parameter %s cannot be nil", p)
-	case []any:
-		if len(v) == 0 {
-			return nil, fmt.Errorf("required parameter %s cannot be empty", p)
-		}
-		return v, nil
-	default:
-		return nil, fmt.Errorf("parameter %s could not be coerced to []any, is %T", p, value)
-	}
-}
