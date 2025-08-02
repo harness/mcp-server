@@ -18,6 +18,16 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+type OPAContent struct {
+    Policy struct {
+        Name    string `json:"name"`
+        Content string `json:"content"`
+    } `json:"policy"`
+    Metadata struct {
+        DeniedLicenses []string `json:"denied_licenses"`
+    } `json:"metadata"`
+}
+
 func artifactRuleBasedFollowUps(artifacts []generated.ArtifactV2ListingResponse, licenseFilterList *[]generated.LicenseFilter) []string {
 	var prompts []string
 	if licenseFilterList != nil && len(*licenseFilterList) > 0 {
@@ -327,7 +337,7 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 				if enrichedArtifacts != nil {
 					suggestions := artifactRuleBasedFollowUps(enrichedArtifacts, &*body.LicenseFilterList)
 					if len(suggestions) > 0 {
-						promptEvent := types.NewSimpleActionEvent(suggestions)
+						promptEvent := types.NewActionEvent(suggestions)
 						promptResource, err := promptEvent.CreateEmbeddedResource()
 						if err != nil {
 							slog.Error("Failed to create prompt resource", "error", err)
@@ -846,22 +856,13 @@ func CreateOPAPolicyTool(config *config.Config, client *generated.ClientWithResp
 			// Replace placeholder with deny list block
 			finalPolicy := strings.Replace(template, "{{DENY_LIST}}", denyListBlock, 1)
 
-			// We don't need to create the response JSON anymore since we're using the OPAComponent
+			opaContent := OPAContent{}
+			opaContent.Policy.Name = "deny-list"
+			opaContent.Policy.Content = finalPolicy
+			opaContent.Metadata.DeniedLicenses = licenses
 
-			// Create the OPA component using CustomEvent
-			opaContent := map[string]interface{}{
-				"policy": map[string]interface{}{
-					"name":    "deny-list",
-					"content": finalPolicy,
-				},
-				"metadata": map[string]interface{}{
-					"denied_licenses": licenses,
-				},
-			}
-			// Create a custom event for OPA policy
 			opaEvent := event.NewCustomEvent("opa", opaContent)
 
-			// Create prompts for suggestions
 			prompts := []string{
 				"Show me more examples of OPA policies",
 				"How can I test this policy?",
@@ -888,7 +889,7 @@ func CreateOPAPolicyTool(config *config.Config, client *generated.ClientWithResp
 				
 				// Create prompt event and resource
 				if len(prompts) > 0 {
-					promptEvent := types.NewSimpleActionEvent(prompts)
+					promptEvent := types.NewActionEvent(prompts)
 					promptResource, err := promptEvent.CreateEmbeddedResource()
 					if err != nil {
 						slog.Error("Failed to create prompt resource", "error", err)
@@ -1162,7 +1163,7 @@ func ListSCSCodeReposTool(config *config.Config, client *generated.ClientWithRes
 
 				// Create prompt event and resource
 				if len(prompts) > 0 {
-					promptEvent := types.NewSimpleActionEvent(prompts)
+					promptEvent := types.NewActionEvent(prompts)
 					promptResource, err := promptEvent.CreateEmbeddedResource()
 					if err != nil {
 						slog.Error("Failed to create prompt resource", "error", err)

@@ -234,7 +234,7 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 
 				// Create prompt event and resource
 				if len(prompts) > 0 {
-					promptEvent := types.NewSimpleActionEvent(prompts)
+					promptEvent := types.NewActionEvent(prompts)
 					promptResource, err := promptEvent.CreateEmbeddedResource()
 					if err != nil {
 						slog.Error("Failed to create prompt resource", "error", err)
@@ -483,7 +483,7 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 
 				// Create prompt event and resource if we have suggestions
 				if len(suggestions) > 0 {
-					promptEvent := types.NewSimpleActionEvent(suggestions)
+					promptEvent := types.NewActionEvent(suggestions)
 					promptResource, err := promptEvent.CreateEmbeddedResource()
 					if err != nil {
 						slog.Error("Failed to create prompt resource", "error", err)

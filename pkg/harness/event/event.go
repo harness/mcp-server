@@ -7,11 +7,16 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-// CustomEvent represents a custom event sent through the unified agent
+const (
+	CustomEventURI      = "harness:custom-event"
+	CustomEventMIMEType = "application/vnd.harness.custom-event+json"
+)
+
+// CustomEvent represents a custom event sent back to a client as embedded resource
 type CustomEvent struct {
 	Type         string `json:"type"`
-	Continue     bool   `json:"continue,omitempty"`
-	DisplayOrder int    `json:"display_order,omitempty"`
+	Continue     bool   `json:"continue,omitempty"` // wether the agent should continue or stop processing
+	DisplayOrder int    `json:"display_order,omitempty"` // default will be the order that the items are added
 	Content      any    `json:"content,omitempty"`
 }
 
@@ -53,8 +58,8 @@ func (e CustomEvent) CreateCustomResource() (*mcp.TextResourceContents, error) {
 	}
 
 	return &mcp.TextResourceContents{
-		URI:      fmt.Sprintf("harness:custom-event/%s", e.Type),
-		MIMEType: "application/vnd.harness.custom-event+json",
+		URI:      CustomEventURI,
+		MIMEType: CustomEventMIMEType,
 		Text:     string(jsonData),
 	}, nil
 }
