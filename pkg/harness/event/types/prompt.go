@@ -7,7 +7,7 @@ const (
 	PromptDisplayOrder = 100
 )
 
-// NewSimpleActionEvent creates a simple aciton selection component on the UI
+// NewSimpleActionEvent creates a simple action selection component on the UI
 func NewSimpleActionEvent(actions []string, opts ...event.CustomEventOption) event.CustomEvent {
 	// Always include prompt display order by default
 	allOpts := append([]event.CustomEventOption{event.WithDisplayOrder(PromptDisplayOrder)}, opts...)

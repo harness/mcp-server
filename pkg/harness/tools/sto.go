@@ -415,8 +415,8 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 			for i := 0; i < len(rows) && i < maxSuggestions; i++ {
 				issue, issueOk := rows[i]["ISSUE"].(string)
 				status, statusOk := rows[i]["STATUS"]
-				if issueOk && statusOk {
-					if status == "Pending" {
+				if issueOk {
+					if statusOk && status == "Pending" {
 						suggestions = append(suggestions, "Approve exemption "+issue)
 					}
 					suggestions = append(suggestions, "Reject exemption "+issue)
