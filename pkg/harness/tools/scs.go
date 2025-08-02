@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/harness/harness-mcp/client/dto"
 	generated "github.com/harness/harness-mcp/client/scs/generated"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
-	"github.com/harness/harness-mcp/pkg/harness/tools/utils"
+	"github.com/harness/harness-mcp/pkg/harness/event"
+	"github.com/harness/harness-mcp/pkg/harness/event/types"
 	"github.com/harness/harness-mcp/pkg/resources"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -288,7 +288,7 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 				rows = append(rows, row)
 			}
 			// Create table columns for our UI component
-			columns := []dto.TableColumn{
+			columns := []types.TableColumn{
 				{Key: "name", Label: "Artifact Name"},
 				{Key: "tags", Label: "Tags"},
 				{Key: "components", Label: "Components"},
@@ -303,54 +303,44 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 			}
 
 			// Create the table component
-			tableComponent := dto.NewTableComponent(
-				"artifact_source",
-				columns,
-				rows,
-			)
+			tableEvent := types.NewTableEvent(columns, rows)
 
-			// Create resource
-			resource, err := utils.CreateUIResource(tableComponent)
+			// Serialize the table component for text representation
+			tableJSON, err := json.Marshal(tableEvent)
 			if err != nil {
-				return nil, fmt.Errorf("failed to create UI resource table: %w", err)
+				return mcp.NewToolResultErrorf("Failed to marshal table data: %v. Found %d artifacts.", err, len(rows)), nil
 			}
 
-			// Compute suggestions
-			var suggestions []string
-			if enrichedArtifacts != nil {
-				suggestions = artifactRuleBasedFollowUps(enrichedArtifacts, &*body.LicenseFilterList)
+			// Start with text content which is always returned
+			responseContents := []mcp.Content{
+				mcp.NewTextContent(string(tableJSON)),
 			}
 
-			// Only create prompt component if we have suggestions
-			resources := []mcp.ResourceContents{resource}
-			if len(suggestions) > 0 {
-				// Use the new helper function
-				promptComponent := dto.NewPromptComponent(
-					"Artifact Sources", 
-					suggestions,
-				)
-
-				// Create prompt resource
-				promptResource, err := utils.CreateUIResource(promptComponent)
+			if config.Internal {
+				tableResource, err := tableEvent.CreateEmbeddedResource()
 				if err != nil {
-					return nil, fmt.Errorf("failed to create prompt resource: %w", err)
+					slog.Error("Failed to create table resource", "error", err)
+				} else {
+					responseContents = append(responseContents, tableResource)
 				}
-				resources = append(resources, promptResource)
+
+				if enrichedArtifacts != nil {
+					suggestions := artifactRuleBasedFollowUps(enrichedArtifacts, &*body.LicenseFilterList)
+					if len(suggestions) > 0 {
+						promptEvent := types.NewSimpleActionEvent(suggestions)
+						promptResource, err := promptEvent.CreateEmbeddedResource()
+						if err != nil {
+							slog.Error("Failed to create prompt resource", "error", err)
+						} else {
+							responseContents = append(responseContents, promptResource)
+						}
+					}
+				}
 			}
 
-			// Serialize the table component for text fallback
-			tableJSON, err := json.Marshal(tableComponent)
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal table component: %w", err)
-			}
-
-			// Return result with UI components
-			return utils.NewToolResultWithResources(
-				config,
-				string(tableJSON),
-				resources,
-				nil,
-			), nil
+			return &mcp.CallToolResult{
+				Content: responseContents,
+			}, nil
 		}
 }
 
@@ -858,54 +848,59 @@ func CreateOPAPolicyTool(config *config.Config, client *generated.ClientWithResp
 
 			// We don't need to create the response JSON anymore since we're using the OPAComponent
 
-			// Create the OPA component using the constructor
-			opaComponent := dto.NewOPAComponent(
-				"scs_result",
-				"deny-list",
-				finalPolicy,
-				map[string]any{
+			// Create the OPA component using CustomEvent
+			opaContent := map[string]interface{}{
+				"policy": map[string]interface{}{
+					"name":    "deny-list",
+					"content": finalPolicy,
+				},
+				"metadata": map[string]interface{}{
 					"denied_licenses": licenses,
 				},
-			)
-
-			// Create OPA resource
-			opaResource, err := utils.CreateUIResource(opaComponent)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create UI resource: %w", err)
 			}
+			// Create a custom event for OPA policy
+			opaEvent := event.NewCustomEvent("opa", opaContent)
 
 			// Create prompts for suggestions
-			// Create string array for prompts
 			prompts := []string{
 				"Show me more examples of OPA policies",
 				"How can I test this policy?",
 			}
 
-			// Create prompt component using the new helper function
-			promptComponent := dto.NewPromptComponent(
-				"Policy Options",
-				prompts,
-			)
-
-			// Create prompt resource
-			promptResource, err := utils.CreateUIResource(promptComponent)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create UI resource: %w", err)
-			}
-
 			// Serialize the OPA component for text fallback
-			opaJSON, err := json.Marshal(opaComponent)
+			opaJSON, err := json.Marshal(opaEvent)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal OPA component: %w", err)
+				return nil, fmt.Errorf("failed to marshal OPA content: %w", err)
 			}
 
-			// Return result with UI components
-			return utils.NewToolResultWithResources(
-				config,
-				string(opaJSON),
-				[]mcp.ResourceContents{opaResource, promptResource},
-				nil,
-			), nil
+			responseContents := []mcp.Content{
+				mcp.NewTextContent(string(opaJSON)),
+			}
+
+			if config.Internal {
+				// Create embedded resources for the OPA event
+				opaResource, err := opaEvent.CreateEmbeddedResource()
+				if err != nil {
+					slog.Error("Failed to create OPA resource", "error", err)
+				} else {
+					responseContents = append(responseContents, opaResource)
+				}
+				
+				// Create prompt event and resource
+				if len(prompts) > 0 {
+					promptEvent := types.NewSimpleActionEvent(prompts)
+					promptResource, err := promptEvent.CreateEmbeddedResource()
+					if err != nil {
+						slog.Error("Failed to create prompt resource", "error", err)
+					} else {
+						responseContents = append(responseContents, promptResource)
+					}
+				}
+			}
+
+			return &mcp.CallToolResult{
+				Content: responseContents,
+			}, nil
 		}
 }
 
@@ -1125,7 +1120,7 @@ func ListSCSCodeReposTool(config *config.Config, client *generated.ClientWithRes
 				}
 			}
 			// Create table columns for our UI component
-			columns := []dto.TableColumn{
+			columns := []types.TableColumn{
 				{Key: "name", Label: "Repository Name"},
 				{Key: "platform", Label: "Platform"},
 				{Key: "dependencies", Label: "Dependencies"},
@@ -1136,22 +1131,18 @@ func ListSCSCodeReposTool(config *config.Config, client *generated.ClientWithRes
 				{Key: "last_scan", Label: "Last Scan"},
 			}
 
-			// Create the table component using the new helper function
-			tableComponent := dto.NewTableComponent(
-				"Repositories Report",
-				columns,
-				rows,
-			)
+			// Create the table component
+			tableEvent := types.NewTableEvent(columns, rows)
 
-			tableJSON, err := json.Marshal(tableComponent)
+			// Serialize the table component for text representation
+			tableJSON, err := json.Marshal(tableEvent)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal table component: %w", err)
+				return mcp.NewToolResultErrorf("Failed to marshal table data: %v. Found %d repositories.", err, len(rows)), nil
 			}
 
-			// Create resource
-			resource, err := utils.CreateUIResource(tableComponent)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create UI resource: %w", err)
+			// Start with text content which is always returned
+			responseContents := []mcp.Content{
+				mcp.NewTextContent(string(tableJSON)),
 			}
 
 			// Create string array for prompts
@@ -1160,24 +1151,30 @@ func ListSCSCodeReposTool(config *config.Config, client *generated.ClientWithRes
 				"Show me compliance risk of 1st repository",
 			}
 
-			// Create prompt component using the new helper function
-			promptComponent := dto.NewPromptComponent(
-				"Repositories Report",
-				prompts,
-			)
+			if config.Internal {
+				// Create table resource
+				tableResource, err := tableEvent.CreateEmbeddedResource()
+				if err != nil {
+					slog.Error("Failed to create table resource", "error", err)
+				} else {
+					responseContents = append(responseContents, tableResource)
+				}
 
-			// Create prompt resource
-			promptResource, err := utils.CreateUIResource(promptComponent)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create UI resource: %w", err)
+				// Create prompt event and resource
+				if len(prompts) > 0 {
+					promptEvent := types.NewSimpleActionEvent(prompts)
+					promptResource, err := promptEvent.CreateEmbeddedResource()
+					if err != nil {
+						slog.Error("Failed to create prompt resource", "error", err)
+					} else {
+						responseContents = append(responseContents, promptResource)
+					}
+				}
 			}
 
-			return utils.NewToolResultWithResources(
-				config,
-				string(tableJSON),
-				[]mcp.ResourceContents{resource, promptResource},
-				nil,
-			), nil
+			return &mcp.CallToolResult{
+				Content: responseContents,
+			}, nil
 		}
 
 }

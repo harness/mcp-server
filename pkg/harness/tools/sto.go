@@ -11,7 +11,7 @@ import (
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/client/sto/generated"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
-	"github.com/harness/harness-mcp/pkg/harness/tools/utils"
+	"github.com/harness/harness-mcp/pkg/harness/event/types"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -191,7 +191,7 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 			}
 
 			// Create table columns for our UI component
-			columns := []dto.TableColumn{
+			columns := []types.TableColumn{
 				{Key: "TITLE", Label: "Title"},
 				{Key: "SEVERITY", Label: "Severity"},
 				{Key: "ISSUE_TYPE", Label: "Issue Type"},
@@ -204,17 +204,7 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 			}
 
 			// Create the table component
-			tableComponent := dto.NewTableComponent(
-				"Security Issues",
-				columns,
-				rows,
-			)
-
-			// Create table resource
-			tableResource, err := utils.CreateUIResource(tableComponent)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create UI resource table: %w", err)
-			}
+			tableEvent := types.NewTableEvent(columns, rows)
 
 			// Create string array for prompts
 			prompts := []string{
@@ -222,31 +212,41 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 				"Show me issues without Exemption",
 			}
 
-			// Create prompt component using the new helper function
-			promptComponent := dto.NewPromptComponent(
-				"Security Issues",
-				prompts,
-			)
-
-			// Create prompt resource
-			promptResource, err := utils.CreateUIResource(promptComponent)
+			// Serialize the table component for text representation
+			tableJSON, err := json.Marshal(tableEvent)
 			if err != nil {
-				return nil, fmt.Errorf("failed to create UI resource prompt: %w", err)
+				return mcp.NewToolResultErrorf("Failed to marshal table data: %v", err), nil
 			}
 
-			// Serialize the table component for text fallback
-			tableJSON, err := json.Marshal(tableComponent)
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal table component: %w", err)
+			// Start with text content which is always returned
+			responseContents := []mcp.Content{
+				mcp.NewTextContent(string(tableJSON)),
 			}
 
-			// Return result with UI components
-			return utils.NewToolResultWithResources(
-				config,
-				string(tableJSON),
-				[]mcp.ResourceContents{tableResource, promptResource},
-				nil,
-			), nil
+			if config.Internal {
+				// Create embedded resources for the table event
+				tableResource, err := tableEvent.CreateEmbeddedResource()
+				if err != nil {
+					slog.Error("Failed to create table resource", "error", err)
+				} else {
+					responseContents = append(responseContents, tableResource)
+				}
+
+				// Create prompt event and resource
+				if len(prompts) > 0 {
+					promptEvent := types.NewSimpleActionEvent(prompts)
+					promptResource, err := promptEvent.CreateEmbeddedResource()
+					if err != nil {
+						slog.Error("Failed to create prompt resource", "error", err)
+					} else {
+						responseContents = append(responseContents, promptResource)
+					}
+				}
+			}
+
+			return &mcp.CallToolResult{
+				Content: responseContents,
+			}, nil
 		}
 }
 
@@ -424,9 +424,9 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 			}
 
 			// Create table columns for our UI component
-			columns := []dto.TableColumn{}
+			columns := []types.TableColumn{}
 			if showingApprovedExemptions {
-				columns = []dto.TableColumn{
+				columns = []types.TableColumn{
 					{Key: "ISSUE", Label: "Issue"},
 					{Key: "SEVERITY", Label: "Severity"},
 					{Key: "SCOPE", Label: "Scope"},
@@ -442,7 +442,7 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 					{Key: "TargetId", Label: "Target ID"},
 				}
 			} else {
-				columns = []dto.TableColumn{
+				columns = []types.TableColumn{
 					{Key: "ISSUE", Label: "Issue"},
 					{Key: "SEVERITY", Label: "Severity"},
 					{Key: "SCOPE", Label: "Scope"},
@@ -459,48 +459,43 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 			}
 
 			// Create the table component
-			tableComponent := dto.NewTableComponent(
-				"Security Exemptions",
-				columns,
-				rows,
-			)
+			tableEvent := types.NewTableEvent(columns, rows)
 
-			// Create table resource
-			tableResource, err := utils.CreateUIResource(tableComponent)
+			// Serialize the table component for text representation
+			tableJSON, err := json.Marshal(tableEvent)
 			if err != nil {
-				return nil, fmt.Errorf("failed to create UI resource table: %w", err)
+				return mcp.NewToolResultErrorf("Failed to marshal table data: %v", err), nil
 			}
 
-			// Create prompt component if we have prompts
-			resources := []mcp.ResourceContents{tableResource}
-			if len(suggestions) > 0 {
-				// Use the new helper function
-				promptComponent := dto.NewPromptComponent(
-					"Exemption Management",
-					suggestions,
-				)
+			// Start with text content which is always returned
+			responseContents := []mcp.Content{
+				mcp.NewTextContent(string(tableJSON)),
+			}
 
-				// Create prompt resource
-				promptResource, err := utils.CreateUIResource(promptComponent)
+			if config.Internal {
+				// Create embedded resources for the table event
+				tableResource, err := tableEvent.CreateEmbeddedResource()
 				if err != nil {
-					return nil, fmt.Errorf("failed to create prompt resource: %w", err)
+					slog.Error("Failed to create table resource", "error", err)
+				} else {
+					responseContents = append(responseContents, tableResource)
 				}
-				resources = append(resources, promptResource)
+
+				// Create prompt event and resource if we have suggestions
+				if len(suggestions) > 0 {
+					promptEvent := types.NewSimpleActionEvent(suggestions)
+					promptResource, err := promptEvent.CreateEmbeddedResource()
+					if err != nil {
+						slog.Error("Failed to create prompt resource", "error", err)
+					} else {
+						responseContents = append(responseContents, promptResource)
+					}
+				}
 			}
 
-			// Serialize the table component for text fallback
-			tableJSON, err := json.Marshal(tableComponent)
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal table component: %w", err)
-			}
-
-			// Return result with UI components
-			return utils.NewToolResultWithResources(
-				config,
-				string(tableJSON),
-				resources,
-				nil,
-			), nil
+			return &mcp.CallToolResult{
+				Content: responseContents,
+			}, nil
 		}
 }
 
