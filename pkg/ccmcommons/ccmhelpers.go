@@ -78,48 +78,48 @@ func AdaptViewRulesMap(input []any) ([]dto.CCMViewRule, error) {
 
 		conditionsIface, ok := ruleMapTyped["view_conditions"].([]any)
 		if !ok {
-			return nil, fmt.Errorf("Couldn't cast conditions when adapting perspective rules %s", conditionsIface)
+			return nil, fmt.Errorf("Missing or invalid 'view_conditions' array in perspective rules. Each rule must contain a 'view_conditions' array of condition objects")
 		}
 		var rule dto.CCMViewRule
 		for _, condIface := range conditionsIface {
 			cond, ok := condIface.(map[string]any)
 			if !ok {
-				return nil, fmt.Errorf("Couldn't cast condition to map[string]any when adapting %s", condIface)
+				return nil, fmt.Errorf("Invalid condition format in 'view_conditions'. Each condition must be a JSON object with 'view_field', 'view_operator', and 'values' properties")
 			}
 			viewField, ok := cond["view_field"].(map[string]any) 
 			if !ok {
-				return nil, fmt.Errorf("Couldn't extract view field from perspective rules map when adapting %s", cond)
+				return nil, fmt.Errorf("Missing or invalid 'view_field' object in condition. Each condition requires a 'view_field' object containing 'field_id', 'field_name', 'identifier', and 'identifier_name'")
 			}
 
 			fieldId, ok := viewField["field_id"].(string)
 			if !ok {
-				return nil, fmt.Errorf("Missing view field 'field1_id' when adapting perspecive rules for field ")
+				return nil, fmt.Errorf("Missing or invalid 'field_id' in 'view_field'. This should be a string value like 'awsUsageaccountid', 'region', or 'product'")
 			}
 
 			fieldName, ok := viewField["field_name"].(string)
 			if !ok {
-				return nil, fmt.Errorf("Missing view field 'field_name' when adapting perspecive rules for field ")
+				return nil, fmt.Errorf("Missing or invalid  'field_name' in 'view_field' for field '%s'. This should be a string value like 'Account', 'Region', etc.", fieldId)
 			}
 
 			identifier, ok := viewField["identifier"].(string)
 			if !ok {
-				return nil, fmt.Errorf("Missing view field 'identifier' when adapting perspecive rules for field ")
+				return nil, fmt.Errorf("Missing or invalid 'identifier' in 'view_field' for field '%s'. This should be a string like 'AWS', 'COMMON', 'LABEL', etc.", fieldId)
 			}
 
 			identifierName, ok := viewField["identifier_name"].(string)
 			if !ok {
-				return nil, fmt.Errorf("Missing view field 'identifier' when adapting perspecive rules for field ")
+				return nil, fmt.Errorf("Missing or invalid 'identifier_name' in 'view_field' for field '%s'. This should match the identifier value in a readable format", fieldId)
 			}
 
 
 			operator, ok := cond["view_operator"].(string)
 			if !ok {
-				return nil, fmt.Errorf("Missing field 'view_operator' when adapting perspecive rules for field %s", fieldId)
+				return nil, fmt.Errorf("Missing or invalid 'view_operator' in condition for field '%s'. Valid values are: IN, NOT_IN, EQUALS, NOT_NULL, NULL, LIKE", fieldId)
 			}
 
 			valuesIface, ok := cond["values"].([]any)
 			if !ok {
-				return nil, fmt.Errorf("Missing field 'values' when adapting perspecive rules for field %s", fieldId)
+				return nil, fmt.Errorf("Missing or invalid 'values' array in condition for field '%s'. This should be a non-empty array of string values to match", fieldId)
 			}
 			var values []string
 			for _, v := range valuesIface {

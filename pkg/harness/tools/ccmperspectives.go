@@ -731,6 +731,9 @@ func GetCcmPerspectiveRulesTool(config *config.Config) (tool mcp.Tool, handler s
 			}
 
 			adaptedViewRules, err := ccmcommons.AdaptViewRulesMap(viewRules)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
 			// Create base response with consistent entity info and event type
 			eventType := "perspective_rules_updated"
