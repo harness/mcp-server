@@ -203,17 +203,13 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 				{Key: "EXEMPTION_ID", Label: "Exemption ID"},
 			}
 
-			// Create the table component
-			tableEvent := types.NewTableEvent(columns, rows)
-
-			// Create string array for prompts
-			prompts := []string{
-				"Show me only issues with secrets identified",
-				"Show me issues without Exemption",
+			tableData := types.TableData{
+				Columns: columns,
+				Rows:    rows,
 			}
 
 			// Serialize the table component for text representation
-			tableJSON, err := json.Marshal(tableEvent)
+			tableJSON, err := json.Marshal(tableData)
 			if err != nil {
 				return mcp.NewToolResultErrorf("Failed to marshal table data: %v", err), nil
 			}
@@ -224,12 +220,19 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 			}
 
 			if config.Internal {
-				// Create embedded resources for the table event
+				// Create the table component
+				tableEvent := types.NewTableEvent(tableData)
+
 				tableResource, err := tableEvent.CreateEmbeddedResource()
 				if err != nil {
 					slog.Error("Failed to create table resource", "error", err)
 				} else {
 					responseContents = append(responseContents, tableResource)
+				}
+
+				prompts := []string{
+					"Show me only issues with secrets identified",
+					"Show me issues without Exemption",
 				}
 
 				// Create prompt event and resource
@@ -458,29 +461,32 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 				}
 			}
 
-			// Create the table component
-			tableEvent := types.NewTableEvent(columns, rows)
+			// Always create the basic table data
+			tableData := types.TableData{
+				Columns: columns,
+				Rows:    rows,
+			}
 
-			// Serialize the table component for text representation
-			tableJSON, err := json.Marshal(tableEvent)
+			// Always include basic JSON data for external clients
+			tableJSON, err := json.Marshal(tableData)
 			if err != nil {
 				return mcp.NewToolResultErrorf("Failed to marshal table data: %v", err), nil
 			}
 
-			// Start with text content which is always returned
 			responseContents := []mcp.Content{
 				mcp.NewTextContent(string(tableJSON)),
 			}
 
 			if config.Internal {
-				// Create embedded resources for the table event
+				// Only create enhanced UI components for internal mode
+				tableEvent := types.NewTableEvent(tableData)
 				tableResource, err := tableEvent.CreateEmbeddedResource()
 				if err != nil {
 					slog.Error("Failed to create table resource", "error", err)
 				} else {
 					responseContents = append(responseContents, tableResource)
 				}
-
+				
 				// Create prompt event and resource if we have suggestions
 				if len(suggestions) > 0 {
 					promptEvent := types.NewActionEvent(suggestions)

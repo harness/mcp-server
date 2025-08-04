@@ -312,28 +312,33 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 				{Key: "orchestration", Label: "Orchestration"},
 			}
 
-			// Create the table component
-			tableEvent := types.NewTableEvent(columns, rows)
+			// Always create the basic table data
+			tableData := types.TableData{
+				Columns: columns,
+				Rows:    rows,
+			}
 
-			// Serialize the table component for text representation
-			tableJSON, err := json.Marshal(tableEvent)
+			// Always include basic JSON data for external clients
+			tableJSON, err := json.Marshal(tableData)
 			if err != nil {
 				return mcp.NewToolResultErrorf("Failed to marshal table data: %v. Found %d artifacts.", err, len(rows)), nil
 			}
 
-			// Start with text content which is always returned
 			responseContents := []mcp.Content{
 				mcp.NewTextContent(string(tableJSON)),
 			}
 
 			if config.Internal {
+				// Only create enhanced UI components for internal mode
+				tableEvent := types.NewTableEvent(tableData)
 				tableResource, err := tableEvent.CreateEmbeddedResource()
 				if err != nil {
 					slog.Error("Failed to create table resource", "error", err)
 				} else {
 					responseContents = append(responseContents, tableResource)
 				}
-
+				
+				// Add follow-up prompts if available
 				if enrichedArtifacts != nil {
 					suggestions := artifactRuleBasedFollowUps(enrichedArtifacts, &*body.LicenseFilterList)
 					if len(suggestions) > 0 {
@@ -861,15 +866,8 @@ func CreateOPAPolicyTool(config *config.Config, client *generated.ClientWithResp
 			opaContent.Policy.Content = finalPolicy
 			opaContent.Metadata.DeniedLicenses = licenses
 
-			opaEvent := event.NewCustomEvent("opa", opaContent)
-
-			prompts := []string{
-				"Show me more examples of OPA policies",
-				"How can I test this policy?",
-			}
-
 			// Serialize the OPA component for text fallback
-			opaJSON, err := json.Marshal(opaEvent)
+			opaJSON, err := json.Marshal(opaContent)
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal OPA content: %w", err)
 			}
@@ -879,6 +877,9 @@ func CreateOPAPolicyTool(config *config.Config, client *generated.ClientWithResp
 			}
 
 			if config.Internal {
+				// Create OPA event
+				opaEvent := event.NewCustomEvent("opa", opaContent)
+
 				// Create embedded resources for the OPA event
 				opaResource, err := opaEvent.CreateEmbeddedResource()
 				if err != nil {
@@ -886,7 +887,12 @@ func CreateOPAPolicyTool(config *config.Config, client *generated.ClientWithResp
 				} else {
 					responseContents = append(responseContents, opaResource)
 				}
-				
+
+				prompts := []string{
+					"Show me more examples of OPA policies",
+					"How can I test this policy?",
+				}
+
 				// Create prompt event and resource
 				if len(prompts) > 0 {
 					promptEvent := types.NewActionEvent(prompts)
@@ -1132,33 +1138,37 @@ func ListSCSCodeReposTool(config *config.Config, client *generated.ClientWithRes
 				{Key: "last_scan", Label: "Last Scan"},
 			}
 
-			// Create the table component
-			tableEvent := types.NewTableEvent(columns, rows)
+			tableData := types.TableData{
+				Columns: columns,
+				Rows:    rows,
+			}
 
-			// Serialize the table component for text representation
-			tableJSON, err := json.Marshal(tableEvent)
+			// Always include basic JSON data for external clients
+			tableJSON, err := json.Marshal(tableData)
 			if err != nil {
 				return mcp.NewToolResultErrorf("Failed to marshal table data: %v. Found %d repositories.", err, len(rows)), nil
 			}
 
-			// Start with text content which is always returned
 			responseContents := []mcp.Content{
 				mcp.NewTextContent(string(tableJSON)),
 			}
 
-			// Create string array for prompts
-			prompts := []string{
-				"Show all repositories that violate the compliance rule: Auto-merge must be disabled.",
-				"Show me compliance risk of 1st repository",
-			}
-
 			if config.Internal {
-				// Create table resource
+
+				// Create the table component
+				tableEvent := types.NewTableEvent(tableData)
+
 				tableResource, err := tableEvent.CreateEmbeddedResource()
 				if err != nil {
 					slog.Error("Failed to create table resource", "error", err)
 				} else {
 					responseContents = append(responseContents, tableResource)
+				}
+				
+				// Add follow-up prompts
+				prompts := []string{
+					"Show all repositories that violate the compliance rule: Auto-merge must be disabled.",
+					"Show me compliance risk of 1st repository",
 				}
 
 				// Create prompt event and resource

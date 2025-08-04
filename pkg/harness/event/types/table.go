@@ -18,10 +18,12 @@ type TableData struct {
 	Rows    []TableRow    `json:"rows"`
 }
 
+type TableWrapper struct {
+	Table TableData `json:"table"`
+}
+
 // NewTableEvent creates a table event with columns and rows
-func NewTableEvent(columns []TableColumn, rows []TableRow, opts ...event.CustomEventOption) event.CustomEvent {
-	return event.NewCustomEvent("table", TableData{
-		Columns: columns,
-		Rows:    rows,
-	}, opts...)
+func NewTableEvent(tableData TableData, opts ...event.CustomEventOption) event.CustomEvent {
+	wrapper := TableWrapper{Table: tableData}
+	return event.NewCustomEvent("table", wrapper, opts...)
 }
