@@ -15,12 +15,14 @@ const (
 	GenericTableEvent EventType = "table"
 	OPAEvent          EventType = "opa"
 	PromptEvent       EventType = "prompt"
+	RawEvent          EventType = "raw"
 )
 
 var Reg = builder.Registry{
 	string(GenericTableEvent): GenericTableBuilder{},
 	string(OPAEvent):          OPABuilder{},
 	string(PromptEvent):       PromptBuilder{},
+	string(RawEvent):          RawBuilder{},
 }
 
 type GenericTableBuilder struct{}
@@ -93,6 +95,28 @@ func (GenericTableBuilder) Build(raw json.RawMessage, tool string, args ...any) 
 }
 
 type OPABuilder struct{}
+
+type RawBuilder struct{}
+
+func (RawBuilder) Build(raw json.RawMessage, tool string, args ...any) string {
+	eventType := string(RawEvent)
+
+	// Create base response with consistent structure
+	env := builder.CreateBaseResponse(eventType, tool)
+	env["description"] = "THIS IS A RAW EVENT.INTENDED TO USE BY LLM TO UNDERSTAND THE TOOL RESPONSE. DO NOT CREATE ANY TABLES FROM THIS EVENT"
+	// Parse the raw JSON into a generic interface
+	var data interface{}
+	if err := json.Unmarshal(raw, &data); err != nil {
+		// Return a safe error response
+		return fmt.Sprintf(`{"type": "%s", "error": "Failed to parse raw data"}`, eventType)
+	}
+
+	// Add raw data to the response
+	env["data"] = data
+
+	// Format the response using the common formatter
+	return builder.FormatEventResponse(eventType, env)
+}
 
 type PromptBuilder struct{}
 

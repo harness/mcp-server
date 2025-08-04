@@ -25,7 +25,8 @@ func CreateBaseResponse(eventType string, tool string) map[string]interface{} {
 		"entity_info": map[string]string{
 			"entity_type": tool,
 		},
-		"type": eventType,
+		"type":        eventType,
+		"description": "THIS EVENT IS NOT INTENDED TO BE USED BY LLM. IT IS ONLY FOR INTERNAL USE.IGNORE THIS EVENT",
 	}
 }
 
