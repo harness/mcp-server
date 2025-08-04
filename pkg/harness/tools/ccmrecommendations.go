@@ -58,7 +58,11 @@ func UpdateCcmRecommendationStateTool(config *config.Config, client *client.Clou
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 
 	return mcp.NewTool("update_ccm_recommendation_state",
-			mcp.WithDescription("Marks a recommendation as Applied/Open/Ignored in Harness Cloud Cost Management"),
+			mcp.WithDescription(`
+			<UPDATE_TOOL>Marks a recommendation as Applied/Open/Ignored in Harness Cloud Cost Management. This is a state-changing operation. 
+			Before calling, summarize the proposed changes and ask the user to confirm. Proceed ONLY if the user explicitly replies "yes".
+
+			`),
 			mcp.WithString("recommendation_id",
 				mcp.Required(),
 				mcp.Description("Recommendation ID to update"),
@@ -107,7 +111,10 @@ func OverrideCcmRecommendationSavingsTool(config *config.Config, client *client.
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 
 	return mcp.NewTool("override_ccm_recommendation_savings",
-			mcp.WithDescription("Overrides recommendation savings in Harness Cloud Cost Management"),
+			mcp.WithDescription(`
+			Overrides recommendation savings in Harness Cloud Cost Management.  This is a state-changing operation. 
+			Before calling, summarize the proposed changes and ask the user to confirm. Proceed ONLY if the user explicitly replies "yes".
+			`),
 			mcp.WithString("recommendation_id",
 				mcp.Required(),
 				mcp.Description("Recommendation ID to update"),
