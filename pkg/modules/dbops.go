@@ -3,15 +3,16 @@ package modules
 import (
 	"context"
 	"fmt"
-	"github.com/harness/harness-mcp/client/dbops/generated"
 	"net/http"
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dbops"
+	"github.com/harness/harness-mcp/client/dbops/generated"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness/tools"
 	"github.com/harness/harness-mcp/pkg/modules/utils"
 	"github.com/harness/harness-mcp/pkg/toolsets"
+	"github.com/mark3labs/mcp-go/server"
 )
 
 // DbOpsModule implements the Module interface for "Unlicensed Module"
@@ -109,11 +110,25 @@ func RegisterDbops(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Create the dbops client
 	dbopsClient := dbops.NewClient(dbopsGenClient, connectorServiceClient)
 
+	// Get the GenAI client using the shared method
+	genaiClient, err := GetGenAIClient(config)
+	if err != nil {
+		return fmt.Errorf("failed to create client for genai: %w", err)
+	}
+
+	// Create the dbops toolset with appropriate tools
+	dbopsTools := []server.ServerTool{
+		toolsets.NewServerTool(tools.GetDatabaseInfoTool(config, dbopsClient)),
+	}
+
+	// Add DBChangesetTool only if genaiClient is available
+	if genaiClient != nil {
+		dbopsTools = append(dbopsTools, toolsets.NewServerTool(tools.DBChangesetTool(config, genaiClient)))
+	}
+
 	// Create the dbops toolset
 	dbopsToolset := toolsets.NewToolset("dbops", "Database operations related tools").
-		AddReadTools(
-			toolsets.NewServerTool(tools.GetDatabaseInfoTool(config, dbopsClient)),
-		)
+		AddReadTools(dbopsTools...)
 
 	// Add toolset to the group
 	tsg.AddToolset(dbopsToolset)
