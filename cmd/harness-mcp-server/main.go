@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/harness/harness-mcp/pkg/harness/prompts"
 	"io"
 	"log"
 	"log/slog"
@@ -15,6 +14,7 @@ import (
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness"
 	"github.com/harness/harness-mcp/pkg/harness/auth"
+	"github.com/harness/harness-mcp/pkg/modules"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/spf13/cobra"
@@ -374,8 +374,14 @@ func runStdioServer(ctx context.Context, config config.Config) error {
 	// Register the tools with the server
 	toolsets.RegisterTools(harnessServer)
 
-	// Set the guidelines prompts
-	prompts.RegisterPrompts(harnessServer)
+	// Create module registry
+	moduleRegistry := modules.NewModuleRegistry(&config, toolsets)
+
+	// Register prompts from all enabled modules
+	err = moduleRegistry.RegisterPrompts(harnessServer)
+	if err != nil {
+		return fmt.Errorf("failed to register module prompts: %w", err)
+	}
 
 	// Create stdio server
 	stdioServer := server.NewStdioServer(harnessServer)
