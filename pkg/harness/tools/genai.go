@@ -15,7 +15,7 @@ import (
 
 func AIDevOpsAgentTool(config *config.Config, client *client.GenaiService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("ask_ai_devops_agent",
-			mcp.WithDescription("Send a request to the Harness AI Devops agent to generate harness entities based on the provided action type and prompt."),
+			mcp.WithDescription("The AI Devops Agent is an expert in planning and executing requests related to generation/updation of Harness entities like pipeline, stage, step, environment, connector, service, secret"),
 			mcp.WithString("prompt",
 				mcp.Required(),
 				mcp.Description("The prompt to send to the genai service"),

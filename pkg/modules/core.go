@@ -2,6 +2,7 @@ package modules
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/harness/harness-mcp/client"
@@ -231,7 +232,13 @@ func RegisterLogs(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 		return nil
 	}
 	// Determine the base URL and secret for logs
-	logServiceBaseURL := utils.BuildServiceURL(config, config.LogSvcBaseURL, config.BaseURL, "log-service")
+	logServiceBaseURL := ""
+	// To handle unique ingress for log-service
+	if strings.Contains(config.BaseURL, "/gateway") {
+		logServiceBaseURL = utils.BuildServiceURL(config, config.LogSvcBaseURL, config.BaseURL, "log-service")
+	} else {
+		logServiceBaseURL = utils.BuildServiceURL(config, config.LogSvcBaseURL, config.BaseURL, "gateway/log-service")
+	}
 	logServiceSecret := config.LogSvcSecret
 
 	// Create base client for logs

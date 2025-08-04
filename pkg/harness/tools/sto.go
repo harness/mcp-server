@@ -159,7 +159,12 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 			}
 			resp, err := client.FrontendAllIssuesListWithResponse(ctx, params)
 			if err != nil {
+				slog.Error("Failed to get STO issues", "error", err)
 				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if resp.StatusCode() < 200 || resp.StatusCode() >= 300 {
+				slog.Error("Failed to get STO issues", "status code", resp.StatusCode())
+				return nil, fmt.Errorf("non-2xx status: %d", resp.StatusCode())
 			}
 			if resp.JSON200 == nil {
 				// Try to marshal error response if available
@@ -184,8 +189,6 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 					"OCCURRENCES":      issue.NumOccurrences,
 					"LAST_DETECTED":    formattedDate,
 					"EXEMPTION_STATUS": issue.ExemptionStatus,
-					"ISSUE_ID":         issue.Id,
-					"EXEMPTION_ID":     issue.ExemptionId,
 				}
 				rows = append(rows, row)
 			}
@@ -628,6 +631,7 @@ func ExemptionsApproveExemptionTool(config *config.Config, client *generated.Cli
 			mcp.WithString("accountId", mcp.Required(), mcp.Description("Harness Account ID")),
 			mcp.WithString("orgId", mcp.Description("Harness Organization ID")),
 			mcp.WithString("projectId", mcp.Description("Harness Project ID")),
+			mcp.WithString("userId", mcp.Description("User ID of the approver. Get the current userID from context")),
 			mcp.WithString("comment", mcp.Description("Optional comment for the approval or rejection")),
 			WithScope(config, true),
 		), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -640,7 +644,13 @@ func ExemptionsApproveExemptionTool(config *config.Config, client *generated.Cli
 			if v, _ := OptionalParam[string](request, "projectId"); v != "" {
 				params.ProjectId = &v
 			}
-			approverId := getCurrentUserUUID(ctx, config, principalClient)
+			approverId := ""
+			if v, _ := OptionalParam[string](request, "userId"); v != "" {
+				approverId = v
+			}
+			if approverId == "" {
+				approverId = getCurrentUserUUID(ctx, config, principalClient)
+			}
 			defaultComment := "This is done by Harness Agent"
 			body := generated.ApproveExemptionRequestBody{
 				ApproverId: approverId,
