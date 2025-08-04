@@ -20,5 +20,22 @@ func RegisterPrompts(mcpServer *server.MCPServer) {
 					- If no dates are supplied, default startDate to 60 days ago and endDate to now.`).
 			Build())
 
+		prompts.Append(
+		p.NewPrompt().SetName("ask_confirmation_for_update_and_delete_operations").
+			SetDescription("Ensure that Update or Delete operations are executed ONLY after user confirmation.").
+			SetResultDescription("Execute operation if user input 'yes', cancel otherwise.").
+			SetText(`			
+				**Confirmation Policy**:
+				When a function/tool description contains the tag <INSERT_TOOL>, <UPDATE_TOOL> or <DELETE_TOOL>, **BEFORE** calling it you **ALWAYS** must:
+
+				- Present a clear, minimal summary of the impending change (show key fields/values).
+				- Ask: 'Please confirm to proceed (yes/no).'
+				- **ONLY** invoke the tool if the user’s next message is exactly “yes” (case-insensitive).
+				- If the user’s answer is anything other than “yes”, do not call the tool; instead, offer to adjust or cancel.
+				- Never assume consent; always re-ask if the context is ambiguous or stale.
+			`).
+			Build())
+
+
 	p.AddPrompts(prompts, mcpServer)
 }

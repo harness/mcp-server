@@ -317,13 +317,17 @@ func UpdateCcmPerspectiveTool(config *config.Config, client *client.CloudCostMan
 func createOrUpdatePerspectiveTool(update bool) (tool mcp.Tool) {
 
 	name := "create_ccm_perspective"
-	description := "Creates a cost perspective in Harness Cloud Cost Management"
-
+	description := `
+			<INSERT_TOOL> Creates a Perspective in Harness Cloud Cost Management. This is a state-changing operation that creates a new object. 
+			Before calling, summarize the proposed values and ask the user to confirm. Proceed ONLY if the user explicitly replies "yes".
+		`
 	if update {
 		name = "update_ccm_perspective"		
-		description = "Updates a cost perspective in Harness Cloud Cost Management"
+		description = `
+			<UPDATE_TOOL> Updates an existing Perspective in Harness Cloud Cost Management. This is a state-changing operation that modifies fields such as name, groupBy, filters, and timeRange. 
+			Before calling, summarize the proposed changes and ask the user to confirm. Proceed ONLY if the user explicitly replies "yes".
+		`
 	}	
-
 	
 	options := []mcp.ToolOption{
 		mcp.WithDescription(description),
@@ -626,6 +630,10 @@ func createOrUpdatePerspectiveHandler(
 		return mcp.NewToolResultError("Error extracting rules from request. Check JSON format: " + err.Error()), nil
 	}
 
+	if viewRules == nil {
+		viewRules = []any{}
+	}
+
 	if len(viewRules) > 0 {
 		slog.Debug("viewRules", "viewRules", viewRules)
 		rules, err := ccmcommons. AdaptViewRulesMap(viewRules) 
@@ -633,6 +641,8 @@ func createOrUpdatePerspectiveHandler(
 			return mcp.NewToolResultError("Error processing view rules from request. Check JSON format: " + err.Error()), nil
 		}
 		params.Body.ViewRules = rules
+	} else {
+		params.Body.ViewRules = []dto.CCMViewRule{}
 	}
 
 	viewVisualization, err := OptionalParam[map[string]any](request, "view_visualization")
@@ -815,8 +825,12 @@ Defines how the Perspective data is visualized. This includes the granularity of
 
 
 func DeleteCcmPerspectiveTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	description := `
+			<DELETE_TOOL> Permanently deletes a Perspective in Harness Cloud Cost Management (destructive action). 
+		This cannot be undone. Before calling, show the Perspective identifier (and name if available), warn that deletion is irreversible, and proceed ONLY if the user replies "yes".
+	`
 	return mcp.NewTool("delete_ccm_perspective",
-			mcp.WithDescription("Delete a cost perspective in Harness Cloud Cost Management"),
+			mcp.WithDescription(description),
 			mcp.WithString("perspective_id",
 				mcp.Description("Identifier of the perspective to delete"),
 			),
