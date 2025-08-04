@@ -125,6 +125,11 @@ Toolset Name: `ccm`
 - `update_ccm_recommendation_state`: Marks a recommendation as Applied/Open/Ignored in Harness Cloud Cost Management.
 - `override_ccm_recommendation_savings`: Overrides savings for a recommendation in Harness Cloud Cost Management.
 - `create_jira_for_ccm_recommendation`: Creates a Jira issue for a recommendation in Harness Cloud Cost Management.
+- `get_ec2_recommendation_detail`: Returns ECS Recommendation details for the given Recommendation identifier.
+- `get_azure_vm_recommendation_detail`: Returns Azure Vm Recommendation details for the given Recommendation identifier.
+- `get_ecs_service_recommendation_detail`: Returns ECS Service Recommendation details for the given Recommendation identifier.
+- `get_node_pool_recommendation_detail`: Returns Node Pool Recommendation details for the given Recommendation identifier.
+- `get_workload_recommendation_detail`: Returns Workload Recommendation details for the given Recommendation identifier.
 - `get_ccm_commitment_coverage`: Get commitment coverage information for an account in Harness Cloud Cost Management.
 - `get_ccm_commitment_savings`: Get commitment savings information for an account in Harness Cloud Cost Management.
 

@@ -11,10 +11,20 @@ const (
 	ccmRecommendationsListPath = ccmBasePath + "/recommendation/overview/list?accountIdentifier=%s"
 	ccmRecommendationsByResourceTypeListPath = ccmBasePath + "/recommendation/overview/resource-type/stats?accountIdentifier=%s"
 	ccmRecommendationsStatsPath = ccmBasePath + "/recommendation/overview/stats?accountIdentifier=%s"
-	ccmUpdateRecommendationState = ccmBasePath + "/recommendation/overview/change-state?accountIdentifier=%s"
-	ccmOverrideRecommendationSavings = ccmBasePath + "/recommendation/overview/override-savings?accountIdentifier=%s"
-	ccmCreateRecommendationJiraIssue = ccmBasePath + "/recommendation/servicenow/create?accountIdentifier=%s"
+	ccmUpdateRecommendationStatePath = ccmBasePath + "/recommendation/overview/change-state?accountIdentifier=%s"
+	ccmOverrideRecommendationSavingsPath = ccmBasePath + "/recommendation/overview/override-savings?accountIdentifier=%s"
+	ccmCreateRecommendationJiraTicketPath = ccmBasePath + "/recommendation/jira/create?accountIdentifier=%s"
+	ccmCreateRecommendationServiceNowTicketPath = ccmBasePath + "/recommendation/servicenow/create?accountIdentifier=%s"
+	ccmGetRecommendationDetailPath = ccmBasePath + "/recommendation/details/%s?accountIdentifier=%s&id=%s"
 
+)
+
+const (
+	ec2Path = "ec2-instance"
+	azureVmPath = "azure-vm"
+	ecsServicePath = "ecs-service"
+	nodePoolPath = "node-pool"
+	workloadPath = "workload"
 )
 
 func (r *CloudCostManagementService) ListRecommendations(ctx context.Context, scope dto.Scope, accountId string, options map[string]any) (*map[string]any, error) {
@@ -40,7 +50,7 @@ func (r *CloudCostManagementService)UpdateRecommendationState(
 	state string,
 ) (*map[string]any, error) {
 
-	path := fmt.Sprintf(ccmUpdateRecommendationState, accountId)
+	path := fmt.Sprintf(ccmUpdateRecommendationStatePath, accountId)
 	params := make(map[string]string)
 	params["recommendationId"] = recommendationId 
 	params["state"] = state
@@ -63,7 +73,7 @@ func (r *CloudCostManagementService)OverrideRecommendationSavings(
 	savings float64,
 ) (*map[string]any, error) {
 
-	path := fmt.Sprintf(ccmOverrideRecommendationSavings, accountId)
+	path := fmt.Sprintf(ccmOverrideRecommendationSavingsPath, accountId)
 	params := make(map[string]string)
 	params["recommendationId"] = recommendationId 
 	params["overriddenSavings"] = strconv.FormatFloat(savings, 'f', -1, 64)
@@ -99,31 +109,103 @@ func (r *CloudCostManagementService) getRecommendations(
 	return items, nil
 }
 
-func (r *CloudCostManagementService) CreateJiraIssue(
+func (r *CloudCostManagementService) CreateJiraTicket(
 	ctx context.Context,
 	accountId string,
-	jiraDetails dto.CCMJiraDetails,
+	ticketDetails dto.CCMTicketDetails,
 ) (*map[string]any, error) {
 
-	path := fmt.Sprintf(ccmCreateRecommendationJiraIssue, accountId) // Define ccmCreateJiraIssue as needed
+	url := fmt.Sprintf(ccmCreateRecommendationJiraTicketPath, accountId) // Define ccmCreateJiraIssue as needed
+	return r.createTicket(ctx, accountId, ticketDetails, url)
+}
+
+func (r *CloudCostManagementService) CreateServiceNowTicket(
+	ctx context.Context,
+	accountId string,
+	ticketDetails dto.CCMTicketDetails,
+) (*map[string]any, error) {
+
+	url := fmt.Sprintf(ccmCreateRecommendationServiceNowTicketPath, accountId) // Define ccmCreateJiraIssue as needed
+	return r.createTicket(ctx, accountId, ticketDetails, url)
+}
+
+func (r *CloudCostManagementService) createTicket(
+	ctx context.Context,
+	accountId string,
+	ticketDetails dto.CCMTicketDetails,
+	url string,
+) (*map[string]any, error) {
+
 
 	body := map[string]any{
-		"recommendationId": jiraDetails.RecommendationId,
-		"resourceType":     jiraDetails.ResourceType,
-		"connectorRef":     jiraDetails.ConnectorRef,
-		"projectKey":       jiraDetails.ProjectKey,
-		"ticketType":        jiraDetails.TicketType,
-		"fields":           jiraDetails.Fields,
+		"recommendationId": ticketDetails.RecommendationId,
+		"resourceType":     ticketDetails.ResourceType,
+		"connectorRef":     ticketDetails.ConnectorRef,
+		"ticketType":       ticketDetails.TicketType,
+		"fields":           ticketDetails.Fields,
 	}
 
-	slog.Debug("Creating CCM Jira issue", "accountId", accountId, "jiraDetails", body)
+	if ticketDetails.Platform == dto.TicketPlatformJira {
+		body["projectKey"] = ticketDetails.ProjectKey
+	}
+
+	slog.Debug("Creating CCM Ticket", "accountId", accountId, "jiraDetails", body, "ticketType", ticketDetails.TicketType)
 
 	resp := new(map[string]any)
 
-	err := r.Client.Post(ctx, path, nil, body, &resp)
+	err := r.Client.Post(ctx, url, nil, body, &resp)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create CCM Jira issue: %w", err)
 	}
 
 	return resp, nil
 }
+
+func (r *CloudCostManagementService) GetEc2RecommendationDetail(ctx context.Context, options dto.CCMRecommendationDetailOptions) (*map[string]any, error) {
+	return r.getRecommendationDetail(ctx, options, ec2Path)
+}
+
+func (r *CloudCostManagementService) GetAzureVmRecommendationDetail(ctx context.Context, options dto.CCMRecommendationDetailOptions) (*map[string]any, error) {
+	return r.getRecommendationDetail(ctx, options, azureVmPath)
+}
+
+func (r *CloudCostManagementService) GetEcsServiceRecommendationDetail(ctx context.Context, options dto.CCMRecommendationDetailOptions) (*map[string]any, error) {
+	return r.getRecommendationDetail(ctx, options, ecsServicePath)
+}
+
+func (r *CloudCostManagementService) GetNodePoolRecommendationDetail(ctx context.Context, options dto.CCMRecommendationDetailOptions) (*map[string]any, error) {
+	return r.getRecommendationDetail(ctx, options, nodePoolPath)
+}
+
+func (r *CloudCostManagementService) GetWorkloadRecommendationDetail(ctx context.Context, options dto.CCMRecommendationDetailOptions) (*map[string]any, error) {
+	return r.getRecommendationDetail(ctx, options, workloadPath)
+}
+
+func (r *CloudCostManagementService) getRecommendationDetail(
+	ctx context.Context, 
+	options dto.CCMRecommendationDetailOptions,
+	typePath string,
+) (*map[string]any, error) {
+
+	path := fmt.Sprintf(ccmGetRecommendationDetailPath, typePath, options.AccountIdentifier, options.RecommendationId)
+	params := make(map[string]string)
+
+	if typePath == ecsServicePath || typePath == workloadPath {
+		params["from"] = options.From
+		params["to"] = options.To
+	}
+
+	if typePath == ecsServicePath { 
+		params["bufferPercentage"] = strconv.FormatInt(options.BufferPercentage, 10)
+	}
+
+	items := new(map[string]any)
+
+	err := r.Client.Get(ctx, path, params, nil, &items)
+	if err != nil { return nil, fmt.Errorf("Failed to list cloud cost management recommendations: %w", err)
+	}
+
+	return items, nil
+}
+
+

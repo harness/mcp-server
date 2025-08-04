@@ -15,11 +15,25 @@ const (
 	ResourceTypeAzureInstance = "AZURE_INSTANCE"
 )
 
-type CCMJiraDetails struct {
+const (
+	TicketPlatformJira     = "JIRA"
+	TicketPlatformServiceNow = "SERVICE_NOW"
+)
+
+type CCMTicketDetails struct {
 	RecommendationId string                 `json:"recommendationId"`
 	ResourceType     string                 `json:"resourceType"`
 	ConnectorRef     string                 `json:"connectorRef"`
 	ProjectKey       string                 `json:"projectKey,omitempty"`
 	TicketType        string                 `json:"ticketType"`
 	Fields           map[string]any `json:"fields"`
+	Platform		 string                // TicketPlatform 
+}
+
+type CCMRecommendationDetailOptions struct {
+	AccountIdentifier string `json:"accountIdentifier"`
+	RecommendationId                string `json:"id"`
+	From              string `json:"from,omitempty"`
+	To                string `json:"to,omitempty"`
+	BufferPercentage int64  `json:"bufferPercentage,omitempty"` // Only for ECS Service recommendations
 }

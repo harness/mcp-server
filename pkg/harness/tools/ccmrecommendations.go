@@ -9,6 +9,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/harness/harness-mcp/pkg/ccmcommons"
 	"github.com/harness/harness-mcp/client/dto"
+	"github.com/harness/harness-mcp/pkg/utils"
 )
 
 const (
@@ -16,6 +17,9 @@ const (
 )
 
 type ClientFunctionRecommendationsInterface func(ctx context.Context, scope dto.Scope, accountId string, params map[string]any) (*map[string]any, error)
+type GetRecommendationDetail func(ctx context.Context, options dto.CCMRecommendationDetailOptions) (*map[string]any, error)
+type CreateTicketForRecommendation func(ctx context.Context, accountId string, ticketDetails dto.CCMTicketDetails) (*map[string]any, error)
+
 
 func ListCcmRecommendationsTool(config *config.Config, client *client.CloudCostManagementService,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
@@ -276,11 +280,21 @@ func recommendationsHandler(
 	return mcp.NewToolResultText(string(r)), nil
 }
 
-func CreateCcmJiraIssueTool(config *config.Config, client *client.CloudCostManagementService,
+var createJiraToolName = "create_ccm_jira_ticket" 
+func CreateCcmJiraTicketTool(config *config.Config, client *client.CloudCostManagementService,
+) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return createTicketTool(createJiraToolName, "Creates a Jira ticket for a CCM recommendation", config, client.CreateJiraTicket)
+}
+
+func CreateCcmServiceNowTicketTool(config *config.Config, client *client.CloudCostManagementService,
+) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return createTicketTool("create_ccm_service_now_ticket", "Creates a Service Now ticket for a CCM recommendation", config, client.CreateServiceNowTicket)
+}
+
+func createTicketTool(name string, description string, config *config.Config, clientCall CreateTicketForRecommendation,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 
-	return mcp.NewTool("create_ccm_jira_issue",
-		mcp.WithDescription("Creates a Jira issue for a CCM recommendation"),
+	options := []mcp.ToolOption{
 		mcp.WithString("recommendation_id",
 			mcp.Required(),
 			mcp.Description("Recommendation ID"),
@@ -298,9 +312,18 @@ func CreateCcmJiraIssueTool(config *config.Config, client *client.CloudCostManag
 			mcp.Description("Resource type"),
 		),
 		mcp.WithString("connector_ref", mcp.Required(), mcp.Description("Jira connector reference")),
-		mcp.WithString("project_key", mcp.Required(), mcp.Description("Jira project key")),
 		mcp.WithString("ticket_type", mcp.Required(), mcp.Description("Jira issue type")),
 		mcp.WithObject("fields", mcp.Required(), mcp.Description("Additional Jira fields")),
+	}
+
+	if name == createJiraToolName {
+		options = append(options,
+			mcp.WithString("project_key", mcp.Required(), mcp.Description("Jira project key")),
+		)
+	}
+	
+	return mcp.NewTool(name,
+		mcp.WithDescription(description),
 	),
 	func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		accountId, err := getAccountID(config, request)
@@ -332,7 +355,23 @@ func CreateCcmJiraIssueTool(config *config.Config, client *client.CloudCostManag
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		jiraDetails := dto.CCMJiraDetails{
+		if recommendationId == "" {
+			return mcp.NewToolResultError("recommendation_id is required"), nil
+		}
+		if resourceType == "" {
+			return mcp.NewToolResultError("resource_type is required"), nil
+		}
+		if connectorRef == "" {
+			return mcp.NewToolResultError("connector_ref is required"), nil
+		}
+		if name == createJiraToolName && projectKey == "" {
+			return mcp.NewToolResultError("project_key is required"), nil
+		}
+		if ticketType == "" {
+			return mcp.NewToolResultError("ticket_type is required"), nil
+		}
+
+		ticketDetail := dto.CCMTicketDetails{
 			RecommendationId: recommendationId,
 			ResourceType:     resourceType,
 			ConnectorRef:     connectorRef,
@@ -341,7 +380,7 @@ func CreateCcmJiraIssueTool(config *config.Config, client *client.CloudCostManag
 			Fields:           fields,
 		}
 
-		data, err := client.CreateJiraIssue(ctx, accountId, jiraDetails)
+		data, err := clientCall(ctx, accountId, ticketDetail)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -355,6 +394,146 @@ func CreateCcmJiraIssueTool(config *config.Config, client *client.CloudCostManag
 	}
 }
 
+const (
+	ToolEC2 int = 1
+	ToolAzureVm int = 2
+	ToolECSService = 3
+	ToolNodePool = 4
+	ToolWorkload = 5
+)
+
+func GetEc2RecommendationDetailTool(config *config.Config, client *client.CloudCostManagementService,
+) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return createRecommendationDetailTool(
+		"get_ec2_recommendation_detail", 
+		"Returns ECS Recommendation details for the given Recommendation identifier.", 
+		config, client.GetEc2RecommendationDetail, ToolEC2,)
+}
+
+func GetAzureVmRecommendationDetailTool(config *config.Config, client *client.CloudCostManagementService,
+) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return createRecommendationDetailTool(
+		"get_azure_vm_recommendation_detail", 
+		"Returns Azure Vm Recommendation details for the given Recommendation identifier.", 
+		config, client.GetAzureVmRecommendationDetail, ToolAzureVm)
+}
+
+func GetEcsServiceRecommendationDetailTool(config *config.Config, client *client.CloudCostManagementService,
+) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return createRecommendationDetailTool(
+		"get_ecs_service_recommendation_detail", 
+		"Returns ECS Service Recommendation details for the given Recommendation identifier.", 
+		config, client.GetEcsServiceRecommendationDetail, ToolECSService)
+}
+
+func GetNodePoolRecommendationDetailTool(config *config.Config, client *client.CloudCostManagementService,
+) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return createRecommendationDetailTool(
+		"get_node_pool_recommendation_detail", 
+		"Returns Node Pool Recommendation details for the given Recommendation identifier.", 
+		config, client.GetNodePoolRecommendationDetail, ToolNodePool)
+}
+
+func GetWorkloadRecommendationDetailTool(config *config.Config, client *client.CloudCostManagementService,
+) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return createRecommendationDetailTool(
+		"get_workload_recommendation_detail", 
+		"Returns Workload Recommendation details for the given Recommendation identifier.", 
+		config, client.GetWorkloadRecommendationDetail, ToolWorkload)
+}
+
+func createRecommendationDetailTool(
+	name string, 
+	description string, 
+	config *config.Config, 
+	clientCall GetRecommendationDetail,
+	toolId int,
+) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+
+	options := []mcp.ToolOption{
+		mcp.WithDescription(description), 
+		mcp.WithString("recommendation_id",
+			mcp.Required(),
+			mcp.Description("ECS Recommendation identifier."),
+		),
+	}
+
+	if toolId == ToolECSService || toolId == ToolWorkload {
+		options = append(options, 
+			mcp.WithString("from",
+				mcp.Description("Should use org.joda.time.DateTime parsable format. Example, '2022-01-31', '2022-01-31T07:54Z' or '2022-01-31T07:54:51.264Z' Defaults to Today-7days"),
+			))
+
+		options = append(options, 
+			mcp.WithString("to",
+				mcp.Description("Should use org.joda.time.DateTime parsable format. Example, '2022-01-31', '2022-01-31T07:54Z' or '2022-01-31T07:54:51.264Z' Defaults to Today"),
+			))
+	}
+
+	if toolId == ToolECSService || toolId == ToolWorkload {
+		options = append(options, 
+			mcp.WithNumber("bufferPercentage",
+				mcp.Description("Buffer Percentage defaults to zero"),
+			))
+	}
+
+	return mcp.NewTool(name, options...),
+	func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		accountId, err := getAccountID(config, request)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		recommendationId, err := OptionalParam[string](request, "recommendation_id")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		from, err := OptionalParam[string](request, "from")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		to, err := OptionalParam[string](request, "to")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		bufferPercentage, err := OptionalParam[int64](request, "buffer_percentage")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		fromDate := ""
+		toDate := ""
+		if toolId == ToolECSService || toolId == ToolWorkload {
+			fromDate, err = utils.FormatMMDDYYYYToHyphenYYYYMMDD(from)
+			if err != nil {
+				return mcp.NewToolResultError("Error when parsing from date:" + err.Error()), nil
+			}
+			toDate, err = utils.FormatMMDDYYYYToHyphenYYYYMMDD(to)
+			if err != nil {
+				return mcp.NewToolResultError("Error when parsing to date:" + err.Error()), nil
+			}
+		}
+
+		detailOption := dto.CCMRecommendationDetailOptions{
+			AccountIdentifier: accountId,
+			RecommendationId:  recommendationId,
+			From:              fromDate,
+			To:                toDate,
+			BufferPercentage:  bufferPercentage,
+		}
+
+		data, err := clientCall(ctx, detailOption)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		r, err := json.Marshal(data)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		return mcp.NewToolResultText(string(r)), nil
+	}
+}
 
 func recommendationsListDefinition() json.RawMessage {
 	return toRawMessage(commonRecommendationsSchema(), []string{})
