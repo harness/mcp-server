@@ -202,8 +202,6 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 				{Key: "OCCURRENCES", Label: "Occurrences"},
 				{Key: "LAST_DETECTED", Label: "Last Detected"},
 				{Key: "EXEMPTION_STATUS", Label: "Exemption Status"},
-				{Key: "ISSUE_ID", Label: "Issue ID"},
-				{Key: "EXEMPTION_ID", Label: "Exemption ID"},
 			}
 
 			tableData := types.TableData{
@@ -217,9 +215,15 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 				return mcp.NewToolResultErrorf("Failed to marshal table data: %v", err), nil
 			}
 
+			raw, err := json.Marshal(resp.JSON200)
+			if err != nil {
+				return mcp.NewToolResultError("Failed to marshal table data: " + err.Error()), nil
+			}
+
 			// Start with text content which is always returned
 			responseContents := []mcp.Content{
 				mcp.NewTextContent(string(tableJSON)),
+				mcp.NewTextContent(string(raw)),
 			}
 
 			if config.Internal {
@@ -441,11 +445,6 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 					{Key: "REQUESTED_BY", Label: "Requested By"},
 					{Key: "APPROVED_BY", Label: "Approved By"},
 					{Key: "STATUS", Label: "Status"},
-					{Key: "ExemptionId", Label: "Exemption ID"},
-					{Key: "OrgId", Label: "Org ID"},
-					{Key: "ProjectId", Label: "Project ID"},
-					{Key: "PipelineId", Label: "Pipeline ID"},
-					{Key: "TargetId", Label: "Target ID"},
 				}
 			} else {
 				columns = []types.TableColumn{
@@ -456,11 +455,6 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 					{Key: "EXEMPTION_DURATION", Label: "Exemption Duration"},
 					{Key: "REQUESTED_BY", Label: "Requested By"},
 					{Key: "STATUS", Label: "Status"},
-					{Key: "ExemptionId", Label: "Exemption ID"},
-					{Key: "OrgId", Label: "Org ID"},
-					{Key: "ProjectId", Label: "Project ID"},
-					{Key: "PipelineId", Label: "Pipeline ID"},
-					{Key: "TargetId", Label: "Target ID"},
 				}
 			}
 
@@ -476,8 +470,14 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 				return mcp.NewToolResultErrorf("Failed to marshal table data: %v", err), nil
 			}
 
+			raw, err := json.Marshal(resp.JSON200)
+			if err != nil {
+				return mcp.NewToolResultError("Failed to marshal table data: " + err.Error()), nil
+			}
+
 			responseContents := []mcp.Content{
 				mcp.NewTextContent(string(tableJSON)),
+				mcp.NewTextContent(string(raw)),
 			}
 
 			if config.Internal {

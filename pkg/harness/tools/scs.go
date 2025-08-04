@@ -298,7 +298,6 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 				{Key: "digest", Label: "Digest"},
 				{Key: "signing", Label: "Signing"},
 				{Key: "updated", Label: "Updated"},
-				{Key: "orchestration", Label: "Orchestration"},
 			}
 
 			// Always create the basic table data
@@ -313,8 +312,15 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 				return mcp.NewToolResultErrorf("Failed to marshal table data: %v. Found %d artifacts.", err, len(rows)), nil
 			}
 
+
+			rawEnrichedArtifacts, err := json.Marshal(enrichedArtifacts)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal response: %w", err)
+			}
+
 			responseContents := []mcp.Content{
 				mcp.NewTextContent(string(tableJSON)),
+				mcp.NewTextContent(string(rawEnrichedArtifacts)),
 			}
 
 			if config.Internal {
@@ -1066,23 +1072,7 @@ func ListSCSCodeReposTool(config *config.Config, client *generated.ClientWithRes
 						row["repo_path"] = *repo.Url
 					}
 					if repo.LastScan != nil {
-						scan := map[string]interface{}{}
-						if repo.LastScan.Id != nil {
-							scan["pipeline"] = *repo.LastScan.Id
-						}
-						if repo.LastScan.ExecutionId != nil {
-							scan["execution"] = *repo.LastScan.ExecutionId
-						}
-						if repo.LastScan.Status != nil {
-							scan["status"] = *repo.LastScan.Status
-						}
-						if repo.LastScan.TriggeredAt != nil {
-							tsMillis := *repo.LastScan.TriggeredAt
-							tsSecs := tsMillis / 1000
-							t := time.Unix(tsSecs, 0)
-							scan["last_scan"] = t.Format("02/01/2006 15:04")
-						}
-						row["last_scan"] = scan
+						row["last_scan"] = mapLastScan(repo.LastScan)
 					}
 					rows = append(rows, row)
 				}
