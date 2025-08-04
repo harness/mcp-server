@@ -11,8 +11,7 @@ import (
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/client/sto/generated"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
-	builder "github.com/harness/harness-mcp/pkg/harness/event/common"
-	"github.com/harness/harness-mcp/pkg/harness/event/response"
+	"github.com/harness/harness-mcp/pkg/harness/event/types"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -194,28 +193,70 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 				rows = append(rows, row)
 			}
 
+			// Create table columns for our UI component
+			columns := []types.TableColumn{
+				{Key: "TITLE", Label: "Title"},
+				{Key: "SEVERITY", Label: "Severity"},
+				{Key: "ISSUE_TYPE", Label: "Issue Type"},
+				{Key: "TARGETS_IMPACTED", Label: "Targets Impacted"},
+				{Key: "OCCURRENCES", Label: "Occurrences"},
+				{Key: "LAST_DETECTED", Label: "Last Detected"},
+				{Key: "EXEMPTION_STATUS", Label: "Exemption Status"},
+			}
+
+			tableData := types.TableData{
+				Columns: columns,
+				Rows:    rows,
+			}
+
+			// Serialize the table component for text representation
+			tableJSON, err := json.Marshal(tableData)
+			if err != nil {
+				return mcp.NewToolResultErrorf("Failed to marshal table data: %v", err), nil
+			}
+
 			raw, err := json.Marshal(resp.JSON200)
 			if err != nil {
 				return mcp.NewToolResultError("Failed to marshal table data: " + err.Error()), nil
 			}
 
-			tableData, err := json.Marshal(rows)
-			if err != nil {
-				return mcp.NewToolResultError("Failed to marshal table data: " + err.Error()), nil
+			// Start with text content which is always returned
+			responseContents := []mcp.Content{
+				mcp.NewTextContent(string(tableJSON)),
+				mcp.NewTextContent(string(raw)),
 			}
-			var prompts []string
-			prompts = append(prompts,
-				"Show me only issues with secrets identified",
-				"Show me issues without Exemption",
-			)
-			// Use the new ToolResultBuilder to build the result with multiple events
-			columns := []string{"TITLE", "SEVERITY", "ISSUE_TYPE", "TARGETS_IMPACTED", "OCCURRENCES", "LAST_DETECTED", "EXEMPTION_STATUS"}
-			resultBuilder := response.NewToolResultBuilder("Issues Report").
-				AddStringEvent(string(builder.RawEvent), string(raw)).
-				AddStringEvent(string(builder.GenericTableEvent), string(tableData), columns).
-				AddPrompts(prompts)
 
-			return resultBuilder.Build(), nil
+			if config.Internal {
+				// Create the table component
+				tableEvent := types.NewTableEvent(tableData)
+
+				tableResource, err := tableEvent.CreateEmbeddedResource()
+				if err != nil {
+					slog.Error("Failed to create table resource", "error", err)
+				} else {
+					responseContents = append(responseContents, tableResource)
+				}
+
+				prompts := []string{
+					"Show me only issues with secrets identified",
+					"Show me issues without Exemption",
+				}
+
+				// Create prompt event and resource
+				if len(prompts) > 0 {
+					promptEvent := types.NewActionEvent(prompts)
+					promptResource, err := promptEvent.CreateEmbeddedResource()
+					if err != nil {
+						slog.Error("Failed to create prompt resource", "error", err)
+					} else {
+						responseContents = append(responseContents, promptResource)
+					}
+				}
+			}
+
+			return &mcp.CallToolResult{
+				Content: responseContents,
+			}, nil
 		}
 }
 
@@ -383,36 +424,87 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 			)
 			for i := 0; i < len(rows) && i < maxSuggestions; i++ {
 				issue, issueOk := rows[i]["ISSUE"].(string)
+				status, statusOk := rows[i]["STATUS"]
 				if issueOk {
-					if rows[i]["STATUS"] == "Pending" {
+					if statusOk && status == "Pending" {
 						suggestions = append(suggestions, "Approve exemption "+issue)
 					}
 					suggestions = append(suggestions, "Reject exemption "+issue)
 				}
 			}
 
-			tableData, err := json.Marshal(rows)
-			if err != nil {
-				return mcp.NewToolResultError("Failed to marshal table data: " + err.Error()), nil
-			}
-			columns := []string{}
+			// Create table columns for our UI component
+			columns := []types.TableColumn{}
 			if showingApprovedExemptions {
-				columns = []string{"ISSUE", "SEVERITY", "SCOPE", "REASON", "EXEMPTION_DURATION", "REQUESTED_BY", "APPROVED_BY", "STATUS"}
+				columns = []types.TableColumn{
+					{Key: "ISSUE", Label: "Issue"},
+					{Key: "SEVERITY", Label: "Severity"},
+					{Key: "SCOPE", Label: "Scope"},
+					{Key: "REASON", Label: "Reason"},
+					{Key: "EXEMPTION_DURATION", Label: "Exemption Duration"},
+					{Key: "REQUESTED_BY", Label: "Requested By"},
+					{Key: "APPROVED_BY", Label: "Approved By"},
+					{Key: "STATUS", Label: "Status"},
+				}
 			} else {
-				columns = []string{"ISSUE", "SEVERITY", "SCOPE", "REASON", "EXEMPTION_DURATION", "REQUESTED_BY", "STATUS"}
+				columns = []types.TableColumn{
+					{Key: "ISSUE", Label: "Issue"},
+					{Key: "SEVERITY", Label: "Severity"},
+					{Key: "SCOPE", Label: "Scope"},
+					{Key: "REASON", Label: "Reason"},
+					{Key: "EXEMPTION_DURATION", Label: "Exemption Duration"},
+					{Key: "REQUESTED_BY", Label: "Requested By"},
+					{Key: "STATUS", Label: "Status"},
+				}
+			}
+
+			// Always create the basic table data
+			tableData := types.TableData{
+				Columns: columns,
+				Rows:    rows,
+			}
+
+			// Always include basic JSON data for external clients
+			tableJSON, err := json.Marshal(tableData)
+			if err != nil {
+				return mcp.NewToolResultErrorf("Failed to marshal table data: %v", err), nil
 			}
 
 			raw, err := json.Marshal(resp.JSON200)
 			if err != nil {
 				return mcp.NewToolResultError("Failed to marshal table data: " + err.Error()), nil
 			}
-			// Use the new ToolResultBuilder to build the result with multiple events
-			resultBuilder := response.NewToolResultBuilder("Exemption Report").
-				AddStringEvent(string(builder.RawEvent), string(raw)).
-				AddStringEvent(string(builder.GenericTableEvent), string(tableData), columns).
-				AddPrompts(suggestions)
 
-			return resultBuilder.Build(), nil
+			responseContents := []mcp.Content{
+				mcp.NewTextContent(string(tableJSON)),
+				mcp.NewTextContent(string(raw)),
+			}
+
+			if config.Internal {
+				// Only create enhanced UI components for internal mode
+				tableEvent := types.NewTableEvent(tableData)
+				tableResource, err := tableEvent.CreateEmbeddedResource()
+				if err != nil {
+					slog.Error("Failed to create table resource", "error", err)
+				} else {
+					responseContents = append(responseContents, tableResource)
+				}
+				
+				// Create prompt event and resource if we have suggestions
+				if len(suggestions) > 0 {
+					promptEvent := types.NewActionEvent(suggestions)
+					promptResource, err := promptEvent.CreateEmbeddedResource()
+					if err != nil {
+						slog.Error("Failed to create prompt resource", "error", err)
+					} else {
+						responseContents = append(responseContents, promptResource)
+					}
+				}
+			}
+
+			return &mcp.CallToolResult{
+				Content: responseContents,
+			}, nil
 		}
 }
 

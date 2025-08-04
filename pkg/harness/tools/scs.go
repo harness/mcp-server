@@ -11,12 +11,22 @@ import (
 
 	generated "github.com/harness/harness-mcp/client/scs/generated"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
-	builder "github.com/harness/harness-mcp/pkg/harness/event/common"
-	"github.com/harness/harness-mcp/pkg/harness/event/response"
+	"github.com/harness/harness-mcp/pkg/harness/event"
+	"github.com/harness/harness-mcp/pkg/harness/event/types"
 	"github.com/harness/harness-mcp/pkg/resources"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
+
+type OPAContent struct {
+    Policy struct {
+        Name    string `json:"name"`
+        Content string `json:"content"`
+    } `json:"policy"`
+    Metadata struct {
+        DeniedLicenses []string `json:"denied_licenses"`
+    } `json:"metadata"`
+}
 
 // mapLastScan extracts last scan data from PipelineDetails into a map
 func mapLastScan(lastScan *generated.PipelineDetails) map[string]interface{} {
@@ -46,6 +56,7 @@ func formatScorecard(scorecardValue string) interface{} {
 		return fmt.Sprintf("%.2f", score)
 	}
 	// Fallback to the original string if parsing fails
+
 	return scorecardValue
 }
 
@@ -346,31 +357,71 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 				}
 				rows = append(rows, row)
 			}
+			// Create table columns for our UI component
+			columns := []types.TableColumn{
+				{Key: "name", Label: "Artifact Name"},
+				{Key: "tags", Label: "Tags"},
+				{Key: "components", Label: "Components"},
+				{Key: "vulnerabilities", Label: "Vulnerabilities"},
+				{Key: "scorecard", Label: "Scorecard"},
+				{Key: "deployment", Label: "Deployment"},
+				{Key: "sbom violations", Label: "SBOM Violations"},
+				{Key: "digest", Label: "Digest"},
+				{Key: "signing", Label: "Signing"},
+				{Key: "updated", Label: "Updated"},
+			}
 
-			raw, err := json.Marshal(enrichedArtifacts)
+			// Always create the basic table data
+			tableData := types.TableData{
+				Columns: columns,
+				Rows:    rows,
+			}
+
+			// Always include basic JSON data for external clients
+			tableJSON, err := json.Marshal(tableData)
+			if err != nil {
+				return mcp.NewToolResultErrorf("Failed to marshal table data: %v. Found %d artifacts.", err, len(rows)), nil
+			}
+
+
+			rawEnrichedArtifacts, err := json.Marshal(enrichedArtifacts)
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal response: %w", err)
 			}
-			// Transform enrichedArtifacts into a table-like structure
-			pretty, err := json.MarshalIndent(rows, "", "  ")
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal response: %w", err)
+
+			responseContents := []mcp.Content{
+				mcp.NewTextContent(string(tableJSON)),
+				mcp.NewTextContent(string(rawEnrichedArtifacts)),
 			}
 
-			// Compute suggestions
-			var suggestions []string
-			if enrichedArtifacts != nil {
-				suggestions = artifactRuleBasedFollowUps(body.LicenseFilterList)
+			if config.Internal {
+				// Only create enhanced UI components for internal mode
+				tableEvent := types.NewTableEvent(tableData)
+				tableResource, err := tableEvent.CreateEmbeddedResource()
+				if err != nil {
+					slog.Error("Failed to create table resource", "error", err)
+				} else {
+					responseContents = append(responseContents, tableResource)
+				}
+				
+				// Add follow-up prompts if available
+				if enrichedArtifacts != nil {
+					suggestions := artifactRuleBasedFollowUps(body.LicenseFilterList)
+					if len(suggestions) > 0 {
+						promptEvent := types.NewActionEvent(suggestions)
+						promptResource, err := promptEvent.CreateEmbeddedResource()
+						if err != nil {
+							slog.Error("Failed to create prompt resource", "error", err)
+						} else {
+							responseContents = append(responseContents, promptResource)
+						}
+					}
+				}
 			}
 
-			// Use the new ToolResultBuilder to build the result with multiple events
-			columns := []string{"name", "tags", "components", "vulnerabilities", "scorecard", "deployment", "sbom violations", "digest", "signing", "updated"}
-			resultBuilder := response.NewToolResultBuilder("Artifact Report").
-				AddStringEvent(string(builder.RawEvent), string(raw)).
-				AddStringEvent(string(builder.GenericTableEvent), string(pretty), columns).
-				AddPrompts(suggestions)
-
-			return resultBuilder.Build(), nil
+			return &mcp.CallToolResult{
+				Content: responseContents,
+			}, nil
 		}
 }
 
@@ -877,24 +928,53 @@ func CreateOPAPolicyTool(config *config.Config, client *generated.ClientWithResp
 			// Replace placeholder with deny list block
 			finalPolicy := strings.Replace(template, "{{DENY_LIST}}", denyListBlock, 1)
 
-			resp := map[string]interface{}{
-				"policy":          finalPolicy,
-				"denied_licenses": licenses,
-			}
+			opaContent := OPAContent{}
+			opaContent.Policy.Name = "deny-list"
+			opaContent.Policy.Content = finalPolicy
+			opaContent.Metadata.DeniedLicenses = licenses
 
-			out, err := json.Marshal(resp)
+			// Serialize the OPA component for text fallback
+			opaJSON, err := json.Marshal(opaContent)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal response: %w", err)
+				return nil, fmt.Errorf("failed to marshal OPA content: %w", err)
 			}
 
-			// Compute suggestions for OPA policies
-			suggestions := []string{
-				"Show me more examples of OPA policies",
-				"How can I test this policy?",
+			responseContents := []mcp.Content{
+				mcp.NewTextContent(string(opaJSON)),
 			}
 
-			// Use the OPA builder to format the response
-			return response.NewToolResultBuilder("OPA Policy").AddStringEvent(string(builder.OPAEvent), string(out), suggestions).AddPrompts(suggestions).Build(), nil
+			if config.Internal {
+				// Create OPA event
+				opaEvent := event.NewCustomEvent("opa", opaContent)
+
+				// Create embedded resources for the OPA event
+				opaResource, err := opaEvent.CreateEmbeddedResource()
+				if err != nil {
+					slog.Error("Failed to create OPA resource", "error", err)
+				} else {
+					responseContents = append(responseContents, opaResource)
+				}
+
+				prompts := []string{
+					"Show me more examples of OPA policies",
+					"How can I test this policy?",
+				}
+
+				// Create prompt event and resource
+				if len(prompts) > 0 {
+					promptEvent := types.NewActionEvent(prompts)
+					promptResource, err := promptEvent.CreateEmbeddedResource()
+					if err != nil {
+						slog.Error("Failed to create prompt resource", "error", err)
+					} else {
+						responseContents = append(responseContents, promptResource)
+					}
+				}
+			}
+
+			return &mcp.CallToolResult{
+				Content: responseContents,
+			}, nil
 		}
 }
 
@@ -1068,30 +1148,66 @@ func ListSCSCodeReposTool(config *config.Config, client *generated.ClientWithRes
 					rows = append(rows, row)
 				}
 			}
-			out, err := json.Marshal(rows)
+			// Create table columns for our UI component
+			columns := []types.TableColumn{
+				{Key: "name", Label: "Repository Name"},
+				{Key: "platform", Label: "Platform"},
+				{Key: "dependencies", Label: "Dependencies"},
+				{Key: "compliance", Label: "Compliance Issues"},
+				{Key: "vulnerabilities", Label: "Vulnerabilities"},
+				{Key: "sbom_score", Label: "SBOM Score"},
+				{Key: "repo_path", Label: "Repository URL"},
+				{Key: "last_scan", Label: "Last Scan"},
+			}
+
+			tableData := types.TableData{
+				Columns: columns,
+				Rows:    rows,
+			}
+
+			// Always include basic JSON data for external clients
+			tableJSON, err := json.Marshal(tableData)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal response: %w", err)
+				return mcp.NewToolResultErrorf("Failed to marshal table data: %v. Found %d repositories.", err, len(rows)), nil
 			}
 
-			// Compute suggestions for repo
-			suggestions := []string{
-				"Show all repositories that violate the compliance rule: Auto-merge must be disabled.",
-				"Show me compliance risk of 1st repository",
+			responseContents := []mcp.Content{
+				mcp.NewTextContent(string(tableJSON)),
 			}
 
-			raw, err := json.Marshal(resp.JSON200)
-			if err != nil {
-				return mcp.NewToolResultError("Failed to marshal table data: " + err.Error()), nil
+			if config.Internal {
+
+				// Create the table component
+				tableEvent := types.NewTableEvent(tableData)
+
+				tableResource, err := tableEvent.CreateEmbeddedResource()
+				if err != nil {
+					slog.Error("Failed to create table resource", "error", err)
+				} else {
+					responseContents = append(responseContents, tableResource)
+				}
+				
+				// Add follow-up prompts
+				prompts := []string{
+					"Show all repositories that violate the compliance rule: Auto-merge must be disabled.",
+					"Show me compliance risk of 1st repository",
+				}
+
+				// Create prompt event and resource
+				if len(prompts) > 0 {
+					promptEvent := types.NewActionEvent(prompts)
+					promptResource, err := promptEvent.CreateEmbeddedResource()
+					if err != nil {
+						slog.Error("Failed to create prompt resource", "error", err)
+					} else {
+						responseContents = append(responseContents, promptResource)
+					}
+				}
 			}
 
-			// Use the new ToolResultBuilder to build the result with multiple events
-			resultBuilder := response.NewToolResultBuilder("Repositories Report").
-				AddStringEvent(string(builder.RawEvent), string(raw)).
-				AddStringEvent(string(builder.GenericTableEvent), string(out),
-					[]string{"name", "compliance", "vulnerabilities", "sbom_score", "repo_path", "last_scan", "dependencies", "last_scan"}).
-				AddPrompts(suggestions)
-
-			return resultBuilder.Build(), nil
+			return &mcp.CallToolResult{
+				Content: responseContents,
+			}, nil
 		}
 
 }
