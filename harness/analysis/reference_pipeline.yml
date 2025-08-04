@@ -1,0 +1,2315 @@
+pipeline:
+  name: autofixPipeline
+  identifier: autofixPipeline
+  projectIdentifier: Harness_Commons
+  orgIdentifier: PROD
+  description: Pipeline for autofixing issues using coding agent
+  tags:
+    Owner: ML
+    TicketID: BT-12770
+  stages:
+    - stage:
+        name: AutofixExecution
+        identifier: AutofixExecution
+        description: Pipeline for autofixing issues using coding agent
+        type: CI
+        spec:
+          cloneCodebase: true
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: printenv
+                  identifier: printenv
+                  spec:
+                    shell: Sh
+                    command: printenv
+              - step:
+                  type: Run
+                  name: GetCurrentBranch
+                  identifier: GetCurrentBranch
+                  spec:
+                    shell: Bash
+                    command: |-
+                      # Get current branch name
+                      CURRENT_BRANCH=<+trigger.sourceBranch>
+                      TARGET_BRANCH=<+trigger.targetBranch>
+                      echo "Current branch: $CURRENT_BRANCH"
+                      echo "Target branch: $TARGET_BRANCH"
+                      CACHE_BRANCH=<+trigger.targetBranch>
+
+                      # Export CURRENT_BRANCH
+                      export CURRENT_BRANCH
+
+                      # Check if CURRENT_BRANCH ends with 'ai-autofix'
+                      if [[ "$CURRENT_BRANCH" == *ai-autofix ]]; then
+                        IS_FIRST_RUN=false
+                      else
+                        IS_FIRST_RUN=true
+                        CACHE_BRANCH=<+trigger.sourceBranch>
+                      fi
+
+                      # Export IS_FIRST_RUN
+                      export IS_FIRST_RUN
+                      export TARGET_BRANCH
+                      echo "Is first run: $IS_FIRST_RUN"
+                    outputVariables:
+                      - name: CURRENT_BRANCH
+                      - name: IS_FIRST_RUN
+                      - name: CACHE_BRANCH
+                      - name: TARGET_BRANCH
+              - step:
+                  type: RestoreCacheGCS
+                  name: RestoreExecutionCountCache
+                  identifier: RestoreExecutionCountCache
+                  spec:
+                    connectorRef: org.platformRW
+                    bucket: aida-remediation-agent-artifacts
+                    key: cache-v0-<+pipeline.properties.ci.codebase.repoName>-<+execution.steps.GetCurrentBranch.output.outputVariables.CACHE_BRANCH>
+                    archiveFormat: Tar
+                    failIfKeyNotFound: false
+              - step:
+                  type: Run
+                  name: fetch_failed_steps
+                  identifier: fetch_failed_steps
+                  spec:
+                    shell: Python
+                    command: |-
+                      import requests
+                      import json
+                      import re
+                      from typing import Dict, List, Optional, Tuple
+                      from urllib.parse import urljoin, urlparse
+
+                      class HarnessAPI:
+                          def __init__(self, api_key: str, account_id: str, base_url: str):
+                              self.api_key = api_key
+                              self.account_id = account_id
+                              self.base_url = base_url
+                              self.headers = {
+                                  "x-api-key": api_key,
+                                  "Content-Type": "application/json"
+                              }
+
+                          def get_pipeline_execution_details(self, org_id: str, project_id: str, execution_id: str, stage_id: Optional[str] = None) -> Dict:
+                              """
+                              Fetch pipeline execution details using REST API
+                              """
+                              endpoint = f"pipeline/api/pipelines/execution/{execution_id}"
+                              url = urljoin(self.base_url, endpoint)
+                              
+                              params = {
+                                  "accountIdentifier": self.account_id,
+                                  "orgIdentifier": org_id,
+                                  "projectIdentifier": project_id
+                              }
+                              
+                              # Add stage node ID if provided
+                              if stage_id:
+                                  params["stageNodeId"] = stage_id
+                              
+                              print(f"[DEBUG] Requesting pipeline execution details from: {url}")
+                              print(f"[DEBUG] Request params: {json.dumps(params, indent=2)}")
+                              
+                              response = requests.get(url, headers=self.headers, params=params)
+                              
+                              if response.status_code != 200:
+                                  raise Exception(f"API request failed with status code: {response.status_code}, Response: {response.text}")
+                              
+                              response_data = response.json()
+                              print(f"[DEBUG] Pipeline execution details response status: {response.status_code}")
+                              print(f"[DEBUG] Response data structure: {json.dumps({k: type(v).__name__ for k, v in response_data.items()}, indent=2)}")
+                              # print(f"[DEBUG] Full response data: {json.dumps(response_data, indent=2)}")
+                              
+                              return response_data
+
+                          def get_execution_graph(self, org_id: str, project_id: str, execution_id: str) -> Dict:
+                              """
+                              Fetch the execution graph which contains detailed step information
+                              """
+                              endpoint = f"pipeline/api/pipelines/execution/{execution_id}/graph"
+                              url = urljoin(self.base_url, endpoint)
+                              
+                              params = {
+                                  "accountIdentifier": self.account_id,
+                                  "orgIdentifier": org_id,
+                                  "projectIdentifier": project_id
+                              }
+                              
+                              print(f"[DEBUG] Requesting execution graph from: {url}")
+                              print(f"[DEBUG] Request params: {json.dumps(params, indent=2)}")
+                              
+                              response = requests.get(url, headers=self.headers, params=params)
+                              
+                              if response.status_code != 200:
+                                  raise Exception(f"Failed to fetch execution graph: {response.status_code}, Response: {response.text}")
+                              
+                              response_data = response.json()
+                              print(f"[DEBUG] Execution graph response status: {response.status_code}")
+                              print(f"[DEBUG] Graph data structure: {json.dumps({k: type(v).__name__ for k, v in response_data.items()}, indent=2)}")
+                              print(f"[DEBUG] Full graph response data: {json.dumps(response_data, indent=2)}")
+                              
+                              return response_data
+
+                          def get_log_download_link(self, log_key: str) -> Optional[str]:
+                              """
+                              Get the download link for a given log key.
+                              """
+
+                              endpoint = "log-service/blob/download"
+                              url = urljoin(self.base_url, endpoint)
+
+                              params = {
+                                  "accountID": self.account_id,
+                                  "prefix": log_key
+                              }
+
+                              print(f"[DEBUG] Requesting log download link from: {url}")
+                              print(f"[DEBUG] Request params: {json.dumps(params, indent=2)}")
+                              
+                              response = requests.post(url, headers=self.headers, params=params)
+
+                              if response.status_code != 200:
+                                  print(f"Warning: Failed to get download link for log key {log_key}. Status: {response.status_code}, Response: {response.text}")
+                                  return None
+                              
+                              data = response.json()
+                              print(f"[DEBUG] Log download link response status: {response.status_code}")
+                              print(f"[DEBUG] Full response data: {json.dumps(data, indent=2)}")
+                              
+                              return data.get('link')
+
+                          def get_failed_steps(self, org_id: str, project_id: str, execution_id: str) -> List[Dict]:
+                              """
+                              Get a list of all failed steps with their log keys
+                              """
+                              # Get the main execution details
+                              execution_data = self.get_pipeline_execution_details(org_id, project_id, execution_id)
+                              failed_steps = []
+
+                              try:
+                                  summary = execution_data.get('data', {}).get('pipelineExecutionSummary', {})
+                                  failure_info = summary.get('failureInfo', {})
+                                  response_messages = failure_info.get('responseMessages', [])
+                                  layout_node_map = summary.get('layoutNodeMap', {})
+
+                                  # Extract the identifiers of all failed stages and steps
+                                  failed_stage_step_map = {}
+                                  
+                                  # First try to get failed stages and steps from response_messages
+                                  for msg in response_messages:
+                                      info = msg.get('additionalInfo', {})
+                                      stage_id = info.get('stageIdentifier')
+                                      step_id = info.get('stepIdentifier')
+                                      if stage_id and step_id:
+                                          if stage_id not in failed_stage_step_map:
+                                              failed_stage_step_map[stage_id] = set()
+                                          failed_stage_step_map[stage_id].add(step_id)
+                                  
+                                  # If no failed stages/steps found in response_messages, try to find them in layout_node_map
+                                  if not failed_stage_step_map:
+                                      print("[DEBUG] Searching inside layout_node_map")
+                                      for node_id, node_info in layout_node_map.items():
+                                          if node_info.get('status') == 'Failed':
+                                              stage_id = node_info.get('nodeIdentifier')
+                                              stage_uuid = node_info.get('nodeUuid')
+                                              # For stages that have failed, we need to get their steps
+                                              if stage_id and stage_uuid:
+                                                  # Initialize an empty set for this stage's failed steps
+                                                  if stage_id not in failed_stage_step_map:
+                                                      failed_stage_step_map[stage_id] = set()
+                                                  
+                                                  # Fetch the detailed execution graph for this failed stage to find failed steps
+                                                  stage_execution_data = self.get_pipeline_execution_details(org_id, project_id, execution_id, stage_id=stage_uuid)
+                                                  print(f"[DEBUG] Stage execution data: {json.dumps(stage_execution_data, indent=2)}")
+                                                  stage_graph = stage_execution_data.get('data', {}).get('executionGraph', {})
+                                                  node_map = stage_graph.get('nodeMap', {})
+                                                  
+                                                  # Find all failed steps in this stage
+                                                  for node in node_map.values():
+                                                      # If it's not a child node, skip
+                                                      executable_responses = node.get('executableResponses', [])
+                                                      is_child = False
+                                                      for e in executable_responses:
+                                                          if e.get('child'):
+                                                              is_child = True
+                                                              break
+                                                      if is_child:
+                                                          continue
+                                                      if node.get('status') == 'Failed':
+                                                          step_id = node.get('identifier')
+                                                          if step_id:
+                                                              failed_stage_step_map[stage_id].add(step_id)
+                                  
+                                  print("Failed stage-step map:", failed_stage_step_map)
+                                  
+                                  # Find the corresponding node UUID for each failed stage
+                                  stage_id_to_uuid_map = {node.get('nodeIdentifier'): node.get('nodeUuid') for node in layout_node_map.values()}
+
+                                  # For each failed stage, get its detailed graph and find the log key for the failed step
+                                  for stage_identifier, step_identifiers in failed_stage_step_map.items():
+                                      stage_node_uuid = stage_id_to_uuid_map.get(stage_identifier)
+                                      if not stage_node_uuid:
+                                          continue
+
+                                      # Fetch the detailed execution graph for the specific stage
+                                      stage_execution_data = self.get_pipeline_execution_details(org_id, project_id, execution_id, stage_id=stage_node_uuid)
+                                      stage_graph = stage_execution_data.get('data', {}).get('executionGraph', {})
+                                      node_map = stage_graph.get('nodeMap', {})
+
+                                      for step_identifier in step_identifiers:
+                                          for node in node_map.values():
+                                              if node.get('identifier') == step_identifier and node.get('status') == 'Failed':
+                                                  print("NODE IS: ", node)
+                                                  failure_info = node.get('failureInfo', {})
+                                                  failed_steps.append({
+                                                      'stage_name': stage_identifier,
+                                                      'step_name': step_identifier,
+                                                      'stage_id': stage_node_uuid,
+                                                      'log_key': node.get('logBaseKey'),
+                                                      'failure_message': failure_info.get('message'),
+                                                      'error_code': failure_info.get('failureTypeList', []),
+                                                      'failure_details': failure_info.get('responseMessages', []),
+                                                      'started_at': node.get('startTs'),
+                                                      'ended_at': node.get('endTs'),
+                                                  })
+                                                  break # Found the step, move to the next identifier
+
+                                          
+                                  # If we still don't have any failed steps but we did find failed stages,
+                                  # add the stage-level information as a fallback
+                                  if not failed_steps and failed_stage_step_map:
+                                      for stage_id, step_ids in failed_stage_step_map.items():
+                                          if not step_ids:  # No specific failed steps were found
+                                              stage_uuid = stage_id_to_uuid_map.get(stage_id)
+                                              if stage_uuid:
+                                                  # Find the stage info in the layout_node_map
+                                                  for node_info in layout_node_map.values():
+                                                      if node_info.get('nodeUuid') == stage_uuid and node_info.get('status') == 'Failed':
+                                                          failed_steps.append({
+                                                              'stage_name': stage_id,
+                                                              'step_name': 'unknown',  # No specific step identified
+                                                              'stage_id': stage_uuid,
+                                                              'log_key': node_info.get('logBaseKey'),
+                                                              'failure_message': f"Stage {node_info.get('name', 'Unknown')} failed",
+                                                              'error_code': [],
+                                                              'failure_details': [],
+                                                              'started_at': node_info.get('startTs'),
+                                                              'ended_at': node_info.get('endTs'),
+                                                          })
+                                                          break
+                                          
+                                  if not failed_steps:
+                                      print("\nNo failed nodes found in the layout map")
+                                      print("Available nodes and their statuses:")
+                                      for node_id, node_info in layout_node_map.items():
+                                          print(f"  - {node_info.get('name', 'Unknown')}: {node_info.get('status')}")
+
+
+                                          
+                              except KeyError as e:
+                                  raise Exception(f"Unexpected response structure: {str(e)}")
+                                  
+                              return failed_steps
+
+                      def parse_pipeline_url(url: str) -> Tuple[str, str, str, str, str]:
+                          """
+                          Parses the pipeline execution URL to extract identifiers.
+                          Handles both formats:
+                          - /ng/account/...
+                          - /ng/#/account/...
+                          """
+                          parsed_url = urlparse(url)
+                          path = parsed_url.path
+                          fragment = parsed_url.fragment
+                          
+                          # If URL contains a fragment (e.g., #/account/...), use that instead
+                          if fragment and fragment.startswith('/account/'):
+                              path = '/ng' + fragment
+                          
+                          pattern = re.compile(
+                              r'/ng(?:/#)?/account/(?P<account_id>[^/]+)'
+                              r'.*?/orgs/(?P<org_id>[^/]+)'
+                              r'/projects/(?P<project_id>[^/]+)'
+                              r'.*?/executions/(?P<execution_id>[^/]+)'
+                          )
+                          match = pattern.search(path)
+                          
+                          if not match:
+                              # Try an alternative approach by combining path and fragment
+                              combined_path = path + '/' + fragment
+                              match = pattern.search(combined_path)
+                              
+                          if not match:
+                              raise ValueError("Could not parse required IDs from the pipeline URL.")
+                          
+                          ids = match.groupdict()
+                          
+                          # Construct base url for API calls
+                          base_url = f"{parsed_url.scheme}://{parsed_url.netloc}/gateway/"
+
+                          return base_url, ids['account_id'], ids['org_id'], ids['project_id'], ids['execution_id']
+
+                      def main():
+                          import argparse
+                          import os
+                          
+                          parser = argparse.ArgumentParser(description='Fetch log download links for failed steps in a Harness pipeline execution.')
+                          parser.add_argument('--api-key', help='Harness API key. Can also be set via HARNESS_API_KEY environment variable.')
+                          parser.add_argument('--pipeline-url', help='The full URL of the failed pipeline execution. Can also be set via PIPELINE_URL environment variable.')
+
+                          args = parser.parse_args()
+
+                          api_key = args.api_key or os.getenv('HARNESS_API_KEY')
+                          pipeline_url = args.pipeline_url or os.getenv('PIPELINE_URL')
+
+                          if not api_key:
+                              print("Error: API key must be provided via --api-key argument or HARNESS_API_KEY environment variable.")
+                              return
+
+                          if not pipeline_url:
+                              print("Error: Pipeline URL must be provided via --pipeline-url argument or PIPELINE_URL environment variable.")
+                              return
+
+                          try:
+                              base_url, account_id, org_id, project_id, execution_id = parse_pipeline_url(pipeline_url)
+                              harness = HarnessAPI(api_key, account_id, base_url)
+                              failed_steps = harness.get_failed_steps(org_id, project_id, execution_id)
+
+                              print("[DEBUG] Failed steps:", failed_steps)
+                              
+                              if not failed_steps:
+                                  print("No failed steps found in the pipeline execution.")
+                                  os.environ['FAILED_STAGE_NAMES'] = ",".join([])
+                                  os.environ['FAILED_STAGES_COUNT'] = "0"
+                                  os.environ['FAILED_STEP_LOGS_URLS'] = ""
+                                  return
+                                  
+                              log_keys = [step['log_key'] for step in failed_steps if 'log_key' in step and step['log_key']]
+
+                              print("log keys before filtering:", log_keys)
+                              
+                              if not log_keys:
+                                  print("No log keys found for failed steps.")
+                                  return
+                                  
+                              # Filter out log keys that are prefixes of other log keys
+                              filtered_log_keys = []
+                              for key1 in log_keys:
+                                  is_prefix = False
+                                  for key2 in log_keys:
+                                      # Check if key1 is a prefix of key2 but not equal to key2
+                                      if key1 != key2 and key2.startswith(key1):
+                                          is_prefix = True
+                                          break
+                                  if not is_prefix:
+                                      filtered_log_keys.append(key1)
+                                      
+                              log_keys = filtered_log_keys
+                              print("log keys after filtering:", log_keys)
+                                  
+                              download_links = []
+                              for key in log_keys:
+                                  link = harness.get_log_download_link(key)
+                                  if link:
+                                      download_links.append(link)
+                              
+                              if not download_links:
+                                  print("Could not retrieve any download links for the logs.")
+                                  return
+                              
+                              for link in download_links:
+                                  print("Download link:", link)
+                                  print("\n")
+
+                              # Set the log download links environment variable
+                              links_string = ",".join(download_links)
+                              os.environ['FAILED_STEP_LOGS_URLS'] = links_string
+                              
+                              # Get unique failed stage names
+                              failed_stage_names = list(set([step['stage_name'] for step in failed_steps if 'stage_name' in step]))
+                              failed_stages_count = len(failed_stage_names)
+                              
+                              # Set the environment variables for failed stage names and count
+                              os.environ['FAILED_STAGE_NAMES'] = ",".join(failed_stage_names)
+                              os.environ['FAILED_STAGES_COUNT'] = str(failed_stages_count)
+                              
+                              # Print the log links
+                              # print(links_string)
+                              print(f"\nFailed stages: {','.join(failed_stage_names)}")
+                              print(f"Failed stages count: {failed_stages_count}")
+                                  
+                          except Exception as e:
+                              print(f"Error: {str(e)}")
+
+                      if __name__ == "__main__":
+                          main()
+                    envVariables:
+                      HARNESS_API_KEY: <+stage.variables.HARNESS_API_KEY>
+                      PIPELINE_URL: <+input>.default(<+pipeline.executionUrl>)
+                    outputVariables:
+                      - name: FAILED_STEP_LOGS_URLS
+                      - name: FAILED_STAGE_NAMES
+                      - name: FAILED_STAGES_COUNT
+              - step:
+                  type: Run
+                  name: MoveCacheAndCheckExecutionCount
+                  identifier: MoveCacheAndCheckExecutionCount
+                  spec:
+                    shell: Python
+                    command: |-
+                      import os
+                      import json
+                      import datetime
+                      import subprocess
+                      import shutil
+
+                      # Get environment variables with default values
+                      IS_FIRST_RUN = os.environ.get('IS_FIRST_RUN', 'false').lower() == 'true'
+                      FAILED_STAGES_COUNT = int(os.environ.get('FAILED_STAGES_COUNT', '0'))
+                      PR_NUMBER = int(os.environ.get('PR_NUMBER', '-1'))
+                      TARGET_BRANCH = os.environ.get('TARGET_BRANCH', '')
+                      MAX_PIPELINE_RETRIES = int(os.environ.get('MAX_PIPELINE_RETRIES', '3'))
+
+                      # Parse FAILED_STAGES from environment variable (comma-separated string)
+                      failed_stages_str = os.environ.get('FAILED_STAGES', '')
+                      FAILED_STAGES = failed_stages_str.split(',') if failed_stages_str else []
+
+                      # Debug information
+                      print("=== DEBUG INFORMATION ===")
+                      # current_dir = os.getcwd()
+                      # parent_dir = os.path.dirname(current_dir)
+                      # print(f"Current working directory: {current_dir}")
+                      # print(f"Parent directory: {parent_dir}")
+                      print(f"Repository name: {os.environ.get('REPO_NAME', 'null')}")
+                      print(f"Current branch: {os.environ.get('CURRENT_BRANCH', 'null')}")
+                      print(f"Cache key: cache-v0-{os.environ.get('REPO_NAME', 'null')}-{os.environ.get('CURRENT_BRANCH', 'null')}")
+                      print(f"IS_FIRST_RUN: {IS_FIRST_RUN}")
+                      print(f"FAILED_STAGES_COUNT: {FAILED_STAGES_COUNT}")
+                      print(f"FAILED_STAGES: {FAILED_STAGES}")
+                      print(f"PR_NUMBER: {PR_NUMBER}")
+
+                      # Check directory structure
+                      # print("\n=== DIRECTORY STRUCTURE ===")
+                      # print("Current directory contents:")
+                      # print(subprocess.check_output(["ls", "-la"]).decode("utf-8"))
+
+                      print("\nParent directory contents:")
+                      # print(subprocess.check_output(["ls", "-la", ".."]).decode("utf-8"))
+
+                      # Check if cache directory exists in current workspace
+                      cache_dir = "/cache"
+
+                      # if os.path.exists(current_cache_dir):
+                      #     print(f"\nCache directory exists in current workspace: {current_cache_dir}")
+                      #     print(subprocess.check_output(["ls", "-la", current_cache_dir]).decode("utf-8"))
+                      # else:
+                      #     print(f"\nNo cache directory in current workspace: {current_cache_dir}")
+
+                      # # Create cache directory in current workspace if it doesn't exist
+                      # print("\n=== MANAGING CACHE DIRECTORIES ===")
+                      # if not os.path.exists(current_cache_dir):
+                      #     os.makedirs(current_cache_dir)
+                      #     print(f"Created cache directory in current workspace: {current_cache_dir}")
+                      # else:
+                      #     print(f"Cache directory already exists in current workspace: {current_cache_dir}")
+
+                      # Ensure cache directory exists
+                      if not os.path.exists(cache_dir):
+                          os.makedirs(cache_dir)
+                          print(f"Created cache directory: {cache_dir}")
+                      else:
+                          print(f"Cache directory already exists in current workspace: {cache_dir}")
+
+                      # Get current timestamp
+                      timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+                      # Define metadata file path
+                      metadata_file = os.path.join(cache_dir, "execution_metadata.json")
+
+                      # Check if metadata file exists and update it
+                      print("\n=== CHECKING EXECUTION METADATA ===")
+                      if os.path.exists(metadata_file):
+                          print(f"Metadata file exists: {metadata_file}")
+                          print("Contents before update:")
+                          
+                          with open(metadata_file, "r") as f:
+                              metadata = json.load(f)
+                              print(json.dumps(metadata, indent=2))
+                          
+                          # Extract and increment count
+                          current_count = metadata.get("count", 0)
+                          print(f"Current execution count: {current_count}")
+                          
+                          new_count = current_count + 1
+                          print(f"New execution count: {new_count}")
+                          
+                          # Check if count exceeds maximum retries
+                          if new_count > MAX_PIPELINE_RETRIES:
+                              print(f"Execution count reached limit ({MAX_PIPELINE_RETRIES}). Exiting pipeline.")
+                          
+                          # Update metadata
+                          metadata["count"] = new_count
+                          metadata["last_run"] = timestamp
+                          
+                          # If this is the first run, add initial failed stages information
+                          if IS_FIRST_RUN:
+                              metadata["count"] = 1
+                              metadata["initial_failed_stages_count"] = FAILED_STAGES_COUNT
+                              metadata["initial_failed_stages"] = FAILED_STAGES
+                              metadata["initial_pr_number"] = PR_NUMBER
+                              metadata["initial_target_branch"] = TARGET_BRANCH
+                              print(f"Added initial failed stages information: count={FAILED_STAGES_COUNT}, stages={FAILED_STAGES}, PR#{PR_NUMBER}")
+                              print(f"IS_FIRST_RUN environment variable is set to: {os.environ.get('IS_FIRST_RUN', 'false')}")
+                          
+                          # Write updated metadata
+                          with open(metadata_file, "w") as f:
+                              json.dump(metadata, f, indent=2)
+                          
+                          print("\nMetadata file updated. New contents:")
+                          with open(metadata_file, "r") as f:
+                              print(f.read())
+                      else:
+                          print(f"No metadata file found. Creating new file: {metadata_file}")
+                          
+                          # Create new metadata
+                          metadata = {
+                              "count": 1,
+                              "last_run": timestamp,
+                          }
+                          
+                          # If this is the first run, add initial failed stages information
+                          if IS_FIRST_RUN:
+                              metadata["initial_failed_stages_count"] = FAILED_STAGES_COUNT
+                              metadata["initial_failed_stages"] = FAILED_STAGES
+                              metadata["initial_pr_number"] = PR_NUMBER
+                              metadata["initial_target_branch"] = TARGET_BRANCH
+                              print(f"Added initial failed stages information: count={FAILED_STAGES_COUNT}, stages={FAILED_STAGES}, PR#{PR_NUMBER}")
+                              print(f"IS_FIRST_RUN environment variable is set to: {os.environ.get('IS_FIRST_RUN', 'false')}")
+                          
+                          # Write new metadata
+                          with open(metadata_file, "w") as f:
+                              json.dump(metadata, f, indent=2)
+                          
+                          print("Created new metadata file. Contents:")
+                          with open(metadata_file, "r") as f:
+                              print(f.read())
+
+
+
+                      # Set environment variables from metadata if they exist
+                      if os.path.exists(metadata_file):
+                          with open(metadata_file, "r") as f:
+                              metadata = json.load(f)
+                              
+                          # Set environment variables from metadata values
+                          if "initial_failed_stages_count" in metadata:
+                              os.environ["INITIAL_FAILED_STAGES_COUNT"] = str(metadata.get("initial_failed_stages_count", ""))
+                              print(f"Set INITIAL_FAILED_STAGES_COUNT environment variable to {metadata['initial_failed_stages_count']}")
+                              
+                          if "initial_pr_number" in metadata:
+                              os.environ["INITIAL_PR_NUMBER"] = str(metadata.get("initial_pr_number", ""))
+                              print(f"Set INITIAL_PR_NUMBER environment variable to {metadata['initial_pr_number']}")
+                              
+                          if "initial_failed_stages" in metadata:
+                              os.environ["INITIAL_FAILED_STAGES"] = ",".join(metadata["initial_failed_stages"]) if metadata["initial_failed_stages"] else ""
+                              print(f"Set INITIAL_FAILED_STAGES environment variable to {os.environ['INITIAL_FAILED_STAGES']}")
+
+                          if "initial_target_branch" in metadata:
+                              os.environ["INITIAL_TARGET_BRANCH"] = str(metadata.get("initial_target_branch", ""))
+                              print(f"Set INITIAL_TARGET_BRANCH environment variable to {os.environ['INITIAL_TARGET_BRANCH']}")
+                          
+                          if "count" in metadata:
+                              os.environ["CURR_COUNT"] = str(metadata.get("count", ""))
+                              print(f"Set CURR_COUNT environment variable to {metadata['count']}")
+
+                      # Move cache to parent directory
+                      # print("\n=== MOVING CACHE TO PARENT DIRECTORY ===")
+
+                      # # Create parent cache directory if it doesn't exist
+                      # if not os.path.exists(parent_cache_dir):
+                      #     os.makedirs(parent_cache_dir)
+                      #     print(f"Created parent cache directory: {parent_cache_dir}")
+
+                      # # Copy all files from current cache to parent cache
+                      # for item in os.listdir(current_cache_dir):
+                      #     src = os.path.join(current_cache_dir, item)
+                      #     dst = os.path.join(parent_cache_dir, item)
+                      #     if os.path.isfile(src):
+                      #         shutil.copy2(src, dst)
+                      #         print(f"Copied {src} to {dst}")
+                      #     elif os.path.isdir(src):
+                      #         if os.path.exists(dst):
+                      #             shutil.rmtree(dst)
+                      #         shutil.copytree(src, dst)
+                      #         print(f"Copied directory {src} to {dst}")
+
+                      # Remove current cache directory
+                      # shutil.rmtree(current_cache_dir)
+                      # print(f"Removed current cache directory: {current_cache_dir}\nThis prevents the coding agent from using the cache.")
+
+                      # Final verification
+                      print("\n=== FINAL VERIFICATION ===")
+                      # print("Parent cache directory contents:")
+                      # print(subprocess.check_output(["ls", "-la", parent_cache_dir]).decode("utf-8"))
+
+                      metadata_file = os.path.join(cache_dir, "execution_metadata.json")
+                      if os.path.exists(metadata_file):
+                          print(f"Final metadata file contents ({metadata_file}):")
+                          with open(metadata_file, "r") as f:
+                              print(f.read())
+                      else:
+                          print(f"ERROR: Metadata file not found in parent directory: {metadata_file}")
+                    envVariables:
+                      REPO_NAME: <+pipeline.properties.ci.codebase.repoName>
+                      CURRENT_BRANCH: <+execution.steps.GetCurrentBranch.output.outputVariables.CURRENT_BRANCH>
+                      IS_FIRST_RUN: <+execution.steps.GetCurrentBranch.output.outputVariables.IS_FIRST_RUN>
+                      PR_NUMBER: <+trigger.prNumber>
+                      FAILED_STAGES: <+execution.steps.fetch_failed_steps.output.outputVariables.FAILED_STAGE_NAMES>
+                      FAILED_STAGES_COUNT: <+execution.steps.fetch_failed_steps.output.outputVariables.FAILED_STAGES_COUNT>
+                      MAX_PIPELINE_RETRIES: <+stage.variables.MAX_RETRIES_PER_PIPELINE>
+                      TARGET_BRANCH: <+trigger.targetBranch>
+                    outputVariables:
+                      - name: INITIAL_FAILED_STAGES_COUNT
+                      - name: INITIAL_PR_NUMBER
+                      - name: INITIAL_FAILED_STAGES
+                      - name: CURR_COUNT
+                      - name: INITIAL_TARGET_BRANCH
+                contextType: Pipeline
+              - step:
+                  type: Run
+                  name: generate_diff
+                  identifier: generate_diff
+                  spec:
+                    shell: Sh
+                    command: |-
+                      git fetch origin <+execution.steps.MoveCacheAndCheckExecutionCount.output.outputVariables.INITIAL_TARGET_BRANCH>
+                      git diff origin/<+execution.steps.MoveCacheAndCheckExecutionCount.output.outputVariables.INITIAL_TARGET_BRANCH>...HEAD >> $(pwd)/../diff.txt
+                      cat $(pwd)/../diff.txt
+                contextType: Pipeline
+              - step:
+                  type: Run
+                  name: doWeProceed
+                  identifier: Run_18
+                  spec:
+                    shell: Python
+                    command: |-
+                      import os
+
+                      # Read environment variables
+                      FAILED_STAGES_COUNT = int(os.getenv("FAILED_STAGES_COUNT", "0"))
+                      INITIAL_FAILED_STAGES_COUNT = int(os.getenv("INITIAL_FAILED_STAGES_COUNT", "0"))
+                      CURR_COUNT = int(os.getenv("CURR_COUNT", "0"))
+                      MAX_PIPELINE_RETRIES = int(os.getenv("MAX_PIPELINE_RETRIES", "3"))
+                      HAS_REMEDIATION_FIXED=False
+
+                      print("failed stages: ", FAILED_STAGES_COUNT)
+                      print("current count: ", CURR_COUNT)
+                      print("max retries: ", MAX_PIPELINE_RETRIES)
+                      print("initial failed stages: ", INITIAL_FAILED_STAGES_COUNT)
+
+                      # Determine whether to proceed
+                      PROCEED = not (FAILED_STAGES_COUNT == 0 or CURR_COUNT >= MAX_PIPELINE_RETRIES)
+
+                      # Set the PROCEED variable in the environment
+                      os.environ["PROCEED"] = str(PROCEED).lower()
+
+
+                      if FAILED_STAGES_COUNT < INITIAL_FAILED_STAGES_COUNT:
+                          HAS_REMEDIATION_FIXED=True
+
+                      SHOULD_GENERATE_SUMMARY = (not PROCEED) and HAS_REMEDIATION_FIXED
+                      os.environ["HAS_REMEDIATION_FIXED"] = str(HAS_REMEDIATION_FIXED).lower()
+                      os.environ["SHOULD_GENERATE_SUMMARY"] = str(SHOULD_GENERATE_SUMMARY).lower()
+                      # Print it to be used by the shell or CI system if needed
+                      # print(f"PROCEED={os.environ['PROCEED']}")
+                    envVariables:
+                      FAILED_STAGES_COUNT: <+execution.steps.fetch_failed_steps.output.outputVariables.FAILED_STAGES_COUNT>
+                      CURR_COUNT: <+execution.steps.MoveCacheAndCheckExecutionCount.output.outputVariables.CURR_COUNT>
+                      MAX_ITERATIONS: <+stage.variables.MAX_ITERATIONS>
+                      INITIAL_FAILED_STAGES_COUNT: <+execution.steps.MoveCacheAndCheckExecutionCount.output.outputVariables.INITIAL_FAILED_STAGES_COUNT>
+                      MAX_PIPELINE_RETRIES: <+stage.variables.MAX_RETRIES_PER_PIPELINE>
+                    outputVariables:
+                      - name: PROCEED
+                      - name: HAS_REMEDIATION_FIXED
+                      - name: SHOULD_GENERATE_SUMMARY
+                contextType: Pipeline
+              - step:
+                  type: Run
+                  name: DownloadAgents
+                  identifier: DownloadAgents
+                  spec:
+                    shell: Bash
+                    envVariables:
+                      GCP_KEY: <+stage.variables.GCP_KEY>
+                    command: |
+                      # Show current directory and list contents
+                      echo "Current working directory: $(pwd)"
+                      echo "Listing current directory contents:"
+                      ls -la
+                      echo "Listing parent directory contents:"
+                      ls -la ../
+                      echo "-----------------------------------"
+
+                      # Create directories for downloaded artifacts in parent directory
+                      mkdir -p ../agents
+                      mkdir -p ../binary
+
+                      # Verify gcloud is available and check version
+                      which gcloud
+                      gcloud --version | head -n 1
+
+                      # Create service account key file from the secret in parent directory
+                      echo "Setting up GCP authentication..."
+                      # Write the key to a file without exposing it in logs
+                      set +x  # Disable command echo if it's on
+                      echo "$GCP_KEY" > ../gcp-key.json
+                      set -x  # Re-enable command echo if it was on
+
+                      # Set proper permissions on the key file
+                      chmod 600 ../gcp-key.json
+
+                      # Debug the key file (don't show contents)
+                      echo "Checking key file:"
+                      ls -la ../gcp-key.json
+                      echo "Key file size: $(wc -c < ../gcp-key.json) bytes"
+
+                      # Set the credentials environment variable
+                      export GOOGLE_APPLICATION_CREDENTIALS="$PWD/../gcp-key.json"
+                      echo "Set GOOGLE_APPLICATION_CREDENTIALS to: $GOOGLE_APPLICATION_CREDENTIALS"
+
+                      # Activate the service account
+                      echo "Activating service account..."
+                      gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS"
+
+                      # Release type for both agents
+                      RELEASE_TYPE="beta"
+                      echo "Downloading $RELEASE_TYPE release artifacts"
+
+                      # Get latest coding agent artifact
+                      echo "Finding latest coding agent artifact..."
+                      # List all files in the coding agent directory
+                      echo "Listing all files in coding-agent/$RELEASE_TYPE/:"
+                      gcloud storage ls gs://aida-remediation-agent-artifacts/coding-agent/$RELEASE_TYPE/
+
+                      # Find the latest coding agent (looking for pattern like coding-agent-beta-2025-07-08-13-12-03)
+                      LATEST_CODING_AGENT=$(gcloud storage ls gs://aida-remediation-agent-artifacts/coding-agent/$RELEASE_TYPE/ | grep -E "coding-agent-$RELEASE_TYPE-[0-9]{4}-[0-9]{2}-[0-9]{2}" | sort -r | head -n 1 | xargs)
+                      if [ -z "$LATEST_CODING_AGENT" ]; then
+                        echo "ERROR: No coding agent artifact found with expected naming pattern"
+                        # Fallback to any file with coding-agent prefix
+                        LATEST_CODING_AGENT=$(gcloud storage ls gs://aida-remediation-agent-artifacts/coding-agent/$RELEASE_TYPE/ | grep -E 'coding-agent' | sort -r | head -n 1 | xargs)
+                        if [ -z "$LATEST_CODING_AGENT" ]; then
+                          echo "ERROR: No coding agent artifact found at all"
+                          exit 1
+                        fi
+                      fi
+                      echo "Latest coding agent: $LATEST_CODING_AGENT"
+
+                      # Get latest remediation agent artifact
+                      echo "Finding latest remediation agent artifact..."
+                      # List all files in the remediation agent directory
+                      echo "Listing all files in remediation-agent/$RELEASE_TYPE/:"
+                      gcloud storage ls gs://aida-remediation-agent-artifacts/remediation-agent/$RELEASE_TYPE/
+
+                      # Find the latest remediation agent (looking for pattern like remediation-agent-beta-2025-07-08-13-12-03)
+                      LATEST_REMEDIATION_AGENT=$(gcloud storage ls gs://aida-remediation-agent-artifacts/remediation-agent/$RELEASE_TYPE/ | grep -E "remediation-agent-$RELEASE_TYPE-[0-9]{4}-[0-9]{2}-[0-9]{2}" | sort -r | head -n 1 | xargs)
+                      if [ -z "$LATEST_REMEDIATION_AGENT" ]; then
+                        echo "ERROR: No remediation agent artifact found with expected naming pattern"
+                        # Fallback to any file with remediation-agent prefix
+                        LATEST_REMEDIATION_AGENT=$(gcloud storage ls gs://aida-remediation-agent-artifacts/remediation-agent/$RELEASE_TYPE/ | grep -E 'remediation-agent' | sort -r | head -n 1 | xargs)
+                        if [ -z "$LATEST_REMEDIATION_AGENT" ]; then
+                          echo "ERROR: No remediation agent artifact found at all"
+                          exit 1
+                        fi
+                      fi
+                      echo "Latest remediation agent: $LATEST_REMEDIATION_AGENT"
+
+                      # Download only the latest artifacts
+                      echo "Downloading latest coding agent..."
+                      gcloud storage cp "$LATEST_CODING_AGENT" ../agents/ || echo "Failed to download coding agent"
+
+                      echo "Downloading latest remediation agent..."
+                      gcloud storage cp "$LATEST_REMEDIATION_AGENT" ../agents/ || echo "Failed to download remediation agent"
+
+                      # List downloaded artifacts
+                      echo "Downloaded agent artifacts:"
+                      ls -la ../agents/
+
+                      # Get the filenames without paths
+                      CODING_AGENT_FILENAME=$(basename "$LATEST_CODING_AGENT")
+                      REMEDIATION_AGENT_FILENAME=$(basename "$LATEST_REMEDIATION_AGENT")
+
+                      # Copy to binary directory with standard names
+                      cp "../agents/$CODING_AGENT_FILENAME" ../binary/codex-agent
+                      cp "../agents/$REMEDIATION_AGENT_FILENAME" ../binary/remediation-agent
+
+                      # Make binaries executable
+                      chmod +x ../binary/codex-agent
+                      chmod +x ../binary/remediation-agent
+
+                      echo "Agent binaries prepared:"
+                      ls -la ../binary/
+              - parallel:
+                  - stepGroup:
+                      name: ProceedPath
+                      identifier: ProceedPath
+                      when:
+                        condition: <+execution.steps.Run_18.output.outputVariables.PROCEED>==true
+                        stageStatus: Success
+                      steps:
+                        - step:
+                            type: Run
+                            name: RunRemediationAgent
+                            identifier: RunRemediationAgent
+                            spec:
+                              shell: Bash
+                              command: |-
+                                # Show current directory and list contents
+                                echo "Current working directory: $(pwd)"
+                                echo "Listing current directory contents:"
+                                ls -la
+                                echo "Listing parent directory contents:"
+                                ls -la ../
+                                echo "-----------------------------------"
+                                # Create service account key file from the secret in parent directory
+
+                                echo "Setting up GCP authentication..."
+                                # Write the key to a file without exposing it in logs
+                                set +x  # Disable command echo if it's on
+                                echo "$VERTEX_KEY" | base64 --decode  > ../gcp-key.json
+                                set -x  # Re-enable command echo if it was on
+
+                                # Set proper permissions on the key file
+                                chmod 600 ../gcp-key.json
+
+                                # Debug the key file (don't show contents)
+                                echo "Checking key file:"
+                                ls -la ../gcp-key.json
+                                echo "Key file size: $(wc -c < ../gcp-key.json) bytes"
+
+                                # Set the credentials environment variable
+                                export GOOGLE_APPLICATION_CREDENTIALS="$PWD/../gcp-key.json"
+                                echo "Set GOOGLE_APPLICATION_CREDENTIALS to: $GOOGLE_APPLICATION_CREDENTIALS"
+
+                                # Activate the service account
+                                echo "Activating service account..."
+                                gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS"
+
+                                # Check if remediation-agent binary exists
+                                if [ ! -f "../binary/remediation-agent" ]; then
+                                  echo "ERROR: remediation-agent binary not found at ../binary/remediation-agent"
+                                  exit 1
+                                fi
+
+                                # Create output directory in parent directory
+                                mkdir -p ../output
+
+                                # Prepare input for remediation agent
+                                # For testing purposes, create a simple task description
+                                echo "Creating test PR description for remediation agent..."
+                                PR_TITLE="Fix code issues and improve performance"
+                                PR_DESCRIPTION="Please analyze the codebase for issues and fix them. Look for bugs, performance issues, and improve code quality."
+
+                                echo "PR Title: $PR_TITLE"
+                                echo "PR Description: $PR_DESCRIPTION"
+
+                                # Run the remediation agent
+                                echo "Running remediation agent to generate task file..."
+                                ../binary/remediation-agent \
+                                  --output-dir ../output \
+                                  --api vertex \
+                                  --log-max-lines "2000" \
+                                  --log-context-lines "200" \
+                                  --git-diff-path "$(pwd)/../diff.txt" \
+                                  --local-git-repo-path "$(pwd)" \
+                                  --pipeline-logs-url "<+execution.steps.fetch_failed_steps.output.outputVariables.FAILED_STEP_LOGS_URLS>"\
+                                  --pr-title "dummy" \
+                                  --pr-description "dummy" \
+                                  --include-pipeline-failure \
+                                  --account-id "_OKE5H2PQKOUfzFFDuD4FA" \
+                                  --org-id "default" \
+                                  --project-id "CODE" \
+                                  --pipeline-id "test" \
+                                  --run-sequence "70" \
+                                  --plan-execution-id "" \
+                                  --stage-id "test" \
+                                  --step-id "harness-git-clone" \
+                                  --token "<+stage.variables.HARNESS_TOKEN>"
+
+                                # Check if task.txt was generated
+                                if [ -f "../output/task.txt" ]; then
+                                  echo "Task file successfully generated at ../output/task.txt"
+                                  echo "Content preview:"
+                                  cat ../output/task.txt
+                                else
+                                  echo "WARNING: No task.txt file was generated by the remediation agent"
+                                  # Create a fallback task file
+                                  echo "# Fallback Task\n\nInvestigate and fix issues in the codebase." > ../output/task.txt
+                                  echo "Created fallback task.txt file"
+                                fi
+                              envVariables:
+                                VERTEX_KEY: <+stage.variables.genAIQASA>
+                                GOOGLE_CLOUD_PROJECT: gen-ai-qa
+                                GOOGLE_CLOUD_LOCATION: asia-southeast1
+                                VERTEX_MODEL_NAME: <+stage.variables.VERTEX_MODEL_NAME>
+                        - step:
+                            type: Run
+                            name: AddFailedStages
+                            identifier: Run_18
+                            spec:
+                              shell: Sh
+                              command: "echo -e \"\\n Here are the names of the failed stages: ${FAILED_STAGES}. Use them to identify which parts of the pipeline YAML are currently failing, so you can build and test those locally to ensure your changes eventually pass.\" >> /tmp/info.txt"
+                              envVariables:
+                                FAILED_STAGES: <+execution.steps.fetch_failed_steps.output.outputVariables.FAILED_STAGE_NAMES>
+                            description: Add failed stages to the task
+                        - step:
+                            type: Run
+                            name: FetchPipelineYaml
+                            identifier: FetchPipelineYaml
+                            spec:
+                              shell: Python
+                              command: |-
+                                #!/usr/bin/env python3
+                                """
+                                Harness Pipeline API Client
+
+                                This script interacts with the Harness API to fetch pipeline details.
+                                It supports all the parameters and options documented in the API specification.
+                                """
+
+                                import argparse
+                                import json
+                                import os
+                                import sys
+                                from typing import Dict, Optional, Any
+                                import requests
+                                from requests.exceptions import RequestException
+                                import re
+                                from urllib.parse import urlparse
+
+
+                                def parse_pipeline_url(pipeline_url: str) -> Dict[str, str]:
+                                    """
+                                    Parse a Harness pipeline URL to extract components
+                                    
+                                    Expected URL format:
+                                    https://harness0.harness.io/ng/#/account/{account_id}/ci/orgs/{org}/projects/{project}/pipelines/{pipeline}/...
+                                    
+                                    Args:
+                                        pipeline_url: Full Harness pipeline URL
+                                        
+                                    Returns:
+                                        Dictionary containing parsed components: base_url, account_id, org, project, pipeline
+                                        
+                                    Raises:
+                                        ValueError: If URL format is invalid
+                                    """
+                                    try:
+                                        # Parse the URL
+                                        parsed = urlparse(pipeline_url)
+                                        base_url = f"{parsed.scheme}://{parsed.netloc}"
+                                        
+                                        # Extract components using regex
+                                        # Pattern: /ng/#/account/{account}/ci/orgs/{org}/projects/{project}/pipelines/{pipeline}/
+                                        pattern = r'/ng/#/account/([^/]+)/ci/orgs/([^/]+)/projects/([^/]+)/pipelines/([^/]+)'
+                                        match = re.search(pattern, pipeline_url)
+                                        
+                                        if not match:
+                                            raise ValueError(f"Invalid pipeline URL format. Expected pattern not found in: {pipeline_url}")
+                                            
+                                        account_id, org, project, pipeline = match.groups()
+                                        
+                                        return {
+                                            'base_url': base_url,
+                                            'account_id': account_id,
+                                            'org': org,
+                                            'project': project,
+                                            'pipeline': pipeline
+                                        }
+                                        
+                                    except Exception as e:
+                                        raise ValueError(f"Failed to parse pipeline URL '{pipeline_url}': {str(e)}")
+
+
+                                class HarnessPipelineClient:
+                                    """Client for interacting with Harness Pipeline API"""
+                                    
+                                    def __init__(self, api_key: str, account_id: str, base_url: str = "https://app.harness.io"):
+                                        """
+                                        Initialize the Harness Pipeline client
+                                        
+                                        Args:
+                                            api_key: Harness API key
+                                            account_id: Harness account identifier
+                                            base_url: Base URL for Harness API (default: https://app.harness.io)
+                                        """
+                                        self.api_key = api_key
+                                        self.account_id = account_id
+                                        self.base_url = base_url.rstrip('/')
+                                        
+                                    def get_pipeline(
+                                        self,
+                                        org: str,
+                                        project: str,
+                                        pipeline: str,
+                                        branch_name: Optional[str] = None,
+                                        template_applied: bool = False,
+                                        connector_ref: Optional[str] = None,
+                                        repo_name: Optional[str] = None,
+                                        load_from_fallback_branch: bool = False,
+                                        validate_async: bool = False,
+                                        load_from_cache: bool = False
+                                    ) -> Dict[str, Any]:
+                                        """
+                                        Get pipeline details from Harness API
+                                        
+                                        Args:
+                                            org: Organization identifier
+                                            project: Project identifier  
+                                            pipeline: Pipeline identifier
+                                            branch_name: Name of the branch (for Git Experience)
+                                            template_applied: If true, returns Pipeline YAML with Templates applied
+                                            connector_ref: Identifier of the Harness Connector (for Git Experience)
+                                            repo_name: Name of the repository (for Git Experience)
+                                            load_from_fallback_branch: Flag to load pipeline from non-default branch
+                                            validate_async: Flag to start asynchronous validation process
+                                            load_from_cache: Flag to enable loading remote pipeline from git cache
+                                            
+                                        Returns:
+                                            Dictionary containing the API response
+                                            
+                                        Raises:
+                                            RequestException: If the API request fails
+                                        """
+                                        
+                                        # Build URL
+                                        url = f"{self.base_url}/orgs/{org}/projects/{project}/pipelines/{pipeline}"
+                                        
+                                        # Build query parameters
+                                        params = {}
+                                        if branch_name:
+                                            params['branch_name'] = branch_name
+                                        if template_applied:
+                                            params['template_applied'] = str(template_applied).lower()
+                                        if connector_ref:
+                                            params['connector_ref'] = connector_ref
+                                        if repo_name:
+                                            params['repo_name'] = repo_name
+                                        if load_from_fallback_branch:
+                                            params['load_from_fallback_branch'] = str(load_from_fallback_branch).lower()
+                                        if validate_async:
+                                            params['validate_async'] = str(validate_async).lower()
+                                            
+                                        # Build headers
+                                        headers = {
+                                            'x-api-key': self.api_key,
+                                            'Harness-Account': self.account_id,
+                                            'Content-Type': 'application/json'
+                                        }
+                                        
+                                        if load_from_cache:
+                                            headers['Load-From-Cache'] = str(load_from_cache).lower()
+                                            
+                                        try:
+                                            print(f"Making request to: {url}")
+                                            print(f"Query parameters: {params}")
+                                            
+                                            response = requests.get(url, params=params, headers=headers)
+                                            response.raise_for_status()
+                                            
+                                            return response.json()
+                                            
+                                        except requests.exceptions.HTTPError as e:
+                                            print(f"HTTP Error: {e}")
+                                            print(f"Response content: {response.text}")
+                                            raise
+                                        except requests.exceptions.RequestException as e:
+                                            print(f"Request failed: {e}")
+                                            raise
+
+
+
+
+
+                                def main():
+                                    """Main function to handle command line arguments and execute API call"""
+                                    parser = argparse.ArgumentParser(
+                                        description='Fetch pipeline details from Harness API',
+                                        formatter_class=argparse.RawDescriptionHelpFormatter,
+                                        epilog="""
+                                Environment Variables:
+                                  HARNESS_API_KEY        Your Harness API key (required)
+                                  HARNESS_ACCOUNT_ID     Your Harness account identifier (required)
+                                  HARNESS_BASE_URL       Base URL for Harness API (optional, defaults to https://app.harness.io/v1)
+
+                                Examples:
+                                  # Using pipeline URL (easiest - just copy from browser)
+                                  python harness_pipeline_api.py --pipeline-url "https://harness0.harness.io/ng/#/account/abc123/ci/orgs/PROD/projects/MyProject/pipelines/MyPipeline/executions/xyz789/pipeline" --pretty
+                                  
+                                  # Using PIPELINE_URL environment variable
+                                  export PIPELINE_URL="https://harness0.harness.io/.../pipelines/MyPipeline/..."
+                                  python harness_pipeline_api.py --pretty
+                                  
+                                  # Traditional individual arguments
+                                  python harness_pipeline_api.py --org myorg --project myproject --pipeline mypipeline
+                                  
+                                  # With custom base URL
+                                  python harness_pipeline_api.py --org myorg --project myproject --pipeline mypipeline --base-url https://app.harness.io/gateway/v1
+                                  
+                                  # With Git Experience parameters
+                                  python harness_pipeline_api.py --org myorg --project myproject --pipeline mypipeline --branch-name main --repo-name myrepo --connector-ref myconnector
+                                  
+                                  # With template applied and async validation
+                                  python harness_pipeline_api.py --org myorg --project myproject --pipeline mypipeline --template-applied --validate-async
+                                  
+                                  # Save YAML to specific directory
+                                  python harness_pipeline_api.py --pipeline-url "https://harness0.harness.io/..." --output-dir ./pipeline_configs --pretty
+                                  
+                                  # Using HARNESS_OUTPUT_DIR environment variable
+                                  export HARNESS_OUTPUT_DIR="./analysis_results"
+                                  python harness_pipeline_api.py --pipeline-url "https://harness0.harness.io/..." --pretty
+                                        """
+                                    )
+                                    
+                                    # Arguments with environment variable fallbacks
+                                    parser.add_argument('--pipeline-url', help='Full Harness pipeline URL to parse (overrides PIPELINE_URL env var and individual org/project/pipeline args)')
+                                    parser.add_argument('--org', help='Organization identifier (overrides HARNESS_ORG_ID env var)')
+                                    parser.add_argument('--project', help='Project identifier (overrides HARNESS_PROJECT_ID env var)')
+                                    parser.add_argument('--pipeline', help='Pipeline identifier (overrides HARNESS_PIPELINE_ID env var)')
+                                    parser.add_argument('--api-key', help='Harness API key (overrides HARNESS_API_KEY env var)')
+                                    parser.add_argument('--account-id', help='Harness account identifier (overrides HARNESS_ACCOUNT_ID env var)')
+                                    
+                                    # Optional arguments with environment variable fallbacks
+                                    parser.add_argument('--branch-name', help='Name of the branch (overrides HARNESS_BRANCH_NAME env var)')
+                                    parser.add_argument('--template-applied', action='store_true', 
+                                                       help='Return Pipeline YAML with Templates applied (overrides HARNESS_TEMPLATE_APPLIED env var)')
+                                    parser.add_argument('--connector-ref', help='Harness Connector identifier (overrides HARNESS_CONNECTOR_REF env var)')
+                                    parser.add_argument('--repo-name', help='Repository name (overrides HARNESS_REPO_NAME env var)')
+                                    parser.add_argument('--load-from-fallback-branch', action='store_true',
+                                                       help='Load pipeline from non-default branch (overrides HARNESS_LOAD_FROM_FALLBACK_BRANCH env var)')
+                                    parser.add_argument('--validate-async', action='store_true',
+                                                       help='Start asynchronous validation process (overrides HARNESS_VALIDATE_ASYNC env var)')
+                                    parser.add_argument('--load-from-cache', action='store_true',
+                                                       help='Load pipeline from git cache (overrides HARNESS_LOAD_FROM_CACHE env var)')
+                                    
+                                    # API configuration
+                                    parser.add_argument('--base-url', help='Base URL for Harness API (overrides HARNESS_BASE_URL env var)')
+                                    
+                                    # Output options
+                                    parser.add_argument('--output-file', '-o', help='Save response to file')
+                                    parser.add_argument('--output-dir', '-d', help='Output directory for reference_pipeline.yml (default: current directory, env: HARNESS_OUTPUT_DIR)', default=None)
+                                    parser.add_argument('--pretty', action='store_true', help='Pretty print JSON output')
+                                    
+                                    args = parser.parse_args()
+                                    
+                                    try:
+                                        # First, check if we have a pipeline URL to parse
+                                        pipeline_url = args.pipeline_url or os.environ.get("PIPELINE_URL")
+                                        
+                                        if pipeline_url:
+                                            # Parse the pipeline URL to extract components
+                                            print(f"Parsing pipeline URL: {pipeline_url}")
+                                            parsed_components = parse_pipeline_url(pipeline_url)
+                                            
+                                            # Use parsed values, but allow command line args to override
+                                            base_url = args.base_url or parsed_components['base_url']
+                                            account_id = args.account_id or parsed_components['account_id']
+                                            org = args.org or parsed_components['org']
+                                            project = args.project or parsed_components['project']
+                                            pipeline = args.pipeline or parsed_components['pipeline']
+                                            
+                                            # Still need API key from args or env
+                                            api_key = args.api_key or os.environ.get("HARNESS_API_KEY")
+                                            if not api_key:
+                                                print("Error: API key must be provided via --api-key or HARNESS_API_KEY environment variable")
+                                                sys.exit(1)
+                                                
+                                        else:
+                                            # Fallback to individual environment variables (original behavior)
+                                            # Get API key from command line or environment variable
+                                            api_key = args.api_key or os.environ.get("HARNESS_API_KEY")
+                                            if not api_key:
+                                                print("Error: API key must be provided via --api-key or HARNESS_API_KEY environment variable")
+                                                sys.exit(1)
+                                            
+                                            # Get account ID from command line or environment variable
+                                            account_id = args.account_id or os.environ.get("HARNESS_ACCOUNT_ID")
+                                            if not account_id:
+                                                print("Error: Account ID must be provided via --account-id or HARNESS_ACCOUNT_ID environment variable")
+                                                sys.exit(1)
+                                                
+                                            # Get org from command line or environment variable
+                                            org = args.org or os.environ.get("HARNESS_ORG_ID")
+                                            if not org:
+                                                print("Error: Organization must be provided via --org or HARNESS_ORG_ID environment variable")
+                                                sys.exit(1)
+                                                
+                                            # Get project from command line or environment variable
+                                            project = args.project or os.environ.get("HARNESS_PROJECT_ID")
+                                            if not project:
+                                                print("Error: Project must be provided via --project or HARNESS_PROJECT_ID environment variable")
+                                                sys.exit(1)
+                                                
+                                            # Get pipeline from command line or environment variable
+                                            pipeline = args.pipeline or os.environ.get("HARNESS_PIPELINE_ID")
+                                            if not pipeline:
+                                                print("Error: Pipeline must be provided via --pipeline or HARNESS_PIPELINE_ID environment variable")
+                                                sys.exit(1)
+                                                
+                                            # Get base URL from command line or environment variable, with default
+                                            base_url = args.base_url or os.environ.get("HARNESS_BASE_URL", "https://app.harness.io")
+                                        
+                                        # Ensure base_url ends with /v1 if not already present
+                                        if not base_url.endswith('/v1'):
+                                            base_url = f"{base_url.rstrip('/')}/v1"
+                                        
+                                        # Get optional parameters from command line or environment variables
+                                        branch_name = args.branch_name or os.environ.get("HARNESS_BRANCH_NAME")
+                                        template_applied = args.template_applied or os.environ.get("HARNESS_TEMPLATE_APPLIED", "false").lower() == "true"
+                                        connector_ref = args.connector_ref or os.environ.get("HARNESS_CONNECTOR_REF")
+                                        repo_name = args.repo_name or os.environ.get("HARNESS_REPO_NAME")
+                                        load_from_fallback_branch = args.load_from_fallback_branch or os.environ.get("HARNESS_LOAD_FROM_FALLBACK_BRANCH", "false").lower() == "true"
+                                        validate_async = args.validate_async or os.environ.get("HARNESS_VALIDATE_ASYNC", "false").lower() == "true"
+                                        load_from_cache = args.load_from_cache or os.environ.get("HARNESS_LOAD_FROM_CACHE", "false").lower() == "true"
+                                        
+                                        # Initialize client
+                                        client = HarnessPipelineClient(
+                                            api_key=api_key,
+                                            account_id=account_id,
+                                            base_url=base_url
+                                        )
+                                        
+                                        # Make API call
+                                        response = client.get_pipeline(
+                                            org=org,
+                                            project=project,
+                                            pipeline=pipeline,
+                                            branch_name=branch_name,
+                                            template_applied=template_applied,
+                                            connector_ref=connector_ref,
+                                            repo_name=repo_name,
+                                            load_from_fallback_branch=load_from_fallback_branch,
+                                            validate_async=validate_async,
+                                            load_from_cache=load_from_cache
+                                        )
+                                        
+                                        # Save pipeline YAML to reference file if available
+                                        if 'pipeline_yaml' in response and response['pipeline_yaml']:
+                                            # Create output directory if it doesn't exist
+                                            output_dir = args.output_dir or os.environ.get("HARNESS_OUTPUT_DIR", ".")
+                                            try:
+                                                os.makedirs(output_dir, exist_ok=True)
+                                            except Exception as e:
+                                                print(f"Warning: Could not create output directory {output_dir}: {e}")
+                                                output_dir = '.'  # Fall back to current directory
+                                            
+                                            yaml_filename = os.path.join(output_dir, 'reference_pipeline.yml')
+                                            try:
+                                                with open(yaml_filename, 'w') as f:
+                                                    f.write(response['pipeline_yaml'])
+                                                print(f"Pipeline YAML saved to {yaml_filename}")
+                                            except Exception as e:
+                                                print(f"Warning: Could not save pipeline YAML to {yaml_filename}: {e}")
+                                        
+                                        # Format output
+                                        if args.pretty:
+                                            output = json.dumps(response, indent=2, sort_keys=True)
+                                        else:
+                                            output = json.dumps(response)
+                                            
+                                        # Save to file or print to stdout
+                                        if args.output_file:
+                                            with open(args.output_file, 'w') as f:
+                                                f.write(output)
+                                            print(f"Response saved to {args.output_file}")
+                                        else:
+                                            print(output)
+                                            
+                                        print(f"\nSuccess! Retrieved pipeline '{pipeline}' from org '{org}', project '{project}'")
+                                        
+                                    except ValueError as e:
+                                        print(f"Configuration error: {e}", file=sys.stderr)
+                                        sys.exit(1)
+                                    except RequestException as e:
+                                        print(f"API request failed: {e}", file=sys.stderr)
+                                        sys.exit(1)
+                                    except Exception as e:
+                                        print(f"Unexpected error: {e}", file=sys.stderr)
+                                        sys.exit(1)
+
+
+                                if __name__ == '__main__':
+                                    main()
+                              envVariables:
+                                HARNESS_BASE_URL: https://harness0.harness.io
+                                HARNESS_API_KEY: <+stage.variables.HARNESS_API_KEY>
+                                PIPELINE_URL: <+input>.default(<+pipeline.executionUrl>)
+                                HARNESS_OUTPUT_DIR: $(pwd)/../harness/analysis
+                            description: Fetch Pipeline YAML
+                            failureStrategies:
+                              - onFailure:
+                                  errors:
+                                    - AllErrors
+                                  action:
+                                    type: Ignore
+                        - step:
+                            type: Run
+                            name: RunCodingAgent
+                            identifier: RunCodingAgent
+                            spec:
+                              shell: Bash
+                              command: |-
+                                # Show current directory and list contents
+                                echo "Current working directory: $(pwd)"
+
+                                # Check if codex-agent binary exists
+                                if [ ! -f "../binary/codex-agent" ]; then
+                                  echo "ERROR: codex-agent binary not found at ../binary/codex-agent"
+                                  exit 1
+                                fi
+
+                                # Check if task file exists from remediation agent
+                                if [ -f "../output/task.txt" ]; then
+                                  echo "Using task file generated by remediation agent"
+                                  TASK_FILE="../output/task.txt"
+                                else
+                                  echo "WARNING: No task file found from remediation agent, using fallback"
+                                  echo "# Fallback Task\n\nInvestigate and fix issues in the codebase." > ../output/task.txt
+                                  TASK_FILE="../output/task.txt"
+                                fi
+
+                                # Create service account key file from the secret in parent directory
+                                echo "Setting up GCP authentication..."
+                                # Write the key to a file without exposing it in logs
+                                set +x  # Disable command echo if it's on
+                                echo "$VERTEX_KEY" | base64 --decode > ../gcp-key.json
+                                set -x  # Re-enable command echo if it was on
+
+                                # Set proper permissions on the key file
+                                chmod 600 ../gcp-key.json
+
+                                # Debug the key file (don't show contents)
+                                echo "Checking key file:"
+                                ls -la ../gcp-key.json
+                                echo "Key file size: $(wc -c < ../gcp-key.json) bytes"
+
+                                # Set the credentials environment variable
+                                export GOOGLE_APPLICATION_CREDENTIALS="$PWD/../gcp-key.json"
+                                echo "Set GOOGLE_APPLICATION_CREDENTIALS to: $GOOGLE_APPLICATION_CREDENTIALS"
+
+                                # Activate the service account
+                                echo "Activating service account..."
+                                gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS"
+
+                                # Print debug info
+                                echo "Running codex-agent with:"
+                                echo "Working directory: $(pwd)"
+                                echo "Max iterations: <+stage.variables.MAX_ITERATIONS>"
+                                echo "Task file: $TASK_FILE"
+                                echo "Task file preview (first 100 chars):"
+                                head -c 100 "$TASK_FILE"
+                                echo "..."
+
+                                # Run the codex-agent with the task file
+                                ../binary/codex-agent \
+                                  --api vertex \
+                                  --task-file "$TASK_FILE" \
+                                  --working-directory $(pwd) \
+                                  -bc \
+                                  -o $(pwd)/../harness/analysis \
+                                  --max-iterations <+stage.variables.MAX_ITERATIONS> \
+                                  --max-retries <+stage.variables.MAX_RETRIES>
+
+                                echo "codex-agent execution completed"
+
+                                # Show git diff (add untracked files first)
+                                # echo "Changes made by coding agent:"
+                                # git add -A
+                                # git --no-pager diff --cached
+                              envVariables:
+                                VERTEX_KEY: <+stage.variables.genAIQASA>
+                                GOOGLE_CLOUD_PROJECT: gen-ai-qa
+                                GOOGLE_CLOUD_LOCATION: asia-southeast1
+                                VERTEX_MODEL_NAME: <+stage.variables.VERTEX_MODEL_NAME>
+                        - step:
+                            type: Run
+                            name: RemoveJsonFiles
+                            identifier: RemoveJsonFiles
+                            spec:
+                              shell: Sh
+                              command: rm -f build_info.json test_info.json
+                            description: Remove buildInfo.json and test_info.json
+                        - step:
+                            type: Run
+                            name: createNetrc
+                            identifier: createNetrc
+                            spec:
+                              shell: Sh
+                              command: |-
+                                git diff >> diff.txt
+                                cat diff.txt
+                                rm diff.txt
+                                cat <<EOF > ${HOME}/.netrc
+                                  machine ${DRONE_NETRC_MACHINE}
+                                  login ${DRONE_NETRC_USERNAME}
+                                  password ${DRONE_NETRC_PASSWORD}
+                                  EOF
+                        - step:
+                            type: SaveCacheGCS
+                            name: SaveExecutionCountCache
+                            identifier: SaveExecutionCountCache
+                            spec:
+                              connectorRef: org.platformRW
+                              bucket: aida-remediation-agent-artifacts
+                              key: cache-v0-<+pipeline.properties.ci.codebase.repoName>-<+execution.steps.GetCurrentBranch.output.outputVariables.CACHE_BRANCH>
+                              sourcePaths:
+                                - /cache
+                              archiveFormat: Tar
+                              override: true
+                        - step:
+                            type: Run
+                            name: pushToBranch
+                            identifier: pushToBranch
+                            spec:
+                              shell: Bash
+                              command: |-
+                                # Show current directory and list contents
+                                echo "Current working directory: $(pwd)"
+
+                                # Configure git identity
+                                git config --global user.email "harness-auto-fix-ai@harness.io"
+                                git config --global user.name "harness-auto-fix"
+
+                                git log
+
+                                # Check if there are changes to commit
+                                if [ -n "$(git status --porcelain)" ]; then
+                                  # Add all changes
+                                  git add .
+                                  git commit -m "harness-auto-fix created this fix"
+                                  
+                                  # Get current branch name
+                                  CURRENT_BRANCH=<+execution.steps.GetCurrentBranch.output.outputVariables.CURRENT_BRANCH>
+                                  echo "Current branch: $CURRENT_BRANCH"
+                                  
+                                  if [ "$CURRENT_BRANCH" = "HEAD" ]; then
+                                    # Detached HEAD state
+                                    SHORT_COMMIT_ID=$(git rev-parse --short HEAD)
+                                    FIX_BRANCH="commit-${SHORT_COMMIT_ID}-ai-autofix"
+                                    git checkout -b $FIX_BRANCH
+                                    echo "Detached HEAD detected. Creating branch: $FIX_BRANCH"
+                                    git push -f origin HEAD:$FIX_BRANCH
+                                  # Check if branch already has ai-autofix suffix using basic shell
+                                  elif [ "$(echo "$CURRENT_BRANCH" | grep "ai-autofix")" != "" ]; then
+                                    echo "Branch already has ai-autofix suffix, pushing to same branch"
+                                    FIX_BRANCH="$CURRENT_BRANCH"
+                                    echo "Pushing changes to branch: $FIX_BRANCH"
+                                    git push origin HEAD:$FIX_BRANCH
+                                  else
+                                    echo "Creating new branch with ai-autofix suffix"
+                                    FIX_BRANCH="${CURRENT_BRANCH}-ai-autofix"
+                                    echo "Do a force push to the new branch"
+                                    git push -f origin HEAD:$FIX_BRANCH
+                                  fi
+                                  export FIX_BRANCH
+                                  
+                                  echo "Successfully pushed changes to $FIX_BRANCH"
+                                else
+                                  echo "No changes to commit"
+                                fi
+                              outputVariables:
+                                - name: FIX_BRANCH
+                          contextType: Pipeline
+                        - step:
+                            type: Run
+                            name: createPullRequest
+                            identifier: createPullRequest
+                            spec:
+                              shell: Python
+                              command: |-
+                                #!/usr/bin/env python3
+
+                                import argparse
+                                import os
+                                import requests
+                                import json
+                                import sys
+
+                                def create_pull_request(repo_identifier, source_branch, target_branch, account_id, org_id, project_id, api_key, base_url="https://app.harness.io", title=None, description=None, is_draft=False, bypass_rules=False, reviewer_ids=None, labels=None):
+                                    """
+                                    Create a pull request using the Harness API
+                                    
+                                    Args:
+                                        repo_identifier (str): The repository identifier
+                                        source_branch (str): The source branch
+                                        target_branch (str): The target branch
+                                        account_id (str): The account identifier
+                                        org_id (str): The organization identifier
+                                        project_id (str): The project identifier
+                                        api_key (str): The Harness API key
+                                        base_url (str, optional): The base URL for the Harness API. Defaults to "https://app.harness.io".
+                                        title (str, optional): The title of the pull request. Defaults to None.
+                                        description (str, optional): The description of the pull request. Defaults to None.
+                                        is_draft (bool, optional): Whether the PR is a draft. Defaults to False.
+                                        bypass_rules (bool, optional): Whether to bypass rules. Defaults to False.
+                                        reviewer_ids (list, optional): List of reviewer IDs. Defaults to None.
+                                        labels (list, optional): List of labels. Defaults to None.
+                                    
+                                    Returns:
+                                        dict: The response from the API
+                                    """
+                                    url = f"{base_url}/code/api/v1/repos/{repo_identifier}/pullreq"
+                                    
+                                    # Prepare query parameters
+                                    params = {
+                                        "accountIdentifier": account_id
+                                    }
+                                    
+                                    # Add org_id and project_id to query params if provided
+                                    if org_id:
+                                        params["orgIdentifier"] = org_id
+                                    
+                                    if project_id:
+                                        params["projectIdentifier"] = project_id
+                                    
+                                    # Prepare headers
+                                    headers = {
+                                        "Content-Type": "application/json",
+                                        "x-api-key": api_key
+                                    }
+                                    
+                                    # Prepare request body
+                                    body = {
+                                        "source_branch": source_branch,
+                                        "target_branch": target_branch,
+                                        "bypass_rules": bypass_rules,
+                                        "is_draft": is_draft,
+                                    }
+                                    
+                                    # Add optional fields if provided
+                                    if title:
+                                        body["title"] = title
+                                    else:
+                                        # Generate a default title based on the source branch
+                                        body["title"] = f"Merge {source_branch} into {target_branch}"
+                                    
+                                    if description:
+                                        body["description"] = description
+                                    
+                                    if reviewer_ids:
+                                        body["reviewer_ids"] = reviewer_ids
+                                    
+                                    if labels:
+                                        body["labels"] = labels
+                                    
+                                    try:
+                                        print(f"Making request to: {url}")
+                                        print(f"With params: {params}")
+                                        print(f"With body: {json.dumps(body, indent=2)}")
+                                        
+                                        response = requests.post(url, params=params, headers=headers, json=body)
+                                        
+                                        # Print response details for debugging
+                                        print(f"Response status code: {response.status_code}")
+                                        print(f"Response headers: {response.headers}")
+                                        
+                                        # Try to get response body
+                                        try:
+                                            response_body = response.json()
+                                            print(f"Response body: {json.dumps(response_body, indent=2)}")
+                                        except ValueError:
+                                            print(f"Response body (text): {response.text}")
+                                        
+                                        response.raise_for_status()  # Raise an exception for 4XX/5XX responses
+                                        return response.json()
+                                    except requests.exceptions.RequestException as e:
+                                        print(f"Error creating pull request: {e}")
+                                        if hasattr(e, 'response') and e.response:
+                                            print(f"Response status code: {e.response.status_code}")
+                                            try:
+                                                error_json = e.response.json()
+                                                print(f"Response body: {json.dumps(error_json, indent=2)}")
+                                            except ValueError:
+                                                print(f"Response body: {e.response.text}")
+                                        sys.exit(1)
+
+                                def main():
+                                    parser = argparse.ArgumentParser(description="Create a pull request using Harness API")
+                                    
+                                    # Arguments with environment variable fallbacks
+                                    parser.add_argument("--repo-identifier", help="Repository identifier (overrides HARNESS_REPO_IDENTIFIER env var)")
+                                    parser.add_argument("--source-branch", help="Source branch (overrides SOURCE_BRANCH env var)")
+                                    parser.add_argument("--target-branch", help="Target branch (overrides TARGET_BRANCH env var)")
+                                    parser.add_argument("--account-id", help="Account identifier (overrides HARNESS_ACCOUNT_ID env var)")
+                                    parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose output")
+                                    
+                                    # Optional arguments
+                                    parser.add_argument("--org-id", help="Organization identifier (overrides HARNESS_ORG_ID env var)")
+                                    parser.add_argument("--project-id", help="Project identifier (overrides HARNESS_PROJECT_ID env var)")
+                                    parser.add_argument("--api-key", help="Harness API key (overrides HARNESS_API_KEY env var)")
+                                    parser.add_argument("--base-url", help="Base URL for Harness API (overrides HARNESS_BASE_URL env var, default: https://app.harness.io)")
+                                    parser.add_argument("--title", help="Pull request title (overrides HARNESS_PR_TITLE env var)")
+                                    parser.add_argument("--description", help="Pull request description (overrides HARNESS_PR_DESCRIPTION env var)")
+                                    parser.add_argument("--draft", action="store_true", help="Create as draft PR")
+                                    parser.add_argument("--bypass-rules", action="store_true", help="Bypass PR rules")
+                                    parser.add_argument("--reviewer-ids", help="Comma-separated list of reviewer IDs")
+                                    parser.add_argument("--labels", help="Comma-separated list of labels in format 'label:value'")
+                                    
+                                    args = parser.parse_args()
+                                    
+                                    # Get API key from command line or environment variable
+                                    api_key = args.api_key or os.environ.get("HARNESS_API_KEY")
+                                    if not api_key:
+                                        print("Error: API key must be provided via --api-key or HARNESS_API_KEY environment variable")
+                                        sys.exit(1)
+                                        
+                                    # Get repository identifier from command line or environment variable
+                                    repo_identifier = args.repo_identifier or os.environ.get("HARNESS_REPO_IDENTIFIER")
+                                    if not repo_identifier:
+                                        print("Error: Repository identifier must be provided via --repo-identifier or HARNESS_REPO_IDENTIFIER environment variable")
+                                        sys.exit(1)
+                                    
+                                    # Get source branch from command line or environment variable
+                                    source_branch = args.source_branch or os.environ.get("SOURCE_BRANCH")
+                                    if not source_branch:
+                                        print("Error: Source branch must be provided via --source-branch or SOURCE_BRANCH environment variable")
+                                        sys.exit(1)
+                                    
+                                    # Get target branch from command line or environment variable
+                                    target_branch = args.target_branch or os.environ.get("TARGET_BRANCH")
+                                    if not target_branch:
+                                        print("Error: Target branch must be provided via --target-branch or TARGET_BRANCH environment variable")
+                                        sys.exit(1)
+                                    
+                                    # Get account ID from command line or environment variable
+                                    account_id = args.account_id or os.environ.get("HARNESS_ACCOUNT_ID")
+                                    if not account_id:
+                                        print("Error: Account ID must be provided via --account-id or HARNESS_ACCOUNT_ID environment variable")
+                                        sys.exit(1)
+                                        
+                                    # Get org ID and project ID from command line or environment variables
+                                    org_id = args.org_id or os.environ.get("HARNESS_ORG_ID")
+                                    project_id = args.project_id or os.environ.get("HARNESS_PROJECT_ID")
+                                    
+                                    # Get base URL from command line or environment variable, with default
+                                    base_url = args.base_url or os.environ.get("HARNESS_BASE_URL", "https://app.harness.io")
+                                    
+                                    # Get title and description from command line or environment variables
+                                    title = args.title or os.environ.get("HARNESS_PR_TITLE")
+                                    description = args.description or os.environ.get("HARNESS_PR_DESCRIPTION")
+                                    
+                                    # Process reviewer IDs if provided
+                                    reviewer_ids = None
+                                    if args.reviewer_ids:
+                                        try:
+                                            reviewer_ids = [int(id_str) for id_str in args.reviewer_ids.split(",")]
+                                        except ValueError:
+                                            print("Error: reviewer IDs must be integers")
+                                            sys.exit(1)
+                                    
+                                    # Process labels if provided
+                                    labels = None
+                                    if args.labels:
+                                        labels = []
+                                        for label_str in args.labels.split(","):
+                                            if ":" in label_str:
+                                                label, value = label_str.split(":", 1)
+                                                labels.append({"value": value})
+                                            else:
+                                                labels.append({"value": label_str})
+                                    
+                                    # Create the pull request
+                                    result = create_pull_request(
+                                        repo_identifier=repo_identifier,
+                                        source_branch=source_branch,
+                                        target_branch=target_branch,
+                                        account_id=account_id,
+                                        org_id=org_id,
+                                        project_id=project_id,
+                                        api_key=api_key,
+                                        base_url=base_url,
+                                        title=title,
+                                        description=description,
+                                        is_draft=args.draft,
+                                        bypass_rules=args.bypass_rules,
+                                        reviewer_ids=reviewer_ids,
+                                        labels=labels
+                                    )
+                                    
+                                    # Print the result
+                                    print(json.dumps(result, indent=2))
+                                    print(f"\nPull request created successfully!")
+
+                                if __name__ == "__main__":
+                                    main()
+                              envVariables:
+                                HARNESS_REPO_IDENTIFIER: <+pipeline.properties.ci.codebase.repoName>
+                                HARNESS_BASE_URL: https://harness0.harness.io/gateway
+                                HARNESS_PR_TITLE: <+trigger.prTitle>
+                                HARNESS_PR_DESCRIPTION: working on autofixing your CI checks
+                                HARNESS_API_KEY: <+stage.variables.HARNESS_API_KEY>
+                                SOURCE_BRANCH: <+execution.steps.ProceedPath.steps.pushToBranch.output.outputVariables.FIX_BRANCH>
+                                TARGET_BRANCH: <+execution.steps.GetCurrentBranch.output.outputVariables.CURRENT_BRANCH>
+                            when:
+                              stageStatus: Success
+                              condition: <+execution.steps.GetCurrentBranch.output.outputVariables.IS_FIRST_RUN>==true
+                            failureStrategies:
+                              - onFailure:
+                                  errors:
+                                    - AllErrors
+                                  action:
+                                    type: Ignore
+                          contextType: Pipeline
+                    contextType: Pipeline
+                  - stepGroup:
+                      name: Summary Flow
+                      identifier: Summary_Flow
+                      steps:
+                        - step:
+                            type: Run
+                            name: Generate Final Git Diff
+                            identifier: Generate_Final_Git_Diff
+                            spec:
+                              shell: Sh
+                              command: |-
+                                git fetch origin <+pipeline.variables.TARGET_BRANCH>
+                                git diff origin/<+pipeline.variables.TARGET_BRANCH>...HEAD >> $(pwd)/../summary_diff.txt
+                                cat $(pwd)/../summary_diff.txt
+                              envVariables:
+                                WORKING_BRANCH: <+execution.steps.GetCurrentBranch.output.outputVariables.CURRENT_BRANCH>
+                        - step:
+                            type: Run
+                            name: SummmaryGeneration
+                            identifier: SummmaryGeneration
+                            spec:
+                              shell: Sh
+                              command: |-
+                                # Show current directory and list contents
+                                echo "Current working directory: $(pwd)"
+                                echo "Listing current directory contents:"
+                                ls -la
+                                echo "Listing parent directory contents:"
+                                ls -la ../
+                                echo "-----------------------------------"
+                                # Create service account key file from the secret in parent directory
+
+                                echo "Setting up GCP authentication..."
+                                # Write the key to a file without exposing it in logs
+                                set +x  # Disable command echo if it's on
+                                echo "$VERTEX_KEY" | base64 --decode  > ../gcp-key.json
+                                set -x  # Re-enable command echo if it was on
+
+                                # Set proper permissions on the key file
+                                chmod 600 ../gcp-key.json
+
+                                # Debug the key file (don't show contents)
+                                echo "Checking key file:"
+                                ls -la ../gcp-key.json
+                                echo "Key file size: $(wc -c < ../gcp-key.json) bytes"
+
+                                # Set the credentials environment variable
+                                export GOOGLE_APPLICATION_CREDENTIALS="$PWD/../gcp-key.json"
+                                echo "Set GOOGLE_APPLICATION_CREDENTIALS to: $GOOGLE_APPLICATION_CREDENTIALS"
+
+                                # Activate the service account
+                                echo "Activating service account..."
+                                gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS"
+
+                                # Check if remediation-agent binary exists
+                                if [ ! -f "../binary/remediation-agent" ]; then
+                                  echo "ERROR: remediation-agent binary not found at ../binary/remediation-agent"
+                                  exit 1
+                                fi
+
+                                # Create output directory in parent directory
+                                mkdir -p ../output
+
+                                # Prepare input for remediation agent
+                                # For testing purposes, create a simple task description
+                                echo "Creating test PR description for remediation agent..."
+                                PR_TITLE="Fix code issues and improve performance"
+                                PR_DESCRIPTION="Please analyze the codebase for issues and fix them. Look for bugs, performance issues, and improve code quality."
+
+                                echo "PR Title: $PR_TITLE"
+                                echo "PR Description: $PR_DESCRIPTION"
+
+                                ../binary/remediation-agent \
+                                  -s \
+                                  -a vertex\
+                                  --git-diff-path "$(pwd)/../summary_diff.txt" \
+                                  --output-dir "../output" \
+                                  --pr-title "dummy" \
+                                  --pr-description "dummy" \
+
+                                # Check if summary.txt was generated
+                                if [ -f "../output/summary.txt" ]; then
+                                  echo "Summary generated at ../output/summary.txt"
+                                  echo "Content preview:"
+                                  cat ../output/summary.txt
+
+                                  SUMMARY=$(cat ../output/summary.txt | tr '\n' '\\n')
+                                  export SUMMARY
+                                  echo "SUMMARY=$SUMMARY"
+
+                                else
+                                  echo "WARNING: No summary.txt file was generated by the remediation agent"
+                                fi
+                              envVariables:
+                                VERTEX_KEY: <+stage.variables.genAIQASA>
+                                GOOGLE_CLOUD_PROJECT: gen-ai-qa
+                                GOOGLE_CLOUD_LOCATION: asia-southeast1
+                                VERTEX_MODEL_NAME: <+stage.variables.VERTEX_MODEL_NAME>
+                              outputVariables:
+                                - name: SUMMARY
+                        - step:
+                            type: Run
+                            name: Add PR Comment
+                            identifier: Add_PR_Comment
+                            spec:
+                              shell: Python
+                              command: |-
+                                #!/usr/bin/env python3
+
+                                import argparse
+                                import os
+                                import requests
+                                import json
+                                import sys
+
+                                def add_pr_comment(repo_identifier, pr_id, comment_text, account_id, org_id, project_id, api_key, base_url="https://harness0.harness.io/gateway"):
+                                    """
+                                    Add a comment to a pull request using the Harness API
+                                    
+                                    Args:
+                                        repo_identifier (str): The repository identifier
+                                        pr_id (int): The pull request ID
+                                        comment_text (str): The comment text to add
+                                        account_id (str): The account identifier
+                                        org_id (str): The organization identifier
+                                        project_id (str): The project identifier
+                                        api_key (str): The Harness API key
+                                        base_url (str, optional): The base URL for the Harness API
+                                    
+                                    Returns:
+                                        dict: The response from the API
+                                    """
+                                    url = f"{base_url}/code/api/v1/repos/{repo_identifier}/pullreq/{pr_id}/comments"
+                                    
+                                    # Prepare query parameters
+                                    params = {
+                                        "accountIdentifier": account_id
+                                    }
+                                    
+                                    # Add org_id and project_id to query params if provided
+                                    if org_id:
+                                        params["orgIdentifier"] = org_id
+                                    
+                                    if project_id:
+                                        params["projectIdentifier"] = project_id
+                                    
+                                    # Prepare headers
+                                    headers = {
+                                        "Content-Type": "application/json",
+                                        "x-api-key": api_key
+                                    }
+                                    
+                                    # Prepare request body - simple comment without code references
+                                    body = {
+                                        "text": comment_text
+                                    }
+                                    
+                                    try:
+                                        print(f"Making request to add comment: {url}")
+                                        print(f"With params: {params}")
+                                        print(f"With body: {json.dumps(body, indent=2)}")
+                                        
+                                        response = requests.post(url, params=params, headers=headers, json=body)
+                                        
+                                        # Print response details for debugging
+                                        print(f"Response status code: {response.status_code}")
+                                        print(f"Response headers: {response.headers}")
+                                        
+                                        # Try to get response body
+                                        try:
+                                            response_body = response.json()
+                                            print(f"Response body: {json.dumps(response_body, indent=2)}")
+                                        except ValueError:
+                                            print(f"Response body (text): {response.text}")
+                                        
+                                        response.raise_for_status()  # Raise an exception for 4XX/5XX responses
+                                        return response.json()
+                                    except requests.exceptions.RequestException as e:
+                                        print(f"Error adding comment to pull request: {e}")
+                                        if hasattr(e, 'response') and e.response:
+                                            print(f"Response status code: {e.response.status_code}")
+                                            try:
+                                                error_json = e.response.json()
+                                                print(f"Response body: {json.dumps(error_json, indent=2)}")
+                                            except ValueError:
+                                                print(f"Response body: {e.response.text}")
+                                        sys.exit(1)
+
+                                def main():
+                                    parser = argparse.ArgumentParser(description="Find the original PR and add a comment with a link to the new PR")
+                                    
+                                    # Arguments with environment variable fallbacks
+                                    parser.add_argument("--repo-identifier", help="Repository identifier (overrides HARNESS_REPO_IDENTIFIER env var)")
+                                    parser.add_argument("--account-id", help="Account identifier (overrides HARNESS_ACCOUNT_ID env var)")
+                                    parser.add_argument("--comment-text", help="Comment text template (overrides COMMENT_TEXT env var)")
+                                    parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose output")
+                                    
+                                    # Optional arguments
+                                    parser.add_argument("--org-id", help="Organization identifier (overrides HARNESS_ORG_ID env var)")
+                                    parser.add_argument("--project-id", help="Project identifier (overrides HARNESS_PROJECT_ID env var)")
+                                    parser.add_argument("--api-key", help="Harness API key (overrides HARNESS_API_KEY env var)")
+                                    parser.add_argument("--base-url", help="Base URL for Harness API (overrides HARNESS_BASE_URL env var, default: https://harness0.harness.io/gateway)")
+                                    parser.add_argument("--find-only", action="store_true", help="Only find the PRs, don't add a comment")
+                                    
+                                    args = parser.parse_args()
+                                    
+                                    # Get API key from command line or environment variable
+                                    api_key = args.api_key or os.environ.get("HARNESS_API_KEY")
+                                    if not api_key:
+                                        print("Error: API key must be provided via --api-key or HARNESS_API_KEY environment variable")
+                                        sys.exit(1)
+                                        
+                                    # Get repository identifier from command line or environment variable
+                                    repo_identifier = args.repo_identifier or os.environ.get("HARNESS_REPO_IDENTIFIER")
+                                    if not repo_identifier:
+                                        print("Error: Repository identifier must be provided via --repo-identifier or HARNESS_REPO_IDENTIFIER environment variable")
+                                        sys.exit(1)
+                                    
+                                    # Get account ID from command line or environment variable
+                                    account_id = args.account_id or os.environ.get("HARNESS_ACCOUNT_ID")
+                                    if not account_id:
+                                        print("Error: Account ID must be provided via --account-id or HARNESS_ACCOUNT_ID environment variable")
+                                        sys.exit(1)
+                                        
+                                    # Get org ID and project ID from command line or environment variables
+                                    org_id = args.org_id or os.environ.get("HARNESS_ORG_ID")
+                                    project_id = args.project_id or os.environ.get("HARNESS_PROJECT_ID")
+                                    
+                                    # Get base URL from command line or environment variable, with default
+                                    base_url = args.base_url or os.environ.get("HARNESS_BASE_URL", "https://harness0.harness.io/gateway")
+                                        
+                                    pr_number = str(os.getenv("INITIAL_PR_NUMBER", 0))
+
+                                    print("PR number is: ", pr_number)
+
+                                    # If find-only flag is set, exit here
+                                    if args.find_only:
+                                        return
+                                    
+                                    current_pr_url = str(os.getenv("PR_URL", ""))
+                                    
+                                    # Prepare comment text with link to the new PR
+                                    # Remove '/gateway' from base_url if it exists to fix the URL format
+                                    ui_base_url = base_url.replace('/gateway', '')
+                                    TOTAL_ITERATIONS = os.environ.get("CURR_COUNT")
+                                    default_comment = f"We've fixed a few of your CI checks after {TOTAL_ITERATIONS} iterations [here]({current_pr_url}). Here's the summary of what we did:\n"
+                                    task_file_path = "../output/summary.txt"
+                                    try:
+                                        with open(task_file_path, "r") as f:
+                                            task_summary = f.read().strip()
+                                            default_comment += f"\n{task_summary}"
+                                    except FileNotFoundError:
+                                        print(f"Warning: Task file {task_file_path} not found. Proceeding with default comment.")
+                                        task_summary = ""
+                                        default_comment += "\n(No task summary available.)"
+
+                                    comment_text = args.comment_text or os.environ.get("COMMENT_TEXT", default_comment)
+                                    
+                                    # Add the comment to the original pull request
+                                    result = add_pr_comment(
+                                        repo_identifier=repo_identifier,
+                                        pr_id=pr_number,
+                                        comment_text=comment_text,
+                                        account_id=account_id,
+                                        org_id=org_id,
+                                        project_id=project_id,
+                                        api_key=api_key,
+                                        base_url=base_url
+                                    )
+                                    
+                                    print(f"\nComment added to original PR #{pr_number} successfully!")
+
+                                if __name__ == "__main__":
+                                    main()
+                              envVariables:
+                                HARNESS_REPO_IDENTIFIER: <+pipeline.properties.ci.codebase.repoName>
+                                HARNESS_BASE_URL: https://harness0.harness.io/gateway
+                                SOURCE_BRANCH: <+execution.steps.GetCurrentBranch.output.outputVariables.CURRENT_BRANCH>
+                                TARGET_BRANCH: <+pipeline.variables.TARGET_BRANCH>
+                                FIX_BRANCH: <+execution.steps.ProceedPath.steps.pushToBranch.output.outputVariables.FIX_BRANCH>
+                                HARNESS_API_KEY: <+stage.variables.HARNESS_API_KEY>
+                                INITIAL_PR_NUMBER: <+execution.steps.MoveCacheAndCheckExecutionCount.output.outputVariables.INITIAL_PR_NUMBER>
+                                PR_URL: <+trigger.payload.pull_req.pr_url>
+                                CURR_COUNT: <+execution.steps.MoveCacheAndCheckExecutionCount.output.outputVariables.CURR_COUNT>
+                        - step:
+                            type: Run
+                            name: Add PR Description
+                            identifier: Run_18
+                            spec:
+                              shell: Python
+                              command: |-
+                                #!/usr/bin/env python3
+
+                                import argparse
+                                import os
+                                import requests
+                                import json
+                                import sys
+
+                                def update_pull_request(repo_identifier, pullreq_number, account_id, org_id=None, project_id=None, api_key=None, base_url="https://app.harness.io", title=None, description=None):
+                                    """
+                                    Update a pull request using the Harness API
+                                    
+                                    Args:
+                                        repo_identifier (str): The repository identifier
+                                        pullreq_number (int): The pull request number to update
+                                        account_id (str): The account identifier
+                                        org_id (str, optional): The organization identifier. Defaults to None.
+                                        project_id (str, optional): The project identifier. Defaults to None.
+                                        api_key (str, optional): The Harness API key. Defaults to None.
+                                        base_url (str, optional): The base URL for the Harness API. Defaults to "https://app.harness.io".
+                                        title (str, optional): The new title of the pull request. Defaults to None.
+                                        description (str, optional): The new description of the pull request. Defaults to None.
+                                    
+                                    Returns:
+                                        dict: The response from the API
+                                    """
+                                    url = f"{base_url}/code/api/v1/repos/{repo_identifier}/pullreq/{pullreq_number}"
+                                    
+                                    # Prepare query parameters
+                                    params = {
+                                        "accountIdentifier": account_id
+                                    }
+                                    
+                                    # Add org_id and project_id to query params if provided
+                                    if org_id:
+                                        params["orgIdentifier"] = org_id
+                                    
+                                    if project_id:
+                                        params["projectIdentifier"] = project_id
+                                    
+                                    # Prepare headers
+                                    headers = {
+                                        "Content-Type": "application/json",
+                                        "x-api-key": api_key
+                                    }
+                                    
+                                    # Prepare request body
+                                    body = {}
+                                    
+                                    # Add optional fields if provided
+                                    if title:
+                                        body["title"] = title
+                                    
+                                    if description:
+                                        body["description"] = description
+                                    
+                                    # Only send request if there's something to update
+                                    if not body:
+                                        print("Error: At least one of title or description must be provided")
+                                        sys.exit(1)
+                                    
+                                    try:
+                                        print(f"Making request to: {url}")
+                                        print(f"With params: {params}")
+                                        print(f"With body: {json.dumps(body, indent=2)}")
+                                        
+                                        response = requests.patch(url, params=params, headers=headers, json=body)
+                                        
+                                        # Print response details for debugging
+                                        print(f"Response status code: {response.status_code}")
+                                        print(f"Response headers: {response.headers}")
+                                        
+                                        # Try to get response body
+                                        try:
+                                            response_body = response.json()
+                                            print(f"Response body: {json.dumps(response_body, indent=2)}")
+                                        except ValueError:
+                                            print(f"Response body (text): {response.text}")
+                                        
+                                        response.raise_for_status()  # Raise an exception for 4XX/5XX responses
+                                        return response.json()
+                                    except requests.exceptions.RequestException as e:
+                                        print(f"Error updating pull request: {e}")
+                                        if hasattr(e, 'response') and e.response:
+                                            print(f"Response status code: {e.response.status_code}")
+                                            try:
+                                                error_json = e.response.json()
+                                                print(f"Response body: {json.dumps(error_json, indent=2)}")
+                                            except ValueError:
+                                                print(f"Response body: {e.response.text}")
+                                        sys.exit(1)
+
+                                def main():
+                                    parser = argparse.ArgumentParser(description="Update a pull request using Harness API")
+                                    
+                                    # Required arguments with environment variable fallbacks
+                                    parser.add_argument("--repo-identifier", help="Repository identifier (overrides HARNESS_REPO_IDENTIFIER env var)")
+                                    parser.add_argument("--pr-number", type=int, help="Pull request number to update (overrides HARNESS_PR_NUMBER env var)")
+                                    parser.add_argument("--account-id", help="Account identifier (overrides HARNESS_ACCOUNT_ID env var)")
+                                    
+                                    # Optional arguments
+                                    parser.add_argument("--org-id", help="Organization identifier (overrides HARNESS_ORG_ID env var)")
+                                    parser.add_argument("--project-id", help="Project identifier (overrides HARNESS_PROJECT_ID env var)")
+                                    parser.add_argument("--api-key", help="Harness API key (overrides HARNESS_API_KEY env var)")
+                                    parser.add_argument("--base-url", help="Base URL for Harness API (overrides HARNESS_BASE_URL env var, default: https://app.harness.io)")
+                                    parser.add_argument("--title", help="New pull request title (overrides HARNESS_PR_TITLE env var)")
+                                    parser.add_argument("--description", help="New pull request description (overrides HARNESS_PR_DESCRIPTION env var)")
+                                    parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose output")
+                                    
+                                    args = parser.parse_args()
+                                    
+                                    # Get API key from command line or environment variable
+                                    api_key = args.api_key or os.environ.get("HARNESS_API_KEY")
+                                    if not api_key:
+                                        print("Error: API key must be provided via --api-key or HARNESS_API_KEY environment variable")
+                                        sys.exit(1)
+                                        
+                                    # Get repository identifier from command line or environment variable
+                                    repo_identifier = args.repo_identifier or os.environ.get("HARNESS_REPO_IDENTIFIER")
+                                    if not repo_identifier:
+                                        print("Error: Repository identifier must be provided via --repo-identifier or HARNESS_REPO_IDENTIFIER environment variable")
+                                        sys.exit(1)
+                                    
+                                    # Get PR number from command line or environment variable
+                                    pr_number = args.pr_number or os.environ.get("HARNESS_PR_NUMBER")
+                                    if not pr_number:
+                                        print("Error: PR number must be provided via --pr-number or HARNESS_PR_NUMBER environment variable")
+                                        sys.exit(1)
+                                    try:
+                                        pr_number = int(pr_number)  # Ensure it's an integer
+                                    except ValueError:
+                                        print("Error: PR number must be an integer")
+                                        sys.exit(1)
+                                    
+                                    # Get account ID from command line or environment variable
+                                    account_id = args.account_id or os.environ.get("HARNESS_ACCOUNT_ID")
+                                    if not account_id:
+                                        print("Error: Account ID must be provided via --account-id or HARNESS_ACCOUNT_ID environment variable")
+                                        sys.exit(1)
+                                        
+                                    # Get org ID and project ID from command line or environment variables
+                                    org_id = args.org_id or os.environ.get("HARNESS_ORG_ID")
+                                    project_id = args.project_id or os.environ.get("HARNESS_PROJECT_ID")
+                                    
+                                    # Get base URL from command line or environment variable, with default
+                                    base_url = args.base_url or os.environ.get("HARNESS_BASE_URL", "https://app.harness.io")
+                                    
+                                    # Get title and description from command line or environment variables
+                                    title = args.title or os.environ.get("HARNESS_PR_TITLE")
+                                    summary_path = "../output/summary.txt"
+                                    try:
+                                        with open(summary_path, "r") as f:
+                                            task_summary = f.read().strip()
+                                    except FileNotFoundError:
+                                        print(f"Warning: Summary file {summary_path} not found. Proceeding with default comment.")
+                                        task_summary = ""
+                                    
+                                    # Make sure at least one update field is provided
+                                    if not title and not description:
+                                        print("Error: At least one of title or description must be provided for update")
+                                        sys.exit(1)
+                                    
+                                    # Update the pull request
+                                    result = update_pull_request(
+                                        repo_identifier=repo_identifier,
+                                        pullreq_number=pr_number,
+                                        account_id=account_id,
+                                        org_id=org_id,
+                                        project_id=project_id,
+                                        api_key=api_key,
+                                        base_url=base_url,
+                                        title=title,
+                                        description=task_summary
+                                    )
+                                    
+                                    # Print the result
+                                    print(json.dumps(result, indent=2))
+                                    print(f"\nPull request updated successfully!!")
+
+                                if __name__ == "__main__":
+                                    main()
+                              envVariables:
+                                HARNESS_REPO_IDENTIFIER: <+pipeline.properties.ci.codebase.repoName>
+                                HARNESS_BASE_URL: https://harness0.harness.io/gateway
+                                HARNESS_PR_TITLE: <+trigger.prTitle>
+                                HARNESS_PR_DESCRIPTION: <+execution.steps.Summary_Flow.steps.SummmaryGeneration.output.outputVariables.SUMMARY>
+                                HARNESS_API_KEY: <+stage.variables.HARNESS_API_KEY>
+                                HARNESS_PR_NUMBER: <+trigger.prNumber>
+                      when:
+                        stageStatus: Success
+                        condition: <+execution.steps.Run_18.output.outputVariables.SHOULD_GENERATE_SUMMARY>==true
+          buildIntelligence:
+            enabled: false
+          caching:
+            enabled: false
+            paths: []
+        variables:
+          - name: GCP_KEY
+            type: Secret
+            description: GCP service account key for accessing GCS
+            required: true
+            value: org.gcpfileplatform
+          - name: LLM_API_KEY
+            type: Secret
+            description: API key for LLM service
+            required: true
+            value: autofixPipelineAnthropicApiKey
+          - name: HARNESS_TOKEN
+            type: Secret
+            description: PAT for talking to Harness
+            value: logDownloadAutoFix
+          - name: VERTEX_MODEL_NAME
+            type: String
+            description: LLM model to use for remediation agent
+            required: true
+            value: claude-sonnet-4@20250514
+          - name: MAX_ITERATIONS
+            type: String
+            description: Maximum iterations for the coding agent
+            required: true
+            value: "100"
+          - name: MAX_RETRIES
+            type: String
+            description: Maximum retries for the coding agent
+            required: true
+            value: "1"
+          - name: genAIQASA
+            type: Secret
+            description: service account for gen-ai-qa used in the agents
+            required: false
+            value: secEngEightFourSix
+          - name: MAX_RETRIES_PER_PIPELINE
+            type: String
+            description: ""
+            required: false
+            value: "4"
+          - name: HARNESS_API_KEY
+            type: Secret
+            description: ""
+            required: false
+            value: harnessAiAutofix
+  properties:
+    ci:
+      codebase:
+        repoName: <+input>
+        build: <+input>
+        prCloneStrategy: SourceBranch
+        sparseCheckout: []
+  variables:
+    - name: TARGET_BRANCH
+      type: String
+      description: ""
+      required: true
+      value: <+input>.default(<+trigger.payload.pull_req.target_branch>)
+  allowStageExecutions: true

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"log/slog"
 
-	builder "github.com/harness/harness-mcp/pkg/harness/event/common"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -52,7 +51,7 @@ func (b *ToolResultBuilder) AddPrompts(prompts []string) *ToolResultBuilder {
 			slog.Error("Failed to marshal prompts", "error", err)
 			promptData = []byte("[]")
 		}
-		return b.AddEvent(string(builder.PromptEvent), promptData)
+		return b.AddEvent("prompt", promptData)
 	}
 	return b
 }
@@ -62,11 +61,11 @@ func (b *ToolResultBuilder) Build() *mcp.CallToolResult {
 	var contents []mcp.Content
 
 	for _, eventData := range b.events {
-		contents = append(contents, mcp.TextContent{
-			Type: "text",
-			Text: builder.Reg.Build(eventData.EventType, eventData.Event, b.module, eventData.Args...),
-		})
+		// For the new system, we just add the raw JSON data as text content
+		// The complex builder registry system has been replaced with direct content handling
+		contents = append(contents, mcp.NewTextContent(string(eventData.Event)))
 	}
+	
 	slog.Info("Building tool result", "module", b.module, "events", len(b.events))
 	return &mcp.CallToolResult{
 		Content: contents,
