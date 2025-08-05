@@ -97,7 +97,8 @@ func TestListPipelines(t *testing.T) {
 
 	mcpClient := setupMCPClient(t)
 	ctx := context.Background()
-	accountID := getE2EAccountID(t)
+	accountID, err := getE2EAccountID(t)
+	require.NoError(t, err, "expected to get account ID successfully")
 
 	// Call the list_pipelines tool
 	request := mcp.CallToolRequest{}
@@ -173,7 +174,8 @@ func TestListExecutions(t *testing.T) {
 
 	mcpClient := setupMCPClient(t)
 	ctx := context.Background()
-	accountID := getE2EAccountID(t)
+	accountID, err := getE2EAccountID(t)
+	require.NoError(t, err, "expected to get account ID successfully")
 
 	// Call the list_executions tool
 	request := mcp.CallToolRequest{}
@@ -242,7 +244,8 @@ func TestPipelineWorkflow(t *testing.T) {
 
 	mcpClient := setupMCPClient(t)
 	ctx := context.Background()
-	accountID := getE2EAccountID(t)
+	accountID, err := getE2EAccountID(t)
+	require.NoError(t, err, "expected to get account ID successfully")
 
 	// Step 1: List pipelines
 	listRequest := mcp.CallToolRequest{}

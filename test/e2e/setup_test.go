@@ -4,6 +4,7 @@ package e2e_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
@@ -22,9 +23,11 @@ var (
 	// Shared variables and sync.Once instances to ensure one-time execution
 	getTokenOnce sync.Once
 	token        string
+	tokenErr     error
 
 	getAccountIDOnce sync.Once
 	accountID        string
+	accountIDErr     error
 
 	getOrgIDOnce sync.Once
 	orgID        string
@@ -38,18 +41,21 @@ var (
 )
 
 // getE2EToken ensures the environment variable is checked only once and returns the token
-func getE2EToken(t *testing.T) string {
+func getE2EToken(t *testing.T) (string, error) {
 	getTokenOnce.Do(func() {
 		token = os.Getenv("HARNESS_MCP_SERVER_E2E_TOKEN")
 		if token == "" {
-			t.Fatalf("HARNESS_MCP_SERVER_E2E_TOKEN environment variable is not set")
+			tokenErr = fmt.Errorf("HARNESS_MCP_SERVER_E2E_TOKEN environment variable is not set")
 		}
 	})
-	return token
+	if tokenErr != nil {
+		return "", tokenErr
+	}
+	return token, nil
 }
 
 // getE2EAccountID ensures the environment variable is checked only once and returns the account ID
-func getE2EAccountID(t *testing.T) string {
+func getE2EAccountID(t *testing.T) (string, error) {
 	getAccountIDOnce.Do(func() {
 		// First check if explicitly set
 		accountID = os.Getenv("HARNESS_MCP_SERVER_E2E_ACCOUNT_ID")
@@ -58,7 +64,11 @@ func getE2EAccountID(t *testing.T) string {
 		}
 
 		// If not set, try to extract from PAT token
-		pat := getE2EToken(t)
+		pat, err := getE2EToken(t)
+		if err != nil {
+			accountIDErr = err
+			return
+		}
 		// PAT format is pat.{account_id}.{token_id}.{token_value}
 		parts := strings.Split(pat, ".")
 		if len(parts) >= 2 {
@@ -76,9 +86,12 @@ func getE2EAccountID(t *testing.T) string {
 			}
 		}
 
-		t.Fatalf("Could not determine account ID from token or environment variables")
+		accountIDErr = fmt.Errorf("could not determine account ID from token or environment variables")
 	})
-	return accountID
+	if accountIDErr != nil {
+		return "", accountIDErr
+	}
+	return accountID, nil
 }
 
 // getE2EOrgID ensures the environment variable is checked only once and returns the org ID
@@ -126,8 +139,16 @@ func setupMCPClient(t *testing.T, options ...clientOption) *mcpClient.Client {
 	// Only setup once across all tests
 	setupClientOnce.Do(func() {
 		// Get token
-		token := getE2EToken(t)
-		accountID := getE2EAccountID(t)
+		token, err := getE2EToken(t)
+		if err != nil {
+			setupClientErr = err
+			return
+		}
+		accountID, err := getE2EAccountID(t)
+		if err != nil {
+			setupClientErr = err
+			return
+		}
 		// Create and configure options
 		opts := &clientOpts{
 			enabledToolsets: []string{"ccm", "pipelines", "default"},
