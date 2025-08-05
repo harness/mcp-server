@@ -33,7 +33,18 @@ format: tools # Format go code and error if any changes are made
 	@gci write --custom-order -s standard -s "prefix(github.com/harness/gitness)" -s default -s blank -s dot .
 	@echo "Formatting complete"
 
-.PHONY: help format tools
+###############################################################################
+#
+# Testing
+#
+###############################################################################
+
+test: ## Run the go tests
+	@echo "Running tests"
+	@go test ./... -coverprofile=coverage.out
+	@go tool cover -html=coverage.out
+
+.PHONY: help format tools test
 
 $(GOBIN)/gci:
 	go install github.com/daixiang0/gci@v0.13.1

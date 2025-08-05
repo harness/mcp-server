@@ -130,6 +130,26 @@ func (m *CoreModule) IsDefault() bool {
 	return true
 }
 
+// GetGenAIClient creates and returns a GenAI client if in internal mode, otherwise returns nil
+func GetGenAIClient(config *config.Config) (*client.GenaiService, error) {
+	// Skip registration for external mode for now
+	if !config.Internal {
+		return nil, nil
+	}
+
+	// Determine the base URL and secret for genai service
+	baseURL := config.GenaiBaseURL // Only used in internal mode
+	secret := config.GenaiSecret
+
+	// Create base client for genai with the default timeout
+	c, err := utils.CreateClient(baseURL, config, secret, defaultGenaiTimeout)
+	if err != nil {
+		return nil, err
+	}
+
+	return &client.GenaiService{Client: c}, nil
+}
+
 // RegisterPipelines registers the pipelines toolset
 func RegisterPipelines(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
@@ -272,23 +292,16 @@ func RegisterLogs(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 // RegisterGenAI registers the genai toolset
 func RegisterGenAI(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-
 	// Skip registration for external mode for now
 	if !config.Internal {
 		return nil
 	}
 
-	// Determine the base URL and secret for genai service
-	baseURL := config.GenaiBaseURL // Only used in internal mode
-	secret := config.GenaiSecret
-
-	// Create base client for genai with the default timeout
-	c, err := utils.CreateClient(baseURL, config, secret, defaultGenaiTimeout)
+	// Get the GenAI client
+	genaiClient, err := GetGenAIClient(config)
 	if err != nil {
 		return err
 	}
-
-	genaiClient := &client.GenaiService{Client: c}
 
 	// Create the genai toolset
 	genai := toolsets.NewToolset("genai", "Harness GenAI tools").
