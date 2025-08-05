@@ -83,6 +83,7 @@ func ListDashboardsTool(config *config.Config, client *client.DashboardService) 
 				"DBOPS":     "Database Operations",
 				"IACM":      "Infrastructure as Code",
 				"IDP":       "Internal Developer Platform",
+				"SEI":      "Software Engineering Insights",
 				"SSCA":      "Software Supply Chain",
 				"STO":       "Security Testing",
 				"SRM":       "Service Reliability Management",
