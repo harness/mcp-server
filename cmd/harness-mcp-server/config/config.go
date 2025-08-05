@@ -9,6 +9,13 @@ type Config struct {
 	LogFilePath   string
 	Debug         bool
 	EnableLicense bool
+	
+	// Server configuration
+	Transport string // "stdio" or "http"
+	HTTP      struct {
+		Port int    `envconfig:"MCP_HTTP_PORT" default:"8080"`
+		Path string `envconfig:"MCP_HTTP_PATH" default:"/mcp"`
+	}
 
 	Internal bool
 
