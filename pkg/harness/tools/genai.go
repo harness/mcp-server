@@ -238,7 +238,7 @@ func AIDevOpsAgentTool(config *config.Config, client *client.GenaiService) (tool
 	toolParams := append(commonParams,
 		mcp.WithString("action",
 			mcp.Required(),
-			mcp.Description("The action type to perform (CREATE_STEP, UPDATE_STEP, CREATE_STAGE, etc.)"),
+			mcp.Description("The action type to perform (CREATE_STEP, UPDATE_STEP, CREATE_STAGE, UPDATE_STAGE, CREATE_PIPELINE, UPDATE_PIPELINE, CREATE_ENVIRONMENT, UPDATE_ENVIRONMENT, CREATE_SECRET, UPDATE_SECRET, CREATE_SERVICE, UPDATE_SERVICE, CREATE_CONNECTOR, UPDATE_CONNECTOR etc.)"),
 		),
 		WithScope(config, false),
 	)
