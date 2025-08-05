@@ -70,3 +70,7 @@ func BoolToString(b bool) string {
 	}
 	return "false"
 }
+
+func ToBoolPtr(b bool) *bool {
+	return &b
+}
