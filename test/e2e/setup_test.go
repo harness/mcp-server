@@ -41,7 +41,7 @@ var (
 )
 
 // getE2EToken ensures the environment variable is checked only once and returns the token
-func getE2EToken(t *testing.T) (string, error) {
+func getE2EToken(t *testing.T) string {
 	getTokenOnce.Do(func() {
 		token = os.Getenv("HARNESS_MCP_SERVER_E2E_TOKEN")
 		if token == "" {
@@ -49,13 +49,13 @@ func getE2EToken(t *testing.T) (string, error) {
 		}
 	})
 	if tokenErr != nil {
-		return "", tokenErr
+		t.Skip("Skipping e2e test: HARNESS_MCP_SERVER_E2E_TOKEN environment variable is not set")
 	}
-	return token, nil
+	return token
 }
 
 // getE2EAccountID ensures the environment variable is checked only once and returns the account ID
-func getE2EAccountID(t *testing.T) (string, error) {
+func getE2EAccountID(t *testing.T) string {
 	getAccountIDOnce.Do(func() {
 		// First check if explicitly set
 		accountID = os.Getenv("HARNESS_MCP_SERVER_E2E_ACCOUNT_ID")
@@ -64,11 +64,7 @@ func getE2EAccountID(t *testing.T) (string, error) {
 		}
 
 		// If not set, try to extract from PAT token
-		pat, err := getE2EToken(t)
-		if err != nil {
-			accountIDErr = err
-			return
-		}
+		pat := getE2EToken(t)
 		// PAT format is pat.{account_id}.{token_id}.{token_value}
 		parts := strings.Split(pat, ".")
 		if len(parts) >= 2 {
@@ -89,9 +85,9 @@ func getE2EAccountID(t *testing.T) (string, error) {
 		accountIDErr = fmt.Errorf("could not determine account ID from token or environment variables")
 	})
 	if accountIDErr != nil {
-		return "", accountIDErr
+		t.Skip("Skipping e2e test: could not determine account ID from token or environment variables")
 	}
-	return accountID, nil
+	return accountID
 }
 
 // getE2EOrgID ensures the environment variable is checked only once and returns the org ID
@@ -139,16 +135,8 @@ func setupMCPClient(t *testing.T, options ...clientOption) *mcpClient.Client {
 	// Only setup once across all tests
 	setupClientOnce.Do(func() {
 		// Get token
-		token, err := getE2EToken(t)
-		if err != nil {
-			setupClientErr = err
-			return
-		}
-		accountID, err := getE2EAccountID(t)
-		if err != nil {
-			setupClientErr = err
-			return
-		}
+		token := getE2EToken(t)
+		accountID := getE2EAccountID(t)
 		// Create and configure options
 		opts := &clientOpts{
 			enabledToolsets: []string{"ccm", "pipelines", "default"},
