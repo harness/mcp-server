@@ -97,7 +97,10 @@ func TestListPipelines(t *testing.T) {
 
 	mcpClient := setupMCPClient(t)
 	ctx := context.Background()
-	accountID := getE2EAccountID(t)
+	accountID, err := getE2EAccountID()
+	if err != nil {
+		t.Skip("Skipping e2e test: could not determine account ID from token or environment variables")
+	}
 
 	// Call the list_pipelines tool
 	request := mcp.CallToolRequest{}
@@ -173,7 +176,10 @@ func TestListExecutions(t *testing.T) {
 
 	mcpClient := setupMCPClient(t)
 	ctx := context.Background()
-	accountID := getE2EAccountID(t)
+	accountID, err := getE2EAccountID()
+	if err != nil {
+		t.Skip("Skipping e2e test: could not determine account ID from token or environment variables")
+	}
 
 	// Call the list_executions tool
 	request := mcp.CallToolRequest{}
@@ -242,7 +248,10 @@ func TestPipelineWorkflow(t *testing.T) {
 
 	mcpClient := setupMCPClient(t)
 	ctx := context.Background()
-	accountID := getE2EAccountID(t)
+	accountID, err := getE2EAccountID()
+	if err != nil {
+		t.Skip("Skipping e2e test: could not determine account ID from token or environment variables")
+	}
 
 	// Step 1: List pipelines
 	listRequest := mcp.CallToolRequest{}

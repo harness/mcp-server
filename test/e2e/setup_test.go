@@ -41,21 +41,18 @@ var (
 )
 
 // getE2EToken ensures the environment variable is checked only once and returns the token
-func getE2EToken(t *testing.T) string {
+func getE2EToken() (string, error) {
 	getTokenOnce.Do(func() {
 		token = os.Getenv("HARNESS_MCP_SERVER_E2E_TOKEN")
 		if token == "" {
 			tokenErr = fmt.Errorf("HARNESS_MCP_SERVER_E2E_TOKEN environment variable is not set")
 		}
 	})
-	if tokenErr != nil {
-		t.Skip("Skipping e2e test: HARNESS_MCP_SERVER_E2E_TOKEN environment variable is not set")
-	}
-	return token
+	return token, tokenErr
 }
 
 // getE2EAccountID ensures the environment variable is checked only once and returns the account ID
-func getE2EAccountID(t *testing.T) string {
+func getE2EAccountID() (string, error) {
 	getAccountIDOnce.Do(func() {
 		// First check if explicitly set
 		accountID = os.Getenv("HARNESS_MCP_SERVER_E2E_ACCOUNT_ID")
@@ -64,12 +61,14 @@ func getE2EAccountID(t *testing.T) string {
 		}
 
 		// If not set, try to extract from PAT token
-		pat := getE2EToken(t)
-		// PAT format is pat.{account_id}.{token_id}.{token_value}
-		parts := strings.Split(pat, ".")
-		if len(parts) >= 2 {
-			accountID = parts[1]
-			return
+		pat, err := getE2EToken()
+		if err == nil && pat != "" {
+			// PAT format is pat.{account_id}.{token_id}.{token_value}
+			parts := strings.Split(pat, ".")
+			if len(parts) >= 2 {
+				accountID = parts[1]
+				return
+			}
 		}
 
 		// Try to get from HARNESS_MCP_USER_PAT if HARNESS_MCP_SERVER_E2E_TOKEN not set
@@ -84,10 +83,7 @@ func getE2EAccountID(t *testing.T) string {
 
 		accountIDErr = fmt.Errorf("could not determine account ID from token or environment variables")
 	})
-	if accountIDErr != nil {
-		t.Skip("Skipping e2e test: could not determine account ID from token or environment variables")
-	}
-	return accountID
+	return accountID, accountIDErr
 }
 
 // getE2EOrgID ensures the environment variable is checked only once and returns the org ID
@@ -132,11 +128,19 @@ func withToolsets(toolsets []string) clientOption {
 
 // setupMCPClient creates and initializes an MCP client for testing
 func setupMCPClient(t *testing.T, options ...clientOption) *mcpClient.Client {
+	// Check environment variables first, before sync.Once
+	token, tokenErr := getE2EToken()
+	if tokenErr != nil {
+		t.Skip("Skipping e2e test: HARNESS_MCP_SERVER_E2E_TOKEN environment variable is not set")
+	}
+	
+	accountID, accountIDErr := getE2EAccountID()
+	if accountIDErr != nil {
+		t.Skip("Skipping e2e test: could not determine account ID from token or environment variables")
+	}
+	
 	// Only setup once across all tests
 	setupClientOnce.Do(func() {
-		// Get token
-		token := getE2EToken(t)
-		accountID := getE2EAccountID(t)
 		// Create and configure options
 		opts := &clientOpts{
 			enabledToolsets: []string{"ccm", "pipelines", "default"},
