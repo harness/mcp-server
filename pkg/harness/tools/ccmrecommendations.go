@@ -252,6 +252,10 @@ func recommendationsHandler(
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
+	if filterType == "" {
+		filterType = FilterTypeRecommendation
+	}
+
 	params := map[string]any{
 		"k8sRecommendationFilterPropertiesDTO":      k8sProps,
 		"awsRecommendationFilterPropertiesDTO":      awsProps,
