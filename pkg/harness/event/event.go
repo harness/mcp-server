@@ -72,3 +72,31 @@ func (e CustomEvent) CreateEmbeddedResource() (mcp.Content, error) {
 	}
 	return mcp.NewEmbeddedResource(resource), nil
 }
+
+// CreateBaseResponse creates a base response structure with entity information
+func CreateBaseResponse(eventType, entityType string) map[string]any {
+	return map[string]any{
+		"entity_info": map[string]any{
+			"entity_type": entityType,
+		},
+		"type": eventType,
+	}
+}
+
+// FormatEventResponse formats the response data as a JSON string
+func FormatEventResponse(eventType string, responseData map[string]any) string {
+	jsonData, err := json.Marshal(responseData)
+	if err != nil {
+		// Return a basic error response if marshaling fails
+		errorResponse := map[string]any{
+			"entity_info": map[string]any{
+				"entity_type": "error",
+			},
+			"type":  eventType,
+			"error": fmt.Sprintf("Failed to marshal response: %v", err),
+		}
+		errorJSON, _ := json.Marshal(errorResponse)
+		return string(errorJSON)
+	}
+	return string(jsonData)
+}
