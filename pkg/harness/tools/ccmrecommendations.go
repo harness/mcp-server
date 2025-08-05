@@ -9,6 +9,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/harness/harness-mcp/pkg/ccmcommons"
 	"github.com/harness/harness-mcp/client/dto"
+	"github.com/harness/harness-mcp/pkg/utils"
 )
 
 const (
@@ -69,6 +70,11 @@ func UpdateCcmRecommendationStateTool(config *config.Config, client *client.Clou
 				mcp.Required(),
 				mcp.Description("New state for recommendation"),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    utils.ToBoolPtr(false),
+				DestructiveHint: utils.ToBoolPtr(true),
+			}),
+
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			accountId, err := getAccountID(config, request)
@@ -119,6 +125,11 @@ func OverrideCcmRecommendationSavingsTool(config *config.Config, client *client.
 				mcp.Required(),
 				mcp.Description("New savings for recommendation"),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    utils.ToBoolPtr(false),
+				DestructiveHint: utils.ToBoolPtr(true),
+			}),
+
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			accountId, err := getAccountID(config, request)

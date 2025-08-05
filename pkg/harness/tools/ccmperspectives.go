@@ -426,6 +426,10 @@ func createOrUpdatePerspectiveTool(update bool) (tool mcp.Tool) {
 				mcp.Enum(dto.ViewStateDraft, dto.ViewStateCompleted),
 				mcp.Description("State of view. Set to completed if it is not provided."),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    utils.ToBoolPtr(false),
+				DestructiveHint: utils.ToBoolPtr(true),
+			}),
 			createPerspectiveRules(),
 			createPerspectiveVisualization(),
 	}
@@ -834,6 +838,10 @@ func DeleteCcmPerspectiveTool(config *config.Config, client *client.CloudCostMan
 			mcp.WithString("perspective_id",
 				mcp.Description("Identifier of the perspective to delete"),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    utils.ToBoolPtr(false),
+				DestructiveHint: utils.ToBoolPtr(true),
+			}),
 			WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
