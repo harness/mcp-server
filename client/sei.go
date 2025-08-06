@@ -37,7 +37,7 @@ func (s *SEIService) makeRequest(ctx context.Context, method, path string, param
 	// 3. Add authentication headers using the secret
 	// 4. Make the HTTP request
 	// 5. Parse the response into appropriate data structures
-	
+
 	// For now, we return a dummy response to compile
 	return map[string]interface{}{
 		"message": "SEI API response",
@@ -53,31 +53,31 @@ func (s *SEIService) makePostRequest(ctx context.Context, path string, body inte
 	headers := map[string]string{
 		"Content-Type": "application/json",
 	}
-	
+
 	// Add authentication header if secret is provided
 	if s.Secret != "" {
 		headers["x-api-key"] = s.Secret
 	}
-	
+
 	// Add any additional headers
 	for _, additionalHeader := range additionalHeaders {
 		for key, value := range additionalHeader {
 			headers[key] = value
 		}
 	}
-	
+
 	// Marshal body to JSON
 	bodyBytes, err := json.Marshal(body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request body: %w", err)
 	}
-	
+
 	// Use PostRaw to include custom headers
 	err = s.Client.PostRaw(ctx, path, queryParams, bytes.NewBuffer(bodyBytes), headers, &response)
 	if err != nil {
 		return nil, fmt.Errorf("POST request failed: %w", err)
 	}
-	
+
 	return response, nil
 }
 
@@ -86,7 +86,7 @@ func (s *SEIService) makePostRequest(ctx context.Context, path string, body inte
 func (s *SEIService) GetProductivityFeatureMetrics(ctx context.Context, params map[string]interface{}) (interface{}, error) {
 	// Build request body from params
 	requestBody := map[string]interface{}{}
-	
+
 	// Required fields for request body
 	if startDate, ok := params["startDate"]; ok {
 		requestBody["startDate"] = startDate
@@ -97,7 +97,7 @@ func (s *SEIService) GetProductivityFeatureMetrics(ctx context.Context, params m
 	if featureType, ok := params["featureType"]; ok {
 		requestBody["featureType"] = featureType
 	}
-	
+
 	// Optional fields for request body
 	if granularity, ok := params["granularity"]; ok {
 		requestBody["granularity"] = granularity
@@ -120,7 +120,7 @@ func (s *SEIService) GetProductivityFeatureMetrics(ctx context.Context, params m
 	if stackBy, ok := params["stackBy"]; ok {
 		requestBody["stackBy"] = stackBy
 	}
-	
+
 	// Pagination parameters in request body
 	if page, ok := params["page"]; ok {
 		requestBody["page"] = page
@@ -128,7 +128,7 @@ func (s *SEIService) GetProductivityFeatureMetrics(ctx context.Context, params m
 	if pageSize, ok := params["page_size"]; ok {
 		requestBody["page_size"] = pageSize
 	}
-	
+
 	// Sorting parameters in request body
 	if sortBy, ok := params["sortBy"]; ok {
 		requestBody["sortBy"] = sortBy
@@ -136,7 +136,7 @@ func (s *SEIService) GetProductivityFeatureMetrics(ctx context.Context, params m
 	if sortByCriteria, ok := params["sortByCriteria"]; ok {
 		requestBody["sortByCriteria"] = sortByCriteria
 	}
-	
+
 	// Build query parameters from session attributes
 	queryParams := map[string]string{}
 	if accountId, ok := params["accountId"]; ok {
@@ -154,7 +154,7 @@ func (s *SEIService) GetProductivityFeatureMetrics(ctx context.Context, params m
 			queryParams["orgIdentifier"] = orgStr
 		}
 	}
-	
+
 	// Build additional headers
 	additionalHeaders := map[string]string{}
 	if accountId, ok := params["accountId"]; ok {
@@ -162,8 +162,10 @@ func (s *SEIService) GetProductivityFeatureMetrics(ctx context.Context, params m
 			additionalHeaders["harness-account"] = accountStr
 		}
 	}
-	
-	return s.makePostRequest(ctx, "v2/productivityv3/feature_metrics", requestBody, queryParams, additionalHeaders)
+	fmt.Println("Request Body: ", requestBody)
+	fmt.Println("Query Parameters: ", queryParams)
+	fmt.Println("Additional Headers: ", additionalHeaders)
+	return s.makePostRequest(ctx, "/gateway/sei/api/v2/productivityv3/feature_metrics", requestBody, queryParams, additionalHeaders)
 }
 
 // GetProductivityFeatureBreakdown gets productivity feature breakdown
@@ -191,7 +193,7 @@ func (s *SEIService) GetEfficiencyMttrBreakdown(ctx context.Context, params map[
 func (s *SEIService) GetEfficiencyLeadTime(ctx context.Context, params map[string]interface{}) (interface{}, error) {
 	// Build request body from params
 	requestBody := map[string]interface{}{}
-	
+
 	// Required fields for request body
 	if teamRefId, ok := params["teamRefId"]; ok {
 		requestBody["teamRefId"] = teamRefId
@@ -205,7 +207,7 @@ func (s *SEIService) GetEfficiencyLeadTime(ctx context.Context, params map[strin
 	if granularity, ok := params["granularity"]; ok {
 		requestBody["granularity"] = granularity
 	}
-	
+
 	// Optional fields for request body
 	if drillDownStartDate, ok := params["drillDownStartDate"]; ok {
 		requestBody["drillDownStartDate"] = drillDownStartDate
@@ -219,7 +221,7 @@ func (s *SEIService) GetEfficiencyLeadTime(ctx context.Context, params map[strin
 	if pageSize, ok := params["pageSize"]; ok {
 		requestBody["pageSize"] = pageSize
 	}
-	
+
 	// Build query parameters from session attributes
 	queryParams := map[string]string{}
 	if projectIdentifier, ok := params["projectIdentifier"]; ok {
@@ -232,8 +234,16 @@ func (s *SEIService) GetEfficiencyLeadTime(ctx context.Context, params map[strin
 			queryParams["orgIdentifier"] = orgStr
 		}
 	}
-	
-	return s.makePostRequest(ctx, "v2/insights/efficiency/leadtime", requestBody, queryParams)
+
+	// Build additional headers
+	additionalHeaders := map[string]string{}
+	if accountId, ok := params["accountId"]; ok {
+		if accountStr, ok := accountId.(string); ok {
+			additionalHeaders["harness-account"] = accountStr
+		}
+	}
+
+	return s.makePostRequest(ctx, "/gateway/sei/api/v2/insights/efficiency/leadtime", requestBody, queryParams, additionalHeaders)
 }
 
 // GetEfficiencyLeadTimeStages gets lead time stages
