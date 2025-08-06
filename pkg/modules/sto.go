@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -83,7 +84,8 @@ func RegisterSTO(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 	cPrincipal, err := utils.CreateClient(baseURLPrincipal, config, principalSecret)
 	if err != nil {
-		return err
+		slog.Warn("Failed to create principal client for STO toolset", "error", err)
+		return nil
 	}
 	principalClient := &client.PrincipalService{Client: cPrincipal}
 
@@ -92,7 +94,8 @@ func RegisterSTO(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	if config.Internal {
 		stoAPIKey, err = retrieveSTOToken(tokenURL, secret)
 		if err != nil {
-			return err
+			slog.Warn("Failed to retrieve STO token. STO toolset will be partially operational", "error", err)
+			// Continue without the token
 		}
 	}
 
@@ -100,7 +103,8 @@ func RegisterSTO(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	stoClient, err := sto.NewClientWithResponses(baseURL, sto.WithHTTPClient(c),
 		sto.WithRequestEditorFn(requestEditorFn))
 	if err != nil {
-		return fmt.Errorf("failed to create generated STO client: %w", err)
+		slog.Warn("Failed to create generated STO client. STO toolset will not be available", "error", err)
+		return nil
 	}
 	sto := toolsets.NewToolset("sto", "Harness Security Test Orchestration tools").
 		AddReadTools(
