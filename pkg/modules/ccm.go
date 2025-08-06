@@ -91,6 +91,7 @@ func RegisterCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGro
 			toolsets.NewServerTool(tools.CreateCcmPerspectiveTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.UpdateCcmPerspectiveTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.DeleteCcmPerspectiveTool(config, ccmClient)),
+			toolsets.NewServerTool(tools.GetCcmPerspectiveRulesTool(config)),
 			toolsets.NewServerTool(tools.CcmPerspectiveGridTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.CcmPerspectiveTimeSeriesTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.CcmPerspectiveSummaryWithBudgetTool(config, ccmClient)),
@@ -105,6 +106,7 @@ func RegisterCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGro
 			toolsets.NewServerTool(tools.OverrideCcmRecommendationSavingsTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.FetchCommitmentCoverageTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.FetchCommitmentSavingsTool(config, ccmClient)),
+			toolsets.NewServerTool(tools.FetchCommitmentUtilisationTool(config, ccmClient)),
 		)
 
 	// Add toolset to the group

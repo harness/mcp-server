@@ -3,8 +3,9 @@ package tools
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/mark3labs/mcp-go/mcp"
 	"strconv"
+
+	"github.com/mark3labs/mcp-go/mcp"
 )
 
 // Helper functions for parameter handling

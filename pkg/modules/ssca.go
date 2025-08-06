@@ -69,7 +69,7 @@ func (m *SSCAModule) IsDefault() bool {
 
 // RegisterSCS registers the Supply Chain Security toolset
 func RegisterSCS(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-	baseURL := utils.BuildServiceURL(config, config.SCSSvcBaseURL, config.BaseURL, "/ssca-manager")
+	baseURL := utils.BuildServiceURL(config, config.SCSSvcBaseURL, config.BaseURL, "ssca-manager")
 	secret := config.SCSSvcSecret
 	// Create base client for SCS
 	c, err := utils.CreateClient(baseURL, config, secret, 30*time.Second)
@@ -98,7 +98,6 @@ func RegisterSCS(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 			toolsets.NewServerTool(tools.GetCodeRepositoryOverviewTool(config, scsClient)),
 			toolsets.NewServerTool(tools.FetchComplianceResultsByArtifactTool(config, scsClient)),
 			toolsets.NewServerTool(tools.ListArtifactSourcesTool(config, scsClient)),
-			toolsets.NewServerTool(tools.GetArtifactV2OverviewTool(config, scsClient)),
 			toolsets.NewServerTool(tools.GetArtifactChainOfCustodyV2Tool(config, scsClient)),
 			toolsets.NewServerTool(tools.CreateOPAPolicyTool(config, scsClient)),
 			toolsets.NewServerTool(tools.ArtifactListV2Tool(config, scsClient)),

@@ -296,11 +296,10 @@ func (c *Client) PostRawStream(
 
 	notify := func(err error, next time.Duration) {
 		retryCount++
-		log.Warn().
-			Int("retry_count", retryCount).
-			Dur("next_retry_in", next).
-			Err(err).
-			Msg("Retrying request due to error")
+		slog.Warn("Retrying request due to error",
+			    "retry_count", retryCount,
+			    "next_retry_in", next,
+			    "error", err)
 	}
 
 	if len(b) > 0 {

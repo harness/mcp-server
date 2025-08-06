@@ -1,7 +1,6 @@
 package modules
 
 import (
-	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/toolsets"
 )
 
@@ -28,76 +27,6 @@ type Module interface {
 	IsDefault() bool
 }
 
-// ModuleRegistry holds all available modules
-type ModuleRegistry struct {
-	modules []Module
-	config  *config.Config
-	tsg     *toolsets.ToolsetGroup
-}
-
-// NewModuleRegistry creates a new module registry with all available modules
-func NewModuleRegistry(config *config.Config, tsg *toolsets.ToolsetGroup) *ModuleRegistry {
-	return &ModuleRegistry{
-		modules: []Module{
-			NewCoreModule(config, tsg),
-			NewCIModule(config, tsg),
-			NewCDModule(config, tsg),
-			NewUnlicensedModule(config, tsg),
-			NewCHAOSModule(config, tsg),
-			NewSEIModule(config, tsg),
-			NewSTOModule(config, tsg),
-			NewSSCAModule(config, tsg),
-			NewCODEModule(config, tsg),
-			NewCCMModule(config, tsg),
-			NewIDPModule(config, tsg),
-			NewHARModule(config, tsg),
-		},
-		config: config,
-		tsg:    tsg,
-	}
-}
-
-// GetAllModules returns all available modules
-func (r *ModuleRegistry) GetAllModules() []Module {
-	return r.modules
-}
-
-// GetEnabledModules returns the list of enabled modules based on configuration
-func (r *ModuleRegistry) GetEnabledModules() []Module {
-	// If no specific modules are enabled, return all default modules
-	if len(r.config.EnableModules) == 0 {
-		var defaultModules []Module
-		for _, module := range r.modules {
-			if module.IsDefault() {
-				defaultModules = append(defaultModules, module)
-			}
-		}
-		return defaultModules
-	}
-
-	// Create a map for quick lookup of enabled module IDs
-	enabledModuleIDs := make(map[string]bool)
-	for _, id := range r.config.EnableModules {
-		enabledModuleIDs[id] = true
-	}
-
-	// Check if "all" is enabled
-	if enabledModuleIDs["all"] {
-		return r.modules
-	}
-
-	enabledModuleIDs["CORE"] = true
-
-	// Return only enabled modules
-	var enabledModules []Module
-	for _, module := range r.modules {
-		if enabledModuleIDs[module.ID()] {
-			enabledModules = append(enabledModules, module)
-		}
-	}
-	return enabledModules
-}
-
 // ModuleEnableToolsets is a helper function that safely enables toolsets
 // by only enabling toolsets that actually exist in the toolset group
 func ModuleEnableToolsets(m Module, tsg *toolsets.ToolsetGroup) error {
@@ -115,5 +44,7 @@ func ModuleEnableToolsets(m Module, tsg *toolsets.ToolsetGroup) error {
 	if len(existingToolsets) == 0 {
 		return nil
 	}
+
+	// Enable the toolsets
 	return tsg.EnableToolsets(existingToolsets)
 }

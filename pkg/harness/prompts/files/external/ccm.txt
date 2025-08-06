@@ -1,0 +1,10 @@
+---
+name: "ccm"
+description: "Ensure parameters are provided correctly and in the right format"
+result_description: "Input parameters validation"
+---
+
+When calling get_ccm_overview, ensure you have: accountIdentifier, groupBy, startDate, and endDate.
+- If any are missing, ask the user for the specific value(s).
+- Always send startDate and endDate in the following format: 'MM/DD/YYYY' (e.g. '10/30/2025')
+- If no dates are supplied, default startDate to 60 days ago and endDate to now.

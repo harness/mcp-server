@@ -29,7 +29,7 @@ func (r *CloudCostManagementService) GetRecommendationsStats(ctx context.Context
 	return r.getRecommendations(ctx, scope, accountId, options, ccmRecommendationsStatsPath)
 }
 
-func (r *CloudCostManagementService)UpdateRecommendationState(
+func (r *CloudCostManagementService) UpdateRecommendationState(
 	ctx context.Context, 
 	scope dto.Scope, 
 	accountId string, 
@@ -52,7 +52,7 @@ func (r *CloudCostManagementService)UpdateRecommendationState(
 	return resp, nil
 }
 
-func (r *CloudCostManagementService)OverrideRecommendationSavings(
+func (r *CloudCostManagementService) OverrideRecommendationSavings(
 	ctx context.Context, 
 	scope dto.Scope, 
 	accountId string, 
