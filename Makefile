@@ -21,6 +21,7 @@ build:
 	@echo "Building mcp-server"
 	go build -ldflags=${LDFLAGS} -o cmd/harness-mcp-server/harness-mcp-server ./cmd/harness-mcp-server
 
+
 ###############################################################################
 #
 # Code Formatting and linting
