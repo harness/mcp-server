@@ -124,7 +124,8 @@ Toolset Name: `ccm`
 - `get_ccm_recommendations_stats`: Returns overall statistics for cloud cost optimization recommendations within a given account in Harness Cloud Cost Management.
 - `update_ccm_recommendation_state`: Marks a recommendation as Applied/Open/Ignored in Harness Cloud Cost Management.
 - `override_ccm_recommendation_savings`: Overrides savings for a recommendation in Harness Cloud Cost Management.
-- `create_jira_for_ccm_recommendation`: Creates a Jira issue for a recommendation in Harness Cloud Cost Management.
+- `create_jira_ticket_for_ccm_recommendation`: Creates a Jira ticket for a recommendation in Harness Cloud Cost Management.
+- `create_service_now_ticket_for_ccm_recommendation`: Creates a Service Now ticket for a recommendation in Harness Cloud Cost Management.
 - `get_ec2_recommendation_detail`: Returns ECS Recommendation details for the given Recommendation identifier.
 - `get_azure_vm_recommendation_detail`: Returns Azure Vm Recommendation details for the given Recommendation identifier.
 - `get_ecs_service_recommendation_detail`: Returns ECS Service Recommendation details for the given Recommendation identifier.

@@ -141,12 +141,14 @@ func (r *CloudCostManagementService) createTicket(
 		"recommendationId": ticketDetails.RecommendationId,
 		"resourceType":     ticketDetails.ResourceType,
 		"connectorRef":     ticketDetails.ConnectorRef,
-		"ticketType":       ticketDetails.TicketType,
 		"fields":           ticketDetails.Fields,
 	}
 
 	if ticketDetails.Platform == dto.TicketPlatformJira {
 		body["projectKey"] = ticketDetails.ProjectKey
+		body["issueType"] = ticketDetails.TicketType
+	} else {
+		body["ticketType"] = ticketDetails.TicketType
 	}
 
 	slog.Debug("Creating CCM Ticket", "accountId", accountId, "jiraDetails", body, "ticketType", ticketDetails.TicketType)

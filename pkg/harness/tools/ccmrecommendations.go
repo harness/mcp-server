@@ -301,7 +301,7 @@ func recommendationsHandler(
 	return mcp.NewToolResultText(string(r)), nil
 }
 
-var createJiraToolName = "create_ccm_jira_ticket" 
+var createJiraToolName = "create_jira_ticket_for_ccm_recommendation" 
 func CreateCcmJiraTicketTool(config *config.Config, client *client.CloudCostManagementService,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return createTicketTool(createJiraToolName, "Creates a Jira ticket for a CCM recommendation", config, client.CreateJiraTicket)
@@ -309,13 +309,14 @@ func CreateCcmJiraTicketTool(config *config.Config, client *client.CloudCostMana
 
 func CreateCcmServiceNowTicketTool(config *config.Config, client *client.CloudCostManagementService,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return createTicketTool("create_ccm_service_now_ticket", "Creates a Service Now ticket for a CCM recommendation", config, client.CreateServiceNowTicket)
+	return createTicketTool("create_service_now_ticket_for_ccm_recommendation", "Creates a Service Now ticket for a CCM recommendation", config, client.CreateServiceNowTicket)
 }
 
 func createTicketTool(name string, description string, config *config.Config, clientCall CreateTicketForRecommendation,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 
 	options := []mcp.ToolOption{
+		mcp.WithDescription(description), 
 		mcp.WithString("recommendation_id",
 			mcp.Required(),
 			mcp.Description("Recommendation ID"),
@@ -332,19 +333,26 @@ func createTicketTool(name string, description string, config *config.Config, cl
 			mcp.Required(),
 			mcp.Description("Resource type"),
 		),
-		mcp.WithString("connector_ref", mcp.Required(), mcp.Description("Jira connector reference")),
-		mcp.WithString("ticket_type", mcp.Required(), mcp.Description("Jira issue type")),
-		mcp.WithObject("fields", mcp.Required(), mcp.Description("Additional Jira fields")),
+		mcp.WithString("connector_ref", mcp.Required(), mcp.Description("Connector reference")),
+		mcp.WithObject("fields", mcp.Required(), mcp.Description("Additional fields")),
+		mcp.WithToolAnnotation(mcp.ToolAnnotation{
+			ReadOnlyHint:    utils.ToBoolPtr(false),
+			DestructiveHint: utils.ToBoolPtr(true),
+		}),
 	}
 
 	if name == createJiraToolName {
 		options = append(options,
 			mcp.WithString("project_key", mcp.Required(), mcp.Description("Jira project key")),
+			mcp.WithString("issue_type", mcp.Required(), mcp.Description("Issue type")),
+		)
+	} else {
+		options = append(options,
+			mcp.WithString("ticket_type", mcp.Required(), mcp.Description("Ticket type")),
 		)
 	}
 	
-	return mcp.NewTool(name,
-		mcp.WithDescription(description),
+	return mcp.NewTool(name, options...,
 	),
 	func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		accountId, err := getAccountID(config, request)
@@ -367,10 +375,7 @@ func createTicketTool(name string, description string, config *config.Config, cl
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		ticketType, err := OptionalParam[string](request, "ticket_type")
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
+
 		fields, err := OptionalParam[map[string]any](request, "fields")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -385,11 +390,26 @@ func createTicketTool(name string, description string, config *config.Config, cl
 		if connectorRef == "" {
 			return mcp.NewToolResultError("connector_ref is required"), nil
 		}
-		if name == createJiraToolName && projectKey == "" {
-			return mcp.NewToolResultError("project_key is required"), nil
+
+		ticketType := ""
+		if name == createJiraToolName {
+			if projectKey == "" {
+				return mcp.NewToolResultError("project_key is required"), nil
+			}
+
+			ticketType, err = OptionalParam[string](request, "issue_type")
+			if err != nil {
+				return mcp.NewToolResultError("ticket_type is required"), nil
+			}
+		} else {
+			ticketType, err = OptionalParam[string](request, "issue_type")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 		}
+		
 		if ticketType == "" {
-			return mcp.NewToolResultError("ticket_type is required"), nil
+			return mcp.NewToolResultError("Ticket or Issue type can not be nil"), nil
 		}
 
 		ticketDetail := dto.CCMTicketDetails{
@@ -410,7 +430,6 @@ func createTicketTool(name string, description string, config *config.Config, cl
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-
 		return mcp.NewToolResultText(string(r)), nil
 	}
 }
