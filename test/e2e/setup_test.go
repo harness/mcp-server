@@ -57,7 +57,7 @@ func getE2EAccountID(t *testing.T) string {
 			return
 		}
 
-		// If not set, try to extract from PAT  token
+		// If not set, try to extract from PAT token
 		pat := getE2EToken(t)
 		// PAT format is pat.{account_id}.{token_id}.{token_value}
 		parts := strings.Split(pat, ".")
