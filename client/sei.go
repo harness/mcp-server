@@ -48,7 +48,7 @@ func (s *SEIService) makeRequest(ctx context.Context, method, path string, param
 }
 
 // makePostRequest makes a POST request with JSON body
-func (s *SEIService) makePostRequest(ctx context.Context, path string, body interface{}, queryParams map[string]string) (interface{}, error) {
+func (s *SEIService) makePostRequest(ctx context.Context, path string, body interface{}, queryParams map[string]string, additionalHeaders ...map[string]string) (interface{}, error) {
 	var response interface{}
 	headers := map[string]string{
 		"Content-Type": "application/json",
@@ -57,6 +57,13 @@ func (s *SEIService) makePostRequest(ctx context.Context, path string, body inte
 	// Add authentication header if secret is provided
 	if s.Secret != "" {
 		headers["x-api-key"] = s.Secret
+	}
+	
+	// Add any additional headers
+	for _, additionalHeader := range additionalHeaders {
+		for key, value := range additionalHeader {
+			headers[key] = value
+		}
 	}
 	
 	// Marshal body to JSON
@@ -75,12 +82,12 @@ func (s *SEIService) makePostRequest(ctx context.Context, path string, body inte
 }
 
 // GetProductivityFeatureMetrics gets productivity feature metrics
-// Makes a POST request to /v2/productivityv3/feature_metrics with JSON body
+// Makes a POST request to /v2/productivityv3/feature_metrics with JSON body and query parameters
 func (s *SEIService) GetProductivityFeatureMetrics(ctx context.Context, params map[string]interface{}) (interface{}, error) {
 	// Build request body from params
 	requestBody := map[string]interface{}{}
 	
-	// Required fields
+	// Required fields for request body
 	if startDate, ok := params["startDate"]; ok {
 		requestBody["startDate"] = startDate
 	}
@@ -91,7 +98,7 @@ func (s *SEIService) GetProductivityFeatureMetrics(ctx context.Context, params m
 		requestBody["featureType"] = featureType
 	}
 	
-	// Optional fields
+	// Optional fields for request body
 	if granularity, ok := params["granularity"]; ok {
 		requestBody["granularity"] = granularity
 	}
@@ -114,7 +121,49 @@ func (s *SEIService) GetProductivityFeatureMetrics(ctx context.Context, params m
 		requestBody["stackBy"] = stackBy
 	}
 	
-	return s.makePostRequest(ctx, "v2/productivityv3/feature_metrics", requestBody, nil)
+	// Pagination parameters in request body
+	if page, ok := params["page"]; ok {
+		requestBody["page"] = page
+	}
+	if pageSize, ok := params["page_size"]; ok {
+		requestBody["page_size"] = pageSize
+	}
+	
+	// Sorting parameters in request body
+	if sortBy, ok := params["sortBy"]; ok {
+		requestBody["sortBy"] = sortBy
+	}
+	if sortByCriteria, ok := params["sortByCriteria"]; ok {
+		requestBody["sortByCriteria"] = sortByCriteria
+	}
+	
+	// Build query parameters from session attributes
+	queryParams := map[string]string{}
+	if accountId, ok := params["accountId"]; ok {
+		if accountStr, ok := accountId.(string); ok {
+			queryParams["account"] = accountStr
+		}
+	}
+	if projectId, ok := params["projectId"]; ok {
+		if projectStr, ok := projectId.(string); ok {
+			queryParams["projectIdentifier"] = projectStr
+		}
+	}
+	if orgId, ok := params["orgId"]; ok {
+		if orgStr, ok := orgId.(string); ok {
+			queryParams["orgIdentifier"] = orgStr
+		}
+	}
+	
+	// Build additional headers
+	additionalHeaders := map[string]string{}
+	if accountId, ok := params["accountId"]; ok {
+		if accountStr, ok := accountId.(string); ok {
+			additionalHeaders["harness-account"] = accountStr
+		}
+	}
+	
+	return s.makePostRequest(ctx, "v2/productivityv3/feature_metrics", requestBody, queryParams, additionalHeaders)
 }
 
 // GetProductivityFeatureBreakdown gets productivity feature breakdown
