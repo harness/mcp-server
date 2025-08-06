@@ -1,0 +1,208 @@
+package client
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
+)
+
+// SEIService handles communication with the SEI API
+type SEIService struct {
+	Client  *Client
+	BaseURL string
+	Secret  string
+}
+
+// NewSEIService creates a new SEIService with the given client and baseURL
+func NewSEIService(client *Client, baseURL, secret string) *SEIService {
+	// Ensure the baseURL ends with a trailing slash
+	if !strings.HasSuffix(baseURL, "/") {
+		baseURL = baseURL + "/"
+	}
+	return &SEIService{
+		Client:  client,
+		BaseURL: baseURL,
+		Secret:  secret,
+	}
+}
+
+// makeRequest is a helper function to make API requests to the SEI service
+func (s *SEIService) makeRequest(ctx context.Context, method, path string, params map[string]interface{}) (interface{}, error) {
+	// This is a placeholder implementation
+	// In a real implementation, this would:
+	// 1. Construct the URL from baseURL and path
+	// 2. Convert params to query parameters or JSON body depending on method
+	// 3. Add authentication headers using the secret
+	// 4. Make the HTTP request
+	// 5. Parse the response into appropriate data structures
+	
+	// For now, we return a dummy response to compile
+	return map[string]interface{}{
+		"message": "SEI API response",
+		"method":  method,
+		"path":    path,
+		"params":  params,
+	}, nil
+}
+
+// makePostRequest makes a POST request with JSON body
+func (s *SEIService) makePostRequest(ctx context.Context, path string, body interface{}, queryParams map[string]string) (interface{}, error) {
+	var response interface{}
+	headers := map[string]string{
+		"Content-Type": "application/json",
+	}
+	
+	// Add authentication header if secret is provided
+	if s.Secret != "" {
+		headers["x-api-key"] = s.Secret
+	}
+	
+	// Marshal body to JSON
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request body: %w", err)
+	}
+	
+	// Use PostRaw to include custom headers
+	err = s.Client.PostRaw(ctx, path, queryParams, bytes.NewBuffer(bodyBytes), headers, &response)
+	if err != nil {
+		return nil, fmt.Errorf("POST request failed: %w", err)
+	}
+	
+	return response, nil
+}
+
+// GetProductivityFeatureMetrics gets productivity feature metrics
+// Makes a POST request to /v2/productivityv3/feature_metrics with JSON body
+func (s *SEIService) GetProductivityFeatureMetrics(ctx context.Context, params map[string]interface{}) (interface{}, error) {
+	// Build request body from params
+	requestBody := map[string]interface{}{}
+	
+	// Required fields
+	if startDate, ok := params["startDate"]; ok {
+		requestBody["startDate"] = startDate
+	}
+	if endDate, ok := params["endDate"]; ok {
+		requestBody["endDate"] = endDate
+	}
+	if featureType, ok := params["featureType"]; ok {
+		requestBody["featureType"] = featureType
+	}
+	
+	// Optional fields
+	if granularity, ok := params["granularity"]; ok {
+		requestBody["granularity"] = granularity
+	}
+	if developerIds, ok := params["developerIds"]; ok {
+		requestBody["developerIds"] = developerIds
+	}
+	if developerRefIds, ok := params["developerRefIds"]; ok {
+		requestBody["developerRefIds"] = developerRefIds
+	}
+	if teamRefIds, ok := params["teamRefIds"]; ok {
+		requestBody["teamRefIds"] = teamRefIds
+	}
+	if teamIds, ok := params["teamIds"]; ok {
+		requestBody["teamIds"] = teamIds
+	}
+	if teamId, ok := params["teamId"]; ok {
+		requestBody["teamId"] = teamId
+	}
+	if stackBy, ok := params["stackBy"]; ok {
+		requestBody["stackBy"] = stackBy
+	}
+	
+	return s.makePostRequest(ctx, "v2/productivityv3/feature_metrics", requestBody, nil)
+}
+
+// GetProductivityFeatureBreakdown gets productivity feature breakdown
+func (s *SEIService) GetProductivityFeatureBreakdown(ctx context.Context, params map[string]interface{}) (interface{}, error) {
+	return s.makeRequest(ctx, "GET", "api/v1/productivity/feature/breakdown", params)
+}
+
+// GetProductivityFeatureDrilldown gets productivity feature drilldown
+func (s *SEIService) GetProductivityFeatureDrilldown(ctx context.Context, params map[string]interface{}) (interface{}, error) {
+	return s.makeRequest(ctx, "GET", "api/v1/productivity/feature/drilldown", params)
+}
+
+// GetProductivityFeatureIndividualDrilldown gets productivity feature individual drilldown
+func (s *SEIService) GetProductivityFeatureIndividualDrilldown(ctx context.Context, params map[string]interface{}) (interface{}, error) {
+	return s.makeRequest(ctx, "GET", "api/v1/productivity/feature/individual/drilldown", params)
+}
+
+// GetEfficiencyMttrBreakdown gets MTTR breakdown
+func (s *SEIService) GetEfficiencyMttrBreakdown(ctx context.Context, params map[string]interface{}) (interface{}, error) {
+	return s.makeRequest(ctx, "GET", "api/v1/efficiency/mttr/breakdown", params)
+}
+
+// GetEfficiencyLeadTime gets lead time
+// Makes a POST request to /v2/insights/efficiency/leadtime with JSON body and query parameters
+func (s *SEIService) GetEfficiencyLeadTime(ctx context.Context, params map[string]interface{}) (interface{}, error) {
+	// Build request body from params
+	requestBody := map[string]interface{}{}
+	
+	// Required fields for request body
+	if teamRefId, ok := params["teamRefId"]; ok {
+		requestBody["teamRefId"] = teamRefId
+	}
+	if dateStart, ok := params["dateStart"]; ok {
+		requestBody["dateStart"] = dateStart
+	}
+	if dateEnd, ok := params["dateEnd"]; ok {
+		requestBody["dateEnd"] = dateEnd
+	}
+	if granularity, ok := params["granularity"]; ok {
+		requestBody["granularity"] = granularity
+	}
+	
+	// Optional fields for request body
+	if drillDownStartDate, ok := params["drillDownStartDate"]; ok {
+		requestBody["drillDownStartDate"] = drillDownStartDate
+	}
+	if drillDownEndDate, ok := params["drillDownEndDate"]; ok {
+		requestBody["drillDownEndDate"] = drillDownEndDate
+	}
+	if page, ok := params["page"]; ok {
+		requestBody["page"] = page
+	}
+	if pageSize, ok := params["pageSize"]; ok {
+		requestBody["pageSize"] = pageSize
+	}
+	
+	// Build query parameters from session attributes
+	queryParams := map[string]string{}
+	if projectIdentifier, ok := params["projectIdentifier"]; ok {
+		if projectStr, ok := projectIdentifier.(string); ok {
+			queryParams["projectIdentifier"] = projectStr
+		}
+	}
+	if orgIdentifier, ok := params["orgIdentifier"]; ok {
+		if orgStr, ok := orgIdentifier.(string); ok {
+			queryParams["orgIdentifier"] = orgStr
+		}
+	}
+	
+	return s.makePostRequest(ctx, "v2/insights/efficiency/leadtime", requestBody, queryParams)
+}
+
+// GetEfficiencyLeadTimeStages gets lead time stages
+func (s *SEIService) GetEfficiencyLeadTimeStages(ctx context.Context, params map[string]interface{}) (interface{}, error) {
+	return s.makeRequest(ctx, "GET", "api/v1/efficiency/lead-time/stages", params)
+}
+
+// GetEfficiencyLeadTimeDrilldown gets lead time drilldown
+func (s *SEIService) GetEfficiencyLeadTimeDrilldown(ctx context.Context, params map[string]interface{}) (interface{}, error) {
+	return s.makeRequest(ctx, "GET", "api/v1/efficiency/lead-time/drilldown", params)
+}
+
+// GetEfficiencyDeploymentFrequencyDrilldown gets deployment frequency drilldown
+func (s *SEIService) GetEfficiencyDeploymentFrequencyDrilldown(ctx context.Context, params map[string]interface{}) (interface{}, error) {
+	return s.makeRequest(ctx, "GET", "api/v1/efficiency/deployment-frequency/drilldown", params)
+}
+
+// GetEfficiencyChangeFailureRateDrilldown gets change failure rate drilldown
+func (s *SEIService) GetEfficiencyChangeFailureRateDrilldown(ctx context.Context, params map[string]interface{}) (interface{}, error) {
+	return s.makeRequest(ctx, "GET", "api/v1/efficiency/change-failure-rate/drilldown", params)
+}
