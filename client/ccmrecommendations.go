@@ -3,28 +3,29 @@ package client
 import (
 	"context"
 	"fmt"
-	"github.com/harness/harness-mcp/client/dto"
-	"strconv"
 	"log/slog"
+	"strconv"
+
+	"github.com/harness/harness-mcp/client/dto"
 )
+
 const (
-	ccmRecommendationsListPath = ccmBasePath + "/recommendation/overview/list?accountIdentifier=%s"
-	ccmRecommendationsByResourceTypeListPath = ccmBasePath + "/recommendation/overview/resource-type/stats?accountIdentifier=%s"
-	ccmRecommendationsStatsPath = ccmBasePath + "/recommendation/overview/stats?accountIdentifier=%s"
-	ccmUpdateRecommendationStatePath = ccmBasePath + "/recommendation/overview/change-state?accountIdentifier=%s"
-	ccmOverrideRecommendationSavingsPath = ccmBasePath + "/recommendation/overview/override-savings?accountIdentifier=%s"
-	ccmCreateRecommendationJiraTicketPath = ccmBasePath + "/recommendation/jira/create?accountIdentifier=%s"
+	ccmRecommendationsListPath                  = ccmBasePath + "/recommendation/overview/list?accountIdentifier=%s"
+	ccmRecommendationsByResourceTypeListPath    = ccmBasePath + "/recommendation/overview/resource-type/stats?accountIdentifier=%s"
+	ccmRecommendationsStatsPath                 = ccmBasePath + "/recommendation/overview/stats?accountIdentifier=%s"
+	ccmUpdateRecommendationStatePath            = ccmBasePath + "/recommendation/overview/change-state?accountIdentifier=%s"
+	ccmOverrideRecommendationSavingsPath        = ccmBasePath + "/recommendation/overview/override-savings?accountIdentifier=%s"
+	ccmCreateRecommendationJiraTicketPath       = ccmBasePath + "/recommendation/jira/create?accountIdentifier=%s"
 	ccmCreateRecommendationServiceNowTicketPath = ccmBasePath + "/recommendation/servicenow/create?accountIdentifier=%s"
-	ccmGetRecommendationDetailPath = ccmBasePath + "/recommendation/details/%s?accountIdentifier=%s&id=%s"
-
+	ccmGetRecommendationDetailPath              = ccmBasePath + "/recommendation/details/%s?accountIdentifier=%s&id=%s"
 )
 
 const (
-	ec2Path = "ec2-instance"
-	azureVmPath = "azure-vm"
+	ec2Path        = "ec2-instance"
+	azureVmPath    = "azure-vm"
 	ecsServicePath = "ecs-service"
-	nodePoolPath = "node-pool"
-	workloadPath = "workload"
+	nodePoolPath   = "node-pool"
+	workloadPath   = "workload"
 )
 
 func (r *CloudCostManagementService) ListRecommendations(ctx context.Context, scope dto.Scope, accountId string, options map[string]any) (*map[string]any, error) {
@@ -42,17 +43,17 @@ func (r *CloudCostManagementService) GetRecommendationsStats(ctx context.Context
 	return r.getRecommendations(ctx, scope, accountId, options, ccmRecommendationsStatsPath)
 }
 
-func (r *CloudCostManagementService)UpdateRecommendationState(
-	ctx context.Context, 
-	scope dto.Scope, 
-	accountId string, 
+func (r *CloudCostManagementService) UpdateRecommendationState(
+	ctx context.Context,
+	scope dto.Scope,
+	accountId string,
 	recommendationId string,
 	state string,
 ) (*map[string]any, error) {
 
 	path := fmt.Sprintf(ccmUpdateRecommendationStatePath, accountId)
 	params := make(map[string]string)
-	params["recommendationId"] = recommendationId 
+	params["recommendationId"] = recommendationId
 	params["state"] = state
 
 	resp := new(map[string]any)
@@ -65,17 +66,17 @@ func (r *CloudCostManagementService)UpdateRecommendationState(
 	return resp, nil
 }
 
-func (r *CloudCostManagementService)OverrideRecommendationSavings(
-	ctx context.Context, 
-	scope dto.Scope, 
-	accountId string, 
+func (r *CloudCostManagementService) OverrideRecommendationSavings(
+	ctx context.Context,
+	scope dto.Scope,
+	accountId string,
 	recommendationId string,
 	savings float64,
 ) (*map[string]any, error) {
 
 	path := fmt.Sprintf(ccmOverrideRecommendationSavingsPath, accountId)
 	params := make(map[string]string)
-	params["recommendationId"] = recommendationId 
+	params["recommendationId"] = recommendationId
 	params["overriddenSavings"] = strconv.FormatFloat(savings, 'f', -1, 64)
 
 	resp := new(map[string]any)
@@ -89,9 +90,9 @@ func (r *CloudCostManagementService)OverrideRecommendationSavings(
 }
 
 func (r *CloudCostManagementService) getRecommendations(
-	ctx context.Context, 
-	scope dto.Scope, 
-	accountId string, 
+	ctx context.Context,
+	scope dto.Scope,
+	accountId string,
 	options map[string]any,
 	url string,
 ) (*map[string]any, error) {
@@ -103,7 +104,8 @@ func (r *CloudCostManagementService) getRecommendations(
 	items := new(map[string]any)
 
 	err := r.Client.Post(ctx, path, params, options, &items)
-	if err != nil { return nil, fmt.Errorf("Failed to list cloud cost management recommendations: %w", err)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to list cloud cost management recommendations: %w", err)
 	}
 
 	return items, nil
@@ -135,7 +137,6 @@ func (r *CloudCostManagementService) createTicket(
 	ticketDetails dto.CCMTicketDetails,
 	url string,
 ) (*map[string]any, error) {
-
 
 	body := map[string]any{
 		"recommendationId": ticketDetails.RecommendationId,
@@ -184,7 +185,7 @@ func (r *CloudCostManagementService) GetWorkloadRecommendationDetail(ctx context
 }
 
 func (r *CloudCostManagementService) getRecommendationDetail(
-	ctx context.Context, 
+	ctx context.Context,
 	options dto.CCMRecommendationDetailOptions,
 	typePath string,
 ) (*map[string]any, error) {
@@ -197,17 +198,16 @@ func (r *CloudCostManagementService) getRecommendationDetail(
 		params["to"] = options.To
 	}
 
-	if typePath == ecsServicePath { 
+	if typePath == ecsServicePath {
 		params["bufferPercentage"] = strconv.FormatInt(options.BufferPercentage, 10)
 	}
 
 	items := new(map[string]any)
 
 	err := r.Client.Get(ctx, path, params, nil, &items)
-	if err != nil { return nil, fmt.Errorf("Failed to list cloud cost management recommendations: %w", err)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to list cloud cost management recommendations: %w", err)
 	}
 
 	return items, nil
 }
-
-
