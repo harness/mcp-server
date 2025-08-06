@@ -15,12 +15,11 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/pkg/harness/auth"
-	"github.com/rs/zerolog/log"
 )
 
 const (
-	HttpPost = "POST"
-	HttpPut  = "PUT"
+	HttpPost   = "POST"
+	HttpPut    = "PUT"
 	HttpDelete = "DELETE"
 )
 
@@ -181,7 +180,7 @@ func (c *Client) PostRaw(
 	out interface{},
 	b ...backoff.BackOff,
 ) error {
-	return c.RequestRaw(ctx, path, params, body, headers, HttpPost, out, b ...)
+	return c.RequestRaw(ctx, path, params, body, headers, HttpPost, out, b...)
 }
 
 // Delete is a simple helper that builds up the request URL, adding the path and parameters.
@@ -213,7 +212,7 @@ func (c *Client) DeleteRaw(
 	out interface{},
 	b ...backoff.BackOff,
 ) error {
-	return c.RequestRaw(ctx, path, params, body, headers, HttpDelete, out, b ...)
+	return c.RequestRaw(ctx, path, params, body, headers, HttpDelete, out, b...)
 }
 
 func (c *Client) PutRaw(
@@ -225,7 +224,7 @@ func (c *Client) PutRaw(
 	out interface{},
 	b ...backoff.BackOff,
 ) error {
-	return c.RequestRaw(ctx, path, params, body, headers, HttpPut, out, b ...)
+	return c.RequestRaw(ctx, path, params, body, headers, HttpPut, out, b...)
 }
 
 // PostStream is similar to Post but returns the raw http.Response for streaming
@@ -297,9 +296,9 @@ func (c *Client) PostRawStream(
 	notify := func(err error, next time.Duration) {
 		retryCount++
 		slog.Warn("Retrying request due to error",
-			    "retry_count", retryCount,
-			    "next_retry_in", next,
-			    "error", err)
+			"retry_count", retryCount,
+			"next_retry_in", next,
+			"error", err)
 	}
 
 	if len(b) > 0 {
@@ -381,11 +380,10 @@ func (c *Client) RequestRaw(
 	}
 	notify := func(err error, next time.Duration) {
 		retryCount++
-		log.Warn().
-			Int("retry_count", retryCount).
-			Dur("next_retry_in", next).
-			Err(err).
-			Msg("Retrying request due to error")
+		slog.Warn("Retrying request due to error",
+			"retry_count", retryCount,
+			"next_retry_in", next,
+			"error", err)
 	}
 
 	if len(b) > 0 {
@@ -400,7 +398,6 @@ func (c *Client) RequestRaw(
 
 	return nil
 }
-
 
 // Do is a wrapper of http.Client.Do that injects the auth header in the request.
 func (c *Client) Do(r *http.Request) (*http.Response, error) {
