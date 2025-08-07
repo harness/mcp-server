@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 )
 
@@ -56,7 +57,10 @@ func (s *SEIService) makePostRequest(ctx context.Context, path string, body inte
 
 	// Add authentication header if secret is provided
 	if s.Secret != "" {
+		slog.Info("SEI - Adding authentication header secret")
 		headers["x-api-key"] = s.Secret
+	} else {
+		slog.Info("SEI -No authentication header added")
 	}
 
 	// Add any additional headers
