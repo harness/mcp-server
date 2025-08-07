@@ -131,6 +131,7 @@ Toolset Name: `ccm`
 - `get_ecs_service_recommendation_detail`: Returns ECS Service Recommendation details for the given Recommendation identifier.
 - `get_node_pool_recommendation_detail`: Returns Node Pool Recommendation details for the given Recommendation identifier.
 - `get_workload_recommendation_detail`: Returns Workload Recommendation details for the given Recommendation identifier.
+- `list_jira_projects`: Returns a list of Jira projects available to create tickets for recommendations in Harness Cloud Cost Management.
 - `get_ccm_commitment_coverage`: Get commitment coverage information for an account in Harness Cloud Cost Management.
 - `get_ccm_commitment_savings`: Get commitment savings information for an account in Harness Cloud Cost Management.
 

@@ -10,6 +10,7 @@ import (
 )
 
 const (
+	ngBasePath                                  = "ng/api"
 	ccmRecommendationsListPath                  = ccmBasePath + "/recommendation/overview/list?accountIdentifier=%s"
 	ccmRecommendationsByResourceTypeListPath    = ccmBasePath + "/recommendation/overview/resource-type/stats?accountIdentifier=%s"
 	ccmRecommendationsStatsPath                 = ccmBasePath + "/recommendation/overview/stats?accountIdentifier=%s"
@@ -18,6 +19,8 @@ const (
 	ccmCreateRecommendationJiraTicketPath       = ccmBasePath + "/recommendation/jira/create?accountIdentifier=%s"
 	ccmCreateRecommendationServiceNowTicketPath = ccmBasePath + "/recommendation/servicenow/create?accountIdentifier=%s"
 	ccmGetRecommendationDetailPath              = ccmBasePath + "/recommendation/details/%s?accountIdentifier=%s&id=%s"
+	ccmTicketToolSettingsPath                   = ngBasePath + "/settings?accountIdentifier=%s&category=CE&group=ticketing_preferences"
+	ccmJiraProjectsPath                         = ngBasePath + "/jira/projects?accountIdentifier=%s&connectorRef=%s"
 )
 
 const (
@@ -138,6 +141,17 @@ func (r *CloudCostManagementService) createTicket(
 	url string,
 ) (*map[string]any, error) {
 
+	// Fist check if ticketing tool is available from settings
+	platform, err := r.getTicketingToolSettings(ctx, accountId)
+
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get ticket tool settings in cloud cost management recommendations: %w", err)
+	}
+
+	if platform != ticketDetails.Platform {
+		return nil, fmt.Errorf("Ticketing tool not available for this account: %s", ticketDetails.Platform)
+	}
+
 	body := map[string]any{
 		"recommendationId": ticketDetails.RecommendationId,
 		"resourceType":     ticketDetails.ResourceType,
@@ -156,7 +170,7 @@ func (r *CloudCostManagementService) createTicket(
 
 	resp := new(map[string]any)
 
-	err := r.Client.Post(ctx, url, nil, body, &resp)
+	err = r.Client.Post(ctx, url, nil, body, &resp)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create CCM Jira issue: %w", err)
 	}
@@ -182,6 +196,24 @@ func (r *CloudCostManagementService) GetNodePoolRecommendationDetail(ctx context
 
 func (r *CloudCostManagementService) GetWorkloadRecommendationDetail(ctx context.Context, options dto.CCMRecommendationDetailOptions) (*map[string]any, error) {
 	return r.getRecommendationDetail(ctx, options, workloadPath)
+}
+
+func (r *CloudCostManagementService) ListJiraProjects(
+	ctx context.Context,
+	accountId string,
+	connector string,
+) (*map[string]any, error) {
+
+	path := fmt.Sprintf(ccmJiraProjectsPath, accountId, connector)
+
+	items := new(map[string]any)
+
+	err := r.Client.Get(ctx, path, nil, nil, &items)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to list Jira Projeects: %w", err)
+	}
+
+	return items, nil
 }
 
 func (r *CloudCostManagementService) getRecommendationDetail(
@@ -210,4 +242,37 @@ func (r *CloudCostManagementService) getRecommendationDetail(
 	}
 
 	return items, nil
+}
+
+// Returns dto.TicketPlatformJira or dto.TicketPlatformServiceNow based on the settings
+func (r *CloudCostManagementService) getTicketingToolSettings(
+	ctx context.Context,
+	accountId string,
+) (string, error) {
+
+	path := fmt.Sprintf(ccmTicketToolSettingsPath, accountId)
+
+	resp := new(dto.CCMTicketToolSettingsResponse)
+	err := r.Client.Get(ctx, path, nil, nil, &resp)
+	if err != nil {
+		return "", fmt.Errorf("Failed to get ticket tool settings in cloud cost management recommendations: %w", err)
+	}
+
+	return ExtractTicketingToolValue(*resp)
+}
+
+func ExtractTicketingToolValue(resp dto.CCMTicketToolSettingsResponse) (string, error) {
+	for _, d := range resp.Data {
+
+		slog.Debug("-------------------------------")
+		slog.Debug("Checking ticketing tool setting", "setting", d.Setting)
+		slog.Debug("-------------------------------")
+		if d.Setting.Identifier == "ticketing_tool" {
+			slog.Debug("Current ticketing tool setting", "setting", d.Setting.Value)
+			return d.Setting.Value, nil
+		}
+	}
+
+	slog.Debug("Current ticketing tool setting not found")
+	return "", fmt.Errorf("ticketing_tool setting not found")
 }

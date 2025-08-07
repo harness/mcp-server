@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
@@ -321,6 +322,7 @@ func createTicketTool(name string, description string, config *config.Config, cl
 			mcp.Description("Recommendation ID"),
 		),
 		mcp.WithString("resource_type",
+			mcp.Description("Resource type"),
 			mcp.Enum(
 				dto.ResourceTypeWorkload,
 				dto.ResourceTypeNodePool,
@@ -330,7 +332,6 @@ func createTicketTool(name string, description string, config *config.Config, cl
 				dto.ResourceTypeAzureInstance,
 			),
 			mcp.Required(),
-			mcp.Description("Resource type"),
 		),
 		mcp.WithString("connector_ref", mcp.Required(), mcp.Description("Connector reference")),
 		mcp.WithObject("fields", mcp.Required(), mcp.Description("Additional fields")),
@@ -574,6 +575,38 @@ func createRecommendationDetailTool(
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+func ListJiraProjectsTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("list_jira_projects",
+			mcp.WithDescription("Get a list of Jira project to create a ticket for a Recommendation in Harness Cloud Cost Management"),
+			mcp.WithString("jira_connector_ref",
+				mcp.Required(),
+				mcp.Description("Jira connector reference to fetch projects from"),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			accountId, err := getAccountID(config, request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			connector, err := RequiredParam[string](request, "jira_connector_ref")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.ListJiraProjects(ctx, accountId, connector)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get a list of Jira Projects: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal Jira Projects list: %w", err)
+			}
 			return mcp.NewToolResultText(string(r)), nil
 		}
 }
