@@ -57,10 +57,10 @@ func (s *SEIService) makePostRequest(ctx context.Context, path string, body inte
 
 	// Add authentication header if secret is provided
 	if s.Secret != "" {
-		slog.Info("SEI - Adding authentication header secret")
-		headers["x-api-key"] = s.Secret
+		slog.Info("SEI - Adding Authorization header with ApiKey")
+		headers["Authorization"] = "ApiKey " + s.Secret
 	} else {
-		slog.Info("SEI -No authentication header added")
+		slog.Info("SEI - No authentication header added")
 	}
 
 	// Add any additional headers
@@ -76,9 +76,12 @@ func (s *SEIService) makePostRequest(ctx context.Context, path string, body inte
 		return nil, fmt.Errorf("failed to marshal request body: %w", err)
 	}
 
+	slog.Info("SEI - Post Request details", "body", body, "queryParams", queryParams, "headers", headers)
+
 	// Use PostRaw to include custom headers
 	err = s.Client.PostRaw(ctx, path, queryParams, bytes.NewBuffer(bodyBytes), headers, &response)
 	if err != nil {
+		slog.Error("SEI - Post Request failed", "error", err)
 		return nil, fmt.Errorf("POST request failed: %w", err)
 	}
 
