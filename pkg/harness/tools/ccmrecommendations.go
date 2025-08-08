@@ -343,8 +343,8 @@ func createTicketTool(name string, description string, config *config.Config, cl
 
 	if name == createJiraToolName {
 		options = append(options,
-			mcp.WithString("project_key", mcp.Required(), mcp.Description("Jira project key")),
-			mcp.WithString("issue_type", mcp.Required(), mcp.Description("Issue type")),
+			mcp.WithString("project_key", mcp.Required(), mcp.Description("Jira project key. Get the possible values for this field by using the `list_jira_projects` tool.")),
+			mcp.WithString("issue_type", mcp.Required(), mcp.Description("Issue type. Get the value for this field by using the `list_jira_issue_types` tool.")),
 		)
 	} else {
 		options = append(options,
@@ -623,7 +623,7 @@ func ListJiraIssueTypesTool(
 			),
 			mcp.WithString("project_key",
 				mcp.Required(),
-				mcp.Description("Jira project key to fetch issue types from"),
+				mcp.Description("Jira project key to fetch issue types from. Get the values for this parameter from the `list_jira_projects` tool"),
 			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
