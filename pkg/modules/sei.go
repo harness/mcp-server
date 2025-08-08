@@ -67,13 +67,14 @@ func (m *SEIModule) IsDefault() bool {
 // RegisterSoftwareEngineeringInsights creates and registers SEI tools
 func RegisterSoftwareEngineeringInsights(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for SEI
-	baseURL := "http://localhost:8080" //utils.BuildServiceURL(config, config.SEISvcBaseURL, config.BaseURL, "")
+	baseURL := "http://localhost:8080"
 	var secret string
 	if config.SEISvcSecret != "" {
 		secret = config.SEISvcSecret
 	}
 
 	slog.Info("SEI service configuration", "baseURL", baseURL, "secret", secret)
+	
 	// Create base client for SEI
 	c, err := utils.CreateClient(baseURL, config, secret)
 	if err != nil {
@@ -92,33 +93,14 @@ func RegisterSoftwareEngineeringInsights(config *config.Config, tsg *toolsets.To
 
 	// Get productivity tools and handlers
 	productivityFeatureMetricsTool, productivityFeatureMetricsHandler := tools.GetProductivityFeatureMetricsTool(config, seiClient)
-	// productivityFeatureBreakdownTool, productivityFeatureBreakdownHandler := tools.GetProductivityFeatureBreakdownTool(config, seiClient)
-	// productivityFeatureDrilldownTool, productivityFeatureDrilldownHandler := tools.GetProductivityFeatureDrilldownTool(config, seiClient)
-	// productivityFeatureIndividualDrilldownTool, productivityFeatureIndividualDrilldownHandler := tools.GetProductivityFeatureIndividualDrilldownTool(config, seiClient)
 
 	// Get efficiency tools and handlers
-	// efficiencyMttrBreakdownTool, efficiencyMttrBreakdownHandler := tools.GetEfficiencyMttrBreakdownTool(config, seiClient)
 	efficiencyLeadTimeTool, efficiencyLeadTimeHandler := tools.GetEfficiencyLeadTimeTool(config, seiClient)
-	// efficiencyLeadTimeStagesTool, efficiencyLeadTimeStagesHandler := tools.GetEfficiencyLeadTimeStagesTool(config, seiClient)
-	// efficiencyLeadTimeDrilldownTool, efficiencyLeadTimeDrilldownHandler := tools.GetEfficiencyLeadTimeDrilldownTool(config, seiClient)
-	// efficiencyDeploymentFrequencyDrilldownTool, efficiencyDeploymentFrequencyDrilldownHandler := tools.GetEfficiencyDeploymentFrequencyDrilldownTool(config, seiClient)
-	// efficiencyChangeFailureRateDrilldownTool, efficiencyChangeFailureRateDrilldownHandler := tools.GetEfficiencyChangeFailureRateDrilldownTool(config, seiClient)
 
 	// Add tools to the toolset
 	sei.AddReadTools(
-		// Productivity tools
 		toolsets.NewServerTool(productivityFeatureMetricsTool, productivityFeatureMetricsHandler),
-		// toolsets.NewServerTool(productivityFeatureBreakdownTool, productivityFeatureBreakdownHandler),
-		// toolsets.NewServerTool(productivityFeatureDrilldownTool, productivityFeatureDrilldownHandler),
-		// toolsets.NewServerTool(productivityFeatureIndividualDrilldownTool, productivityFeatureIndividualDrilldownHandler),
-
-		// Efficiency tools
-		// toolsets.NewServerTool(efficiencyMttrBreakdownTool, efficiencyMttrBreakdownHandler),
 		toolsets.NewServerTool(efficiencyLeadTimeTool, efficiencyLeadTimeHandler),
-		// toolsets.NewServerTool(efficiencyLeadTimeStagesTool, efficiencyLeadTimeStagesHandler),
-		// toolsets.NewServerTool(efficiencyLeadTimeDrilldownTool, efficiencyLeadTimeDrilldownHandler),
-		// toolsets.NewServerTool(efficiencyDeploymentFrequencyDrilldownTool, efficiencyDeploymentFrequencyDrilldownHandler),
-		// toolsets.NewServerTool(efficiencyChangeFailureRateDrilldownTool, efficiencyChangeFailureRateDrilldownHandler),
 	)
 
 	// Add toolset to the group

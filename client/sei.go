@@ -176,25 +176,7 @@ func (s *SEIService) GetProductivityFeatureMetrics(ctx context.Context, params m
 	return s.makePostRequest(ctx, "/v2/productivityv3/feature_metrics", requestBody, queryParams, additionalHeaders)
 }
 
-// GetProductivityFeatureBreakdown gets productivity feature breakdown
-func (s *SEIService) GetProductivityFeatureBreakdown(ctx context.Context, params map[string]interface{}) (interface{}, error) {
-	return s.makeRequest(ctx, "GET", "api/v1/productivity/feature/breakdown", params)
-}
 
-// GetProductivityFeatureDrilldown gets productivity feature drilldown
-func (s *SEIService) GetProductivityFeatureDrilldown(ctx context.Context, params map[string]interface{}) (interface{}, error) {
-	return s.makeRequest(ctx, "GET", "api/v1/productivity/feature/drilldown", params)
-}
-
-// GetProductivityFeatureIndividualDrilldown gets productivity feature individual drilldown
-func (s *SEIService) GetProductivityFeatureIndividualDrilldown(ctx context.Context, params map[string]interface{}) (interface{}, error) {
-	return s.makeRequest(ctx, "GET", "api/v1/productivity/feature/individual/drilldown", params)
-}
-
-// GetEfficiencyMttrBreakdown gets MTTR breakdown
-func (s *SEIService) GetEfficiencyMttrBreakdown(ctx context.Context, params map[string]interface{}) (interface{}, error) {
-	return s.makeRequest(ctx, "GET", "api/v1/efficiency/mttr/breakdown", params)
-}
 
 // GetEfficiencyLeadTime gets lead time
 // Makes a POST request to /v2/insights/efficiency/leadtime with JSON body and query parameters
@@ -255,22 +237,4 @@ func (s *SEIService) GetEfficiencyLeadTime(ctx context.Context, params map[strin
 	return s.makePostRequest(ctx, "/v2/insights/efficiency/leadtime", requestBody, queryParams, additionalHeaders)
 }
 
-// GetEfficiencyLeadTimeStages gets lead time stages
-func (s *SEIService) GetEfficiencyLeadTimeStages(ctx context.Context, params map[string]interface{}) (interface{}, error) {
-	return s.makeRequest(ctx, "GET", "api/v1/efficiency/lead-time/stages", params)
-}
 
-// GetEfficiencyLeadTimeDrilldown gets lead time drilldown
-func (s *SEIService) GetEfficiencyLeadTimeDrilldown(ctx context.Context, params map[string]interface{}) (interface{}, error) {
-	return s.makeRequest(ctx, "GET", "api/v1/efficiency/lead-time/drilldown", params)
-}
-
-// GetEfficiencyDeploymentFrequencyDrilldown gets deployment frequency drilldown
-func (s *SEIService) GetEfficiencyDeploymentFrequencyDrilldown(ctx context.Context, params map[string]interface{}) (interface{}, error) {
-	return s.makeRequest(ctx, "GET", "api/v1/efficiency/deployment-frequency/drilldown", params)
-}
-
-// GetEfficiencyChangeFailureRateDrilldown gets change failure rate drilldown
-func (s *SEIService) GetEfficiencyChangeFailureRateDrilldown(ctx context.Context, params map[string]interface{}) (interface{}, error) {
-	return s.makeRequest(ctx, "GET", "api/v1/efficiency/change-failure-rate/drilldown", params)
-}
