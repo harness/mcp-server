@@ -21,6 +21,7 @@ const (
 	ccmGetRecommendationDetailPath              = ccmBasePath + "/recommendation/details/%s?accountIdentifier=%s&id=%s"
 	ccmTicketToolSettingsPath                   = ngBasePath + "/settings?accountIdentifier=%s&category=CE&group=ticketing_preferences"
 	ccmJiraProjectsPath                         = ngBasePath + "/jira/projects?accountIdentifier=%s&connectorRef=%s"
+	ccmJiraMetadataPath                         = ngBasePath + "/jira/createMetadata?accountIdentifier=%s"
 )
 
 const (
@@ -210,10 +211,33 @@ func (r *CloudCostManagementService) ListJiraProjects(
 
 	err := r.Client.Get(ctx, path, nil, nil, &items)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to list Jira Projeects: %w", err)
+		return nil, fmt.Errorf("Failed to list Jira Projects: %w", err)
 	}
 
 	return items, nil
+}
+
+func (r *CloudCostManagementService) ListJiraIssueTypes(
+	ctx context.Context,
+	options dto.CCMJiraIssueTypesOptions,
+) (*dto.CCMJiraIssueTypesList, error) {
+
+	path := fmt.Sprintf(ccmJiraMetadataPath, options.AccountId)
+
+	params := map[string]string{
+		"connectorRef": options.ConnectorRef,
+		"projectKey":   options.ProjectKey,
+	}
+
+	resp := new(dto.CCMJiraIssueTypesResponse)
+	err := r.Client.Get(ctx, path, params, nil, &resp)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to list Jira Issue Types: %w", err)
+	}
+	slog.Debug("Jira Issue Types Response", "response", resp)
+	items := ExtractIssueTypesList(*resp)
+	slog.Debug("Jira Issue Types Response", "items", items)
+	return &items, nil
 }
 
 func (r *CloudCostManagementService) getRecommendationDetail(
@@ -237,6 +261,7 @@ func (r *CloudCostManagementService) getRecommendationDetail(
 	items := new(map[string]any)
 
 	err := r.Client.Get(ctx, path, params, nil, &items)
+
 	if err != nil {
 		return nil, fmt.Errorf("Failed to list cloud cost management recommendations: %w", err)
 	}
@@ -263,10 +288,6 @@ func (r *CloudCostManagementService) getTicketingToolSettings(
 
 func ExtractTicketingToolValue(resp dto.CCMTicketToolSettingsResponse) (string, error) {
 	for _, d := range resp.Data {
-
-		slog.Debug("-------------------------------")
-		slog.Debug("Checking ticketing tool setting", "setting", d.Setting)
-		slog.Debug("-------------------------------")
 		if d.Setting.Identifier == "ticketing_tool" {
 			slog.Debug("Current ticketing tool setting", "setting", d.Setting.Value)
 			return d.Setting.Value, nil
@@ -275,4 +296,14 @@ func ExtractTicketingToolValue(resp dto.CCMTicketToolSettingsResponse) (string, 
 
 	slog.Debug("Current ticketing tool setting not found")
 	return "", fmt.Errorf("ticketing_tool setting not found")
+}
+
+func ExtractIssueTypesList(resp dto.CCMJiraIssueTypesResponse) dto.CCMJiraIssueTypesList {
+	var issueTypes []dto.CCMJiraIssueType
+	for _, project := range resp.Data.Projects {
+		for _, issueType := range project.IssueTypes {
+			issueTypes = append(issueTypes, issueType)
+		}
+	}
+	return dto.CCMJiraIssueTypesList{CCMBaseResponse: resp.CCMBaseResponse, Data: issueTypes}
 }

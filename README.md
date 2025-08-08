@@ -132,6 +132,7 @@ Toolset Name: `ccm`
 - `get_node_pool_recommendation_detail`: Returns Node Pool Recommendation details for the given Recommendation identifier.
 - `get_workload_recommendation_detail`: Returns Workload Recommendation details for the given Recommendation identifier.
 - `list_jira_projects`: Returns a list of Jira projects available to create tickets for recommendations in Harness Cloud Cost Management.
+- `list_jira_issue_types`: Returns a list of Jira Issue types available to create tickets for recommendations in Harness Cloud Cost Management.
 - `get_ccm_commitment_coverage`: Get commitment coverage information for an account in Harness Cloud Cost Management.
 - `get_ccm_commitment_savings`: Get commitment savings information for an account in Harness Cloud Cost Management.
 

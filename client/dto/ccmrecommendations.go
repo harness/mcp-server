@@ -65,3 +65,40 @@ type CCMTicketToolSettingsResponse struct {
 	CCMBaseResponse
 	Data []CCMTicketToolSettings `json:"data,omitempty"`
 }
+
+type CCMJiraIssueTypesOptions struct {
+	AccountId    string
+	ProjectKey   string
+	ConnectorRef string
+}
+
+type CCMJiraIssueTypesResponse struct {
+	CCMBaseResponse
+	Data CCMJiraProjects `json:"data,omitempty"`
+}
+
+type CCMJiraProjects struct {
+	Projects map[string]CCMJiraProjectDetail `json:"projects"`
+}
+
+type CCMJiraProjectDetail struct {
+	Id         string                      `json:"id"`
+	Key        string                      `json:"key"`
+	Name       string                      `json:"name"`
+	IssueTypes map[string]CCMJiraIssueType `json:"issuetypes"`
+}
+
+type CCMJiraIssueType struct {
+	Id   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type CCMIssueTypeInfo struct {
+	Id   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type CCMJiraIssueTypesList struct {
+	CCMBaseResponse
+	Data []CCMJiraIssueType `json:"data,omitempty"`
+}

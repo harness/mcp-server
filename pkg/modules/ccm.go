@@ -112,6 +112,7 @@ func RegisterCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGro
 			toolsets.NewServerTool(tools.GetNodePoolRecommendationDetailTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.GetWorkloadRecommendationDetailTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.ListJiraProjectsTool(config, ccmClient)),
+			toolsets.NewServerTool(tools.ListJiraIssueTypesTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.FetchCommitmentCoverageTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.FetchCommitmentSavingsTool(config, ccmClient)),
 		)

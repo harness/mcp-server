@@ -611,6 +611,55 @@ func ListJiraProjectsTool(config *config.Config, client *client.CloudCostManagem
 		}
 }
 
+func ListJiraIssueTypesTool(
+	config *config.Config,
+	client *client.CloudCostManagementService,
+) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("list_jira_issue_types",
+			mcp.WithDescription("Get a list of Jira project to create a ticket for a Recommendation in Harness Cloud Cost Management"),
+			mcp.WithString("jira_connector_ref",
+				mcp.Required(),
+				mcp.Description("Jira connector reference to fetch projects from"),
+			),
+			mcp.WithString("project_key",
+				mcp.Required(),
+				mcp.Description("Jira project key to fetch issue types from"),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			accountId, err := getAccountID(config, request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			connector, err := RequiredParam[string](request, "jira_connector_ref")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			projectKey, err := RequiredParam[string](request, "project_key")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			options := dto.CCMJiraIssueTypesOptions{
+				AccountId:    accountId,
+				ConnectorRef: connector,
+				ProjectKey:   projectKey,
+			}
+			data, err := client.ListJiraIssueTypes(ctx, options)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get a list of Jira Projects: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal Jira Projects list: %w", err)
+			}
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
 func recommendationsListDefinition() json.RawMessage {
 	return toRawMessage(commonRecommendationsSchema(), []string{})
 }
