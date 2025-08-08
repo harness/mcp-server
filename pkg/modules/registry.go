@@ -34,6 +34,7 @@ func NewModuleRegistry(config *config.Config, tsg *toolsets.ToolsetGroup) *Modul
 			NewCCMModule(config, tsg),
 			NewIDPModule(config, tsg),
 			NewHARModule(config, tsg),
+			NewRMGModule(config, tsg),
 		},
 		config: config,
 		tsg:    tsg,
@@ -70,6 +71,7 @@ func (r *ModuleRegistry) GetEnabledModules() []Module {
 	}
 
 	enabledModuleIDs["CORE"] = true
+	enabledModuleIDs["RMG"] = true
 
 	// Return only enabled modules
 	var enabledModules []Module

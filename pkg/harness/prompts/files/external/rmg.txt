@@ -1,0 +1,14 @@
+---
+name: "rmg"
+description: "Ensure parameters are provided correctly and in the right format for RMG operations"
+result_description: "Input parameters validation for Release Management"
+---
+
+When calling ask_rm_devops_agent, ensure you have the required parameters for release process operations:
+- Ask clarity about their release requirements before passing the information to the tool.
+- If scope parameters (accountIdentifier, orgIdentifier, projectIdentifier) are missing, ask the user for the specific value(s).
+- For release processes, include relevant context such as:
+  - Release Process requirements
+The RMG AI DevOps Agent specializes in creating release processes and will automatically use the CREATE_PROCESS action.
+Provide detailed requirements to get the most accurate release process configuration. 
+Do not use the word "pipeline", "stages" in your response
