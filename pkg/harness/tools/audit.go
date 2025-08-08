@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math"
 	"time"
 
@@ -21,8 +22,10 @@ const (
 )
 
 func convertDateToMilliseconds(timestamp string) int64 {
+	slog.Info("Converting date to milliseconds", "timestamp", timestamp)
 	t, err := time.Parse(time.RFC3339, timestamp)
 	if err != nil {
+		slog.Error("Failed to parse timestamp", "error", err, "timestamp", timestamp)
 		panic(err)
 	}
 
@@ -79,6 +82,8 @@ func ListUserAuditTrailTool(config *config.Config, auditClient *client.AuditServ
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			slog.Info("Handling list_user_audits request", "request", request.GetArguments())
+
 			userIDList, err := OptionalParam[string](request, "user_id_list")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -104,9 +109,19 @@ func ListUserAuditTrailTool(config *config.Config, auditClient *client.AuditServ
 
 			startTime, _ := OptionalParam[string](request, "start_time")
 			endTime, _ := OptionalParam[string](request, "end_time")
+			slog.Info("Time range parameters", "start_time", startTime, "end_time", endTime)
 
 			startTimeMilliseconds := convertDateToMilliseconds(startTime)
 			endTimeMilliseconds := convertDateToMilliseconds(endTime)
+			slog.Info("Converted time range", "start_time_ms", startTimeMilliseconds, "end_time_ms", endTimeMilliseconds)
+
+			slog.Info("Calling ListUserAuditTrail API",
+				"user_id_list", userIDList,
+				"actions", actionsList,
+				"page", page,
+				"size", size,
+				"start_time_ms", startTimeMilliseconds,
+				"end_time_ms", endTimeMilliseconds)
 
 			data, err := auditClient.ListUserAuditTrail(ctx, scope, userIDList, actionsList, page, size, startTimeMilliseconds, endTimeMilliseconds, nil)
 			if err != nil {
