@@ -13,9 +13,16 @@ import (
 // Role represents the role of the prompt creator, either User or Assistant.
 type Role int
 
+type Mode string
+
 const (
 	User      Role = iota // 0
 	Assistant             // 1
+)
+
+const (
+	Standard Mode = "standard"
+	Architect Mode = "architect"
 )
 
 // Prompt represents the prompt data needed to add to the MCP server.

@@ -90,7 +90,10 @@ func (r *ModuleRegistry) RegisterPrompts(mcpServer *server.MCPServer) error {
 
 	// Register prompts for each enabled module
 	for _, module := range enabledModules {
-		if err := registerPrompts(module.ID(), r.config, mcpServer); err != nil {
+		if err := registerPrompts(module.ID(), r.config, mcpServer, p.Standard); err != nil {
+			return err
+		}
+		if err := registerPrompts(module.ID(), r.config, mcpServer, p.Architect); err != nil {
 			return err
 		}
 	}
@@ -98,9 +101,9 @@ func (r *ModuleRegistry) RegisterPrompts(mcpServer *server.MCPServer) error {
 	return nil
 }
 
-func registerPrompts(moduleID string, cfg *config.Config, mcpServer *server.MCPServer) error {
+func registerPrompts(moduleID string, cfg *config.Config, mcpServer *server.MCPServer, mode p.Mode) error {
 	// Get module-specific prompts
-	modulePrompts, err := prompts.GetModulePrompts(prompts.PromptFiles, strings.ToLower(moduleID), cfg.Internal)
+	modulePrompts, err := prompts.GetModulePrompts(prompts.PromptFiles, strings.ToLower(moduleID), cfg.Internal, string(mode))
 	if err != nil {
 		return err
 	}
@@ -134,9 +137,10 @@ func registerPrompts(moduleID string, cfg *config.Config, mcpServer *server.MCPS
 		}
 	}
 
+	promptName := strings.ToLower(moduleID) + "_" + string(mode)
 	// Create a single MCP prompt with the module ID as the name
 	mcpPrompt := p.NewPrompt().
-		SetName(moduleID). // Use moduleID as the prompt name
+		SetName(promptName). // Use moduleID as the prompt name
 		SetDescription(description).
 		SetResultDescription(resultDescription).
 		SetText(combinedContent.String()).
@@ -146,7 +150,7 @@ func registerPrompts(moduleID string, cfg *config.Config, mcpServer *server.MCPS
 	mcpPrompts := p.Prompts{}
 	mcpPrompts.Append(mcpPrompt)
 
-	slog.Info("Registering prompt for module", "module", moduleID, "contentLength", len(combinedContent.String()))
+	slog.Info("Registering prompt for", "module", moduleID, "mode", mode, "contentLength", len(combinedContent.String()))
 
 	// Register the prompt with the MCP server
 	p.AddPrompts(mcpPrompts, mcpServer)
