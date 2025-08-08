@@ -1,6 +1,8 @@
 package modules
 
 import (
+	"log/slog"
+
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness/tools"
@@ -65,14 +67,13 @@ func (m *SEIModule) IsDefault() bool {
 // RegisterSoftwareEngineeringInsights creates and registers SEI tools
 func RegisterSoftwareEngineeringInsights(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for SEI
-	baseURL := utils.BuildServiceURL(config, config.SEISvcBaseURL, config.BaseURL, "")
+	baseURL := "http://localhost:8080" //utils.BuildServiceURL(config, config.SEISvcBaseURL, config.BaseURL, "")
 	var secret string
 	if config.SEISvcSecret != "" {
 		secret = config.SEISvcSecret
-	} else {
-		secret = config.APIKey
 	}
 
+	slog.Info("SEI service configuration", "baseURL", baseURL, "secret", secret)
 	// Create base client for SEI
 	c, err := utils.CreateClient(baseURL, config, secret)
 	if err != nil {

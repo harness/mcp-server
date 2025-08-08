@@ -518,14 +518,33 @@ func GetEfficiencyLeadTimeTool(config *config.Config, client *client.SEIService)
 				mcp.DefaultString("SEI_Harness_Prod"),
 				mcp.Description("Harness Project ID"),
 			),
-			mcp.WithString("startDate",
+			mcp.WithString("teamRefId",
+				mcp.Required(),
+				mcp.Description("Team reference ID for the metrics"),
+			),
+			mcp.WithString("dateStart",
+				mcp.Required(),
 				mcp.Description("Start date for metrics in YYYY-MM-DD format"),
 			),
-			mcp.WithString("endDate",
+			mcp.WithString("dateEnd",
+				mcp.Required(),
 				mcp.Description("End date for metrics in YYYY-MM-DD format"),
 			),
-			mcp.WithString("metricType",
-				mcp.Description("Type of metric to retrieve"),
+			mcp.WithString("granularity",
+				mcp.Required(),
+				mcp.Description("Time granularity for the metrics (e.g., DAILY, WEEKLY, MONTHLY)"),
+			),
+			mcp.WithString("drillDownStartDate",
+				mcp.Description("Optional drill-down start date in YYYY-MM-DD format"),
+			),
+			mcp.WithString("drillDownEndDate",
+				mcp.Description("Optional drill-down end date in YYYY-MM-DD format"),
+			),
+			mcp.WithNumber("page",
+				mcp.Description("Optional page number for pagination"),
+			),
+			mcp.WithNumber("pageSize",
+				mcp.Description("Optional page size for pagination"),
 			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -542,23 +561,46 @@ func GetEfficiencyLeadTimeTool(config *config.Config, client *client.SEIService)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+			teamRefId, err := RequiredParam[string](request, "teamRefId")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			dateStart, err := RequiredParam[string](request, "dateStart")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			dateEnd, err := RequiredParam[string](request, "dateEnd")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			granularity, err := RequiredParam[string](request, "granularity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
 			// Build params map for additional parameters
 			requestParams := map[string]interface{}{
-				"accountId": accountID,
-				"orgId":     orgID,
-				"projectId": projectID,
+				"accountId":   accountID,
+				"orgId":       orgID,
+				"projectId":   projectID,
+				"teamRefId":   teamRefId,
+				"dateStart":   dateStart,
+				"dateEnd":     dateEnd,
+				"granularity": granularity,
 			}
 
 			// Optional params
-			if startDate, ok, err := OptionalParamOK[string](request, "startDate"); ok && err == nil && startDate != "" {
-				requestParams["startDate"] = startDate
+			if drillDownStartDate, ok, err := OptionalParamOK[string](request, "drillDownStartDate"); ok && err == nil && drillDownStartDate != "" {
+				requestParams["drillDownStartDate"] = drillDownStartDate
 			}
-			if endDate, ok, err := OptionalParamOK[string](request, "endDate"); ok && err == nil && endDate != "" {
-				requestParams["endDate"] = endDate
+			if drillDownEndDate, ok, err := OptionalParamOK[string](request, "drillDownEndDate"); ok && err == nil && drillDownEndDate != "" {
+				requestParams["drillDownEndDate"] = drillDownEndDate
 			}
-			if metricType, ok, err := OptionalParamOK[string](request, "metricType"); ok && err == nil && metricType != "" {
-				requestParams["metricType"] = metricType
+			if page, ok, err := OptionalParamOK[float64](request, "page"); ok && err == nil {
+				requestParams["page"] = int(page)
+			}
+			if pageSize, ok, err := OptionalParamOK[float64](request, "pageSize"); ok && err == nil {
+				requestParams["pageSize"] = int(pageSize)
 			}
 
 			// Call API

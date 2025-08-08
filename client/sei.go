@@ -172,7 +172,8 @@ func (s *SEIService) GetProductivityFeatureMetrics(ctx context.Context, params m
 	fmt.Println("Request Body: ", requestBody)
 	fmt.Println("Query Parameters: ", queryParams)
 	fmt.Println("Additional Headers: ", additionalHeaders)
-	return s.makePostRequest(ctx, "/gateway/sei/api/v2/productivityv3/feature_metrics", requestBody, queryParams, additionalHeaders)
+	// return s.makePostRequest(ctx, "/gateway/sei/api/v2/productivityv3/feature_metrics", requestBody, queryParams, additionalHeaders)
+	return s.makePostRequest(ctx, "/v2/productivityv3/feature_metrics", requestBody, queryParams, additionalHeaders)
 }
 
 // GetProductivityFeatureBreakdown gets productivity feature breakdown
@@ -231,13 +232,13 @@ func (s *SEIService) GetEfficiencyLeadTime(ctx context.Context, params map[strin
 
 	// Build query parameters from session attributes
 	queryParams := map[string]string{}
-	if projectIdentifier, ok := params["projectIdentifier"]; ok {
-		if projectStr, ok := projectIdentifier.(string); ok {
+	if projectId, ok := params["projectId"]; ok {
+		if projectStr, ok := projectId.(string); ok {
 			queryParams["projectIdentifier"] = projectStr
 		}
 	}
-	if orgIdentifier, ok := params["orgIdentifier"]; ok {
-		if orgStr, ok := orgIdentifier.(string); ok {
+	if orgId, ok := params["orgId"]; ok {
+		if orgStr, ok := orgId.(string); ok {
 			queryParams["orgIdentifier"] = orgStr
 		}
 	}
@@ -250,7 +251,8 @@ func (s *SEIService) GetEfficiencyLeadTime(ctx context.Context, params map[strin
 		}
 	}
 
-	return s.makePostRequest(ctx, "/gateway/sei/api/v2/insights/efficiency/leadtime", requestBody, queryParams, additionalHeaders)
+	// return s.makePostRequest(ctx, "/gateway/sei/api/v2/insights/efficiency/leadtime", requestBody, queryParams, additionalHeaders)
+	return s.makePostRequest(ctx, "/v2/insights/efficiency/leadtime", requestBody, queryParams, additionalHeaders)
 }
 
 // GetEfficiencyLeadTimeStages gets lead time stages

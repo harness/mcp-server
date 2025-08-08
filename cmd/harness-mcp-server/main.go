@@ -87,6 +87,9 @@ var (
 				Debug:            viper.GetBool("debug"),
 				EnableModules:    enableModules,
 				EnableLicense:    viper.GetBool("enable_license"),
+				// SEI service configuration
+				SEISvcSecret:     viper.GetString("sei_svc_secret"),
+				SEISvcBaseURL:    viper.GetString("sei_svc_base_url"),
 			}
 
 			if err := runStdioServer(ctx, cfg); err != nil {
@@ -218,6 +221,8 @@ func init() {
 		"Default org ID to use. If not specified, it would need to be passed in the query (if required)")
 	stdioCmd.Flags().String("default-project-id", "",
 		"Default project ID to use. If not specified, it would need to be passed in the query (if required)")
+	stdioCmd.Flags().String("sei-svc-secret", "", "Secret for SEI service")
+	stdioCmd.Flags().String("sei-svc-base-url", "", "Base URL for SEI service")
 
 	// Add internal-specific flags
 	internalCmd.Flags().String("bearer-token", "", "Bearer token for authentication")
@@ -268,6 +273,8 @@ func init() {
 	_ = viper.BindPFlag("api_key", stdioCmd.Flags().Lookup("api-key"))
 	_ = viper.BindPFlag("default_org_id", stdioCmd.Flags().Lookup("default-org-id"))
 	_ = viper.BindPFlag("default_project_id", stdioCmd.Flags().Lookup("default-project-id"))
+	_ = viper.BindPFlag("sei_svc_secret", stdioCmd.Flags().Lookup("sei-svc-secret"))
+	_ = viper.BindPFlag("sei_svc_base_url", stdioCmd.Flags().Lookup("sei-svc-base-url"))
 
 	// Bind internal-specific flags to viper
 	_ = viper.BindPFlag("bearer_token", internalCmd.Flags().Lookup("bearer-token"))
