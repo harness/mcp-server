@@ -1,0 +1,13 @@
+---
+name: "sei-efficiency"
+description: "Check parameters for sei_efficiency_lead_time tool call"
+result_description: "Input parameters validation"
+---
+
+When calling sei_efficiency_lead_time, ensure you have: accountId, projectId, orgId, teamRefId or teamName, granularity, groupBy, startDate, and endDate.
+- If any are missing, ask the user for values for teamName, project Id, orgId and teamRefId.
+- If no dates are supplied, as k user to default to consider for last month as date range. Fix the startDate to 1st of last month and endDate to last day of last month.
+- If teamName is provided, ensure that either teamRefId or teamName is used, not both.
+- If granularity is not provided, default it to 'WEEKLY'.
+- Always send startDate and endDate in the following format: 'MM/DD/YYYY' (e.g. '10/30/2025')
+
