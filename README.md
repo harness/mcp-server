@@ -2,6 +2,36 @@
 
 The Harness MCP Server is a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/introduction) server that provides seamless integration with Harness APIs, enabling advanced automation and interaction capabilities for developers and tools.
 
+## Table of Contents
+
+- [Components](#components)
+  - [Tools](#tools)
+    - [Pipelines Toolset](#pipelines-toolset)
+    - [Pull Requests Toolset](#pull-requests-toolset)
+    - [Repositories Toolset](#repositories-toolset)
+    - [Registries Toolset](#registries-toolset)
+    - [Dashboards Toolset](#dashboards-toolset)
+    - [Cloud Cost Management Toolset](#cloud-cost-management-toolset)
+    - [Logs Toolset](#logs-toolset)
+- [Prerequisites](#prerequisites)
+- [Quickstart](#quickstart)
+- [Makefile Usage](#makefile-usage)
+- [Build from Source](#build-from-source)
+- [Use Docker Image](#use-docker-image)
+- [Integration with AI Assistants](#integration-with-ai-assistants)
+  - [Usage with Gemini CLI](#usage-with-gemini-cli)
+  - [Claude Desktop Configuration](#claude-desktop-configuration)
+  - [Usage with Claude Code](#usage-with-claude-code)
+  - [Usage with Windsurf](#usage-with-windsurf)
+  - [Usage with Amazon Q Developer CLI](#usage-with-amazon-q-developer-cli)
+  - [Cursor Configuration](#cursor-configuration)
+  - [VS Code Configuration](#vs-code-configuration)
+- [Development](#development)
+  - [Command Line Arguments](#command-line-arguments)
+  - [Environment Variables](#environment-variables)
+  - [Authentication](#authentication)
+- [Debugging](#debugging)
+
 ## Components
 
 ### Tools
@@ -245,6 +275,30 @@ docker run -i --rm \
   harness/mcp-server stdio
 ```
 
+## Integration with AI Assistants
+
+### Usage with Gemini CLI
+
+Add the server configuration to your Gemini config file at: `~/.gemini/settings.json`
+
+```json
+{
+  "theme": "Default",
+  "selectedAuthType": "oauth-personal",
+  "mcpServers": {
+    "Harness": {
+      "command": "/path/to/harness-mcp-server",
+      "args": ["stdio"],
+      "env": {
+        "HARNESS_API_KEY": "<YOUR_API_KEY>",
+        "HARNESS_DEFAULT_ORG_ID": "<YOUR_ORG_ID>",
+        "HARNESS_DEFAULT_PROJECT_ID": "<YOUR_PROJECT_ID>",
+      }
+    }
+  }
+}
+```
+
 ### Claude Desktop Configuration
 
 On MacOS: `~/Library/Application\ Support/Claude/claude_desktop_config.json`  
@@ -272,8 +326,23 @@ On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
 
 ## Usage with Claude Code
 
-```bash
-HARNESS_API_KEY=your_api_key HARNESS_ACCOUNT_ID=your_account_id HARNESS_ORG_ID=your_org_id HARNESS_PROJECT_ID=your_project_id ./cmd/harness-mcp-server/harness-mcp-server stdio
+Add the server configuration to your Claude config file at: `~/.claude.json`
+
+```json
+{
+  "mcpServers": {
+    "Harness": {
+      "command": "/path/to/harness-mcp-server",
+      "args": ["stdio"],
+      "env": {
+        "HARNESS_API_KEY": "<YOUR_API_KEY>",
+        "HARNESS_DEFAULT_ORG_ID": "<YOUR_ORG_ID>",
+        "HARNESS_DEFAULT_PROJECT_ID": "<YOUR_PROJECT_ID>",
+        "HARNESS_BASE_URL": "<YOUR_BASE_URL>"
+      }
+    }
+  }
+}
 ```
 
 ## Usage with Windsurf
