@@ -2,6 +2,36 @@
 
 The Harness MCP Server is a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/introduction) server that provides seamless integration with Harness APIs, enabling advanced automation and interaction capabilities for developers and tools.
 
+## Table of Contents
+
+- [Components](#components)
+  - [Tools](#tools)
+    - [Pipelines Toolset](#pipelines-toolset)
+    - [Pull Requests Toolset](#pull-requests-toolset)
+    - [Repositories Toolset](#repositories-toolset)
+    - [Registries Toolset](#registries-toolset)
+    - [Dashboards Toolset](#dashboards-toolset)
+    - [Cloud Cost Management Toolset](#cloud-cost-management-toolset)
+    - [Logs Toolset](#logs-toolset)
+- [Prerequisites](#prerequisites)
+- [Quickstart](#quickstart)
+- [Makefile Usage](#makefile-usage)
+- [Build from Source](#build-from-source)
+- [Use Docker Image](#use-docker-image)
+- [Integration with AI Assistants](#integration-with-ai-assistants)
+  - [Usage with Gemini CLI](#usage-with-gemini-cli)
+  - [Claude Desktop Configuration](#claude-desktop-configuration)
+  - [Usage with Claude Code](#usage-with-claude-code)
+  - [Usage with Windsurf](#usage-with-windsurf)
+  - [Usage with Amazon Q Developer CLI](#usage-with-amazon-q-developer-cli)
+  - [Cursor Configuration](#cursor-configuration)
+  - [VS Code Configuration](#vs-code-configuration)
+- [Development](#development)
+  - [Command Line Arguments](#command-line-arguments)
+  - [Environment Variables](#environment-variables)
+  - [Authentication](#authentication)
+- [Debugging](#debugging)
+
 ## Components
 
 ### Tools
@@ -245,6 +275,30 @@ docker run -i --rm \
   harness/mcp-server stdio
 ```
 
+## Integration with AI Assistants
+
+### Usage with Gemini CLI
+
+Add the server configuration to your Gemini config file at: `~/.gemini/settings.json`
+
+```json
+{
+  "theme": "Default",
+  "selectedAuthType": "oauth-personal",
+  "mcpServers": {
+    "Harness": {
+      "command": "/path/to/harness-mcp-server",
+      "args": ["stdio"],
+      "env": {
+        "HARNESS_API_KEY": "<YOUR_API_KEY>",
+        "HARNESS_DEFAULT_ORG_ID": "<YOUR_ORG_ID>",
+        "HARNESS_DEFAULT_PROJECT_ID": "<YOUR_PROJECT_ID>",
+      }
+    }
+  }
+}
+```
+
 ### Claude Desktop Configuration
 
 On MacOS: `~/Library/Application\ Support/Claude/claude_desktop_config.json`  
@@ -272,8 +326,23 @@ On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
 
 ## Usage with Claude Code
 
-```bash
-HARNESS_API_KEY=your_api_key HARNESS_ACCOUNT_ID=your_account_id HARNESS_ORG_ID=your_org_id HARNESS_PROJECT_ID=your_project_id ./cmd/harness-mcp-server/harness-mcp-server stdio
+Add the server configuration to your Claude config file at: `~/.claude.json`
+
+```json
+{
+  "mcpServers": {
+    "Harness": {
+      "command": "/path/to/harness-mcp-server",
+      "args": ["stdio"],
+      "env": {
+        "HARNESS_API_KEY": "<YOUR_API_KEY>",
+        "HARNESS_DEFAULT_ORG_ID": "<YOUR_ORG_ID>",
+        "HARNESS_DEFAULT_PROJECT_ID": "<YOUR_PROJECT_ID>",
+        "HARNESS_BASE_URL": "<YOUR_BASE_URL>"
+      }
+    }
+  }
+}
 ```
 
 ## Usage with Windsurf
@@ -494,3 +563,35 @@ npx @modelcontextprotocol/inspector /path/to/harness-mcp-server stdio
 ```
 
 Upon launching, the Inspector will display a URL that you can access in your browser to begin debugging.
+
+## Testing
+
+### Running E2E Tests
+
+The project includes end-to-end (E2E) tests that validate the integration with Harness services. To run these tests:
+
+1. Set up the required environment variables:
+
+```bash
+export HARNESS_MCP_SERVER_E2E_TOKEN=<your_harness_api_token>
+export HARNESS_MCP_SERVER_E2E_ACCOUNT_ID=<your_account_id>  
+export HARNESS_MCP_SERVER_E2E_ORG_ID=<your_org_id>          
+export HARNESS_MCP_SERVER_E2E_PROJECT_ID=<your_project_id>  
+export HARNESS_MCP_SERVER_E2E_BASE_URL=<base_url>          
+```
+
+2. Run the E2E tests using the Go test command with the e2e build tag:
+
+```bash
+go test -tags=e2e ./test/e2e/... -v
+```
+
+3. To run specific E2E tests, use the `-run` flag:
+
+```bash
+go test -tags=e2e ./test/e2e/... -v -run TestPipelineWorkflow
+```
+
+4. In VS Code, you can run the E2E tests directly using the launch.json configuration. Simply open the Run and Debug view, select the E2E test configuration from the dropdown menu, and click the Run button.
+
+The E2E tests create an in-process MCP client that communicates with the Harness API using your provided credentials.
