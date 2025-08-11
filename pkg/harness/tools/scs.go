@@ -19,13 +19,18 @@ import (
 )
 
 type OPAContent struct {
-    Policy struct {
-        Name    string `json:"name"`
-        Content string `json:"content"`
-    } `json:"policy"`
-    Metadata struct {
-        DeniedLicenses []string `json:"denied_licenses"`
-    } `json:"metadata"`
+	Policy struct {
+		Name    string `json:"name"`
+		Content string `json:"content"`
+	} `json:"policy"`
+	Metadata struct {
+		DeniedLicenses []string `json:"denied_licenses"`
+	} `json:"metadata"`
+}
+
+type FileContent struct {
+	Name    string `json:"name"`
+	Content []byte `json:"content"`
 }
 
 // mapLastScan extracts last scan data from PipelineDetails into a map
@@ -119,9 +124,9 @@ func artifactRuleBasedFollowUps(licenseFilterList *[]generated.LicenseFilter) []
 
 // ListArtifactSourcesTool returns a tool for listing artifact sources.
 func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("list_artifact_sources",
+	return mcp.NewTool("list_artifacts_scs",
 			mcp.WithDescription(`
-			Lists all artifact sources available in Harness SCS.
+			Lists all artifacts available in Harness SCS.
 
 			Output Format:
 			Show output in the following format, other than this format don't show any other section:
@@ -213,8 +218,18 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 				mcp.Enum("severity", "title", "updated"),
 				mcp.DefaultString("updated"),
 			),
+			mcp.WithNumber("page",
+				mcp.Description("Page number for pagination - page 0 is the first page"),
+				mcp.Min(0),
+				mcp.DefaultNumber(0),
+			),
+			mcp.WithNumber("size",
+				mcp.Description("Number of items per page.Always take 5 items per page,unless specified otherwise."),
+				mcp.Min(1),
+				mcp.DefaultNumber(5),
+				mcp.Max(10),
+			),
 			WithScope(config, true),
-			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := FetchScope(config, request, true)
@@ -231,6 +246,7 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 				Order:          (*generated.ListArtifactSourcesParamsOrder)(&order),
 				Sort:           &sortVal,
 			}
+			size = 5
 			artifactParams := &generated.ArtifactListV2Params{
 				Page:           (*generated.Page)(&page),
 				Limit:          (*generated.Limit)(&size),
@@ -238,9 +254,6 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 				Order:          (*generated.ArtifactListV2ParamsOrder)(&order),
 				Sort:           &sortVal,
 			}
-
-			//slog.Info("ArtifactListV2Params values", "Page", pageVal, "Limit", sizeVal, "HarnessAccount", config.AccountID, "Order", order, "Sort", sortVal)
-			//slog.Info("Request passed to BuildArtifactListingBody", "request", request)
 
 			// build the body using a helper function
 			body, err := BuildArtifactListingBody(request)
@@ -260,6 +273,8 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 
 			// Enrich each source with artifact details
 			var enrichedArtifacts []generated.ArtifactV2ListingResponse
+			//Note: SearchTerm can't be passed as we search on digest or tag in artifact list v2
+			body.SearchTerm = nil
 			if resp.JSON200 != nil {
 				for _, src := range *resp.JSON200 {
 					if src.SourceId != nil && *src.SourceId != "" {
@@ -377,20 +392,12 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 				Rows:    rows,
 			}
 
-			// Always include basic JSON data for external clients
-			tableJSON, err := json.Marshal(tableData)
-			if err != nil {
-				return mcp.NewToolResultErrorf("Failed to marshal table data: %v. Found %d artifacts.", err, len(rows)), nil
-			}
-
-
 			rawEnrichedArtifacts, err := json.Marshal(enrichedArtifacts)
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal response: %w", err)
 			}
 
 			responseContents := []mcp.Content{
-				mcp.NewTextContent(string(tableJSON)),
 				mcp.NewTextContent(string(rawEnrichedArtifacts)),
 			}
 
@@ -403,7 +410,7 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 				} else {
 					responseContents = append(responseContents, tableResource)
 				}
-				
+
 				// Add follow-up prompts if available
 				if enrichedArtifacts != nil {
 					suggestions := artifactRuleBasedFollowUps(body.LicenseFilterList)
@@ -978,6 +985,86 @@ func CreateOPAPolicyTool(config *config.Config, client *generated.ClientWithResp
 		}
 }
 
+// DownloadSbomTool returns a tool for downloading an SBOM for an artifact orchestration.
+// LINT FIXES: ensure io/fmt imported, use request.GetString, use mcp.NewFile, handle resp.Body as []byte.
+func DownloadSbomTool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("download_sbom",
+			mcp.WithDescription(`
+		Downloads the Software Bill of Materials (SBOM) for a given artifact orchestration in Harness SCS.
+
+		How to obtain orchestration_id:
+
+		1. If you do not know the orchestration_id:
+		- For artifact orchestration, use the 'list_artifact_scs' tool with a relevant search_term (e.g., image name
+			like 'alpine'). Then look for orchestration object which contains id in json response eg:
+			"orchestration": {
+            "id": <id>,
+            "pipeline_id": <pipeline_id>,
+            "pipeline_execution_id": <pipeline_execution_id>
+        }
+		- For repository orchestration, use the 'list_scs_code_repos' tool with a relevant search_term (e.g., repository name
+			like 'my-repo') to find the repository orchestration_id.
+
+		Usage Guidance:
+		- Use this tool to retrieve the SBOM for a specific artifact orchestration by its orchestration_id.
+		- The SBOM may be returned as a downloadable file (if large) or as a string preview (if small).
+		`),
+			mcp.WithString("orchestration_id",
+				mcp.Required(),
+				mcp.Description(`Required. The orchestration ID for the artifact whose SBOM you want to download. eg: '8nehRXghR2C8ZWMHiyzxCg'`),
+			),
+			WithScope(config, true),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := FetchScope(config, request, true)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			orgID := scope.OrgID
+			projectID := scope.ProjectID
+			orchestrationID, err := RequiredParam[string](request, "orchestration_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			params := &generated.DownloadSbomParams{
+				HarnessAccount: generated.AccountHeader(config.AccountID),
+			}
+			resp, err := client.DownloadSbomWithResponse(ctx, orgID, projectID, orchestrationID, params)
+			if err != nil {
+				return nil, fmt.Errorf("failed to call DownloadSbom: %w", err)
+			}
+			if resp.StatusCode() == 404 {
+				return mcp.NewToolResultError("SBOM not found"), nil
+			}
+			if resp.StatusCode() < 200 || resp.StatusCode() >= 300 {
+				return nil, fmt.Errorf("non-2xx status: %d", resp.StatusCode())
+			}
+			var responseContents []mcp.Content
+			if len(resp.Body) > 0 {
+				responseContents = append(responseContents, mcp.NewTextContent("SBOM downloaded successfully"))
+			} else {
+				return mcp.NewToolResultError("SBOM response body is empty"), nil
+			}
+
+			FileContent := FileContent{}
+			FileContent.Name = fmt.Sprintf("sbom_%s.json", orchestrationID)
+			FileContent.Content = []byte(*resp.JSON200.Sbom)
+
+			// Create OPA event
+			fileEvent := event.NewCustomEvent("file", FileContent)
+
+			// Create embedded resources for the OPA event
+			fileResource, err := fileEvent.CreateEmbeddedResource()
+			if err != nil {
+				return nil, fmt.Errorf("failed to create OPA resource: %w", err)
+			}
+			responseContents = append(responseContents, fileResource)
+			return &mcp.CallToolResult{
+				Content: responseContents,
+			}, nil
+		}
+}
+
 // GetSCSTool returns a tool for getting SCS (Supply Chain Security) details
 func ListSCSCodeReposTool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_scs_code_repos",
@@ -1166,13 +1253,13 @@ func ListSCSCodeReposTool(config *config.Config, client *generated.ClientWithRes
 			}
 
 			// Always include basic JSON data for external clients
-			tableJSON, err := json.Marshal(tableData)
+			raw, err := json.Marshal(resp.JSON200)
 			if err != nil {
 				return mcp.NewToolResultErrorf("Failed to marshal table data: %v. Found %d repositories.", err, len(rows)), nil
 			}
 
 			responseContents := []mcp.Content{
-				mcp.NewTextContent(string(tableJSON)),
+				mcp.NewTextContent(string(raw)),
 			}
 
 			if config.Internal {
@@ -1186,7 +1273,7 @@ func ListSCSCodeReposTool(config *config.Config, client *generated.ClientWithRes
 				} else {
 					responseContents = append(responseContents, tableResource)
 				}
-				
+
 				// Add follow-up prompts
 				prompts := []string{
 					"Show all repositories that violate the compliance rule: Auto-merge must be disabled.",
