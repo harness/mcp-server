@@ -67,8 +67,8 @@ func (m *SEIModule) IsDefault() bool {
 // RegisterSoftwareEngineeringInsights creates and registers SEI tools
 func RegisterSoftwareEngineeringInsights(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for SEI
-// 	baseURL := utils.BuildServiceURL(config, config.SEISvcBaseURL, config.BaseURL, "")
-	baseURL := "http://localhost:8080"
+	baseURL := utils.BuildServiceURL(config, config.SEISvcBaseURL, config.BaseURL, "")
+// 	baseURL := "http://localhost:8080"
 	var secret string
 	if config.SEISvcSecret != "" {
 		secret = config.SEISvcSecret

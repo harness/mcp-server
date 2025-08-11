@@ -49,10 +49,10 @@ func (s *SEIService) makeRequest(ctx context.Context, method, path string, param
 }
 
 // makePostRequest makes a POST request with JSON body
-func (s *SEIService) makePostRequest(ctx context.Context, path string, body interface{}, queryParams map[string]string, additionalHeaders ...map[string]string) (interface{}, error) {
+func (s *SEIService) makePostRequest(ctx context.Context, path string, body interface{}, queryParams map[string]string) (interface{}, error) {
 	var response interface{}
 	headers := map[string]string{
-		"Content-Type": "application/json",
+		"Content-Type": "application/json", // Explicitly set to override any automatic setting
 	}
 
 	// Add authentication header if secret is provided
@@ -63,20 +63,13 @@ func (s *SEIService) makePostRequest(ctx context.Context, path string, body inte
 		slog.Info("SEI - No authentication header added")
 	}
 
-	// Add any additional headers
-	for _, additionalHeader := range additionalHeaders {
-		for key, value := range additionalHeader {
-			headers[key] = value
-		}
-	}
-
 	// Marshal body to JSON
 	bodyBytes, err := json.Marshal(body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request body: %w", err)
 	}
 
-	slog.Info("SEI - Post Request details", "body", body, "queryParams", queryParams, "headers", headers)
+	slog.Info("SEI - Post Request details", "body", body, "path", path, "queryParams", queryParams, "headers", headers)
 
 	// Use PostRaw to include custom headers
 	err = s.Client.PostRaw(ctx, path, queryParams, bytes.NewBuffer(bodyBytes), headers, &response)
@@ -162,21 +155,11 @@ func (s *SEIService) GetProductivityFeatureMetrics(ctx context.Context, params m
 		}
 	}
 
-	// Build additional headers
-	additionalHeaders := map[string]string{}
-	if accountId, ok := params["accountId"]; ok {
-		if accountStr, ok := accountId.(string); ok {
-			additionalHeaders["harness-account"] = accountStr
-		}
-	}
 	fmt.Println("Request Body: ", requestBody)
 	fmt.Println("Query Parameters: ", queryParams)
-	fmt.Println("Additional Headers: ", additionalHeaders)
-	// return s.makePostRequest(ctx, "/gateway/sei/api/v2/productivityv3/feature_metrics", requestBody, queryParams, additionalHeaders)
-	return s.makePostRequest(ctx, "/v2/productivityv3/feature_metrics", requestBody, queryParams, additionalHeaders)
+	// return s.makePostRequest(ctx, "/gateway/sei/api/v2/productivityv3/feature_metrics", requestBody, queryParams)
+	return s.makePostRequest(ctx, "/v2/productivityv3/feature_metrics", requestBody, queryParams)
 }
-
-
 
 // GetEfficiencyLeadTime gets lead time
 // Makes a POST request to /v2/insights/efficiency/leadtime with JSON body and query parameters
@@ -210,18 +193,14 @@ func (s *SEIService) GetEfficiencyLeadTime(ctx context.Context, params map[strin
 			queryParams["orgIdentifier"] = orgStr
 		}
 	}
-
-	// Build additional headers
-	additionalHeaders := map[string]string{}
+	// Add account query parameter to match working curl command
 	if accountId, ok := params["accountId"]; ok {
 		if accountStr, ok := accountId.(string); ok {
-			additionalHeaders["harness-account"] = accountStr
+			queryParams["account"] = accountStr
 		}
 	}
 
 	// return s.makePostRequest(ctx, "/gateway/sei/api/v2/insights/efficiency/leadtime", requestBody, queryParams, additionalHeaders)
-// 	return s.makePostRequest(ctx, "/prod1/sei/api/v2/insights/efficiency/leadtime", requestBody, queryParams, additionalHeaders)
-	return s.makePostRequest(ctx, "/v2/insights/efficiency/leadtime", requestBody, queryParams, additionalHeaders)
+	// 	return s.makePostRequest(ctx, "/prod1/sei/api/v2/insights/efficiency/leadtime", requestBody, queryParams, additionalHeaders)
+	return s.makePostRequest(ctx, "/prod1/sei/api/v2/insights/efficiency/leadtime", requestBody, queryParams)
 }
-
-
