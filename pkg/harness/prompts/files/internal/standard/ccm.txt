@@ -1,5 +1,5 @@
 ---
-name: "ccm_standard"
+name: "ccm"
 description: "Ensure parameters are provided correctly and in the right format"
 result_description: "Input parameters validation"
 ---

@@ -1,0 +1,10 @@
+---
+name: "ccm"
+description: "Common CCM guidelines for all configurations"
+result_description: "Common CCM validation rules"
+---
+
+Common guidelines for CCM (Cloud Cost Management) operations:
+- Always validate input parameters before making API calls
+- Use consistent date formatting across all operations
+- Handle errors gracefully and provide meaningful feedback to users

@@ -1,0 +1,11 @@
+---
+name: "ccm"
+description: "Common CCM guidelines for architectural analysis"
+result_description: "Common CCM validation rules for architects"
+---
+
+Common guidelines for CCM (Cloud Cost Management) architectural operations:
+- Always validate input parameters before making API calls
+- Use consistent date formatting across all operations
+- Handle errors gracefully and provide meaningful feedback to users
+- Consider long-term trends and patterns for architectural decisions
