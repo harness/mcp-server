@@ -180,7 +180,70 @@ func (c *Client) PostRaw(
 	out interface{},
 	b ...backoff.BackOff,
 ) error {
-	return c.RequestRaw(ctx, path, params, body, headers, HttpPost, out, b...)
+	var retryCount int
+
+	operation := func() error {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, appendPath(c.BaseURL.String(), path), body)
+		if err != nil {
+			return backoff.Permanent(fmt.Errorf("unable to create HTTP request: %w", err))
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+		// Add custom headers from the headers map
+		for key, value := range headers {
+			req.Header.Add(key, value)
+		}
+		addQueryParams(req, params)
+
+		resp, err := c.Do(req)
+
+		slog.Debug("Response", "url", req.URL.String())
+		slog.Debug("Response", "value", resp)
+
+		if resp != nil && resp.Body != nil {
+			defer resp.Body.Close()
+		}
+
+		if err != nil || resp == nil {
+			return fmt.Errorf("request failed: %w", err)
+		}
+
+		if isRetryable(resp.StatusCode) {
+			return fmt.Errorf("retryable status code: %d", resp.StatusCode)
+		}
+
+		if statusErr := mapStatusCodeToError(resp.StatusCode); statusErr != nil {
+			return backoff.Permanent(statusErr)
+		}
+
+		if out != nil && resp.Body != nil {
+			if err := unmarshalResponse(resp, out); err != nil {
+				return fmt.Errorf("unmarshal error: %w", err)
+			}
+		}
+
+		return nil
+	}
+
+	notify := func(err error, next time.Duration) {
+		retryCount++
+		slog.Warn("Retrying request due to error",
+			"retry_count", retryCount,
+			"next_retry_in", next,
+			"error", err)
+	}
+
+	if len(b) > 0 {
+		if err := backoff.RetryNotify(operation, b[0], notify); err != nil {
+			return fmt.Errorf("request failed after %d retries: %w", retryCount, err)
+		}
+	} else {
+		if err := operation(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // Delete is a simple helper that builds up the request URL, adding the path and parameters.
@@ -314,7 +377,7 @@ func (c *Client) PostRawStream(
 	return resp, nil
 }
 
-// PutRaw is a simple helper that builds up the request URL, adding the path and parameters.
+// RequestRaw is a simple helper that builds up the request URL, adding the path and parameters.
 // The response from the request is unmarshalled into the out parameter.
 func (c *Client) RequestRaw(
 	ctx context.Context,
