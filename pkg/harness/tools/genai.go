@@ -210,6 +210,9 @@ func createGenAIToolHandler(config *config.Config, client *client.GenaiService, 
 		case *dto.DBChangesetParameters:
 			req.Stream = shouldStream
 			response, respErr = client.SendDBChangeset(ctx, scope, req, onProgress)
+		case *dto.IDPWorkflowParameters:
+			req.Stream = shouldStream
+			response, respErr = client.SendIDPWorkflow(ctx, scope, req, onProgress)
 		default:
 			return nil, fmt.Errorf("unsupported request type: %T", requestObj)
 		}
@@ -337,6 +340,75 @@ func DBChangesetTool(config *config.Config, client *client.GenaiService) (tool m
 			BaseRequestParameters: *baseParams,
 			DatabaseType:          dto.DatabaseType(strings.ToUpper(databaseType)),
 			OldChangeset:          oldChangeset,
+			ErrorContext:          errorContext,
+		}, nil
+	})
+	return tool, handler
+}
+
+// GenerateWorflowTool creates a tool for generating idp workflows
+func GenerateWorflowTool(config *config.Config, client *client.GenaiService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	// Get common parameters
+	commonParams := getCommonGenAIParameters()
+
+	// Add tool-specific parameters
+	toolParams := append(commonParams,
+		mcp.WithString("pipeline_info",
+			mcp.Required(),
+			mcp.Description("The YAML of the pipeline which is to be used for generating the workflow. Use the get_pipeline tool to retrieve the pipeline YAML."),
+		),
+		mcp.WithString("old_workflow",
+			mcp.Description("Optional existing workflow YAML for updates"),
+		),
+		mcp.WithString("error_context",
+			mcp.Description("Optional error context if this is a retry after an error for a given workflow"),
+		),
+		WithScope(config, false),
+	)
+
+	tool = mcp.NewTool("generate_idp_workflow",
+		append([]mcp.ToolOption{mcp.WithDescription(`
+			Generates the YAML for an IDP Workflow.
+			Usage Guidance:
+			- Use this tool to generate a workflow YAML using a given pipeline.
+			- You must provide the pipline YAML to generate the workflow YAML.
+			`)},
+			toolParams...)...,
+	)
+
+	handler = createGenAIToolHandler(config, client, func(baseParams *dto.BaseRequestParameters, request mcp.CallToolRequest) (interface{}, error) {
+
+		pipelineInfoArg, ok := request.GetArguments()["pipeline_info"]
+		if !ok || pipelineInfoArg == nil {
+			return nil, fmt.Errorf("missing required parameter: pipeline_info")
+		}
+
+		pipelineInfo, ok := pipelineInfoArg.(string)
+		if !ok {
+			return nil, fmt.Errorf("pipeline_info must be a string")
+		}
+
+		oldWorkflowArg, ok := request.GetArguments()["old_workflow"]
+		var oldWorkflow string
+		if ok && oldWorkflowArg != nil {
+			if oc, isString := oldWorkflowArg.(string); isString {
+				oldWorkflow = oc
+			}
+		}
+
+		errorContextArg, ok := request.GetArguments()["error_context"]
+		var errorContext string
+		if ok && errorContextArg != nil {
+			if ec, isString := errorContextArg.(string); isString {
+				errorContext = ec
+			}
+		}
+
+		// Create the IDP Workflow parameters
+		return &dto.IDPWorkflowParameters{
+			BaseRequestParameters: *baseParams,
+			PipelineInfo:          pipelineInfo,
+			OldWorkflow:           oldWorkflow,
 			ErrorContext:          errorContext,
 		}, nil
 	})

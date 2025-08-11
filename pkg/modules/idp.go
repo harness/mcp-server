@@ -1,11 +1,14 @@
 package modules
 
 import (
+	"fmt"
+
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness/tools"
 	"github.com/harness/harness-mcp/pkg/modules/utils"
 	"github.com/harness/harness-mcp/pkg/toolsets"
+	"github.com/mark3labs/mcp-go/server"
 )
 
 // IDPModule implements the Module interface for Internal Developer Portal
@@ -76,15 +79,29 @@ func RegisterInternalDeveloperPortal(config *config.Config, tsg *toolsets.Toolse
 		Client: c,
 	}
 
-	idp := toolsets.NewToolset("Internal Developer Portal", "Harness Internal Developer Portal catalog related tools for managing catalog Entities which represent the core components of your system").
-		AddReadTools(
-			toolsets.NewServerTool(tools.ListEntitiesTool(config, idpClient)),
-			toolsets.NewServerTool(tools.GetEntityTool(config, idpClient)),
-			toolsets.NewServerTool(tools.GetScorecardTool(config, idpClient)),
-			toolsets.NewServerTool(tools.ListScorecardsTool(config, idpClient)),
-			toolsets.NewServerTool(tools.GetScoreSummaryTool(config, idpClient)),
-			toolsets.NewServerTool(tools.GetScoresTool(config, idpClient)),
-		)
+	// Get the GenAI client using the shared method
+	genaiClient, err := GetGenAIClient(config)
+	if err != nil {
+		return fmt.Errorf("failed to create client for genai: %w", err)
+	}
+
+	idpTools := []server.ServerTool{
+		toolsets.NewServerTool(tools.ListEntitiesTool(config, idpClient)),
+		toolsets.NewServerTool(tools.GetEntityTool(config, idpClient)),
+		toolsets.NewServerTool(tools.GetScorecardTool(config, idpClient)),
+		toolsets.NewServerTool(tools.ListScorecardsTool(config, idpClient)),
+		toolsets.NewServerTool(tools.GetScoreSummaryTool(config, idpClient)),
+		toolsets.NewServerTool(tools.GetScoresTool(config, idpClient)),
+		toolsets.NewServerTool(tools.ExecuteWorkflowTool(config, idpClient)),
+	}
+
+	// Add GenerateWorflowTool only if genaiClient is available
+	if genaiClient != nil {
+		idpTools = append(idpTools, toolsets.NewServerTool(tools.GenerateWorflowTool(config, genaiClient)))
+	}
+
+	idp := toolsets.NewToolset("idp", "Harness Internal Developer Portal catalog related tools for managing catalog Entities which represent the core components of your system").
+		AddReadTools(idpTools...)
 
 	// Add toolset to the group
 	tsg.AddToolset(idp)

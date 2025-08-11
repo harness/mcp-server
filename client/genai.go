@@ -16,6 +16,7 @@ import (
 const (
 	aiDevopsChatPath = "chat/platform"
 	dbChangesetPath  = "chat/db-changeset"
+	idpWorkflowPath  = "chat/idp-workflow"
 )
 
 type GenaiService struct {
@@ -110,6 +111,12 @@ func (g *GenaiService) SendAIDevOpsChat(ctx context.Context, scope dto.Scope, re
 // If request.Stream is true and onProgress is provided, it will handle streaming responses.
 func (g *GenaiService) SendDBChangeset(ctx context.Context, scope dto.Scope, request *dto.DBChangesetParameters, onProgress ...func(progressUpdate dto.ProgressUpdate) error) (*dto.ServiceChatResponse, error) {
 	return g.sendGenAIRequest(ctx, dbChangesetPath, scope, request, onProgress...)
+}
+
+// SendIDPWorkflow sends a request to generate idp workflows and returns the response.
+// If request.Stream is true and onProgress is provided, it will handle streaming responses.
+func (g *GenaiService) SendIDPWorkflow(ctx context.Context, scope dto.Scope, request *dto.IDPWorkflowParameters, onProgress ...func(progressUpdate dto.ProgressUpdate) error) (*dto.ServiceChatResponse, error) {
+	return g.sendGenAIRequest(ctx, idpWorkflowPath, scope, request, onProgress...)
 }
 
 // processStreamingResponse handles Server-Sent Events (SSE) streaming responses

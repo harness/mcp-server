@@ -217,3 +217,12 @@ type ScorecardScore struct {
 	Score         int    `json:"score"`
 	ScorecardName string `json:"scorecard_name"`
 }
+
+type ExecuteWorkflowRequest struct {
+	Identifier string      `json:"identifier"`
+	Values     interface{} `json:"values,omitempty"`
+}
+
+type ExecuteWorkflowResponse struct {
+	ExecutionID string `json:"id"`
+}
