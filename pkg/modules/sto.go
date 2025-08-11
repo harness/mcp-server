@@ -2,8 +2,12 @@ package modules
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/harness/harness-mcp/client"
 	sto "github.com/harness/harness-mcp/client/sto/generated"
@@ -69,36 +73,38 @@ func (m *STOModule) IsDefault() bool {
 
 // RegisterSTO registers the Security Test Orchestration toolset
 func RegisterSTO(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-	baseURL := utils.BuildServiceURL(config, config.STOSvcBaseURL, config.BaseURL, "/sto")
+	baseURL := utils.BuildServiceURL(config, config.STOSvcBaseURL, config.BaseURL, "sto")
 	secret := config.STOSvcSecret
+	c := &http.Client{
+		Timeout: 30 * time.Second,
+	}
 
 	baseURLPrincipal := utils.BuildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng/api")
 	principalSecret := config.NgManagerSecret
 
-	c, err := utils.CreateClient(baseURL, config, secret)
-	if err != nil {
-		return err
-	}
-
 	cPrincipal, err := utils.CreateClient(baseURLPrincipal, config, principalSecret)
 	if err != nil {
-		return err
+		slog.Warn("Failed to create principal client for STO toolset", "error", err)
+		return nil
 	}
 	principalClient := &client.PrincipalService{Client: cPrincipal}
 
-	requestEditorFn := func(ctx context.Context, req *http.Request) error {
-		k, v, err := c.AuthProvider.GetHeader(ctx)
+	stoAPIKey := ""
+	tokenURL := fmt.Sprintf("%s/api/v2/token?accountId=%s&audience=sto-plugin", baseURL, config.AccountID)
+	if config.Internal {
+		stoAPIKey, err = retrieveSTOToken(tokenURL, secret)
 		if err != nil {
-			return err
+			slog.Warn("Failed to retrieve STO token. STO toolset will be partially operational", "error", err)
+			// Continue without the token
 		}
-		req.Header.Set(k, v)
-		return nil
 	}
 
+	requestEditorFn := createSTORequestEditor(config, stoAPIKey)
 	stoClient, err := sto.NewClientWithResponses(baseURL, sto.WithHTTPClient(c),
 		sto.WithRequestEditorFn(requestEditorFn))
 	if err != nil {
-		return fmt.Errorf("failed to create generated STO client: %w", err)
+		slog.Warn("Failed to create generated STO client. STO toolset will not be available", "error", err)
+		return nil
 	}
 	sto := toolsets.NewToolset("sto", "Harness Security Test Orchestration tools").
 		AddReadTools(
@@ -109,4 +115,59 @@ func RegisterSTO(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 		)
 	tsg.AddToolset(sto)
 	return nil
+}
+
+// createSTORequestEditor creates a request editor function for STO API requests
+func createSTORequestEditor(config *config.Config, stoAPIKey string) func(context.Context, *http.Request) error {
+	return func(ctx context.Context, req *http.Request) error {
+		//Add STO plugin token as Authorization header if internal mode
+		if config.Internal && stoAPIKey != "" {
+			req.Header.Set("Authorization", "ApiKey "+stoAPIKey)
+		} else {
+			req.Header.Set("x-api-key", config.APIKey)
+		}
+		return nil
+	}
+}
+
+// retrieveSTOToken retrieves the STO plugin token from the token endpoint
+func retrieveSTOToken(tokenURL, secret string) (string, error) {
+	stoTokenReq, err := http.NewRequestWithContext(context.Background(), http.MethodGet, tokenURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create STO token request: %w", err)
+	}
+
+	stoTokenReq.Header.Set("X-Harness-Token", secret)
+
+	// Try with a fresh HTTP client to avoid any client configuration issues
+	httpClient := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	stoTokenResp, err := httpClient.Do(stoTokenReq)
+	if err != nil {
+		return "", fmt.Errorf("failed to call STO token endpoint: %w", err)
+	}
+
+	defer stoTokenResp.Body.Close()
+
+	if stoTokenResp.StatusCode >= 300 {
+		return "", fmt.Errorf("failed to retrieve STO token, status: %s", stoTokenResp.Status)
+	}
+
+	bodyBytes, err := io.ReadAll(stoTokenResp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read STO token response: %w", err)
+	}
+
+	var tokenJSON map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &tokenJSON); err == nil {
+		if v, ok := tokenJSON["token"].(string); ok && v != "" {
+			return v, nil
+		} else if v, ok := tokenJSON["apiKey"].(string); ok && v != "" {
+			return v, nil
+		}
+	}
+
+	return "", nil
 }

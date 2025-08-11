@@ -52,19 +52,72 @@ const (
 	CallerUnifiedAgent Caller = "unified_agent"
 )
 
-type ServiceChatParameters struct {
+// GenAIRequest defines the interface for all GenAI request types
+type GenAIRequest interface {
+	GetBaseParameters() *BaseRequestParameters
+	IsStreaming() bool
+}
+
+// BaseRequestParameters defines common fields for all GenAI request types
+type BaseRequestParameters struct {
 	Prompt          string          `json:"prompt"`
 	Provider        string          `json:"provider,omitempty"`
 	ModelName       string          `json:"model_name,omitempty"`
 	ConversationID  string          `json:"conversation_id"`
 	InteractionID   string          `json:"interaction_id,omitempty"`
-	Capabilities    []Capability    `json:"capabilities"`
+	Capabilities    []Capability    `json:"capabilities,omitempty"`
 	ConversationRaw []any           `json:"conversation_raw,omitempty"`
 	Context         []ContextItem   `json:"context,omitempty"`
-	Action          RequestAction   `json:"action,omitempty"`
 	HarnessContext  *HarnessContext `json:"harness_context,omitempty"`
 	Stream          bool            `json:"stream,omitempty"`
 	Caller          Caller          `json:"caller,omitempty"`
+}
+
+// GetBaseParameters returns the base parameters
+func (b *BaseRequestParameters) GetBaseParameters() *BaseRequestParameters {
+	return b
+}
+
+// IsStreaming returns whether the request is streaming
+func (b *BaseRequestParameters) IsStreaming() bool {
+	return b.Stream
+}
+
+// ServiceChatParameters extends BaseRequestParameters for AI DevOps agent requests
+type ServiceChatParameters struct {
+	BaseRequestParameters
+	Action RequestAction `json:"action,omitempty"`
+}
+
+// GetBaseParameters returns the base parameters
+func (s *ServiceChatParameters) GetBaseParameters() *BaseRequestParameters {
+	return &s.BaseRequestParameters
+}
+
+// IsStreaming returns whether the request is streaming
+func (s *ServiceChatParameters) IsStreaming() bool {
+	return s.BaseRequestParameters.Stream
+}
+
+// DatabaseType defines the supported database types
+type DatabaseType string
+
+// DBChangesetParameters extends BaseRequestParameters for database changeset generation
+type DBChangesetParameters struct {
+	BaseRequestParameters
+	DatabaseType DatabaseType `json:"database_type"`
+	OldChangeset string       `json:"oldchangeset,omitempty"`
+	ErrorContext string       `json:"error_context,omitempty"`
+}
+
+// GetBaseParameters returns the base parameters
+func (d *DBChangesetParameters) GetBaseParameters() *BaseRequestParameters {
+	return &d.BaseRequestParameters
+}
+
+// IsStreaming returns whether the request is streaming
+func (d *DBChangesetParameters) IsStreaming() bool {
+	return d.BaseRequestParameters.Stream
 }
 
 type CapabilityToRun struct {

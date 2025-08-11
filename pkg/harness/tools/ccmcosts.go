@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
+
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/utils"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"time"
 )
 
 // GetCcmOverview creates a tool for getting a ccm overview from an account
@@ -357,12 +358,12 @@ func FetchCommitmentCoverageTool(config *config.Config, client *client.CloudCost
 
 			data, err := client.GetComputeCoverage(ctx, scope, params)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get commitment coverage: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to get commitment coverage: %s", err)), nil
 			}
 
 			r, err := json.Marshal(data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal commitment coverage: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal commitment coverage: %s", err)), nil
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
@@ -454,12 +455,96 @@ func FetchCommitmentSavingsTool(config *config.Config, client *client.CloudCostM
 
 			data, err := client.GetCommitmentSavings(ctx, scope, params)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get commitment savings: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to get commitment savings: %s", err)), nil
 			}
 
 			r, err := json.Marshal(data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal commitment savings: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal commitment savings: %s", err)), nil
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+func FetchCommitmentUtilisationTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("get_ccm_commitment_utilisation",
+			mcp.WithDescription("Get commitment utilisation information for an account in Harness Cloud Cost Management broken down by Reserved Instances and Savings Plans in day wise granularity"),
+			mcp.WithString("start_date",
+				mcp.Description("Start date to filter commitment utilisation (optional, defaults to 30 days ago)"),
+			),
+			mcp.WithString("end_date",
+				mcp.Description("End date to filter commitment utilisation (optional, defaults to current date)"),
+			),
+			mcp.WithString("service",
+				mcp.Description("Optional service to filter commitment utilisation"),
+			),
+			mcp.WithArray("cloud_account_ids",
+				mcp.Description("Optional cloud account IDs to filter commitment utilisation"),
+				mcp.Items(map[string]any{
+					"type": "string",
+				}),
+			),
+			WithScope(config, false),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			accountId, err := getAccountID(config, request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			params := &dto.CCMCommitmentOptions{}
+			params.AccountIdentifier = &accountId
+
+			// Handle service parameter
+			service, ok, err := OptionalParamOK[string](request, "service")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if ok && service != "" {
+				params.Service = &service
+			}
+
+			// Handle cloud account IDs parameter
+			cloudAccountIDs, ok, err := OptionalParamOK[[]string](request, "cloud_account_ids")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if ok && len(cloudAccountIDs) > 0 {
+				params.CloudAccountIDs = cloudAccountIDs
+			}
+
+			// Handle start date parameter
+			startDate, ok, err := OptionalParamOK[string](request, "start_date")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if ok && startDate != "" {
+				params.StartDate = &startDate
+			}
+
+			// Handle end date parameter
+			endDate, ok, err := OptionalParamOK[string](request, "end_date")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if ok && endDate != "" {
+				params.EndDate = &endDate
+			}
+
+			scope, err := FetchScope(config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.GetCommitmentUtilisation(ctx, scope, params)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to get commitment utilisation: %s", err)), nil
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal commitment utilisation: %s", err)), nil
 			}
 
 			return mcp.NewToolResultText(string(r)), nil

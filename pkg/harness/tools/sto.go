@@ -5,15 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/client/sto/generated"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
-	"github.com/harness/harness-mcp/pkg/appseccommons"
-	builder "github.com/harness/harness-mcp/pkg/harness/event/common"
+	"github.com/harness/harness-mcp/pkg/harness/event/types"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -161,7 +159,12 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 			}
 			resp, err := client.FrontendAllIssuesListWithResponse(ctx, params)
 			if err != nil {
+				slog.Error("Failed to get STO issues", "error", err)
 				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if resp.StatusCode() < 200 || resp.StatusCode() >= 300 {
+				slog.Error("Failed to get STO issues", "status code", resp.StatusCode())
+				return nil, fmt.Errorf("non-2xx status: %d", resp.StatusCode())
 			}
 			if resp.JSON200 == nil {
 				// Try to marshal error response if available
@@ -186,45 +189,74 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 					"OCCURRENCES":      issue.NumOccurrences,
 					"LAST_DETECTED":    formattedDate,
 					"EXEMPTION_STATUS": issue.ExemptionStatus,
-					"ISSUE_ID":         issue.Id,
-					"EXEMPTION_ID":     issue.ExemptionId,
 				}
 				rows = append(rows, row)
 			}
 
-			tableData, err := json.Marshal(rows)
+			// Create table columns for our UI component
+			columns := []types.TableColumn{
+				{Key: "TITLE", Label: "Title"},
+				{Key: "SEVERITY", Label: "Severity"},
+				{Key: "ISSUE_TYPE", Label: "Issue Type"},
+				{Key: "TARGETS_IMPACTED", Label: "Targets Impacted"},
+				{Key: "OCCURRENCES", Label: "Occurrences"},
+				{Key: "LAST_DETECTED", Label: "Last Detected"},
+				{Key: "EXEMPTION_STATUS", Label: "Exemption Status"},
+			}
+
+			tableData := types.TableData{
+				Columns: columns,
+				Rows:    rows,
+			}
+
+			// Serialize the table component for text representation
+			tableJSON, err := json.Marshal(tableData)
+			if err != nil {
+				return mcp.NewToolResultErrorf("Failed to marshal table data: %v", err), nil
+			}
+
+			raw, err := json.Marshal(resp.JSON200)
 			if err != nil {
 				return mcp.NewToolResultError("Failed to marshal table data: " + err.Error()), nil
 			}
-			var prompts []string
-			prompts = append(prompts,
-				"Show me only issues with secrets identified",
-				"Show me issues without Exemption",
-			)
-			// The tool name is "sto_all_issues_list", so we extract "STO" from it
-			moduleName := "All_Issue_Report"
 
-			if search, _ := OptionalParam[string](request, "search"); search != "" {
-				// Truncate if too long
-				if len(search) > 20 {
-					search = search[:17] + "..."
-				}
-				// Replace underscores with spaces for better readability
-				search = strings.ReplaceAll(search, "_", " ")
-				// Capitalize first letter for consistency
-				if len(search) > 0 {
-					search = strings.ToUpper(search[:1]) + search[1:]
-				}
-				moduleName = moduleName + ": " + search
+			// Start with text content which is always returned
+			responseContents := []mcp.Content{
+				mcp.NewTextContent(string(tableJSON)),
+				mcp.NewTextContent(string(raw)),
 			}
 
-			return appseccommons.NewToolResultTextWithPrompts(
-				string(builder.GenericTableEvent),
-				string(tableData),
-				prompts,
-				moduleName,
-				"TITLE", "SEVERITY", "ISSUE_TYPE", "TARGETS_IMPACTED", "OCCURRENCES", "LAST_DETECTED", "EXEMPTION_STATUS", "ISSUE_ID", "EXEMPTION_ID",
-			), nil
+			if config.Internal {
+				// Create the table component
+				tableEvent := types.NewTableEvent(tableData)
+
+				tableResource, err := tableEvent.CreateEmbeddedResource()
+				if err != nil {
+					slog.Error("Failed to create table resource", "error", err)
+				} else {
+					responseContents = append(responseContents, tableResource)
+				}
+
+				prompts := []string{
+					"Show me only issues with secrets identified",
+					"Show me issues without Exemption",
+				}
+
+				// Create prompt event and resource
+				if len(prompts) > 0 {
+					promptEvent := types.NewActionEvent(prompts)
+					promptResource, err := promptEvent.CreateEmbeddedResource()
+					if err != nil {
+						slog.Error("Failed to create prompt resource", "error", err)
+					} else {
+						responseContents = append(responseContents, promptResource)
+					}
+				}
+			}
+
+			return &mcp.CallToolResult{
+				Content: responseContents,
+			}, nil
 		}
 }
 
@@ -392,32 +424,87 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 			)
 			for i := 0; i < len(rows) && i < maxSuggestions; i++ {
 				issue, issueOk := rows[i]["ISSUE"].(string)
+				status, statusOk := rows[i]["STATUS"]
 				if issueOk {
-					if rows[i]["STATUS"] == "Pending" {
+					if statusOk && status == "Pending" {
 						suggestions = append(suggestions, "Approve exemption "+issue)
 					}
 					suggestions = append(suggestions, "Reject exemption "+issue)
 				}
 			}
 
-			tableData, err := json.Marshal(rows)
+			// Create table columns for our UI component
+			columns := []types.TableColumn{}
+			if showingApprovedExemptions {
+				columns = []types.TableColumn{
+					{Key: "ISSUE", Label: "Issue"},
+					{Key: "SEVERITY", Label: "Severity"},
+					{Key: "SCOPE", Label: "Scope"},
+					{Key: "REASON", Label: "Reason"},
+					{Key: "EXEMPTION_DURATION", Label: "Exemption Duration"},
+					{Key: "REQUESTED_BY", Label: "Requested By"},
+					{Key: "APPROVED_BY", Label: "Approved By"},
+					{Key: "STATUS", Label: "Status"},
+				}
+			} else {
+				columns = []types.TableColumn{
+					{Key: "ISSUE", Label: "Issue"},
+					{Key: "SEVERITY", Label: "Severity"},
+					{Key: "SCOPE", Label: "Scope"},
+					{Key: "REASON", Label: "Reason"},
+					{Key: "EXEMPTION_DURATION", Label: "Exemption Duration"},
+					{Key: "REQUESTED_BY", Label: "Requested By"},
+					{Key: "STATUS", Label: "Status"},
+				}
+			}
+
+			// Always create the basic table data
+			tableData := types.TableData{
+				Columns: columns,
+				Rows:    rows,
+			}
+
+			// Always include basic JSON data for external clients
+			tableJSON, err := json.Marshal(tableData)
+			if err != nil {
+				return mcp.NewToolResultErrorf("Failed to marshal table data: %v", err), nil
+			}
+
+			raw, err := json.Marshal(resp.JSON200)
 			if err != nil {
 				return mcp.NewToolResultError("Failed to marshal table data: " + err.Error()), nil
 			}
-			columns := []string{}
-			if showingApprovedExemptions {
-				columns = []string{"ISSUE", "SEVERITY", "SCOPE", "REASON", "EXEMPTION_DURATION", "REQUESTED_BY", "APPROVED_BY", "STATUS", "ExemptionId", "OrgId", "ProjectId", "PipelineId", "TargetId"}
-			} else {
-				columns = []string{"ISSUE", "SEVERITY", "SCOPE", "REASON", "EXEMPTION_DURATION", "REQUESTED_BY", "STATUS", "ExemptionId", "OrgId", "ProjectId", "PipelineId", "TargetId"}
+
+			responseContents := []mcp.Content{
+				mcp.NewTextContent(string(tableJSON)),
+				mcp.NewTextContent(string(raw)),
 			}
 
-			return appseccommons.NewToolResultTextWithPrompts(
-				string(builder.GenericTableEvent),
-				string(tableData),
-				suggestions,
-				"List_Exemptions",
-				columns,
-			), nil
+			if config.Internal {
+				// Only create enhanced UI components for internal mode
+				tableEvent := types.NewTableEvent(tableData)
+				tableResource, err := tableEvent.CreateEmbeddedResource()
+				if err != nil {
+					slog.Error("Failed to create table resource", "error", err)
+				} else {
+					responseContents = append(responseContents, tableResource)
+				}
+				
+				// Create prompt event and resource if we have suggestions
+				if len(suggestions) > 0 {
+					promptEvent := types.NewActionEvent(suggestions)
+					promptResource, err := promptEvent.CreateEmbeddedResource()
+					if err != nil {
+						slog.Error("Failed to create prompt resource", "error", err)
+					} else {
+						responseContents = append(responseContents, promptResource)
+					}
+				}
+			}
+
+			return &mcp.CallToolResult{
+				Content: responseContents,
+			}, nil
 		}
 }
 
@@ -544,6 +631,7 @@ func ExemptionsApproveExemptionTool(config *config.Config, client *generated.Cli
 			mcp.WithString("accountId", mcp.Required(), mcp.Description("Harness Account ID")),
 			mcp.WithString("orgId", mcp.Description("Harness Organization ID")),
 			mcp.WithString("projectId", mcp.Description("Harness Project ID")),
+			mcp.WithString("userId", mcp.Description("User ID of the approver. Get the current userID from context")),
 			mcp.WithString("comment", mcp.Description("Optional comment for the approval or rejection")),
 			WithScope(config, true),
 		), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -556,7 +644,13 @@ func ExemptionsApproveExemptionTool(config *config.Config, client *generated.Cli
 			if v, _ := OptionalParam[string](request, "projectId"); v != "" {
 				params.ProjectId = &v
 			}
-			approverId := getCurrentUserUUID(ctx, config, principalClient)
+			approverId := ""
+			if v, _ := OptionalParam[string](request, "userId"); v != "" {
+				approverId = v
+			}
+			if approverId == "" {
+				approverId = getCurrentUserUUID(ctx, config, principalClient)
+			}
 			defaultComment := "This is done by Harness Agent"
 			body := generated.ApproveExemptionRequestBody{
 				ApproverId: approverId,
