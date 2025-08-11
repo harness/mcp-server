@@ -153,6 +153,7 @@ Toolset Name: `ccm`
 - `get_ccm_commitment_coverage`: Get commitment coverage information for an account in Harness Cloud Cost Management
 - `get_ccm_commitment_savings`: Get commitment savings information for an account in Harness Cloud Cost Management
 - `get_ccm_commitment_utilisation`: Get commitment utilisation information for an account in Harness Cloud Cost Management broken down by Reserved Instances and Savings Plans in day wise granularity.
+- `get_ccm_estimated_savings`: Get estimated savings information for a cloud account in Harness Cloud Cost Management
 
 #### Database Operations Toolset
 

@@ -49,3 +49,19 @@ type ComputeCoveragesDetail struct {
 	Table *ComputeCoveragesDetailTable `json:"table,omitempty"`
 	Chart []*ComputeCoverageChart      `json:"chart,omitempty"`
 }
+
+type CommitmentEstimatedSavings struct {
+	AnnualizedSavings float64 `json:"annualized_savings,omitempty"`
+	CloudAccountID    string  `json:"cloud_account_id,omitempty"`
+}
+
+type CommitmentEstimatedSavingsResponse struct {
+	Data []*CommitmentEstimatedSavings `json:"data,omitempty"`
+}
+
+type EstimatedSavingsRemoteResponse struct {
+	CurrentCoverage  float64 `json:"current_coverage"`
+	TargetCoverage   float64 `json:"target_coverage"`
+	CurrentSavings   float64 `json:"current_savings"`
+	EstimatedSavings float64 `json:"estimated_savings"`
+}
