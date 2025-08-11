@@ -172,6 +172,10 @@ func (r *CloudCostManagementService) GetComputeCoverage(ctx context.Context, sco
 		requestPayload.Service = *opts.Service
 	}
 
+	if opts.GroupBy != nil && *opts.GroupBy != "" {
+		requestPayload.GroupBy = opts.GroupBy
+	}
+
 	if len(opts.CloudAccountIDs) > 0 {
 		requestPayload.CloudAccounts = opts.CloudAccountIDs
 	}
