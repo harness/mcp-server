@@ -4,7 +4,7 @@ import (
 	"embed"
 )
 
-//go:embed files/**/*.txt
+//go:embed files/**/**/*.txt
 var PromptFiles embed.FS // Exported to be accessible from other packages
 
 // GetModulePrompts retrieves prompts for a specific module from a given filesystem
@@ -19,9 +19,9 @@ func GetModulePrompts(fs embed.FS, module string, isInternal bool, mode string) 
 
 	var allPrompts []PromptFile
 
-	filename := module + "_" + mode + ".txt"
+	filename := module + ".txt"
 	// Load common prompt for the module directly
-	commonPath := "files/common/" + filename
+	commonPath := "files/common/" + mode + "/" + filename
 	commonPrompt, err := fileLoader.loadPromptFileFromEmbed(commonPath)
 	if err == nil {
 		allPrompts = append(allPrompts, commonPrompt)
@@ -30,9 +30,9 @@ func GetModulePrompts(fs embed.FS, module string, isInternal bool, mode string) 
 	// Load mode-specific prompt for the module directly
 	var modePath string
 	if isInternal {
-		modePath = "files/internal/" + filename
+		modePath = "files/internal/" + mode + "/" + filename
 	} else {
-		modePath = "files/external/" + filename
+		modePath = "files/external/" + mode + "/" + filename
 	}
 
 	modePrompt, err := fileLoader.loadPromptFileFromEmbed(modePath)

@@ -1,6 +1,7 @@
 package modules
 
 import (
+	"encoding/json"
 	"log/slog"
 	"strings"
 
@@ -90,10 +91,7 @@ func (r *ModuleRegistry) RegisterPrompts(mcpServer *server.MCPServer) error {
 
 	// Register prompts for each enabled module
 	for _, module := range enabledModules {
-		if err := registerPrompts(module.ID(), r.config, mcpServer, p.Standard); err != nil {
-			return err
-		}
-		if err := registerPrompts(module.ID(), r.config, mcpServer, p.Architect); err != nil {
+		if err := registerPrompts(module.ID(), r.config, mcpServer); err != nil {
 			return err
 		}
 	}
@@ -101,59 +99,95 @@ func (r *ModuleRegistry) RegisterPrompts(mcpServer *server.MCPServer) error {
 	return nil
 }
 
-func registerPrompts(moduleID string, cfg *config.Config, mcpServer *server.MCPServer, mode p.Mode) error {
-	// Get module-specific prompts
-	modulePrompts, err := prompts.GetModulePrompts(prompts.PromptFiles, strings.ToLower(moduleID), cfg.Internal, string(mode))
-	if err != nil {
-		return err
-	}
+func registerPrompts(moduleID string, cfg *config.Config, mcpServer *server.MCPServer) error {
+    // Create a map to store prompts by mode
+    modulePromptsByMode := map[string][]prompts.PromptFile{
+        string(p.Standard): {},
+        string(p.Architect): {},
+    }
+    
+    // Get module-specific prompts for standard mode
+    standardPrompts, err := prompts.GetModulePrompts(prompts.PromptFiles, strings.ToLower(moduleID), cfg.Internal, string(p.Standard))
+    if err != nil {
+        return err
+    }
+    modulePromptsByMode[string(p.Standard)] = standardPrompts
+    
+    // Get module-specific prompts for architect mode (only for internal)
+    if cfg.Internal {
+        architectPrompts, err := prompts.GetModulePrompts(prompts.PromptFiles, strings.ToLower(moduleID), cfg.Internal, string(p.Architect))
+        if err != nil {
+            return err
+        }
+        modulePromptsByMode[string(p.Architect)] = architectPrompts
+    }
+    
+    // Check if we have any prompts for this module
+    totalPrompts := len(modulePromptsByMode[string(p.Standard)]) + len(modulePromptsByMode[string(p.Architect)])
+    if totalPrompts == 0 {
+        // No prompts for this module
+        return nil
+    }
 
-	if len(modulePrompts) == 0 {
-		// No prompts for this module
-		return nil
-	}
-
-	// Combine all prompt contents into a single prompt
-	var combinedContent strings.Builder
-
-	// Use the first prompt's metadata for description and result description if available
-	description := ""
-	if len(modulePrompts) > 0 && modulePrompts[0].Metadata.Description != "" {
-		description = modulePrompts[0].Metadata.Description
-	}
-
-	resultDescription := ""
-	if len(modulePrompts) > 0 && modulePrompts[0].Metadata.ResultDescription != "" {
-		resultDescription = modulePrompts[0].Metadata.ResultDescription
-	}
-
-	// Combine all prompt contents
-	for i, promptFile := range modulePrompts {
-		if promptFile.Content != "" {
-			if i > 0 {
-				combinedContent.WriteString("\n\n")
-			}
-			combinedContent.WriteString(promptFile.Content)
-		}
-	}
-
-	promptName := strings.ToLower(moduleID) + "_" + string(mode)
-	// Create a single MCP prompt with the module ID as the name
-	mcpPrompt := p.NewPrompt().
-		SetName(promptName). // Use moduleID as the prompt name
-		SetDescription(description).
-		SetResultDescription(resultDescription).
-		SetText(combinedContent.String()).
-		Build()
-
-	// Create a Prompts collection with the single prompt
-	mcpPrompts := p.Prompts{}
-	mcpPrompts.Append(mcpPrompt)
-
-	slog.Info("Registering prompt for", "module", moduleID, "mode", mode, "contentLength", len(combinedContent.String()))
-
-	// Register the prompt with the MCP server
-	p.AddPrompts(mcpPrompts, mcpServer)
-
-	return nil
+    // Create a map to store combined content for each mode
+    modeContents := make(map[string]string)
+    
+    // Get description and result description from the first available prompt
+    description := ""
+    resultDescription := ""
+    
+    // Process each mode separately to build the content map
+    for mode, modePrompts := range modulePromptsByMode {
+        if len(modePrompts) == 0 {
+            continue // Skip empty modes
+        }
+        
+        // Use the first prompt's metadata for description and result description if not already set
+        if description == "" && modePrompts[0].Metadata.Description != "" {
+            description = modePrompts[0].Metadata.Description
+        }
+        
+        if resultDescription == "" && modePrompts[0].Metadata.ResultDescription != "" {
+            resultDescription = modePrompts[0].Metadata.ResultDescription
+        }
+        
+        // Combine all prompt contents for this mode
+        var combinedContent strings.Builder
+        for i, promptFile := range modePrompts {
+            if promptFile.Content != "" {
+                if i > 0 {
+                    combinedContent.WriteString("\n\n")
+                }
+                combinedContent.WriteString(promptFile.Content)
+            }
+        }
+        
+        // Store the combined content for this mode
+        modeContents[mode] = combinedContent.String()
+    }
+    
+    // Convert the mode contents map to JSON
+    contentJSON, err := json.Marshal(modeContents)
+    if err != nil {
+        return err
+    }
+    
+    // Create a single MCP prompt with the module ID as the name
+    mcpPrompt := p.NewPrompt().
+        SetName(strings.ToLower(moduleID)). // Use moduleID as the prompt name
+        SetDescription(description).
+        SetResultDescription(resultDescription).
+        SetText(string(contentJSON)). // Store the JSON map as the prompt text
+        Build()
+    
+    // Create a Prompts collection with the single prompt
+    mcpPrompts := p.Prompts{}
+    mcpPrompts.Append(mcpPrompt)
+    
+    slog.Info("Registering prompt for", "module", moduleID, "contentLength", len(contentJSON))
+    
+    // Register the prompt with the MCP server
+    p.AddPrompts(mcpPrompts, mcpServer)
+    
+    return nil
 }
