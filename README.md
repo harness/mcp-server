@@ -12,6 +12,7 @@ The Harness MCP Server is a [Model Context Protocol (MCP)](https://modelcontextp
     - [Registries Toolset](#registries-toolset)
     - [Dashboards Toolset](#dashboards-toolset)
     - [Cloud Cost Management Toolset](#cloud-cost-management-toolset)
+    - [Software Engineering Insights (SEI) Toolset](#software-engineering-insights-sei-toolset)
     - [Logs Toolset](#logs-toolset)
 - [Prerequisites](#prerequisites)
 - [Quickstart](#quickstart)
@@ -192,6 +193,34 @@ Toolset Name: `sto`
 
 - `frontend_all_issues_list`: List and filter security issues in Harness STO by target, pipeline, tool, severity, exemption status, and type.
 
+#### Software Engineering Insights (SEI) Toolset
+
+Toolset Name: `sei`
+
+- `sei_efficiency_lead_time`: Get lead time metrics for a team to measure development efficiency
+- `sei_deployment_frequency`: Get deployment frequency metrics for a project to track DORA metrics
+- `sei_change_failure_rate`: Get change failure rate metrics for a project to measure deployment quality
+- `sei_deployment_frequency_drilldown`: Get detailed pipeline execution records for deployment frequency analysis
+- `sei_change_failure_rate_drilldown`: Get detailed deployment records with failure status for CFR analysis
+- `sei_productivity_feature_metrics`: Get productivity metrics for a collection with various feature types and dimensions
+- `sei_get_teams_list`: Get list of teams with pagination for team discovery and lookup
+- `sei_get_team`: Get team information by team reference ID
+- `sei_get_team_developers`: Get team developers by team reference ID
+- `sei_get_team_integrations`: Get team integrations by team reference ID
+- `sei_get_team_integration_filters`: Get team integration filters by team reference ID and integration type
+- `sei_get_org_trees`: Get organization trees with pagination for hierarchical team structure
+- `sei_get_org_tree_by_id`: Get a specific organization tree by ID
+- `sei_get_org_tree_teams`: Get team hierarchy for an organization tree
+- `sei_get_org_tree_efficiency_profile`: Get efficiency profile reference ID for an organization tree
+- `sei_get_org_tree_productivity_profile`: Get productivity profile reference ID for an organization tree
+- `sei_get_org_tree_business_alignment_profile`: Get business alignment profile reference ID for an organization tree
+- `sei_get_org_tree_integrations`: Get integrations associated with an organization tree
+- `sei_get_ba_all_profiles`: Get all BA profiles for business alignment analysis
+- `sei_get_ba_insight_metrics`: Get BA insight metrics with BAInsightRequestDTO
+- `sei_get_ba_insight_summary`: Get BA insight summary with BASummaryRequestDTO
+- `sei_get_ba_drilldown_data`: Get BA drilldown data with BADrilldownRequestDTO
+
+**Enhanced Team Lookup:** The SEI toolset features an intelligent team name lookup mechanism that automatically converts natural language team references (like "John Smith's team") to team reference IDs using organizational structure discovery.
 
 #### Logs Toolset
 
