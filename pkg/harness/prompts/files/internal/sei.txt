@@ -1,6 +1,6 @@
 ---
-name: "sei-efficiency"
-description: "Check parameters for sei_efficiency_lead_time tool call"
+name: "sei_efficiency_lead_time "
+description: "invoke the sei_efficiency_lead_time tool by collecting all asking for all the required parameters for sei_efficiency_lead_time tool call"
 result_description: "Input parameters validation"
 ---
 

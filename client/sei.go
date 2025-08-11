@@ -198,20 +198,6 @@ func (s *SEIService) GetEfficiencyLeadTime(ctx context.Context, params map[strin
 		requestBody["granularity"] = granularity
 	}
 
-	// Optional fields for request body
-	if drillDownStartDate, ok := params["drillDownStartDate"]; ok {
-		requestBody["drillDownStartDate"] = drillDownStartDate
-	}
-	if drillDownEndDate, ok := params["drillDownEndDate"]; ok {
-		requestBody["drillDownEndDate"] = drillDownEndDate
-	}
-	if page, ok := params["page"]; ok {
-		requestBody["page"] = page
-	}
-	if pageSize, ok := params["pageSize"]; ok {
-		requestBody["pageSize"] = pageSize
-	}
-
 	// Build query parameters from session attributes
 	queryParams := map[string]string{}
 	if projectId, ok := params["projectId"]; ok {
@@ -234,6 +220,7 @@ func (s *SEIService) GetEfficiencyLeadTime(ctx context.Context, params map[strin
 	}
 
 	// return s.makePostRequest(ctx, "/gateway/sei/api/v2/insights/efficiency/leadtime", requestBody, queryParams, additionalHeaders)
+// 	return s.makePostRequest(ctx, "/prod1/sei/api/v2/insights/efficiency/leadtime", requestBody, queryParams, additionalHeaders)
 	return s.makePostRequest(ctx, "/v2/insights/efficiency/leadtime", requestBody, queryParams, additionalHeaders)
 }
 

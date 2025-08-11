@@ -200,18 +200,6 @@ func GetEfficiencyLeadTimeTool(config *config.Config, client *client.SEIService)
 				mcp.Required(),
 				mcp.Description("Time granularity for the metrics (e.g., DAILY, WEEKLY, MONTHLY)"),
 			),
-			mcp.WithString("drillDownStartDate",
-				mcp.Description("Optional drill-down start date in YYYY-MM-DD format"),
-			),
-			mcp.WithString("drillDownEndDate",
-				mcp.Description("Optional drill-down end date in YYYY-MM-DD format"),
-			),
-			mcp.WithNumber("page",
-				mcp.Description("Optional page number for pagination"),
-			),
-			mcp.WithNumber("pageSize",
-				mcp.Description("Optional page size for pagination"),
-			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			// Required params
