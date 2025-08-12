@@ -46,7 +46,7 @@ func (i *IDPService) GetEntity(ctx context.Context, scope dto.Scope, kind string
 
 	response := new(dto.EntityResponse)
 
-	err := i.Client.Get(ctx, path, params, map[string]string{}, response)
+	err := i.Client.Get(ctx, path, params, headers, response)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +108,7 @@ func (i *IDPService) ListEntities(ctx context.Context, scope dto.Scope, getEntit
 
 	response := make([]dto.EntityResponse, 0)
 
-	err := i.Client.Get(ctx, path, params, map[string]string{}, &response)
+	err := i.Client.Get(ctx, path, params, headers, &response)
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +204,7 @@ func (i *IDPService) ExecuteWorkflow(ctx context.Context, scope dto.Scope, ident
 
 	response := new(dto.ExecuteWorkflowResponse)
 
-	err = i.Client.Post(ctx, path, params, body, response)
+	err = i.Client.Post(ctx, path, params, body, headers, response)
 	if err != nil {
 		slog.Error("Failed to execute workflow", "error", err)
 		return nil, err

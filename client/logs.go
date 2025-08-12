@@ -62,7 +62,7 @@ func (l *LogService) DownloadLogs(ctx context.Context, scope dto.Scope, planExec
 
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		response = &dto.LogDownloadResponse{}
-		err = l.LogServiceClient.Post(ctx, logDownloadPath, params, nil, response)
+		err = l.LogServiceClient.Post(ctx, logDownloadPath, params, nil, map[string]string{}, response)
 		if err != nil {
 			lastErr = fmt.Errorf("failed to fetch log download URL (attempt %d): %w", attempt, err)
 			if attempt == maxAttempts {

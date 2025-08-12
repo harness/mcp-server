@@ -63,7 +63,7 @@ func (g *GenaiService) sendGenAIRequest(ctx context.Context, path string, scope 
 	// Handle non-streaming case with early return
 	if !shouldStream {
 		var response dto.ServiceChatResponse
-		err := g.Client.Post(ctx, path, params, request, &response)
+		err := g.Client.Post(ctx, path, params, request, map[string]string{}, &response)
 		if err != nil {
 			return nil, fmt.Errorf("failed to send request to genai service: %w", err)
 		}

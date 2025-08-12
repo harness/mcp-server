@@ -79,7 +79,7 @@ func (r *CloudCostManagementService) getEstimatedSavingsResponse(ctx context.Con
 	// Temporary slice to hold the strings
 	baseResponse := new(dto.CCMCommitmentBaseResponse)
 
-	err := r.Client.Post(ctx, path, params, requestPayload, baseResponse)
+	err := r.Client.Post(ctx, path, params, requestPayload, map[string]string{}, baseResponse)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cloud cost managment estimated savings response with path %s: %w", path, err)
 	}
