@@ -120,6 +120,14 @@ func (d *DBChangesetParameters) IsStreaming() bool {
 	return d.BaseRequestParameters.Stream
 }
 
+// IDPWorkflowParameters extends BaseRequestParameters for workflow generation
+type IDPWorkflowParameters struct {
+	BaseRequestParameters
+	PipelineInfo string `json:"pipeline_info"`
+	OldWorkflow  string `json:"oldworkflow,omitempty"`
+	ErrorContext string `json:"error_context,omitempty"`
+}
+
 type CapabilityToRun struct {
 	CallID string         `json:"call_id"`
 	Type   string         `json:"type"`

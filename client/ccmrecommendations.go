@@ -77,7 +77,6 @@ func (r *CloudCostManagementService) OverrideRecommendationSavings(
 	recommendationId string,
 	savings float64,
 ) (*map[string]any, error) {
-
 	path := fmt.Sprintf(ccmOverrideRecommendationSavingsPath, accountId)
 	params := make(map[string]string)
 	params["recommendationId"] = recommendationId

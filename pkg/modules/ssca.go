@@ -100,7 +100,7 @@ func RegisterSCS(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 			toolsets.NewServerTool(tools.ListArtifactSourcesTool(config, scsClient)),
 			toolsets.NewServerTool(tools.GetArtifactChainOfCustodyV2Tool(config, scsClient)),
 			toolsets.NewServerTool(tools.CreateOPAPolicyTool(config, scsClient)),
-			toolsets.NewServerTool(tools.ArtifactListV2Tool(config, scsClient)),
+			toolsets.NewServerTool(tools.DownloadSbomTool(config, scsClient)),
 		)
 	tsg.AddToolset(scsToolset)
 	return nil

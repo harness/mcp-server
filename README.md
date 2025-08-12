@@ -165,8 +165,8 @@ Toolset Name: `ccm`
 - `list_jira_issue_types`: Returns a list of Jira Issue types available to create tickets for recommendations in Harness Cloud Cost Management.
 - `get_ccm_commitment_coverage`: Get commitment coverage information for an account in Harness Cloud Cost Management.
 - `get_ccm_commitment_savings`: Get commitment savings information for an account in Harness Cloud Cost Management.
-- `get_ccm_commitment_savings`: Get commitment savings information for an account in Harness Cloud Cost Management
 - `get_ccm_commitment_utilisation`: Get commitment utilisation information for an account in Harness Cloud Cost Management broken down by Reserved Instances and Savings Plans in day wise granularity.
+- `get_ccm_estimated_savings`: Get estimated savings information for a cloud account in Harness Cloud Cost Management
 
 #### Database Operations Toolset
 
@@ -577,3 +577,35 @@ npx @modelcontextprotocol/inspector /path/to/harness-mcp-server stdio
 ```
 
 Upon launching, the Inspector will display a URL that you can access in your browser to begin debugging.
+
+## Testing
+
+### Running E2E Tests
+
+The project includes end-to-end (E2E) tests that validate the integration with Harness services. To run these tests:
+
+1. Set up the required environment variables:
+
+```bash
+export HARNESS_MCP_SERVER_E2E_TOKEN=<your_harness_api_token>
+export HARNESS_MCP_SERVER_E2E_ACCOUNT_ID=<your_account_id>  
+export HARNESS_MCP_SERVER_E2E_ORG_ID=<your_org_id>          
+export HARNESS_MCP_SERVER_E2E_PROJECT_ID=<your_project_id>  
+export HARNESS_MCP_SERVER_E2E_BASE_URL=<base_url>          
+```
+
+2. Run the E2E tests using the Go test command with the e2e build tag:
+
+```bash
+go test -tags=e2e ./test/e2e/... -v
+```
+
+3. To run specific E2E tests, use the `-run` flag:
+
+```bash
+go test -tags=e2e ./test/e2e/... -v -run TestPipelineWorkflow
+```
+
+4. In VS Code, you can run the E2E tests directly using the launch.json configuration. Simply open the Run and Debug view, select the E2E test configuration from the dropdown menu, and click the Run button.
+
+The E2E tests create an in-process MCP client that communicates with the Harness API using your provided credentials.
