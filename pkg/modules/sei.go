@@ -73,6 +73,8 @@ func RegisterSoftwareEngineeringInsights(config *config.Config, tsg *toolsets.To
 	var secret string
 	if config.SEISvcSecret != "" {
 		secret = config.SEISvcSecret
+	} else {
+		secret = config.APIKey
 	}
 
 	slog.Info("SEI service configuration", "baseURL", baseURL, "secret", secret)
