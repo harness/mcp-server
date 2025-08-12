@@ -4,7 +4,7 @@ import (
 	"embed"
 )
 
-//go:embed files/**/*.txt
+//go:embed files/internal/**/*.txt files/**/*.txt
 var PromptFiles embed.FS // Exported to be accessible from other packages
 
 // GetModulePrompts retrieves prompts for a specific module from a given filesystem
