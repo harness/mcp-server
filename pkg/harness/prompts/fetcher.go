@@ -21,7 +21,7 @@ func GetModulePrompts(fs embed.FS, module string, isInternal bool, mode string) 
 
 	filename := module + ".txt"
 	// Load common prompt for the module directly
-	commonPath := "files/common/" + mode + "/" + filename
+	commonPath := "files/common/" + filename
 	commonPrompt, err := fileLoader.loadPromptFileFromEmbed(commonPath)
 	if err == nil {
 		allPrompts = append(allPrompts, commonPrompt)
@@ -30,7 +30,7 @@ func GetModulePrompts(fs embed.FS, module string, isInternal bool, mode string) 
 	// Load mode-specific prompt for the module directly
 	var modePath string
 	if isInternal {
-		modePath = "files/internal/" + mode + "/" + filename
+		modePath = "files/internal/" + filename
 	} else {
 		modePath = "files/external/" + mode + "/" + filename
 	}
