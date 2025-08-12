@@ -34,6 +34,7 @@ const (
 const (
 	TimeRangeTypeLast7Days string = "LAST_7"
 	TimeRangeTypeLast30Days string = "LAST_30_DAYS"
+	TimeRangeTypeLast30 string = "LAST_30"
 	TimeRangeTypeLastMonth string = "LAST_MONTH"
 	TimeRangeTypeCurrentMonth string = "CURRENT_MONTH"
 	TimeRangeTypeCustom string = "CUSTOM"

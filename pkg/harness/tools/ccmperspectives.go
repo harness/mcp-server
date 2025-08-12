@@ -343,7 +343,7 @@ func createPerspectiveTool(config *config.Config, client *client.CloudCostManage
 		),
 		mcp.WithString("view_time_range_type",
 			mcp.Required(),
-			mcp.Enum(dto.TimeRangeTypeLast7Days, dto.TimeRangeTypeLast30Days, dto.TimeRangeTypeLastMonth, dto.TimeRangeTypeCurrentMonth, dto.TimeRangeTypeCustom),
+			mcp.Enum(dto.TimeRangeTypeLast7Days, dto.TimeRangeTypeLast30, dto.TimeRangeTypeLastMonth, dto.TimeRangeTypeCurrentMonth, dto.TimeRangeTypeCustom),
 			mcp.DefaultString(dto.TimeRangeTypeLast7Days),
 			mcp.Description("Containing folder identifier of the perspective"),
 		),
@@ -463,6 +463,8 @@ func createPerspectiveHandler(config *config.Config, client *client.CloudCostMan
 	viewType, err := OptionalParam[string](request, "view_type")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
+	} else if viewType != dto.ViewTypeCustomer {
+		return mcp.NewToolResultError(fmt.Sprintf("view_type must be %s or %s", dto.ViewTypeSample, dto.ViewTypeCustomer)), nil
 	}
 
 	viewState, err := OptionalParam[string](request, "view_state")
