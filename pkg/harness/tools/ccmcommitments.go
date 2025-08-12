@@ -142,16 +142,6 @@ func FetchEC2AnalysisTool(config *config.Config, client *client.CloudCostManagem
 				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal commitment coverage: %s", err)), nil
 			}
 
-			// Get Utilisation data
-			utilisationData, err := client.GetCommitmentUtilisation(ctx, scope, params)
-			if err != nil {
-				return mcp.NewToolResultError(fmt.Sprintf("failed to get commitment utilisation: %s", err)), nil
-			}
-
-			masterAccounts, err := client.GetCommitmentMasterAccounts(ctx, scope, params)
-			if err != nil {
-				return mcp.NewToolResultError(fmt.Sprintf("failed to get commitment master accounts: %s", err)), nil
-			}
 
 			return mcp.NewToolResultText(string(r)), nil
 		}
