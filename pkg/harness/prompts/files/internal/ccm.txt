@@ -85,7 +85,7 @@ Here are the sequential steps the AI agent must follow when a user asks to view 
    ####Step 3: Validate Similar Keys with the User
    This step is only necessary if no exact match was found in Step 2.
    
-   - **Action:** Call the ccm_perspective_filter_values_validate tool.
+   - **Action:** Call the ccm_perspective_filter_values_event tool.
    
    - **Parameters:** Provide the list of contextually similar keys you identified.
    
