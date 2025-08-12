@@ -134,7 +134,7 @@ func (p *PullRequestService) Create(ctx context.Context, scope dto.Scope, repoID
 	}
 
 	pr := new(dto.PullRequest)
-	err := p.Client.Post(ctx, path, params, createPR, pr)
+	err := p.Client.Post(ctx, path, params, createPR, map[string]string{}, pr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create pull request: %w", err)
 	}

@@ -77,7 +77,7 @@ func (p *PipelineService) List(
 	response := &dto.ListOutput[dto.PipelineListItem]{}
 
 	// Make the POST request
-	err := p.Client.Post(ctx, path, params, requestBody, response)
+	err := p.Client.Post(ctx, path, params, requestBody, map[string]string{}, response)
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +134,7 @@ func (p *PipelineService) ListExecutions(
 	response := &dto.ListOutput[dto.PipelineExecution]{}
 
 	// Make the POST request
-	err := p.Client.Post(ctx, path, params, requestBody, response)
+	err := p.Client.Post(ctx, path, params, requestBody, map[string]string{}, response)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list pipeline executions: %w", err)
 	}
@@ -189,7 +189,7 @@ func (p *PipelineService) FetchExecutionURL(
 	urlResponse := &dto.Entity[string]{}
 
 	// Make the POST request
-	err := p.Client.Post(ctx, path, params, nil, urlResponse)
+	err := p.Client.Post(ctx, path, params, nil, map[string]string{}, urlResponse)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch execution URL: %w", err)
 	}

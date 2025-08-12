@@ -34,7 +34,7 @@ func (c *ChatbotService) SendChatMessage(ctx context.Context, scope dto.Scope, r
 	}
 
 	var response string
-	err := c.Client.Post(ctx, path, params, request, &response)
+	err := c.Client.Post(ctx, path, params, request, map[string]string{}, &response)
 	if err != nil {
 		return "", fmt.Errorf("failed to send message to chatbot: %w", err)
 	}

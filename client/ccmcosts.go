@@ -183,7 +183,7 @@ func (r *CloudCostManagementService) GetComputeCoverage(ctx context.Context, sco
 	// Temporary slice to hold the strings
 	coverageRespone := new(dto.CCMCommitmentBaseResponse)
 
-	err := r.Client.Post(ctx, path, params, requestPayload, coverageRespone)
+	err := r.Client.Post(ctx, path, params, requestPayload, map[string]string{}, coverageRespone)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cloud cost managment compute coverage with path %s: %w", path, err)
 	}
@@ -234,7 +234,7 @@ func (r *CloudCostManagementService) GetCommitmentSavings(ctx context.Context, s
 
 	savingsResponse := new(dto.CCMCommitmentBaseResponse)
 
-	err := r.Client.Post(ctx, path, params, requestPayload, savingsResponse)
+	err := r.Client.Post(ctx, path, params, requestPayload, map[string]string{}, savingsResponse)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cloud cost management compute savings with path %s: %w", path, err)
 	}
@@ -281,7 +281,7 @@ func (r *CloudCostManagementService) GetCommitmentUtilisation(ctx context.Contex
 	// Temporary slice to hold the strings
 	utilisationResponse := new(dto.CCMCommitmentBaseResponse)
 
-	err := r.Client.Post(ctx, path, params, requestPayload, utilisationResponse)
+	err := r.Client.Post(ctx, path, params, requestPayload, map[string]string{}, utilisationResponse)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cloud cost managment compute utilisation with path %s: %w", path, err)
 	}
