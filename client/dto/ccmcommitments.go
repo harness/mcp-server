@@ -65,3 +65,19 @@ type EstimatedSavingsRemoteResponse struct {
 	CurrentSavings   float64 `json:"current_savings"`
 	EstimatedSavings float64 `json:"estimated_savings"`
 }
+
+type ComputeSpendsDetail struct {
+	Table *ComputeSpendsDetailTable `json:"table,omitempty"`
+	Chart []*ComputeSpendChart      `json:"chart,omitempty"`
+}
+
+type ComputeSpendsDetailTable struct {
+	TotalSpend float64  `json:"total_spend"`
+	Trend      *float64 `json:"trend,omitempty"`
+	Service    *string  `json:"service"`
+}
+
+type ComputeSpendChart struct {
+	Day         time.Time `json:"date"`
+	SpendAmount float64   `json:"spend_amount"`
+}

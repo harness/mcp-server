@@ -93,3 +93,66 @@ func FetchEstimatedSavingsTool(config *config.Config, client *client.CloudCostMa
 			return mcp.NewToolResultText(string(r)), nil
 		}
 }
+
+func FetchEC2AnalysisTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("get_ccm_ec2_analysis",
+			mcp.WithDescription("Get EC2 analysis information for the account in Harness Cloud Cost Management that provides analysis on Commitment Spend across AWS Reserved Instances (RI) and Savings Plans (SP) alongside a detaied breakdown of Utilization. It also details savings derived so far along with additional potential for savings"),
+			WithScope(config, false),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			accountId, err := getAccountID(config, request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			params := &dto.CCMCommitmentOptions{}
+			params.AccountIdentifier = &accountId
+
+			// Handle service parameter
+			service, ok, err := OptionalParamOK[string](request, "service")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if ok && service != "" {
+				params.Service = &service
+			}
+
+			cloudAccountIDs, err := OptionalStringArrayParam(request, "cloud_account_ids")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if len(cloudAccountIDs) == 0 {
+				return mcp.NewToolResultError("missing required parameter: cloud_account_ids"), nil
+			}
+			params.CloudAccountIDs = cloudAccountIDs
+
+			scope, err := FetchScope(config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// Fetch commitment spends
+			data, err := client.GetCommitmentSpends(ctx, scope, params)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to get commitment coverage: %s", err)), nil
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal commitment coverage: %s", err)), nil
+			}
+
+			// Get Utilisation data
+			utilisationData, err := client.GetCommitmentUtilisation(ctx, scope, params)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to get commitment utilisation: %s", err)), nil
+			}
+
+			masterAccounts, err := client.GetCommitmentMasterAccounts(ctx, scope, params)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to get commitment master accounts: %s", err)), nil
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}

@@ -390,7 +390,7 @@ func FetchCommitmentCoverageTool(config *config.Config, client *client.CloudCost
 
 func FetchCommitmentSavingsTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_ccm_commitment_savings",
-			mcp.WithDescription("Get commitment savings information for an account in Harness Cloud Cost Management"),
+			mcp.WithDescription("Get current commitment savings generated for an account in Harness Cloud Cost Management"),
 			mcp.WithString("start_date",
 				mcp.Required(),
 				mcp.Description("Start date to filter commitment savings"),
