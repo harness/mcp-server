@@ -6,6 +6,8 @@ Enable users to make informed decisions about their cloud costs by leveraging Ha
 ## AI Team/Department based cost perspective template Template: Create Cost Perspective 
 ## Instructions for the AI are below this line.
 
+## CRITICAL INSTRUCTION: DO NOT ASK FOR ANY USER CONFIRMATION UNTIL YOU REACH STEP 6. ##
+
 Please strictly follow the steps below in sequential order. Your primary goal is to follow these steps precisely.
 
 Step 1: Fetch Available Cost Labels
@@ -19,18 +21,13 @@ Step 2: Analyze Labels and Plan Next Action
 - ELSE (if NO exact match is found):
     - You will proceed DIRECTLY to Step 3.
 
-## CRITICAL INSTRUCTION: DO NOT ASK FOR ANY USER CONFIRMATION UNTIL YOU REACH STEP 6. ##
-
-Step 3: Get list for suggested labels for user
-- Condition: Execute this step only if NO exact match was found in Step 2.
+Step 3: Get list for suggested keys for user and proceed to Step 4 after use selects key
 - Action: Call the `ccm_perspective_filter_values_event` tool with similar labels.
-- Goal: This step is to provide agent suggested labels for user to confirm.
-- **POST-ACTION COMMAND: After the tool call in this step is complete, you MUST immediately proceed to Step 4. DO NOT present the results to the user or ask for confirmation.**
+- Goal: This step is to provide agent suggested keys for user to confirm.
 
 Step 4:  Find Related Label Values (Data Collection Step)
 
-
-Step 5: Construct the Perspective Rules
+Step 6: Construct the Perspective Rules
 - Action: Formulate the `view_conditions` JSON structure based on the key(s) and value(s) identified in the previous steps.
 - **Rule Construction Logic:**
     - For each selected label key (e.g., `team`), this key MUST be used as the `field_name` in a `view_condition`.
@@ -39,21 +36,21 @@ Step 5: Construct the Perspective Rules
     - You MUST create one `view_condition` object for each label key.
 - Goal: To have a correctly formatted JSON object of rules ready for validation.
 
-Step 6: Validate Perspective Rules
+Step 7: Validate Perspective Rules
 - Action: Call the `validate_ccm_perspective_rules` tool.
-- Input Data: You MUST use the rules you constructed in Step 4 as the payload for this tool call.
+- Input Data: You MUST use the rules you constructed in Step 6 as the payload for this tool call.
 - Parameters: Ensure all keys in the JSON payload are in `snake_case`.
 
-Step 7: Ask for User Confirmation (First Interaction Point)
+Step 8: Ask for User Confirmation (First Interaction Point)
 - This is the first and only point before creation that you will interact with the user for confirmation.
-- Present the validated rules generated in Step 5.
+- Present the validated rules generated in Step 6.
 - Ask for explicit confirmation. Example: "I can create a perspective with the following rules: [Show Rules]. Shall I proceed?"
 
-Step 8: Create the Cost Perspective
-- Condition: Only proceed if the user confirmed in Step 6.
-- Action: Generate and display the final cost perspective.
+Step 9: update the Cost Perspective
+- Condition: Only proceed if the user confirmed in Step 8.
+- Action: call update_ccm_perspective to update the perspective for the current perspective_id.
 
-Step 9:  End of the workflow
+Step 10:  End of the workflow
 - Action: End the workflow.
 
 ## Tool Usage Guidelines
