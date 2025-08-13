@@ -476,7 +476,7 @@ func CcmPerspectiveFilterValuesTool(config *config.Config, client *client.CloudC
 // ValidatePerspectiveFilterValuesTool creates a tool for validating filter values for specific field types
 func CcmPerspectiveFilterValuesToolEvent(config *config.Config) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("ccm_perspective_filter_values_event",
-			mcp.WithDescription("Validate filter values for specified field types in Harness Cloud Cost Management"),
+			mcp.WithDescription("Do not call this tool unless explicitly asked. Filter values for specified field types in Harness Cloud Cost Management"),
 			mcp.WithString("field_type",
 				mcp.Description("The field type to validate filter values for. Must be one of: "+
 					"business_mapping (Cost Category), awsUsageaccountid (AWS Account), awsBillingEntity, "+
@@ -517,7 +517,7 @@ func CcmPerspectiveFilterValuesToolEvent(config *config.Config) (tool mcp.Tool, 
 			filterValuesEvent := event.NewCustomEvent("ccm_perspective_filter_values_event", map[string]any{
 				"fieldType":    fieldType,
 				"filterValues": filterValues,
-			}, event.WithContinue(false))
+			}, event.WithContinue(true), event.WithDisplayOrder(100))
 
 			// Create embedded resource for the filter values event
 			eventResource, err := filterValuesEvent.CreateEmbeddedResource()
