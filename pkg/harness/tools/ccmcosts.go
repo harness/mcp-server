@@ -496,12 +496,10 @@ func FetchCommitmentUtilisationTool(config *config.Config, client *client.CloudC
 				mcp.Description("Optional service to filter commitment utilisation"),
 			),
 			mcp.WithArray("cloud_account_ids",
+				mcp.WithStringItems(),
 				mcp.Description("Optional cloud account IDs to filter commitment utilisation"),
-				mcp.Items(map[string]any{
-					"type": "string",
-				}),
-			),
-			WithScope(config, false),
+		),
+		WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			accountId, err := getAccountID(config, request)
@@ -522,11 +520,11 @@ func FetchCommitmentUtilisationTool(config *config.Config, client *client.CloudC
 			}
 
 			// Handle cloud account IDs parameter
-			cloudAccountIDs, ok, err := OptionalParamOK[[]string](request, "cloud_account_ids")
+			cloudAccountIDs, err := OptionalStringArrayParam(request, "cloud_account_ids")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			if ok && len(cloudAccountIDs) > 0 {
+			if len(cloudAccountIDs) > 0 {
 				params.CloudAccountIDs = cloudAccountIDs
 			}
 
