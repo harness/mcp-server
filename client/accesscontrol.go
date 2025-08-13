@@ -40,7 +40,7 @@ func (u *PrincipalService) GetAllUsers(ctx context.Context, scope dto.Scope, sea
 	addScope(scope, params)
 
 	resp := &dto.AccessControlOutput[dto.UsersOutput]{}
-	err := u.Client.Post(ctx, getUsersPath, params, opts, resp)
+	err := u.Client.Post(ctx, getUsersPath, params, opts, map[string]string{}, resp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list the users: %w", err)
 	}
@@ -152,7 +152,7 @@ func (ra *RBACService) ListRoleAssignmentsTool(ctx context.Context, scope dto.Sc
 	}
 
 	resp := &dto.AccessControlOutput[dto.RoleAssignmentsOutputData]{}
-	err := ra.Client.Post(ctx, listRoleAssignmentsPath, params, opts, resp)
+	err := ra.Client.Post(ctx, listRoleAssignmentsPath, params, opts, map[string]string{}, resp)
 	if err != nil {
 		optsJSON, _ := json.MarshalIndent(opts, "", "  ")
 		return nil, fmt.Errorf("failed to list the role assignments: %w\nRequest body: %s", err, string(optsJSON))

@@ -58,6 +58,12 @@ type Connector struct {
 	Spec              map[string]interface{} `json:"spec"`
 }
 
+// EntityValidityDetails represents the validity information of a connector.
+type EntityValidityDetails struct {
+	Valid       bool   `json:"valid"`
+	InvalidYaml string `json:"invalidYaml"`
+}
+
 // ConnectorStatus represents the status information of a connector.
 type ConnectorStatus struct {
 	Status          string           `json:"status"`
@@ -83,12 +89,6 @@ type ActivityDetails struct {
 
 // GitDetails represents git-related information of a connector.
 type GitDetails struct {
-	Valid       bool   `json:"valid"`
-	InvalidYaml string `json:"invalidYaml"`
-}
-
-// EntityValidityDetails represents the validity information of a connector.
-type EntityValidityDetails struct {
 	Valid       bool   `json:"valid"`
 	InvalidYaml string `json:"invalidYaml"`
 }

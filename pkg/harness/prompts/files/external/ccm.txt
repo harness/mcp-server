@@ -79,34 +79,55 @@ Enable users to make informed decisions about their cloud costs by leveraging Ha
 - service is an optional payload which defaults to 'Amazon Elastic Compute Cloud - Compute' which stands for EC2 and other option would be 'Amazon Relational Database' which stands for RDS.
     
 
-### Workflow Process
 
-1. **For Cost Breakdown Queries**
-   1.1 **Initial Key Discovery**
-      - Use `ccm_perspective_filter_values` to fetch available label keys
-      - If requested category keys are unavailable:
-        - Suggest alternative keys with similar context
-        - Provide examples of available keys
-      
-   1.2 **Context Validation**
-      - If requested context keys cannot be fetched:
-        - Suggest cost breakdowns using available categories
-        - Provide reasoning for suggested alternatives
-      
-   1.3 **User-Driven Breakdowns**
-      - If user requests specific key-based breakdowns:
-        - Use `ccm_perspective_filter_values` to fetch possible values
-        - Validate key availability and context
-        - Provide feedback on key compatibility
-      
-   1.4 **Perspective Generation**
-      - Generate perspective rules using validated keys
-      - Include AWS account filtering (e.g., "harness-ce") when applicable
-      - Validate rules using `validate_ccm_perspective_rules`
-      - Create perspective using `create_ccm_perspective`
-      - Provide status and next steps to user
+###Please follow below perspective creation workflow to create a team/department/organization cost perspective.
 
-2. **Additional Best Practices**
+Here are the sequential steps the AI agent must follow when a user asks to view costs for a specific team or department or organization.
+
+   ####Step 1: Fetch Available Cost Labels
+   When a user requests cost data for a team or department (e.g., """"Show me the cost for the engineering team""""), the first action is to identify all available cost labels.
+   
+   - **Action:** Call the ccm_perspective_filter_values tool.
+   
+   - **Parameters:** Include a time_filter with default values as LAST_30_DAYS to ensure the labels are relevant to the requested time frame. 
+   
+   - **Goal:** To retrieve a complete list of possible label keys that can be used for filtering costs.
+   
+   ####Step 2: Identify Matching Keys
+   Once the list of available labels is retrieved, analyze it to find a match for the user's request.
+   
+   Condition (A): Exact Match Found
+   
+   If a label key exactly matches the user's request (e.g., the user asks for """"Finance Team"""" and a key like team:Finance or department:Finance exists), proceed directly to Step 4.
+   
+   Condition (B): No Exact Match Found
+   
+   If no exact match exists, look for keys with a similar context or semantic meaning (e.g., the user asks for the """"IT team,"""" and available keys include dept:information_technology or cost_center:IT_Ops). Before asking user to confirm the key, procceed to Step 3.
+   
+   ####Step 3: Validate Similar Keys with the User
+   This step is only necessary if no exact match was found in Step 2.
+   
+   - **Action:** Call the ccm_perspective_filter_values_event tool.
+   
+   - **Parameters:** Provide the list of contextually similar keys you identified.
+   
+   - **Goal:** Present the suggested keys to the user and ask them to confirm which one(s) should be used to represent their requested team/department.
+   
+   ####Step 4:  Get ccm perpective rules validated
+   - **Action:** Call the validate_ccm_perspective_rules tool. You must use snake_case for all keys in the JSON request payload (e.g., view_conditions). Allowed values for view_operator field are "IN", "NOT IN", "NOT NULL", "NULL" and "LIKE".
+   
+   - **Parameters:** Refer tool schema to generating tool request.
+   
+   - **Goal:** Add the perspective rule for the user and ask them to confirm to create perspective for above rules
+   
+   ####Step 5: Create the Cost Perspective
+   After identifying the correct key(s) – either through an exact match (Step 2A) or user validation (Step 3) – create the final cost view.
+   
+   - **Action:** Generate the perspective rules based on the confirmed key(s).
+   
+   - **Goal:** Display the cost data filtered specifically for the user's requested team or department.
+
+**Additional Best Practices**
    - Always validate AWS account IDs before rule generation
    - Include time range validation in perspective creation
    - Maintain consistent use of snake_case for all field names
