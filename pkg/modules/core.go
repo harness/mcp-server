@@ -173,6 +173,8 @@ func RegisterPipelines(config *config.Config, tsg *toolsets.ToolsetGroup) error 
 			toolsets.NewServerTool(tools.FetchExecutionURLTool(config, pipelineClient)),
 			toolsets.NewServerTool(tools.GetExecutionTool(config, pipelineClient)),
 			toolsets.NewServerTool(tools.ListExecutionsTool(config, pipelineClient)),
+			toolsets.NewServerTool(tools.GetInputSetTool(config, pipelineClient)),
+			toolsets.NewServerTool(tools.ListInputSetsTool(config, pipelineClient)),
 		)
 
 	// Add toolset to the group

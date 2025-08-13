@@ -13,6 +13,8 @@ const (
 	pipelineExecutionPath        = "/api/pipelines/execution/url"
 	pipelineExecutionGetPath     = "/api/pipelines/execution/v2/%s"
 	pipelineExecutionSummaryPath = "/api/pipelines/execution/summary"
+	pipelineInputSetListPath     = "/api/inputSets"
+	pipelineInputSetPath         = "/api/inputSets/%s"
 )
 
 type PipelineService struct {
@@ -195,4 +197,72 @@ func (p *PipelineService) FetchExecutionURL(
 	}
 
 	return urlResponse.Data, nil
+}
+
+func (p *PipelineService) ListInputSets(
+	ctx context.Context,
+	scope dto.Scope,
+	opts *dto.InputSetListOptions,
+) (*dto.InputSetListResponse, error) {
+	path := pipelineInputSetListPath
+
+	// Prepare query parameters
+	params := make(map[string]string)
+	addScope(scope, params)
+
+	// Handle nil options by creating default options
+	if opts == nil {
+		opts = &dto.InputSetListOptions{}
+	}
+
+	// Set default pagination
+	setDefaultPagination(&opts.PaginationOptions)
+
+	// Add pagination parameters
+	params["page"] = fmt.Sprintf("%d", opts.Page)
+	params["size"] = fmt.Sprintf("%d", opts.Size)
+
+	// Add optional parameters if provided
+	if opts.PipelineIdentifier != "" {
+		params["pipelineIdentifier"] = opts.PipelineIdentifier
+	}
+	if opts.SearchTerm != "" {
+		params["searchTerm"] = opts.SearchTerm
+	}
+
+	// Initialize the response object
+	response := &dto.InputSetListResponse{}
+
+	// Make the GET request
+	err := p.Client.Get(ctx, path, params, map[string]string{}, response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list input sets: %w", err)
+	}
+
+	return response, nil
+}
+
+func (p *PipelineService) GetInputSet(
+	ctx context.Context,
+	scope dto.Scope,
+	pipelineIdentifier, inputSetIdentifier string,
+) (*dto.InputSetResponse, error) {
+	pathTemplate := pipelineInputSetPath
+	path := fmt.Sprintf(pathTemplate, inputSetIdentifier)
+
+	// Prepare query parameters
+	params := make(map[string]string)
+	addScope(scope, params)
+	params["pipelineIdentifier"] = pipelineIdentifier
+
+	// Initialize the response object
+	response := &dto.InputSetResponse{}
+
+	// Make the GET request
+	err := p.Client.Get(ctx, path, params, map[string]string{}, response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get input set: %w", err)
+	}
+
+	return response, nil
 }
