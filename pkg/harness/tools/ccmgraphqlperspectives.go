@@ -487,7 +487,7 @@ func CcmPerspectiveFilterValuesToolEvent(config *config.Config) (tool mcp.Tool, 
 			),
 			mcp.WithArray("filter_values",
 				mcp.WithStringItems(),
-			    mcp.Description("Array of values to validate for the specified field type"),
+				mcp.Description("Array of values to validate for the specified field type"),
 				mcp.Required(),
 			),
 		),
@@ -517,7 +517,7 @@ func CcmPerspectiveFilterValuesToolEvent(config *config.Config) (tool mcp.Tool, 
 			filterValuesEvent := event.NewCustomEvent("ccm_perspective_filter_values_event", map[string]any{
 				"fieldType":    fieldType,
 				"filterValues": filterValues,
-			})
+			}, event.WithContinue(false))
 
 			// Create embedded resource for the filter values event
 			eventResource, err := filterValuesEvent.CreateEmbeddedResource()
