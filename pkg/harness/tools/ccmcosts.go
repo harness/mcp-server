@@ -390,7 +390,7 @@ func FetchCommitmentCoverageTool(config *config.Config, client *client.CloudCost
 
 func FetchCommitmentSavingsTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_ccm_commitment_savings",
-			mcp.WithDescription("Get commitment savings information for an account in Harness Cloud Cost Management"),
+			mcp.WithDescription("Get current commitment savings generated for an account in Harness Cloud Cost Management"),
 			mcp.WithString("start_date",
 				mcp.Required(),
 				mcp.Description("Start date to filter commitment savings"),
@@ -406,10 +406,8 @@ func FetchCommitmentSavingsTool(config *config.Config, client *client.CloudCostM
 				mcp.Description("Optional service to filter commitment savings"),
 			),
 			mcp.WithArray("cloud_account_ids",
-				mcp.Description("Optional cloud account IDs to filter commitment savings"),
-				mcp.Items(map[string]any{
-					"type": "string",
-				}),
+				mcp.WithStringItems(),
+				mcp.Description("Optional cloud account IDs to filter commitment coverage"),
 			),
 			WithScope(config, false),
 		),
@@ -432,11 +430,11 @@ func FetchCommitmentSavingsTool(config *config.Config, client *client.CloudCostM
 			}
 
 			// Handle cloud account IDs parameter
-			cloudAccountIDs, ok, err := OptionalParamOK[[]string](request, "cloud_account_ids")
+			cloudAccountIDs, err := OptionalStringArrayParam(request, "cloud_account_ids")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			if ok && len(cloudAccountIDs) > 0 {
+			if len(cloudAccountIDs) > 0 {
 				params.CloudAccountIDs = cloudAccountIDs
 			}
 

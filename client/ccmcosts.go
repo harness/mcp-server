@@ -154,13 +154,13 @@ func (r *CloudCostManagementService) GetComputeCoverage(ctx context.Context, sco
 		params["start_date"] = *opts.StartDate
 	} else {
 		// Default to last 30 days
-		params["start_date"] = utils.FormatUnixToMMDDYYYY(time.Now().AddDate(0, 0, -30).Unix())
+		params["start_date"] = utils.FormatUnixToYYYYMMDD(time.Now().AddDate(0, 0, -30).Unix())
 	}
 	if opts.EndDate != nil && *opts.EndDate != "" {
 		params["end_date"] = *opts.EndDate
 	} else {
 		// Default to last 30 days
-		params["end_date"] = utils.CurrentMMDDYYYY()
+		params["end_date"] = utils.FormatUnixToYYYYMMDD(time.Now().Unix())
 	}
 
 	var requestPayload = dto.CCMCommitmentAPIFilter{
@@ -205,13 +205,13 @@ func (r *CloudCostManagementService) GetCommitmentSavings(ctx context.Context, s
 		params["start_date"] = *opts.StartDate
 	} else {
 		// Default to last 30 days
-		params["start_date"] = utils.FormatUnixToMMDDYYYY(time.Now().AddDate(0, 0, -30).Unix())
+		params["start_date"] = utils.FormatUnixToYYYYMMDD(time.Now().AddDate(0, 0, -30).Unix())
 	}
 	if opts.EndDate != nil && *opts.EndDate != "" {
 		params["end_date"] = *opts.EndDate
 	} else {
 		// Default to last 30 days
-		params["end_date"] = utils.CurrentMMDDYYYY()
+		params["end_date"] = utils.FormatUnixToYYYYMMDD(time.Now().Unix())
 	}
 
 	var requestPayload = dto.CCMCommitmentAPIFilter{
@@ -256,13 +256,13 @@ func (r *CloudCostManagementService) GetCommitmentUtilisation(ctx context.Contex
 		params["start_date"] = *opts.StartDate
 	} else {
 		// Default to last 30 days
-		params["start_date"] = utils.FormatUnixToMMDDYYYY(time.Now().AddDate(0, 0, -30).Unix())
+		params["start_date"] = utils.FormatUnixToYYYYMMDD(time.Now().AddDate(0, 0, -30).Unix())
 	}
 	if opts.EndDate != nil && *opts.EndDate != "" {
 		params["end_date"] = *opts.EndDate
 	} else {
 		// Default to last 30 days
-		params["end_date"] = utils.CurrentMMDDYYYY()
+		params["end_date"] = utils.FormatUnixToYYYYMMDD(time.Now().Unix())
 	}
 
 	var requestPayload = dto.CCMCommitmentAPIFilter{
