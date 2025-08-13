@@ -80,7 +80,7 @@ Here are the sequential steps the AI agent must follow when a user asks to view 
    
    Condition (B): No Exact Match Found
    
-   If no exact match exists, look for keys with a similar context or semantic meaning (e.g., the user asks for the """"IT team,"""" and available keys include dept:information_technology or cost_center:IT_Ops). Before asking user to confirm the key, procceed to Step 3.
+   If no exact match exists, look for keys with a similar context or semantic meaning (e.g., the user asks for the """"IT team,"""" and available keys include dept:information_technology or cost_center:IT_Ops). Always Procceed to Step 3 before asking user to confirm the keys.
    
    ####Step 3: Validate Similar Keys with the User
    This step is only necessary if no exact match was found in Step 2.
