@@ -87,6 +87,9 @@ var (
 				Debug:            viper.GetBool("debug"),
 				EnableModules:    enableModules,
 				EnableLicense:    viper.GetBool("enable_license"),
+				// SEI service configuration
+				SEISvcSecret:     viper.GetString("sei_svc_secret"),
+				SEISvcBaseURL:    viper.GetString("sei_svc_base_url"),
 			}
 
 			if err := runStdioServer(ctx, cfg); err != nil {
@@ -181,6 +184,8 @@ var (
 				SCSSvcBaseURL:           viper.GetString("scs_svc_base_url"),
 				STOSvcSecret:            viper.GetString("sto_svc_secret"),
 				STOSvcBaseURL:           viper.GetString("sto_svc_base_url"),
+				SEISvcSecret:            viper.GetString("sei_svc_secret"),
+				SEISvcBaseURL:           viper.GetString("sei_svc_base_url"),
 				AuditSvcBaseURL:         viper.GetString("audit_svc_base_url"),
 				AuditSvcSecret:          viper.GetString("audit_svc_secret"),
 				DBOpsSvcBaseURL:         viper.GetString("dbops_svc_base_url"),
@@ -218,6 +223,8 @@ func init() {
 		"Default org ID to use. If not specified, it would need to be passed in the query (if required)")
 	stdioCmd.Flags().String("default-project-id", "",
 		"Default project ID to use. If not specified, it would need to be passed in the query (if required)")
+	stdioCmd.Flags().String("sei-svc-secret", "", "Secret for SEI service")
+	stdioCmd.Flags().String("sei-svc-base-url", "", "Base URL for SEI service")
 
 	// Add internal-specific flags
 	internalCmd.Flags().String("bearer-token", "", "Bearer token for authentication")
@@ -246,6 +253,8 @@ func init() {
 	internalCmd.Flags().String("scs-svc-base-url", "", "Base URL for SCS service")
 	internalCmd.Flags().String("sto-svc-secret", "", "Secret for STO service")
 	internalCmd.Flags().String("sto-svc-base-url", "", "Base URL for STO service")
+	internalCmd.Flags().String("sei-svc-secret", "", "Secret for SEI service")
+	internalCmd.Flags().String("sei-svc-base-url", "", "Base URL for SEI service")
 	internalCmd.Flags().String("audit-svc-base-url", "", "Base URL for audit service")
 	internalCmd.Flags().String("audit-svc-secret", "", "Secret for audit service")
 	internalCmd.Flags().String("dbops-svc-base-url", "", "Base URL for dbops service")
@@ -266,6 +275,8 @@ func init() {
 	_ = viper.BindPFlag("api_key", stdioCmd.Flags().Lookup("api-key"))
 	_ = viper.BindPFlag("default_org_id", stdioCmd.Flags().Lookup("default-org-id"))
 	_ = viper.BindPFlag("default_project_id", stdioCmd.Flags().Lookup("default-project-id"))
+	_ = viper.BindPFlag("sei_svc_secret", stdioCmd.Flags().Lookup("sei-svc-secret"))
+	_ = viper.BindPFlag("sei_svc_base_url", stdioCmd.Flags().Lookup("sei-svc-base-url"))
 
 	// Bind internal-specific flags to viper
 	_ = viper.BindPFlag("bearer_token", internalCmd.Flags().Lookup("bearer-token"))
@@ -298,6 +309,8 @@ func init() {
 	_ = viper.BindPFlag("scs_svc_base_url", internalCmd.Flags().Lookup("scs-svc-base-url"))
 	_ = viper.BindPFlag("sto_svc_secret", internalCmd.Flags().Lookup("sto-svc-secret"))
 	_ = viper.BindPFlag("sto_svc_base_url", internalCmd.Flags().Lookup("sto-svc-base-url"))
+	_ = viper.BindPFlag("sei_svc_secret", internalCmd.Flags().Lookup("sei-svc-secret"))
+	_ = viper.BindPFlag("sei_svc_base_url", internalCmd.Flags().Lookup("sei-svc-base-url"))
 	_ = viper.BindPFlag("audit_svc_base_url", internalCmd.Flags().Lookup("audit-svc-base-url"))
 	_ = viper.BindPFlag("audit_svc_secret", internalCmd.Flags().Lookup("audit-svc-secret"))
 	_ = viper.BindPFlag("dbops_svc_base_url", internalCmd.Flags().Lookup("dbops-svc-base-url"))
