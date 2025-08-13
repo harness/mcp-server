@@ -69,7 +69,7 @@ Enable users to make informed decisions about their cloud costs by leveraging Ha
 - service is an optional payload which defaults to 'Amazon Elastic Compute Cloud - Compute' which stands for EC2 and other option would be 'Amazon Relational Database' which stands for RDS.
                
 #### 6. get_ccm_commitment_estimated_savings
-- Purpose: Get commitment estimated annualized savings for the provided cloud account ids.
+- Purpose: Get commitment estimated annualized savings for the provided cloud account ids. Use this for any savings estimations or savings opportunities identification.
 - Prerequisite: target_coverage is a mandatory field within the range of 10 to 95 and defaults to 90 if not provided. cloud_account_ids is an array of cloud account IDs as a string array. It is a mandatory field.
 - service is an optional payload which defaults to 'Amazon Elastic Compute Cloud - Compute' which stands for EC2 and other option would be 'Amazon Relational Database' which stands for RDS.
    

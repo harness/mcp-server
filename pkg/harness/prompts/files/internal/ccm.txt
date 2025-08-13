@@ -55,7 +55,29 @@ Enable users to make informed decisions about their cloud costs by leveraging Ha
 
 #### 3. ccm_perspective_filter_values
 - Purpose: Retrieve label keys/values for cost categorization
-- Prerequisite: value_type can be label_key, label_v2_key .
+- Prerequisite: value_type can be label_key, label_v2_key.
+
+#### 4. get_ccm_commitment_coverage
+- Purpose: Get commitment coverage information for an account in Harness Cloud Cost Management
+- Prerequisite: start_date and end_date input should be of the form YYYY-MM-DD as an example 2006-01-02. cloud_account_ids is an array of cloud account IDs as a string array.
+- group_by is to be used for grouping the data in different forms with valid options are - 'Commitment Type', 'Instance Family' and 'Regions' with 'Commitment Type' being the default value if none are passed in tje payload.
+- service is an optional payload which defaults to 'Amazon Elastic Compute Cloud - Compute' which stands for EC2 and other option would be 'Amazon Relational Database' which stands for RDS.
+
+#### 5. get_ccm_commitment_utilisation
+- Purpose: Get commitment utilisation information for an account in Harness Cloud Cost Management
+- Prerequisite: start_date and end_date input should be of the form YYYY-MM-DD as an example 2006-01-02. cloud_account_ids is an array of cloud account IDs as a string array.
+- service is an optional payload which defaults to 'Amazon Elastic Compute Cloud - Compute' which stands for EC2 and other option would be 'Amazon Relational Database' which stands for RDS.
+               
+#### 6. get_ccm_commitment_estimated_savings
+- Purpose: Get commitment estimated annualized savings for the provided cloud account ids. Use this for any savings estimations or savings opportunities identification.
+- Prerequisite: target_coverage is a mandatory field within the range of 10 to 95 and defaults to 90 if not provided. cloud_account_ids is an array of cloud account IDs as a string array. It is a mandatory field.
+- service is an optional payload which defaults to 'Amazon Elastic Compute Cloud - Compute' which stands for EC2 and other option would be 'Amazon Relational Database' which stands for RDS.
+   
+#### 7. get_ccm_commitment_ec2_analysis
+- Purpose: Get commitment utilisation information for an account in Harness Cloud Cost Management
+- Prerequisite: start_date and end_date input should be of the form YYYY-MM-DD as an example 2006-01-02. cloud_account_ids is an array of cloud account IDs as a string array.
+- service is an optional payload which defaults to 'Amazon Elastic Compute Cloud - Compute' which stands for EC2 and other option would be 'Amazon Relational Database' which stands for RDS.
+    
 
 
 ###Please follow below perspective creation workflow to create a team/department/organization cost perspective.
