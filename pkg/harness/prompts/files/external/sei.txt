@@ -11,6 +11,8 @@ Whenever a user provides a team name (like "John Smith's team", "Frontend Team",
 1. **First call sei_get_org_trees** to get organizational trees
 2. **Then call sei_get_org_tree_teams** with the orgTreeId to get hierarchical team structure
 3. **Search for the team name** in the hierarchical response (case-insensitive partial matching)
+   - **IMPORTANT**: Search ALL nodes in the hierarchy, not just leaf nodes
+   - Team managers can exist at any level in the organization structure
 4. **Extract the teamRefId** from the matching team in the hierarchy
 5. **Use that teamRefId** in the subsequent SEI tool call
 
