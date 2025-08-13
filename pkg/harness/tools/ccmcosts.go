@@ -498,7 +498,8 @@ func FetchCommitmentUtilisationTool(config *config.Config, client *client.CloudC
 			mcp.WithArray("cloud_account_ids",
 				mcp.WithStringItems(),
 				mcp.Description("Optional cloud account IDs to filter commitment utilisation"),
-			WithScope(config, false),
+		),
+		WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			accountId, err := getAccountID(config, request)
