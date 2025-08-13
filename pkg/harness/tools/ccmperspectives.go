@@ -22,7 +22,7 @@ import (
 const (
 	CCMPerspectiveRulesToolID       = "validate_ccm_perspective_rules"
 	CCMPerspectiveRuleEventType     = "perspective_rules_updated"
-	FollowUpCreatePerspectivePrompt = "Create a new CCM perspective with these rules"
+	FollowUpCreatePerspectivePrompt = "Update CCM perspective with these rules"
 )
 
 func ListCcmPerspectivesDetailTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {

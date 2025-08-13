@@ -147,7 +147,7 @@ func (r *CloudCostManagementService) GetCommitmentSpends(ctx context.Context, sc
 	// Temporary slice to hold the strings
 	spendDetailsResponse := new(dto.CCMCommitmentBaseResponse)
 
-	err := r.Client.Post(ctx, path, params, requestPayload, spendDetailsResponse)
+	err := r.Client.Post(ctx, path, params, requestPayload, map[string]string{}, spendDetailsResponse)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cloud cost managment compute spend details with path %s: %w", path, err)
 	}
@@ -162,7 +162,7 @@ func (r *CloudCostManagementService) GetCommitmentMasterAccounts(ctx context.Con
 
 	listMasterAccountsResponse := new(dto.CCMCommitmentBaseResponse)
 
-	err := r.Client.Post(ctx, path, params, nil, listMasterAccountsResponse)
+	err := r.Client.Post(ctx, path, params, nil, map[string]string{},listMasterAccountsResponse)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cloud cost managment master accounts with path %s: %w", path, err)
 	}
