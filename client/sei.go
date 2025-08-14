@@ -29,24 +29,6 @@ func NewSEIService(client *Client, baseURL, secret string) *SEIService {
 	}
 }
 
-// makeRequest is a helper function to make API requests to the SEI service
-func (s *SEIService) makeRequest(ctx context.Context, method, path string, params map[string]interface{}) (interface{}, error) {
-	// This is a placeholder implementation
-	// In a real implementation, this would:
-	// 1. Construct the URL from baseURL and path
-	// 2. Convert params to query parameters or JSON body depending on method
-	// 3. Add authentication headers using the secret
-	// 4. Make the HTTP request
-	// 5. Parse the response into appropriate data structures
-
-	// For now, we return a dummy response to compile
-	return map[string]interface{}{
-		"message": "SEI API response",
-		"method":  method,
-		"path":    path,
-		"params":  params,
-	}, nil
-}
 
 // makePostRequest makes a POST request with JSON body
 func (s *SEIService) makePostRequest(ctx context.Context, path string, body interface{}, queryParams map[string]string, additionalHeaders ...map[string]string) (interface{}, error) {
@@ -164,7 +146,7 @@ func (s *SEIService) GetProductivityFeatureMetrics(ctx context.Context, params m
 
 	fmt.Println("Request Body: ", requestBody)
 	fmt.Println("Query Parameters: ", queryParams)
-	// return s.makePostRequest(ctx, "/gateway/sei/api/v2/productivityv3/feature_metrics", requestBody, queryParams)
+
 	return s.makePostRequest(ctx, "/v2/productivityv3/feature_metrics", requestBody, queryParams)
 }
 
@@ -207,8 +189,6 @@ func (s *SEIService) GetEfficiencyLeadTime(ctx context.Context, params map[strin
 		}
 	}
 
-	// return s.makePostRequest(ctx, "/gateway/sei/api/v2/insights/efficiency/leadtime", requestBody, queryParams, additionalHeaders)
-	// 	return s.makePostRequest(ctx, "/prod1/sei/api/v2/insights/efficiency/leadtime", requestBody, queryParams, additionalHeaders)
 	return s.makePostRequest(ctx, "/v2/insights/efficiency/leadtime", requestBody, queryParams)
 }
 
