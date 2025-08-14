@@ -12,9 +12,9 @@ import (
 )
 
 const (
-	ccmCommitmentEstimatedSavingsPath = ccmCommitmentBasePath + "/accounts/%s/v2/setup/%s/estimated_savings?accountIdentifier=%s"
-	ccmCommitmentSpendDetailsPath     = ccmCommitmentBasePath + "/accounts/%s/v2/spend/detail?accountIdentifier=%s"
-	ccmCommitmentMasterAccountsPath   = ccmCommitmentBasePath + "/accounts/%s/v1/setup/listMasterAccounts?accountIdentifier=%s"
+	ccmCommitmentEstimatedSavingsPath = "/accounts/%s/v2/setup/%s/estimated_savings?accountIdentifier=%s"
+	ccmCommitmentSpendDetailsPath     = "/accounts/%s/v2/spend/detail?accountIdentifier=%s"
+	ccmCommitmentMasterAccountsPath   = "/accounts/%s/v1/setup/listMasterAccounts?accountIdentifier=%s"
 
 	defaultTargetCoveragePercentage = 90.0
 )
