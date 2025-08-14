@@ -163,6 +163,8 @@ Toolset Name: `ccm`
 - `get_workload_recommendation_detail`: Returns Workload Recommendation details for the given Recommendation identifier.
 - `list_jira_projects`: Returns a list of Jira projects available to create tickets for recommendations in Harness Cloud Cost Management.
 - `list_jira_issue_types`: Returns a list of Jira Issue types available to create tickets for recommendations in Harness Cloud Cost Management.
+- `list_ccm_anomalies`: Returns a list of cost anomalies for a specified account in Harness Cloud Cost Management.
+- `list_ccm_ignored_anomalies`: Returns a list of ignored cost anomalies for a specified account in Harness Cloud Cost Management.
 - `get_ccm_commitment_coverage`: Get commitment coverage information for an account in Harness Cloud Cost Management.
 - `get_ccm_commitment_savings`: Get commitment savings information for an account in Harness Cloud Cost Management.
 - `get_ccm_commitment_utilisation`: Get commitment utilisation information for an account in Harness Cloud Cost Management broken down by Reserved Instances and Savings Plans in day wise granularity.

@@ -3,6 +3,7 @@ package ccmcommons
 import (
 	"fmt"
 )
+
 var CCMPerspectiveGridDescription = `
 Query detailed cost perspective grid data in Harness Cloud Cost Management.
 This tool allows you to retrieve tabular cost data for a given perspective (view) with advanced filtering, grouping, and aggregation options.
@@ -43,12 +44,10 @@ var CCMFilterFields = []map[string]string{
 	{
 		"name":        "aws_billing_entity",
 		"description": fmt.Sprintf("Filter results by AWS billing entity. %s", commonFilterDesc),
-
 	},
 	{
 		"name":        "aws_instance_type",
 		"description": fmt.Sprintf("Filter results by AWS instance type. %s", commonFilterDesc),
-
 	},
 	{
 		"name":        "aws_line_item_type",
@@ -91,21 +90,21 @@ var CCMFilterFields = []map[string]string{
 var commonKvFilterDesc = `Values are provided in the format '{"filterL1": "value1", "filterL2": ["value2", "value3", ...]}', where 'filterL1' represents the selected `
 var CCMKeyValueFilterFields = []map[string]string{
 	{
-		"name":        "bussines_mapping",
-		"description": fmt.Sprintf("Filter results by Cost Category and Bucket. Values have to be retrieved from list of Cost Categories names. %s Cost Category and 'filterL2' corresponds to the Buckets within that category.", commonKvFilterDesc),
-		"filterL2": "bucket",
+		"name":          "bussines_mapping",
+		"description":   fmt.Sprintf("Filter results by Cost Category and Bucket. Values have to be retrieved from list of Cost Categories names. %s Cost Category and 'filterL2' corresponds to the Buckets within that category.", commonKvFilterDesc),
+		"filterL2":      "bucket",
 		"l2Description": "Buckets corresponding to the Cost Category",
 	},
 	{
-		"name":        "label",
-		"description": fmt.Sprintf("Filter results by  Label and Sub Label. Values for this field corresponds to labels list .%s Label and 'filterL2' corresponds to the Sub Label within that Label.", commonKvFilterDesc),
-		"filterL2": "value",
+		"name":          "label",
+		"description":   fmt.Sprintf("Filter results by  Label and Sub Label. Values for this field corresponds to labels list .%s Label and 'filterL2' corresponds to the Sub Label within that Label.", commonKvFilterDesc),
+		"filterL2":      "value",
 		"l2Description": "Value within the label.",
 	},
 	{
-		"name":        "label_v2",
-		"description": fmt.Sprintf("Filter results by Label V2 and Sub Label. Values for this field are listed in label v2 list. %s Label and 'filterL2' corresponds to the Sub Label within that Label.", commonKvFilterDesc),
-		"filterL2": "value",
+		"name":          "label_v2",
+		"description":   fmt.Sprintf("Filter results by Label V2 and Sub Label. Values for this field are listed in label v2 list. %s Label and 'filterL2' corresponds to the Sub Label within that Label.", commonKvFilterDesc),
+		"filterL2":      "value",
 		"l2Description": "Value within the label.",
 	},
 }
@@ -136,7 +135,6 @@ var OperatorsDescription = `
 	Pattern matching using wildcards: % (any sequence of characters) or _ (single character).
 	Returns true if the field’s value matches the specified pattern. Conversely, NOT LIKE matches if it does not match the pattern
 	`
-
 
 var CreateConditionsInstructions = `
 To genere rules for filtering views in a cloud cost management system. Your output must be a JSON object matching the <CONDITIONS> format below, which will be transformed into a Go struct format described by the MCP Server.
@@ -223,7 +221,7 @@ var ConditionFieldDescriptions = []map[string]string{
 	},
 	{
 		"fieldId":     "business_mapping",
-		"description": "Use this field to create a view filter rule to filter by Labels", 
+		"description": "Use this field to create a view filter rule to filter by Labels",
 	},
 }
 
@@ -238,4 +236,12 @@ Retrieves aggregated statistics of cloud cost optimization recommendations group
 
 var GetRecommendationsStatsDescription = `
 Retrieves overall statistics for cloud cost optimization recommendations within a given account. The response provides aggregated metrics such as the total number of recommendations, total estimated cost savings, and the count of open and applied recommendations. This helps track the overall state and impact of cost optimization efforts across all resources.
+`
+
+var ListAnomaliesDescription = `
+Fetch the result of anomaly query.
+`
+
+var ListIgnoredAnomaliesDescription = `
+Fetch the list of anomalies present in the ignore list according to the filters applied.
 `
