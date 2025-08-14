@@ -69,16 +69,14 @@ func (m *SEIModule) IsDefault() bool {
 func RegisterSoftwareEngineeringInsights(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for SEI
 	baseURL := utils.BuildServiceURL(config, config.SEISvcBaseURL, config.BaseURL, "/gateway/sei/api/")
-// 	baseURL := "http://localhost:8080"
+	// 	baseURL := "http://localhost:8080"
 	var secret string
 	if config.SEISvcSecret != "" {
 		secret = config.SEISvcSecret
-	} else {
-		secret = config.APIKey
 	}
 
 	slog.Info("SEI service configuration", "baseURL", baseURL, "secret", secret)
-	
+
 	// Create base client for SEI with extended timeout for productivity calls
 	// Productivity calls can take longer to process, so we increase timeout to 60 seconds
 	seiTimeout := 60 * time.Second
