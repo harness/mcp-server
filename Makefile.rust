@@ -1,0 +1,178 @@
+# Rust-specific Makefile for Harness MCP Server
+
+# Variables
+CARGO := cargo
+BINARY_NAME := harness-mcp-server
+TARGET_DIR := target
+RELEASE_DIR := $(TARGET_DIR)/release
+DEBUG_DIR := $(TARGET_DIR)/debug
+
+# Default target
+.PHONY: all
+all: build
+
+# Build the project in debug mode
+.PHONY: build
+build:
+	@echo "Building $(BINARY_NAME) in debug mode..."
+	$(CARGO) build
+
+# Build the project in release mode
+.PHONY: release
+release:
+	@echo "Building $(BINARY_NAME) in release mode..."
+	$(CARGO) build --release
+
+# Run the project
+.PHONY: run
+run:
+	@echo "Running $(BINARY_NAME)..."
+	$(CARGO) run -- stdio
+
+# Run tests
+.PHONY: test
+test:
+	@echo "Running tests..."
+	$(CARGO) test
+
+# Run tests with coverage
+.PHONY: test-coverage
+test-coverage:
+	@echo "Running tests with coverage..."
+	$(CARGO) test --all-features
+	# Note: For actual coverage, you might want to use cargo-tarpaulin or similar
+
+# Format code
+.PHONY: format
+format:
+	@echo "Formatting code..."
+	$(CARGO) fmt
+
+# Check formatting
+.PHONY: format-check
+format-check:
+	@echo "Checking code formatting..."
+	$(CARGO) fmt -- --check
+
+# Lint code
+.PHONY: lint
+lint:
+	@echo "Linting code..."
+	$(CARGO) clippy -- -D warnings
+
+# Check code without building
+.PHONY: check
+check:
+	@echo "Checking code..."
+	$(CARGO) check
+
+# Clean build artifacts
+.PHONY: clean
+clean:
+	@echo "Cleaning build artifacts..."
+	$(CARGO) clean
+
+# Install dependencies
+.PHONY: deps
+deps:
+	@echo "Installing dependencies..."
+	$(CARGO) fetch
+
+# Update dependencies
+.PHONY: update
+update:
+	@echo "Updating dependencies..."
+	$(CARGO) update
+
+# Build Docker image
+.PHONY: docker-build
+docker-build:
+	@echo "Building Docker image..."
+	docker build -f Dockerfile.rust -t harness/mcp-server:rust .
+
+# Run Docker container
+.PHONY: docker-run
+docker-run:
+	@echo "Running Docker container..."
+	docker run -i --rm \
+		-e HARNESS_API_KEY=${HARNESS_API_KEY} \
+		-e HARNESS_DEFAULT_ORG_ID=${HARNESS_DEFAULT_ORG_ID} \
+		-e HARNESS_DEFAULT_PROJECT_ID=${HARNESS_DEFAULT_PROJECT_ID} \
+		harness/mcp-server:rust
+
+# Install the binary
+.PHONY: install
+install: release
+	@echo "Installing $(BINARY_NAME)..."
+	$(CARGO) install --path .
+
+# Uninstall the binary
+.PHONY: uninstall
+uninstall:
+	@echo "Uninstalling $(BINARY_NAME)..."
+	$(CARGO) uninstall $(BINARY_NAME)
+
+# Development setup
+.PHONY: dev-setup
+dev-setup:
+	@echo "Setting up development environment..."
+	rustup component add rustfmt clippy
+	$(CARGO) install cargo-watch cargo-edit
+
+# Watch for changes and rebuild
+.PHONY: watch
+watch:
+	@echo "Watching for changes..."
+	cargo watch -x build
+
+# Watch for changes and run tests
+.PHONY: watch-test
+watch-test:
+	@echo "Watching for changes and running tests..."
+	cargo watch -x test
+
+# Generate documentation
+.PHONY: docs
+docs:
+	@echo "Generating documentation..."
+	$(CARGO) doc --no-deps --open
+
+# Benchmark
+.PHONY: bench
+bench:
+	@echo "Running benchmarks..."
+	$(CARGO) bench
+
+# Security audit
+.PHONY: audit
+audit:
+	@echo "Running security audit..."
+	$(CARGO) audit
+
+# Show help
+.PHONY: help
+help:
+	@echo "Available targets:"
+	@echo "  build         - Build in debug mode"
+	@echo "  release       - Build in release mode"
+	@echo "  run           - Run the application"
+	@echo "  test          - Run tests"
+	@echo "  test-coverage - Run tests with coverage"
+	@echo "  format        - Format code"
+	@echo "  format-check  - Check code formatting"
+	@echo "  lint          - Lint code with clippy"
+	@echo "  check         - Check code without building"
+	@echo "  clean         - Clean build artifacts"
+	@echo "  deps          - Install dependencies"
+	@echo "  update        - Update dependencies"
+	@echo "  docker-build  - Build Docker image"
+	@echo "  docker-run    - Run Docker container"
+	@echo "  install       - Install binary"
+	@echo "  uninstall     - Uninstall binary"
+	@echo "  dev-setup     - Setup development environment"
+	@echo "  watch         - Watch for changes and rebuild"
+	@echo "  watch-test    - Watch for changes and run tests"
+	@echo "  docs          - Generate documentation"
+	@echo "  bench         - Run benchmarks"
+	@echo "  audit         - Run security audit"
+	@echo "  help          - Show this help message"

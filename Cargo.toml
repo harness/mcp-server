@@ -1,0 +1,89 @@
+[package]
+name = "harness-mcp-server"
+version = "0.1.0"
+edition = "2021"
+authors = ["Harness Inc."]
+description = "A Harness MCP server that handles various tools and resources"
+license = "Apache-2.0"
+repository = "https://github.com/harness/harness-mcp"
+readme = "README.md"
+
+[workspace]
+members = [
+    "crates/harness-core",
+    "crates/harness-auth",
+    "crates/harness-tools",
+    "crates/harness-client",
+    "crates/harness-config",
+    "crates/harness-utils",
+]
+
+[[bin]]
+name = "harness-mcp-server"
+path = "src/main.rs"
+
+[dependencies]
+# Workspace dependencies
+harness-core = { path = "crates/harness-core" }
+harness-auth = { path = "crates/harness-auth" }
+harness-tools = { path = "crates/harness-tools" }
+harness-client = { path = "crates/harness-client" }
+harness-config = { path = "crates/harness-config" }
+harness-utils = { path = "crates/harness-utils" }
+
+# CLI and configuration
+clap = { version = "4.4", features = ["derive", "env"] }
+config = "0.14"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+
+# Async runtime and HTTP
+tokio = { version = "1.0", features = ["full"] }
+reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false }
+hyper = { version = "0.14", features = ["full"] }
+
+# Error handling and logging
+anyhow = "1.0"
+thiserror = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# JSON Web Tokens
+jsonwebtoken = "9.2"
+
+# UUID generation
+uuid = { version = "1.6", features = ["v4", "serde"] }
+
+# Time handling
+chrono = { version = "0.4", features = ["serde"] }
+
+# URL handling
+url = { version = "2.4", features = ["serde"] }
+
+# Base64 encoding/decoding
+base64 = "0.21"
+
+# Signal handling
+signal-hook = "0.3"
+signal-hook-tokio = { version = "0.3", features = ["futures-v0_3"] }
+
+[dev-dependencies]
+tokio-test = "0.4"
+mockito = "1.2"
+tempfile = "3.8"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.dev]
+debug = true
+opt-level = 0
+
+[features]
+default = ["rustls-tls"]
+rustls-tls = ["reqwest/rustls-tls"]
+native-tls = ["reqwest/native-tls"]

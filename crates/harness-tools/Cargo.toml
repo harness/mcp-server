@@ -1,0 +1,18 @@
+[package]
+name = "harness-tools"
+version = "0.1.0"
+edition = "2021"
+authors = ["Harness Inc."]
+description = "Tool implementations for Harness MCP Server"
+
+[dependencies]
+harness-config = { path = "../harness-config" }
+harness-client = { path = "../harness-client" }
+
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+anyhow = "1.0"
+thiserror = "1.0"
+tracing = "0.1"
+uuid = { version = "1.6", features = ["v4", "serde"] }
