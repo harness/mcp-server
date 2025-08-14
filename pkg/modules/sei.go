@@ -62,14 +62,13 @@ func (m *SEIModule) EnableToolsets(tsg *toolsets.ToolsetGroup) error {
 
 // IsDefault indicates if this module should be enabled by default
 func (m *SEIModule) IsDefault() bool {
-	return true
+	return false
 }
 
 // RegisterSoftwareEngineeringInsights creates and registers SEI tools
 func RegisterSoftwareEngineeringInsights(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-	// Determine the base URL and secret for SEI
+	// Determine the base URL and secret for SEI. Set baseURL := "http://localhost:8080" for local testing
 	baseURL := utils.BuildServiceURL(config, config.SEISvcBaseURL, config.BaseURL, "/gateway/sei/api/")
-	// 	baseURL := "http://localhost:8080"
 	var secret string
 	if config.SEISvcSecret != "" {
 		secret = config.SEISvcSecret
