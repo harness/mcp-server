@@ -238,10 +238,14 @@ var GetRecommendationsStatsDescription = `
 Retrieves overall statistics for cloud cost optimization recommendations within a given account. The response provides aggregated metrics such as the total number of recommendations, total estimated cost savings, and the count of open and applied recommendations. This helps track the overall state and impact of cost optimization efforts across all resources.
 `
 
+var GetAnomaliesSummaryDescription = `
+Fetch the anomales summary in Harness Cloud Cost Management.
+`
+
 var ListAnomaliesDescription = `
-Fetch the result of anomaly query.
+Fetch the result of anomaly query in Harness Cloud Cost Management.
 `
 
 var ListIgnoredAnomaliesDescription = `
-Fetch the list of anomalies present in the ignore list according to the filters applied.
+Fetch the list of anomalies present in the ignore list according to the filters applied in Harness Cloud Cost Management.
 `

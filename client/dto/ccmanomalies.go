@@ -3,6 +3,19 @@ package dto
 const AnomalyFilterType = "Anomaly"
 
 const (
+	FieldIdentifierCluster         = "CLUSTER"
+	FieldIdentifierAWS             = "AWS"
+	FieldIdentifierGCP             = "GCP"
+	FieldIdentifierAzure           = "AZURE"
+	FieldIdentifierExternalData    = "EXTERNAL_DATA"
+	FieldIdentifierCommon          = "COMMON"
+	FieldIdentifierCustom          = "CUSTOM"
+	FieldIdentifierBusinessMapping = "BUSINESS_MAPPING"
+	FieldIdentifierLabel           = "LABEL"
+	FieldIdentifierLabelV2         = "LABEL_V2"
+)
+
+const (
 	TimeFilterOperatorNotIn               = "NOT_IN"
 	TimeFilterOperatorIn                  = "IN"
 	TimeFilterOperatorEquals              = "EQUALS"
@@ -15,6 +28,30 @@ const (
 	TimeFilterOperatorLessThanEqualsTo    = "LESS_THAN_EQUALS_TO"
 	TimeFilterOperatorAfter               = "AFTER"
 	TimeFilterOperatorBefore              = "BEFORE"
+)
+
+const (
+	TimeRangeLastMonth    = "LAST_MONTH"
+	TimeRangeCurrentMonth = "CURRENT_MONTH"
+)
+
+const (
+	AnomTimeGroupByHour    = "HOUR"
+	AnomTimeGroupByDay     = "DAY"
+	AnomTimeGroupByMonth   = "MONTH"
+	AnomTimeGroupByWeek    = "WEEK"
+	AnomTimeGroupByQuarter = "QUARTER"
+	AnomTimeGroupByYear    = "YEAR"
+)
+
+const (
+	AnomFilterOperatorNotIn   = "NOT_IN"
+	AnomFilterOperatorIn      = "IN"
+	AnomFilterOperatorEquals  = "EQUALS"
+	AnomFilterOperatorNotNull = "NOT_NULL"
+	AnomFilterOperatorNull    = "NULL"
+	AnomFilterOperatorLike    = "LIKE"
+	AnomFilterOperatorSearch  = "SEARCH"
 )
 
 const (

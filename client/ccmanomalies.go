@@ -4,25 +4,29 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/harness/harness-mcp/client/dto"
+	"log/slog"
 )
 
 const (
-	ccmAnomaliesListPath        = ccmBasePath + "/anomaly/summary?accountIdentifier=%s"
-	ccmIgnoredAnomaliesListPath = ccmBasePath + "/anomaly/listIgnoredAnomalies?accountIdentifier=%s"
+	ccmAnomaliesSummaryPath     = ccmBasePath + "/anomaly/v2/summary?accountIdentifier=%s"
+	ccmIgnoredAnomaliesListPath = ccmBasePath + "/anomaly/v2/listIgnoredAnomalies?accountIdentifier=%s"
+	ccmAnomaliesListPath        = ccmBasePath + "/anomaly/v2/list?accountIdentifier=%s"
 )
 
-func (r *CloudCostManagementService) ListAnomalies(ctx context.Context, scope dto.Scope, accountId string, options map[string]any) (*map[string]any, error) {
-	return r.getAnomalies(ctx, scope, accountId, options, ccmAnomaliesListPath)
+func (r *CloudCostManagementService) GetAnomaliesSummary(ctx context.Context, accountId string, options map[string]any) (*map[string]any, error) {
+	return r.getAnomalies(ctx, accountId, options, ccmAnomaliesSummaryPath)
 }
 
-func (r *CloudCostManagementService) ListIgnoredAnomalies(ctx context.Context, scope dto.Scope, accountId string, options map[string]any) (*map[string]any, error) {
-	return r.getAnomalies(ctx, scope, accountId, options, ccmIgnoredAnomaliesListPath)
+func (r *CloudCostManagementService) ListIgnoredAnomalies(ctx context.Context, accountId string, options map[string]any) (*map[string]any, error) {
+	return r.getAnomalies(ctx, accountId, options, ccmIgnoredAnomaliesListPath)
+}
+
+func (r *CloudCostManagementService) ListAnomalies(ctx context.Context, accountId string, options map[string]any) (*map[string]any, error) {
+	return r.getAnomalies(ctx, accountId, options, ccmAnomaliesListPath)
 }
 
 func (r *CloudCostManagementService) getAnomalies(
 	ctx context.Context,
-	scope dto.Scope,
 	accountId string,
 	options map[string]any,
 	url string,
@@ -30,10 +34,10 @@ func (r *CloudCostManagementService) getAnomalies(
 
 	path := fmt.Sprintf(url, accountId)
 	params := make(map[string]string)
-	addScope(scope, params)
 
 	items := new(map[string]any)
 
+	slog.Debug("Fetching anomalies", "body", options)
 	err := r.Client.Post(ctx, path, params, options, &items)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to list cloud cost management anomalies: %w", err)

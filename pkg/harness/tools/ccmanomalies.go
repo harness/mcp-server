@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
@@ -12,16 +13,22 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-type ClientFunctionAnomaliesListInterface func(ctx context.Context, scope dto.Scope, accountId string, params map[string]any) (*map[string]any, error)
+type ClientFunctionAnomaliesListInterface func(ctx context.Context, accountId string, params map[string]any) (*map[string]any, error)
 
-func ListCcmAnomaliesTool(config *config.Config, client *client.CloudCostManagementService,
+const (
+	FunctionAnomaliesSummary     = 0
+	FunctionListAnomalies        = 1
+	FunctionListIgnoredAnomalies = 2
+)
+
+func GetCcmAnomaliesSummaryTool(config *config.Config, client *client.CloudCostManagementService,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 
-	return mcp.NewToolWithRawSchema("list_ccm_anomalies", ccmcommons.ListAnomaliesDescription,
-			anomaliesListDefinition(),
+	return mcp.NewToolWithRawSchema("get_ccm_anomalies_summary", ccmcommons.GetAnomaliesSummaryDescription,
+			anomaliesSummaryDefinition(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			return anomaliesListHandler(config, ctx, request, client.ListAnomalies)
+			return anomaliesListHandler(config, ctx, request, client.GetAnomaliesSummary)
 		}
 }
 
@@ -29,10 +36,20 @@ func ListCcmIgnoredAnomaliesTool(config *config.Config, client *client.CloudCost
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 
 	return mcp.NewToolWithRawSchema("list_ccm_ignored_anomalies", ccmcommons.ListIgnoredAnomaliesDescription,
-			anomaliesListDefinition(),
+			anomaliesIgnoredListDefinition(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			return anomaliesListHandler(config, ctx, request, client.ListIgnoredAnomalies)
+		}
+}
+
+func ListCcmAnomaliesTool(config *config.Config, client *client.CloudCostManagementService,
+) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewToolWithRawSchema("list_ccm_anomalies", ccmcommons.ListIgnoredAnomaliesDescription,
+			anomaliesListDefinition(),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return anomaliesListDTOHandler(config, ctx, request, client.ListAnomalies)
 		}
 }
 
@@ -48,60 +65,55 @@ func anomaliesListHandler(
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	scope, err := FetchScope(config, request, false)
+	k8sClusterNames, err := OptionalStringArrayParam(request, "k8sClusterNames")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	// k8sClusterNames, err := OptionalParam[[]string](request, "k8sClusterNames")
-	// if err != nil {
-	// 	return mcp.NewToolResultError(err.Error()), nil
-	// }
-	k8sNamespaces, err := OptionalParam[[]string](request, "k8sNamespaces")
+	k8sNamespaces, err := OptionalStringArrayParam(request, "k8sNamespaces")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	k8sWorkloadNames, err := OptionalParam[[]string](request, "k8sWorkloadNames")
+	k8sWorkloadNames, err := OptionalStringArrayParam(request, "k8sWorkloadNames")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	k8sServiceNames, err := OptionalParam[[]string](request, "k8sServiceNames")
+	k8sServiceNames, err := OptionalStringArrayParam(request, "k8sServiceNames")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	gcpProjects, err := OptionalParam[[]string](request, "gcpProjects")
+	gcpProjects, err := OptionalStringArrayParam(request, "gcpProjects")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	gcpProducts, err := OptionalParam[[]string](request, "gcpProducts")
+	gcpProducts, err := OptionalStringArrayParam(request, "gcpProducts")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	gcpSKUDescriptions, err := OptionalParam[[]string](request, "gcpSKUDescriptions")
+	gcpSKUDescriptions, err := OptionalStringArrayParam(request, "gcpSKUDescriptions")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	awsAccounts, err := OptionalParam[[]string](request, "awsAccounts")
+	awsAccounts, err := OptionalStringArrayParam(request, "awsAccounts")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	awsServices, err := OptionalParam[[]string](request, "awsServices")
+	awsServices, err := OptionalStringArrayParam(request, "awsServices")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	awsUsageTypes, err := OptionalParam[[]string](request, "awsUsageTypes")
+	awsUsageTypes, err := OptionalStringArrayParam(request, "awsUsageTypes")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	azureSubscriptionGuids, err := OptionalParam[[]string](request, "azureSubscriptionGuids")
+	azureSubscriptionGuids, err := OptionalStringArrayParam(request, "azureSubscriptionGuids")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	azureResourceGroups, err := OptionalParam[[]string](request, "azureResourceGroups")
+	azureResourceGroups, err := OptionalStringArrayParam(request, "azureResourceGroups")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	azureMeterCategories, err := OptionalParam[[]string](request, "azureMeterCategories")
+	azureMeterCategories, err := OptionalStringArrayParam(request, "azureMeterCategories")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -113,23 +125,23 @@ func anomaliesListHandler(
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	timeFilters, err := OptionalParam[[]map[string]any](request, "timeFilters")
+	timeFilters, err := OptionalAnyArrayParam(request, "timeFilters")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	orderBy, err := OptionalParam[[]map[string]any](request, "orderBy")
+	orderBy, err := OptionalAnyArrayParam(request, "orderBy")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	groupBy, err := OptionalParam[[]map[string]any](request, "groupBy")
+	groupBy, err := OptionalAnyArrayParam(request, "groupBy")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	aggregations, err := OptionalParam[[]map[string]any](request, "aggregations")
+	aggregations, err := OptionalAnyArrayParam(request, "aggregations")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	searchText, err := OptionalParam[[]string](request, "searchText")
+	searchText, err := OptionalStringArrayParam(request, "searchText")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -141,15 +153,15 @@ func anomaliesListHandler(
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	status, err := OptionalParam[[]string](request, "status")
+	status, err := OptionalStringArrayParam(request, "status")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	anomalyIds, err := OptionalParam[[]string](request, "anomalyIds")
+	anomalyIds, err := OptionalStringArrayParam(request, "anomalyIds")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	tags, err := OptionalParam[map[string]string](request, "tags")
+	tags, err := OptionalParam[map[string]any](request, "tags")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -162,7 +174,7 @@ func anomaliesListHandler(
 	}
 
 	params := map[string]any{
-		//"k8sClusterNames":        k8sClusterNames,
+		"k8sClusterNames":        k8sClusterNames,
 		"k8sNamespaces":          k8sNamespaces,
 		"k8sWorkloadNames":       k8sWorkloadNames,
 		"k8sServiceNames":        k8sServiceNames,
@@ -190,7 +202,10 @@ func anomaliesListHandler(
 		"filterType":             filterType,
 	}
 
-	data, err := clientFunction(ctx, scope, accountId, params)
+	options := make(map[string]any)
+	options["anomalyFilterPropertiesDTO"] = params
+
+	data, err := clientFunction(ctx, accountId, options)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -203,8 +218,173 @@ func anomaliesListHandler(
 	return mcp.NewToolResultText(string(r)), nil
 }
 
-func anomaliesListDefinition() json.RawMessage {
+func anomaliesListDTOHandler(
+	config *config.Config,
+	ctx context.Context,
+	request mcp.CallToolRequest,
+	clientFunction ClientFunctionAnomaliesListInterface,
+) (*mcp.CallToolResult, error) {
+
+	accountId, err := getAccountID(config, request)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	filter, err := OptionalParam[map[string]any](request, "anomalyFilterPropertiesDTO")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	perspectiveQuery, err := OptionalParam[map[string]any](request, "perspectiveQueryDTO")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	filterType, ok := filter["filterType"].(string)
+	if !ok || filterType == "" {
+		filter["filterType"] = "Anomaly"
+	}
+
+	options := map[string]any{
+		"anomalyFilterPropertiesDTO": filter,
+		"perspectiveQuery":           perspectiveQuery,
+	}
+
+	data, err := clientFunction(ctx, accountId, options)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	r, err := json.Marshal(data)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultText(string(r)), nil
+}
+
+func anomaliesSummaryDefinition() json.RawMessage {
 	return generalListRawMessage(generalListMap())
+}
+
+func anomaliesIgnoredListDefinition() json.RawMessage {
+	return generalListRawMessage(generalListMap())
+}
+
+func anomaliesListDefinition() json.RawMessage {
+	return generalListRawMessage(
+		map[string]any{
+			"anomalyFilterPropertiesDTO": generalListMap(),
+			"perspectiveQueryDTO":        perspectiveQueryDTOMap(),
+		},
+	)
+}
+
+func perspectiveQueryDTOMap() map[string]any {
+	slog.Debug("Creating perspective query DTO map")
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"filters": map[string]any{
+				"type": "array",
+				"items": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"idFilter": map[string]any{
+							"type": "object",
+							"properties": map[string]any{
+								"fieldId":   map[string]any{"type": "string"},
+								"fieldName": map[string]any{"type": "string"},
+								"fieldIdentifier": map[string]any{
+									"type": "string",
+									"enum": getFieldIdentifiers(),
+								},
+								"identifierName": map[string]any{"type": "string"},
+							},
+							"operator": map[string]any{
+								"type": "string",
+								"enum": getAnomFilterOperators(),
+							},
+							"values": map[string]any{
+								"type":  "array",
+								"items": map[string]any{"type": "string"},
+							},
+						},
+						"timeFilter": map[string]any{
+							"type": "object",
+							"properties": map[string]any{
+								"field":    map[string]any{"type": "object", "properties": map[string]any{}},
+								"operator": map[string]any{"type": "string"},
+								"value":    map[string]any{"type": "number"},
+							},
+							"required": []string{"field", "operator", "value"},
+						},
+						"timeRangeTypeFilter": map[string]any{
+							"type":    "string",
+							"enum":    getTimeRanges(),
+							"default": dto.TimeRangeLastMonth,
+						},
+						"viewMetadataFilter": map[string]any{
+							"type": "object",
+							"properties": map[string]any{
+								"viewId":    map[string]any{"type": "string"},
+								"isPreview": map[string]any{"type": "boolean"},
+								"preview":   map[string]any{"type": "boolean"},
+							},
+						},
+						"ruleFilter": map[string]any{
+							"type": "object",
+							"properties": map[string]any{
+								"conditions": map[string]any{
+									"type": "array",
+									"items": map[string]any{
+										"type": "object",
+										"properties": map[string]any{
+											"fieldId":   map[string]any{"type": "string"},
+											"fieldName": map[string]any{"type": "string"},
+											"fieldIdentifier": map[string]any{
+												"type": "string",
+												"enum": getFieldIdentifiers(),
+											},
+											"identifierName": map[string]any{"type": "string"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			"groupBy": map[string]any{
+				"type": "array",
+				"items": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"entityGroupBy": map[string]any{
+							"type": "object",
+							"properties": map[string]any{
+								"fieldId":   map[string]any{"type": "string"},
+								"fieldName": map[string]any{"type": "string"},
+								"fieldIdentifier": map[string]any{
+									"type": "string",
+									"enum": getFieldIdentifiers(),
+								},
+								"identifierName": map[string]any{"type": "string"},
+							},
+						},
+						"timeTruncGroupBy": map[string]any{
+							"type": "object",
+							"properties": map[string]any{
+								"resolution": map[string]any{
+									"type": "string",
+									"enum": getAnomTimeGroupBy(),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
 }
 
 func generalListMap() map[string]any {
@@ -231,7 +411,7 @@ func generalListMap() map[string]any {
 				"properties": map[string]any{
 					"operator": map[string]any{
 						"type": "string",
-						"enum": GetTimeFilterOperators(),
+						"enum": getTimeFilterOperators(),
 					},
 					"timestamp": map[string]any{"type": "number"},
 				},
@@ -245,7 +425,7 @@ func generalListMap() map[string]any {
 				"properties": map[string]any{
 					"field": map[string]any{
 						"type": "string",
-						"enum": GetAnomalyFields(),
+						"enum": getAnomalyFields(),
 					},
 					"order": map[string]any{
 						"type": "string",
@@ -262,7 +442,7 @@ func generalListMap() map[string]any {
 				"properties": map[string]any{
 					"groupByField": map[string]any{
 						"type": "string",
-						"enum": GetAnomalyFields(),
+						"enum": getAnomalyFields(),
 					},
 				},
 				"required": []string{"groupByField"},
@@ -275,11 +455,11 @@ func generalListMap() map[string]any {
 				"properties": map[string]any{
 					"operationType": map[string]any{
 						"type": "string",
-						"enum": GetAgregOperationTypes(),
+						"enum": getAgregOperationTypes(),
 					},
 					"field": map[string]any{
 						"type": "string",
-						"enum": GetAnomalyFields(),
+						"enum": getAnomalyFields(),
 					},
 				},
 				"required": []string{"operationType", "field"},
@@ -310,7 +490,7 @@ func generalListRawMessage(properties map[string]any) json.RawMessage {
 	return json.RawMessage(b)
 }
 
-func GetAnomalyFields() []string {
+func getAnomalyFields() []string {
 	return []string{
 		dto.AnomalyFieldPerspectiveID,
 		dto.AnomalyFieldAnomalyID,
@@ -401,7 +581,7 @@ func GetAnomalyFields() []string {
 	}
 }
 
-func GetTimeFilterOperators() []string {
+func getTimeFilterOperators() []string {
 	return []string{
 		dto.TimeFilterOperatorNotIn,
 		dto.TimeFilterOperatorIn,
@@ -418,7 +598,7 @@ func GetTimeFilterOperators() []string {
 	}
 }
 
-func GetAgregOperationTypes() []string {
+func getAgregOperationTypes() []string {
 	return []string{
 		dto.AgregOperationTypeSum,
 		dto.AgregOperationTypeMax,
@@ -428,11 +608,56 @@ func GetAgregOperationTypes() []string {
 	}
 }
 
-func GetAnomalyStatuses() []string {
+func getAnomalyStatuses() []string {
 	return []string{
 		dto.AnomalyStatusActive,
 		dto.AnomalyStatusIgnored,
 		dto.AnomalyStatusArchived,
 		dto.AnomalyStatusResolved,
+	}
+}
+
+func getFieldIdentifiers() []string {
+	return []string{
+		dto.FieldIdentifierCluster,
+		dto.FieldIdentifierAWS,
+		dto.FieldIdentifierGCP,
+		dto.FieldIdentifierAzure,
+		dto.FieldIdentifierExternalData,
+		dto.FieldIdentifierCommon,
+		dto.FieldIdentifierCustom,
+		dto.FieldIdentifierBusinessMapping,
+		dto.FieldIdentifierLabel,
+		dto.FieldIdentifierLabelV2,
+	}
+}
+
+func getTimeRanges() []string {
+	return []string{
+		dto.TimeRangeLastMonth,
+		dto.TimeRangeCurrentMonth,
+	}
+}
+
+func getAnomTimeGroupBy() []string {
+	return []string{
+		dto.AnomTimeGroupByHour,
+		dto.AnomTimeGroupByDay,
+		dto.AnomTimeGroupByMonth,
+		dto.AnomTimeGroupByWeek,
+		dto.AnomTimeGroupByQuarter,
+		dto.AnomTimeGroupByYear,
+	}
+}
+
+func getAnomFilterOperators() []string {
+	return []string{
+		dto.AnomFilterOperatorNotIn,
+		dto.AnomFilterOperatorIn,
+		dto.AnomFilterOperatorEquals,
+		dto.AnomFilterOperatorNotNull,
+		dto.AnomFilterOperatorNull,
+		dto.AnomFilterOperatorLike,
+		dto.AnomFilterOperatorSearch,
 	}
 }
