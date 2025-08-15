@@ -302,6 +302,42 @@ func (s *SEIService) GetChangeFailureRate(ctx context.Context, params map[string
 	return s.makePostRequest(ctx, "/v2/insights/efficiency/changeFailureRate", requestBody, queryParams)
 }
 
+// GetMttr gets Mean Time to Restore metrics
+// Makes a POST request to /v2/insights/efficiency/mttr with JSON body and query parameters
+func (s *SEIService) GetMttr(ctx context.Context, params map[string]interface{}) (interface{}, error) {
+	// Extract query parameters
+	queryParams := map[string]string{
+		"account": fmt.Sprintf("%v", params["accountId"]),
+		"projectIdentifier": fmt.Sprintf("%v", params["projectId"]),
+		"orgIdentifier": fmt.Sprintf("%v", params["orgId"]),
+	}
+
+	// Build request body
+	body := map[string]interface{}{
+		"teamRefId": params["teamRefId"],
+		"dateStart": params["dateStart"],
+		"dateEnd": params["dateEnd"],
+		"granularity": params["granularity"],
+	}
+
+	// Add optional parameters if they exist
+	if drillDownStartDate, ok := params["drillDownStartDate"]; ok && drillDownStartDate != "" {
+		body["drillDownStartDate"] = drillDownStartDate
+	}
+	if drillDownEndDate, ok := params["drillDownEndDate"]; ok && drillDownEndDate != "" {
+		body["drillDownEndDate"] = drillDownEndDate
+	}
+	if page, ok := params["page"]; ok {
+		body["page"] = page
+	}
+	if pageSize, ok := params["pageSize"]; ok {
+		body["pageSize"] = pageSize
+	}
+
+	path := "v2/insights/efficiency/mttr"
+	return s.makePostRequest(ctx, path, body, queryParams)
+}
+
 // GetDeploymentFrequencyDrilldown gets deployment frequency drilldown data
 // Makes a POST request to /v2/insights/efficiency/deploymentFrequency/drilldown with JSON body and query parameters
 func (s *SEIService) GetDeploymentFrequencyDrilldown(ctx context.Context, params map[string]interface{}) (interface{}, error) {

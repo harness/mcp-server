@@ -101,6 +101,7 @@ func RegisterSoftwareEngineeringInsights(config *config.Config, tsg *toolsets.To
 	efficiencyLeadTimeTool, efficiencyLeadTimeHandler := tools.GetEfficiencyLeadTimeTool(config, seiClient)
 	deploymentFrequencyTool, deploymentFrequencyHandler := tools.GetDeploymentFrequencyTool(config, seiClient)
 	changeFailureRateTool, changeFailureRateHandler := tools.GetChangeFailureRateTool(config, seiClient)
+	mttrTool, mttrHandler := tools.GetMttrTool(config, seiClient)
 	deploymentFrequencyDrilldownTool, deploymentFrequencyDrilldownHandler := tools.GetDeploymentFrequencyDrilldownTool(config, seiClient)
 	changeFailureRateDrilldownTool, changeFailureRateDrilldownHandler := tools.GetChangeFailureRateDrilldownTool(config, seiClient)
 
@@ -132,6 +133,7 @@ func RegisterSoftwareEngineeringInsights(config *config.Config, tsg *toolsets.To
 		toolsets.NewServerTool(efficiencyLeadTimeTool, efficiencyLeadTimeHandler),
 		toolsets.NewServerTool(deploymentFrequencyTool, deploymentFrequencyHandler),
 		toolsets.NewServerTool(changeFailureRateTool, changeFailureRateHandler),
+		toolsets.NewServerTool(mttrTool, mttrHandler),
 		toolsets.NewServerTool(deploymentFrequencyDrilldownTool, deploymentFrequencyDrilldownHandler),
 		toolsets.NewServerTool(changeFailureRateDrilldownTool, changeFailureRateDrilldownHandler),
 		// Teams controller tools
