@@ -15,19 +15,10 @@ import (
 func GetProductivityFeatureMetricsTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_productivity_feature_metrics",
 			mcp.WithDescription("Get productivity metrics for a collection"),
+			WithScope(config, true),
 			mcp.WithString("accountId",
 				mcp.Required(),
 				mcp.Description("Harness Account ID"),
-			),
-			mcp.WithString("orgId",
-				mcp.Required(),
-				mcp.DefaultString("default"),
-				mcp.Description("Harness Organization ID"),
-			),
-			mcp.WithString("projectId",
-				mcp.Required(),
-				mcp.DefaultString("SEI_Harness_Prod"),
-				mcp.Description("Harness Project ID"),
 			),
 			mcp.WithString("startDate",
 				mcp.Required(),
@@ -83,11 +74,7 @@ func GetProductivityFeatureMetricsTool(config *config.Config, client *client.SEI
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			orgID, err := RequiredParam[string](request, "orgId")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			projectID, err := RequiredParam[string](request, "projectId")
+			scope, err := FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -107,8 +94,8 @@ func GetProductivityFeatureMetricsTool(config *config.Config, client *client.SEI
 			// Build params map for additional parameters
 			requestParams := map[string]interface{}{
 				"accountId":   accountID,
-				"orgId":       orgID,
-				"projectId":   projectID,
+				"orgId":       scope.OrgID,
+				"projectId":   scope.ProjectID,
 				"startDate":   startDate,
 				"endDate":     endDate,
 				"featureType": featureType,
@@ -170,19 +157,10 @@ func GetProductivityFeatureMetricsTool(config *config.Config, client *client.SEI
 func GetEfficiencyLeadTimeTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_efficiency_lead_time",
 			mcp.WithDescription("Get lead time for a project"),
+			WithScope(config, true),
 			mcp.WithString("accountId",
 				mcp.Required(),
 				mcp.Description("Harness Account ID"),
-			),
-			mcp.WithString("orgId",
-				mcp.Required(),
-				mcp.DefaultString("default"),
-				mcp.Description("Harness Organization ID"),
-			),
-			mcp.WithString("projectId",
-				mcp.Required(),
-				mcp.DefaultString("SEI_Harness_Prod"),
-				mcp.Description("Harness Project ID"),
 			),
 			mcp.WithString("teamRefId",
 				mcp.Required(),
@@ -207,11 +185,7 @@ func GetEfficiencyLeadTimeTool(config *config.Config, client *client.SEIService)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			orgID, err := RequiredParam[string](request, "orgId")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			projectID, err := RequiredParam[string](request, "projectId")
+			scope, err := FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -235,8 +209,8 @@ func GetEfficiencyLeadTimeTool(config *config.Config, client *client.SEIService)
 			// Build params map for additional parameters
 			requestParams := map[string]interface{}{
 				"accountId":   accountID,
-				"orgId":       orgID,
-				"projectId":   projectID,
+				"orgId":       scope.OrgID,
+				"projectId":   scope.ProjectID,
 				"teamRefId":   teamRefId,
 				"dateStart":   dateStart,
 				"dateEnd":     dateEnd,

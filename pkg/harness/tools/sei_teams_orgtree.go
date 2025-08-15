@@ -63,17 +63,10 @@ func GetTeamTool(config *config.Config, client *client.SEIService) (mcp.Tool, se
 func GetTeamsListTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_get_teams_list",
 			mcp.WithDescription("Get list of teams with pagination"),
+			WithScope(config, true),
 			mcp.WithString("accountId",
 				mcp.Required(),
 				mcp.Description("Harness Account ID"),
-			),
-			mcp.WithString("orgId",
-				mcp.DefaultString("default"),
-				mcp.Description("Organization identifier"),
-			),
-			mcp.WithString("projectId",
-				mcp.DefaultString("SEI_Harness_Prod"),
-				mcp.Description("Project identifier"),
 			),
 			mcp.WithBoolean("leafTeamsOnly",
 				mcp.Description("Whether to return only leaf teams"),
@@ -298,17 +291,10 @@ func GetTeamIntegrationFiltersTool(config *config.Config, client *client.SEIServ
 func GetOrgTreesTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_get_org_trees",
 			mcp.WithDescription("Get organization trees with pagination"),
+			WithScope(config, true),
 			mcp.WithString("accountId",
 				mcp.Required(),
 				mcp.Description("Harness Account ID"),
-			),
-			mcp.WithString("orgId",
-				mcp.Required(),
-				mcp.Description("Organization identifier"),
-			),
-			mcp.WithString("projectId",
-				mcp.Required(),
-				mcp.Description("Project identifier"),
 			),
 			mcp.WithNumber("pageIndex",
 				mcp.DefaultNumber(0),
@@ -325,11 +311,7 @@ func GetOrgTreesTool(config *config.Config, client *client.SEIService) (mcp.Tool
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			orgId, err := RequiredParam[string](request, "orgId")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			projectId, err := RequiredParam[string](request, "projectId")
+			scope, err := FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -337,8 +319,8 @@ func GetOrgTreesTool(config *config.Config, client *client.SEIService) (mcp.Tool
 			// Build params map
 			requestParams := map[string]interface{}{
 				"accountId": accountID,
-				"orgId":     orgId,
-				"projectId": projectId,
+				"orgId":     scope.OrgID,
+				"projectId": scope.ProjectID,
 			}
 
 			// Optional params
