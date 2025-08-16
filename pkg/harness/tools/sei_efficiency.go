@@ -149,11 +149,7 @@ func GetDeploymentFrequencyTool(config *config.Config, client *client.SEIService
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			orgID, err := RequiredParam[string](request, "orgId")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			projectID, err := RequiredParam[string](request, "projectId")
+			scope, err := FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -177,8 +173,8 @@ func GetDeploymentFrequencyTool(config *config.Config, client *client.SEIService
 			// Build request parameters
 			requestParams := map[string]interface{}{
 				"accountId":   accountID,
-				"orgId":       orgID,
-				"projectId":   projectID,
+				"orgId":       scope.OrgID,
+				"projectId":   scope.ProjectID,
 				"teamRefId":   teamRefId,
 				"dateStart":   dateStart,
 				"dateEnd":     dateEnd,
@@ -259,11 +255,7 @@ func GetChangeFailureRateTool(config *config.Config, client *client.SEIService) 
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			orgID, err := RequiredParam[string](request, "orgId")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			projectID, err := RequiredParam[string](request, "projectId")
+			scope, err := FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -287,8 +279,8 @@ func GetChangeFailureRateTool(config *config.Config, client *client.SEIService) 
 			// Build request parameters
 			requestParams := map[string]interface{}{
 				"accountId":   accountID,
-				"orgId":       orgID,
-				"projectId":   projectID,
+				"orgId":       scope.OrgID,
+				"projectId":   scope.ProjectID,
 				"teamRefId":   teamRefId,
 				"dateStart":   dateStart,
 				"dateEnd":     dateEnd,
@@ -468,11 +460,7 @@ func GetDeploymentFrequencyDrilldownTool(config *config.Config, client *client.S
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			orgID, err := RequiredParam[string](request, "orgId")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			projectID, err := RequiredParam[string](request, "projectId")
+			scope, err := FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -492,8 +480,8 @@ func GetDeploymentFrequencyDrilldownTool(config *config.Config, client *client.S
 			// Build request parameters
 			requestParams := map[string]interface{}{
 				"accountId": accountID,
-				"orgId":     orgID,
-				"projectId": projectID,
+				"orgId":     scope.OrgID,
+				"projectId": scope.ProjectID,
 				"teamRefId": teamRefId,
 				"dateStart": dateStart,
 				"dateEnd":   dateEnd,
@@ -563,11 +551,7 @@ func GetChangeFailureRateDrilldownTool(config *config.Config, client *client.SEI
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			orgID, err := RequiredParam[string](request, "orgId")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			projectID, err := RequiredParam[string](request, "projectId")
+			scope, err := FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -587,8 +571,8 @@ func GetChangeFailureRateDrilldownTool(config *config.Config, client *client.SEI
 			// Build request parameters
 			requestParams := map[string]interface{}{
 				"accountId": accountID,
-				"orgId":     orgID,
-				"projectId": projectID,
+				"orgId":     scope.OrgID,
+				"projectId": scope.ProjectID,
 				"teamRefId": teamRefId,
 				"dateStart": dateStart,
 				"dateEnd":   dateEnd,

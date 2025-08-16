@@ -29,11 +29,7 @@ func GetBAAllProfilesTool(config *config.Config, client *client.SEIService) (mcp
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			projectId, err := RequiredParam[string](request, "projectId")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			orgId, err := RequiredParam[string](request, "orgId")
+			scope, err := FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -41,8 +37,8 @@ func GetBAAllProfilesTool(config *config.Config, client *client.SEIService) (mcp
 			// Build params map
 			requestParams := map[string]interface{}{
 				"accountId": accountID,
-				"projectId": projectId,
-				"orgId":     orgId,
+				"projectId": scope.ProjectID,
+				"orgId":     scope.OrgID,
 			}
 
 			// Call API
@@ -81,11 +77,7 @@ func GetBAInsightMetricsTool(config *config.Config, client *client.SEIService) (
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			projectId, err := RequiredParam[string](request, "projectId")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			orgId, err := RequiredParam[string](request, "orgId")
+			scope, err := FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -97,8 +89,8 @@ func GetBAInsightMetricsTool(config *config.Config, client *client.SEIService) (
 			// Build params map
 			requestParams := map[string]interface{}{
 				"accountId": accountID,
-				"projectId": projectId,
-				"orgId":     orgId,
+				"projectId": scope.ProjectID,
+				"orgId":     scope.OrgID,
 				"request":   requestData,
 			}
 
@@ -138,11 +130,7 @@ func GetBAInsightSummaryTool(config *config.Config, client *client.SEIService) (
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			projectId, err := RequiredParam[string](request, "projectId")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			orgId, err := RequiredParam[string](request, "orgId")
+			scope, err := FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -154,8 +142,8 @@ func GetBAInsightSummaryTool(config *config.Config, client *client.SEIService) (
 			// Build params map
 			requestParams := map[string]interface{}{
 				"accountId": accountID,
-				"projectId": projectId,
-				"orgId":     orgId,
+				"projectId": scope.ProjectID,
+				"orgId":     scope.OrgID,
 				"request":   requestData,
 			}
 
@@ -195,11 +183,7 @@ func GetBADrilldownDataTool(config *config.Config, client *client.SEIService) (m
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			projectId, err := RequiredParam[string](request, "projectId")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			orgId, err := RequiredParam[string](request, "orgId")
+			scope, err := FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -211,8 +195,8 @@ func GetBADrilldownDataTool(config *config.Config, client *client.SEIService) (m
 			// Build params map
 			requestParams := map[string]interface{}{
 				"accountId": accountID,
-				"projectId": projectId,
-				"orgId":     orgId,
+				"projectId": scope.ProjectID,
+				"orgId":     scope.OrgID,
 				"request":   requestData,
 			}
 
