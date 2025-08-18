@@ -1,0 +1,180 @@
+# Rust Makefile for Harness MCP Server
+
+# Build configuration
+CARGO_TARGET_DIR ?= target
+BINARY_NAME = harness-mcp-server
+RELEASE_DIR = $(CARGO_TARGET_DIR)/release
+DEBUG_DIR = $(CARGO_TARGET_DIR)/debug
+
+# Version information (can be overridden)
+VERSION ?= $(shell grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
+GIT_COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_DATE ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+# Rust toolchain
+RUSTC_VERSION = $(shell rustc --version)
+
+###############################################################################
+#
+# Build rules
+#
+###############################################################################
+
+.PHONY: build build-release build-debug clean test fmt clippy check install
+
+## Build the project in release mode
+build: build-release
+
+## Build the project in release mode
+build-release:
+	@echo "Building $(BINARY_NAME) in release mode..."
+	@echo "Rust version: $(RUSTC_VERSION)"
+	cargo build --release --bin $(BINARY_NAME)
+	@echo "Binary built: $(RELEASE_DIR)/$(BINARY_NAME)"
+
+## Build the project in debug mode
+build-debug:
+	@echo "Building $(BINARY_NAME) in debug mode..."
+	cargo build --bin $(BINARY_NAME)
+	@echo "Binary built: $(DEBUG_DIR)/$(BINARY_NAME)"
+
+## Clean build artifacts
+clean:
+	@echo "Cleaning build artifacts..."
+	cargo clean
+
+## Install the binary to cargo bin directory
+install:
+	@echo "Installing $(BINARY_NAME)..."
+	cargo install --path . --bin $(BINARY_NAME)
+
+###############################################################################
+#
+# Testing
+#
+###############################################################################
+
+## Run all tests
+test:
+	@echo "Running tests..."
+	cargo test
+
+## Run tests with coverage
+test-coverage:
+	@echo "Running tests with coverage..."
+	cargo test --all-features
+	# Note: For actual coverage, you might want to use cargo-tarpaulin or similar
+
+## Run end-to-end tests (if any)
+test-e2e:
+	@echo "Running end-to-end tests..."
+	cargo test --test '*' --features e2e
+
+###############################################################################
+#
+# Code quality
+#
+###############################################################################
+
+## Format code
+fmt:
+	@echo "Formatting code..."
+	cargo fmt
+
+## Check formatting
+fmt-check:
+	@echo "Checking code formatting..."
+	cargo fmt -- --check
+
+## Run clippy lints
+clippy:
+	@echo "Running clippy..."
+	cargo clippy --all-targets --all-features -- -D warnings
+
+## Run all checks (format, clippy, test)
+check: fmt-check clippy test
+
+###############################################################################
+#
+# Docker
+#
+###############################################################################
+
+## Build Docker image
+docker-build:
+	@echo "Building Docker image..."
+	docker build -f Dockerfile.rust -t harness/mcp-server-rust:$(VERSION) .
+	docker tag harness/mcp-server-rust:$(VERSION) harness/mcp-server-rust:latest
+
+## Run Docker container
+docker-run:
+	@echo "Running Docker container..."
+	docker run -i --rm \
+		-e HARNESS_API_KEY \
+		-e HARNESS_DEFAULT_ORG_ID \
+		-e HARNESS_DEFAULT_PROJECT_ID \
+		-e HARNESS_BASE_URL \
+		harness/mcp-server-rust:latest
+
+###############################################################################
+#
+# Development
+#
+###############################################################################
+
+## Run the server in development mode
+dev:
+	@echo "Running server in development mode..."
+	cargo run --bin $(BINARY_NAME) -- stdio
+
+## Watch for changes and rebuild
+watch:
+	@echo "Watching for changes..."
+	cargo watch -x "build --bin $(BINARY_NAME)"
+
+## Generate documentation
+docs:
+	@echo "Generating documentation..."
+	cargo doc --no-deps --open
+
+## Update dependencies
+update:
+	@echo "Updating dependencies..."
+	cargo update
+
+###############################################################################
+#
+# Release
+#
+###############################################################################
+
+## Prepare a release build with optimizations
+release: clean
+	@echo "Building optimized release..."
+	@echo "Version: $(VERSION)"
+	@echo "Git commit: $(GIT_COMMIT)"
+	@echo "Build date: $(BUILD_DATE)"
+	RUSTFLAGS="-C target-cpu=native" cargo build --release --bin $(BINARY_NAME)
+	strip $(RELEASE_DIR)/$(BINARY_NAME) 2>/dev/null || true
+	@echo "Release binary: $(RELEASE_DIR)/$(BINARY_NAME)"
+	@ls -lh $(RELEASE_DIR)/$(BINARY_NAME)
+
+###############################################################################
+#
+# Help
+#
+###############################################################################
+
+## Show help message
+help:
+	@echo "Harness MCP Server (Rust) - Available targets:"
+	@echo ""
+	@grep -E '^## ' $(MAKEFILE_LIST) | sed 's/## /  /' | column -t -s ':'
+	@echo ""
+	@echo "Environment variables:"
+	@echo "  VERSION        - Version to build (default: from Cargo.toml)"
+	@echo "  GIT_COMMIT     - Git commit hash (default: auto-detected)"
+	@echo "  BUILD_DATE     - Build timestamp (default: current time)"
+	@echo ""
+
+.DEFAULT_GOAL := help

@@ -1,0 +1,49 @@
+# ---------------------------------------------------------#
+#                   Build Harness Rust image              #
+# ---------------------------------------------------------#
+FROM --platform=$BUILDPLATFORM rust:1.75-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache musl-dev pkgconfig openssl-dev
+
+# Setup working dir
+WORKDIR /app
+
+# Copy dependency files first for better caching
+COPY Cargo.toml Cargo.lock ./
+
+# Create a dummy main.rs to build dependencies
+RUN mkdir -p src/bin/harness-mcp-server && \
+    echo "fn main() {}" > src/bin/harness-mcp-server/main.rs && \
+    echo "fn main() {}" > src/lib.rs
+
+# Build dependencies
+RUN cargo build --release && \
+    rm -rf src/
+
+# Copy the actual source code
+COPY src/ src/
+
+# Build the application
+RUN cargo build --release --bin harness-mcp-server
+
+### Pull CA Certs
+FROM --platform=$BUILDPLATFORM alpine:latest AS cert-image
+
+RUN apk --update add ca-certificates
+
+# ---------------------------------------------------------#
+#                   Create final image                     #
+# ---------------------------------------------------------#
+FROM alpine:3.21 AS final
+
+# setup app dir and its content
+WORKDIR /app
+VOLUME /data
+
+ENV XDG_CACHE_HOME=/data
+
+COPY --from=builder /app/target/release/harness-mcp-server /app/harness-mcp-server
+COPY --from=cert-image /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+
+ENTRYPOINT [ "/app/harness-mcp-server", "stdio" ]
