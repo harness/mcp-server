@@ -88,7 +88,7 @@ func registerPromptsCopy(moduleID string, cfg *config.Config, mcpServer *server.
 		
 		// Create a single MCP prompt with the module ID as the name
 		mcpPrompt := p.NewPrompt().
-			SetName(strings.ToLower(moduleID)). // Use moduleID as the prompt name
+			SetName(strings.ToUpper(moduleID)). // Use moduleID as the prompt name
 			SetDescription(description).
 			SetResultDescription(resultDescription).
 			SetText(string(contentJSON)). // Store the JSON map as the prompt text
@@ -152,8 +152,8 @@ func TestRegisterPrompts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("registerPrompts returned error: %v", err)
 	}
-	if prompt.Name != "testmodule" {
-		t.Errorf("expected prompt name 'testmodule', got %q", prompt.Name)
+	if prompt.Name != "TESTMODULE" {
+		t.Errorf("expected prompt name 'TESTMODULE', got %q", prompt.Name)
 	}
 	if !strings.Contains(prompt.Description, "Standard test description") {
 		t.Errorf("description mismatch, got %q", prompt.Description)
