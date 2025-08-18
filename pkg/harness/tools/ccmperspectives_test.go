@@ -32,7 +32,7 @@ var (
 
 	validEventJSONText = `{"type":"perspective_rules_updated","continue":true,"content":{"viewRules":[{"viewConditions":[{"type":"VIEW_ID_CONDITION","viewField":{"fieldId":"awsUsageaccountid","fieldName":"Account","identifier":"AWS","identifierName":"AWS"},"viewOperator":"IN","values":["test(test_id)"]}]}]}}`
 
-	validPromptJSONText = `{"type":"prompt","continue":true,"display_order":100,"content":{"prompts":["Create a new CCM perspective with these rules"]}}`
+	validPromptJSONText = `{"type":"prompt","continue":true,"display_order":100,"content":{"prompts":["Proceed to save perspective"]}}`
 
 	validExpectedTextContent = mcp.EmbeddedResource{
 		Type: "resource",

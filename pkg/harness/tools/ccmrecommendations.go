@@ -9,6 +9,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/harness/harness-mcp/pkg/ccmcommons"
 	"github.com/harness/harness-mcp/client/dto"
+	"github.com/harness/harness-mcp/pkg/utils"
 )
 
 const (
@@ -48,6 +49,119 @@ func GetCcmRecommendationsStatsTool(config *config.Config, client *client.CloudC
 	func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return recommendationsHandler(config, ctx, request, client.GetRecommendationsStats)
 	}
+}
+
+func UpdateCcmRecommendationStateTool(config *config.Config, client *client.CloudCostManagementService,
+) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+
+	return mcp.NewTool("update_ccm_recommendation_state",
+			mcp.WithDescription(`
+			<UPDATE_TOOL>Marks a recommendation as Applied/Open/Ignored in Harness Cloud Cost Management. This is a state-changing operation. 
+			Before calling, summarize the proposed changes and ask the user to confirm. Proceed ONLY if the user explicitly replies "yes".
+
+			`),
+			mcp.WithString("recommendation_id",
+				mcp.Required(),
+				mcp.Description("Recommendation ID to update"),
+			),
+			mcp.WithString("state",
+				mcp.Enum(dto.RecommendationStateIgnored, dto.RecommendationStateOpen, dto.RecommendationStateApplied),
+				mcp.DefaultString(dto.RecommendationStateApplied),
+				mcp.Required(),
+				mcp.Description("New state for recommendation"),
+			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    utils.ToBoolPtr(false),
+				DestructiveHint: utils.ToBoolPtr(true),
+			}),
+
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			accountId, err := getAccountID(config, request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			recommendationId, err := OptionalParam[string](request, "recommendation_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			state, err := OptionalParam[string](request, "state")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			scope, err := FetchScope(config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.UpdateRecommendationState(ctx, scope, accountId, recommendationId, state)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+func OverrideCcmRecommendationSavingsTool(config *config.Config, client *client.CloudCostManagementService,
+) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+
+	return mcp.NewTool("override_ccm_recommendation_savings",
+			mcp.WithDescription(`
+			Overrides recommendation savings in Harness Cloud Cost Management.  This is a state-changing operation. 
+			Before calling, summarize the proposed changes and ask the user to confirm. Proceed ONLY if the user explicitly replies "yes".
+			`),
+			mcp.WithString("recommendation_id",
+				mcp.Required(),
+				mcp.Description("Recommendation ID to update"),
+			),
+			mcp.WithNumber("overridden_savings",
+				mcp.Required(),
+				mcp.Description("New savings for recommendation"),
+			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    utils.ToBoolPtr(false),
+				DestructiveHint: utils.ToBoolPtr(true),
+			}),
+
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			accountId, err := getAccountID(config, request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			recommendationId, err := OptionalParam[string](request, "recommendation_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			savings, err := OptionalParam[float64](request, "overridden_savings")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			scope, err := FetchScope(config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.OverrideRecommendationSavings(ctx, scope, accountId, recommendationId, savings)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
 }
 
 func recommendationsHandler(

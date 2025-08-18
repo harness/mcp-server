@@ -178,3 +178,91 @@ type User struct {
 	UserName  string `json:"userName,omitempty"`
 	CreatedAt int64  `json:"createdAt,omitempty"`
 }
+
+// InputSetListOptions represents the options for listing input sets
+type InputSetListOptions struct {
+	PaginationOptions
+	PipelineIdentifier string `json:"pipelineIdentifier,omitempty"`
+	SearchTerm         string `json:"searchTerm,omitempty"`
+}
+
+// InputSetListItem represents an item in the input set list
+type InputSetListItem struct {
+	Identifier             string                `json:"identifier,omitempty"`
+	Name                   string                `json:"name,omitempty"`
+	PipelineIdentifier     string                `json:"pipelineIdentifier,omitempty"`
+	Description            string                `json:"description,omitempty"`
+	InputSetType           string                `json:"inputSetType,omitempty"`
+	Tags                   map[string]string     `json:"tags,omitempty"`
+	GitDetails             GitDetails            `json:"gitDetails,omitempty"`
+	CreatedAt              int64                 `json:"createdAt,omitempty"`
+	LastUpdatedAt          int64                 `json:"lastUpdatedAt,omitempty"`
+	IsOutdated             bool                  `json:"isOutdated,omitempty"`
+	InputSetErrorDetails   InputSetErrorDetails  `json:"inputSetErrorDetails,omitempty"`
+	OverlaySetErrorDetails map[string]string     `json:"overlaySetErrorDetails,omitempty"`
+	EntityValidityDetails  EntityValidityDetails `json:"entityValidityDetails,omitempty"`
+	Modules                []string              `json:"modules,omitempty"`
+}
+
+// InputSetErrorDetails represents error details for input sets
+type InputSetErrorDetails struct {
+	ErrorPipelineYaml         string                 `json:"errorPipelineYaml,omitempty"`
+	UuidToErrorResponseMap    map[string]interface{} `json:"uuidToErrorResponseMap,omitempty"`
+	InvalidInputSetReferences []string               `json:"invalidInputSetReferences,omitempty"`
+	Type                      string                 `json:"type,omitempty"`
+}
+
+// InputSetListResponse represents the full response structure for listing input sets
+type InputSetListResponse struct {
+	Status        string                 `json:"status,omitempty"`
+	Data          InputSetListData       `json:"data,omitempty"`
+	MetaData      map[string]interface{} `json:"metaData,omitempty"`
+	CorrelationId string                 `json:"correlationId,omitempty"`
+}
+
+// InputSetListData represents the data field of input set list response
+type InputSetListData struct {
+	TotalPages    int                `json:"totalPages,omitempty"`
+	TotalItems    int                `json:"totalItems,omitempty"`
+	PageItemCount int                `json:"pageItemCount,omitempty"`
+	PageSize      int                `json:"pageSize,omitempty"`
+	Content       []InputSetListItem `json:"content,omitempty"`
+	PageIndex     int                `json:"pageIndex,omitempty"`
+	Empty         bool               `json:"empty,omitempty"`
+	PageToken     string             `json:"pageToken,omitempty"`
+}
+
+// InputSetDetail represents the detailed information of a specific input set
+type InputSetDetail struct {
+	AccountId              string                `json:"accountId,omitempty"`
+	OrgIdentifier          string                `json:"orgIdentifier,omitempty"`
+	ProjectIdentifier      string                `json:"projectIdentifier,omitempty"`
+	PipelineIdentifier     string                `json:"pipelineIdentifier,omitempty"`
+	Identifier             string                `json:"identifier,omitempty"`
+	InputSetYaml           string                `json:"inputSetYaml,omitempty"`
+	Name                   string                `json:"name,omitempty"`
+	Description            string                `json:"description,omitempty"`
+	Tags                   map[string]string     `json:"tags,omitempty"`
+	InputSetErrorWrapper   InputSetErrorWrapper  `json:"inputSetErrorWrapper,omitempty"`
+	GitDetails             GitDetails            `json:"gitDetails,omitempty"`
+	EntityValidityDetails  EntityValidityDetails `json:"entityValidityDetails,omitempty"`
+	Outdated               bool                  `json:"outdated,omitempty"`
+	ErrorResponse          bool                  `json:"errorResponse,omitempty"`
+}
+
+// InputSetErrorWrapper represents the error wrapper for input sets
+type InputSetErrorWrapper struct {
+	ErrorPipelineYaml         string                 `json:"errorPipelineYaml,omitempty"`
+	UuidToErrorResponseMap    map[string]interface{} `json:"uuidToErrorResponseMap,omitempty"`
+	InvalidInputSetReferences []string               `json:"invalidInputSetReferences,omitempty"`
+	Type                      string                 `json:"type,omitempty"`
+}
+
+// InputSetResponse represents the full response structure for getting a specific input set
+type InputSetResponse struct {
+	Status        string                 `json:"status,omitempty"`
+	Data          InputSetDetail         `json:"data,omitempty"`
+	MetaData      map[string]interface{} `json:"metaData,omitempty"`
+	CorrelationId string                 `json:"correlationId,omitempty"`
+}
+

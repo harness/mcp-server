@@ -35,6 +35,8 @@ func NewModuleRegistry(config *config.Config, tsg *toolsets.ToolsetGroup) *Modul
 			NewCCMModule(config, tsg),
 			NewIDPModule(config, tsg),
 			NewHARModule(config, tsg),
+			NewDbOpsModule(config, tsg),
+			NewACMModule(config, tsg),
 		},
 		config: config,
 		tsg:    tsg,
@@ -174,7 +176,7 @@ func registerPrompts(moduleID string, cfg *config.Config, mcpServer *server.MCPS
     
     // Create a single MCP prompt with the module ID as the name
     mcpPrompt := p.NewPrompt().
-        SetName(strings.ToLower(moduleID)). // Use moduleID as the prompt name
+        SetName(strings.ToUpper(moduleID)). // Use moduleID as the prompt name
         SetDescription(description).
         SetResultDescription(resultDescription).
         SetText(string(contentJSON)). // Store the JSON map as the prompt text

@@ -91,7 +91,7 @@ func (c *ChaosService) RunExperiment(ctx context.Context, scope dto.Scope, exper
 	params = addIdentifierParams(params, scope)
 
 	experimentRun := new(dto.RunChaosExperimentResponse)
-	err := c.Client.Post(ctx, path, params, nil, experimentRun)
+	err := c.Client.Post(ctx, path, params, nil, map[string]string{}, experimentRun)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run experiment: %w", err)
 	}

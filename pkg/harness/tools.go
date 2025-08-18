@@ -271,6 +271,9 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 			if err := modules.RegisterInfrastructure(config, tsg); err != nil {
 				return err
 			}
+			if err := modules.RegisterACM(config, tsg); err != nil {
+				return err
+			}
 		} else {
 			// Register specified toolsets
 			for _, toolset := range config.Toolsets {
@@ -365,6 +368,10 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 					}
 				case "infrastructure":
 					if err := modules.RegisterInfrastructure(config, tsg); err != nil {
+						return err
+					}
+				case "acm":
+					if err := modules.RegisterACM(config, tsg); err != nil {
 						return err
 					}
 				}

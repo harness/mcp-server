@@ -16,6 +16,7 @@ const (
 	idpListScorecardsPath  = "/v1/scorecards"
 	idpGetScoreSummaryPath = "/v1/scores/summary"
 	idpGetScoresPath       = "/v1/scores"
+	idpExecuteWorkflowPath = "/v2/workflows/execute"
 
 	// Default values for requests
 	defaultKind        = "component,api,resource"
@@ -78,9 +79,7 @@ func (i *IDPService) ListEntities(ctx context.Context, scope dto.Scope, getEntit
 		params["search_term"] = getEntitiesParams.SearchTerm
 	}
 
-	if getEntitiesParams.Scopes != "" {
-		params["scopes"] = getEntitiesParams.Scopes
-	}
+	params["scopes"] = generateScopeParamVal(scope)
 
 	params["owned_by_me"] = fmt.Sprintf("%v", getEntitiesParams.OwnedByMe)
 	params["favorites"] = fmt.Sprintf("%v", getEntitiesParams.Favorites)
@@ -140,7 +139,6 @@ func (i *IDPService) ListScorecards(ctx context.Context, scope dto.Scope) (*[]dt
 	addHarnessAccountToHeaders(scope, headers)
 
 	response := make([]dto.ScorecardResponse, 0)
-
 	err := i.Client.Get(ctx, path, map[string]string{}, headers, &response)
 	if err != nil {
 		return nil, err
@@ -159,7 +157,6 @@ func (i *IDPService) GetScorecardSummary(ctx context.Context, scope dto.Scope, i
 	params["entity_identifier"] = identifier
 
 	response := new(dto.ScorecardSummaryResponse)
-
 	err := i.Client.Get(ctx, path, params, headers, response)
 	if err != nil {
 		return nil, err
@@ -178,9 +175,38 @@ func (i *IDPService) GetScorecardScores(ctx context.Context, scope dto.Scope, id
 	params["entity_identifier"] = identifier
 
 	response := new(dto.ScorecardScoreResponse)
-
 	err := i.Client.Get(ctx, path, params, headers, response)
 	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
+}
+
+func (i *IDPService) ExecuteWorkflow(ctx context.Context, scope dto.Scope, identifier string, inputSet map[string]interface{}) (*dto.ExecuteWorkflowResponse, error) {
+	path := idpExecuteWorkflowPath
+
+	headers := make(map[string]string)
+	addHarnessAccountToHeaders(scope, headers)
+
+	params := make(map[string]string)
+	addScope(scope, params)
+
+	_, token, err := i.Client.AuthProvider.GetHeader(ctx)
+	if err != nil {
+		slog.Error("Failed to get auth header", "error", err)
+		return nil, err
+	}
+	inputSet["token"] = token
+	body := new(dto.ExecuteWorkflowRequest)
+	body.Identifier = identifier
+	body.Values = inputSet
+
+	response := new(dto.ExecuteWorkflowResponse)
+
+	err = i.Client.Post(ctx, path, params, body, headers, response)
+	if err != nil {
+		slog.Error("Failed to execute workflow", "error", err)
 		return nil, err
 	}
 

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"log/slog"
+
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
@@ -18,9 +20,10 @@ import (
 )
 
 const (
-	CCMPerspectiveRulesToolID    	= "validate_ccm_perspective_rules"
+	CCMPerspectiveRulesToolID       = "validate_ccm_perspective_rules"
 	CCMPerspectiveRuleEventType     = "perspective_rules_updated"
-	FollowUpCreatePerspectivePrompt = "Create a new CCM perspective with these rules"
+	FollowUpCreatePerspectivePrompt = "Proceed to save perspective"
+	CCMPerspectivetCreateOrUpdateRuleEventType = "perspective_created_or_updated_event"
 )
 
 func ListCcmPerspectivesDetailTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
@@ -90,7 +93,6 @@ func ListCcmPerspectivesDetailTool(config *config.Config, client *client.CloudCo
 				params.SortOrder = sortOrder
 			}
 
-			// Handle limit parameter
 			limit, ok, err := OptionalParamOK[float64](request, "limit")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -154,7 +156,6 @@ func GetCcmPerspectiveTool(config *config.Config, client *client.CloudCostManage
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-
 			data, err := client.GetPerspective(ctx, scope, params)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get CCM Perspective: %w", err)
@@ -214,9 +215,6 @@ func GetLastPeriodCostCcmPerspectiveTool(config *config.Config, client *client.C
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			period, err := OptionalParam[string](request, "period")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
 
 			params := &dto.CCMGetLastPeriodCostPerspectiveOptions{}
 			params.AccountIdentifier = accountId
@@ -308,16 +306,37 @@ func GetLastTwelveMonthsCostCcmPerspectiveTool(config *config.Config, client *cl
 
 // Create perspective
 func CreateCcmPerspectiveTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return createPerspectiveTool(config, client),
+	return createOrUpdatePerspectiveTool(false),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			return createPerspectiveHandler(config, client, ctx, request)
+			return createOrUpdatePerspectiveHandler(config, client, ctx, request, false)
 		}
 }
 
-func createPerspectiveTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool) {
+// Update perspective
+func UpdateCcmPerspectiveTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return createOrUpdatePerspectiveTool(true),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return createOrUpdatePerspectiveHandler(config, client, ctx, request, true)
+		}
+}
 
-	return mcp.NewTool("create_ccm_perspective",
-		mcp.WithDescription("Get the last twelve months cost for a perspective in Harness Cloud Cost Management"),
+func createOrUpdatePerspectiveTool(update bool) (tool mcp.Tool) {
+
+	name := "create_ccm_perspective"
+	description := `
+		<INSERT_TOOL> Creates a Perspective in Harness Cloud Cost Management. This is a state-changing operation that creates a new object. 
+		Before calling, summarize the proposed values and ask the user to confirm. Proceed ONLY if the user explicitly replies "yes".
+		`
+	if update {
+		name = "update_ccm_perspective"
+		description = `
+			<UPDATE_TOOL> Updates an existing Perspective in Harness Cloud Cost Management. This is a state-changing operation that modifies fields such as name, groupBy, filters, and timeRange. 
+			Before calling, summarize the proposed changes and ask the user to confirm. Proceed ONLY if the user explicitly replies "yes".
+			`
+	}
+
+	options := []mcp.ToolOption{
+		mcp.WithDescription(description),
 		mcp.WithString("account_id",
 			mcp.Description("The account identifier owner of the perspective"),
 		),
@@ -343,7 +362,7 @@ func createPerspectiveTool(config *config.Config, client *client.CloudCostManage
 		),
 		mcp.WithString("view_time_range_type",
 			mcp.Required(),
-			mcp.Enum(dto.TimeRangeTypeLast7Days, dto.TimeRangeTypeLast30Days, dto.TimeRangeTypeLastMonth, dto.TimeRangeTypeCurrentMonth, dto.TimeRangeTypeCustom),
+			mcp.Enum(dto.TimeRangeTypeLast7Days, dto.TimeRangeTypeLast30, dto.TimeRangeTypeLastMonth, dto.TimeRangeTypeCurrentMonth, dto.TimeRangeTypeCustom),
 			mcp.DefaultString(dto.TimeRangeTypeLast7Days),
 			mcp.Description("Containing folder identifier of the perspective"),
 		),
@@ -413,16 +432,46 @@ func createPerspectiveTool(config *config.Config, client *client.CloudCostManage
 			mcp.Enum(dto.ViewStateDraft, dto.ViewStateCompleted),
 			mcp.Description("State of view. Set to completed if it is not provided."),
 		),
+		mcp.WithToolAnnotation(mcp.ToolAnnotation{
+			ReadOnlyHint:    utils.ToBoolPtr(false),
+			DestructiveHint: utils.ToBoolPtr(true),
+		}),
 		createPerspectiveRules(),
-	)
+		createPerspectiveVisualization(),
+	}
+
+	if update {
+		options = append(options,
+			mcp.WithString("perspective_id",
+				mcp.Required(),
+				mcp.Description("The identifier of the perspective to update."),
+			),
+		)
+	}
+
+	return mcp.NewTool(name, options...)
 }
 
-func createPerspectiveHandler(config *config.Config, client *client.CloudCostManagementService, ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func createOrUpdatePerspectiveHandler(
+	config *config.Config,
+	client *client.CloudCostManagementService,
+	ctx context.Context,
+	request mcp.CallToolRequest,
+	update bool,
+) (*mcp.CallToolResult, error) {
 
 	// Account Id for querystring.
 	accountId, err := getAccountID(config, request)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	perspectiveId := ""
+	if update {
+		perspectiveId, err = OptionalParam[string](request, "perspective_id")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
 	}
 
 	perspectiveAccountId, err := OptionalParam[string](request, "account_id")
@@ -463,6 +512,8 @@ func createPerspectiveHandler(config *config.Config, client *client.CloudCostMan
 	viewType, err := OptionalParam[string](request, "view_type")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
+	} else if viewType != dto.ViewTypeCustomer {
+		return mcp.NewToolResultError(fmt.Sprintf("view_type must be %s or %s", dto.ViewTypeSample, dto.ViewTypeCustomer)), nil
 	}
 
 	viewState, err := OptionalParam[string](request, "view_state")
@@ -471,6 +522,9 @@ func createPerspectiveHandler(config *config.Config, client *client.CloudCostMan
 	}
 
 	params := &dto.CCMCreatePerspectiveOptions{}
+	if update {
+		params.Body.UUID = perspectiveId
+	}
 	params.AccountId = accountId
 	params.Clone = clone
 	params.UpdateTotalCost = updateTotalCost
@@ -585,15 +639,35 @@ func createPerspectiveHandler(config *config.Config, client *client.CloudCostMan
 
 	viewRules, err := OptionalAnyArrayParam(request, "view_rules")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return mcp.NewToolResultError("Error extracting rules from request. Check JSON format: " + err.Error()), nil
 	}
 
-	if viewRules != nil {
+	if viewRules == nil {
+		viewRules = []any{}
+	}
+
+	if len(viewRules) > 0 {
+		slog.Debug("viewRules", "viewRules", viewRules)
 		rules, err := ccmcommons.AdaptViewRulesMap(viewRules)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return mcp.NewToolResultError("Error processing view rules from request. Check JSON format: " + err.Error()), nil
 		}
 		params.Body.ViewRules = rules
+	} else {
+		params.Body.ViewRules = []dto.CCMViewRule{}
+	}
+
+	viewVisualization, err := OptionalParam[map[string]any](request, "view_visualization")
+	if err != nil {
+		return mcp.NewToolResultError("Error extracting visualization options from request. Check JSON format: " + err.Error()), nil
+	}
+	if len(viewVisualization) > 0 {
+		slog.Debug("viewVisualization", "viewVisualization", viewVisualization)
+		viewVisual, err := ccmcommons.AdaptViewVisualization(viewVisualization)
+		if err != nil {
+			return mcp.NewToolResultError("Error processing visualization options from request. Check JSON format: " + err.Error()), nil
+		}
+		params.Body.ViewVisualization = viewVisual
 	}
 
 	params.Body.ViewType = viewType
@@ -603,7 +677,7 @@ func createPerspectiveHandler(config *config.Config, client *client.CloudCostMan
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	data, err := client.CreatePerspective(ctx, scope, params)
+	data, err := client.CreateOrUpdatePerspective(ctx, scope, params, update)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CCM Perspective: %w", err)
 	}
@@ -613,7 +687,23 @@ func createPerspectiveHandler(config *config.Config, client *client.CloudCostMan
 		return nil, fmt.Errorf("failed to marshal CCM Perspective: %w", err)
 	}
 
-	return mcp.NewToolResultText(string(r)), nil
+	responseContents := []mcp.Content{}
+
+	viewRulesEvent := event.NewCustomEvent(CCMPerspectivetCreateOrUpdateRuleEventType, map[string]any{
+		"response": string(r),
+	})
+
+	// Create embedded resources for the OPA event
+	eventResource, err := viewRulesEvent.CreateEmbeddedResource()
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	} else {
+		responseContents = append(responseContents, eventResource)
+	}
+
+	return &mcp.CallToolResult{
+		Content: responseContents,
+	}, nil
 }
 
 func getSupportedDataSources() string {
@@ -649,22 +739,22 @@ func createPerspectiveRules() mcp.ToolOption {
 	// option_description := fmt.Sprintf(" field %s. The format for this field is: {\"field\": \"field_name\", \"value\": \"field_value\"}.",group_by_options),
 
 	var fieldDescription = `
-A list of view rules that define the filtering logic for this Perspective. Each rule contains one or more view conditions specifying which data to include or exclude from the Perspective. These conditions allow filtering by dimensions such as Kubernetes clusters, cloud providers (AWS, GCP, Azure), business mappings, custom fields, and labels.
+	A list of view rules that define the filtering logic for this Perspective. Each rule contains one or more view conditions specifying which data to include or exclude from the Perspective. These conditions allow filtering by dimensions such as Kubernetes clusters, cloud providers (AWS, GCP, Azure), business mappings, custom fields, and labels.
 
-Each viewCondition includes:
+	Each viewCondition includes:
 
-The filter type (currently only ViewIdCondition is supported),
+	The filter type (currently only ViewIdCondition is supported),
 
-A viewField specifying the dimension to filter on (e.g., cost category or resource type),
+	A viewField specifying the dimension to filter on (e.g., cost category or resource type),
 
-An identifier defining the field source (e.g., "CLUSTER", "AWS", "LABEL_V2", etc.),
+	An identifier defining the field source (e.g., "CLUSTER", "AWS", "LABEL_V2", etc.),
 
-An operator such as "IN", "EQUALS", or "LIKE",
+	An operator such as "IN", "EQUALS", or "LIKE",
 
-A list of values used in the condition.
+	A list of values used in the condition.
 
-Use this field to define precise inclusion/exclusion logic for data shown in the Perspective.
-`
+	Use this field to define precise inclusion/exclusion logic for data shown in the Perspective.
+	`
 
 	return mcp.WithArray(
 		"view_rules",
@@ -721,6 +811,84 @@ func getOperatorsDescription() string {
 }
 func GetOperatorsDescription() string {
 	return ccmcommons.OperatorsDescription
+}
+
+func createPerspectiveVisualization() mcp.ToolOption {
+	var fieldDescription = `
+	Defines how the Perspective data is visualized. This includes the granularity of data points, the grouping field, and the chart type.
+
+	- granularity: The time interval for data aggregation (e.g., DAY).
+	- groupBy: The field used to group data in the visualization, including fieldId, fieldName, identifier, and identifierName.
+	- chartType: The type of chart to display (e.g., STACKED_TIME_SERIES).
+	`
+	return mcp.WithObject(
+		"view_visualization",
+		mcp.Description(fieldDescription),
+		mcp.Properties(map[string]any{
+			"granularity": map[string]any{
+				"type":        "string",
+				"description": "The time interval for data aggregation (e.g., DAY).",
+				"enum":        []string{dto.GranularityDay, dto.GranularityWeek, dto.GranularityMonth},
+			},
+			"group_by": map[string]any{
+				"type":        "object",
+				"description": "The field used to group data in the visualization.",
+				"properties": map[string]any{
+					"field_id":        map[string]any{"type": "string"},
+					"field_name":      map[string]any{"type": "string"},
+					"identifier":      map[string]any{"type": "string"},
+					"identifier_name": map[string]any{"type": "string"},
+				},
+				"required": []string{"field_id", "field_name", "identifier"},
+			},
+			"chart_type": map[string]any{
+				"type":        "string",
+				"description": "The type of chart to display.",
+				"default":     dto.GraphTypeStackedTimeSeries,
+				"enum":        []string{dto.GraphTypeStackedTimeSeries, dto.GraphTypeStackedLineChart},
+			},
+		}),
+	)
+}
+
+func DeleteCcmPerspectiveTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	description := `
+	<DELETE_TOOL> Permanently deletes a Perspective in Harness Cloud Cost Management (destructive action). 
+	This cannot be undone. Before calling, show the Perspective identifier (and name if available), warn that deletion is irreversible, and proceed ONLY if the user replies "yes".
+	`
+	return mcp.NewTool("delete_ccm_perspective",
+			mcp.WithDescription(description),
+			mcp.WithString("perspective_id",
+				mcp.Description("Identifier of the perspective to delete"),
+			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    utils.ToBoolPtr(false),
+				DestructiveHint: utils.ToBoolPtr(true),
+			}),
+			WithScope(config, false),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			accountId, err := getAccountID(config, request)
+
+			perspectiveId, err := OptionalParam[string](request, "perspective_id")
+
+			scope, err := FetchScope(config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.DeletePerspective(ctx, scope, accountId, perspectiveId)
+			if err != nil {
+				return mcp.NewToolResultError("failed to delete a CCM Perspective:" + err.Error()), nil
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return mcp.NewToolResultError("Failed to marshal a CCM delete response:" + err.Error()), nil
+			}
+			return mcp.NewToolResultText(string(r)), nil
+
+		}
 }
 
 // GetCcmPerspectiveRulesTool creates a tool for validating perspective rules JSON format
