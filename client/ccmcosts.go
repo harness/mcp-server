@@ -12,14 +12,13 @@ import (
 
 const (
 	ccmBasePath                                = "ccm/api"
-	ccmCommitmentBasePath                      = "/lw/co/api"
 	ccmGetOverviewPath                         = ccmBasePath + "/overview?accountIdentifier=%s&startTime=%d&endTime=%d&groupBy=%s"
 	ccmCostCategoryListPath                    = ccmBasePath + "/business-mapping/filter-panel?accountIdentifier=%s"
 	ccmCostCategoryDetailListPath              = ccmBasePath + "/business-mapping?accountIdentifier=%s"    // This endpoint lists cost categories
 	ccmGetCostCategoryPath                     = ccmBasePath + "/business-mapping/%s?accountIdentifier=%s" // This endpoint lists cost categories
-	ccmCommitmentCoverageDetailsPath           = ccmCommitmentBasePath + "/accounts/%s/v1/detail/compute_coverage?accountIdentifier=%s"
-	ccmCommitmentSavingsDetailsPath            = ccmCommitmentBasePath + "/accounts/%s/v1/detail/savings?accountIdentifier=%s"
-	ccmCommitmentUtilisationDetailsPath        = ccmCommitmentBasePath + "/accounts/%s/v1/detail/commitment_utilisation?accountIdentifier=%s"
+	ccmCommitmentCoverageDetailsPath           = "/accounts/%s/v1/detail/compute_coverage?accountIdentifier=%s"
+	ccmCommitmentSavingsDetailsPath            = "/accounts/%s/v1/detail/savings?accountIdentifier=%s"
+	ccmCommitmentUtilisationDetailsPath        = "/accounts/%s/v1/detail/commitment_utilisation?accountIdentifier=%s"
 	ccmCommitmentComputeService         string = "Amazon Elastic Compute Cloud - Compute"
 )
 
@@ -154,13 +153,13 @@ func (r *CloudCostManagementService) GetComputeCoverage(ctx context.Context, sco
 		params["start_date"] = *opts.StartDate
 	} else {
 		// Default to last 30 days
-		params["start_date"] = utils.FormatUnixToMMDDYYYY(time.Now().AddDate(0, 0, -30).Unix())
+		params["start_date"] = utils.FormatUnixToYYYYMMDD(time.Now().AddDate(0, 0, -30).Unix())
 	}
 	if opts.EndDate != nil && *opts.EndDate != "" {
 		params["end_date"] = *opts.EndDate
 	} else {
 		// Default to last 30 days
-		params["end_date"] = utils.CurrentMMDDYYYY()
+		params["end_date"] = utils.FormatUnixToYYYYMMDD(time.Now().Unix())
 	}
 
 	var requestPayload = dto.CCMCommitmentAPIFilter{
@@ -183,7 +182,7 @@ func (r *CloudCostManagementService) GetComputeCoverage(ctx context.Context, sco
 	// Temporary slice to hold the strings
 	coverageRespone := new(dto.CCMCommitmentBaseResponse)
 
-	err := r.Client.Post(ctx, path, params, requestPayload, coverageRespone)
+	err := r.Client.Post(ctx, path, params, requestPayload, map[string]string{}, coverageRespone)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cloud cost managment compute coverage with path %s: %w", path, err)
 	}
@@ -205,13 +204,13 @@ func (r *CloudCostManagementService) GetCommitmentSavings(ctx context.Context, s
 		params["start_date"] = *opts.StartDate
 	} else {
 		// Default to last 30 days
-		params["start_date"] = utils.FormatUnixToMMDDYYYY(time.Now().AddDate(0, 0, -30).Unix())
+		params["start_date"] = utils.FormatUnixToYYYYMMDD(time.Now().AddDate(0, 0, -30).Unix())
 	}
 	if opts.EndDate != nil && *opts.EndDate != "" {
 		params["end_date"] = *opts.EndDate
 	} else {
 		// Default to last 30 days
-		params["end_date"] = utils.CurrentMMDDYYYY()
+		params["end_date"] = utils.FormatUnixToYYYYMMDD(time.Now().Unix())
 	}
 
 	var requestPayload = dto.CCMCommitmentAPIFilter{
@@ -234,7 +233,7 @@ func (r *CloudCostManagementService) GetCommitmentSavings(ctx context.Context, s
 
 	savingsResponse := new(dto.CCMCommitmentBaseResponse)
 
-	err := r.Client.Post(ctx, path, params, requestPayload, savingsResponse)
+	err := r.Client.Post(ctx, path, params, requestPayload, map[string]string{}, savingsResponse)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cloud cost management compute savings with path %s: %w", path, err)
 	}
@@ -256,13 +255,13 @@ func (r *CloudCostManagementService) GetCommitmentUtilisation(ctx context.Contex
 		params["start_date"] = *opts.StartDate
 	} else {
 		// Default to last 30 days
-		params["start_date"] = utils.FormatUnixToMMDDYYYY(time.Now().AddDate(0, 0, -30).Unix())
+		params["start_date"] = utils.FormatUnixToYYYYMMDD(time.Now().AddDate(0, 0, -30).Unix())
 	}
 	if opts.EndDate != nil && *opts.EndDate != "" {
 		params["end_date"] = *opts.EndDate
 	} else {
 		// Default to last 30 days
-		params["end_date"] = utils.CurrentMMDDYYYY()
+		params["end_date"] = utils.FormatUnixToYYYYMMDD(time.Now().Unix())
 	}
 
 	var requestPayload = dto.CCMCommitmentAPIFilter{
@@ -281,7 +280,7 @@ func (r *CloudCostManagementService) GetCommitmentUtilisation(ctx context.Contex
 	// Temporary slice to hold the strings
 	utilisationResponse := new(dto.CCMCommitmentBaseResponse)
 
-	err := r.Client.Post(ctx, path, params, requestPayload, utilisationResponse)
+	err := r.Client.Post(ctx, path, params, requestPayload, map[string]string{}, utilisationResponse)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cloud cost managment compute utilisation with path %s: %w", path, err)
 	}

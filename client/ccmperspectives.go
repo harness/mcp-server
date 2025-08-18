@@ -4,15 +4,18 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/pkg/utils"
 )
+
 const (
-	ccmPerspetiveDetailListPath = ccmBasePath + "/perspective/getAllPerspectives?accountIdentifier=%s"
-	ccmGetPerspectivePath = ccmBasePath + "/perspective"
-	ccmGetLastPeriodCostPerspectivePath = ccmBasePath + "/perspective/lastPeriodCost"
+	ccmPerspetiveDetailListPath              = ccmBasePath + "/perspective/getAllPerspectives?accountIdentifier=%s"
+	ccmGetPerspectivePath                    = ccmBasePath + "/perspective"
+	ccmGetLastPeriodCostPerspectivePath      = ccmBasePath + "/perspective/lastPeriodCost"
 	ccmGetLastTwelveMonthCostPerspectivePath = ccmBasePath + "/perspective/lastYearMonthlyCost"
-	ccmCreatePerspectivePath = ccmBasePath + "/perspective"
+	ccmCreatePerspectivePath                 = ccmBasePath + "/perspective"
+	ccmDeletePerspectivePath                 = ccmCreatePerspectivePath
 )
 
 func (r *CloudCostManagementService) ListPerspectivesDetail(ctx context.Context, scope dto.Scope, opts *dto.CCMListPerspectivesDetailOptions) (*dto.CCMPerspectivesDetailList, error) {
@@ -108,9 +111,9 @@ func (r *CloudCostManagementService) GetLastTwelveMonthsCostPerspective(ctx cont
 	params["accountIdentifier"] = opts.AccountIdentifier
 	params["perspectiveId"] = opts.PerspectiveId
 	params["startTime"] = fmt.Sprintf("%d", opts.StartTime)
-	params["period"] = dto.PeriodYearly 
-	params["type"] = "PREVIOUS_PERIOD_SPEND" 
-	params["breakdown"] = "MONTHLY" 
+	params["period"] = dto.PeriodYearly
+	params["type"] = "PREVIOUS_PERIOD_SPEND"
+	params["breakdown"] = "MONTHLY"
 
 	items := new(dto.CCMLastTwelveMonthsCostPerspective)
 	err := r.Client.Get(ctx, path, params, nil, &items)
@@ -121,7 +124,7 @@ func (r *CloudCostManagementService) GetLastTwelveMonthsCostPerspective(ctx cont
 	return items, nil
 }
 
-func (r *CloudCostManagementService) CreatePerspective(ctx context.Context, scope dto.Scope, opts *dto.CCMCreatePerspectiveOptions) (*dto.CCMCreatePerspectiveResponse, error) {
+func (r *CloudCostManagementService) CreateOrUpdatePerspective(ctx context.Context, scope dto.Scope, opts *dto.CCMCreatePerspectiveOptions, update bool) (*dto.CCMCreatePerspectiveResponse, error) {
 	path := ccmCreatePerspectivePath
 	params := make(map[string]string)
 	if opts == nil {
@@ -134,43 +137,54 @@ func (r *CloudCostManagementService) CreatePerspective(ctx context.Context, scop
 	params["updateTotalCost"] = utils.BoolToString(opts.UpdateTotalCost)
 
 	// Body payload
-	body := map[string]interface{}{
-		"name": opts.Body.Name,
+	body := map[string]any{
+		"name":        opts.Body.Name,
 		"viewVersion": opts.Body.ViewVersion,
-		"viewTimeRange": map[string]interface{}{
+		"viewTimeRange": map[string]any{
 			"viewTimeRangeType": opts.Body.ViewTimeRange.ViewTimeRangeType,
-			"startTime": opts.Body.ViewTimeRange.StartTime,
-			"endTime": opts.Body.ViewTimeRange.EndTime,
-		},	
-		"viewType": opts.Body.ViewType,
+			"startTime":         opts.Body.ViewTimeRange.StartTime,
+			"endTime":           opts.Body.ViewTimeRange.EndTime,
+		},
+		"viewType":  opts.Body.ViewType,
 		"viewState": opts.Body.ViewState,
-		"viewRules": opts.Body.ViewRules,
 	}
 
-	awsPreferences := map[string]interface{}{
+	if len(opts.Body.ViewRules) > 0 {
+		body["viewRules"] = opts.Body.ViewRules
+	}
+
+	if opts.Body.ViewVisualization != (dto.CCMViewVisualization{}) {
+		body["viewVisualization"] = opts.Body.ViewVisualization
+	}
+
+	if update {
+		body["uuid"] = opts.Body.UUID
+	}
+
+	awsPreferences := map[string]any{
 		"includeDiscounts": opts.Body.ViewPreferences.AwsPreferences.IncludeDiscounts,
-		"includeCredits": opts.Body.ViewPreferences.AwsPreferences.IncludeCredits,
-		"includeRefunds": opts.Body.ViewPreferences.AwsPreferences.IncludeRefunds,
-		"includeTaxes": opts.Body.ViewPreferences.AwsPreferences.IncludeTaxes,
+		"includeCredits":   opts.Body.ViewPreferences.AwsPreferences.IncludeCredits,
+		"includeRefunds":   opts.Body.ViewPreferences.AwsPreferences.IncludeRefunds,
+		"includeTaxes":     opts.Body.ViewPreferences.AwsPreferences.IncludeTaxes,
 	}
 
 	if opts.Body.ViewPreferences.AwsPreferences.AwsCost != "" {
 		awsPreferences["awsCost"] = opts.Body.ViewPreferences.AwsPreferences.AwsCost
 	}
 
-	viewPreferences := map[string]interface{}{
-		"showAnomalies":        opts.Body.ViewPreferences.ShowAnomalies,
-		"includeOthers":        opts.Body.ViewPreferences.IncludeOthers,
+	viewPreferences := map[string]any{
+		"showAnomalies":          opts.Body.ViewPreferences.ShowAnomalies,
+		"includeOthers":          opts.Body.ViewPreferences.IncludeOthers,
 		"includeUnallocatedCost": opts.Body.ViewPreferences.IncludeUnallocatedCost,
-		"awsPreferences": awsPreferences,	
-		"gcpPreferences": map[string]interface{}{
+		"awsPreferences":         awsPreferences,
+		"gcpPreferences": map[string]any{
 			"includeDiscounts": opts.Body.ViewPreferences.GcpPreferences.IncludeDiscounts,
-			"includeTaxes": opts.Body.ViewPreferences.GcpPreferences.IncludeTaxes,
+			"includeTaxes":     opts.Body.ViewPreferences.GcpPreferences.IncludeTaxes,
 		},
 	}
 
 	if opts.Body.ViewPreferences.AzureViewPreferences.CostType != "" {
-		azureViewPreferences := map[string]interface{}{
+		azureViewPreferences := map[string]any{
 			"costType": opts.Body.ViewPreferences.AzureViewPreferences.CostType,
 		}
 		viewPreferences["azureViewPreferences"] = azureViewPreferences
@@ -184,14 +198,40 @@ func (r *CloudCostManagementService) CreatePerspective(ctx context.Context, scop
 
 	if opts.Body.FolderId != "" {
 		body["folderId"] = opts.Body.FolderId
-	}	
+	}
 
-	slog.Debug("Create Perspective", "Body", body)
 	item := new(dto.CCMCreatePerspectiveResponse)
-	err := r.Client.Post(ctx, path, params, body, &item)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create cloud cost management perspective: %w", err)
+	if !update {
+		slog.Debug("Creating perspective", "body", body)
+		err := r.Client.Post(ctx, path, params, body, map[string]string{}, &item)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to create cloud cost management perspective: %w", err)
+		}
+	} else {
+		slog.Debug("Updating perspective", "body", body)
+		err := r.Client.Put(ctx, path, params, body, &item)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to update cloud cost management perspective: %w", err)
+		}
 	}
 
 	return item, nil
+}
+
+func (r *CloudCostManagementService) DeletePerspective(ctx context.Context, scope dto.Scope, accountId string, perspectiveId string) (*dto.CCMBaseResponse, error) {
+	path := ccmDeletePerspectivePath
+	params := make(map[string]string)
+	addScope(scope, params)
+
+	params["accountId"] = accountId
+	params["perspectiveId"] = perspectiveId
+
+	response := new(dto.CCMBaseResponse)
+
+	err := r.Client.Delete(ctx, path, params, nil, &response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete a cloud cost management perspective: %w", err)
+	}
+
+	return response, nil
 }

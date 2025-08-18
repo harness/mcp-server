@@ -141,7 +141,7 @@ func (e *EnvironmentClient) MoveConfigs(ctx context.Context, scope dto.Scope, re
 	params["moveConfigType"] = string(request.MoveConfigType)
 
 	response := &dto.MoveEnvironmentConfigsResponse{}
-	err := e.Client.Post(ctx, path, params, nil, response)
+	err := e.Client.Post(ctx, path, params, nil, map[string]string{}, response)
 	if err != nil {
 		return false, fmt.Errorf("failed to move environment configurations: %w", err)
 	}

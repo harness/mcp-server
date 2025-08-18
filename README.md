@@ -140,6 +140,8 @@ Toolset Name: `ccm`
 - `get_last_period_cost_ccm_perspective`:  Retrieves the cost for a specified period and perspective within a given account.
 - `get_last_twelve_months_cost_ccm_perspective`:  Retrieves a monthly cost breakdown for the past 12 months for a perspective within a specified account.
 - `create_ccm_perspective`: Creates a perspective for a specified account. 
+- `update_ccm_perspective`: Updates a perspective for a specified account. 
+- `delete_ccm_perspective`: Deletes a perspective for a specified account. 
 - `ccm_perspective_grid`: Query detailed cost perspective data in Harness Cloud Cost Management.
 - `ccm_perspective_time_series`: Query detailed cost perspective data, grouped by time in Harness Cloud Cost Management.
 - `ccm_perspective_summary_with_budget`: Query a summary of cost perspectives with budget information in Harness Cloud Cost Management, including detailed cost and budget data grouped by time.
@@ -150,9 +152,13 @@ Toolset Name: `ccm`
 - `list_ccm_recommendations`: Returns a filterable list of cost-optimization recommendations in Harness Cloud Cost Management.
 - `list_ccm_recommendations_by_resource_type`: Returns a aggregated statistics of cloud cost optimization recommendations grouped by resource type within a given account in Harness Cloud Cost Management.
 - `get_ccm_recommendations_stats`: Returns overall statistics for cloud cost optimization recommendations within a given account in Harness Cloud Cost Management.
+- `update_ccm_recommendation_state`: Marks a recommendation as Applied/Open/Ignored in Harness Cloud Cost Management
+- `override_ccm_recommendation_savings`: Overrides savings for a recommendation in Harness Cloud Cost Management
 - `get_ccm_commitment_coverage`: Get commitment coverage information for an account in Harness Cloud Cost Management
 - `get_ccm_commitment_savings`: Get commitment savings information for an account in Harness Cloud Cost Management
 - `get_ccm_commitment_utilisation`: Get commitment utilisation information for an account in Harness Cloud Cost Management broken down by Reserved Instances and Savings Plans in day wise granularity.
+- `get_ccm_estimated_savings`: Get estimated savings information for a cloud account in Harness Cloud Cost Management
+- `get_ccm_commitment_ec2_analysis`: Get AWS EC2 commitment analysis for an account in Harness Cloud Cost Management, including RI/SP commitment spend, utilization breakdown, current savings, estimated annualized savings, and ESR.
 
 #### Database Operations Toolset
 
@@ -186,7 +192,9 @@ Toolset Name: `scs`
 Toolset Name: `sto`
 
 - `frontend_all_issues_list`: List and filter security issues in Harness STO by target, pipeline, tool, severity, exemption status, and type.
-
+- `global_exemptions`: List all global exemptions in Harness STO.
+- `promote_exemption`: Promote a specific exemption to a global exemption.
+- `approve_exemption`: Approve a specific exemption.
 
 #### Logs Toolset
 

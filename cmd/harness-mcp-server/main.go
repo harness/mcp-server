@@ -162,6 +162,8 @@ var (
 				ArtifactRegistrySecret:  viper.GetString("artifact_registry_secret"),
 				NextgenCEBaseURL:        viper.GetString("nextgen_ce_base_url"),
 				NextgenCESecret:         viper.GetString("nextgen_ce_secret"),
+				CCMCommOrchBaseURL:      viper.GetString("ccm_comm_orch_base_url"),
+				CCMCommOrchSecret:       viper.GetString("ccm_comm_orch_secret"),
 				IDPSvcBaseURL:           viper.GetString("idp_svc_base_url"),
 				IDPSvcSecret:            viper.GetString("idp_svc_secret"),
 				McpSvcSecret:            viper.GetString("mcp_svc_secret"),
