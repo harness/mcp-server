@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"log/slog"
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
@@ -50,6 +49,16 @@ func ListCcmAnomaliesTool(config *config.Config, client *client.CloudCostManagem
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			return anomaliesListDTOHandler(config, ctx, request, client.ListAnomalies)
+		}
+}
+
+func GetCcmAnomaliesForPerspectiveTool(config *config.Config, client *client.CloudCostManagementService,
+) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewToolWithRawSchema("get_ccm_anomalies_for_perspective", ccmcommons.GetAnomaliesForPerspectiveDescription,
+			anomaliesForPerspectiveDefinition(),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return anomaliesForPerspectiveHandler(config, ctx, request, client)
 		}
 }
 
@@ -262,6 +271,54 @@ func anomaliesListDTOHandler(
 	return mcp.NewToolResultText(string(r)), nil
 }
 
+func anomaliesForPerspectiveHandler(
+	config *config.Config,
+	ctx context.Context,
+	request mcp.CallToolRequest,
+	client *client.CloudCostManagementService,
+) (*mcp.CallToolResult, error) {
+
+	accountId, err := getAccountID(config, request)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	perspectiveId, err := OptionalParam[string](request, "perspectiveId")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if perspectiveId == "" {
+		return mcp.NewToolResultError("missing required parameter: perspectiveId"), nil
+	}
+
+	filters, err := OptionalAnyArrayParam(request, "filters")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	groupBy, err := OptionalAnyArrayParam(request, "groupBy")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	options := map[string]any{
+		"filters": filters,
+		"groupBy": groupBy,
+	}
+
+	data, err := client.GetAnomaliesForPerspective(ctx, accountId, perspectiveId, options)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	r, err := json.Marshal(data)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultText(string(r)), nil
+}
+
 func anomaliesSummaryDefinition() json.RawMessage {
 	return generalListRawMessage(generalListMap())
 }
@@ -279,110 +336,151 @@ func anomaliesListDefinition() json.RawMessage {
 	)
 }
 
-func perspectiveQueryDTOMap() map[string]any {
-	slog.Debug("Creating perspective query DTO map")
+func anomaliesForPerspectiveDefinition() json.RawMessage {
+
+	return generalListRawMessage(
+		map[string]any{
+			"perspectiveId": map[string]any{
+				"type":        "string",
+				"description": "The ID of the perspective to filter anomalies by.",
+			},
+			"filters": buildPerspectiveFilters(),
+			"groupBy": buildPersectiveGroupBy(),
+		},
+	)
+}
+
+func buildIdFilter() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"filters": map[string]any{
+			"fieldId":   map[string]any{"type": "string"},
+			"fieldName": map[string]any{"type": "string"},
+			"fieldIdentifier": map[string]any{
+				"type": "string",
+				"enum": getFieldIdentifiers(),
+			},
+			"identifierName": map[string]any{"type": "string"},
+		},
+		"operator": map[string]any{
+			"type": "string",
+			"enum": getAnomFilterOperators(),
+		},
+		"values": map[string]any{
+			"type":  "array",
+			"items": map[string]any{"type": "string"},
+		},
+	}
+}
+
+func buildTimeFilter() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"field":    map[string]any{"type": "object", "properties": map[string]any{}},
+			"operator": map[string]any{"type": "string"},
+			"value":    map[string]any{"type": "number"},
+		},
+		"required": []string{"field", "operator", "value"},
+	}
+}
+
+func buildTimeRangeFilter() map[string]any {
+	return map[string]any{
+		"type":    "string",
+		"enum":    getTimeRanges(),
+		"default": dto.TimeRangeLastMonth,
+	}
+}
+
+func buildMetadataFilter() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"viewId":    map[string]any{"type": "string"},
+			"isPreview": map[string]any{"type": "boolean"},
+			"preview":   map[string]any{"type": "boolean"},
+		},
+	}
+}
+
+func buildRuleFilter() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"conditions": map[string]any{
 				"type": "array",
 				"items": map[string]any{
 					"type": "object",
 					"properties": map[string]any{
-						"idFilter": map[string]any{
-							"type": "object",
-							"properties": map[string]any{
-								"fieldId":   map[string]any{"type": "string"},
-								"fieldName": map[string]any{"type": "string"},
-								"fieldIdentifier": map[string]any{
-									"type": "string",
-									"enum": getFieldIdentifiers(),
-								},
-								"identifierName": map[string]any{"type": "string"},
-							},
-							"operator": map[string]any{
-								"type": "string",
-								"enum": getAnomFilterOperators(),
-							},
-							"values": map[string]any{
-								"type":  "array",
-								"items": map[string]any{"type": "string"},
-							},
+						"fieldId":   map[string]any{"type": "string"},
+						"fieldName": map[string]any{"type": "string"},
+						"fieldIdentifier": map[string]any{
+							"type": "string",
+							"enum": getFieldIdentifiers(),
 						},
-						"timeFilter": map[string]any{
-							"type": "object",
-							"properties": map[string]any{
-								"field":    map[string]any{"type": "object", "properties": map[string]any{}},
-								"operator": map[string]any{"type": "string"},
-								"value":    map[string]any{"type": "number"},
-							},
-							"required": []string{"field", "operator", "value"},
-						},
-						"timeRangeTypeFilter": map[string]any{
-							"type":    "string",
-							"enum":    getTimeRanges(),
-							"default": dto.TimeRangeLastMonth,
-						},
-						"viewMetadataFilter": map[string]any{
-							"type": "object",
-							"properties": map[string]any{
-								"viewId":    map[string]any{"type": "string"},
-								"isPreview": map[string]any{"type": "boolean"},
-								"preview":   map[string]any{"type": "boolean"},
-							},
-						},
-						"ruleFilter": map[string]any{
-							"type": "object",
-							"properties": map[string]any{
-								"conditions": map[string]any{
-									"type": "array",
-									"items": map[string]any{
-										"type": "object",
-										"properties": map[string]any{
-											"fieldId":   map[string]any{"type": "string"},
-											"fieldName": map[string]any{"type": "string"},
-											"fieldIdentifier": map[string]any{
-												"type": "string",
-												"enum": getFieldIdentifiers(),
-											},
-											"identifierName": map[string]any{"type": "string"},
-										},
-									},
-								},
-							},
-						},
+						"identifierName": map[string]any{"type": "string"},
 					},
 				},
 			},
-			"groupBy": map[string]any{
-				"type": "array",
-				"items": map[string]any{
+		},
+	}
+}
+
+func buildPerspectiveFilters() map[string]any {
+	return map[string]any{
+		"type": "array",
+		"items": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"idFilter":            buildIdFilter(),
+				"timeFilter":          buildTimeFilter(),
+				"timeRangeTypeFilter": buildTimeRangeFilter(),
+				"viewMetadataFilter":  buildMetadataFilter(),
+				"ruleFilter":          buildRuleFilter(),
+			},
+		},
+	}
+}
+
+func buildPersectiveGroupBy() map[string]any {
+	return map[string]any{
+		"type": "array",
+		"items": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"entityGroupBy": map[string]any{
 					"type": "object",
 					"properties": map[string]any{
-						"entityGroupBy": map[string]any{
-							"type": "object",
-							"properties": map[string]any{
-								"fieldId":   map[string]any{"type": "string"},
-								"fieldName": map[string]any{"type": "string"},
-								"fieldIdentifier": map[string]any{
-									"type": "string",
-									"enum": getFieldIdentifiers(),
-								},
-								"identifierName": map[string]any{"type": "string"},
-							},
+						"fieldId":   map[string]any{"type": "string"},
+						"fieldName": map[string]any{"type": "string"},
+						"fieldIdentifier": map[string]any{
+							"type": "string",
+							"enum": getFieldIdentifiers(),
 						},
-						"timeTruncGroupBy": map[string]any{
-							"type": "object",
-							"properties": map[string]any{
-								"resolution": map[string]any{
-									"type": "string",
-									"enum": getAnomTimeGroupBy(),
-								},
-							},
+						"identifierName": map[string]any{"type": "string"},
+					},
+				},
+				"timeTruncGroupBy": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"resolution": map[string]any{
+							"type": "string",
+							"enum": getAnomTimeGroupBy(),
 						},
 					},
 				},
 			},
+		},
+	}
+}
+
+func perspectiveQueryDTOMap() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"filters": buildPerspectiveFilters(),
+			"groupBy": buildPersectiveGroupBy(),
 		},
 	}
 }

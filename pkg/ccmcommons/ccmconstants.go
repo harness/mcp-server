@@ -249,3 +249,7 @@ Fetch the result of anomaly query in Harness Cloud Cost Management.
 var ListIgnoredAnomaliesDescription = `
 Fetch the list of anomalies present in the ignore list according to the filters applied in Harness Cloud Cost Management.
 `
+
+var GetAnomaliesForPerspectiveDescription = `
+Fetch anomalies for perspective
+`

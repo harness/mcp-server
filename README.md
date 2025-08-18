@@ -166,6 +166,7 @@ Toolset Name: `ccm`
 - `get_ccm_anomalies_summary`: Returns a summary of cost anomalies for a specified account in Harness Cloud Cost Management.
 - `list_ccm_anomalies`: Returns a list of cost anomalies for a specified account in Harness Cloud Cost Management.
 - `list_ccm_ignored_anomalies`: Returns a list of ignored cost anomalies for a specified account in Harness Cloud Cost Management.
+- `get_ccm_anomalies_for_perspective`: Returns a anomalies for a perspective and account in Harness Cloud Cost Management.
 - `get_ccm_commitment_coverage`: Get commitment coverage information for an account in Harness Cloud Cost Management.
 - `get_ccm_commitment_savings`: Get commitment savings information for an account in Harness Cloud Cost Management.
 - `get_ccm_commitment_utilisation`: Get commitment utilisation information for an account in Harness Cloud Cost Management broken down by Reserved Instances and Savings Plans in day wise granularity.
