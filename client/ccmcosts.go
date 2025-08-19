@@ -12,14 +12,13 @@ import (
 
 const (
 	ccmBasePath                                = "ccm/api"
-	ccmCommitmentBasePath                      = "/lw/co/api"
 	ccmGetOverviewPath                         = ccmBasePath + "/overview?accountIdentifier=%s&startTime=%d&endTime=%d&groupBy=%s"
 	ccmCostCategoryListPath                    = ccmBasePath + "/business-mapping/filter-panel?accountIdentifier=%s"
 	ccmCostCategoryDetailListPath              = ccmBasePath + "/business-mapping?accountIdentifier=%s"    // This endpoint lists cost categories
 	ccmGetCostCategoryPath                     = ccmBasePath + "/business-mapping/%s?accountIdentifier=%s" // This endpoint lists cost categories
-	ccmCommitmentCoverageDetailsPath           = ccmCommitmentBasePath + "/accounts/%s/v1/detail/compute_coverage?accountIdentifier=%s"
-	ccmCommitmentSavingsDetailsPath            = ccmCommitmentBasePath + "/accounts/%s/v1/detail/savings?accountIdentifier=%s"
-	ccmCommitmentUtilisationDetailsPath        = ccmCommitmentBasePath + "/accounts/%s/v1/detail/commitment_utilisation?accountIdentifier=%s"
+	ccmCommitmentCoverageDetailsPath           = "/accounts/%s/v1/detail/compute_coverage?accountIdentifier=%s"
+	ccmCommitmentSavingsDetailsPath            = "/accounts/%s/v1/detail/savings?accountIdentifier=%s"
+	ccmCommitmentUtilisationDetailsPath        = "/accounts/%s/v1/detail/commitment_utilisation?accountIdentifier=%s"
 	ccmCommitmentComputeService         string = "Amazon Elastic Compute Cloud - Compute"
 )
 

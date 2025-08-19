@@ -77,7 +77,7 @@ func RegisterCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGro
 		Client: c,
 	}
 
-	commOrchBaseURL := utils.BuildServiceURL(config, config.CCMCommOrchBaseURL, config.BaseURL, "")
+	commOrchBaseURL := utils.BuildServiceURL(config, config.CCMCommOrchBaseURL, config.BaseURL, "lw/co/api")
 	commOrchSecret := config.CCMCommOrchSecret
 
 	// Create base client for CCM

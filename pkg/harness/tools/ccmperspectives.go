@@ -22,7 +22,8 @@ import (
 const (
 	CCMPerspectiveRulesToolID       = "validate_ccm_perspective_rules"
 	CCMPerspectiveRuleEventType     = "perspective_rules_updated"
-	FollowUpCreatePerspectivePrompt = "Update CCM perspective with these rules"
+	FollowUpCreatePerspectivePrompt = "Proceed to save perspective"
+	CCMPerspectivetCreateOrUpdateRuleEventType = "perspective_created_or_updated_event"
 )
 
 func ListCcmPerspectivesDetailTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
@@ -686,7 +687,23 @@ func createOrUpdatePerspectiveHandler(
 		return nil, fmt.Errorf("failed to marshal CCM Perspective: %w", err)
 	}
 
-	return mcp.NewToolResultText(string(r)), nil
+	responseContents := []mcp.Content{}
+
+	viewRulesEvent := event.NewCustomEvent(CCMPerspectivetCreateOrUpdateRuleEventType, map[string]any{
+		"response": string(r),
+	})
+
+	// Create embedded resources for the OPA event
+	eventResource, err := viewRulesEvent.CreateEmbeddedResource()
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	} else {
+		responseContents = append(responseContents, eventResource)
+	}
+
+	return &mcp.CallToolResult{
+		Content: responseContents,
+	}, nil
 }
 
 func getSupportedDataSources() string {

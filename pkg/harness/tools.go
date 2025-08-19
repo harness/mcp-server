@@ -271,6 +271,9 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 			if err := modules.RegisterInfrastructure(config, tsg); err != nil {
 				return err
 			}
+			if err := modules.RegisterACM(config, tsg); err != nil {
+				return err
+			}
 			if err := modules.RegisterSoftwareEngineeringInsights(config, tsg); err != nil {
 				return err
 			}
@@ -370,6 +373,10 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 					if err := modules.RegisterInfrastructure(config, tsg); err != nil {
 						return err
 					}
+				case "acm":
+					if err := modules.RegisterACM(config, tsg); err != nil {
+						return err
+					}
 				case "sei":
 					if err := modules.RegisterSoftwareEngineeringInsights(config, tsg); err != nil {
 						return err
@@ -431,4 +438,3 @@ func RegisterDefault(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	tsg.AddToolset(defaultToolset)
 	return nil
 }
-
