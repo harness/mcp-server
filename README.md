@@ -76,14 +76,14 @@ Toolset Name: `pullrequests`
 
 #### Services Toolset
 
-Toolset Name: `service` 
+Toolset Name: `services` 
 
 - `get_service`: Get details of a specific service
 - `list_services`: List services
 
 #### Environments Toolset
 
-Toolset Name: `environment` 
+Toolset Name: `environments` 
 
 - `get_environment`: Get details of a specific environment
 - `list_environments`: List environments
