@@ -1,0 +1,102 @@
+# Rust Makefile for Harness MCP Server
+
+.PHONY: build test clean format lint check install run help
+
+# Default target
+all: build
+
+# Build the project
+build:
+	@echo "Building harness-mcp-server..."
+	cargo build --release
+
+# Build for development
+build-dev:
+	@echo "Building harness-mcp-server (debug)..."
+	cargo build
+
+# Run tests
+test:
+	@echo "Running tests..."
+	cargo test
+
+# Run tests with coverage
+test-coverage:
+	@echo "Running tests with coverage..."
+	cargo tarpaulin --out Html
+
+# Clean build artifacts
+clean:
+	@echo "Cleaning build artifacts..."
+	cargo clean
+
+# Format code
+format:
+	@echo "Formatting code..."
+	cargo fmt
+
+# Check formatting
+format-check:
+	@echo "Checking code formatting..."
+	cargo fmt -- --check
+
+# Run linter
+lint:
+	@echo "Running clippy..."
+	cargo clippy -- -D warnings
+
+# Check code without building
+check:
+	@echo "Checking code..."
+	cargo check
+
+# Install dependencies and tools
+install:
+	@echo "Installing dependencies..."
+	rustup component add rustfmt clippy
+	cargo install cargo-tarpaulin
+
+# Run the server in stdio mode (requires environment variables)
+run:
+	@echo "Running harness-mcp-server..."
+	cargo run -- stdio
+
+# Run with example environment
+run-example:
+	@echo "Running harness-mcp-server with example config..."
+	HARNESS_API_KEY=pat.example.token \
+	HARNESS_DEFAULT_ORG_ID=example_org \
+	HARNESS_DEFAULT_PROJECT_ID=example_project \
+	cargo run -- stdio
+
+# Development workflow
+dev: format lint test
+
+# CI workflow
+ci: format-check lint test
+
+# Release build
+release: clean
+	@echo "Building release version..."
+	cargo build --release
+	strip target/release/harness-mcp-server
+
+# Show help
+help:
+	@echo "Available targets:"
+	@echo "  build         - Build the project (release mode)"
+	@echo "  build-dev     - Build the project (debug mode)"
+	@echo "  test          - Run tests"
+	@echo "  test-coverage - Run tests with coverage"
+	@echo "  clean         - Clean build artifacts"
+	@echo "  format        - Format code"
+	@echo "  format-check  - Check code formatting"
+	@echo "  lint          - Run clippy linter"
+	@echo "  check         - Check code without building"
+	@echo "  install       - Install dependencies and tools"
+	@echo "  run           - Run the server"
+	@echo "  run-example   - Run with example environment"
+	@echo "  dev           - Development workflow (format + lint + test)"
+	@echo "  ci            - CI workflow (format-check + lint + test)"
+	@echo "  release       - Build optimized release version"
+	@echo "  help          - Show this help message"
