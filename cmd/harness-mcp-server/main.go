@@ -435,7 +435,7 @@ func runMCPServer(ctx context.Context, config config.Config) error {
 func runHTTPServer(ctx context.Context, harnessServer *server.MCPServer, config config.Config) error {
 	// Create HTTP server
 	httpServer := server.NewStreamableHTTPServer(harnessServer)
-
+	config.LoadEnvConfig()
 	// Start server
 	address := fmt.Sprintf(":%d", config.HTTP.Port)
 	slog.Info("Harness MCP Server running on HTTP", "version", version, "address", address, "path", config.HTTP.Path)
