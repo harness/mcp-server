@@ -34,22 +34,21 @@ const (
 
 func (r *CloudCostManagementService) ListRecommendations(ctx context.Context, scope dto.Scope, accountId string, options map[string]any) (*map[string]any, error) {
 
-	return r.getRecommendations(ctx, scope, accountId, options, ccmRecommendationsListPath)
+	return r.getRecommendations(ctx, accountId, options, ccmRecommendationsListPath)
 }
 
 func (r *CloudCostManagementService) ListRecommendationsByResourceType(ctx context.Context, scope dto.Scope, accountId string, options map[string]any) (*map[string]any, error) {
 
-	return r.getRecommendations(ctx, scope, accountId, options, ccmRecommendationsByResourceTypeListPath)
+	return r.getRecommendations(ctx, accountId, options, ccmRecommendationsByResourceTypeListPath)
 }
 
 func (r *CloudCostManagementService) GetRecommendationsStats(ctx context.Context, scope dto.Scope, accountId string, options map[string]any) (*map[string]any, error) {
 
-	return r.getRecommendations(ctx, scope, accountId, options, ccmRecommendationsStatsPath)
+	return r.getRecommendations(ctx, accountId, options, ccmRecommendationsStatsPath)
 }
 
 func (r *CloudCostManagementService) UpdateRecommendationState(
 	ctx context.Context,
-	scope dto.Scope,
 	accountId string,
 	recommendationId string,
 	state string,
@@ -72,7 +71,6 @@ func (r *CloudCostManagementService) UpdateRecommendationState(
 
 func (r *CloudCostManagementService) OverrideRecommendationSavings(
 	ctx context.Context,
-	scope dto.Scope,
 	accountId string,
 	recommendationId string,
 	savings float64,
@@ -94,7 +92,6 @@ func (r *CloudCostManagementService) OverrideRecommendationSavings(
 
 func (r *CloudCostManagementService) getRecommendations(
 	ctx context.Context,
-	scope dto.Scope,
 	accountId string,
 	options map[string]any,
 	url string,
@@ -102,7 +99,6 @@ func (r *CloudCostManagementService) getRecommendations(
 
 	path := fmt.Sprintf(url, accountId)
 	params := make(map[string]string)
-	addScope(scope, params)
 
 	items := new(map[string]any)
 

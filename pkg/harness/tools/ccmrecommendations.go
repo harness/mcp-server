@@ -18,7 +18,7 @@ const (
 	FilterTypeRecommendation = "CCMRecommendation"
 )
 
-type ClientFunctionRecommendationsInterface func(ctx context.Context, scope dto.Scope, accountId string, params map[string]any) (*map[string]any, error)
+type ClientFunctionRecommendationsInterface func(ctx context.Context, accountId string, params map[string]any) (*map[string]any, error)
 type GetRecommendationDetail func(ctx context.Context, options dto.CCMRecommendationDetailOptions) (*map[string]any, error)
 type CreateTicketForRecommendation func(ctx context.Context, accountId string, ticketDetails dto.CCMTicketDetails) (*map[string]any, error)
 
@@ -93,12 +93,7 @@ func UpdateCcmRecommendationStateTool(config *config.Config, client *client.Clou
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := FetchScope(config, request, false)
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-
-			data, err := client.UpdateRecommendationState(ctx, scope, accountId, recommendationId, state)
+			data, err := client.UpdateRecommendationState(ctx, accountId, recommendationId, state)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -147,12 +142,7 @@ func OverrideCcmRecommendationSavingsTool(config *config.Config, client *client.
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := FetchScope(config, request, false)
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-
-			data, err := client.OverrideRecommendationSavings(ctx, scope, accountId, recommendationId, savings)
+			data, err := client.OverrideRecommendationSavings(ctx, accountId, recommendationId, savings)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -175,11 +165,6 @@ func recommendationsHandler(
 
 	// Account Id for querystring.
 	accountId, err := getAccountID(config, request)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	scope, err := FetchScope(config, request, false)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -287,7 +272,7 @@ func recommendationsHandler(
 		"filterType":                                  filterType,
 	}
 
-	data, err := clientFunction(ctx, scope, accountId, params)
+	data, err := clientFunction(ctx, accountId, params)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -505,12 +490,12 @@ func createRecommendationDetailTool(
 	if toolId == ToolECSService || toolId == ToolWorkload {
 		options = append(options,
 			mcp.WithString("from",
-				mcp.Description("Should use org.joda.time.DateTime parsable format. Example, '2022-01-31', '2022-01-31T07:54Z' or '2022-01-31T07:54:51.264Z' Defaults to Today-7days"),
+				mcp.Description("Should use org.joda.time.DateTime parsable format. Example, '01/31/2022'"),
 			))
 
 		options = append(options,
 			mcp.WithString("to",
-				mcp.Description("Should use org.joda.time.DateTime parsable format. Example, '2022-01-31', '2022-01-31T07:54Z' or '2022-01-31T07:54:51.264Z' Defaults to Today"),
+				mcp.Description("Should use org.joda.time.DateTime parsable format. Example, '01/31/2022'"),
 			))
 	}
 
