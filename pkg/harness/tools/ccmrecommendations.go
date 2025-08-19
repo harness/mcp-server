@@ -401,12 +401,12 @@ func createTicketTool(name string, description string, config *config.Config, cl
 
 				ticketType, err = OptionalParam[string](request, "issue_type")
 				if err != nil {
-					return mcp.NewToolResultError("ticket_type is required"), nil
+					return mcp.NewToolResultError("Error when getting issue_type: " + err.Error()), nil
 				}
 			} else {
 				ticketType, err = OptionalParam[string](request, "ticket_type")
 				if err != nil {
-					return mcp.NewToolResultError(err.Error()), nil
+					return mcp.NewToolResultError("Error when getting ticket_type: " + err.Error()), nil
 				}
 				platform = dto.TicketPlatformServiceNow
 			}
@@ -450,7 +450,7 @@ func GetEc2RecommendationDetailTool(config *config.Config, client *client.CloudC
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return createRecommendationDetailTool(
 		"get_ec2_recommendation_detail",
-		"Returns ECS Recommendation details for the given Recommendation identifier.",
+		"Returns EC2 Recommendation details for the given Recommendation identifier.",
 		config, client.GetEc2RecommendationDetail, ToolEC2)
 }
 
@@ -514,9 +514,9 @@ func createRecommendationDetailTool(
 			))
 	}
 
-	if toolId == ToolECSService || toolId == ToolWorkload {
+	if toolId == ToolECSService {
 		options = append(options,
-			mcp.WithNumber("bufferPercentage",
+			mcp.WithNumber("buffer_percentage",
 				mcp.Description("Buffer Percentage defaults to zero"),
 			))
 	}
@@ -616,7 +616,7 @@ func ListJiraIssueTypesTool(
 	client *client.CloudCostManagementService,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_jira_issue_types",
-			mcp.WithDescription("Get a list of Jira project to create a ticket for a Recommendation in Harness Cloud Cost Management"),
+			mcp.WithDescription("Get a list of Jira projects to create a ticket for a Recommendation in Harness Cloud Cost Management"),
 			mcp.WithString("jira_connector_ref",
 				mcp.Required(),
 				mcp.Description("Jira connector reference to fetch projects from"),

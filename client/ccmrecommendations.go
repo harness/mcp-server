@@ -141,7 +141,7 @@ func (r *CloudCostManagementService) createTicket(
 	url string,
 ) (*map[string]any, error) {
 
-	// Fist check if ticketing tool is available from settings
+	// First check if ticketing tool is available from settings
 	platform, err := r.getTicketingToolSettings(ctx, accountId)
 
 	if err != nil {
