@@ -221,3 +221,4 @@ func TestGetPromptTool(t *testing.T) {
 
 	t.Logf("Successfully retrieved prompt '%s' with mode 'standard'", promptName)
 }
+
