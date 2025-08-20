@@ -139,13 +139,17 @@ func registerPrompts(moduleID string, cfg *config.Config, mcpServer *server.MCPS
     description := ""
     resultDescription := ""
     
-    // Process each mode separately to build the content map
-    for mode, modePrompts := range modulePromptsByMode {
-        if len(modePrompts) == 0 {
+    // Process modes in a deterministic order, with Standard mode taking precedence for descriptions
+    modeOrder := []string{string(p.Standard), string(p.Architect)}
+    
+    for _, mode := range modeOrder {
+        modePrompts, exists := modulePromptsByMode[mode]
+        if !exists || len(modePrompts) == 0 {
             continue // Skip empty modes
         }
         
         // Use the first prompt's metadata for description and result description if not already set
+        // Standard mode takes precedence over Architect mode
         if description == "" && modePrompts[0].Metadata.Description != "" {
             description = modePrompts[0].Metadata.Description
         }
