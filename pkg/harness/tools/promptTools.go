@@ -12,7 +12,7 @@ import (
 )
 
 // ListPromptsTool creates a tool for listing prompts from the MCP server
-func ListPromptsTool(config *config.Config) (mcp.Tool, server.ToolHandlerFunc) {
+func ListPromptsTool(config *config.Config) (tool mcp.Tool, handler server.ToolHandlerFunc) {
     return mcp.NewTool("list_prompts",
             mcp.WithDescription("Lists available prompts from the MCP server"),
             mcp.WithString("prefix",
@@ -124,7 +124,7 @@ func ListPromptsTool(config *config.Config) (mcp.Tool, server.ToolHandlerFunc) {
 }
 
 // GetPromptTool creates a tool for retrieving a single prompt from the MCP server
-func GetPromptTool(config *config.Config) (mcp.Tool, server.ToolHandlerFunc) {
+func GetPromptTool(config *config.Config) (tool mcp.Tool, handler server.ToolHandlerFunc) {
     return mcp.NewTool("get_prompt",
             mcp.WithDescription("Retrieves a specific prompt from the MCP server by name"),
             mcp.WithString("prompt_name",

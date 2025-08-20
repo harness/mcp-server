@@ -274,6 +274,9 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 			if err := modules.RegisterACM(config, tsg); err != nil {
 				return err
 			}
+			if err := modules.RegisterPromptTools(config, tsg); err != nil {
+				return err
+			}
 		} else {
 			// Register specified toolsets
 			for _, toolset := range config.Toolsets {

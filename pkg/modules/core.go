@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	"log/slog"
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
@@ -302,9 +301,9 @@ func RegisterLogs(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 // RegisterGenAI registers the genai toolset
 func RegisterGenAI(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Skip registration for external mode for now
-	// if !config.Internal {
-	// 	return nil
-	// }
+	if !config.Internal {
+		return nil
+	}
 
 	// Get the GenAI client
 	genaiClient, err := GetGenAIClient(config)
@@ -446,7 +445,6 @@ func RegisterChatbot(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 }
 
 func RegisterPromptTools(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-    slog.Info("Starting prompt tools registration")
     // Create the prompt toolset with both tools
     prompt := toolsets.NewToolset("prompt", "Harness MCP Prompts tools").
         AddReadTools(
@@ -456,6 +454,5 @@ func RegisterPromptTools(config *config.Config, tsg *toolsets.ToolsetGroup) erro
 
     // Add toolset to the group
     tsg.AddToolset(prompt)
-	slog.Info("Prompt tools registered")
     return nil
 }
