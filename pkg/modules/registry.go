@@ -139,19 +139,34 @@ func registerPrompts(moduleID string, cfg *config.Config, mcpServer *server.MCPS
     description := ""
     resultDescription := ""
     
+    // First, prioritize standard mode for descriptions to ensure deterministic behavior
+    if len(modulePromptsByMode[string(p.Standard)]) > 0 {
+        standardPrompts := modulePromptsByMode[string(p.Standard)]
+        if standardPrompts[0].Metadata.Description != "" {
+            description = standardPrompts[0].Metadata.Description
+        }
+        if standardPrompts[0].Metadata.ResultDescription != "" {
+            resultDescription = standardPrompts[0].Metadata.ResultDescription
+        }
+    }
+    
+    // If standard mode doesn't have descriptions, fall back to architect mode
+    if description == "" || resultDescription == "" {
+        if len(modulePromptsByMode[string(p.Architect)]) > 0 {
+            architectPrompts := modulePromptsByMode[string(p.Architect)]
+            if description == "" && architectPrompts[0].Metadata.Description != "" {
+                description = architectPrompts[0].Metadata.Description
+            }
+            if resultDescription == "" && architectPrompts[0].Metadata.ResultDescription != "" {
+                resultDescription = architectPrompts[0].Metadata.ResultDescription
+            }
+        }
+    }
+    
     // Process each mode separately to build the content map
     for mode, modePrompts := range modulePromptsByMode {
         if len(modePrompts) == 0 {
             continue // Skip empty modes
-        }
-        
-        // Use the first prompt's metadata for description and result description if not already set
-        if description == "" && modePrompts[0].Metadata.Description != "" {
-            description = modePrompts[0].Metadata.Description
-        }
-        
-        if resultDescription == "" && modePrompts[0].Metadata.ResultDescription != "" {
-            resultDescription = modePrompts[0].Metadata.ResultDescription
         }
         
         // Combine all prompt contents for this mode
