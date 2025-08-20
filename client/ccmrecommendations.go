@@ -32,17 +32,17 @@ const (
 	workloadPath   = "workload"
 )
 
-func (r *CloudCostManagementService) ListRecommendations(ctx context.Context, scope dto.Scope, accountId string, options map[string]any) (*map[string]any, error) {
+func (r *CloudCostManagementService) ListRecommendations(ctx context.Context, accountId string, options map[string]any) (*map[string]any, error) {
 
 	return r.getRecommendations(ctx, accountId, options, ccmRecommendationsListPath)
 }
 
-func (r *CloudCostManagementService) ListRecommendationsByResourceType(ctx context.Context, scope dto.Scope, accountId string, options map[string]any) (*map[string]any, error) {
+func (r *CloudCostManagementService) ListRecommendationsByResourceType(ctx context.Context, accountId string, options map[string]any) (*map[string]any, error) {
 
 	return r.getRecommendations(ctx, accountId, options, ccmRecommendationsByResourceTypeListPath)
 }
 
-func (r *CloudCostManagementService) GetRecommendationsStats(ctx context.Context, scope dto.Scope, accountId string, options map[string]any) (*map[string]any, error) {
+func (r *CloudCostManagementService) GetRecommendationsStats(ctx context.Context, accountId string, options map[string]any) (*map[string]any, error) {
 
 	return r.getRecommendations(ctx, accountId, options, ccmRecommendationsStatsPath)
 }
@@ -61,7 +61,7 @@ func (r *CloudCostManagementService) UpdateRecommendationState(
 
 	resp := new(map[string]any)
 
-	err := r.Client.Post(ctx, path, params, nil, &resp)
+	err := r.Client.Post(ctx, path, params, nil, map[string]string{}, &resp)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to update cloud cost management Recommendation state: %w", err)
 	}
@@ -102,7 +102,7 @@ func (r *CloudCostManagementService) getRecommendations(
 
 	items := new(map[string]any)
 
-	err := r.Client.Post(ctx, path, params, options, &items)
+	err := r.Client.Post(ctx, path, params, options, map[string]string{}, &items)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to list cloud cost management recommendations: %w", err)
 	}
@@ -166,7 +166,7 @@ func (r *CloudCostManagementService) createTicket(
 
 	resp := new(map[string]any)
 
-	err = r.Client.Post(ctx, url, nil, body, &resp)
+	err = r.Client.Post(ctx, url, nil, body, map[string]string{}, &resp)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create CCM Jira issue: %w", err)
 	}

@@ -25,6 +25,11 @@ func FormatUnixToMMDDYYYY(ts int64) string {
 	return t.Format("01/02/2006")
 }
 
+func FormatUnixToYYYYMMDD(ts int64) string {
+	t := time.Unix(ts, 0)
+	return t.Format("2006-01-02")
+}
+
 func FormatUnixMillisToMMDDYYYY(ms int64) string {
 	t := time.Unix(0, ms*int64(time.Millisecond))
 	return t.Format("01/02/2006")

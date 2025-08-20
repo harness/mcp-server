@@ -138,7 +138,7 @@ func (i *InfrastructureClient) MoveConfigs(ctx context.Context, scope dto.Scope,
 
 	// No request body needed for this API
 	response := &dto.MoveInfraConfigsResponse{}
-	err := i.Client.Post(ctx, path, params, nil, response)
+	err := i.Client.Post(ctx, path, params, nil, map[string]string{}, response)
 	if err != nil {
 		return nil, fmt.Errorf("failed to move infrastructure configurations: %w", err)
 	}

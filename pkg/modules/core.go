@@ -52,6 +52,8 @@ func (m *CoreModule) Toolsets() []string {
 		"genai",
 		"intelligence",
 		"chatbot",
+		"settings",
+		"secrets",
 	}
 }
 
@@ -115,6 +117,16 @@ func (m *CoreModule) RegisterToolsets() error {
 			if err != nil {
 				return err
 			}
+		case "settings":
+			err := RegisterSettings(m.config, m.tsg)
+			if err != nil {
+				return err
+			}
+		case "secrets":
+			err := RegisterSecrets(m.config, m.tsg)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -173,6 +185,10 @@ func RegisterPipelines(config *config.Config, tsg *toolsets.ToolsetGroup) error 
 			toolsets.NewServerTool(tools.FetchExecutionURLTool(config, pipelineClient)),
 			toolsets.NewServerTool(tools.GetExecutionTool(config, pipelineClient)),
 			toolsets.NewServerTool(tools.ListExecutionsTool(config, pipelineClient)),
+			toolsets.NewServerTool(tools.GetInputSetTool(config, pipelineClient)),
+			toolsets.NewServerTool(tools.ListInputSetsTool(config, pipelineClient)),
+			toolsets.NewServerTool(tools.GetPipelineSummaryTool(config, pipelineClient)),
+			toolsets.NewServerTool(tools.ListTriggersTool(config, pipelineClient)),
 		)
 
 	// Add toolset to the group
@@ -433,5 +449,54 @@ func RegisterChatbot(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 	// Add toolset to the group
 	tsg.AddToolset(chatbot)
+	return nil
+}
+
+// RegisterSettings registers the settings toolset
+func RegisterSettings(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Determine the base URL and secret for settings
+	baseURL := utils.BuildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng/api")
+	secret := config.NgManagerSecret
+
+	// Create base client for settings
+	c, err := utils.CreateClient(baseURL, config, secret)
+	if err != nil {
+		return err
+	}
+
+	settingsClient := &client.SettingsClient{Client: c}
+
+	// Create the settings toolset
+	settings := toolsets.NewToolset("settings", "Harness Settings related tools").
+		AddReadTools(
+			toolsets.NewServerTool(tools.ListSettingsTool(config, settingsClient)),
+		)
+
+	// Add toolset to the group
+	tsg.AddToolset(settings)
+	return nil
+}
+
+func RegisterSecrets(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Determine the base URL and secret for secrets service
+	baseURL := utils.BuildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng/api")
+	secret := config.NgManagerSecret
+
+	// Create base client for secrets
+	c, err := utils.CreateClient(baseURL, config, secret)
+	if err != nil {
+		return err
+	}
+
+	secretsClient := &client.SecretsClient{Client: c}
+
+	// Create the secrets toolset
+	secrets := toolsets.NewToolset("secrets", "Harness Secrets related tools").
+		AddReadTools(
+			toolsets.NewServerTool(tools.GetSecretTool(config, secretsClient)),
+		)
+
+	// Add toolset to the group
+	tsg.AddToolset(secrets)
 	return nil
 }

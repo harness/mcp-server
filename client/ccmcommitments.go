@@ -5,12 +5,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/harness/harness-mcp/client/dto"
+	"github.com/harness/harness-mcp/pkg/utils"
 )
 
 const (
-	ccmCommitmentEstimatedSavingsPath = ccmCommitmentBasePath + "/accounts/%s/v2/setup/%s/estimated_savings?accountIdentifier=%s"
+	ccmCommitmentEstimatedSavingsPath = "/accounts/%s/v2/setup/%s/estimated_savings?accountIdentifier=%s"
+	ccmCommitmentSpendDetailsPath     = "/accounts/%s/v2/spend/detail?accountIdentifier=%s"
+	ccmCommitmentMasterAccountsPath   = "/accounts/%s/v1/setup/listMasterAccounts?accountIdentifier=%s"
 
 	defaultTargetCoveragePercentage = 90.0
 )
@@ -79,7 +83,7 @@ func (r *CloudCostManagementService) getEstimatedSavingsResponse(ctx context.Con
 	// Temporary slice to hold the strings
 	baseResponse := new(dto.CCMCommitmentBaseResponse)
 
-	err := r.Client.Post(ctx, path, params, requestPayload, baseResponse)
+	err := r.Client.Post(ctx, path, params, requestPayload, map[string]string{}, baseResponse)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cloud cost managment estimated savings response with path %s: %w", path, err)
 	}
@@ -94,6 +98,85 @@ func (r *CloudCostManagementService) getEstimatedSavingsResponse(ctx context.Con
 	err = json.Unmarshal(responseBytes, &response)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal cloud cost managment estimated savings response with path %s: %w", path, err)
+	}
+
+	return &response, nil
+}
+
+func (r *CloudCostManagementService) GetCommitmentSpends(ctx context.Context, scope dto.Scope, opts *dto.CCMCommitmentOptions) (*dto.CCMCommitmentBaseResponse, error) {
+
+	path := fmt.Sprintf(ccmCommitmentSpendDetailsPath, scope.AccountID, scope.AccountID)
+	params := make(map[string]string)
+	addScope(scope, params)
+
+	// Handle nil options by creating default options
+	if opts == nil {
+		opts = &dto.CCMCommitmentOptions{}
+	}
+
+	if opts.StartDate != nil && *opts.StartDate != "" {
+		params["start_date"] = *opts.StartDate
+	} else {
+		// Default to last 30 days
+		params["start_date"] = utils.FormatUnixToYYYYMMDD(time.Now().AddDate(0, 0, -30).Unix())
+	}
+	if opts.EndDate != nil && *opts.EndDate != "" {
+		params["end_date"] = *opts.EndDate
+	} else {
+		// Default to last 30 days
+		params["end_date"] = utils.FormatUnixToYYYYMMDD(time.Now().Unix())
+	}
+
+	var requestPayload = dto.CCMCommitmentAPIFilter{
+		Service:          ccmCommitmentComputeService, // Default value
+		NetAmortizedCost: utils.ToBoolPtr(false),
+	}
+
+	if opts.Service != nil && *opts.Service != "" {
+		requestPayload.Service = *opts.Service
+	}
+
+	if opts.IsNetAmortizedCost != nil {
+		requestPayload.NetAmortizedCost = opts.IsNetAmortizedCost
+	}
+
+	if len(opts.CloudAccountIDs) > 0 {
+		requestPayload.CloudAccounts = opts.CloudAccountIDs
+	}
+
+	// Temporary slice to hold the strings
+	spendDetailsResponse := new(dto.CCMCommitmentBaseResponse)
+
+	err := r.Client.Post(ctx, path, params, requestPayload, map[string]string{}, spendDetailsResponse)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cloud cost managment compute spend details with path %s: %w", path, err)
+	}
+
+	return spendDetailsResponse, nil
+}
+
+func (r *CloudCostManagementService) GetCommitmentMasterAccounts(ctx context.Context, scope dto.Scope) (*dto.CCMMasterAccountsListResponse, error) {
+	path := fmt.Sprintf(ccmCommitmentMasterAccountsPath, scope.AccountID, scope.AccountID)
+	params := make(map[string]string)
+	addScope(scope, params)
+
+	listMasterAccountsResponse := new(dto.CCMCommitmentBaseResponse)
+
+	err := r.Client.Post(ctx, path, params, nil, map[string]string{},listMasterAccountsResponse)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cloud cost managment master accounts with path %s: %w", path, err)
+	}
+
+	jsonBytes, err := json.Marshal(listMasterAccountsResponse.Response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal cloud cost managment master accounts with path %s: %w", path, err)
+	}
+
+	var response dto.CCMMasterAccountsListResponse
+
+	err = json.Unmarshal(jsonBytes, &response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal cloud cost managment master accounts with path %s: %w", path, err)
 	}
 
 	return &response, nil
