@@ -52,6 +52,7 @@ func (m *CoreModule) Toolsets() []string {
 		"genai",
 		"intelligence",
 		"chatbot",
+		"prompts",
 	}
 }
 
@@ -112,6 +113,11 @@ func (m *CoreModule) RegisterToolsets() error {
 			}
 		case "chatbot":
 			err := RegisterChatbot(m.config, m.tsg)
+			if err != nil {
+				return err
+			}
+		case "prompts":
+			err := RegisterPromptTools(m.config, m.tsg)
 			if err != nil {
 				return err
 			}
@@ -436,4 +442,17 @@ func RegisterChatbot(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Add toolset to the group
 	tsg.AddToolset(chatbot)
 	return nil
+}
+
+func RegisterPromptTools(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+    // Create the prompt toolset with both tools
+    prompt := toolsets.NewToolset("prompt", "Harness MCP Prompts tools").
+        AddReadTools(
+            toolsets.NewServerTool(tools.GetPromptTool(config)),
+            toolsets.NewServerTool(tools.ListPromptsTool(config)),
+        )
+
+    // Add toolset to the group
+    tsg.AddToolset(prompt)
+    return nil
 }
