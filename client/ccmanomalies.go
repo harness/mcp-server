@@ -9,8 +9,10 @@ import (
 
 const (
 	ccmAnomaliesSummaryPath       = ccmBasePath + "/anomaly/v2/summary?accountIdentifier=%s"
-	ccmIgnoredAnomaliesListPath   = ccmBasePath + "/anomaly/v2/listIgnoredAnomalies?accountIdentifier=%s"
+	ccmIgnoredAnomaliesListPath   = ccmBasePath + "/anomaly/listIgnoredAnomalies?accountIdentifier=%s"
 	ccmAnomaliesListPath          = ccmBasePath + "/anomaly/v2/list?accountIdentifier=%s"
+	ccmAnomalyPath                = ccmBasePath + "/anomaly/anomaly?accountIdentifier=%s"
+	ccmAnomalyFilterValuesPath    = ccmBasePath + "/anomaly/anomaly/filter-values?accountIdentifier=%s"
 	ccmAnomaliesByPerspectivePath = ccmBasePath + "/anomaly/perspective/%s?accountIdentifier=%s"
 	ccmReportAnomalyFeedbackPath  = ccmBasePath + "/anomaly/feedback?accountIdentifier=%s&anomalyId=%s"
 )
@@ -25,8 +27,16 @@ func (r *CloudCostManagementService) ListIgnoredAnomalies(ctx context.Context, a
 	return r.getAnomalies(ctx, accountId, options, ccmIgnoredAnomaliesListPath)
 }
 
-func (r *CloudCostManagementService) ListAnomalies(ctx context.Context, accountId string, options map[string]any) (*map[string]any, error) {
+func (r *CloudCostManagementService) ListAllAnomalies(ctx context.Context, accountId string, options map[string]any) (*map[string]any, error) {
 	return r.getAnomalies(ctx, accountId, options, ccmAnomaliesListPath)
+}
+
+func (r *CloudCostManagementService) ListAnomalies(ctx context.Context, accountId string, options map[string]any) (*map[string]any, error) {
+	return r.getAnomalies(ctx, accountId, options, ccmAnomalyPath)
+}
+
+func (r *CloudCostManagementService) ListFilterFieldAnomalies(ctx context.Context, accountId string, options []string) (*map[string]any, error) {
+	return r.getFilterValuesAnomalies(ctx, accountId, options)
 }
 
 func (r *CloudCostManagementService) getAnomalies(
@@ -37,6 +47,26 @@ func (r *CloudCostManagementService) getAnomalies(
 ) (*map[string]any, error) {
 
 	path := fmt.Sprintf(url, accountId)
+	params := make(map[string]string)
+
+	items := new(map[string]any)
+
+	slog.Debug("Fetching anomalies", "body", options)
+	err := r.Client.Post(ctx, path, params, options, emptyMap, &items)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to list cloud cost management anomalies: %w", err)
+	}
+
+	return items, nil
+}
+
+func (r *CloudCostManagementService) getFilterValuesAnomalies(
+	ctx context.Context,
+	accountId string,
+	options []string,
+) (*map[string]any, error) {
+
+	path := fmt.Sprintf(ccmAnomalyFilterValuesPath, accountId)
 	params := make(map[string]string)
 
 	items := new(map[string]any)

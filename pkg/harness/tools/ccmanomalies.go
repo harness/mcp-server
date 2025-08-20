@@ -32,6 +32,17 @@ func GetCcmAnomaliesSummaryTool(config *config.Config, client *client.CloudCostM
 		}
 }
 
+func ListAllCcmAnomaliesTool(config *config.Config, client *client.CloudCostManagementService,
+) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+
+	return mcp.NewToolWithRawSchema("list_all_ccm_anomalies", ccmcommons.GetAnomaliesSummaryDescription,
+			anomaliesSummaryDefinition(),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return anomaliesListHandler(config, ctx, request, client.ListAllAnomalies)
+		}
+}
+
 func ListCcmIgnoredAnomaliesTool(config *config.Config, client *client.CloudCostManagementService,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 
@@ -45,7 +56,7 @@ func ListCcmIgnoredAnomaliesTool(config *config.Config, client *client.CloudCost
 
 func ListCcmAnomaliesTool(config *config.Config, client *client.CloudCostManagementService,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewToolWithRawSchema("list_ccm_anomalies", ccmcommons.ListIgnoredAnomaliesDescription,
+	return mcp.NewToolWithRawSchema("list_ccm_anomalies", ccmcommons.ListAnomaliesDescription,
 			anomaliesListDefinition(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -100,6 +111,38 @@ func ReportCcmAnomalyFeedbackTool(config *config.Config, client *client.CloudCos
 			r, err := json.Marshal(data)
 			if err != nil {
 				return nil, fmt.Errorf("failed to report anomaly feedback: %w", err)
+			}
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+func ListFilterValuesCcmAnomaliesTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("list_filter_values_ccm_anomalies",
+			mcp.WithDescription("Return the list of distinct values for all the specified anomaly fields in Harness cloud Cost Management"),
+			mcp.WithArray("columns",
+				mcp.Required(),
+				mcp.Description("List of anomaly fields to get distinct values for. "),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			accountId, err := getAccountID(config, request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			columns, err := OptionalStringArrayParam(request, "columns")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.ListFilterFieldAnomalies(ctx, accountId, columns)
+			if err != nil {
+				return nil, fmt.Errorf("failed to list filter values CCM anomaly feedback: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to list filter values anomaly feedback: %w", err)
 			}
 			return mcp.NewToolResultText(string(r)), nil
 		}
