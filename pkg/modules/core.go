@@ -187,6 +187,8 @@ func RegisterPipelines(config *config.Config, tsg *toolsets.ToolsetGroup) error 
 			toolsets.NewServerTool(tools.ListExecutionsTool(config, pipelineClient)),
 			toolsets.NewServerTool(tools.GetInputSetTool(config, pipelineClient)),
 			toolsets.NewServerTool(tools.ListInputSetsTool(config, pipelineClient)),
+			toolsets.NewServerTool(tools.GetPipelineSummaryTool(config, pipelineClient)),
+			toolsets.NewServerTool(tools.ListTriggersTool(config, pipelineClient)),
 		)
 
 	// Add toolset to the group

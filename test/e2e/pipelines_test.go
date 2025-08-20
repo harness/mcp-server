@@ -364,7 +364,7 @@ func TestListInputSets(t *testing.T) {
 	if response.IsError {
 		t.Logf("Error response: %v", response.Content)
 	}
-	
+
 	require.False(t, response.IsError, "expected result not to be an error")
 
 	// Verify response content
@@ -391,10 +391,10 @@ func TestListInputSets(t *testing.T) {
 		getInputSetRequest := mcp.CallToolRequest{}
 		getInputSetRequest.Params.Name = "get_input_set"
 		getInputSetRequest.Params.Arguments = map[string]any{
-			"accountIdentifier":   accountID,
-			"orgIdentifier":       getE2EOrgID(),
-			"projectIdentifier":   getE2EProjectID(),
-			"pipeline_identifier": pipelineID,
+			"accountIdentifier":    accountID,
+			"orgIdentifier":        getE2EOrgID(),
+			"projectIdentifier":    getE2EProjectID(),
+			"pipeline_identifier":  pipelineID,
 			"input_set_identifier": inputSetID,
 		}
 
@@ -494,16 +494,16 @@ func TestInputSetWorkflow(t *testing.T) {
 		t.Log("No input sets found, skipping input set detail test")
 		return
 	}
-	
+
 	// Log the number of input sets found with search term
 	t.Logf("Found %d input sets with search term 'test'", len(inputSetResponse.Data.Content))
-	
+
 	// Only check the search results if we found input sets
 	for _, inputSet := range inputSetResponse.Data.Content {
 		// Check if the name or identifier contains the search term
-		containsSearchTerm := strings.Contains(strings.ToLower(inputSet.Name), "test") || 
+		containsSearchTerm := strings.Contains(strings.ToLower(inputSet.Name), "test") ||
 			strings.Contains(strings.ToLower(inputSet.Identifier), "test")
-		t.Logf("Input set %s (name: %s) contains search term 'test': %v", 
+		t.Logf("Input set %s (name: %s) contains search term 'test': %v",
 			inputSet.Identifier, inputSet.Name, containsSearchTerm)
 	}
 
@@ -541,4 +541,285 @@ func TestInputSetWorkflow(t *testing.T) {
 	identifier, ok := rawResponse["identifier"].(string)
 	require.True(t, ok, "expected identifier to be present in response")
 	require.Equal(t, inputSetID, identifier, "expected input set ID to match")
+}
+
+func TestGetPipelineSummary(t *testing.T) {
+	t.Parallel()
+
+	mcpClient := setupMCPClient(t)
+	ctx := context.Background()
+	accountID := getE2EAccountID(t)
+
+	// Step 1: First list pipelines to get a pipeline ID
+	request := mcp.CallToolRequest{}
+	request.Params.Name = "list_pipelines"
+	request.Params.Arguments = map[string]any{
+		"accountIdentifier": accountID,
+		"orgIdentifier":     getE2EOrgID(),
+		"projectIdentifier": getE2EProjectID(),
+		"page":              0,
+		"limit":             10,
+	}
+
+	response, err := mcpClient.CallTool(ctx, request)
+	require.NoError(t, err, "expected to call 'list_pipelines' tool successfully")
+	if response.IsError {
+		t.Logf("Error response: %v", response.Content)
+	}
+	require.False(t, response.IsError, "expected result not to be an error")
+
+	// Parse the response to extract a pipeline ID
+	textContent, ok := response.Content[0].(mcp.TextContent)
+	require.True(t, ok, "expected content to be of type TextContent")
+
+	var pipelineResponse struct {
+		Data struct {
+			Content []struct {
+				Identifier string `json:"identifier"`
+				Name       string `json:"name"`
+			} `json:"content"`
+		} `json:"data"`
+	}
+
+	err = json.Unmarshal([]byte(textContent.Text), &pipelineResponse)
+	require.NoError(t, err, "expected to unmarshal response successfully")
+
+	// Skip if no pipelines are found
+	if len(pipelineResponse.Data.Content) == 0 {
+		t.Log("No pipelines found, skipping pipeline summary test")
+		return
+	}
+
+	pipelineID := pipelineResponse.Data.Content[0].Identifier
+	t.Logf("Using pipeline ID: %s", pipelineID)
+
+	// Step 2: Get pipeline summary
+	summaryRequest := mcp.CallToolRequest{}
+	summaryRequest.Params.Name = "get_pipeline_summary"
+	summaryRequest.Params.Arguments = map[string]any{
+		"accountIdentifier": accountID,
+		"orgIdentifier":     getE2EOrgID(),
+		"projectIdentifier": getE2EProjectID(),
+		"pipeline_id":       pipelineID,
+		"get_metadata_only": false,
+	}
+
+	summaryResponse, err := mcpClient.CallTool(ctx, summaryRequest)
+	require.NoError(t, err, "expected to call 'get_pipeline_summary' tool successfully")
+
+	if summaryResponse.IsError {
+		t.Logf("Error response: %v", summaryResponse.Content)
+		return
+	}
+
+	// Parse the response to extract summary
+	textContent, ok = summaryResponse.Content[0].(mcp.TextContent)
+	require.True(t, ok, "expected content to be of type TextContent")
+
+	// Use the standard DTO type for the response
+	var summaryResponseObj dto.Entity[dto.PipelineSummary]
+
+	err = json.Unmarshal([]byte(textContent.Text), &summaryResponseObj)
+	require.NoError(t, err, "expected to unmarshal response successfully")
+
+	// Verify the response contains valid data
+	require.Equal(t, "SUCCESS", summaryResponseObj.Status, "expected status to be SUCCESS")
+	require.NotEmpty(t, summaryResponseObj.Data, "expected content to be present")
+
+	pipelineSummary := summaryResponseObj.Data
+	require.NotEmpty(t, pipelineSummary.Identifier, "expected pipeline identifier to be present")
+	require.Equal(t, pipelineID, pipelineSummary.Identifier, "expected pipeline identifier to match")
+	require.NotEmpty(t, pipelineSummary.Name, "expected pipeline name to be present")
+
+	t.Logf("Successfully retrieved summary for pipeline: %s (%s)",
+		pipelineSummary.Name, pipelineSummary.Identifier)
+
+	// Log some additional details from the summary
+	t.Logf("Pipeline version: %d", pipelineSummary.Version)
+	t.Logf("Number of stages: %d", pipelineSummary.NumOfStages)
+	if len(pipelineSummary.Modules) > 0 {
+		t.Logf("Modules: %v", pipelineSummary.Modules)
+	}
+	if len(pipelineSummary.StageNames) > 0 {
+		t.Logf("Stage names: %v", pipelineSummary.StageNames)
+	}
+
+	// Test with metadata only
+	metadataRequest := mcp.CallToolRequest{}
+	metadataRequest.Params.Name = "get_pipeline_summary"
+	metadataRequest.Params.Arguments = map[string]any{
+		"accountIdentifier": accountID,
+		"orgIdentifier":     getE2EOrgID(),
+		"projectIdentifier": getE2EProjectID(),
+		"pipeline_id":       pipelineID,
+		"get_metadata_only": true,
+	}
+
+	metadataResponse, err := mcpClient.CallTool(ctx, metadataRequest)
+	require.NoError(t, err, "expected to call 'get_pipeline_summary' tool with metadata_only=true successfully")
+
+	if !metadataResponse.IsError {
+		textContent, ok = metadataResponse.Content[0].(mcp.TextContent)
+		require.True(t, ok, "expected content to be of type TextContent")
+
+		var metadataResponseObj dto.Entity[dto.PipelineSummary]
+		err = json.Unmarshal([]byte(textContent.Text), &metadataResponseObj)
+		require.NoError(t, err, "expected to unmarshal metadata response successfully")
+		require.Equal(t, "SUCCESS", metadataResponseObj.Status, "expected status to be SUCCESS")
+		require.NotEmpty(t, metadataResponseObj.Data, "expected content to be present in metadata response")
+		t.Logf("Successfully retrieved metadata-only summary for pipeline: %s", metadataResponseObj.Data.Name)
+	} else {
+		// Some environments might not support metadata-only mode, so we don't fail the test
+		t.Logf("Metadata-only request returned error: %v", metadataResponse.Content)
+	}
+}
+
+func TestListTriggers(t *testing.T) {
+	t.Parallel()
+
+	// Create a client for testing
+	mcpClient := setupMCPClient(t)
+	ctx := context.Background()
+	accountID := getE2EAccountID(t)
+
+	// Step 1: List pipelines to get a valid pipeline ID
+	listRequest := mcp.CallToolRequest{}
+	listRequest.Params.Name = "list_pipelines"
+	listRequest.Params.Arguments = map[string]any{
+		"accountIdentifier": accountID,
+		"orgIdentifier":     getE2EOrgID(),
+		"projectIdentifier": getE2EProjectID(),
+		"page":              0,
+		"limit":             10,
+	}
+
+	listResponse, err := mcpClient.CallTool(ctx, listRequest)
+	require.NoError(t, err, "expected to call 'list_pipelines' tool successfully")
+
+	if listResponse.IsError {
+		t.Logf("Error response: %v", listResponse.Content)
+		return
+	}
+
+	// Parse the response to extract pipeline ID
+	textContent, ok := listResponse.Content[0].(mcp.TextContent)
+	require.True(t, ok, "expected content to be of type TextContent")
+
+	var pipelineResponse struct {
+		Data struct {
+			Content []struct {
+				Identifier string `json:"identifier"`
+				Name       string `json:"name"`
+			} `json:"content"`
+		} `json:"data"`
+	}
+
+	err = json.Unmarshal([]byte(textContent.Text), &pipelineResponse)
+	require.NoError(t, err, "expected to unmarshal response successfully")
+
+	// Skip if no pipelines are found
+	if len(pipelineResponse.Data.Content) == 0 {
+		t.Log("No pipelines found, skipping triggers test")
+		return
+	}
+
+	pipelineID := pipelineResponse.Data.Content[0].Identifier
+	t.Logf("Using pipeline ID: %s", pipelineID)
+
+	// Step 2: List triggers for this pipeline
+	triggersRequest := mcp.CallToolRequest{}
+	triggersRequest.Params.Name = "list_triggers"
+	triggersRequest.Params.Arguments = map[string]any{
+		"accountIdentifier": accountID,
+		"orgIdentifier":     getE2EOrgID(),
+		"projectIdentifier": getE2EProjectID(),
+		"target_identifier": pipelineID,
+		"page":              0,
+		"size":              10,
+	}
+
+	triggersResponse, err := mcpClient.CallTool(ctx, triggersRequest)
+	require.NoError(t, err, "expected to call 'list_triggers' tool successfully")
+
+	if triggersResponse.IsError {
+		t.Logf("Error response: %v", triggersResponse)
+		return
+	}
+
+	// Parse the response to extract triggers
+	textContent, ok = triggersResponse.Content[0].(mcp.TextContent)
+	require.True(t, ok, "expected content to be of type TextContent")
+
+	// Use the standard DTO type for the response
+	var triggerResponse dto.ListOutput[dto.TriggerListItem]
+
+	err = json.Unmarshal([]byte(textContent.Text), &triggerResponse)
+	require.NoError(t, err, "expected to unmarshal response successfully")
+
+	// Log the number of triggers found
+	totalTriggers := triggerResponse.Data.TotalItems
+	if totalTriggers == 0 {
+		// Fall back to TotalElements if TotalItems is not set
+		totalTriggers = triggerResponse.Data.TotalElements
+	}
+	t.Logf("Found %d triggers for pipeline %s", totalTriggers, pipelineID)
+
+	// If we have triggers, test filtering by trigger type
+	if totalTriggers > 0 {
+		// Log details about each trigger
+		for i, trigger := range triggerResponse.Data.Content {
+			t.Logf("Trigger #%d: %s (ID: %s, Type: %s)",
+				i+1, trigger.Name, trigger.Identifier, trigger.Type)
+		}
+
+		// If we have at least one trigger, try filtering by its type
+		if len(triggerResponse.Data.Content) > 0 {
+			triggerType := triggerResponse.Data.Content[0].Type
+			t.Logf("Testing filter by trigger type: %s", triggerType)
+
+			// Step 3: List triggers with type filter
+			filteredRequest := mcp.CallToolRequest{}
+			filteredRequest.Params.Name = "list_triggers"
+			filteredRequest.Params.Arguments = map[string]any{
+				"accountIdentifier": accountID,
+				"orgIdentifier":     getE2EOrgID(),
+				"projectIdentifier": getE2EProjectID(),
+				"target_identifier": pipelineID,
+				"trigger_type":      triggerType,
+				"page":              0,
+				"size":              10,
+			}
+
+			filteredResponse, err := mcpClient.CallTool(ctx, filteredRequest)
+			require.NoError(t, err, "expected to call 'list_triggers' tool with filter successfully")
+
+			if filteredResponse.IsError {
+				t.Logf("Error response: %v", filteredResponse.Content)
+				return
+			}
+
+			// Parse the filtered response
+			textContent, ok := filteredResponse.Content[0].(mcp.TextContent)
+			require.True(t, ok, "expected content to be of type TextContent")
+
+			var filteredTriggerResponse dto.ListOutput[dto.TriggerListItem]
+
+			err = json.Unmarshal([]byte(textContent.Text), &filteredTriggerResponse)
+			require.NoError(t, err, "expected to unmarshal filtered response successfully")
+
+			// Verify that all returned triggers match the filter type
+			totalFilteredTriggers := filteredTriggerResponse.Data.TotalItems
+			if totalFilteredTriggers == 0 {
+				// Fall back to TotalElements if TotalItems is not set
+				totalFilteredTriggers = filteredTriggerResponse.Data.TotalElements
+			}
+			t.Logf("Found %d triggers with type %s", totalFilteredTriggers, triggerType)
+			for _, trigger := range filteredTriggerResponse.Data.Content {
+				require.Equal(t, triggerType, trigger.Type,
+					"expected all triggers to match the filter type")
+			}
+		}
+	} else {
+		t.Log("No triggers found for this pipeline")
+	}
 }

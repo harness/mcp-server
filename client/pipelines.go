@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/harness/harness-mcp/client/dto"
 )
@@ -15,6 +16,8 @@ const (
 	pipelineExecutionSummaryPath = "/api/pipelines/execution/summary"
 	pipelineInputSetListPath     = "/api/inputSets"
 	pipelineInputSetPath         = "/api/inputSets/%s"
+	pipelineTriggersPath         = "/api/triggers"
+	pipelineSummaryPath          = "/api/pipelines/summary/%s"
 )
 
 type PipelineService struct {
@@ -265,4 +268,86 @@ func (p *PipelineService) GetInputSet(
 	}
 
 	return response, nil
+}
+
+func (p *PipelineService) ListTriggers(
+	ctx context.Context,
+	scope dto.Scope,
+	opts *dto.TriggerListOptions,
+) (*dto.ListOutput[dto.TriggerListItem], error) {
+	path := pipelineTriggersPath
+
+	// Prepare query parameters
+	params := make(map[string]string)
+	addScope(scope, params)
+
+	// Handle nil options by creating default options
+	if opts == nil {
+		opts = &dto.TriggerListOptions{}
+	}
+
+	// Set default pagination
+	setDefaultPagination(&opts.PaginationOptions)
+
+	// Add pagination parameters
+	params["page"] = fmt.Sprintf("%d", opts.Page)
+	params["size"] = fmt.Sprintf("%d", opts.Size)
+
+	// Add optional parameters if provided
+	if opts.SearchTerm != "" {
+		params["searchTerm"] = opts.SearchTerm
+	}
+	if opts.TargetIdentifier != "" {
+		params["targetIdentifier"] = opts.TargetIdentifier
+	}
+	if opts.Filter != "" {
+		params["filter"] = opts.Filter
+	}
+
+	// Add required parameters for the gateway endpoint based on the curl command
+	params["accountIdentifier"] = scope.AccountID
+	params["orgIdentifier"] = scope.OrgID
+	params["projectIdentifier"] = scope.ProjectID
+
+	// Initialize the response object
+	response := &dto.ListOutput[dto.TriggerListItem]{}
+
+	// Make the GET request (the API uses GET for this list operation)
+	err := p.Client.Get(ctx, path, params, map[string]string{}, response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list triggers: %w", err)
+	}
+
+	return response, nil
+}
+
+// GetPipelineSummary gets a summary of a pipeline
+func (p *PipelineService) GetPipelineSummary(
+	ctx context.Context,
+	scope dto.Scope,
+	pipelineIdentifier string,
+	getMetadataOnly bool,
+) (*dto.Entity[dto.PipelineSummary], error) {
+	// Format the pipeline path first to replace its %s placeholder
+	path := fmt.Sprintf(pipelineSummaryPath, pipelineIdentifier)
+
+	// Prepare query parameters
+	params := make(map[string]string)
+	addScope(scope, params)
+
+	// Add the getMetadataOnly parameter
+	params["getMetadataOnly"] = strconv.FormatBool(getMetadataOnly)
+
+	// Add required parameters for the endpoint
+	params["accountIdentifier"] = scope.AccountID
+	params["orgIdentifier"] = scope.OrgID
+	params["projectIdentifier"] = scope.ProjectID
+
+	var responseData dto.Entity[dto.PipelineSummary]
+	err := p.Client.Get(ctx, path, params, map[string]string{}, &responseData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pipeline summary: %w", err)
+	}
+
+	return &responseData, nil
 }
