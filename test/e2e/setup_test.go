@@ -130,7 +130,7 @@ func setupMCPClient(t *testing.T, options ...clientOption) *mcpClient.Client {
 		accountID := getE2EAccountID(t)
 		// Create and configure options
 		opts := &clientOpts{
-			enabledToolsets: []string{"ccm", "pipelines", "default"},
+			enabledToolsets: []string{"all"},
 		}
 
 		// Apply all options to configure the opts struct
