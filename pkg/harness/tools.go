@@ -377,6 +377,10 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 					if err := modules.RegisterACM(config, tsg); err != nil {
 						return err
 					}
+				case "prompt":
+					if err := modules.RegisterPromptTools(config, tsg); err != nil {
+						return err
+					}
 				}
 			}
 		}
