@@ -157,3 +157,10 @@ const (
 	AnomalyFieldUpdatedBy               = "UPDATED_BY"
 	AnomalyFieldUpdatedAtRelative       = "UPDATED_AT_RELATIVE"
 )
+
+const (
+	AnomalyFeedbackTrueAnomaly         = "TRUE_ANOMALY"
+	AnomalyFeedbackTrueExpectedAnomaly = "TRUE_EXPECTED_ANOMALY"
+	AnomalyFeedbackFalseAnomaly        = "FALSE_ANOMALY"
+	AnomalyFeedbackNotResponded        = "NOT_RESPONDED"
+)

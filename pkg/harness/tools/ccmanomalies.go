@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
@@ -59,6 +60,48 @@ func GetCcmAnomaliesForPerspectiveTool(config *config.Config, client *client.Clo
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			return anomaliesForPerspectiveHandler(config, ctx, request, client)
+		}
+}
+
+func ReportCcmAnomalyFeedbackTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("report_ccm_anomaly_feedback",
+			mcp.WithDescription("Report anomaly feedback in Harness cloud Cost Management"),
+			mcp.WithString("anomaly_id",
+				mcp.Required(),
+				mcp.Description("Anomaly ID to report feedback for"),
+			),
+			mcp.WithString("feedback",
+				mcp.Required(),
+				mcp.Enum(getAnomalyFeedbacks()...),
+				mcp.Description("Feedback to report for the anomaly"),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			accountId, err := getAccountID(config, request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			anomalyId, err := RequiredParam[string](request, "anomaly_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			feedback, err := RequiredParam[string](request, "feedback")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.ReportAnomalyFeedback(ctx, accountId, anomalyId, feedback)
+			if err != nil {
+				return nil, fmt.Errorf("failed to report CCM anomaly feedback: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to report anomaly feedback: %w", err)
+			}
+			return mcp.NewToolResultText(string(r)), nil
 		}
 }
 
@@ -757,5 +800,14 @@ func getAnomFilterOperators() []string {
 		dto.AnomFilterOperatorNull,
 		dto.AnomFilterOperatorLike,
 		dto.AnomFilterOperatorSearch,
+	}
+}
+
+func getAnomalyFeedbacks() []string {
+	return []string{
+		dto.AnomalyFeedbackTrueAnomaly,
+		dto.AnomalyFeedbackTrueExpectedAnomaly,
+		dto.AnomalyFeedbackFalseAnomaly,
+		dto.AnomalyFeedbackNotResponded,
 	}
 }
