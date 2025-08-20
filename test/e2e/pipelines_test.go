@@ -21,16 +21,6 @@ var (
 	toolNames      = make(map[string]string)
 )
 
-// setToolNames updates the global tool name mapping
-func setToolNames(names map[string]string) {
-	toolNamesMutex.Lock()
-	defer toolNamesMutex.Unlock()
-
-	for k, v := range names {
-		toolNames[k] = v
-	}
-}
-
 // getToolName returns the actual tool name for a given pattern
 func getToolName(pattern string) string {
 	toolNamesMutex.Lock()
@@ -84,9 +74,6 @@ func TestListPipelineTools(t *testing.T) {
 	for pattern, actualName := range foundPipelineTools {
 		fmt.Printf("- %s -> %s\n", pattern, actualName)
 	}
-
-	// Store the found tool names in a global variable for other tests to use
-	setToolNames(foundPipelineTools)
 
 	// Check if we found at least one pipeline tool
 	require.NotEmpty(t, foundPipelineTools, "expected to find at least one pipeline tool")
