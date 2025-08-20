@@ -2,6 +2,8 @@ package prompts
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log/slog"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -13,9 +15,16 @@ import (
 // Role represents the role of the prompt creator, either User or Assistant.
 type Role int
 
+type Mode string
+
 const (
 	User      Role = iota // 0
 	Assistant             // 1
+)
+
+const (
+	Standard Mode = "standard"
+	Architect Mode = "architect"
 )
 
 // Prompt represents the prompt data needed to add to the MCP server.
@@ -93,18 +102,44 @@ func AddPrompts(prompts Prompts, mcpServer *server.MCPServer) {
 	}
 }
 
-// createPrompt converts a Prompt into an MCP prompt and defines its handler function.
 func createPrompt(prompt *Prompt) (mcp.Prompt, server.PromptHandlerFunc) {
 	role := mcp.RoleUser
 	if prompt.Role == Assistant {
 		role = mcp.RoleAssistant
 	}
 
-	return mcp.NewPrompt(prompt.Name, mcp.WithPromptDescription(prompt.Description)),
+	return mcp.NewPrompt(
+			prompt.Name,
+			mcp.WithPromptDescription(prompt.Description),
+			mcp.WithArgument("mode", mcp.ArgumentDescription("Selects the prompt mode: 'standard' or 'architect'")),
+		),
 		func(ctx context.Context, request mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-			return mcp.NewGetPromptResult(
-				prompt.ResultDescription,
-				[]mcp.PromptMessage{mcp.NewPromptMessage(role, mcp.NewTextContent(prompt.Text))},
-			), nil
+			// Determine mode (default to "standard") and return different prompt text accordingly.
+			mode := string(Standard) // Default to standard mode
+            if v, ok := request.Params.Arguments["mode"]; ok && v != "" {
+                mode = v
+            }
+
+            // Parse the JSON-encoded map of prompt contents
+            var modeContents map[string]string
+            if err := json.Unmarshal([]byte(prompt.Text), &modeContents); err != nil {
+                slog.Error("Failed to parse prompt content JSON", "error", err, "promptName", prompt.Name)
+                return nil, err
+            }
+
+            // Get the content for the requested mode, fallback to standard if not found
+            text, ok := modeContents[mode]
+            if !ok {
+                // If the requested mode is not available, fall back to standard mode
+                text, ok = modeContents[string(Standard)]
+                if !ok {
+                    return nil, fmt.Errorf("prompt mode %s not found for prompt %s", mode, prompt.Name)
+                }
+            }
+
+            return mcp.NewGetPromptResult(
+                prompt.ResultDescription,
+                []mcp.PromptMessage{mcp.NewPromptMessage(role, mcp.NewTextContent(text))},
+            ), nil
 		}
 }

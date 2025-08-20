@@ -76,14 +76,14 @@ Toolset Name: `pullrequests`
 
 #### Services Toolset
 
-Toolset Name: `service` 
+Toolset Name: `services` 
 
 - `get_service`: Get details of a specific service
 - `list_services`: List services
 
 #### Environments Toolset
 
-Toolset Name: `environment` 
+Toolset Name: `environments` 
 
 - `get_environment`: Get details of a specific environment
 - `list_environments`: List environments
@@ -171,6 +171,7 @@ Toolset Name: `ccm`
 - `get_ccm_commitment_savings`: Get commitment savings information for an account in Harness Cloud Cost Management.
 - `get_ccm_commitment_utilisation`: Get commitment utilisation information for an account in Harness Cloud Cost Management broken down by Reserved Instances and Savings Plans in day wise granularity.
 - `get_ccm_estimated_savings`: Get estimated savings information for a cloud account in Harness Cloud Cost Management
+- `get_ccm_commitment_ec2_analysis`: Get AWS EC2 commitment analysis for an account in Harness Cloud Cost Management, including RI/SP commitment spend, utilization breakdown, current savings, estimated annualized savings, and ESR.
 
 #### Database Operations Toolset
 
@@ -204,7 +205,9 @@ Toolset Name: `scs`
 Toolset Name: `sto`
 
 - `frontend_all_issues_list`: List and filter security issues in Harness STO by target, pipeline, tool, severity, exemption status, and type.
-
+- `global_exemptions`: List all global exemptions in Harness STO.
+- `promote_exemption`: Promote a specific exemption to a global exemption.
+- `approve_exemption`: Approve a specific exemption.
 
 #### Logs Toolset
 

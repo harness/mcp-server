@@ -158,6 +158,7 @@ func (c *Client) Post(
 	path string,
 	params map[string]string,
 	body interface{},
+	headers map[string]string,
 	out interface{},
 	b ...backoff.BackOff,
 ) error {
@@ -166,7 +167,7 @@ func (c *Client) Post(
 		return fmt.Errorf("failed to serialize body: %w", err)
 	}
 
-	return c.PostRaw(ctx, path, params, bytes.NewBuffer(bodyBytes), nil, out, b...)
+	return c.PostRaw(ctx, path, params, bytes.NewBuffer(bodyBytes), headers, out, b...)
 }
 
 // PostRaw is a simple helper that builds up the request URL, adding the path and parameters.

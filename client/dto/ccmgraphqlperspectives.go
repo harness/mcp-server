@@ -55,6 +55,40 @@ const (
 	TimeGroupByMonth = "MONTH"
 )
 
+
+var (
+	ValueTypes = []string{
+		ValueTypeCostCategory,
+		ValueTypeAWSAccount,
+		ValueTypeAWSBillingEntity,
+		ValueTypeAWSInstanceType,
+		ValueTypeAWSLineItemType,
+		ValueTypeAWSPayerAccount,
+		ValueTypeAWSService,
+		ValueTypeAWSUsageType,
+		ValueTypeRegion,
+		ValueTypeProduct,
+		ValueTypeCloudProvider,
+		ValueTypeLabel,
+		ValueTypeLabelKey,
+		ValueTypeLabelV2,
+		ValueTypeLabelV2Key,
+	}
+	TimeFilterValues = []string{
+		TimeFilterLast7,
+		TimeFilterThisMonth,
+		TimeFilterLast30Days,
+		TimeFilterThisQuarter,
+		TimeFilterThisYear,
+		TimeFilterLastMonth,
+		TimeFilterLastQuarter,
+		TimeFilterLastYear,
+		TimeFilterLast3Months,
+		TimeFilterLast6Months,
+		TimeFilterLast12Months,
+	}
+)
+
 type CCMKeyValue struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`

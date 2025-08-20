@@ -77,6 +77,19 @@ func RegisterCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGro
 		Client: c,
 	}
 
+	commOrchBaseURL := utils.BuildServiceURL(config, config.CCMCommOrchBaseURL, config.BaseURL, "lw/co/api")
+	commOrchSecret := config.CCMCommOrchSecret
+
+	// Create base client for CCM
+	commOrchClient, err := utils.CreateClient(commOrchBaseURL, config, commOrchSecret)
+	if err != nil {
+		return err
+	}
+
+	ccmCommOrchClient := &client.CloudCostManagementService{
+		Client: commOrchClient,
+	}
+
 	// Create the CCM toolset
 	ccm := toolsets.NewToolset("ccm", "Harness Cloud Cost Management related tools").
 		AddReadTools(
@@ -99,6 +112,7 @@ func RegisterCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGro
 			toolsets.NewServerTool(tools.CcmMetadataTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.CcmPerspectiveRecommendationsTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.CcmPerspectiveFilterValuesTool(config, ccmClient)),
+			toolsets.NewServerTool(tools.CcmPerspectiveFilterValuesToolEvent(config)),
 			toolsets.NewServerTool(tools.ListCcmRecommendationsTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.ListCcmRecommendationsByResourceTypeTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.GetCcmRecommendationsStatsTool(config, ccmClient)),
@@ -121,6 +135,7 @@ func RegisterCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGro
 			toolsets.NewServerTool(tools.FetchCommitmentSavingsTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.FetchCommitmentUtilisationTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.FetchEstimatedSavingsTool(config, ccmClient)),
+			toolsets.NewServerTool(tools.FetchEC2AnalysisTool(config, ccmCommOrchClient)),
 		)
 
 	// Add toolset to the group

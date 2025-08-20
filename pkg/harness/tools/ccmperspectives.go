@@ -22,7 +22,8 @@ import (
 const (
 	CCMPerspectiveRulesToolID       = "validate_ccm_perspective_rules"
 	CCMPerspectiveRuleEventType     = "perspective_rules_updated"
-	FollowUpCreatePerspectivePrompt = "Create a new CCM perspective with these rules"
+	FollowUpCreatePerspectivePrompt = "Proceed to save perspective"
+	CCMPerspectivetCreateOrUpdateRuleEventType = "perspective_created_or_updated_event"
 )
 
 func ListCcmPerspectivesDetailTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
@@ -361,7 +362,7 @@ func createOrUpdatePerspectiveTool(update bool) (tool mcp.Tool) {
 		),
 		mcp.WithString("view_time_range_type",
 			mcp.Required(),
-			mcp.Enum(dto.TimeRangeTypeLast7Days, dto.TimeRangeTypeLast30Days, dto.TimeRangeTypeLastMonth, dto.TimeRangeTypeCurrentMonth, dto.TimeRangeTypeCustom),
+			mcp.Enum(dto.TimeRangeTypeLast7Days, dto.TimeRangeTypeLast30, dto.TimeRangeTypeLastMonth, dto.TimeRangeTypeCurrentMonth, dto.TimeRangeTypeCustom),
 			mcp.DefaultString(dto.TimeRangeTypeLast7Days),
 			mcp.Description("Containing folder identifier of the perspective"),
 		),
@@ -511,6 +512,8 @@ func createOrUpdatePerspectiveHandler(
 	viewType, err := OptionalParam[string](request, "view_type")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
+	} else if viewType != dto.ViewTypeCustomer {
+		return mcp.NewToolResultError(fmt.Sprintf("view_type must be %s or %s", dto.ViewTypeSample, dto.ViewTypeCustomer)), nil
 	}
 
 	viewState, err := OptionalParam[string](request, "view_state")
@@ -684,7 +687,23 @@ func createOrUpdatePerspectiveHandler(
 		return nil, fmt.Errorf("failed to marshal CCM Perspective: %w", err)
 	}
 
-	return mcp.NewToolResultText(string(r)), nil
+	responseContents := []mcp.Content{}
+
+	viewRulesEvent := event.NewCustomEvent(CCMPerspectivetCreateOrUpdateRuleEventType, map[string]any{
+		"response": string(r),
+	})
+
+	// Create embedded resources for the OPA event
+	eventResource, err := viewRulesEvent.CreateEmbeddedResource()
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	} else {
+		responseContents = append(responseContents, eventResource)
+	}
+
+	return &mcp.CallToolResult{
+		Content: responseContents,
+	}, nil
 }
 
 func getSupportedDataSources() string {
