@@ -319,7 +319,7 @@ func RegisterGenAI(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 // RegisterTemplates registers the templates toolset
 func RegisterTemplates(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for templates
-	baseURL := utils.BuildServiceURL(config, config.TemplateSvcBaseURL, config.BaseURL, "")
+	baseURL := utils.BuildServiceURL(config, config.TemplateSvcBaseURL, config.BaseURL, "template")
 	secret := config.TemplateSvcSecret
 
 	// Create base client for templates
