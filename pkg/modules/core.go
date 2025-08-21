@@ -494,6 +494,7 @@ func RegisterSecrets(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	secrets := toolsets.NewToolset("secrets", "Harness Secrets related tools").
 		AddReadTools(
 			toolsets.NewServerTool(tools.GetSecretTool(config, secretsClient)),
+			toolsets.NewServerTool(tools.ListSecretsTool(config, secretsClient)),
 		)
 
 	// Add toolset to the group
