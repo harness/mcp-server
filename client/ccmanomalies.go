@@ -11,8 +11,8 @@ const (
 	ccmAnomaliesSummaryPath       = ccmBasePath + "/anomaly/v2/summary?accountIdentifier=%s"
 	ccmIgnoredAnomaliesListPath   = ccmBasePath + "/anomaly/listIgnoredAnomalies?accountIdentifier=%s"
 	ccmAnomaliesListPath          = ccmBasePath + "/anomaly/v2/list?accountIdentifier=%s"
-	ccmAnomalyPath                = ccmBasePath + "/anomaly/anomaly?accountIdentifier=%s"
-	ccmAnomalyFilterValuesPath    = ccmBasePath + "/anomaly/anomaly/filter-values?accountIdentifier=%s"
+	ccmAnomalyPath                = ccmBasePath + "/anomaly?accountIdentifier=%s"
+	ccmAnomalyFilterValuesPath    = ccmBasePath + "/anomaly/filter-values?accountIdentifier=%s"
 	ccmAnomaliesByPerspectivePath = ccmBasePath + "/anomaly/perspective/%s?accountIdentifier=%s"
 	ccmReportAnomalyFeedbackPath  = ccmBasePath + "/anomaly/feedback?accountIdentifier=%s&anomalyId=%s"
 )
