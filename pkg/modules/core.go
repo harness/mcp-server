@@ -209,6 +209,7 @@ func RegisterConnectors(config *config.Config, tsg *toolsets.ToolsetGroup) error
 		AddReadTools(
 			toolsets.NewServerTool(tools.ListConnectorCatalogueTool(config, connectorServiceClient)),
 			toolsets.NewServerTool(tools.GetConnectorDetailsTool(config, connectorServiceClient)),
+			toolsets.NewServerTool(tools.ListConnectorsTool(config, connectorServiceClient)),
 		)
 
 	tsg.AddToolset(connectors)
