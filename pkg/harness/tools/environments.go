@@ -33,6 +33,12 @@ func GetEnvironmentTool(config *config.Config, client *client.EnvironmentClient)
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			data, err := client.Get(ctx, scope, environmentIdentifier)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get environment: %w", err)
@@ -74,6 +80,12 @@ func ListEnvironmentsTool(config *config.Config, client *client.EnvironmentClien
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			opts := &dto.EnvironmentOptions{}
 
@@ -187,6 +199,12 @@ func MoveEnvironmentConfigsTool(config *config.Config, client *client.Environmen
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			environmentIdentifier, err := RequiredParam[string](request, "environment_identifier")
 			if err != nil {

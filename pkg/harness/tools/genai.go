@@ -83,6 +83,12 @@ func createGenAIToolHandler(config *config.Config, client *client.GenaiService, 
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
+		// Add account ID to context for this request
+		if scope.AccountID == "" {
+			return mcp.NewToolResultError("account_id is required"), nil
+		}
+		ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 		// Extract optional parameters
 		conversationID, _ := OptionalParam[string](request, "conversation_id")
 		interactionID, _ := OptionalParam[string](request, "interaction_id")

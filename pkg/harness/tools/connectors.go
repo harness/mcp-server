@@ -21,6 +21,12 @@ func ListConnectorCatalogueTool(harnessConfig *config.Config, connectorService *
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			catalogue, err := connectorService.ListConnectorCatalogue(ctx, scope)
 			if err != nil {
 				return nil, fmt.Errorf("failed to list connector catalogue: %w", err)
@@ -56,6 +62,12 @@ func GetConnectorDetailsTool(config *config.Config, connectorService *client.Con
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			data, err := connectorService.GetConnector(ctx, scope, connectorIdentifier)
 			if err != nil {

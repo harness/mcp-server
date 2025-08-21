@@ -36,6 +36,12 @@ func GetEntityTool(config *config.Config, client *client.IDPService) (tool mcp.T
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+			
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 			kind, err := OptionalParam[string](request, "kind")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -95,6 +101,12 @@ func ListEntitiesTool(config *config.Config, client *client.IDPService) (tool mc
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+			
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			_, size, err := FetchPagination(request)
 			if err != nil {
@@ -191,6 +203,12 @@ func GetScorecardTool(config *config.Config, client *client.IDPService) (tool mc
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+			
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 			data, err := client.GetScorecard(ctx, scope, scorecardId)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get scorecard: %w", err)
@@ -216,6 +234,12 @@ func ListScorecardsTool(config *config.Config, client *client.IDPService) (tool 
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+			
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 			data, err := client.ListScorecards(ctx, scope)
 			if err != nil {
 				return nil, fmt.Errorf("failed to list scorecards: %w", err)
@@ -248,6 +272,12 @@ func GetScoreSummaryTool(config *config.Config, client *client.IDPService) (tool
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+			
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 			data, err := client.GetScorecardSummary(ctx, scope, entityId)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get scorecard summary: %w", err)
@@ -280,6 +310,12 @@ func GetScoresTool(config *config.Config, client *client.IDPService) (tool mcp.T
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+			
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 			data, err := client.GetScorecardScores(ctx, scope, entityId)
 			if err != nil {
 				return nil, fmt.Errorf("failed to list scorecards: %w", err)
@@ -324,6 +360,12 @@ func ExecuteWorkflowTool(config *config.Config, client *client.IDPService) (tool
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+			
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 			_, err = RequiredParam[interface{}](request, "workflow_details")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil

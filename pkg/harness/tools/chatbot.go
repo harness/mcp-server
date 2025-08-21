@@ -46,6 +46,12 @@ func AskChatbotTool(config *config.Config, client *client.ChatbotService) (tool 
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+			
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			var chatHistory []dto.ChatHistoryItem
 			chatHistoryRaw, err := OptionalParam[[]interface{}](request, "chat_history")

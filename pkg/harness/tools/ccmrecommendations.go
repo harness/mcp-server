@@ -95,6 +95,12 @@ func UpdateCcmRecommendationStateTool(config *config.Config, client *client.Clou
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			data, err := client.UpdateRecommendationState(ctx, scope, accountId, recommendationId, state)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -150,6 +156,12 @@ func OverrideCcmRecommendationSavingsTool(config *config.Config, client *client.
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			data, err := client.OverrideRecommendationSavings(ctx, scope, accountId, recommendationId, savings)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -181,6 +193,12 @@ func recommendationsHandler(
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
+
+	// Add account ID to context for this request
+	if scope.AccountID == "" {
+		return mcp.NewToolResultError("account_id is required"), nil
+	}
+	ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 	k8sProps, err := OptionalParam[map[string]any](request, "k8sRecommendationFilterPropertiesDTO")
 	if err != nil {

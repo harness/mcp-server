@@ -115,6 +115,12 @@ func ListCcmPerspectivesDetailTool(config *config.Config, client *client.CloudCo
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			data, err := client.ListPerspectivesDetail(ctx, scope, params)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get CCM Perspectives: %w", err)
@@ -156,6 +162,13 @@ func GetCcmPerspectiveTool(config *config.Config, client *client.CloudCostManage
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			data, err := client.GetPerspective(ctx, scope, params)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get CCM Perspective: %w", err)
@@ -227,6 +240,12 @@ func GetLastPeriodCostCcmPerspectiveTool(config *config.Config, client *client.C
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			data, err := client.GetLastCostPerspective(ctx, scope, params)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get CCM Perspective: %w", err)
@@ -289,6 +308,12 @@ func GetLastTwelveMonthsCostCcmPerspectiveTool(config *config.Config, client *cl
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			data, err := client.GetLastTwelveMonthsCostPerspective(ctx, scope, params)
 			if err != nil {
@@ -677,6 +702,12 @@ func createOrUpdatePerspectiveHandler(
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
+	// Add account ID to context for this request
+	if scope.AccountID == "" {
+		return mcp.NewToolResultError("account_id is required"), nil
+	}
+	ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 	data, err := client.CreateOrUpdatePerspective(ctx, scope, params, update)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CCM Perspective: %w", err)
@@ -876,6 +907,12 @@ func DeleteCcmPerspectiveTool(config *config.Config, client *client.CloudCostMan
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			data, err := client.DeletePerspective(ctx, scope, accountId, perspectiveId)
 			if err != nil {

@@ -33,6 +33,12 @@ func GetServiceTool(config *config.Config, client *client.ServiceClient) (tool m
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			data, err := client.Get(ctx, scope, serviceIdentifier)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get service: %w", err)
@@ -74,6 +80,12 @@ func ListServicesTool(config *config.Config, client *client.ServiceClient) (tool
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			opts := &dto.ServiceOptions{}
 

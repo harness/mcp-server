@@ -59,6 +59,12 @@ func ListDashboardsTool(config *config.Config, client *client.DashboardService) 
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			// Get pagination parameters from the request
 			page, size, err := fetchDashboardPagination(request)
 			if err != nil {
@@ -195,6 +201,12 @@ func GetDashboardDataTool(config *config.Config, client *client.DashboardService
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			// Fetch the dashboard data
 			dashboardData, err := client.GetDashboardData(ctx, scope, dashboardID, timeframeInt)

@@ -24,6 +24,12 @@ func ListExperimentsTool(config *config.Config, client *client.ChaosService) (to
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			page, size, err := FetchPagination(request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -60,6 +66,12 @@ func GetExperimentsTool(config *config.Config, client *client.ChaosService) (too
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			experimentID, err := RequiredParam[string](request, "experimentID")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -90,6 +102,12 @@ func GetExperimentRunsTool(config *config.Config, client *client.ChaosService) (
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			experimentID, err := RequiredParam[string](request, "experimentID")
 			if err != nil {
@@ -126,6 +144,12 @@ func RunExperimentTool(config *config.Config, client *client.ChaosService) (tool
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			experimentID, err := RequiredParam[string](request, "experimentID")
 			if err != nil {

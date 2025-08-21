@@ -32,6 +32,12 @@ func GetRegistryTool(config *config.Config, client *ar.ClientWithResponses) (too
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			// Call the GetRegistry API
 			ref := utils.GetRef(scope, registryRef)
 			response, err := client.GetRegistryWithResponse(ctx, ref)
@@ -82,6 +88,13 @@ func ListRegistriesTool(config *config.Config, client *ar.ClientWithResponses) (
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+			
 			ref := utils.GetRef(scope)
 
 			packageType, ok, err := OptionalParamOK[string](request, "package_type")

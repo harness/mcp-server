@@ -56,6 +56,12 @@ func FindSimilarTemplates(config *config.Config, client *client.IntelligenceServ
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			// Create similarity search request
 			similarityRequest := &dto.SimilaritySearchRequest{
 				AccountID:    scope.AccountID,

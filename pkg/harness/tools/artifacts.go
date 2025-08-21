@@ -54,6 +54,13 @@ func ListArtifactsTool(config *config.Config, client *ar.ClientWithResponses) (t
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			ref := utils.GetRef(scope, registryRef)
 
 			// Call the GetAllArtifactsByRegistry API

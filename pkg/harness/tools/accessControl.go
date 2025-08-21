@@ -33,6 +33,12 @@ func GetAllUsersTool(config *config.Config, usersClient *client.PrincipalService
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			page, size, err := FetchPagination(request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -77,6 +83,12 @@ func GetUserInfoTool(config *config.Config, userInfoClient *client.PrincipalServ
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			userID, err := RequiredParam[string](request, "user_id")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -120,6 +132,12 @@ func GetUserGroupInfoTool(config *config.Config, userGroupInfoClient *client.Pri
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			userGroupID, err := RequiredParam[string](request, "user_group_id")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -154,6 +172,12 @@ func GetServiceAccountTool(config *config.Config, serviceAccountClient *client.P
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			serviceAccountID, err := RequiredParam[string](request, "service_account_id")
 			if err != nil {
@@ -194,6 +218,12 @@ func GetRoleInfoTool(config *config.Config, roleInfoClient *client.RBACService) 
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			data, err := roleInfoClient.GetRoleInfo(ctx, scope, roleID)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get role info: %w", err)
@@ -219,6 +249,12 @@ func ListAvailableRolesTool(config *config.Config, rolesClient *client.RBACServi
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			page, size, err := FetchPagination(request)
 			if err != nil {
@@ -253,6 +289,12 @@ func ListAvailablePermissions(config *config.Config, permissionsClient *client.R
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			page, size, err := FetchPagination(request)
 			if err != nil {
@@ -303,6 +345,12 @@ func ListRoleAssignmentsTool(config *config.Config, roleAssignmentsClient *clien
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			page, size, err := FetchPagination(request)
 			if err != nil {

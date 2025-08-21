@@ -56,6 +56,12 @@ Once a task is created, you need to trigger it for a repository and branch to ex
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
+		// Add account ID to context for this request
+		if scope.AccountID == "" {
+			return mcp.NewToolResultError("account_id is required"), nil
+		}
+		ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 		// Construct the space_ref
 		orgProjectPath := fmt.Sprintf("%s/%s", scope.OrgID, scope.ProjectID)
 
@@ -140,6 +146,12 @@ func TriggerAutonomousCodeMaintenanceTaskTool(config *config.Config, client *cli
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
+		// Add account ID to context for this request
+		if scope.AccountID == "" {
+			return mcp.NewToolResultError("account_id is required"), nil
+		}
+		ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 		// Create the request
 		executeRequest := &dto.TriggerACMTaskExecutionRequest{
 			TaskID:       taskID,
@@ -220,6 +232,12 @@ func GetAutonomousCodeMaintenanceTaskExecutionsTool(config *config.Config, clien
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+
+		// Add account ID to context for this request
+		if scope.AccountID == "" {
+			return mcp.NewToolResultError("account_id is required"), nil
+		}
+		ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 		// Create the request
 		getRequest := &dto.GetACMExecutionsRequest{

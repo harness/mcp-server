@@ -475,6 +475,11 @@ func (c *Client) Do(r *http.Request) (*http.Response, error) {
 	}
 	r.Header.Set(k, v)
 
+	// Check for account ID in context and add it to headers if present
+	if accountID := GetAccountIDFromContext(ctx); accountID != "" {
+		slog.Debug("Adding account ID header from context", "accountID: ", accountID)
+		r.Header.Set("Harness-Account", accountID)
+	}
 	return c.client.Do(r)
 }
 

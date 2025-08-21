@@ -82,6 +82,12 @@ func FetchEstimatedSavingsTool(config *config.Config, client *client.CloudCostMa
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			data, err := client.GetEstimatedSavings(ctx, scope, targetCoverage, params)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to get commitment coverage: %s", err)), nil
@@ -132,6 +138,12 @@ func FetchEC2AnalysisTool(config *config.Config, client *client.CloudCostManagem
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			var response dto.CommitmentEC2AnalysisResponse
 

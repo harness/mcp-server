@@ -236,6 +236,13 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			orgID := scope.OrgID
 			projectID := scope.ProjectID
 			order, _, page, size, sortVal := ParseArtifactListParams(request)
@@ -537,6 +544,13 @@ func ArtifactListV2Tool(config *config.Config, client *generated.ClientWithRespo
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			orgID := scope.OrgID
 			projectID := scope.ProjectID
 			source, err := RequiredParam[string](request, "source")
@@ -607,6 +621,13 @@ func GetArtifactV2OverviewTool(config *config.Config, client *generated.ClientWi
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			orgID := scope.OrgID
 			projectID := scope.ProjectID
 			source, err := RequiredParam[string](request, "source")
@@ -671,6 +692,13 @@ func GetArtifactChainOfCustodyV2Tool(config *config.Config, client *generated.Cl
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			orgID := scope.OrgID
 			projectID := scope.ProjectID
 			artifact, err := RequiredParam[string](request, "artifact_identifier")
@@ -766,6 +794,13 @@ func FetchComplianceResultsByArtifactTool(config *config.Config, client *generat
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			orgID := scope.OrgID
 			projectID := scope.ProjectID
 
@@ -837,6 +872,13 @@ func GetCodeRepositoryOverviewTool(config *config.Config, client *generated.Clie
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			orgID := scope.OrgID
 			projectID := scope.ProjectID
 
@@ -1020,6 +1062,13 @@ func DownloadSbomTool(config *config.Config, client *generated.ClientWithRespons
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			orgID := scope.OrgID
 			projectID := scope.ProjectID
 			orchestrationID, err := RequiredParam[string](request, "orchestration_id")
@@ -1167,6 +1216,13 @@ func ListSCSCodeReposTool(config *config.Config, client *generated.ClientWithRes
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			orgID := scope.OrgID
 			projectID := scope.ProjectID
 			order, sort, page, size, _ := ParseArtifactListParams(request)

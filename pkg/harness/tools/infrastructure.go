@@ -46,6 +46,12 @@ func ListInfrastructuresTool(config *config.Config, client *client.Infrastructur
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			opts := &dto.InfrastructureOptions{}
 
 			// Handle pagination
@@ -176,6 +182,12 @@ func MoveInfrastructureConfigsTool(config *config.Config, client *client.Infrast
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			// Extract required parameters
 			infraIdentifier, err := RequiredParam[string](request, "infra_identifier")

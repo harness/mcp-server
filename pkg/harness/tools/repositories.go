@@ -32,6 +32,12 @@ func GetRepositoryTool(config *config.Config, client *client.RepositoryService) 
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			data, err := client.Get(ctx, scope, repoIdentifier)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get repository: %w", err)
@@ -75,6 +81,12 @@ func ListRepositoriesTool(config *config.Config, client *client.RepositoryServic
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			opts := &dto.RepositoryOptions{}
 

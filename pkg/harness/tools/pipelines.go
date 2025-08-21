@@ -31,6 +31,12 @@ func GetPipelineTool(config *config.Config, client *client.PipelineService) (too
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			data, err := client.Get(ctx, scope, pipelineID)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get pipeline: %w", err)
@@ -59,6 +65,12 @@ func ListPipelinesTool(config *config.Config, client *client.PipelineService) (t
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			page, size, err := FetchPagination(request)
 			if err != nil {
@@ -121,6 +133,12 @@ func FetchExecutionURLTool(config *config.Config, client *client.PipelineService
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			url, err := client.FetchExecutionURL(ctx, scope, pipelineID, planExecutionID)
 			if err != nil {
 				return nil, fmt.Errorf("failed to fetch execution URL: %w", err)
@@ -149,6 +167,12 @@ func GetExecutionTool(config *config.Config, client *client.PipelineService) (to
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			data, err := client.GetExecution(ctx, scope, planExecutionID)
 			if err != nil {
@@ -190,6 +214,12 @@ func ListExecutionsTool(config *config.Config, client *client.PipelineService) (
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			page, size, err := FetchPagination(request)
 			if err != nil {
@@ -266,6 +296,12 @@ func ListInputSetsTool(config *config.Config, client *client.PipelineService) (t
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			page, size, err := FetchPagination(request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -332,6 +368,12 @@ func GetInputSetTool(config *config.Config, client *client.PipelineService) (too
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			data, err := client.GetInputSet(ctx, scope, pipelineIdentifier, inputSetIdentifier)
 			if err != nil {

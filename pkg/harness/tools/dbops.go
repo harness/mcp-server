@@ -40,6 +40,13 @@ func GetDatabaseInfoTool(config *config.Config, dbopsClient *dbops.Client) (tool
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Add account ID to context for this request
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
+			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
+
 			orgID := scope.OrgID
 			projectID := scope.ProjectID
 
