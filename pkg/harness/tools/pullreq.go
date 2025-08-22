@@ -60,30 +60,6 @@ func GetPullRequestTool(config *config.Config, client *client.PullRequestService
 		}
 }
 
-// Helper function to parse comma-separated list
-func parseCommaSeparatedList(input string) []string {
-	if input == "" {
-		return nil
-	}
-	return splitAndTrim(input, ",")
-}
-
-// splitAndTrim splits a string by the given separator and trims spaces from each element
-func splitAndTrim(s, sep string) []string {
-	if s == "" {
-		return nil
-	}
-	parts := strings.Split(s, sep)
-	result := make([]string, 0, len(parts))
-	for _, part := range parts {
-		trimmed := strings.TrimSpace(part)
-		if trimmed != "" {
-			result = append(result, trimmed)
-		}
-	}
-	return result
-}
-
 // ListPullRequestsTool creates a tool for listing pull requests
 // TODO: more options can be added (sort, order, timestamps, etc)
 func ListPullRequestsTool(config *config.Config, client *client.PullRequestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
@@ -211,6 +187,30 @@ func ListPullRequestsTool(config *config.Config, client *client.PullRequestServi
 
 			return mcp.NewToolResultText(string(r)), nil
 		}
+}
+
+// Helper function to parse comma-separated list
+func parseCommaSeparatedList(input string) []string {
+	if input == "" {
+		return nil
+	}
+	return splitAndTrim(input, ",")
+}
+
+// splitAndTrim splits a string by the given separator and trims spaces from each element
+func splitAndTrim(s, sep string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, sep)
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
 }
 
 // GetPullRequestChecksTool creates a tool for getting pull request status checks
