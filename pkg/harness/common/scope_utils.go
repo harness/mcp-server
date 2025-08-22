@@ -7,9 +7,6 @@ import (
 	"github.com/harness/harness-mcp/client/dto"
 )
 
-// AccountIDKey is the context key for storing the account ID
-type AccountIDKey struct{}
-
 // ScopeKey is the context key for storing the scope
 type ScopeKey struct{}
 
