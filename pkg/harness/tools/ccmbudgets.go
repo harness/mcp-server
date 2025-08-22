@@ -127,3 +127,76 @@ func GetBudgetCostDetailTool(config *config.Config, client *client.CloudCostMana
 			return mcp.NewToolResultText(string(r)), nil
 		}
 }
+
+func CloneBudgetTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("clone_budget",
+			mcp.WithDescription("Clones a budget in Harness Cloud Cost Management"),
+			mcp.WithString("budgetId", mcp.Required(), mcp.Description("Budget ID")),
+			mcp.WithString("cloneName", mcp.Required(), mcp.Description("Name for the cloned budget")),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			accountId, err := getAccountID(config, request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			budgetId, err := RequiredParam[string](request, "budgetId")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			cloneName, err := RequiredParam[string](request, "cloneName")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			if budgetId == "" {
+				return mcp.NewToolResultError("BudgetId must be provided"), nil
+			}
+
+			if cloneName == "" {
+				return mcp.NewToolResultError("CloneName must be provided"), nil
+			}
+
+			data, err := client.CloneBudget(ctx, accountId, budgetId, cloneName)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			r, err := json.Marshal(data)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+func DeleteBudgetTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("delete_budget",
+			mcp.WithDescription("Deletes a budget in Harness Cloud Cost Management"),
+			mcp.WithString("budgetId", mcp.Required(), mcp.Description("Budget ID")),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			accountId, err := getAccountID(config, request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			budgetId, err := RequiredParam[string](request, "budgetId")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			if budgetId == "" {
+				return mcp.NewToolResultError("BudgetId must be provided"), nil
+			}
+
+			data, err := client.DeleteBudget(ctx, accountId, budgetId)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			r, err := json.Marshal(data)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}

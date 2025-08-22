@@ -174,6 +174,8 @@ Toolset Name: `ccm`
 - `get_budget_detail`: Get budget detail for a specific budget in Harness Cloud Cost Management.
 - `list_budgets_for_perspective`: List budgets for a specific perspective in Harness Cloud Cost Management.
 - `get_budget_cost_detail`: Get budget cost detail for a specific account in Harness Cloud Cost Management.
+- `delete_budget`: Delete a budget for a specific account in Harness Cloud Cost Management.
+- `clone_budget`: Clone a budget for a specific account in Harness Cloud Cost Management.
 - `get_ccm_commitment_coverage`: Get commitment coverage information for an account in Harness Cloud Cost Management.
 - `get_ccm_commitment_savings`: Get commitment savings information for an account in Harness Cloud Cost Management.
 - `get_ccm_commitment_utilisation`: Get commitment utilisation information for an account in Harness Cloud Cost Management broken down by Reserved Instances and Savings Plans in day wise granularity.

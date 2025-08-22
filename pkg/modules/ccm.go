@@ -138,6 +138,8 @@ func RegisterCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGro
 			toolsets.NewServerTool(tools.GetBudgetDetailTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.ListBudgetsForPerspectiveTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.GetBudgetCostDetailTool(config, ccmClient)),
+			toolsets.NewServerTool(tools.CloneBudgetTool(config, ccmClient)),
+			toolsets.NewServerTool(tools.DeleteBudgetTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.FetchCommitmentCoverageTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.FetchCommitmentSavingsTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.FetchCommitmentUtilisationTool(config, ccmClient)),
