@@ -26,13 +26,12 @@ func GetAllUsersTool(config *config.Config, usersClient *client.PrincipalService
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			// Get scope from context (added by middleware)
-			scope, err := common.GetScopeFromContext(ctx)
-			if err != nil {
-				return mcp.NewToolResultError("Failed to get scope from context: " + err.Error()), nil
-			}
-
 			searchTerm, _ := OptionalParam[string](request, "search_term")
+
+			scope, err := common.FetchScope(config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
 			page, size, err := FetchPagination(request)
 			if err != nil {
@@ -64,19 +63,18 @@ func GetAllUsersTool(config *config.Config, usersClient *client.PrincipalService
 
 func GetUserInfoTool(config *config.Config, userInfoClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_user_info",
-			mcp.WithDescription("Get details of a specific USER."),
+			mcp.WithDescription("Get User Info."),
 			mcp.WithString("user_id",
-				mcp.Description("The ID of the user"),
 				mcp.Required(),
+				mcp.Description("The user id(UUID) to retrieve the user info."),
 			),
 			common.WithScope(config, false),
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			// Get scope from context (added by middleware)
-			scope, err := common.GetScopeFromContext(ctx)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
-				return mcp.NewToolResultError("Failed to get scope from context: " + err.Error()), nil
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			userID, err := RequiredParam[string](request, "user_id")
@@ -106,9 +104,9 @@ func GetUserInfoTool(config *config.Config, userInfoClient *client.PrincipalServ
 		}
 }
 
-func GetUserGroupInfoTool(config *config.Config, userGroupClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetUserGroupInfoTool(config *config.Config, userGroupInfoClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_user_group_info",
-			mcp.WithDescription("Get details of a specific USER GROUP."),
+			mcp.WithDescription("Get User Group Info."),
 			mcp.WithString("user_group_id",
 				mcp.Required(),
 				mcp.Description("The User Group ID to retrieve the user group info."),
@@ -117,15 +115,9 @@ func GetUserGroupInfoTool(config *config.Config, userGroupClient *client.Princip
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			// Get scope from context (added by middleware)
-			scope, err := common.GetScopeFromContext(ctx)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
-				return mcp.NewToolResultError("Failed to get scope from context: " + err.Error()), nil
-			}
-
-			// Check if account ID is available
-			if scope.AccountID == "" {
-				return mcp.NewToolResultError("account_id is required"), nil
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			userGroupID, err := RequiredParam[string](request, "user_group_id")
@@ -133,7 +125,7 @@ func GetUserGroupInfoTool(config *config.Config, userGroupClient *client.Princip
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			data, err := userGroupClient.GetUserGroupInfo(ctx, scope, userGroupID)
+			data, err := userGroupInfoClient.GetUserGroupInfo(ctx, scope, userGroupID)
 			if err != nil {
 				return nil, fmt.Errorf("Failed to get user group info: %w", err)
 			}
@@ -158,10 +150,9 @@ func GetServiceAccountTool(config *config.Config, serviceAccountClient *client.P
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			// Get scope from context (added by middleware)
-			scope, err := common.GetScopeFromContext(ctx)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
-				return mcp.NewToolResultError("Failed to get scope from context: " + err.Error()), nil
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			serviceAccountID, err := RequiredParam[string](request, "service_account_id")
@@ -198,10 +189,9 @@ func GetRoleInfoTool(config *config.Config, roleInfoClient *client.RBACService) 
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			// Get scope from context (added by middleware)
-			scope, err := common.GetScopeFromContext(ctx)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
-				return mcp.NewToolResultError("Failed to get scope from context: " + err.Error()), nil
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			data, err := roleInfoClient.GetRoleInfo(ctx, scope, roleID)
@@ -225,10 +215,9 @@ func ListAvailableRolesTool(config *config.Config, rolesClient *client.RBACServi
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			// Get scope from context (added by middleware)
-			scope, err := common.GetScopeFromContext(ctx)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
-				return mcp.NewToolResultError("Failed to get scope from context: " + err.Error()), nil
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			page, size, err := FetchPagination(request)
@@ -260,10 +249,9 @@ func ListAvailablePermissions(config *config.Config, permissionsClient *client.R
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			// Get scope from context (added by middleware)
-			scope, err := common.GetScopeFromContext(ctx)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
-				return mcp.NewToolResultError("failed to get scope from context: " + err.Error()), nil
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			page, size, err := FetchPagination(request)
@@ -276,12 +264,12 @@ func ListAvailablePermissions(config *config.Config, permissionsClient *client.R
 
 			data, err := permissionsClient.ListAvailablePermissions(ctx, scope, page, size)
 			if err != nil {
-				return nil, fmt.Errorf("failed to list the available permissions: %w", err)
+				return nil, fmt.Errorf("Failed to list the available permissions: %w", err)
 			}
 
 			r, err := json.Marshal(data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal the permissions of the user: %w", err)
+				return nil, fmt.Errorf("Failed to marshal the permissions of the user: %w", err)
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
@@ -311,15 +299,9 @@ func ListRoleAssignmentsTool(config *config.Config, roleAssignmentsClient *clien
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			// Get scope from context (added by middleware)
-			scope, err := common.GetScopeFromContext(ctx)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
-				return mcp.NewToolResultError("Failed to get scope from context: " + err.Error()), nil
-			}
-
-			// Validate account ID
-			if scope.AccountID == "" {
-				return mcp.NewToolResultError("account_id is required"), nil
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			page, size, err := FetchPagination(request)
