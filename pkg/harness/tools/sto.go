@@ -489,7 +489,7 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 				} else {
 					responseContents = append(responseContents, tableResource)
 				}
-				
+
 				// Create prompt event and resource if we have suggestions
 				if len(suggestions) > 0 {
 					promptEvent := types.NewActionEvent(suggestions)
