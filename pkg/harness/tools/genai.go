@@ -9,6 +9,7 @@ import (
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -78,16 +79,11 @@ func createGenAIToolHandler(config *config.Config, client *client.GenaiService, 
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		scope, err := FetchScope(config, request, false)
+		scope, err := common.FetchScope(config, request, false)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		// Add account ID to context for this request
-		if scope.AccountID == "" {
-			return mcp.NewToolResultError("account_id is required"), nil
-		}
-		ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 		// Extract optional parameters
 		conversationID, _ := OptionalParam[string](request, "conversation_id")
@@ -249,7 +245,7 @@ func AIDevOpsAgentTool(config *config.Config, client *client.GenaiService) (tool
 			mcp.Required(),
 			mcp.Description("The action type to perform (CREATE_STEP, UPDATE_STEP, CREATE_STAGE, UPDATE_STAGE, CREATE_PIPELINE, UPDATE_PIPELINE, CREATE_ENVIRONMENT, UPDATE_ENVIRONMENT, CREATE_SECRET, UPDATE_SECRET, CREATE_SERVICE, UPDATE_SERVICE, CREATE_CONNECTOR, UPDATE_CONNECTOR etc.)"),
 		),
-		WithScope(config, false),
+		common.WithScope(config, false),
 	)
 
 	tool = mcp.NewTool("ask_ai_devops_agent",
@@ -299,7 +295,7 @@ func DBChangesetTool(config *config.Config, client *client.GenaiService) (tool m
 		mcp.WithString("error_context",
 			mcp.Description("Optional error context if this is a retry after an error for a given changeset"),
 		),
-		WithScope(config, false),
+		common.WithScope(config, false),
 	)
 
 	tool = mcp.NewTool("generate_db_changeset",
@@ -369,7 +365,7 @@ func GenerateWorflowTool(config *config.Config, client *client.GenaiService) (to
 		mcp.WithString("error_context",
 			mcp.Description("Optional error context if this is a retry after an error for a given workflow"),
 		),
-		WithScope(config, false),
+		common.WithScope(config, false),
 	)
 
 	tool = mcp.NewTool("generate_idp_workflow",

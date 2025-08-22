@@ -13,6 +13,7 @@ import (
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness/event/types"
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/mark3labs/mcp-go/server"
 )
 
@@ -102,9 +103,9 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
                                                 - Example: "SCA,SAST"
                                                 - If not provided (field omitted), all issue types are included (default behavior, as in: ?issueTypes= omitted in the request).
                                             `)),
-			WithScope(config, true),
+			common.WithScope(config, true),
 		), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -302,11 +303,11 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 		- Exemption title: "Temporary exemption for production release"
 		
 		Note: For exact vulnerability IDs, use the complete ID without modifications.`)),
-			WithScope(config, true),
+			common.WithScope(config, true),
 		), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			page := int64(0)
 			size := int64(5)
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -548,7 +549,7 @@ func ExemptionsPromoteExemptionTool(config *config.Config, client *generated.Cli
 			mcp.WithString("comment", mcp.Description("Optional comment for the approval or rejection")),
 			mcp.WithString("pipelineId", mcp.Description("Optional pipeline ID to associate with the exemption")),
 			mcp.WithString("targetId", mcp.Description("Optional target ID to associate with the exemption")),
-			WithScope(config, true),
+			common.WithScope(config, true),
 		), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			params := &generated.ExemptionsPromoteExemptionParams{
 				AccountId: config.AccountID,
@@ -633,7 +634,7 @@ func ExemptionsApproveExemptionTool(config *config.Config, client *generated.Cli
 			mcp.WithString("projectId", mcp.Description("Harness Project ID")),
 			mcp.WithString("userId", mcp.Description("User ID of the approver. Get the current userID from context")),
 			mcp.WithString("comment", mcp.Description("Optional comment for the approval or rejection")),
-			WithScope(config, true),
+			common.WithScope(config, true),
 		), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			params := &generated.ExemptionsApproveExemptionParams{
 				AccountId: config.AccountID,

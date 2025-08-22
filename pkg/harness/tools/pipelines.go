@@ -8,6 +8,7 @@ import (
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -19,23 +20,17 @@ func GetPipelineTool(config *config.Config, client *client.PipelineService) (too
 				mcp.Required(),
 				mcp.Description("The ID of the pipeline"),
 			),
-			WithScope(config, true),
+			common.WithScope(config, true),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			pipelineID, err := RequiredParam[string](request, "pipeline_id")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-
-			// Add account ID to context for this request
-			if scope.AccountID == "" {
-				return mcp.NewToolResultError("account_id is required"), nil
-			}
-			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			data, err := client.Get(ctx, scope, pipelineID)
 			if err != nil {
@@ -57,20 +52,14 @@ func ListPipelinesTool(config *config.Config, client *client.PipelineService) (t
 			mcp.WithString("search_term",
 				mcp.Description("Optional search term to filter pipelines"),
 			),
-			WithScope(config, true),
+			common.WithScope(config, true),
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-
-			// Add account ID to context for this request
-			if scope.AccountID == "" {
-				return mcp.NewToolResultError("account_id is required"), nil
-			}
-			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			page, size, err := FetchPagination(request)
 			if err != nil {
@@ -115,7 +104,7 @@ func FetchExecutionURLTool(config *config.Config, client *client.PipelineService
 				mcp.Required(),
 				mcp.Description("The ID of the plan execution"),
 			),
-			WithScope(config, true),
+			common.WithScope(config, true),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			pipelineID, err := RequiredParam[string](request, "pipeline_id")
@@ -128,16 +117,10 @@ func FetchExecutionURLTool(config *config.Config, client *client.PipelineService
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-
-			// Add account ID to context for this request
-			if scope.AccountID == "" {
-				return mcp.NewToolResultError("account_id is required"), nil
-			}
-			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			url, err := client.FetchExecutionURL(ctx, scope, pipelineID, planExecutionID)
 			if err != nil {
@@ -155,7 +138,7 @@ func GetExecutionTool(config *config.Config, client *client.PipelineService) (to
 				mcp.Required(),
 				mcp.Description("The ID of the plan execution"),
 			),
-			WithScope(config, true),
+			common.WithScope(config, true),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			planExecutionID, err := RequiredParam[string](request, "plan_execution_id")
@@ -163,16 +146,10 @@ func GetExecutionTool(config *config.Config, client *client.PipelineService) (to
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-
-			// Add account ID to context for this request
-			if scope.AccountID == "" {
-				return mcp.NewToolResultError("account_id is required"), nil
-			}
-			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			data, err := client.GetExecution(ctx, scope, planExecutionID)
 			if err != nil {
@@ -206,20 +183,14 @@ func ListExecutionsTool(config *config.Config, client *client.PipelineService) (
 			mcp.WithBoolean("my_deployments",
 				mcp.Description("Optional flag to show only my deployments"),
 			),
-			WithScope(config, true),
+			common.WithScope(config, true),
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-
-			// Add account ID to context for this request
-			if scope.AccountID == "" {
-				return mcp.NewToolResultError("account_id is required"), nil
-			}
-			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			page, size, err := FetchPagination(request)
 			if err != nil {
@@ -287,20 +258,14 @@ func ListInputSetsTool(config *config.Config, client *client.PipelineService) (t
 			mcp.WithString("search_term",
 				mcp.Description("Optional search term to filter out Input Sets based on name, identifier, tags."),
 			),
-			WithScope(config, true),
+			common.WithScope(config, true),
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-
-			// Add account ID to context for this request
-			if scope.AccountID == "" {
-				return mcp.NewToolResultError("account_id is required"), nil
-			}
-			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			page, size, err := FetchPagination(request)
 			if err != nil {
@@ -351,7 +316,7 @@ func GetInputSetTool(config *config.Config, client *client.PipelineService) (too
 				mcp.Required(),
 				mcp.Description("The identifier of the input set."),
 			),
-			WithScope(config, true),
+			common.WithScope(config, true),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			pipelineIdentifier, err := RequiredParam[string](request, "pipeline_identifier")
@@ -364,16 +329,10 @@ func GetInputSetTool(config *config.Config, client *client.PipelineService) (too
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-
-			// Add account ID to context for this request
-			if scope.AccountID == "" {
-				return mcp.NewToolResultError("account_id is required"), nil
-			}
-			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			data, err := client.GetInputSet(ctx, scope, pipelineIdentifier, inputSetIdentifier)
 			if err != nil {

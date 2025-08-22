@@ -10,6 +10,7 @@ import (
 	"github.com/harness/harness-mcp/pkg/utils"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 )
 
 // ListArtifactVersionsTool creates a tool for listing artifact versions in a registry
@@ -30,7 +31,7 @@ func ListArtifactVersionsTool(config *config.Config, client *ar.ClientWithRespon
 			mcp.WithString("search",
 				mcp.Description("Optional search term to filter versions"),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -63,7 +64,7 @@ func ListArtifactVersionsTool(config *config.Config, client *ar.ClientWithRespon
 				params.SearchTerm = &search
 			}
 
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -117,7 +118,7 @@ func ListArtifactFilesTool(config *config.Config, client *ar.ClientWithResponses
 				mcp.Description("Optional field to sort by"),
 				mcp.Enum("updatedAt"),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -163,7 +164,7 @@ func ListArtifactFilesTool(config *config.Config, client *ar.ClientWithResponses
 				params.SortField = &sortField
 			}
 
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

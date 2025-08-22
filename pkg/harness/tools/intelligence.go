@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -28,7 +30,7 @@ func FindSimilarTemplates(config *config.Config, client *client.IntelligenceServ
 			mcp.WithNumber("count",
 				mcp.Description("Maximum number of similar templates to return"),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			// Get required description parameter
@@ -51,16 +53,10 @@ func FindSimilarTemplates(config *config.Config, client *client.IntelligenceServ
 			count := int(countFloat)
 
 			// Try to fetch scope parameters (account_id, org_id, project_id) if provided
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-
-			// Add account ID to context for this request
-			if scope.AccountID == "" {
-				return mcp.NewToolResultError("account_id is required"), nil
-			}
-			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			// Create similarity search request
 			similarityRequest := &dto.SimilaritySearchRequest{
