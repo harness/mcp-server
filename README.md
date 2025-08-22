@@ -170,12 +170,14 @@ Toolset Name: `ccm`
 - `list_all_ccm_anomalies`: Returns a list of all cost anomalies for a specified account in Harness Cloud Cost Management.
 - `list_filter_values_ccm_anomalies`: Returns the list of distinct values for all the specified anomalies for a specified account in Harness Cloud Cost Management.
 - `report_ccm_anomaly_feedback`: Reports feedback for an anomaly and account in Harness Cloud Cost Management.
-- `list_all_budgets`: List all budgets for a specific account in Harness Cloud Cost Management.
+- `list_all_ccm_budgets`: List all budgets for a specific account in Harness Cloud Cost Management.
 - `get_budget_detail`: Get budget detail for a specific budget in Harness Cloud Cost Management.
-- `list_budgets_for_perspective`: List budgets for a specific perspective in Harness Cloud Cost Management.
-- `get_budget_cost_detail`: Get budget cost detail for a specific account in Harness Cloud Cost Management.
-- `delete_budget`: Delete a budget for a specific account in Harness Cloud Cost Management.
-- `clone_budget`: Clone a budget for a specific account in Harness Cloud Cost Management.
+- `list_ccm_budgets_for_perspective`: List budgets for a specific perspective in Harness Cloud Cost Management.
+- `get_ccm_budget_cost_detail`: Get budget cost detail for a specific account in Harness Cloud Cost Management.
+- `delete_ccm_budget`: Delete a budget for a specific account in Harness Cloud Cost Management.
+- `clone_ccm_budget`: Clone a budget for a specific account in Harness Cloud Cost Management.
+- `create_ccm_budget`: Create a budget for a specific account in Harness Cloud Cost Management.
+- `update_ccm_budget`: Update a budget for a specific account in Harness Cloud Cost Management.
 - `get_ccm_commitment_coverage`: Get commitment coverage information for an account in Harness Cloud Cost Management.
 - `get_ccm_commitment_savings`: Get commitment savings information for an account in Harness Cloud Cost Management.
 - `get_ccm_commitment_utilisation`: Get commitment utilisation information for an account in Harness Cloud Cost Management broken down by Reserved Instances and Savings Plans in day wise granularity.

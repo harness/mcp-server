@@ -12,6 +12,8 @@ const (
 	ccmGetBudgetCostDetailPath       = ccmBasePath + "/budgets/%s/costDetails?accountIdentifier=%s&breakdown=%s"
 	ccmCloneBudgetPath               = ccmBasePath + "/budgets/%s?accountIdentifier=%s&cloneName=%s"
 	ccmDeleteBudgetPath              = ccmBasePath + "/budgets/%s?accountIdentifier=%s"
+	ccmCreateBudgetPath              = ccmBasePath + "/budgets?accountIdentifier=%s"
+	ccmUpdateBudgetPath              = ccmBasePath + "/budgets/%s?accountIdentifier=%s"
 )
 
 func (c *CloudCostManagementService) ListAllBudgets(ctx context.Context, accountId string, options map[string]string) (*map[string]any, error) {
@@ -68,6 +70,30 @@ func (c *CloudCostManagementService) DeleteBudget(ctx context.Context, accountId
 	err := c.Client.Delete(ctx, path, nil, nil, &resp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to delete ccm budget  %s: %w", budgetId, err)
+	}
+	return resp, nil
+}
+
+func (c *CloudCostManagementService) CreateBudget(ctx context.Context, accountId string, options map[string]any) (*map[string]any, error) {
+
+	path := fmt.Sprintf(ccmCreateBudgetPath, accountId)
+	resp := new(map[string]any)
+
+	err := c.Client.Post(ctx, path, nil, nil, map[string]string{}, &resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list all ccm budgets: %w", err)
+	}
+	return resp, nil
+}
+
+func (c *CloudCostManagementService) UpdateBudget(ctx context.Context, accountId string, options map[string]any) (*map[string]any, error) {
+	budgetId := options["budgetId"].(string)
+	path := fmt.Sprintf(ccmUpdateBudgetPath, budgetId, accountId)
+	resp := new(map[string]any)
+
+	err := c.Client.Put(ctx, path, nil, nil, &resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list all ccm budgets: %w", err)
 	}
 	return resp, nil
 }
