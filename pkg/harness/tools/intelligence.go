@@ -143,7 +143,7 @@ func AIDevOpsAgentTool(config *config.Config, client *client.IntelligenceService
 					"required": []string{"role", "content"},
 				}),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			// Get required parameters
@@ -186,7 +186,7 @@ func AIDevOpsAgentTool(config *config.Config, client *client.IntelligenceService
 			}
 
 			// Try to fetch scope parameters (account_id, org_id, project_id) if provided
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
