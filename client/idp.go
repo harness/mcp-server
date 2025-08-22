@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/harness/harness-mcp/client/dto"
 )
@@ -192,10 +193,15 @@ func (i *IDPService) ExecuteWorkflow(ctx context.Context, scope dto.Scope, ident
 	params := make(map[string]string)
 	addScope(scope, params)
 
-	_, token, err := i.Client.AuthProvider.GetHeader(ctx)
+	_, authHeaderVal, err := i.Client.AuthProvider.GetHeader(ctx)
 	if err != nil {
 		slog.Error("Failed to get auth header", "error", err)
 		return nil, err
+	}
+	token := authHeaderVal
+	parts := strings.Split(authHeaderVal, " ")
+	if len(parts) == 2 {
+		token = parts[1]
 	}
 	inputSet["token"] = token
 	body := new(dto.ExecuteWorkflowRequest)

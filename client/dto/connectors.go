@@ -4,18 +4,6 @@ import (
 	"time"
 )
 
-// formatUnixMillisToRFC3339 converts Unix timestamp in milliseconds to RFC3339 format
-func formatUnixMillisToRFC3339(ms int64) string {
-	if ms <= 0 {
-		return ""
-	}
-	// Convert milliseconds to seconds and nanoseconds for Unix time
-	sec := ms / 1000
-	nsec := (ms % 1000) * 1000000
-	t := time.Unix(sec, nsec)
-	return t.Format(time.RFC3339)
-}
-
 // ConnectorCatalogueItem represents an item in the connector catalogue.
 // Based on https://apidocs.harness.io/tag/Connectors#operation/getConnectorCatalogue
 type ConnectorCatalogueItem struct {
@@ -44,30 +32,48 @@ type ConnectorCatalogueItem struct {
 	SSCASupported                    bool       `json:"sscaSupported,omitempty"`
 }
 
+// formatUnixMillisToRFC3339 converts Unix timestamp in milliseconds to RFC3339 format
+func formatUnixMillisToRFC3339(ms int64) string {
+	if ms <= 0 {
+		return ""
+	}
+	sec := ms / 1000
+	nsec := (ms % 1000) * 1000000
+	t := time.Unix(sec, nsec)
+	return t.Format(time.RFC3339)
+}
+
 // ConnectorDetail represents the detailed information of a connector.
 // Based on https://apidocs.harness.io/tag/Connectors#operation/getConnector
 type ConnectorDetail struct {
-	Connector             Connector             `json:"connector"`
-	CreatedAt             int64                 `json:"createdAt"`
-	LastModifiedAt        int64                 `json:"lastModifiedAt"`
-	Status                ConnectorStatus       `json:"status"`
-	ActivityDetails       ActivityDetails       `json:"activityDetails"`
-	HarnessManaged        bool                  `json:"harnessManaged"`
-	GitDetails            GitDetails            `json:"gitDetails"`
-	EntityValidityDetails EntityValidityDetails `json:"entityValidityDetails"`
-	GovernanceMetadata    interface{}           `json:"governanceMetadata,omitempty"`
-	IsFavorite            bool                  `json:"isFavorite"`
+	Connector             Connector                      `json:"connector"`
+	CreatedAt             int64                          `json:"createdAt"`
+	LastModifiedAt        int64                          `json:"lastModifiedAt"`
+	Status                ConnectorStatus                `json:"status"`
+	ActivityDetails       ActivityDetails                `json:"activityDetails"`
+	HarnessManaged        bool                           `json:"harnessManaged"`
+	GitDetails            ConnectorGitDetails            `json:"gitDetails"`
+	EntityValidityDetails ConnectorEntityValidityDetails `json:"entityValidityDetails"`
+	GovernanceMetadata    interface{}                    `json:"governanceMetadata,omitempty"`
+	IsFavorite            bool                           `json:"isFavorite"`
 }
 
-// ConnectorDetailWithHumanTime extends ConnectorDetail with human-readable timestamp fields
-type ConnectorDetailWithHumanTime struct {
-	ConnectorDetail
-	// Human-readable timestamps in RFC3339
+// ConnectorDetailResponse extends ConnectorDetail with human-readable timestamp fields
+type ConnectorDetailResponse struct {
+	// Core connector fields
+	Connector Connector `json:"connector"`
+	// Human-readable timestamps in RFC3339 instead of Unix timestamps
 	CreatedAtTime      string `json:"created_at_time"`
 	LastModifiedAtTime string `json:"last_modified_at_time"`
 	// Nested structures with human-readable fields
-	Status          ConnectorStatusWithHumanTime `json:"status"`
-	ActivityDetails ActivityDetailsWithHumanTime `json:"activityDetails"`
+	Status          ConnectorStatusResponse `json:"status"`
+	ActivityDetails ActivityDetailsResponse `json:"activityDetails"`
+	// Other fields from ConnectorDetail
+	HarnessManaged        bool                           `json:"harnessManaged"`
+	GitDetails            ConnectorGitDetails            `json:"gitDetails"`
+	EntityValidityDetails ConnectorEntityValidityDetails `json:"entityValidityDetails"`
+	GovernanceMetadata    interface{}                    `json:"governanceMetadata,omitempty"`
+	IsFavorite            bool                           `json:"isFavorite"`
 }
 
 // Connector represents the core connector information.
@@ -83,8 +89,8 @@ type Connector struct {
 	Spec              map[string]interface{} `json:"spec"`
 }
 
-// EntityValidityDetails represents the validity information of a connector.
-type EntityValidityDetails struct {
+// ConnectorEntityValidityDetails represents the validity information of a connector.
+type ConnectorEntityValidityDetails struct {
 	Valid       bool   `json:"valid"`
 	InvalidYaml string `json:"invalidYaml"`
 }
@@ -100,9 +106,13 @@ type ConnectorStatus struct {
 	LastAlertSent   int64            `json:"lastAlertSent"`
 }
 
-// ConnectorStatusWithHumanTime extends ConnectorStatus with human-readable timestamp fields
-type ConnectorStatusWithHumanTime struct {
-	ConnectorStatus
+// ConnectorStatusResponse extends ConnectorStatus with human-readable timestamp fields
+type ConnectorStatusResponse struct {
+	// Original fields from ConnectorStatus
+	Status       string           `json:"status"`
+	ErrorSummary string           `json:"errorSummary"`
+	Errors       []ConnectorError `json:"errors"`
+	// Human-readable timestamps instead of Unix timestamps
 	TestedAtTime        string `json:"tested_at_time"`
 	LastTestedAtTime    string `json:"last_tested_at_time"`
 	LastConnectedAtTime string `json:"last_connected_at_time"`
@@ -121,14 +131,14 @@ type ActivityDetails struct {
 	LastActivityTime int64 `json:"lastActivityTime"`
 }
 
-// ActivityDetailsWithHumanTime extends ActivityDetails with human-readable timestamp fields
-type ActivityDetailsWithHumanTime struct {
-	ActivityDetails
+// ActivityDetailsResponse extends ActivityDetails with human-readable timestamp fields
+type ActivityDetailsResponse struct {
+	// Human-readable timestamp instead of Unix timestamp
 	LastActivityTimeStr string `json:"last_activity_time"`
 }
 
-// GitDetails represents git-related information of a connector.
-type GitDetails struct {
+// ConnectorGitDetails represents git-related information of a connector.
+type ConnectorGitDetails struct {
 	Valid       bool   `json:"valid"`
 	InvalidYaml string `json:"invalidYaml"`
 }
@@ -182,13 +192,13 @@ type ConnectorListData struct {
 	TotalPages    int               `json:"totalPages"`
 }
 
-// ConnectorListDataWithHumanTime extends ConnectorListData with human-readable timestamp fields in content
-type ConnectorListDataWithHumanTime struct {
-	Content       []ConnectorDetailWithHumanTime `json:"content"`
-	PageInfo      PageInfo                       `json:"pageInfo"`
-	Empty         bool                           `json:"empty"`
-	TotalElements int                            `json:"totalElements"`
-	TotalPages    int                            `json:"totalPages"`
+// ConnectorListDataResponse extends ConnectorListData with human-readable timestamp fields in content
+type ConnectorListDataResponse struct {
+	Content       []ConnectorDetailResponse `json:"content"`
+	PageInfo      PageInfo                  `json:"pageInfo"`
+	Empty         bool                      `json:"empty"`
+	TotalElements int                       `json:"totalElements"`
+	TotalPages    int                       `json:"totalPages"`
 }
 
 // PageInfo represents pagination information.
@@ -199,10 +209,12 @@ type PageInfo struct {
 	HasPrev bool `json:"hasPrev"`
 }
 
-// ToConnectorStatusWithHumanTime converts ConnectorStatus adding RFC3339 time strings
-func ToConnectorStatusWithHumanTime(s ConnectorStatus) ConnectorStatusWithHumanTime {
-	return ConnectorStatusWithHumanTime{
-		ConnectorStatus:     s,
+// ToConnectorStatus converts ConnectorStatus adding RFC3339 time strings
+func ToConnectorStatus(s ConnectorStatus) ConnectorStatusResponse {
+	return ConnectorStatusResponse{
+		Status:              s.Status,
+		ErrorSummary:        s.ErrorSummary,
+		Errors:              s.Errors,
 		TestedAtTime:        formatUnixMillisToRFC3339(s.TestedAt),
 		LastTestedAtTime:    formatUnixMillisToRFC3339(s.LastTestedAt),
 		LastConnectedAtTime: formatUnixMillisToRFC3339(s.LastConnectedAt),
@@ -210,37 +222,41 @@ func ToConnectorStatusWithHumanTime(s ConnectorStatus) ConnectorStatusWithHumanT
 	}
 }
 
-// ToActivityDetailsWithHumanTime converts ActivityDetails adding RFC3339 time string
-func ToActivityDetailsWithHumanTime(a ActivityDetails) ActivityDetailsWithHumanTime {
-	return ActivityDetailsWithHumanTime{
-		ActivityDetails:     a,
+// ToActivityDetails converts ActivityDetails adding RFC3339 time string
+func ToActivityDetails(a ActivityDetails) ActivityDetailsResponse {
+	return ActivityDetailsResponse{
 		LastActivityTimeStr: formatUnixMillisToRFC3339(a.LastActivityTime),
 	}
 }
 
-// ToConnectorDetailWithHumanTime converts ConnectorDetail adding RFC3339 time strings and nested conversions
-func ToConnectorDetailWithHumanTime(d ConnectorDetail) ConnectorDetailWithHumanTime {
-	return ConnectorDetailWithHumanTime{
-		ConnectorDetail:    d,
-		CreatedAtTime:      formatUnixMillisToRFC3339(d.CreatedAt),
-		LastModifiedAtTime: formatUnixMillisToRFC3339(d.LastModifiedAt),
-		Status:             ToConnectorStatusWithHumanTime(d.Status),
-		ActivityDetails:    ToActivityDetailsWithHumanTime(d.ActivityDetails),
+// ToConnectorDetail converts ConnectorDetail adding RFC3339 time strings and nested conversions
+func ToConnectorDetail(d ConnectorDetail) ConnectorDetailResponse {
+	return ConnectorDetailResponse{
+		Connector:             d.Connector,
+		CreatedAtTime:         formatUnixMillisToRFC3339(d.CreatedAt),
+		LastModifiedAtTime:    formatUnixMillisToRFC3339(d.LastModifiedAt),
+		Status:                ToConnectorStatus(d.Status),
+		ActivityDetails:       ToActivityDetails(d.ActivityDetails),
+		HarnessManaged:        d.HarnessManaged,
+		GitDetails:            d.GitDetails,
+		EntityValidityDetails: d.EntityValidityDetails,
+		GovernanceMetadata:    d.GovernanceMetadata,
+		IsFavorite:            d.IsFavorite,
 	}
 }
 
-// ToConnectorListDataWithHumanTime converts ConnectorListData content to include human-readable times
-func ToConnectorListDataWithHumanTime(data ConnectorListData) ConnectorListDataWithHumanTime {
-	out := ConnectorListDataWithHumanTime{
+// ToConnectorListData converts ConnectorListData content to include human-readable times
+func ToConnectorListData(data ConnectorListData) ConnectorListDataResponse {
+	out := ConnectorListDataResponse{
 		PageInfo:      data.PageInfo,
 		Empty:         data.Empty,
 		TotalElements: data.TotalElements,
 		TotalPages:    data.TotalPages,
 	}
 	if len(data.Content) > 0 {
-		out.Content = make([]ConnectorDetailWithHumanTime, len(data.Content))
+		out.Content = make([]ConnectorDetailResponse, len(data.Content))
 		for i, item := range data.Content {
-			out.Content[i] = ToConnectorDetailWithHumanTime(item)
+			out.Content[i] = ToConnectorDetail(item)
 		}
 	}
 	return out

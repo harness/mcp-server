@@ -46,6 +46,7 @@ Toolset Name: `default`
 
 - `get_connector_details`: Get details of a specific connector
 - `list_connector_catalogue`: List the Harness connector catalogue
+- `list_connectors`: List connectors with filtering options
 - `list_pipelines`: List pipelines in a repository
 - `get_pipeline`: Get details of a specific pipeline
 - `get_execution`: Get details of a specific pipeline execution
@@ -76,14 +77,14 @@ Toolset Name: `pullrequests`
 
 #### Services Toolset
 
-Toolset Name: `service` 
+Toolset Name: `services` 
 
 - `get_service`: Get details of a specific service
 - `list_services`: List services
 
 #### Environments Toolset
 
-Toolset Name: `environment` 
+Toolset Name: `environments` 
 
 - `get_environment`: Get details of a specific environment
 - `list_environments`: List environments
@@ -102,6 +103,7 @@ Toolset Name: `connectors`
 
 - `list_connector_catalogue`: List the Harness connector catalogue
 - `get_connector_details`: Get details of a specific connector
+- `list_connectors`: List connectors with filtering options
 
 #### Repositories Toolset
 

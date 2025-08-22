@@ -17,7 +17,7 @@ import (
 func TestListIDPTools(t *testing.T) {
 	t.Parallel()
 
-	mcpClient := setupMCPClient(t, withToolsets([]string{"pipelines", "idp", "default"}))
+	mcpClient := setupMCPClient(t)
 	ctx := context.Background()
 
 	// List available tools
@@ -58,9 +58,6 @@ func TestListIDPTools(t *testing.T) {
 		fmt.Printf("- %s -> %s\n", pattern, actualName)
 	}
 
-	// Store the found tool names in a global variable for other tests to use
-	setToolNames(foundIDPTools)
-
 	// Check if we found at least one pipeline tool
 	require.NotEmpty(t, foundIDPTools, "expected to find at least one IDP tool")
 
@@ -71,7 +68,7 @@ func TestCreateWorkflow(t *testing.T) {
 	t.Skip("Skipping test for now as it tests a tool which is dependent on an internal service")
 	t.Parallel()
 
-	mcpClient := setupMCPClient(t, withToolsets([]string{"pipelines", "idp", "default"}))
+	mcpClient := setupMCPClient(t)
 	ctx := context.Background()
 	accountID := getE2EAccountID(t)
 
@@ -149,7 +146,7 @@ func TestCreateWorkflow(t *testing.T) {
 func TestExecuteWorkflow(t *testing.T) {
 	t.Parallel()
 
-	mcpClient := setupMCPClient(t, withToolsets([]string{"pipelines", "idp", "default"}))
+	mcpClient := setupMCPClient(t)
 	ctx := context.Background()
 	accountID := getE2EAccountID(t)
 
