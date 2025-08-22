@@ -66,6 +66,7 @@ type ListAuditEventsFilter struct {
 	FilterType string               `json:"filterType,omitempty"`
 	StartTime  int64                `json:"startTime,omitempty"`
 	EndTime    int64                `json:"endTime,omitempty"`
+	Resources  []AuditResource      `json:"resources,omitempty"`
 }
 
 type AuditOutput[T any] struct {
