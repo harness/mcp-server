@@ -4,13 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"strings"
+
+	"log/slog"
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/ccmcommons"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/harness/harness-mcp/pkg/harness/event"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -49,7 +51,7 @@ func CcmPerspectiveGridTool(config *config.Config, client *client.CloudCostManag
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -122,7 +124,7 @@ func CcmPerspectiveTimeSeriesTool(config *config.Config, client *client.CloudCos
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -191,7 +193,7 @@ func CcmPerspectiveSummaryWithBudgetTool(config *config.Config, client *client.C
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -251,7 +253,7 @@ func CcmPerspectiveBudgetTool(config *config.Config, client *client.CloudCostMan
 			params.AccountId = accountId
 			params.PerspectiveId = perspectiveId
 
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -280,7 +282,7 @@ func CcmMetadataTool(config *config.Config, client *client.CloudCostManagementSe
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -324,7 +326,7 @@ func CcmPerspectiveRecommendationsTool(config *config.Config, client *client.Clo
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -445,7 +447,7 @@ func CcmPerspectiveFilterValuesTool(config *config.Config, client *client.CloudC
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

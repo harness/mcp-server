@@ -2,11 +2,15 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/harness/harness-mcp/client/dto"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 )
 
 // TestUnmarshalResponse_StringPointer tests the string pointer handling in unmarshalResponse function
@@ -238,4 +242,76 @@ func (e *errorReader) Read(p []byte) (n int, err error) {
 
 func (e *errorReader) Close() error {
 	return nil
+}
+
+// --- New tests for Harness-Account header injection via scope ---
+
+type mockAuthProvider struct{}
+
+func (m mockAuthProvider) GetHeader(ctx context.Context) (string, string, error) {
+	return "Authorization", "Bearer test-token", nil
+}
+
+type recordingTransport struct {
+	sawAccount string
+}
+
+func (rt *recordingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	rt.sawAccount = req.Header.Get("Harness-Account")
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader("ok")),
+		Header:     make(http.Header),
+		Request:    req,
+	}, nil
+}
+
+func TestClientDo_AddsHarnessAccountHeader_FromScope(t *testing.T) {
+	// Prepare client with recording transport
+	rt := &recordingTransport{}
+	c := &Client{
+		client:       &http.Client{Transport: rt},
+		AuthProvider: mockAuthProvider{},
+	}
+
+	// Build request with scope in context
+	req, err := http.NewRequest(http.MethodGet, "http://example.com/test", nil)
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+
+	scope := dto.Scope{AccountID: "acc_123", OrgID: "org", ProjectID: "proj"}
+	ctx := common.WithScopeContext(context.Background(), scope)
+	req = req.WithContext(ctx)
+
+	// Execute
+	if _, err := c.Do(req); err != nil {
+		t.Fatalf("Do() returned error: %v", err)
+	}
+
+	// Assert
+	if rt.sawAccount != scope.AccountID {
+		t.Fatalf("expected Harness-Account header %q, got %q", scope.AccountID, rt.sawAccount)
+	}
+}
+
+func TestClientDo_DoesNotAddHarnessAccountHeader_WhenNoScope(t *testing.T) {
+	rt := &recordingTransport{}
+	c := &Client{
+		client:       &http.Client{Transport: rt},
+		AuthProvider: mockAuthProvider{},
+	}
+
+	req, err := http.NewRequest(http.MethodGet, "http://example.com/test", nil)
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+
+	if _, err := c.Do(req); err != nil {
+		t.Fatalf("Do() returned error: %v", err)
+	}
+
+	if rt.sawAccount != "" {
+		t.Fatalf("expected no Harness-Account header, got %q", rt.sawAccount)
+	}
 }

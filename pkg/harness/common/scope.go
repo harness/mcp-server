@@ -1,4 +1,4 @@
-package tools
+package common
 
 import (
 	"fmt"
@@ -81,4 +81,21 @@ func FetchScope(config *config.Config, request mcp.CallToolRequest, required boo
 	}
 
 	return scope, nil
+}
+
+// OptionalParam is a helper function that can be used to fetch an optional parameter from the request.
+func OptionalParam[T any](r mcp.CallToolRequest, p string) (T, error) {
+	var zero T
+
+	// Check if the parameter is present in the request
+	if _, ok := r.GetArguments()[p]; !ok {
+		return zero, nil
+	}
+
+	// Check if the parameter is of the expected type
+	if _, ok := r.GetArguments()[p].(T); !ok {
+		return zero, fmt.Errorf("parameter %s is not of type %T, is %T", p, zero, r.GetArguments()[p])
+	}
+
+	return r.GetArguments()[p].(T), nil
 }

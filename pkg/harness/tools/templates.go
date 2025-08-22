@@ -10,6 +10,7 @@ import (
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 )
 
 // ListTemplates creates a tool that allows querying templates at all scopes (account, org, project)
@@ -31,7 +32,7 @@ func ListTemplates(config *config.Config, client *client.TemplateService) (tool 
 			mcp.WithBoolean("recursive",
 				mcp.Description("If true, returns all supported templates at the specified scope. Default: false"),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -79,7 +80,7 @@ func ListTemplates(config *config.Config, client *client.TemplateService) (tool 
 			}
 
 			// Try to fetch scope parameters (org_id, project_id) if provided
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -94,12 +95,6 @@ func ListTemplates(config *config.Config, client *client.TemplateService) (tool 
 					scopeParam = "account"
 				}
 			}
-
-			// Add account ID to context for this request
-			if scope.AccountID == "" {
-				return mcp.NewToolResultError("account_id is required"), nil
-			}
-			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			// Call appropriate API based on scope
 			var data *dto.TemplateMetaDataList

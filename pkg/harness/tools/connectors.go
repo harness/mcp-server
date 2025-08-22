@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -13,19 +15,13 @@ import (
 func ListConnectorCatalogueTool(harnessConfig *config.Config, connectorService *client.ConnectorService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("list_connector_catalogue",
 			mcp.WithDescription("List the Harness connector catalogue."),
-			WithScope(harnessConfig, false),
+			common.WithScope(harnessConfig, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(harnessConfig, request, false)
+			scope, err := common.FetchScope(harnessConfig, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-
-			// Add account ID to context for this request
-			if scope.AccountID == "" {
-				return mcp.NewToolResultError("account_id is required"), nil
-			}
-			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			catalogue, err := connectorService.ListConnectorCatalogue(ctx, scope)
 			if err != nil {
@@ -50,7 +46,7 @@ func GetConnectorDetailsTool(config *config.Config, connectorService *client.Con
 				mcp.Required(),
 				mcp.Description("The identifier of the connector"),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			connectorIdentifier, err := RequiredParam[string](request, "connector_identifier")
@@ -58,16 +54,10 @@ func GetConnectorDetailsTool(config *config.Config, connectorService *client.Con
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-
-			// Add account ID to context for this request
-			if scope.AccountID == "" {
-				return mcp.NewToolResultError("account_id is required"), nil
-			}
-			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			data, err := connectorService.GetConnector(ctx, scope, connectorIdentifier)
 			if err != nil {

@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -15,20 +17,14 @@ import (
 func ListExperimentsTool(config *config.Config, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("chaos_experiments_list",
 			mcp.WithDescription("List the chaos experiments"),
-			WithScope(config, false),
+			common.WithScope(config, false),
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-
-			// Add account ID to context for this request
-			if scope.AccountID == "" {
-				return mcp.NewToolResultError("account_id is required"), nil
-			}
-			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			page, size, err := FetchPagination(request)
 			if err != nil {
@@ -58,19 +54,13 @@ func ListExperimentsTool(config *config.Config, client *client.ChaosService) (to
 func GetExperimentsTool(config *config.Config, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("chaos_experiment_describe",
 			mcp.WithDescription("Retrieves information about chaos experiment, allowing users to get an overview and detailed insights for each experiment"),
-			WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-
-			// Add account ID to context for this request
-			if scope.AccountID == "" {
-				return mcp.NewToolResultError("account_id is required"), nil
-			}
-			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			experimentID, err := RequiredParam[string](request, "experimentID")
 			if err != nil {
@@ -95,19 +85,13 @@ func GetExperimentsTool(config *config.Config, client *client.ChaosService) (too
 func GetExperimentRunsTool(config *config.Config, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("chaos_experiment_run_result",
 			mcp.WithDescription("Retrieves run result of chaos experiment runs, helping to describe and summarize the details of each experiment run"),
-			WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-
-			// Add account ID to context for this request
-			if scope.AccountID == "" {
-				return mcp.NewToolResultError("account_id is required"), nil
-			}
-			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			experimentID, err := RequiredParam[string](request, "experimentID")
 			if err != nil {
@@ -137,19 +121,13 @@ func GetExperimentRunsTool(config *config.Config, client *client.ChaosService) (
 func RunExperimentTool(config *config.Config, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("chaos_experiment_run",
 			mcp.WithDescription("Run the chaos experiment"),
-			WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-
-			// Add account ID to context for this request
-			if scope.AccountID == "" {
-				return mcp.NewToolResultError("account_id is required"), nil
-			}
-			ctx = context.WithValue(ctx, "accountID", scope.AccountID)
 
 			experimentID, err := RequiredParam[string](request, "experimentID")
 			if err != nil {

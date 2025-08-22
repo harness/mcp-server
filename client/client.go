@@ -14,6 +14,7 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/harness/harness-mcp/client/dto"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/harness/harness-mcp/pkg/harness/auth"
 )
 
@@ -29,8 +30,6 @@ var (
 	// when different tools get added.
 	defaultPageSize = 5
 	maxPageSize     = 20
-
-	apiKeyHeader = "x-api-key"
 )
 
 var (
@@ -475,10 +474,12 @@ func (c *Client) Do(r *http.Request) (*http.Response, error) {
 	}
 	r.Header.Set(k, v)
 
-	// Check for account ID in context and add it to headers if present
-	if accountID := GetAccountIDFromContext(ctx); accountID != "" {
-		slog.Debug("Adding account ID header from context", "accountID: ", accountID)
-		r.Header.Set("Harness-Account", accountID)
+	// Check for scope in context and add account ID to headers if present
+	if scope, err := common.GetScopeFromContext(ctx); err == nil {
+		if scope.AccountID != "" {
+			slog.Debug("Adding account ID header from scope in context", "accountID", scope.AccountID)
+			r.Header.Set("Harness-Account", scope.AccountID)
+		}
 	}
 	return c.client.Do(r)
 }
