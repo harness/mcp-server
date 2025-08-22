@@ -15,7 +15,7 @@ const (
 // CustomEvent represents a custom event sent back to a client as embedded resource
 type CustomEvent struct {
 	Type         string `json:"type"`
-	Continue     bool   `json:"continue,omitempty"` // wether the agent should continue or stop processing
+	Continue     bool   `json:"continue,omitempty"`      // wether the agent should continue or stop processing
 	DisplayOrder int    `json:"display_order,omitempty"` // default will be the order that the items are added
 	Content      any    `json:"content,omitempty"`
 }

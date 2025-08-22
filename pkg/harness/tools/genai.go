@@ -84,7 +84,6 @@ func createGenAIToolHandler(config *config.Config, client *client.GenaiService, 
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-
 		// Extract optional parameters
 		conversationID, _ := OptionalParam[string](request, "conversation_id")
 		interactionID, _ := OptionalParam[string](request, "interaction_id")

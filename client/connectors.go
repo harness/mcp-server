@@ -107,21 +107,21 @@ func (c *ConnectorService) ListConnectors(ctx context.Context, scope dto.Scope, 
 		ConnectorNames:                    connectorNames,
 		ConnectorIdentifiers:              connectorIdentifiers,
 		Description:                       description,
-		Types:                            types,
-		Categories:                       categories,
-		ConnectivityStatuses:             connectivityStatuses,
+		Types:                             types,
+		Categories:                        categories,
+		ConnectivityStatuses:              connectivityStatuses,
 		InheritingCredentialsFromDelegate: inheritingCredentialsFromDelegate,
-		ConnectorConnectivityModes:       connectorConnectivityModes,
-		Tags:                             tags,
-		FilterType:                       "Connector", // Fixed value
+		ConnectorConnectivityModes:        connectorConnectivityModes,
+		Tags:                              tags,
+		FilterType:                        "Connector", // Fixed value
 	}
 
 	// Define a struct to match the actual API response structure
 	type listConnectorsResponse struct {
-		Status        string                     `json:"status"`
-		Data          pkgDTO.ConnectorListData   `json:"data"`
-		MetaData      interface{}                `json:"metaData"`
-		CorrelationID string                     `json:"correlationId"`
+		Status        string                   `json:"status"`
+		Data          pkgDTO.ConnectorListData `json:"data"`
+		MetaData      interface{}              `json:"metaData"`
+		CorrelationID string                   `json:"correlationId"`
 	}
 
 	var response listConnectorsResponse

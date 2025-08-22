@@ -2,7 +2,7 @@ package dto
 
 // SettingItem represents a single setting in the Harness settings API response
 type SettingItem struct {
-	Setting       Setting `json:"setting"`
+	Setting        Setting `json:"setting"`
 	LastModifiedAt *int64  `json:"lastModifiedAt"`
 }
 
@@ -26,10 +26,10 @@ type Setting struct {
 
 // SettingsResponse represents the response from the Harness settings API
 type SettingsResponse struct {
-	Status        string       `json:"status"`
+	Status        string        `json:"status"`
 	Data          []SettingItem `json:"data"`
-	MetaData      interface{}  `json:"metaData"`
-	CorrelationID string       `json:"correlationId"`
+	MetaData      interface{}   `json:"metaData"`
+	CorrelationID string        `json:"correlationId"`
 }
 
 // SettingsListOptions represents options for listing settings

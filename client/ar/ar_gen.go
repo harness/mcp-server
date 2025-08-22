@@ -10,11 +10,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
-
-	"log/slog"
 
 	"github.com/oapi-codegen/runtime"
 )

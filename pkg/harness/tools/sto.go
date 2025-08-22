@@ -11,9 +11,9 @@ import (
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/client/sto/generated"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/harness/harness-mcp/pkg/harness/event/types"
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/mark3labs/mcp-go/server"
 )
 
@@ -490,7 +490,7 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 				} else {
 					responseContents = append(responseContents, tableResource)
 				}
-				
+
 				// Create prompt event and resource if we have suggestions
 				if len(suggestions) > 0 {
 					promptEvent := types.NewActionEvent(suggestions)

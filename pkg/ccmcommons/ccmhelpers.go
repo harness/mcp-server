@@ -1,15 +1,16 @@
 package ccmcommons
 
 import (
-	"strings"
 	"fmt"
+	"strings"
+
 	"github.com/harness/harness-mcp/client/ccmcommons"
 	"github.com/harness/harness-mcp/client/dto"
 )
 
 func GetFilterInstructions() string {
 	// Build a map for fast lookup by fieldId
-	fieldsMap :=  ccmcommons.BuildOutputFieldsMap()
+	fieldsMap := ccmcommons.BuildOutputFieldsMap()
 	instructions := "To create a filter rule in a perspective for a specific field, use the descriptions shown below:\n\n"
 	for _, desc := range ConditionFieldDescriptions {
 		fieldId := desc["fieldId"]
@@ -26,13 +27,13 @@ func GetFilterInstructions() string {
 			}`
 		}
 	}
-	
+
 	return instructions
 }
 
 func GetConditionInstructions() string {
 	instructions := CreateConditionsInstructions
-	instructions = strings.Replace(instructions, "<<VIEW_FIELD_INSTRUCTIONS>>", GetFilterInstructions(), 1) 
+	instructions = strings.Replace(instructions, "<<VIEW_FIELD_INSTRUCTIONS>>", GetFilterInstructions(), 1)
 	instructions = strings.Replace(instructions, "<<VIEW_OPERATOR_INSTRUCTIONS>>", OperatorsDescription, 1)
 	return instructions
 }
@@ -86,7 +87,7 @@ func AdaptViewRulesMap(input []any) ([]dto.CCMViewRule, error) {
 			if !ok {
 				return nil, fmt.Errorf("Invalid condition format in 'view_conditions'. Each condition must be a JSON object with 'view_field', 'view_operator', and 'values' properties")
 			}
-			viewField, ok := cond["view_field"].(map[string]any) 
+			viewField, ok := cond["view_field"].(map[string]any)
 			if !ok {
 				return nil, fmt.Errorf("Missing or invalid 'view_field' object in condition. Each condition requires a 'view_field' object containing 'field_id', 'field_name', 'identifier', and 'identifier_name'")
 			}
@@ -110,7 +111,6 @@ func AdaptViewRulesMap(input []any) ([]dto.CCMViewRule, error) {
 			if !ok {
 				return nil, fmt.Errorf("Missing 'identifier_name' or invalid 'identifier_name' in 'view_field' for field '%s'. This should match the identifier value in a readable format", fieldId)
 			}
-
 
 			operator, ok := cond["view_operator"].(string)
 			if !ok {

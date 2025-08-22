@@ -8,9 +8,9 @@ import (
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/harness/harness-mcp/pkg/harness/common"
 )
 
 // ListTemplates creates a tool that allows querying templates at all scopes (account, org, project)

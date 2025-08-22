@@ -10,9 +10,9 @@ import (
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/harness/harness-mcp/pkg/harness/event"
 	"github.com/harness/harness-mcp/pkg/harness/event/types"
-	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/harness/harness-mcp/pkg/utils"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -48,12 +48,6 @@ func GetCcmOverviewTool(config *config.Config, client *client.CloudCostManagemen
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-
-			// Add account ID to context for this request
-			if accountId == "" {
-				return mcp.NewToolResultError("account_id is required"), nil
-			}
-			ctx = context.WithValue(ctx, "accountID", accountId)
 
 			startTimeStr, err := RequiredParam[string](request, "startTime")
 			if err != nil {
@@ -101,12 +95,6 @@ func ListCcmCostCategoriesTool(config *config.Config, client *client.CloudCostMa
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-
-			// Add account ID to context for this request
-			if accountId == "" {
-				return mcp.NewToolResultError("account_id is required"), nil
-			}
-			ctx = context.WithValue(ctx, "accountID", accountId)
 
 			params := &dto.CCMListCostCategoriesOptions{}
 			params.AccountIdentifier = accountId
@@ -178,12 +166,6 @@ func ListCcmCostCategoriesDetailTool(config *config.Config, client *client.Cloud
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-
-			// Add account ID to context for this request
-			if accountId == "" {
-				return mcp.NewToolResultError("account_id is required"), nil
-			}
-			ctx = context.WithValue(ctx, "accountID", accountId)
 
 			params := &dto.CCMListCostCategoriesDetailOptions{}
 			params.AccountIdentifier = accountId
@@ -267,12 +249,6 @@ func GetCcmCostCategoryTool(config *config.Config, client *client.CloudCostManag
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			// Add account ID to context for this request
-			if accountId == "" {
-				return mcp.NewToolResultError("account_id is required"), nil
-			}
-			ctx = context.WithValue(ctx, "accountID", accountId)
-
 			params := &dto.CCMGetCostCategoryOptions{}
 			params.AccountIdentifier = accountId
 			// Handle cost category parameter
@@ -343,12 +319,6 @@ func FetchCommitmentCoverageTool(config *config.Config, client *client.CloudCost
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-
-			// Add account ID to context for this request
-			if accountId == "" {
-				return mcp.NewToolResultError("account_id is required"), nil
-			}
-			ctx = context.WithValue(ctx, "accountID", accountId)
 
 			params := &dto.CCMCommitmentOptions{}
 			params.AccountIdentifier = &accountId
@@ -448,12 +418,6 @@ func FetchCommitmentSavingsTool(config *config.Config, client *client.CloudCostM
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			// Add account ID to context for this request
-			if accountId == "" {
-				return mcp.NewToolResultError("account_id is required"), nil
-			}
-			ctx = context.WithValue(ctx, "accountID", accountId)
-
 			params := &dto.CCMCommitmentOptions{}
 			params.AccountIdentifier = &accountId
 
@@ -543,12 +507,6 @@ func FetchCommitmentUtilisationTool(config *config.Config, client *client.CloudC
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-
-			// Add account ID to context for this request
-			if accountId == "" {
-				return mcp.NewToolResultError("account_id is required"), nil
-			}
-			ctx = context.WithValue(ctx, "accountID", accountId)
 
 			params := &dto.CCMCommitmentOptions{}
 			params.AccountIdentifier = &accountId

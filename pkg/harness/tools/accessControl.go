@@ -10,7 +10,6 @@ import (
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
-
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -165,11 +164,6 @@ func GetServiceAccountTool(config *config.Config, serviceAccountClient *client.P
 				return mcp.NewToolResultError("Failed to get scope from context: " + err.Error()), nil
 			}
 
-			// Check if account ID is available
-			if scope.AccountID == "" {
-				return mcp.NewToolResultError("account_id is required"), nil
-			}
-
 			serviceAccountID, err := RequiredParam[string](request, "service_account_id")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -210,11 +204,6 @@ func GetRoleInfoTool(config *config.Config, roleInfoClient *client.RBACService) 
 				return mcp.NewToolResultError("Failed to get scope from context: " + err.Error()), nil
 			}
 
-			// Check if account ID is available
-			if scope.AccountID == "" {
-				return mcp.NewToolResultError("account_id is required"), nil
-			}
-
 			data, err := roleInfoClient.GetRoleInfo(ctx, scope, roleID)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get role info: %w", err)
@@ -242,11 +231,6 @@ func ListAvailableRolesTool(config *config.Config, rolesClient *client.RBACServi
 				return mcp.NewToolResultError("Failed to get scope from context: " + err.Error()), nil
 			}
 
-			// Validate account ID
-			if scope.AccountID == "" {
-				return mcp.NewToolResultError("account_id is required"), nil
-			}
-
 			page, size, err := FetchPagination(request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -265,83 +249,78 @@ func ListAvailableRolesTool(config *config.Config, rolesClient *client.RBACServi
 				return nil, fmt.Errorf("failed to marshal the available roles: %w", err)
 			}
 
-            return mcp.NewToolResultText(string(r)), nil
-        }
+			return mcp.NewToolResultText(string(r)), nil
+		}
 }
 
 func ListAvailablePermissions(config *config.Config, permissionsClient *client.RBACService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-    return mcp.NewTool("list_available_permissions",
-            mcp.WithDescription("List The Permissions Available In The Account."),
-            common.WithScope(config, false),
-            WithPagination(),
-        ),
-        func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-            // Get scope from context (added by middleware)
-            scope, err := common.GetScopeFromContext(ctx)
-            if err != nil {
-                return mcp.NewToolResultError("Failed to get scope from context: " + err.Error()), nil
-            }
+	return mcp.NewTool("list_available_permissions",
+			mcp.WithDescription("List The Permissions Available In The Account."),
+			common.WithScope(config, false),
+			WithPagination(),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			// Get scope from context (added by middleware)
+			scope, err := common.GetScopeFromContext(ctx)
+			if err != nil {
+				return mcp.NewToolResultError("failed to get scope from context: " + err.Error()), nil
+			}
 
-            // Validate account ID
-            if scope.AccountID == "" {
-                return mcp.NewToolResultError("account_id is required"), nil
-            }
+			page, size, err := FetchPagination(request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
-            page, size, err := FetchPagination(request)
-            if err != nil {
-                return mcp.NewToolResultError(err.Error()), nil
-            }
+			page = int(math.Min(math.Max(float64(page), float64(minPage)), float64(maxPage)))
+			size = int(math.Min(math.Max(float64(size), float64(minSize)), float64(maxSize)))
 
-            page = int(math.Min(math.Max(float64(page), float64(minPage)), float64(maxPage)))
-            size = int(math.Min(math.Max(float64(size), float64(minSize)), float64(maxSize)))
+			data, err := permissionsClient.ListAvailablePermissions(ctx, scope, page, size)
+			if err != nil {
+				return nil, fmt.Errorf("failed to list the available permissions: %w", err)
+			}
 
-            data, err := permissionsClient.ListAvailablePermissions(ctx, scope, page, size)
-            if err != nil {
-                return nil, fmt.Errorf("Failed to list the available permissions: %w", err)
-            }
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal the permissions of the user: %w", err)
+			}
 
-            r, err := json.Marshal(data)
-            if err != nil {
-                return nil, fmt.Errorf("Failed to marshal the permissions of the user: %w", err)
-            }
-
-            return mcp.NewToolResultText(string(r)), nil
-        }
+			return mcp.NewToolResultText(string(r)), nil
+		}
 }
 
 func ListRoleAssignmentsTool(config *config.Config, roleAssignmentsClient *client.RBACService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-    return mcp.NewTool("list_role_assignments",
-            mcp.WithDescription("List The Role Assignments."),
-            mcp.WithString("resource_group_names",
-                mcp.Description("Optional resource group name. For multiple resource groups, use comma-separated values."),
-            ),
-            mcp.WithString("role_names",
-                mcp.Description("Optional role name. For multiple roles, use comma-separated values."),
-            ),
-            mcp.WithString("principal_type",
-                mcp.Description("Optional principal type. For multiple principal types, use comma-separated values.\nAllowed values: USER, USER_GROUP, SERVICE_ACCOUNT"),
-            ),
-            mcp.WithString("principal_scope_level_filter",
-                mcp.Description("Optional principal scope level filter. For multiple principal scope level filters, use comma-separated values.\nAllowed values: account, organization, project"),
-            ),
-            mcp.WithArray("principal_filter",
-                mcp.Description("Optional array of principal filters"),
-                mcp.Items(dto.RoleAssignmentPrincipalFilter{}),
-            ),
-            common.WithScope(config, false),
-            WithPagination(),
-        ),
-        func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-            // Get scope from context (added by middleware)
-            scope, err := common.GetScopeFromContext(ctx)
-            if err != nil {
-                return mcp.NewToolResultError("Failed to get scope from context: " + err.Error()), nil
-            }
+	return mcp.NewTool("list_role_assignments",
+			mcp.WithDescription("List The Role Assignments."),
+			mcp.WithString("resource_group_names",
+				mcp.Description("Optional resource group name. For multiple resource groups, use comma-separated values."),
+			),
+			mcp.WithString("role_names",
+				mcp.Description("Optional role name. For multiple roles, use comma-separated values."),
+			),
+			mcp.WithString("principal_type",
+				mcp.Description("Optional principal type. For multiple principal types, use comma-separated values.\nAllowed values: USER, USER_GROUP, SERVICE_ACCOUNT"),
+			),
+			mcp.WithString("principal_scope_level_filter",
+				mcp.Description("Optional principal scope level filter. For multiple principal scope level filters, use comma-separated values.\nAllowed values: account, organization, project"),
+			),
+			mcp.WithArray("principal_filter",
+				mcp.Description("Optional array of principal filters"),
+				mcp.Items(dto.RoleAssignmentPrincipalFilter{}),
+			),
+			common.WithScope(config, false),
+			WithPagination(),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			// Get scope from context (added by middleware)
+			scope, err := common.GetScopeFromContext(ctx)
+			if err != nil {
+				return mcp.NewToolResultError("Failed to get scope from context: " + err.Error()), nil
+			}
 
-            // Validate account ID
-            if scope.AccountID == "" {
-                return mcp.NewToolResultError("account_id is required"), nil
-            }
+			// Validate account ID
+			if scope.AccountID == "" {
+				return mcp.NewToolResultError("account_id is required"), nil
+			}
 
 			page, size, err := FetchPagination(request)
 			if err != nil {

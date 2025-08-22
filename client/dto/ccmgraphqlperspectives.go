@@ -1,17 +1,17 @@
 package dto
 
 const (
-	TimeFilterLast7         = "LAST_7" // It doesn't work using "LAST_7_DAYS"
-	TimeFilterThisMonth     = "THIS_MONTH"
-	TimeFilterLast30Days    = "LAST_30_DAYS"
-	TimeFilterThisQuarter   = "THIS_QUARTER"
-	TimeFilterThisYear      = "THIS_YEAR"
-	TimeFilterLastMonth     = "LAST_MONTH"
-	TimeFilterLastQuarter   = "LAST_QUARTER"
-	TimeFilterLastYear      = "LAST_YEAR"
-	TimeFilterLast3Months   = "LAST_3_MONTHS"
-	TimeFilterLast6Months   = "LAST_6_MONTHS"
-	TimeFilterLast12Months  = "LAST_12_MONTHS"
+	TimeFilterLast7        = "LAST_7" // It doesn't work using "LAST_7_DAYS"
+	TimeFilterThisMonth    = "THIS_MONTH"
+	TimeFilterLast30Days   = "LAST_30_DAYS"
+	TimeFilterThisQuarter  = "THIS_QUARTER"
+	TimeFilterThisYear     = "THIS_YEAR"
+	TimeFilterLastMonth    = "LAST_MONTH"
+	TimeFilterLastQuarter  = "LAST_QUARTER"
+	TimeFilterLastYear     = "LAST_YEAR"
+	TimeFilterLast3Months  = "LAST_3_MONTHS"
+	TimeFilterLast6Months  = "LAST_6_MONTHS"
+	TimeFilterLast12Months = "LAST_12_MONTHS"
 )
 
 const (
@@ -26,7 +26,7 @@ const (
 	GridGroupByRegion           = "region"
 	GridGroupByProduct          = "product"
 	GridGroupByCloudProvider    = "cloudProvider"
-	GridGroupByLabel            = "label" 
+	GridGroupByLabel            = "label"
 	GridGroupByLabelV2          = "label_v2"
 	GridGroupByNone             = "none"
 )
@@ -54,7 +54,6 @@ const (
 	TimeGroupByWeek  = "WEEK"
 	TimeGroupByMonth = "MONTH"
 )
-
 
 var (
 	ValueTypes = []string{
@@ -95,9 +94,9 @@ type CCMKeyValue struct {
 }
 
 type CCMGraphQLError struct {
-	Message    string                      `json:"message"`
-	Locations  []CCMGraphQLErrorLocation   `json:"locations"`
-	Extensions CCMGraphQLErrorExtensions   `json:"extensions"`
+	Message    string                    `json:"message"`
+	Locations  []CCMGraphQLErrorLocation `json:"locations"`
+	Extensions CCMGraphQLErrorExtensions `json:"extensions"`
 }
 
 type CCMGraphQLErrorLocation struct {
@@ -109,29 +108,28 @@ type CCMGraphQLErrorExtensions struct {
 	Classification string `json:"classification"`
 }
 
-type CCMGraphQLFilters  = map[string][]string
+type CCMGraphQLFilters = map[string][]string
 type CCMGraphQLKeyValueFilters = map[string]map[string]any
 
 type CCMPerspectiveGridOptions struct {
+	AccountId              string         `json:"account_id"`
+	ViewId                 string         `json:"view_id"`
+	TimeFilter             string         `json:"time_filter"`
+	IsClusterOnly          bool           `json:"is_cluster_only"`
+	IsClusterHourlyData    bool           `json:"is_cluster_hourly_data"`
+	Limit                  int32          `json:"limit"`
+	Offset                 int32          `json:"offset"`
+	GroupBy                map[string]any `json:"group_by"`
+	IncludeOthers          bool           `json:"include_others"`
+	IncludeAnomalies       bool           `json:"include_anomalies"`
+	IncludeUnallocatedCost bool           `json:"include_unallocated_cost"`
+	AwsIncludeDiscounts    bool           `json:"aws_include_discounts"`
+	AwsIncludeCredits      bool           `json:"aws_include_credits"`
+	AwsIncludeRefunds      bool           `json:"aws_include_refunds"`
+	AwsIncludeTaxes        bool           `json:"aws_include_taxes"`
+	AwsCost                string         `json:"aws_cost"`
 
-	AccountId             string `json:"account_id"`
-	ViewId                string `json:"view_id"`
-	TimeFilter            string `json:"time_filter"`
-	IsClusterOnly         bool   `json:"is_cluster_only"`
-	IsClusterHourlyData   bool   `json:"is_cluster_hourly_data"`
-	Limit                 int32  `json:"limit"`
-	Offset                int32  `json:"offset"`
-	GroupBy               map[string]any `json:"group_by"`
-	IncludeOthers         bool   `json:"include_others"`
-	IncludeAnomalies      bool   `json:"include_anomalies"`
-	IncludeUnallocatedCost bool  `json:"include_unallocated_cost"`
-	AwsIncludeDiscounts   bool   `json:"aws_include_discounts"`
-	AwsIncludeCredits     bool   `json:"aws_include_credits"`
-	AwsIncludeRefunds     bool   `json:"aws_include_refunds"`
-	AwsIncludeTaxes       bool   `json:"aws_include_taxes"`
-	AwsCost               string `json:"aws_cost"`
-
-	Filters CCMGraphQLFilters 
+	Filters         CCMGraphQLFilters
 	KeyValueFilters CCMGraphQLKeyValueFilters
 }
 
@@ -141,18 +139,18 @@ type CCMPerspectiveTimeSeriesOptions struct {
 }
 
 type CCMPerspectiveGridResponse struct {
-	Errors []CCMGraphQLError `json:"errors"`
-	Data CCMPerspectiveGridDataWrapper `json:"data"`
+	Errors []CCMGraphQLError             `json:"errors"`
+	Data   CCMPerspectiveGridDataWrapper `json:"data"`
 }
 
 type CCMPerspectiveGridDataWrapper struct {
-	PerspectiveGrid      CCMPerspectiveGridEntityStats `json:"perspectiveGrid"`
-	PerspectiveTotalCount int                       `json:"perspectiveTotalCount"`
+	PerspectiveGrid       CCMPerspectiveGridEntityStats `json:"perspectiveGrid"`
+	PerspectiveTotalCount int                           `json:"perspectiveTotalCount"`
 }
 
 type CCMPerspectiveGridEntityStats struct {
-	Data       []CCMPerspectiveGridDataPoint `json:"data"`
-	Typename   string                     `json:"__typename"`
+	Data     []CCMPerspectiveGridDataPoint `json:"data"`
+	Typename string                        `json:"__typename"`
 }
 
 type CCMPerspectiveGridDataPoint struct {
@@ -163,10 +161,9 @@ type CCMPerspectiveGridDataPoint struct {
 	Typename  string  `json:"__typename"`
 }
 
-
 type CCMPerspectiveTimeSeriesResponse struct {
 	Errors []CCMGraphQLError `json:"errors"`
-	Data struct {
+	Data   struct {
 		PerspectiveTimeSeriesStats struct {
 			Stats []CCMPerspectiveTimeSeriesStat `json:"stats"`
 		} `json:"perspectiveTimeSeriesStats"`
@@ -178,16 +175,16 @@ type CCMPerspectiveTimeSeriesStat struct {
 }
 
 type CCMPerspectiveTimeSeriesValue struct {
-	Key       CCMPerspectiveReference `json:"key"`
-	Value     float64              `json:"value"`
-	Typename  string               `json:"__typename"`
+	Key      CCMPerspectiveReference `json:"key"`
+	Value    float64                 `json:"value"`
+	Typename string                  `json:"__typename"`
 }
 
 type CCMPerspectiveReference struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Type      string `json:"type"`
-	Typename  string `json:"__typename"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Type     string `json:"type"`
+	Typename string `json:"__typename"`
 }
 
 type CCMPerspectiveSummaryWithBudgetOptions = CCMPerspectiveGridOptions
@@ -217,35 +214,35 @@ type CCMPerspectiveForecastCost struct {
 
 type CCMPerspectiveSummaryWithBudgetResponse struct {
 	Errors []CCMGraphQLError `json:"errors"`
-	Data struct {
+	Data   struct {
 		PerspectiveTrendStats   CCMPerspectiveTrendStats   `json:"perspectiveTrendStats"`
 		PerspectiveForecastCost CCMPerspectiveForecastCost `json:"perspectiveForecastCost"`
 	} `json:"data"`
 }
 
 type CCMPerspectiveBudget struct {
-	ID          string  `json:"id"`
-	Name        string  `json:"name"`
+	ID           string  `json:"id"`
+	Name         string  `json:"name"`
 	BudgetAmount float64 `json:"budgetAmount"`
-	ActualCost  float64 `json:"actualCost"`
-	TimeLeft    int     `json:"timeLeft"`
-	TimeUnit    string  `json:"timeUnit"`
-	TimeScope   string  `json:"timeScope"`
-	Period      string  `json:"period"`
-	FolderID    string  `json:"folderId"`
-	Typename    string  `json:"__typename"`
+	ActualCost   float64 `json:"actualCost"`
+	TimeLeft     int     `json:"timeLeft"`
+	TimeUnit     string  `json:"timeUnit"`
+	TimeScope    string  `json:"timeScope"`
+	Period       string  `json:"period"`
+	FolderID     string  `json:"folderId"`
+	Typename     string  `json:"__typename"`
 }
 
 type CCMPerspectiveBudgetResponse struct {
 	Errors []CCMGraphQLError `json:"errors"`
-	Data struct {
+	Data   struct {
 		BudgetSummaryList []CCMPerspectiveBudget `json:"budgetSummaryList"`
 	} `json:"data"`
 }
 
 type CCMPerspectiveBudgetOptions struct {
-	AccountId             string `json:"account_id"`
-	PerspectiveId         string `json:"perspective_id"`
+	AccountId     string `json:"account_id"`
+	PerspectiveId string `json:"perspective_id"`
 }
 
 type CCMCurrencyPreference struct {
@@ -257,42 +254,42 @@ type CCMCurrencyPreference struct {
 }
 
 type CCMMetadata struct {
-	K8sClusterConnectorPresent      bool                `json:"k8sClusterConnectorPresent"`
-	CloudDataPresent                bool                `json:"cloudDataPresent"`
-	AwsConnectorsPresent            bool                `json:"awsConnectorsPresent"`
-	GcpConnectorsPresent            bool                `json:"gcpConnectorsPresent"`
-	AzureConnectorsPresent          bool                `json:"azureConnectorsPresent"`
-	ApplicationDataPresent          bool                `json:"applicationDataPresent"`
-	InventoryDataPresent            bool                `json:"inventoryDataPresent"`
-	ClusterDataPresent              bool                `json:"clusterDataPresent"`
-	ExternalDataPresent             bool                `json:"externalDataPresent"`
-	IsSampleClusterPresent          bool                `json:"isSampleClusterPresent"`
-	DefaultAzurePerspectiveId       string              `json:"defaultAzurePerspectiveId"`
-	DefaultAwsPerspectiveId         string              `json:"defaultAwsPerspectiveId"`
-	DefaultGcpPerspectiveId         string              `json:"defaultGcpPerspectiveId"`
-	DefaultClusterPerspectiveId     string              `json:"defaultClusterPerspectiveId"`
-	DefaultExternalDataPerspectiveId string             `json:"defaultExternalDataPerspectiveId"`
-	ShowCostOverview                bool                `json:"showCostOverview"`
-	CurrencyPreference              CCMCurrencyPreference `json:"currencyPreference"`
-	Typename                        string              `json:"__typename"`
+	K8sClusterConnectorPresent       bool                  `json:"k8sClusterConnectorPresent"`
+	CloudDataPresent                 bool                  `json:"cloudDataPresent"`
+	AwsConnectorsPresent             bool                  `json:"awsConnectorsPresent"`
+	GcpConnectorsPresent             bool                  `json:"gcpConnectorsPresent"`
+	AzureConnectorsPresent           bool                  `json:"azureConnectorsPresent"`
+	ApplicationDataPresent           bool                  `json:"applicationDataPresent"`
+	InventoryDataPresent             bool                  `json:"inventoryDataPresent"`
+	ClusterDataPresent               bool                  `json:"clusterDataPresent"`
+	ExternalDataPresent              bool                  `json:"externalDataPresent"`
+	IsSampleClusterPresent           bool                  `json:"isSampleClusterPresent"`
+	DefaultAzurePerspectiveId        string                `json:"defaultAzurePerspectiveId"`
+	DefaultAwsPerspectiveId          string                `json:"defaultAwsPerspectiveId"`
+	DefaultGcpPerspectiveId          string                `json:"defaultGcpPerspectiveId"`
+	DefaultClusterPerspectiveId      string                `json:"defaultClusterPerspectiveId"`
+	DefaultExternalDataPerspectiveId string                `json:"defaultExternalDataPerspectiveId"`
+	ShowCostOverview                 bool                  `json:"showCostOverview"`
+	CurrencyPreference               CCMCurrencyPreference `json:"currencyPreference"`
+	Typename                         string                `json:"__typename"`
 }
 
 type CCMMetadataResponse struct {
 	Errors []CCMGraphQLError `json:"errors"`
-	Data struct {
+	Data   struct {
 		CCMMetadata CCMMetadata `json:"ccmMetaData"`
 	} `json:"data"`
 }
 
 type CCMPerspectiveRecommendationsOptions struct {
-	AccountId             string `json:"account_id"`
-	ViewId                string `json:"view_id"`
-	TimeFilter            string `json:"time_filter"`
-	Limit                 int32  `json:"limit"`
-	Offset                int32  `json:"offset"`
-	MinSaving int 		`json:"min_saving"`
-	Filters CCMGraphQLFilters 
-	KeyValueFilters CCMGraphQLKeyValueFilters
+	AccountId            string `json:"account_id"`
+	ViewId               string `json:"view_id"`
+	TimeFilter           string `json:"time_filter"`
+	Limit                int32  `json:"limit"`
+	Offset               int32  `json:"offset"`
+	MinSaving            int    `json:"min_saving"`
+	Filters              CCMGraphQLFilters
+	KeyValueFilters      CCMGraphQLKeyValueFilters
 	RecommendationStates []string
 }
 
@@ -310,31 +307,31 @@ type CCMRecommendationsV2 struct {
 
 type CCMPerspectiveRecommendationsResponse struct {
 	Errors []CCMGraphQLError `json:"errors"`
-	Data struct {
+	Data   struct {
 		RecommendationStatsV2 CCMRecommendationStatsV2 `json:"recommendationStatsV2"`
 		RecommendationsV2     CCMRecommendationsV2     `json:"recommendationsV2"`
 	} `json:"data"`
 }
 
 type CCMPerspectiveFilterValuesOptions struct {
-	AccountId             string `json:"account_id"`
-	ViewId                string `json:"view_id"`
-	TimeFilter            string `json:"time_filter"`
-	ValueType             string `json:"value_type"`
-	ValueSubType          string `json:"value_sub_type"`
-	Limit                 int32  `json:"limit"`
-	Offset                int32  `json:"offset"`
+	AccountId           string `json:"account_id"`
+	ViewId              string `json:"view_id"`
+	TimeFilter          string `json:"time_filter"`
+	ValueType           string `json:"value_type"`
+	ValueSubType        string `json:"value_sub_type"`
+	Limit               int32  `json:"limit"`
+	Offset              int32  `json:"offset"`
 	IsClusterHourlyData bool
 }
 
 type CCMPerspectiveFilterValues struct {
-	Values    []string `json:"values"`
-	Typename  string   `json:"__typename"`
+	Values   []string `json:"values"`
+	Typename string   `json:"__typename"`
 }
 
 type CCMPerspectiveFilterValuesResponse struct {
 	Errors []CCMGraphQLError `json:"errors"`
-	Data struct {
+	Data   struct {
 		PerspectiveFilters CCMPerspectiveFilterValues `json:"perspectiveFilters"`
 	} `json:"data"`
 }

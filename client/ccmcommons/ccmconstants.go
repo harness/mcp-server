@@ -92,27 +92,27 @@ var OutputKeyValueFields = []map[string]string{
 
 var OutputKeyFields = []map[string]string{
 	{
-		"fieldId":        "labels.key",
-		"fieldName":      "",
-		"identifier":     "LABEL",
+		"fieldId":    "labels.key",
+		"fieldName":  "",
+		"identifier": "LABEL",
 	},
 	{
-		"fieldId":        "labels.key2",
-		"fieldName":      "",
-		"identifier":     "LABEL_V2",
+		"fieldId":    "labels.key2",
+		"fieldName":  "",
+		"identifier": "LABEL_V2",
 	},
 }
 
-var DefaultGroupBy = []map[string]any{ 
-		{	
-			"entityGroupBy": map[string]any{
-				"fieldId":        "product",
-				"fieldName":      "Product",
-				"identifier":     "COMMON",
-				"identifierName": "Common",
-			},
+var DefaultGroupBy = []map[string]any{
+	{
+		"entityGroupBy": map[string]any{
+			"fieldId":        "product",
+			"fieldName":      "Product",
+			"identifier":     "COMMON",
+			"identifierName": "Common",
 		},
-	}
+	},
+}
 
 var ConditionFieldDescriptions = []map[string]string{
 	{
@@ -195,10 +195,10 @@ var ConditionKeyValueFieldDescriptions = []map[string]string{
 	},
 	{
 		"fieldId":     "label_v2",
-		"description": labelV2Description, 
+		"description": labelV2Description,
 	},
 	{
 		"fieldId":     "business_mapping",
-		"description": costCategoryDescription, 
+		"description": costCategoryDescription,
 	},
 }
