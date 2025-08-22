@@ -211,9 +211,6 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 			if err := modules.RegisterChatbot(config, tsg); err != nil {
 				return err
 			}
-			if err := modules.RegisterGenAI(config, tsg); err != nil {
-				return err
-			}
 			if err := modules.RegisterPullRequests(config, tsg); err != nil {
 				return err
 			}
@@ -294,10 +291,6 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 					}
 				case "chatbot":
 					if err := modules.RegisterChatbot(config, tsg); err != nil {
-						return err
-					}
-				case "genai":
-					if err := modules.RegisterGenAI(config, tsg); err != nil {
 						return err
 					}
 				case "pullrequests":
