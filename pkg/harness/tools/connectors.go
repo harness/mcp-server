@@ -141,10 +141,10 @@ func ListConnectorsTool(config *config.Config, connectorService *client.Connecto
 			mcp.WithString("tags",
 				mcp.Description("JSON object of tags to filter by (e.g., {\"env\":\"prod\"})"),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

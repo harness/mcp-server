@@ -113,7 +113,7 @@ func ListUserAuditTrailTool(config *config.Config, auditClient *client.AuditServ
 			mcp.WithString("resource_identifier",
 				mcp.Description("Optional resource identifier to filter by. Must be used with resource_type."),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {

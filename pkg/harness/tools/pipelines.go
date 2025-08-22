@@ -358,7 +358,7 @@ func GetPipelineSummaryTool(config *config.Config, client *client.PipelineServic
 			mcp.WithBoolean("get_metadata_only",
 				mcp.Description("Whether to only fetch metadata without full pipeline details."),
 			),
-			WithScope(config, true),
+			common.WithScope(config, true),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			pipelineID, err := RequiredParam[string](request, "pipeline_id")
@@ -366,7 +366,7 @@ func GetPipelineSummaryTool(config *config.Config, client *client.PipelineServic
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -400,11 +400,11 @@ func ListTriggersTool(config *config.Config, client *client.PipelineService) (to
 			mcp.WithString("search_term",
 				mcp.Description("Optional search term to filter triggers based on name, identifier, tags."),
 			),
-			WithScope(config, true),
+			common.WithScope(config, true),
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
