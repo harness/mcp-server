@@ -3,6 +3,7 @@ package common
 import (
 	"context"
 	"fmt"
+
 	"github.com/harness/harness-mcp/client/dto"
 )
 
@@ -11,22 +12,6 @@ type AccountIDKey struct{}
 
 // ScopeKey is the context key for storing the scope
 type ScopeKey struct{}
-
-// GetAccountIDFromContext retrieves the account ID from the context
-func GetAccountIDFromContext(ctx context.Context) (string, error) {
-	// First try to get from scope
-	scope, err := GetScopeFromContext(ctx)
-	if err == nil {
-		return scope.AccountID, nil
-	}
-
-	// Fall back to direct account ID
-	accountID, ok := ctx.Value(AccountIDKey{}).(string)
-	if !ok || accountID == "" {
-		return "", fmt.Errorf("account_id is required but not found in context")
-	}
-	return accountID, nil
-}
 
 // GetScopeFromContext retrieves the scope from the context
 func GetScopeFromContext(ctx context.Context) (dto.Scope, error) {

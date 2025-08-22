@@ -14,7 +14,7 @@ func NewServer(version string, config *config.Config, opts ...server.ServerOptio
 		server.WithResourceCapabilities(true, true),
 		server.WithPromptCapabilities(true),
 		server.WithLogging(),
-		server.WithToolHandlerMiddleware(middleware.WithAccountID(config)),
+		server.WithToolHandlerMiddleware(middleware.WithHarnessScope(config)),
 	}
 	opts = append(defaultOpts, opts...)
 
