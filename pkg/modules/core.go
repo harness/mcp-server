@@ -57,6 +57,7 @@ func (m *CoreModule) Toolsets() []string {
 		"chatbot",
 		"settings",
 		"secrets",
+		"prompts",
 	}
 }
 
@@ -122,6 +123,11 @@ func (m *CoreModule) RegisterToolsets() error {
 			}
 		case "secrets":
 			err := RegisterSecrets(m.config, m.tsg)
+			if err != nil {
+				return err
+			}
+		case "prompts":
+			err := RegisterPromptTools(m.config, m.tsg)
 			if err != nil {
 				return err
 			}
@@ -429,7 +435,6 @@ func RegisterChatbot(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	return nil
 }
 
-// RegisterSettings registers the settings toolset
 func RegisterSettings(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for settings
 	baseURL := utils.BuildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng/api")
@@ -477,4 +482,17 @@ func RegisterSecrets(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Add toolset to the group
 	tsg.AddToolset(secrets)
 	return nil
+}
+
+func RegisterPromptTools(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+    // Create the prompt toolset with both tools
+    prompt := toolsets.NewToolset("prompt", "Harness MCP Prompts tools").
+        AddReadTools(
+            toolsets.NewServerTool(tools.GetPromptTool(config)),
+            toolsets.NewServerTool(tools.ListPromptsTool(config)),
+        )
+
+    // Add toolset to the group
+    tsg.AddToolset(prompt)
+    return nil
 }
