@@ -15,6 +15,9 @@ import (
 // Default timeout for GenAI service
 const defaultGenaiTimeout = 300 * time.Second
 
+// Default timeout for Intelligence service
+const defaultIntelligenceTimeout = 300 * time.Second
+
 // CoreModule implements the Module interface and contains all default toolsets
 type CoreModule struct {
 	config *config.Config
@@ -99,11 +102,6 @@ func (m *CoreModule) RegisterToolsets() error {
 			}
 		case "logs":
 			err := RegisterLogs(m.config, m.tsg)
-			if err != nil {
-				return err
-			}
-		case "genai":
-			err := RegisterGenAI(m.config, m.tsg)
 			if err != nil {
 				return err
 			}
@@ -255,6 +253,7 @@ func RegisterAudit(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	audit := toolsets.NewToolset("audit", "Audit log related tools").
 		AddReadTools(
 			toolsets.NewServerTool(tools.ListUserAuditTrailTool(config, auditService)),
+			toolsets.NewServerTool(tools.GetAuditYamlTool(config, auditService)),
 		)
 
 	// Add toolset to the group
@@ -307,30 +306,6 @@ func RegisterLogs(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	return nil
 }
 
-// RegisterGenAI registers the genai toolset
-func RegisterGenAI(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-	// Skip registration for external mode for now
-	if !config.Internal {
-		return nil
-	}
-
-	// Get the GenAI client
-	genaiClient, err := GetGenAIClient(config)
-	if err != nil {
-		return err
-	}
-
-	// Create the genai toolset
-	genai := toolsets.NewToolset("genai", "Harness GenAI tools").
-		AddReadTools(
-			toolsets.NewServerTool(tools.AIDevOpsAgentTool(config, genaiClient)),
-		)
-
-	// Add toolset to the group
-	tsg.AddToolset(genai)
-	return nil
-}
-
 // RegisterTemplates registers the templates toolset
 func RegisterTemplates(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for templates
@@ -365,7 +340,7 @@ func RegisterIntelligence(config *config.Config, tsg *toolsets.ToolsetGroup) err
 	secret := config.IntelligenceSvcSecret
 
 	// Create base client for intelligence service
-	c, err := utils.CreateClientWithIdentity(baseURL, config, secret, utils.AiServiceIdentity)
+	c, err := utils.CreateClientWithIdentity(baseURL, config, secret, utils.AiServiceIdentity, defaultIntelligenceTimeout)
 	if err != nil {
 		return err
 	}
@@ -378,6 +353,7 @@ func RegisterIntelligence(config *config.Config, tsg *toolsets.ToolsetGroup) err
 	intelligence := toolsets.NewToolset("intelligence", "Harness Intelligence related tools").
 		AddReadTools(
 			toolsets.NewServerTool(tools.FindSimilarTemplates(config, intelligenceClient)),
+			toolsets.NewServerTool(tools.AIDevOpsAgentTool(config, intelligenceClient)),
 		)
 
 	// Add toolset to the group

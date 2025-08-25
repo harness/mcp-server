@@ -3,13 +3,14 @@ package tools
 import (
 	"context"
 	"encoding/json"
+
 	"github.com/harness/harness-mcp/client"
+	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/ccmcommons"
+	"github.com/harness/harness-mcp/pkg/utils"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/harness/harness-mcp/pkg/ccmcommons"
-	"github.com/harness/harness-mcp/client/dto"
-	"github.com/harness/harness-mcp/pkg/utils"
 )
 
 const (
@@ -22,33 +23,33 @@ func ListCcmRecommendationsTool(config *config.Config, client *client.CloudCostM
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 
 	return mcp.NewToolWithRawSchema("list_ccm_recommendations", ccmcommons.ListRecommendationsDescription,
-		recommendationsListDefinition(),
-	),
-	func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return recommendationsHandler(config, ctx, request, client.ListRecommendations)
-	}
+			recommendationsListDefinition(),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return recommendationsHandler(config, ctx, request, client.ListRecommendations)
+		}
 }
 
 func ListCcmRecommendationsByResourceTypeTool(config *config.Config, client *client.CloudCostManagementService,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 
 	return mcp.NewToolWithRawSchema("list_ccm_recommendations_by_resource_type", ccmcommons.ListRecommendationsByResourceTypeDescription,
-		recommendationsListDefinition(),
-	),
-	func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return recommendationsHandler(config, ctx, request, client.ListRecommendationsByResourceType)
-	}
+			recommendationsListDefinition(),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return recommendationsHandler(config, ctx, request, client.ListRecommendationsByResourceType)
+		}
 }
 
 func GetCcmRecommendationsStatsTool(config *config.Config, client *client.CloudCostManagementService,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 
 	return mcp.NewToolWithRawSchema("get_ccm_recommendations_stats", ccmcommons.GetRecommendationsStatsDescription,
-		recommendationsListDefinition(),
-	),
-	func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return recommendationsHandler(config, ctx, request, client.GetRecommendationsStats)
-	}
+			recommendationsListDefinition(),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return recommendationsHandler(config, ctx, request, client.GetRecommendationsStats)
+		}
 }
 
 func UpdateCcmRecommendationStateTool(config *config.Config, client *client.CloudCostManagementService,
@@ -74,7 +75,6 @@ func UpdateCcmRecommendationStateTool(config *config.Config, client *client.Clou
 				ReadOnlyHint:    utils.ToBoolPtr(false),
 				DestructiveHint: utils.ToBoolPtr(true),
 			}),
-
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			accountId, err := getAccountID(config, request)
@@ -129,7 +129,6 @@ func OverrideCcmRecommendationSavingsTool(config *config.Config, client *client.
 				ReadOnlyHint:    utils.ToBoolPtr(false),
 				DestructiveHint: utils.ToBoolPtr(true),
 			}),
-
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			accountId, err := getAccountID(config, request)
@@ -165,8 +164,8 @@ func OverrideCcmRecommendationSavingsTool(config *config.Config, client *client.
 }
 
 func recommendationsHandler(
-	config *config.Config, 
-	ctx context.Context, 
+	config *config.Config,
+	ctx context.Context,
 	request mcp.CallToolRequest,
 	clientFunction ClientFunctionRecommendationsInterface,
 ) (*mcp.CallToolResult, error) {
@@ -260,25 +259,25 @@ func recommendationsHandler(
 	}
 
 	params := map[string]any{
-		"k8sRecommendationFilterPropertiesDTO":      k8sProps,
-		"awsRecommendationFilterPropertiesDTO":      awsProps,
-		"azureRecommendationFilterProperties":       azureProps,
-		"containerRecommendationFilterPropertiesDTO": containerProps,
+		"k8sRecommendationFilterPropertiesDTO":        k8sProps,
+		"awsRecommendationFilterPropertiesDTO":        awsProps,
+		"azureRecommendationFilterProperties":         azureProps,
+		"containerRecommendationFilterPropertiesDTO":  containerProps,
 		"governanceRecommendationFilterPropertiesDTO": governanceProps,
-		"baseRecommendationFilterPropertiesDTO":     baseProps,
-		"perspectiveFilters":                        perspectiveFilters,
-		"minSaving":                                 minSaving,
-		"minCost":                                   minCost,
-		"daysBack":                                  daysBack,
-		"offset":                                    offset,
-		"limit":                                     limit,
-		"childRecommendation":                       childRecommendation,
-		"includeIgnoredRecommendation":              includeIgnoredRecommendation,
-		"parentRecommendation":                      parentRecommendation,
-		"tagDTOs":                                   tagDTOs,
-		"costCategoryDTOs":                          costCategoryDTOs,
-		"tags":                                      tags,
-		"filterType":                                filterType,
+		"baseRecommendationFilterPropertiesDTO":       baseProps,
+		"perspectiveFilters":                          perspectiveFilters,
+		"minSaving":                                   minSaving,
+		"minCost":                                     minCost,
+		"daysBack":                                    daysBack,
+		"offset":                                      offset,
+		"limit":                                       limit,
+		"childRecommendation":                         childRecommendation,
+		"includeIgnoredRecommendation":                includeIgnoredRecommendation,
+		"parentRecommendation":                        parentRecommendation,
+		"tagDTOs":                                     tagDTOs,
+		"costCategoryDTOs":                            costCategoryDTOs,
+		"tags":                                        tags,
+		"filterType":                                  filterType,
 	}
 
 	data, err := clientFunction(ctx, scope, accountId, params)
@@ -294,7 +293,6 @@ func recommendationsHandler(
 	return mcp.NewToolResultText(string(r)), nil
 }
 
-
 func recommendationsListDefinition() json.RawMessage {
 	return toRawMessage(commonRecommendationsSchema(), []string{})
 }
@@ -305,14 +303,14 @@ func commonRecommendationsSchema() map[string]any {
 		"k8sRecommendationFilterPropertiesDTO": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"ids":                 map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-				"names":               map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-				"namespaces":          map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-				"clusterNames":        map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-				"resourceTypes":       map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+				"ids":                  map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+				"names":                map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+				"namespaces":           map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+				"clusterNames":         map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+				"resourceTypes":        map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 				"recommendationStates": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-				"cloudProvider":       map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-				"regions":             map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+				"cloudProvider":        map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+				"regions":              map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 			},
 		},
 		"awsRecommendationFilterPropertiesDTO": map[string]any{
@@ -346,15 +344,15 @@ func commonRecommendationsSchema() map[string]any {
 		"baseRecommendationFilterPropertiesDTO": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"id":                 map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-				"cloudAccountId":     map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-				"cloudAccountName":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-				"resourceId":         map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-				"resourceName":       map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-				"region":             map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-				"resourceType":       map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+				"id":                  map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+				"cloudAccountId":      map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+				"cloudAccountName":    map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+				"resourceId":          map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+				"resourceName":        map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+				"region":              map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+				"resourceType":        map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 				"recommendationState": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-				"cloudProvider":      map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+				"cloudProvider":       map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 			},
 		},
 		"perspectiveFilters": map[string]any{
@@ -430,14 +428,14 @@ func commonRecommendationsSchema() map[string]any {
 				},
 			},
 		},
-		"minSaving": map[string]any{"type": "number", "default": 1},
-		"minCost": map[string]any{"type": "number"},
-		"daysBack": map[string]any{"type": "number", "default": 10},
-		"offset": map[string]any{"type": "number", "default": 0},
-		"limit": map[string]any{"type": "number", "default": 10},
-		"childRecommendation": map[string]any{"type": "boolean"},
+		"minSaving":                    map[string]any{"type": "number", "default": 1},
+		"minCost":                      map[string]any{"type": "number"},
+		"daysBack":                     map[string]any{"type": "number", "default": 10},
+		"offset":                       map[string]any{"type": "number", "default": 0},
+		"limit":                        map[string]any{"type": "number", "default": 10},
+		"childRecommendation":          map[string]any{"type": "boolean"},
 		"includeIgnoredRecommendation": map[string]any{"type": "boolean"},
-		"parentRecommendation": map[string]any{"type": "boolean"},
+		"parentRecommendation":         map[string]any{"type": "boolean"},
 		"tagDTOs": map[string]any{
 			"type": "array",
 			"items": map[string]any{
@@ -459,7 +457,7 @@ func commonRecommendationsSchema() map[string]any {
 			},
 		},
 		"tags": map[string]any{
-			"type": "object",
+			"type":                 "object",
 			"additionalProperties": map[string]any{"type": "string"},
 		},
 		"filterType": map[string]any{"type": "string", "default": FilterTypeRecommendation},
@@ -467,7 +465,7 @@ func commonRecommendationsSchema() map[string]any {
 }
 
 func toRawMessage(properties map[string]any, requiredFields []string) json.RawMessage {
-	
+
 	schema := map[string]any{
 		"type":       "object",
 		"properties": properties,
@@ -476,4 +474,3 @@ func toRawMessage(properties map[string]any, requiredFields []string) json.RawMe
 	b, _ := json.Marshal(schema)
 	return json.RawMessage(b)
 }
-

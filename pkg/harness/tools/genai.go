@@ -233,46 +233,6 @@ func createGenAIToolHandler(config *config.Config, client *client.GenaiService, 
 	}
 }
 
-func AIDevOpsAgentTool(config *config.Config, client *client.GenaiService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	// Get common parameters
-	commonParams := getCommonGenAIParameters()
-
-	// Add tool-specific parameters
-	toolParams := append(commonParams,
-		mcp.WithString("action",
-			mcp.Required(),
-			mcp.Description("The action type to perform (CREATE_STEP, UPDATE_STEP, CREATE_STAGE, UPDATE_STAGE, CREATE_PIPELINE, UPDATE_PIPELINE, CREATE_ENVIRONMENT, UPDATE_ENVIRONMENT, CREATE_SECRET, UPDATE_SECRET, CREATE_SERVICE, UPDATE_SERVICE, CREATE_CONNECTOR, UPDATE_CONNECTOR etc.)"),
-		),
-		WithScope(config, false),
-	)
-
-	tool = mcp.NewTool("ask_ai_devops_agent",
-		append([]mcp.ToolOption{mcp.WithDescription("The AI Devops Agent is an expert in planning and executing requests related to generation/updation of Harness entities like pipeline, stage, step, environment, connector, service, secret")},
-			toolParams...)...,
-	)
-
-	handler = createGenAIToolHandler(config, client, func(baseParams *dto.BaseRequestParameters, request mcp.CallToolRequest) (interface{}, error) {
-		// Extract action parameter
-		actionArg, ok := request.GetArguments()["action"]
-		if !ok || actionArg == nil {
-			return nil, fmt.Errorf("missing required parameter: action")
-		}
-
-		action, ok := actionArg.(string)
-		if !ok {
-			return nil, fmt.Errorf("action must be a string")
-		}
-
-		// Create the service chat parameters
-		return &dto.ServiceChatParameters{
-			BaseRequestParameters: *baseParams,
-			Action:                dto.RequestAction(strings.ToUpper(action)),
-		}, nil
-	})
-
-	return tool, handler
-}
-
 // DBChangesetTool creates a tool for generating database changesets
 func DBChangesetTool(config *config.Config, client *client.GenaiService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	// Get common parameters

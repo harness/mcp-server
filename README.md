@@ -46,6 +46,7 @@ Toolset Name: `default`
 
 - `get_connector_details`: Get details of a specific connector
 - `list_connector_catalogue`: List the Harness connector catalogue
+- `list_connectors`: List connectors with filtering options
 - `list_pipelines`: List pipelines in a repository
 - `get_pipeline`: Get details of a specific pipeline
 - `get_execution`: Get details of a specific pipeline execution
@@ -102,6 +103,7 @@ Toolset Name: `connectors`
 
 - `list_connector_catalogue`: List the Harness connector catalogue
 - `get_connector_details`: Get details of a specific connector
+- `list_connectors`: List connectors with filtering options
 
 #### Repositories Toolset
 

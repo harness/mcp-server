@@ -68,29 +68,28 @@ var (
 				}
 			]
 	}}]`
-
 )
 
 // TestGetCcmPerspectiveRulesTool tests the basic functionality of the perspective rules tool
 func TestGetCcmPerspectiveRulesTool(t *testing.T) {
 
 	testCases := []struct {
-		name     string
-		input    string
-		expectedContent mcp.EmbeddedResource
+		name                  string
+		input                 string
+		expectedContent       mcp.EmbeddedResource
 		expectedPromptContent mcp.EmbeddedResource
-		expectError bool
+		expectError           bool
 	}{
 		{
-			name:     "Valid Json Input Tests",
-			input:    validInputJSON,
-			expectedContent: validExpectedTextContent,
+			name:                  "Valid Json Input Tests",
+			input:                 validInputJSON,
+			expectedContent:       validExpectedTextContent,
 			expectedPromptContent: validExpectedPromptContent,
-			expectError: false,
+			expectError:           false,
 		},
 		{
-			name:     "Invalid Json Input Tests",
-			input:    invalidInputJSON,
+			name:        "Invalid Json Input Tests",
+			input:       invalidInputJSON,
 			expectError: true,
 		},
 	}
@@ -121,7 +120,7 @@ func TestGetCcmPerspectiveRulesTool(t *testing.T) {
 					Method: CCMPerspectiveRulesToolID,
 				},
 				Params: mcp.CallToolParams{
-					Name: 	CCMPerspectiveRulesToolID,
+					Name: CCMPerspectiveRulesToolID,
 					Arguments: map[string]any{
 						"view_rules": viewRulesArray,
 					},

@@ -13,95 +13,95 @@ import (
 )
 
 func registerPromptsCopy(moduleID string, cfg *config.Config, mcpServer *server.MCPServer) (*p.Prompt, error) {
-	
-	    // Create a map to store prompts by mode
-		modulePromptsByMode := map[string][]prompts.PromptFile{
-			string(p.Standard): {},
-			string(p.Architect): {},
-		}
-		
-		// Get module-specific prompts for standard mode
-		standardPrompts, err := mockGetModulePrompts(prompts.PromptFiles, strings.ToLower(moduleID), cfg.Internal, string(p.Standard))
+
+	// Create a map to store prompts by mode
+	modulePromptsByMode := map[string][]prompts.PromptFile{
+		string(p.Standard):  {},
+		string(p.Architect): {},
+	}
+
+	// Get module-specific prompts for standard mode
+	standardPrompts, err := mockGetModulePrompts(prompts.PromptFiles, strings.ToLower(moduleID), cfg.Internal, string(p.Standard))
+	if err != nil {
+		return nil, err
+	}
+	modulePromptsByMode[string(p.Standard)] = standardPrompts
+
+	// Get module-specific prompts for architect mode (only for internal)
+	if cfg.Internal {
+		architectPrompts, err := mockGetModulePrompts(prompts.PromptFiles, strings.ToLower(moduleID), cfg.Internal, string(p.Architect))
 		if err != nil {
 			return nil, err
 		}
-		modulePromptsByMode[string(p.Standard)] = standardPrompts
-		
-		// Get module-specific prompts for architect mode (only for internal)
-		if cfg.Internal {
-			architectPrompts, err := mockGetModulePrompts(prompts.PromptFiles, strings.ToLower(moduleID), cfg.Internal, string(p.Architect))
-			if err != nil {
-				return nil, err
-			}
-			modulePromptsByMode[string(p.Architect)] = architectPrompts
+		modulePromptsByMode[string(p.Architect)] = architectPrompts
+	}
+
+	// Check if we have any prompts for this module
+	totalPrompts := len(modulePromptsByMode[string(p.Standard)]) + len(modulePromptsByMode[string(p.Architect)])
+	if totalPrompts == 0 {
+		// No prompts for this module
+		return nil, nil
+	}
+
+	// Create a map to store combined content for each mode
+	modeContents := make(map[string]string)
+
+	// Get description and result description from the first available prompt
+	description := ""
+	resultDescription := ""
+
+	// Process each mode separately to build the content map
+	for mode, modePrompts := range modulePromptsByMode {
+		if len(modePrompts) == 0 {
+			continue // Skip empty modes
 		}
-		
-		// Check if we have any prompts for this module
-		totalPrompts := len(modulePromptsByMode[string(p.Standard)]) + len(modulePromptsByMode[string(p.Architect)])
-		if totalPrompts == 0 {
-			// No prompts for this module
-			return nil, nil
+
+		// Use the first prompt's metadata for description and result description if not already set
+		if description == "" && modePrompts[0].Metadata.Description != "" {
+			description = modePrompts[0].Metadata.Description
 		}
-	
-		// Create a map to store combined content for each mode
-		modeContents := make(map[string]string)
-		
-		// Get description and result description from the first available prompt
-		description := ""
-		resultDescription := ""
-		
-		// Process each mode separately to build the content map
-		for mode, modePrompts := range modulePromptsByMode {
-			if len(modePrompts) == 0 {
-				continue // Skip empty modes
-			}
-			
-			// Use the first prompt's metadata for description and result description if not already set
-			if description == "" && modePrompts[0].Metadata.Description != "" {
-				description = modePrompts[0].Metadata.Description
-			}
-			
-			if resultDescription == "" && modePrompts[0].Metadata.ResultDescription != "" {
-				resultDescription = modePrompts[0].Metadata.ResultDescription
-			}
-			
-			// Combine all prompt contents for this mode
-			var combinedContent strings.Builder
-			for i, promptFile := range modePrompts {
-				if promptFile.Content != "" {
-					if i > 0 {
-						combinedContent.WriteString("\n\n")
-					}
-					combinedContent.WriteString(promptFile.Content)
+
+		if resultDescription == "" && modePrompts[0].Metadata.ResultDescription != "" {
+			resultDescription = modePrompts[0].Metadata.ResultDescription
+		}
+
+		// Combine all prompt contents for this mode
+		var combinedContent strings.Builder
+		for i, promptFile := range modePrompts {
+			if promptFile.Content != "" {
+				if i > 0 {
+					combinedContent.WriteString("\n\n")
 				}
+				combinedContent.WriteString(promptFile.Content)
 			}
-			
-			// Store the combined content for this mode
-			modeContents[mode] = combinedContent.String()
 		}
-		
-		// Convert the mode contents map to JSON
-		contentJSON, err := json.Marshal(modeContents)
-		if err != nil {
-			return nil, err
-		}
-		
-		// Create a single MCP prompt with the module ID as the name
-		mcpPrompt := p.NewPrompt().
-			SetName(strings.ToUpper(moduleID)). // Use moduleID as the prompt name
-			SetDescription(description).
-			SetResultDescription(resultDescription).
-			SetText(string(contentJSON)). // Store the JSON map as the prompt text
-			Build()
-		
-		// Create a Prompts collection with the single prompt
-		mcpPrompts := p.Prompts{}
-		mcpPrompts.Append(mcpPrompt)
-		
-		// Register the prompt with the MCP server
-		p.AddPrompts(mcpPrompts, mcpServer)
-		
-		return mcpPrompt, nil
+
+		// Store the combined content for this mode
+		modeContents[mode] = combinedContent.String()
+	}
+
+	// Convert the mode contents map to JSON
+	contentJSON, err := json.Marshal(modeContents)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create a single MCP prompt with the module ID as the name
+	mcpPrompt := p.NewPrompt().
+		SetName(strings.ToUpper(moduleID)). // Use moduleID as the prompt name
+		SetDescription(description).
+		SetResultDescription(resultDescription).
+		SetText(string(contentJSON)). // Store the JSON map as the prompt text
+		Build()
+
+	// Create a Prompts collection with the single prompt
+	mcpPrompts := p.Prompts{}
+	mcpPrompts.Append(mcpPrompt)
+
+	// Register the prompt with the MCP server
+	p.AddPrompts(mcpPrompts, mcpServer)
+
+	return mcpPrompt, nil
 }
 
 // Mock the GetModulePrompts function to return our test prompts
@@ -111,8 +111,8 @@ func mockGetModulePrompts(fs embed.FS, module string, isInternal bool, mode stri
 		return []prompts.PromptFile{
 			{
 				Metadata: prompts.PromptMetadata{
-					Description:       "Standard test description",
-					ResultDescription: "Standard result description",
+					Description:       "Testmodule prompt description",
+					ResultDescription: "Testmodule prompt result description",
 					Module:            "testmodule",
 				},
 				Content:  "Standard content",
@@ -123,8 +123,8 @@ func mockGetModulePrompts(fs embed.FS, module string, isInternal bool, mode stri
 		return []prompts.PromptFile{
 			{
 				Metadata: prompts.PromptMetadata{
-					Description:       "Architect test description",
-					ResultDescription: "Architect result description",
+					Description:       "Testmodule prompt description",
+					ResultDescription: "Testmodule prompt result description",
 					Module:            "testmodule",
 				},
 				Content:  "Architect content",
@@ -155,10 +155,10 @@ func TestRegisterPrompts(t *testing.T) {
 	if prompt.Name != "TESTMODULE" {
 		t.Errorf("expected prompt name 'TESTMODULE', got %q", prompt.Name)
 	}
-	if !strings.Contains(prompt.Description, "Standard test description") {
+	if !strings.Contains(prompt.Description, "Testmodule prompt description") {
 		t.Errorf("description mismatch, got %q", prompt.Description)
 	}
-	if !strings.Contains(prompt.ResultDescription, "Standard result description") {
+	if !strings.Contains(prompt.ResultDescription, "Testmodule prompt result description") {
 		t.Errorf("result description mismatch, got %q", prompt.ResultDescription)
 	}
 
