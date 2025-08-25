@@ -11,14 +11,100 @@ import (
 
 	generated "github.com/harness/harness-mcp/client/scs/generated"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
-	"github.com/harness/harness-mcp/pkg/appseccommons"
-	builder "github.com/harness/harness-mcp/pkg/harness/event/common"
+	"github.com/harness/harness-mcp/pkg/harness/event"
+	"github.com/harness/harness-mcp/pkg/harness/event/types"
 	"github.com/harness/harness-mcp/pkg/resources"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
 
-func artifactRuleBasedFollowUps(artifacts []generated.ArtifactV2ListingResponse, licenseFilterList *[]generated.LicenseFilter) []string {
+type OPAContent struct {
+	Policy struct {
+		Name    string `json:"name"`
+		Content string `json:"content"`
+	} `json:"policy"`
+	Metadata struct {
+		DeniedLicenses []string `json:"denied_licenses"`
+	} `json:"metadata"`
+}
+
+type FileContent struct {
+	Name    string `json:"name"`
+	Content []byte `json:"content"`
+}
+
+// mapLastScan extracts last scan data from PipelineDetails into a map
+func mapLastScan(lastScan *generated.PipelineDetails) map[string]interface{} {
+	scan := map[string]interface{}{}
+	if lastScan.Id != nil {
+		scan["pipeline"] = *lastScan.Id
+	}
+	if lastScan.ExecutionId != nil {
+		scan["execution"] = *lastScan.ExecutionId
+	}
+	if lastScan.Status != nil {
+		scan["status"] = *lastScan.Status
+	}
+	if lastScan.TriggeredAt != nil {
+		tsMillis := *lastScan.TriggeredAt
+		tsSecs := tsMillis / 1000
+		t := time.Unix(tsSecs, 0)
+		scan["last_scan"] = t.Format("02/01/2006 15:04")
+	}
+	return scan
+}
+
+// formatScorecard formats a scorecard value as a float with 2 decimal places
+func formatScorecard(scorecardValue string) interface{} {
+	// Parse string to float before formatting
+	if score, err := strconv.ParseFloat(scorecardValue, 64); err == nil {
+		return fmt.Sprintf("%.2f", score)
+	}
+	// Fallback to the original string if parsing fails
+
+	return scorecardValue
+}
+
+// mapCompliance extracts compliance data from RiskAndCompliance into a map
+func mapCompliance(riskAndCompliance *generated.RiskAndCompliance) map[string]interface{} {
+	compliance := map[string]interface{}{}
+	if riskAndCompliance.Critical != nil {
+		compliance["critical"] = *riskAndCompliance.Critical
+	}
+	if riskAndCompliance.High != nil {
+		compliance["high"] = *riskAndCompliance.High
+	}
+	if riskAndCompliance.Medium != nil {
+		compliance["medium"] = *riskAndCompliance.Medium
+	}
+	if riskAndCompliance.Low != nil {
+		compliance["low"] = *riskAndCompliance.Low
+	}
+	return compliance
+}
+
+// mapVulnerabilities extracts vulnerability data from StoIssueCount into a map
+func mapVulnerabilities(stoIssueCount *generated.StoIssueCount) map[string]interface{} {
+	vuln := map[string]interface{}{}
+	if stoIssueCount.Critical != nil {
+		vuln["critical"] = *stoIssueCount.Critical
+	}
+	if stoIssueCount.High != nil {
+		vuln["high"] = *stoIssueCount.High
+	}
+	if stoIssueCount.Medium != nil {
+		vuln["medium"] = *stoIssueCount.Medium
+	}
+	if stoIssueCount.Low != nil {
+		vuln["low"] = *stoIssueCount.Low
+	}
+	if stoIssueCount.Total != nil {
+		vuln["total"] = *stoIssueCount.Total
+	}
+	return vuln
+}
+
+func artifactRuleBasedFollowUps(licenseFilterList *[]generated.LicenseFilter) []string {
 	var prompts []string
 	if licenseFilterList != nil && len(*licenseFilterList) > 0 {
 		var licenses []string
@@ -38,9 +124,9 @@ func artifactRuleBasedFollowUps(artifacts []generated.ArtifactV2ListingResponse,
 
 // ListArtifactSourcesTool returns a tool for listing artifact sources.
 func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("list_artifact_sources",
+	return mcp.NewTool("list_artifacts_scs",
 			mcp.WithDescription(`
-			Lists all artifact sources available in Harness SCS.
+			Lists all artifacts available in Harness SCS.
 
 			Output Format:
 			Show output in the following format, other than this format don't show any other section:
@@ -132,8 +218,18 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 				mcp.Enum("severity", "title", "updated"),
 				mcp.DefaultString("updated"),
 			),
+			mcp.WithNumber("page",
+				mcp.Description("Page number for pagination - page 0 is the first page"),
+				mcp.Min(0),
+				mcp.DefaultNumber(0),
+			),
+			mcp.WithNumber("size",
+				mcp.Description("Number of items per page.Always take 5 items per page,unless specified otherwise."),
+				mcp.Min(1),
+				mcp.DefaultNumber(5),
+				mcp.Max(10),
+			),
 			WithScope(config, true),
-			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := FetchScope(config, request, true)
@@ -150,11 +246,10 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 				Order:          (*generated.ListArtifactSourcesParamsOrder)(&order),
 				Sort:           &sortVal,
 			}
-			pageVal := 1
-			sizeVal := 2
+			size = 5
 			artifactParams := &generated.ArtifactListV2Params{
-				Page:           (*generated.Page)(&pageVal),
-				Limit:          (*generated.Limit)(&sizeVal),
+				Page:           (*generated.Page)(&page),
+				Limit:          (*generated.Limit)(&size),
 				HarnessAccount: generated.AccountHeader(config.AccountID),
 				Order:          (*generated.ArtifactListV2ParamsOrder)(&order),
 				Sort:           &sortVal,
@@ -166,6 +261,8 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			slog.Info("Body generated by BuildArtifactListingBody", "body", body)
+
 			resp, err := client.ListArtifactSourcesWithResponse(ctx, orgID, projectID, params, body)
 			if err != nil {
 				return nil, fmt.Errorf("failed to call ListArtifactSources: %w", err)
@@ -176,9 +273,12 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 
 			// Enrich each source with artifact details
 			var enrichedArtifacts []generated.ArtifactV2ListingResponse
+			//Note: SearchTerm can't be passed as we search on digest or tag in artifact list v2
+			body.SearchTerm = nil
 			if resp.JSON200 != nil {
 				for _, src := range *resp.JSON200 {
 					if src.SourceId != nil && *src.SourceId != "" {
+						slog.Info("Fetching artifact details for source", "sourceId", *src.SourceId, "name", *src.Name)
 						artifactResp, err := client.ArtifactListV2WithResponse(ctx, orgID, projectID, *src.SourceId, artifactParams, body)
 						if err != nil {
 							slog.Error("Failed to call ArtifactListV2", "error", err)
@@ -190,6 +290,7 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 					}
 				}
 			}
+
 			rows := []map[string]interface{}{}
 			for _, artifact := range enrichedArtifacts {
 				row := map[string]interface{}{}
@@ -224,8 +325,8 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 						row["updated"] = *artifact.Updated
 					}
 				}
-				if artifact.Scorecard != nil {
-					row["scorecard"] = *artifact.Scorecard.AvgScore
+				if artifact.Scorecard != nil && artifact.Scorecard.AvgScore != nil {
+					row["scorecard"] = formatScorecard(*artifact.Scorecard.AvgScore)
 				}
 				if artifact.PolicyEnforcement != nil {
 					pe := map[string]interface{}{}
@@ -261,23 +362,7 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 					row["orchestration"] = orch
 				}
 				if artifact.StoIssueCount != nil {
-					vuln := map[string]interface{}{}
-					if artifact.StoIssueCount.Critical != nil {
-						vuln["critical"] = *artifact.StoIssueCount.Critical
-					}
-					if artifact.StoIssueCount.High != nil {
-						vuln["high"] = *artifact.StoIssueCount.High
-					}
-					if artifact.StoIssueCount.Medium != nil {
-						vuln["medium"] = *artifact.StoIssueCount.Medium
-					}
-					if artifact.StoIssueCount.Low != nil {
-						vuln["low"] = *artifact.StoIssueCount.Low
-					}
-					if artifact.StoIssueCount.Total != nil {
-						vuln["total"] = *artifact.StoIssueCount.Total
-					}
-					row["vulnerabilities"] = vuln
+					row["vulnerabilities"] = mapVulnerabilities(artifact.StoIssueCount)
 				}
 				if artifact.Signing != nil {
 					row["signing"] = artifact.Signing.Rekor.Signature
@@ -287,19 +372,63 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 				}
 				rows = append(rows, row)
 			}
-			// Transform enrichedArtifacts into a table-like structure
-			pretty, err := json.MarshalIndent(rows, "", "  ")
+			// Create table columns for our UI component
+			columns := []types.TableColumn{
+				{Key: "name", Label: "Artifact Name"},
+				{Key: "tags", Label: "Tags"},
+				{Key: "components", Label: "Components"},
+				{Key: "vulnerabilities", Label: "Vulnerabilities"},
+				{Key: "scorecard", Label: "Scorecard"},
+				{Key: "deployment", Label: "Deployment"},
+				{Key: "sbom violations", Label: "SBOM Violations"},
+				{Key: "digest", Label: "Digest"},
+				{Key: "signing", Label: "Signing"},
+				{Key: "updated", Label: "Updated"},
+			}
+
+			// Always create the basic table data
+			tableData := types.TableData{
+				Columns: columns,
+				Rows:    rows,
+			}
+
+			rawEnrichedArtifacts, err := json.Marshal(enrichedArtifacts)
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal response: %w", err)
 			}
 
-			// Compute suggestions
-			var suggestions []string
-			if enrichedArtifacts != nil {
-				suggestions = artifactRuleBasedFollowUps(enrichedArtifacts, &*body.LicenseFilterList)
+			responseContents := []mcp.Content{
+				mcp.NewTextContent(string(rawEnrichedArtifacts)),
 			}
 
-			return appseccommons.NewToolResultTextWithPrompts(string(builder.GenericTableEvent), string(pretty), suggestions, "Artifact Report", "name", "tags", "components", "vulnerabilities", "scorecard", "deployment", "sbom violations", "digest", "signing", "updated", "orchestration"), nil
+			if config.Internal {
+				// Only create enhanced UI components for internal mode
+				tableEvent := types.NewTableEvent(tableData)
+				tableResource, err := tableEvent.CreateEmbeddedResource()
+				if err != nil {
+					slog.Error("Failed to create table resource", "error", err)
+				} else {
+					responseContents = append(responseContents, tableResource)
+				}
+
+				// Add follow-up prompts if available
+				if enrichedArtifacts != nil {
+					suggestions := artifactRuleBasedFollowUps(body.LicenseFilterList)
+					if len(suggestions) > 0 {
+						promptEvent := types.NewActionEvent(suggestions)
+						promptResource, err := promptEvent.CreateEmbeddedResource()
+						if err != nil {
+							slog.Error("Failed to create prompt resource", "error", err)
+						} else {
+							responseContents = append(responseContents, promptResource)
+						}
+					}
+				}
+			}
+
+			return &mcp.CallToolResult{
+				Content: responseContents,
+			}, nil
 		}
 }
 
@@ -307,7 +436,8 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 func ArtifactListV2Tool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_artifacts_per_source",
 			mcp.WithDescription(`
-			Lists all artifacts from a specified artifact source in Harness SCS.Show in data table format unless otherwise specified.
+			Lists all artifacts from a specified artifact source in Harness SCS.Call this tool with sourceId of the artifact source.
+			Show in data table format unless otherwise specified.
 
 			Usage Guidance:
 			- Use this tool to retrieve a list of all artifacts (such as images, packages, etc.) from a given artifact source.
@@ -805,24 +935,133 @@ func CreateOPAPolicyTool(config *config.Config, client *generated.ClientWithResp
 			// Replace placeholder with deny list block
 			finalPolicy := strings.Replace(template, "{{DENY_LIST}}", denyListBlock, 1)
 
-			response := map[string]interface{}{
-				"policy":          finalPolicy,
-				"denied_licenses": licenses,
-			}
+			opaContent := OPAContent{}
+			opaContent.Policy.Name = "deny-list"
+			opaContent.Policy.Content = finalPolicy
+			opaContent.Metadata.DeniedLicenses = licenses
 
-			out, err := json.Marshal(response)
+			// Serialize the OPA component for text fallback
+			opaJSON, err := json.Marshal(opaContent)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal response: %w", err)
+				return nil, fmt.Errorf("failed to marshal OPA content: %w", err)
 			}
 
-			// Compute suggestions for OPA policies
-			suggestions := []string{
-				"Show me more examples of OPA policies",
-				"How can I test this policy?",
+			responseContents := []mcp.Content{
+				mcp.NewTextContent(string(opaJSON)),
 			}
 
-			// Use the OPA builder to format the response
-			return appseccommons.NewToolResultTextWithPrompts(string(builder.OPAEvent), string(out), suggestions, "scs_result"), nil
+			if config.Internal {
+				// Create OPA event
+				opaEvent := event.NewCustomEvent("opa", opaContent)
+
+				// Create embedded resources for the OPA event
+				opaResource, err := opaEvent.CreateEmbeddedResource()
+				if err != nil {
+					slog.Error("Failed to create OPA resource", "error", err)
+				} else {
+					responseContents = append(responseContents, opaResource)
+				}
+
+				prompts := []string{
+					"Show me more examples of OPA policies",
+					"How can I test this policy?",
+				}
+
+				// Create prompt event and resource
+				if len(prompts) > 0 {
+					promptEvent := types.NewActionEvent(prompts)
+					promptResource, err := promptEvent.CreateEmbeddedResource()
+					if err != nil {
+						slog.Error("Failed to create prompt resource", "error", err)
+					} else {
+						responseContents = append(responseContents, promptResource)
+					}
+				}
+			}
+
+			return &mcp.CallToolResult{
+				Content: responseContents,
+			}, nil
+		}
+}
+
+// DownloadSbomTool returns a tool for downloading an SBOM for an artifact orchestration.
+// LINT FIXES: ensure io/fmt imported, use request.GetString, use mcp.NewFile, handle resp.Body as []byte.
+func DownloadSbomTool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("download_sbom",
+			mcp.WithDescription(`
+		Downloads the Software Bill of Materials (SBOM) for a given artifact orchestration in Harness SCS.
+
+		How to obtain orchestration_id:
+
+		1. If you do not know the orchestration_id:
+		- For artifact orchestration, use the 'list_artifact_scs' tool with a relevant search_term (e.g., image name
+			like 'alpine'). Then look for orchestration object which contains id in json response eg:
+			"orchestration": {
+            "id": <id>,
+            "pipeline_id": <pipeline_id>,
+            "pipeline_execution_id": <pipeline_execution_id>
+        }
+		- For repository orchestration, use the 'list_scs_code_repos' tool with a relevant search_term (e.g., repository name
+			like 'my-repo') to find the repository orchestration_id.
+
+		Usage Guidance:
+		- Use this tool to retrieve the SBOM for a specific artifact orchestration by its orchestration_id.
+		- The SBOM may be returned as a downloadable file (if large) or as a string preview (if small).
+		`),
+			mcp.WithString("orchestration_id",
+				mcp.Required(),
+				mcp.Description(`Required. The orchestration ID for the artifact whose SBOM you want to download. eg: '8nehRXghR2C8ZWMHiyzxCg'`),
+			),
+			WithScope(config, true),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := FetchScope(config, request, true)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			orgID := scope.OrgID
+			projectID := scope.ProjectID
+			orchestrationID, err := RequiredParam[string](request, "orchestration_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			params := &generated.DownloadSbomParams{
+				HarnessAccount: generated.AccountHeader(config.AccountID),
+			}
+			resp, err := client.DownloadSbomWithResponse(ctx, orgID, projectID, orchestrationID, params)
+			if err != nil {
+				return nil, fmt.Errorf("failed to call DownloadSbom: %w", err)
+			}
+			if resp.StatusCode() == 404 {
+				return mcp.NewToolResultError("SBOM not found"), nil
+			}
+			if resp.StatusCode() < 200 || resp.StatusCode() >= 300 {
+				return nil, fmt.Errorf("non-2xx status: %d", resp.StatusCode())
+			}
+			var responseContents []mcp.Content
+			if len(resp.Body) > 0 {
+				responseContents = append(responseContents, mcp.NewTextContent("SBOM downloaded successfully"))
+			} else {
+				return mcp.NewToolResultError("SBOM response body is empty"), nil
+			}
+
+			FileContent := FileContent{}
+			FileContent.Name = fmt.Sprintf("sbom_%s.json", orchestrationID)
+			FileContent.Content = []byte(*resp.JSON200.Sbom)
+
+			// Create OPA event
+			fileEvent := event.NewCustomEvent("file", FileContent)
+
+			// Create embedded resources for the OPA event
+			fileResource, err := fileEvent.CreateEmbeddedResource()
+			if err != nil {
+				return nil, fmt.Errorf("failed to create OPA resource: %w", err)
+			}
+			responseContents = append(responseContents, fileResource)
+			return &mcp.CallToolResult{
+				Content: responseContents,
+			}, nil
 		}
 }
 
@@ -979,80 +1218,83 @@ func ListSCSCodeReposTool(config *config.Config, client *generated.ClientWithRes
 						row["dependencies"] = *repo.DependenciesCount
 					}
 					if repo.RiskAndCompliance != nil {
-						compliance := map[string]interface{}{}
-						if repo.RiskAndCompliance.Critical != nil {
-							compliance["critical"] = *repo.RiskAndCompliance.Critical
-						}
-						if repo.RiskAndCompliance.High != nil {
-							compliance["high"] = *repo.RiskAndCompliance.High
-						}
-						if repo.RiskAndCompliance.Medium != nil {
-							compliance["medium"] = *repo.RiskAndCompliance.Medium
-						}
-						if repo.RiskAndCompliance.Low != nil {
-							compliance["low"] = *repo.RiskAndCompliance.Low
-						}
-						row["compliance"] = compliance
+						row["compliance"] = mapCompliance(repo.RiskAndCompliance)
 					}
 					if repo.StoIssueCount != nil {
-						vuln := map[string]interface{}{}
-						if repo.StoIssueCount.Critical != nil {
-							vuln["critical"] = *repo.StoIssueCount.Critical
-						}
-						if repo.StoIssueCount.High != nil {
-							vuln["high"] = *repo.StoIssueCount.High
-						}
-						if repo.StoIssueCount.Medium != nil {
-							vuln["medium"] = *repo.StoIssueCount.Medium
-						}
-						if repo.StoIssueCount.Low != nil {
-							vuln["low"] = *repo.StoIssueCount.Low
-						}
-						if repo.StoIssueCount.Total != nil {
-							vuln["total"] = *repo.StoIssueCount.Total
-						}
-						row["vulnerabilities"] = vuln
+						row["vulnerabilities"] = mapVulnerabilities(repo.StoIssueCount)
 					}
-					if repo.Scorecard != nil {
-						row["sbom_score"] = repo.Scorecard.AvgScore // You may want to format this as string if needed
+					if repo.Scorecard != nil && repo.Scorecard.AvgScore != nil {
+						row["sbom_score"] = formatScorecard(*repo.Scorecard.AvgScore)
 					}
 					if repo.Url != nil {
 						row["repo_path"] = *repo.Url
 					}
 					if repo.LastScan != nil {
-						scan := map[string]interface{}{}
-						if repo.LastScan.Id != nil {
-							scan["pipeline"] = *repo.LastScan.Id
-						}
-						if repo.LastScan.ExecutionId != nil {
-							scan["execution"] = *repo.LastScan.ExecutionId
-						}
-						if repo.LastScan.Status != nil {
-							scan["status"] = *repo.LastScan.Status
-						}
-						if repo.LastScan.TriggeredAt != nil {
-							tsMillis := *repo.LastScan.TriggeredAt
-							tsSecs := tsMillis / 1000
-							t := time.Unix(tsSecs, 0)
-							scan["last_scan"] = t.Format("02/01/2006 15:04")
-						}
-						row["last_scan"] = scan
+						row["last_scan"] = mapLastScan(repo.LastScan)
 					}
 					rows = append(rows, row)
 				}
 			}
-			out, err := json.Marshal(rows)
+			// Create table columns for our UI component
+			columns := []types.TableColumn{
+				{Key: "name", Label: "Repository Name"},
+				{Key: "platform", Label: "Platform"},
+				{Key: "dependencies", Label: "Dependencies"},
+				{Key: "compliance", Label: "Compliance Issues"},
+				{Key: "vulnerabilities", Label: "Vulnerabilities"},
+				{Key: "sbom_score", Label: "SBOM Score"},
+				{Key: "repo_path", Label: "Repository URL"},
+				{Key: "last_scan", Label: "Last Scan"},
+			}
+
+			tableData := types.TableData{
+				Columns: columns,
+				Rows:    rows,
+			}
+
+			// Always include basic JSON data for external clients
+			raw, err := json.Marshal(resp.JSON200)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal response: %w", err)
+				return mcp.NewToolResultErrorf("Failed to marshal table data: %v. Found %d repositories.", err, len(rows)), nil
 			}
 
-			// Compute suggestions for repo
-			suggestions := []string{
-				"Show all repositories that violate the compliance rule: Auto-merge must be disabled.",
-				"Show me compliance risk of 1st repository",
+			responseContents := []mcp.Content{
+				mcp.NewTextContent(string(raw)),
 			}
 
-			return appseccommons.NewToolResultTextWithPrompts(string(builder.GenericTableEvent), string(out), suggestions, "Repositories Report", "name", "compliance", "vulnerabilities", "sbom_score", "repo_path", "last_scan", "dependencies", "last_scan"), nil
+			if config.Internal {
+
+				// Create the table component
+				tableEvent := types.NewTableEvent(tableData)
+
+				tableResource, err := tableEvent.CreateEmbeddedResource()
+				if err != nil {
+					slog.Error("Failed to create table resource", "error", err)
+				} else {
+					responseContents = append(responseContents, tableResource)
+				}
+
+				// Add follow-up prompts
+				prompts := []string{
+					"Show all repositories that violate the compliance rule: Auto-merge must be disabled.",
+					"Show me compliance risk of 1st repository",
+				}
+
+				// Create prompt event and resource
+				if len(prompts) > 0 {
+					promptEvent := types.NewActionEvent(prompts)
+					promptResource, err := promptEvent.CreateEmbeddedResource()
+					if err != nil {
+						slog.Error("Failed to create prompt resource", "error", err)
+					} else {
+						responseContents = append(responseContents, promptResource)
+					}
+				}
+			}
+
+			return &mcp.CallToolResult{
+				Content: responseContents,
+			}, nil
 		}
 
 }

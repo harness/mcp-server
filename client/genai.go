@@ -15,16 +15,17 @@ import (
 
 const (
 	aiDevopsChatPath = "chat/platform"
+	dbChangesetPath  = "chat/db-changeset"
+	idpWorkflowPath  = "chat/idp-workflow"
 )
 
 type GenaiService struct {
 	Client *Client
 }
 
-// SendAIDevOpsChat sends a request to the AI DevOps service and returns the response.
-// If request.Stream is true and onProgress is provided, it will handle streaming responses.
-// For non-streaming requests or when onProgress is nil, it will use the standard request flow.
-func (g *GenaiService) SendAIDevOpsChat(ctx context.Context, scope dto.Scope, request *dto.ServiceChatParameters, onProgress ...func(progressUpdate dto.ProgressUpdate) error) (*dto.ServiceChatResponse, error) {
+// sendGenAIRequest is a generic method to send requests to GenAI services
+func (g *GenaiService) sendGenAIRequest(ctx context.Context, path string, scope dto.Scope, request dto.GenAIRequest,
+	onProgress ...func(progressUpdate dto.ProgressUpdate) error) (*dto.ServiceChatResponse, error) {
 	if g == nil || g.Client == nil {
 		return nil, fmt.Errorf("genai service or client is nil")
 	}
@@ -56,11 +57,13 @@ func (g *GenaiService) SendAIDevOpsChat(ctx context.Context, scope dto.Scope, re
 		params["projectIdentifier"] = scope.ProjectID
 	}
 
+	// Determine if streaming is required
+	shouldStream := request.IsStreaming() && progressCB != nil
+
 	// Handle non-streaming case with early return
-	isStreaming := request.Stream && progressCB != nil
-	if !isStreaming {
+	if !shouldStream {
 		var response dto.ServiceChatResponse
-		err := g.Client.Post(ctx, aiDevopsChatPath, params, request, &response)
+		err := g.Client.Post(ctx, path, params, request, map[string]string{}, &response)
 		if err != nil {
 			return nil, fmt.Errorf("failed to send request to genai service: %w", err)
 		}
@@ -69,7 +72,7 @@ func (g *GenaiService) SendAIDevOpsChat(ctx context.Context, scope dto.Scope, re
 	}
 
 	// Execute the streaming request
-	resp, err := g.Client.PostStream(ctx, aiDevopsChatPath, params, request)
+	resp, err := g.Client.PostStream(ctx, path, params, request)
 	if err != nil {
 		slog.Warn("Failed to execute streaming request", "error", err.Error())
 		return nil, fmt.Errorf("failed to execute streaming request: %w", err)
@@ -84,7 +87,7 @@ func (g *GenaiService) SendAIDevOpsChat(ctx context.Context, scope dto.Scope, re
 
 	// Initialize the response with conversation ID from request
 	finalResponse := &dto.ServiceChatResponse{
-		ConversationID: request.ConversationID,
+		ConversationID: request.GetBaseParameters().ConversationID,
 	}
 
 	// Process the streaming response
@@ -95,6 +98,25 @@ func (g *GenaiService) SendAIDevOpsChat(ctx context.Context, scope dto.Scope, re
 	}
 
 	return finalResponse, nil
+}
+
+// SendAIDevOpsChat sends a request to the AI DevOps service and returns the response.
+// If request.Stream is true and onProgress is provided, it will handle streaming responses.
+// For non-streaming requests or when onProgress is nil, it will use the standard request flow.
+func (g *GenaiService) SendAIDevOpsChat(ctx context.Context, scope dto.Scope, request *dto.ServiceChatParameters, onProgress ...func(progressUpdate dto.ProgressUpdate) error) (*dto.ServiceChatResponse, error) {
+	return g.sendGenAIRequest(ctx, aiDevopsChatPath, scope, request, onProgress...)
+}
+
+// SendDBChangeset sends a request to generate database changesets and returns the response.
+// If request.Stream is true and onProgress is provided, it will handle streaming responses.
+func (g *GenaiService) SendDBChangeset(ctx context.Context, scope dto.Scope, request *dto.DBChangesetParameters, onProgress ...func(progressUpdate dto.ProgressUpdate) error) (*dto.ServiceChatResponse, error) {
+	return g.sendGenAIRequest(ctx, dbChangesetPath, scope, request, onProgress...)
+}
+
+// SendIDPWorkflow sends a request to generate idp workflows and returns the response.
+// If request.Stream is true and onProgress is provided, it will handle streaming responses.
+func (g *GenaiService) SendIDPWorkflow(ctx context.Context, scope dto.Scope, request *dto.IDPWorkflowParameters, onProgress ...func(progressUpdate dto.ProgressUpdate) error) (*dto.ServiceChatResponse, error) {
+	return g.sendGenAIRequest(ctx, idpWorkflowPath, scope, request, onProgress...)
 }
 
 // processStreamingResponse handles Server-Sent Events (SSE) streaming responses

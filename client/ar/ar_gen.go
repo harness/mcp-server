@@ -10,12 +10,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/oapi-codegen/runtime"
-	"github.com/rs/zerolog/log"
 )
 
 // Defines values for AuthType.
@@ -3348,7 +3348,7 @@ func (c *Client) GetAllRegistries(ctx context.Context, spaceRef SpaceRefPathPara
 	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
 		return nil, err
 	}
-	log.Printf("yey url: %s", req.URL.String())
+	slog.Debug("Request URL", "url", req.URL.String())
 	return c.Client.Do(req)
 }
 

@@ -1,13 +1,13 @@
 package dto
 
 // ***************************
-// Perspective List Detail 
+// Perspective List Detail
 // ***************************
 const (
-	SortByTime string = "TIME"
-	SortByCost string = "COST"
+	SortByTime        string = "TIME"
+	SortByCost        string = "COST"
 	SortByClusterCost string = "CLUSTER_COST"
-	SortByName string = "NAME"
+	SortByName        string = "NAME"
 )
 
 const (
@@ -16,86 +16,98 @@ const (
 )
 
 const (
-	FilterByAws string = "AWS"
-	FilterByAzure string = "AZURE"
-	FilterByGcp string = "GCP"
+	FilterByAws     string = "AWS"
+	FilterByAzure   string = "AZURE"
+	FilterByGcp     string = "GCP"
 	FilterByCluster string = "CLUSTER"
 	FilterByDefault string = "DEFAULT"
 )
 
 const (
-	PeriodDaily    string = "DAILY"
-	PeriodWeekly   string = "WEEKLY"
-	PeriodMonthly  string = "MONTHLY"
+	PeriodDaily     string = "DAILY"
+	PeriodWeekly    string = "WEEKLY"
+	PeriodMonthly   string = "MONTHLY"
 	PeriodQuarterly string = "QUARTERLY"
-	PeriodYearly   string = "YEARLY"
+	PeriodYearly    string = "YEARLY"
 )
 
 const (
-	TimeRangeTypeLast7Days string = "LAST_7"
-	TimeRangeTypeLast30Days string = "LAST_30_DAYS"
-	TimeRangeTypeLastMonth string = "LAST_MONTH"
+	TimeRangeTypeLast7Days    string = "LAST_7"
+	TimeRangeTypeLast30Days   string = "LAST_30_DAYS"
+	TimeRangeTypeLast30       string = "LAST_30"
+	TimeRangeTypeLastMonth    string = "LAST_MONTH"
 	TimeRangeTypeCurrentMonth string = "CURRENT_MONTH"
-	TimeRangeTypeCustom string = "CUSTOM"
+	TimeRangeTypeCustom       string = "CUSTOM"
 )
 
 const (
-	ViewTypeSample string = "SAMPLE"
+	ViewTypeSample   string = "SAMPLE"
 	ViewTypeCustomer string = "CUSTOMER"
-	ViewTypeDefault string = "DEFAULT"
+	ViewTypeDefault  string = "DEFAULT"
 )
 
 const (
-	ViewStateDraft string = "DRAFT"
+	ViewStateDraft     string = "DRAFT"
 	ViewStateCompleted string = "COMPLETED"
 )
 
 const (
-	AwsCostAmortised string = "AMORTISED"
+	AwsCostAmortised    string = "AMORTISED"
 	AwsCostNetAmortised string = "NET_AMORTISED"
-	AwsCostBlended string = "BLENDED"
-	AwsCostUnblended string = "UNBLENDED"
-	AwsCostEffective string = "EFFECTIVE"
+	AwsCostBlended      string = "BLENDED"
+	AwsCostUnblended    string = "UNBLENDED"
+	AwsCostEffective    string = "EFFECTIVE"
 )
 
 const (
-	DataSourceCluster string = "CLUSTER"
-	DataSourceAws string = "AWS"
-	DataSourceGcp string = "GCP"
-	DataSourceAzure string = "AZURE"
-	DataSourceExternalData string = "EXTERNAL_DATA"
-	DataSourceCommon string = "COMMON"
-	DataSourceCustom string = "CUSTOM"
+	DataSourceCluster         string = "CLUSTER"
+	DataSourceAws             string = "AWS"
+	DataSourceGcp             string = "GCP"
+	DataSourceAzure           string = "AZURE"
+	DataSourceExternalData    string = "EXTERNAL_DATA"
+	DataSourceCommon          string = "COMMON"
+	DataSourceCustom          string = "CUSTOM"
 	DataSourceBusinessMapping string = "BUSINESS_MAPPING"
-	DataSourceLabel string = "LABEL"
-	DataSourceLabelV2 string = "LABEL_V2"
+	DataSourceLabel           string = "LABEL"
+	DataSourceLabelV2         string = "LABEL_V2"
 )
 
 const (
-	AzureCostTypeActual string = "ACTUAL"
+	AzureCostTypeActual    string = "ACTUAL"
 	AzureCostTypeAmortized string = "AMORTIZED"
 )
 
 const (
-	FieldIdCluster string = "CLUSTER"
-	FieldIdAws string = "AWS"
-	FieldIdGcp string = "GCP"
-	FieldIdAzure string = "AZURE"
-	FieldIdExternalData string = "EXTERNAL_DATA"
-	FieldIdCommon string = "COMMON"
-	FieldIdCustom string = "CUSTOM"
+	FieldIdCluster         string = "CLUSTER"
+	FieldIdAws             string = "AWS"
+	FieldIdGcp             string = "GCP"
+	FieldIdAzure           string = "AZURE"
+	FieldIdExternalData    string = "EXTERNAL_DATA"
+	FieldIdCommon          string = "COMMON"
+	FieldIdCustom          string = "CUSTOM"
 	FieldIdBusinessMapping string = "BUSINESS_MAPPING"
-	FieldIdLabel string = "LABEL"
-	FieldIdLabelV2 string = "LABEL_V2"
+	FieldIdLabel           string = "LABEL"
+	FieldIdLabelV2         string = "LABEL_V2"
 )
 
 const (
-	ConditionOperatorIn       = "IN"
-	ConditionOperatorNotIn    = "NOT_IN"
-	ConditionOperatorEquals   = "EQUALS"
-	ConditionOperatorNotNull  = "NOT_NULL"
-	ConditionOperatorNull     = "NULL"
-	ConditionOperatorLike     = "LIKE"
+	ConditionOperatorIn      = "IN"
+	ConditionOperatorNotIn   = "NOT_IN"
+	ConditionOperatorEquals  = "EQUALS"
+	ConditionOperatorNotNull = "NOT_NULL"
+	ConditionOperatorNull    = "NULL"
+	ConditionOperatorLike    = "LIKE"
+)
+
+const (
+	GraphTypeStackedTimeSeries = "STACKED_TIME_SERIES"
+	GraphTypeStackedLineChart  = "STACKED_LINE_CHART"
+)
+
+const (
+	GranularityDay   = "DAY"
+	GranularityWeek  = "WEEK"
+	GranularityMonth = "MONTH"
 )
 
 type CCMListPerspectivesDetailOptions struct {
@@ -108,54 +120,54 @@ type CCMListPerspectivesDetailOptions struct {
 }
 
 type CCMPerspectiveView struct {
-	ID                      string `json:"id"`
-	Name                    string `json:"name"`
-	FolderID                string `json:"folderId"`
-	FolderName              string `json:"folderName"`
-	ReportScheduledConfigured bool `json:"reportScheduledConfigured"`
+	ID                        string `json:"id"`
+	Name                      string `json:"name"`
+	FolderID                  string `json:"folderId"`
+	FolderName                string `json:"folderName"`
+	ReportScheduledConfigured bool   `json:"reportScheduledConfigured"`
 }
 
 type CCMPerspectiveViewList struct {
-	TotalCount int       `json:"totalCount"`
+	TotalCount int                  `json:"totalCount"`
 	Views      []CCMPerspectiveView `json:"views"`
 }
 
 type CCMPerspectivesDetailList struct {
 	CCMBaseResponse
-	Data          CCMPerspectiveViewList `json:"data,omitempty"`
+	Data CCMPerspectiveViewList `json:"data,omitempty"`
 }
 
 // ***************************
-// Get Perspective Detail 
+// Get Perspective Detail
 // ***************************
 type CCMGetPerspectiveOptions struct {
 	AccountIdentifier string
-	PerspectiveId string
+	PerspectiveId     string
 }
 
 type CCMPerspectiveDetail struct {
 	CCMBaseResponse
-	Data          CCMPerspective    `json:"data"`
+	Data CCMPerspective `json:"data"`
 }
 
 type CCMPerspective struct {
-	UUID             string               `json:"uuid"`
-	Name             string               `json:"name"`
-	AccountId        string               `json:"accountId"`
-	FolderId         string               `json:"folderId"`
-	ViewVersion      string               `json:"viewVersion"`
-	ViewTimeRange    CCMViewTimeRange     `json:"viewTimeRange"`
-	ViewRules        []CCMViewRule        `json:"viewRules"`
-	DataSources      []string             `json:"dataSources"`
+	UUID              string               `json:"uuid"`
+	Name              string               `json:"name"`
+	AccountId         string               `json:"accountId"`
+	FolderId          string               `json:"folderId"`
+	ViewVersion       string               `json:"viewVersion"`
+	ViewTimeRange     CCMViewTimeRange     `json:"viewTimeRange"`
+	ViewRules         []CCMViewRule        `json:"viewRules"`
+	DataSources       []string             `json:"dataSources"`
 	ViewVisualization CCMViewVisualization `json:"viewVisualization"`
-	ViewPreferences  CCMViewPreferences   `json:"viewPreferences"`
-	ViewType         string               `json:"viewType"`
-	ViewState        string               `json:"viewState"`
-	TotalCost        float64              `json:"totalCost"`
-	CreatedAt        int64                `json:"createdAt"`
-	LastUpdatedAt    int64                `json:"lastUpdatedAt"`
-	CreatedBy        CCMUser              `json:"createdBy"`
-	LastUpdatedBy    CCMUser              `json:"lastUpdatedBy"`
+	ViewPreferences   CCMViewPreferences   `json:"viewPreferences"`
+	ViewType          string               `json:"viewType"`
+	ViewState         string               `json:"viewState"`
+	TotalCost         float64              `json:"totalCost"`
+	CreatedAt         int64                `json:"createdAt"`
+	LastUpdatedAt     int64                `json:"lastUpdatedAt"`
+	CreatedBy         CCMUser              `json:"createdBy"`
+	LastUpdatedBy     CCMUser              `json:"lastUpdatedBy"`
 }
 
 type CCMViewTimeRange struct {
@@ -169,10 +181,10 @@ type CCMViewRule struct {
 }
 
 type CCMViewCondition struct {
-	Type         string         `json:"type"`
-	ViewField    CCMViewField   `json:"viewField"`
-	ViewOperator string         `json:"viewOperator"`
-	Values       []string       `json:"values"`
+	Type         string       `json:"type"`
+	ViewField    CCMViewField `json:"viewField"`
+	ViewOperator string       `json:"viewOperator"`
+	Values       []string     `json:"values"`
 }
 
 type CCMViewField struct {
@@ -183,25 +195,25 @@ type CCMViewField struct {
 }
 
 type CCMViewVisualization struct {
-	Granularity string          `json:"granularity"`
-	GroupBy     CCMGroupBy      `json:"groupBy"`
-	ChartType   string          `json:"chartType"`
+	Granularity string     `json:"granularity"`
+	GroupBy     CCMGroupBy `json:"groupBy"`
+	ChartType   string     `json:"chartType"`
 }
 
 type CCMGroupBy struct {
-	FieldId       string `json:"fieldId"`
-	FieldName     string `json:"fieldName"`
-	Identifier    string `json:"identifier"`
+	FieldId        string `json:"fieldId"`
+	FieldName      string `json:"fieldName"`
+	Identifier     string `json:"identifier"`
 	IdentifierName string `json:"identifierName"`
 }
 
 type CCMViewPreferences struct {
-	ShowAnomalies        bool                 `json:"showAnomalies"`
-	IncludeOthers        bool                 `json:"includeOthers"`
-	IncludeUnallocatedCost bool               `json:"includeUnallocatedCost"`
-	AwsPreferences       CCMAwsPreferences    `json:"awsPreferences"`
-	GcpPreferences       CCMGcpPreferences    `json:"gcpPreferences"`
-	AzureViewPreferences CCMAzureViewPreferences `json:"azureViewPreferences"`
+	ShowAnomalies          bool                    `json:"showAnomalies"`
+	IncludeOthers          bool                    `json:"includeOthers"`
+	IncludeUnallocatedCost bool                    `json:"includeUnallocatedCost"`
+	AwsPreferences         CCMAwsPreferences       `json:"awsPreferences"`
+	GcpPreferences         CCMGcpPreferences       `json:"gcpPreferences"`
+	AzureViewPreferences   CCMAzureViewPreferences `json:"azureViewPreferences"`
 }
 
 type CCMAwsPreferences struct {
@@ -222,45 +234,45 @@ type CCMAzureViewPreferences struct {
 }
 
 // ***************************
-// Get Last period cost perspective 
+// Get Last period cost perspective
 // ***************************
 type CCMGetLastPeriodCostPerspectiveOptions struct {
 	CCMGetPerspectiveOptions
-	StartTime int64 
-	Period string
+	StartTime int64
+	Period    string
 }
 
 type CCMLastPeriodCostPerspective struct {
 	CCMBaseResponse
-	Data          float64 `json:"data,omitempty"`
+	Data float64 `json:"data,omitempty"`
 }
 
 // ***************************
-// Get Last twelve months cost perspective 
+// Get Last twelve months cost perspective
 // ***************************
-type CCMGetLastTwelveMonthsCostPerspectiveOptions = CCMGetLastPeriodCostPerspectiveOptions 
+type CCMGetLastTwelveMonthsCostPerspectiveOptions = CCMGetLastPeriodCostPerspectiveOptions
 
 type CCMCostByTime struct {
-	Time int64 `json:"time,omitempty"` // Unix epoch milliseconds
-	Value   float64 `json:"value,omitempty"`  // Cost 
+	Time  int64   `json:"time,omitempty"`  // Unix epoch milliseconds
+	Value float64 `json:"value,omitempty"` // Cost
 }
 
 type CCMLastTwelveMonthsCostPerspective struct {
 	CCMBaseResponse
-	Data          []CCMCostByTime `json:"data,omitempty"`
+	Data []CCMCostByTime `json:"data,omitempty"`
 }
 
 // ***************************
-// Create perspective 
+// Create perspective
 // ***************************
 type CCMCreatePerspectiveOptions struct {
-	AccountId string
-	Clone bool
+	AccountId       string
+	Clone           bool
 	UpdateTotalCost bool
-	Body CCMPerspective
+	Body            CCMPerspective
 }
 
 type CCMCreatePerspectiveResponse struct {
 	CCMBaseResponse
-	Data          CCMPerspective `json:"data"`
+	Data CCMPerspective `json:"data"`
 }

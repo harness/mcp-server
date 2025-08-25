@@ -81,7 +81,7 @@ func (a *AuditService) ListUserAuditTrail(ctx context.Context, scope dto.Scope, 
 	opts.EndTime = endTime
 
 	resp := &dto.AuditOutput[dto.AuditListItem]{}
-	err := a.Client.Post(ctx, auditPath, params, opts, resp)
+	err := a.Client.Post(ctx, auditPath, params, opts, map[string]string{}, resp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list the audit trail: %w", err)
 	}

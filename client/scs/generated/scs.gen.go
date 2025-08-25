@@ -227,6 +227,11 @@ type ArtifactListingRequestBodyEnvironmentType string
 // ArtifactListingRequestBodyPolicyViolation defines model for ArtifactListingRequestBody.PolicyViolation.
 type ArtifactListingRequestBodyPolicyViolation string
 
+// ArtifactSbomResponseBody defines model for ArtifactSbomResponseBody.
+type ArtifactSbomResponseBody struct {
+	Sbom *string `json:"sbom,omitempty"`
+}
+
 // ArtifactSourcesListingResponse1 defines model for ArtifactSourcesListingResponse.
 type ArtifactSourcesListingResponse1 struct {
 	ArtifactType *ArtifactTypeData `json:"artifact_type,omitempty"`
@@ -805,6 +810,12 @@ type CodeRepositoryListingRequestBody = CodeRepositoryListingRequest
 // FetchComplianceResultByArtifactRequestBody defines model for FetchComplianceResultByArtifactRequestBody.
 type FetchComplianceResultByArtifactRequestBody = ComplianceResultByArtifactFilter
 
+// DownloadSbomParams defines parameters for DownloadSbom.
+type DownloadSbomParams struct {
+	// HarnessAccount Identifier field of the account the resource is scoped to. This is required for Authorization methods other than the x-api-key header. If you are using the x-api-key header, this can be skipped.
+	HarnessAccount AccountHeader `json:"Harness-Account"`
+}
+
 // ListArtifactSourcesParams defines parameters for ListArtifactSources.
 type ListArtifactSourcesParams struct {
 	// Limit Number of items to return per page.
@@ -1004,6 +1015,9 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
+	// DownloadSbom request
+	DownloadSbom(ctx context.Context, org OrgParam, project ProjectParam, orchestrationId string, params *DownloadSbomParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListArtifactSourcesWithBody request with any body
 	ListArtifactSourcesWithBody(ctx context.Context, org OrgParam, project ProjectParam, params *ListArtifactSourcesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -1035,6 +1049,18 @@ type ClientInterface interface {
 
 	// GetArtifactChainOfCustodyV2 request
 	GetArtifactChainOfCustodyV2(ctx context.Context, org OrgParam, project ProjectParam, artifact Artifact, params *GetArtifactChainOfCustodyV2Params, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+func (c *Client) DownloadSbom(ctx context.Context, org OrgParam, project ProjectParam, orchestrationId string, params *DownloadSbomParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDownloadSbomRequest(c.Server, org, project, orchestrationId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 func (c *Client) ListArtifactSourcesWithBody(ctx context.Context, org OrgParam, project ProjectParam, params *ListArtifactSourcesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -1179,6 +1205,67 @@ func (c *Client) GetArtifactChainOfCustodyV2(ctx context.Context, org OrgParam, 
 		return nil, err
 	}
 	return c.Client.Do(req)
+}
+
+// NewDownloadSbomRequest generates requests for DownloadSbom
+func NewDownloadSbomRequest(server string, org OrgParam, project ProjectParam, orchestrationId string, params *DownloadSbomParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "org", runtime.ParamLocationPath, org)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "project", runtime.ParamLocationPath, project)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithLocation("simple", false, "orchestration-id", runtime.ParamLocationPath, orchestrationId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/org/%s/project/%s/orchestration/%s/sbom-download", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithLocation("simple", false, "Harness-Account", runtime.ParamLocationHeader, params.HarnessAccount)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Harness-Account", headerParam0)
+
+	}
+
+	return req, nil
 }
 
 // NewListArtifactSourcesRequest calls the generic ListArtifactSources builder with application/json body
@@ -2030,6 +2117,9 @@ func WithBaseURL(baseURL string) ClientOption {
 
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
+	// DownloadSbomWithResponse request
+	DownloadSbomWithResponse(ctx context.Context, org OrgParam, project ProjectParam, orchestrationId string, params *DownloadSbomParams, reqEditors ...RequestEditorFn) (*DownloadSbomResponse, error)
+
 	// ListArtifactSourcesWithBodyWithResponse request with any body
 	ListArtifactSourcesWithBodyWithResponse(ctx context.Context, org OrgParam, project ProjectParam, params *ListArtifactSourcesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ListArtifactSourcesResponse, error)
 
@@ -2061,6 +2151,28 @@ type ClientWithResponsesInterface interface {
 
 	// GetArtifactChainOfCustodyV2WithResponse request
 	GetArtifactChainOfCustodyV2WithResponse(ctx context.Context, org OrgParam, project ProjectParam, artifact Artifact, params *GetArtifactChainOfCustodyV2Params, reqEditors ...RequestEditorFn) (*GetArtifactChainOfCustodyV2Response, error)
+}
+
+type DownloadSbomResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ArtifactSbomResponseBody
+}
+
+// Status returns HTTPResponse.Status
+func (r DownloadSbomResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DownloadSbomResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
 }
 
 type ListArtifactSourcesResponse struct {
@@ -2239,6 +2351,15 @@ func (r GetArtifactChainOfCustodyV2Response) StatusCode() int {
 	return 0
 }
 
+// DownloadSbomWithResponse request returning *DownloadSbomResponse
+func (c *ClientWithResponses) DownloadSbomWithResponse(ctx context.Context, org OrgParam, project ProjectParam, orchestrationId string, params *DownloadSbomParams, reqEditors ...RequestEditorFn) (*DownloadSbomResponse, error) {
+	rsp, err := c.DownloadSbom(ctx, org, project, orchestrationId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDownloadSbomResponse(rsp)
+}
+
 // ListArtifactSourcesWithBodyWithResponse request with arbitrary body returning *ListArtifactSourcesResponse
 func (c *ClientWithResponses) ListArtifactSourcesWithBodyWithResponse(ctx context.Context, org OrgParam, project ProjectParam, params *ListArtifactSourcesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ListArtifactSourcesResponse, error) {
 	rsp, err := c.ListArtifactSourcesWithBody(ctx, org, project, params, contentType, body, reqEditors...)
@@ -2341,6 +2462,32 @@ func (c *ClientWithResponses) GetArtifactChainOfCustodyV2WithResponse(ctx contex
 		return nil, err
 	}
 	return ParseGetArtifactChainOfCustodyV2Response(rsp)
+}
+
+// ParseDownloadSbomResponse parses an HTTP response from a DownloadSbomWithResponse call
+func ParseDownloadSbomResponse(rsp *http.Response) (*DownloadSbomResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DownloadSbomResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ArtifactSbomResponseBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
 }
 
 // ParseListArtifactSourcesResponse parses an HTTP response from a ListArtifactSourcesWithResponse call

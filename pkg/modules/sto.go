@@ -2,8 +2,9 @@ package modules
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/harness/harness-mcp/client"
 	sto "github.com/harness/harness-mcp/client/sto/generated"
@@ -69,20 +70,20 @@ func (m *STOModule) IsDefault() bool {
 
 // RegisterSTO registers the Security Test Orchestration toolset
 func RegisterSTO(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-	baseURL := utils.BuildServiceURL(config, config.STOSvcBaseURL, config.BaseURL, "/sto")
-	secret := config.STOSvcSecret
-
-	baseURLPrincipal := utils.BuildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng/api")
+	baseURL := utils.BuildServiceURL(config, config.STOSvcBaseURL, config.BaseURL, "sto")
+	// Do not use STO API key, use NG Manager secret as STO calls ACL & ng-manager APIs with the token
 	principalSecret := config.NgManagerSecret
-
-	c, err := utils.CreateClient(baseURL, config, secret)
+	c, err := utils.CreateClient(baseURL, config, principalSecret, 30*time.Second)
 	if err != nil {
 		return err
 	}
 
+	baseURLPrincipal := utils.BuildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng/api")
+
 	cPrincipal, err := utils.CreateClient(baseURLPrincipal, config, principalSecret)
 	if err != nil {
-		return err
+		slog.Warn("Failed to create principal client for STO toolset", "error", err)
+		return nil
 	}
 	principalClient := &client.PrincipalService{Client: cPrincipal}
 
@@ -94,11 +95,11 @@ func RegisterSTO(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 		req.Header.Set(k, v)
 		return nil
 	}
-
 	stoClient, err := sto.NewClientWithResponses(baseURL, sto.WithHTTPClient(c),
 		sto.WithRequestEditorFn(requestEditorFn))
 	if err != nil {
-		return fmt.Errorf("failed to create generated STO client: %w", err)
+		slog.Warn("Failed to create generated STO client. STO toolset will not be available", "error", err)
+		return nil
 	}
 	sto := toolsets.NewToolset("sto", "Harness Security Test Orchestration tools").
 		AddReadTools(

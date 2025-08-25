@@ -3,8 +3,9 @@ package tools
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/mark3labs/mcp-go/mcp"
 	"strconv"
+
+	"github.com/mark3labs/mcp-go/mcp"
 )
 
 // Helper functions for parameter handling
@@ -172,7 +173,8 @@ func OptionalAnyArrayParam(r mcp.CallToolRequest, p string) ([]any, error) {
 	value, ok := r.GetArguments()[p]
 
 	if !ok {
-		return nil, fmt.Errorf("missing parameter: %s", p)
+		// Not present, return an empty slice, because its optional
+		return []any{}, nil
 	}
 
 	switch v := value.(type) {

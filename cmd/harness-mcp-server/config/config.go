@@ -47,6 +47,8 @@ type Config struct {
 	ArtifactRegistrySecret  string
 	NextgenCEBaseURL        string
 	NextgenCESecret         string
+	CCMCommOrchBaseURL      string
+	CCMCommOrchSecret       string
 	IDPSvcBaseURL           string
 	IDPSvcSecret            string
 	McpSvcSecret            string
