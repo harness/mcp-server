@@ -1,0 +1,83 @@
+# Multi-stage build for Rust Harness MCP Server
+FROM rust:1.75-slim as builder
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app directory
+WORKDIR /app
+
+# Copy workspace configuration
+COPY Cargo.toml Cargo.lock ./
+
+# Copy all crate manifests first for better layer caching
+COPY harness-mcp-server/Cargo.toml ./harness-mcp-server/
+COPY harness-mcp-core/Cargo.toml ./harness-mcp-core/
+COPY harness-mcp-tools/Cargo.toml ./harness-mcp-tools/
+COPY harness-mcp-client/Cargo.toml ./harness-mcp-client/
+COPY harness-mcp-types/Cargo.toml ./harness-mcp-types/
+
+# Create dummy source files to build dependencies
+RUN mkdir -p harness-mcp-server/src harness-mcp-core/src harness-mcp-tools/src harness-mcp-client/src harness-mcp-types/src
+RUN echo "fn main() {}" > harness-mcp-server/src/main.rs
+RUN echo "" > harness-mcp-core/src/lib.rs
+RUN echo "" > harness-mcp-tools/src/lib.rs
+RUN echo "" > harness-mcp-client/src/lib.rs
+RUN echo "" > harness-mcp-types/src/lib.rs
+
+# Build dependencies (this layer will be cached)
+RUN cargo build --release
+RUN rm -rf harness-mcp-*/src
+
+# Copy actual source code
+COPY harness-mcp-server/src ./harness-mcp-server/src
+COPY harness-mcp-core/src ./harness-mcp-core/src
+COPY harness-mcp-tools/src ./harness-mcp-tools/src
+COPY harness-mcp-client/src ./harness-mcp-client/src
+COPY harness-mcp-types/src ./harness-mcp-types/src
+
+# Build the application
+RUN cargo build --release --bin harness-mcp-server
+
+# Runtime stage
+FROM debian:bookworm-slim
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN useradd -r -s /bin/false harness
+
+# Copy the binary from builder stage
+COPY --from=builder /app/target/release/harness-mcp-server /usr/local/bin/harness-mcp-server
+
+# Set ownership and permissions
+RUN chown harness:harness /usr/local/bin/harness-mcp-server
+RUN chmod +x /usr/local/bin/harness-mcp-server
+
+# Switch to non-root user
+USER harness
+
+# Set environment variables
+ENV RUST_LOG=info
+ENV HARNESS_BASE_URL=https://app.harness.io
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD echo '{"jsonrpc":"2.0","method":"ping","id":1}' | harness-mcp-server stdio --api-key="${HARNESS_API_KEY}" || exit 1
+
+# Default command
+ENTRYPOINT ["harness-mcp-server"]
+CMD ["stdio"]
+
+# Labels
+LABEL org.opencontainers.image.title="Harness MCP Server (Rust)"
+LABEL org.opencontainers.image.description="Harness Model Context Protocol Server implemented in Rust"
+LABEL org.opencontainers.image.vendor="Harness Inc."
+LABEL org.opencontainers.image.licenses="Apache-2.0"
+LABEL org.opencontainers.image.source="https://github.com/harness/harness-mcp"

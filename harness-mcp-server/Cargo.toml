@@ -1,0 +1,37 @@
+[package]
+name = "harness-mcp-server"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Harness Model Context Protocol (MCP) Server - Main binary"
+
+[[bin]]
+name = "harness-mcp-server"
+path = "src/main.rs"
+
+[dependencies]
+# Workspace crates
+harness-mcp-core.workspace = true
+harness-mcp-tools.workspace = true
+harness-mcp-client.workspace = true
+harness-mcp-types.workspace = true
+
+# External dependencies
+tokio.workspace = true
+clap.workspace = true
+config.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tokio-test = "0.4"
