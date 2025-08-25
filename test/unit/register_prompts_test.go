@@ -111,8 +111,8 @@ func mockGetModulePrompts(fs embed.FS, module string, isInternal bool, mode stri
 		return []prompts.PromptFile{
 			{
 				Metadata: prompts.PromptMetadata{
-					Description:       "Standard test description",
-					ResultDescription: "Standard result description",
+					Description:       "Testmodule prompt description",
+					ResultDescription: "Testmodule prompt result description",
 					Module:            "testmodule",
 				},
 				Content:  "Standard content",
@@ -123,8 +123,8 @@ func mockGetModulePrompts(fs embed.FS, module string, isInternal bool, mode stri
 		return []prompts.PromptFile{
 			{
 				Metadata: prompts.PromptMetadata{
-					Description:       "Architect test description",
-					ResultDescription: "Architect result description",
+					Description:       "Testmodule prompt description",
+					ResultDescription: "Testmodule prompt result description",
 					Module:            "testmodule",
 				},
 				Content:  "Architect content",
@@ -155,10 +155,10 @@ func TestRegisterPrompts(t *testing.T) {
 	if prompt.Name != "TESTMODULE" {
 		t.Errorf("expected prompt name 'TESTMODULE', got %q", prompt.Name)
 	}
-	if !strings.Contains(prompt.Description, "Standard test description") {
+	if !strings.Contains(prompt.Description, "Testmodule prompt description") {
 		t.Errorf("description mismatch, got %q", prompt.Description)
 	}
-	if !strings.Contains(prompt.ResultDescription, "Standard result description") {
+	if !strings.Contains(prompt.ResultDescription, "Testmodule prompt result description") {
 		t.Errorf("result description mismatch, got %q", prompt.ResultDescription)
 	}
 

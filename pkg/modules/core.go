@@ -253,6 +253,7 @@ func RegisterAudit(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	audit := toolsets.NewToolset("audit", "Audit log related tools").
 		AddReadTools(
 			toolsets.NewServerTool(tools.ListUserAuditTrailTool(config, auditService)),
+			toolsets.NewServerTool(tools.GetAuditYamlTool(config, auditService)),
 		)
 
 	// Add toolset to the group

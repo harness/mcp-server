@@ -57,6 +57,45 @@ func previousWeek() string {
 	return oneWeekAgo
 }
 
+// GetAuditYamlTool creates a tool for retrieving YAML diff for a specific audit event.
+func GetAuditYamlTool(config *config.Config, auditClient *client.AuditService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("get_audit_yaml",
+			mcp.WithDescription("Get YAML diff for a specific audit event."),
+			mcp.WithString("audit_id",
+				mcp.Description("The ID of the audit event to retrieve YAML diff for."),
+				mcp.Required(),
+			),
+			WithScope(config, false),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			slog.Info("Handling get_audit_yaml request", "request", request.GetArguments())
+
+			auditID, err := RequiredParam[string](request, "audit_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			scope, err := FetchScope(config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			slog.Info("Calling GetAuditYaml API", "audit_id", auditID)
+
+			data, err := auditClient.GetAuditYaml(ctx, scope, auditID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get audit YAML: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal the audit YAML response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
 // ListAuditsOfUser creates a tool for listing the audit trail.
 func ListUserAuditTrailTool(config *config.Config, auditClient *client.AuditService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_user_audits",
