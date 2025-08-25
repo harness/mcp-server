@@ -16,7 +16,6 @@ import (
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness"
 	"github.com/harness/harness-mcp/pkg/harness/auth"
-	"github.com/harness/harness-mcp/pkg/harness/prompts"
 	"github.com/harness/harness-mcp/pkg/modules"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -416,7 +415,7 @@ func runMCPServer(ctx context.Context, config config.Config) error {
 	harnessServer := harness.NewServer(version, server.WithHooks(hooks), server.WithRecovery())
 
 	// Initialize toolsets
-	toolsets, err := harness.InitToolsets(&config)
+	toolsets, err := harness.InitToolsets(ctx, &config)
 	if err != nil {
 		slog.Error("Failed to initialize toolsets", "error", err)
 	}
