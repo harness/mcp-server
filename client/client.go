@@ -421,7 +421,6 @@ func (c *Client) RequestRaw(
 		if resp != nil && resp.Body != nil {
 			defer resp.Body.Close()
 		}
-
 		if err != nil || resp == nil {
 			return fmt.Errorf("request failed: %w", err)
 		}

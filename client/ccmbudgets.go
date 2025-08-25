@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"log/slog"
 )
 
 const (
@@ -79,21 +80,24 @@ func (c *CloudCostManagementService) CreateBudget(ctx context.Context, accountId
 	path := fmt.Sprintf(ccmCreateBudgetPath, accountId)
 	resp := new(map[string]any)
 
-	err := c.Client.Post(ctx, path, nil, nil, map[string]string{}, &resp)
+	slog.Debug("Create Budget", "body", options)
+	err := c.Client.Post(ctx, path, nil, options, map[string]string{}, &resp)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list all ccm budgets: %w", err)
+		return nil, fmt.Errorf("failed to create a ccm budget: %w", err)
 	}
 	return resp, nil
 }
 
 func (c *CloudCostManagementService) UpdateBudget(ctx context.Context, accountId string, options map[string]any) (*map[string]any, error) {
-	budgetId := options["budgetId"].(string)
+	budgetId := options["uuid"].(string)
+
 	path := fmt.Sprintf(ccmUpdateBudgetPath, budgetId, accountId)
 	resp := new(map[string]any)
 
-	err := c.Client.Put(ctx, path, nil, nil, &resp)
+	err := c.Client.Put(ctx, path, nil, options, &resp)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list all ccm budgets: %w", err)
+		return nil, fmt.Errorf("failed to update a ccm budgets: %w", err)
 	}
+
 	return resp, nil
 }

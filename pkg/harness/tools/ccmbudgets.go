@@ -3,10 +3,12 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/utils"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -294,15 +296,15 @@ func createOrUpdateBudgetHandler(
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	alertThresholds, err := OptionalParam[[]map[string]any](request, "alertThresholds")
+	alertThresholds, err := OptionalAnyArrayParam(request, "alertThresholds")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	emailAddresses, err := OptionalParam[[]string](request, "emailAddresses")
+	emailAddresses, err := OptionalStringArrayParam(request, "emailAddresses")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	userGroupIds, err := OptionalParam[[]string](request, "userGroupIds")
+	userGroupIds, err := OptionalStringArrayParam(request, "userGroupIds")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -318,35 +320,36 @@ func createOrUpdateBudgetHandler(
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	startTime, err := OptionalParam[float64](request, "startTime")
+
+	startTimeStr, err := OptionalParam[string](request, "startTime")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	endTime, err := OptionalParam[float64](request, "endTime")
+
+	if startTimeStr == "" {
+		return mcp.NewToolResultError("startTime must be provided"), nil
+	}
+
+	startTime, err := utils.FormatMMDDYYYYToUnixMillis(startTimeStr)
+
+	endTimeStr, err := OptionalParam[string](request, "endTime")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
+
+	endTime := int64(0)
+	if endTimeStr != "" {
+		endTime, err = utils.FormatMMDDYYYYToUnixMillis(endTimeStr)
+		if err != nil {
+			return mcp.NewToolResultError("Error getting end time" + err.Error()), nil
+		}
+	}
+
 	budgetHistory, err := OptionalParam[map[string]any](request, "budgetHistory")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 	disableCurrencyWarning, err := OptionalParam[bool](request, "disableCurrencyWarning")
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	createdAt, err := OptionalParam[float64](request, "createdAt")
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	lastUpdatedAt, err := OptionalParam[float64](request, "lastUpdatedAt")
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	createdBy, err := OptionalParam[map[string]any](request, "createdBy")
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	lastUpdatedBy, err := OptionalParam[map[string]any](request, "lastUpdatedBy")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -378,10 +381,6 @@ func createOrUpdateBudgetHandler(
 		"endTime":                endTime,
 		"budgetHistory":          budgetHistory,
 		"disableCurrencyWarning": disableCurrencyWarning,
-		"createdAt":              createdAt,
-		"lastUpdatedAt":          lastUpdatedAt,
-		"createdBy":              createdBy,
-		"lastUpdatedBy":          lastUpdatedBy,
 		"ngBudget":               ngBudget,
 	}
 
@@ -413,19 +412,18 @@ func createOrUpdateRequest(
 }
 
 func createOrUpdateBudgetDefinition() json.RawMessage {
-	return toRawMessage(commonRecommendationsSchema(), []string{})
+	return toRawMessage(createOrUpdateBudgetDefinitionMap(), []string{})
 }
 
 func createOrUpdateBudgetDefinitionMap() map[string]any {
+
+	now := time.Now()
+	defaultStartTime := utils.FormatUnixToMMDDYYYY(now.AddDate(0, 0, -60).Unix())
 
 	return map[string]any{
 		"uuid": map[string]any{
 			"type":        "string",
 			"description": "Unique identifier for the budget.",
-		},
-		"accountId": map[string]any{
-			"type":        "string",
-			"description": "Account ID associated with the budget.",
 		},
 		"name": map[string]any{
 			"type":        "string",
@@ -444,12 +442,18 @@ func createOrUpdateBudgetDefinitionMap() map[string]any {
 		"type": map[string]any{
 			"type":        "string",
 			"description": "Type of the budget (e.g., SPECIFIED_AMOUNT).",
+			"enum":        GetBudgetTypes(),
+			"default":     dto.BudgetTypeSpecifiedAmount,
 		},
 		"budgetMonthlyBreakdown": map[string]any{
 			"type":        "object",
 			"description": "Monthly breakdown details for the budget.",
 			"properties": map[string]any{
-				"budgetBreakdown": map[string]any{"type": "string", "enum": []string{"MONTHLY", "YEARLY"}},
+				"budgetBreakdown": map[string]any{
+					"type":    "string",
+					"enum":    GetBudgetBreakdowns(),
+					"default": dto.BudgetBreakdownMonthly,
+				},
 				"budgetMonthlyAmount": map[string]any{
 					"type": "array",
 					"items": map[string]any{
@@ -473,10 +477,13 @@ func createOrUpdateBudgetDefinitionMap() map[string]any {
 		"period": map[string]any{
 			"type":        "string",
 			"description": "Budget period (e.g., DAILY).",
+			"enum":        GetBudgetPeriods(),
+			"default":     dto.BudgetPeriodDaily,
 		},
 		"growthRate": map[string]any{
 			"type":        "number",
 			"description": "Growth rate for the budget.",
+			"default":     0,
 		},
 		"actualCost": map[string]any{
 			"type":        "number",
@@ -495,8 +502,11 @@ func createOrUpdateBudgetDefinitionMap() map[string]any {
 			"items": map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"percentage":     map[string]any{"type": "number"},
-					"basedOn":        map[string]any{"type": "string"},
+					"percentage": map[string]any{"type": "number"},
+					"basedOn": map[string]any{
+						"type": "string",
+						"enum": GetBudgetThresholdBases(),
+					},
 					"emailAddresses": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 					"userGroupIds":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 					"slackWebhooks":  map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
@@ -526,12 +536,13 @@ func createOrUpdateBudgetDefinitionMap() map[string]any {
 			"description": "Is NG budget.",
 		},
 		"startTime": map[string]any{
-			"type":        "number",
-			"description": "Start time (timestamp).",
+			"type":        "string",
+			"description": "Start time of the period in format MM/DD/YYYY. (e.g. 10/30/2025)",
+			"default":     defaultStartTime,
 		},
 		"endTime": map[string]any{
-			"type":        "number",
-			"description": "End time (timestamp).",
+			"type":        "string",
+			"description": "Start time of the period in format MM/DD/YYYY. (e.g. 10/30/2025)",
 		},
 		"budgetHistory": map[string]any{
 			"type":        "object",
@@ -552,34 +563,6 @@ func createOrUpdateBudgetDefinitionMap() map[string]any {
 		"disableCurrencyWarning": map[string]any{
 			"type":        "boolean",
 			"description": "Disable currency warning.",
-		},
-		"createdAt": map[string]any{
-			"type":        "number",
-			"description": "Creation timestamp.",
-		},
-		"lastUpdatedAt": map[string]any{
-			"type":        "number",
-			"description": "Last updated timestamp.",
-		},
-		"createdBy": map[string]any{
-			"type":        "object",
-			"description": "Created by user info.",
-			"properties": map[string]any{
-				"uuid":           map[string]any{"type": "string"},
-				"name":           map[string]any{"type": "string"},
-				"email":          map[string]any{"type": "string"},
-				"externalUserId": map[string]any{"type": "string"},
-			},
-		},
-		"lastUpdatedBy": map[string]any{
-			"type":        "object",
-			"description": "Last updated by user info.",
-			"properties": map[string]any{
-				"uuid":           map[string]any{"type": "string"},
-				"name":           map[string]any{"type": "string"},
-				"email":          map[string]any{"type": "string"},
-				"externalUserId": map[string]any{"type": "string"},
-			},
 		},
 		"ngBudget": map[string]any{
 			"type":        "boolean",
