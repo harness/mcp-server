@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/types/enum"
 	"github.com/harness/harness-mcp/pkg/harness"
 	"github.com/harness/harness-mcp/pkg/harness/auth"
 	"github.com/harness/harness-mcp/pkg/harness/prompts"
@@ -53,8 +54,11 @@ var (
 			defer stop()
 
 			transportMode := viper.GetString("transport")
+			var transportType enum.TransportType
 			if transportMode == "" {
-				transportMode = "stdio"
+				transportType = enum.TransportStdio
+			} else {
+				transportType = enum.ParseTransportType(transportMode)
 			}
 
 			cfg := config.Config{
@@ -63,7 +67,7 @@ var (
 				LogFilePath:   viper.GetString("log_file"),
 				Debug:         viper.GetBool("debug"),
 				EnableLicense: viper.GetBool("enable_license"),
-				Transport:     transportMode,
+				Transport:     transportType,
 				HTTP: struct {
 					Port int    `envconfig:"MCP_HTTP_PORT" default:"8080"`
 					Path string `envconfig:"MCP_HTTP_PATH" default:"/mcp"`
@@ -437,11 +441,9 @@ func runMCPServer(ctx context.Context, config config.Config) error {
 func runHTTPServer(ctx context.Context, harnessServer *server.MCPServer, config config.Config) error {
 	// Create HTTP server
 	httpServer := server.NewStreamableHTTPServer(harnessServer)
-	config.LoadEnvConfig()
 	// Start server
 	address := fmt.Sprintf(":%d", config.HTTP.Port)
 	slog.Info("Harness MCP Server running on HTTP", "version", version, "address", address, "path", config.HTTP.Path)
-
 	errChan := make(chan error, 1)
 	go func() {
 		errChan <- httpServer.Start(address)
