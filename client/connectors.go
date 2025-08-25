@@ -11,6 +11,7 @@ import (
 const (
 	listConnectorCataloguePath = "/connectors/catalogue"
 	getConnectorPath           = "/connectors/%s"
+	listConnectorsPath         = "/connectors/listV2"
 )
 
 type ConnectorService struct {
@@ -86,6 +87,47 @@ func (c *ConnectorService) GetConnector(ctx context.Context, scope dto.Scope, co
 	err := c.Client.Get(ctx, path, params, nil, &response)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get connector: %w", err)
+	}
+
+	return &response.Data, nil
+}
+
+// ListConnectors retrieves a list of connectors with filtering options
+// https://apidocs.harness.io/tag/Connectors#operation/getConnectorListV2
+func (c *ConnectorService) ListConnectors(ctx context.Context, scope dto.Scope, connectorNames, connectorIdentifiers, types, categories, connectivityStatuses, connectorConnectivityModes []string, description string, inheritingCredentialsFromDelegate *bool, tags map[string]string) (*pkgDTO.ConnectorListData, error) {
+	if scope.AccountID == "" {
+		return nil, fmt.Errorf("accountIdentifier cannot be null")
+	}
+
+	params := make(map[string]string)
+	addScope(scope, params)
+
+	// Create request body with specified fields
+	requestBody := pkgDTO.ConnectorListRequestBody{
+		ConnectorNames:                    connectorNames,
+		ConnectorIdentifiers:              connectorIdentifiers,
+		Description:                       description,
+		Types:                             types,
+		Categories:                        categories,
+		ConnectivityStatuses:              connectivityStatuses,
+		InheritingCredentialsFromDelegate: inheritingCredentialsFromDelegate,
+		ConnectorConnectivityModes:        connectorConnectivityModes,
+		Tags:                              tags,
+		FilterType:                        "Connector", // Fixed value
+	}
+
+	// Define a struct to match the actual API response structure
+	type listConnectorsResponse struct {
+		Status        string                   `json:"status"`
+		Data          pkgDTO.ConnectorListData `json:"data"`
+		MetaData      interface{}              `json:"metaData"`
+		CorrelationID string                   `json:"correlationId"`
+	}
+
+	var response listConnectorsResponse
+	err := c.Client.Post(ctx, listConnectorsPath, params, requestBody, nil, &response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list connectors: %w", err)
 	}
 
 	return &response.Data, nil
