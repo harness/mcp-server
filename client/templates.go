@@ -10,9 +10,9 @@ import (
 
 const (
 	// Base API paths
-	templateAccountPath = "v1/templates"
-	templateOrgPath     = "v1/orgs/%s/templates"
-	templateProjectPath = "v1/orgs/%s/projects/%s/templates"
+	templateAccountPath = "/api/v1/templates"
+	templateOrgPath     = "/api/v1/orgs/%s/templates"
+	templateProjectPath = "/api/v1/orgs/%s/projects/%s/templates"
 )
 
 type TemplateService struct {

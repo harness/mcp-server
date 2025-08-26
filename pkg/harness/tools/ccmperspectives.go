@@ -4,9 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
-
 	"log/slog"
+	"strings"
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
@@ -20,9 +19,9 @@ import (
 )
 
 const (
-	CCMPerspectiveRulesToolID       = "validate_ccm_perspective_rules"
-	CCMPerspectiveRuleEventType     = "perspective_rules_updated"
-	FollowUpCreatePerspectivePrompt = "Proceed to save perspective"
+	CCMPerspectiveRulesToolID                  = "validate_ccm_perspective_rules"
+	CCMPerspectiveRuleEventType                = "perspective_rules_updated"
+	FollowUpCreatePerspectivePrompt            = "Proceed to save perspective"
 	CCMPerspectivetCreateOrUpdateRuleEventType = "perspective_created_or_updated_event"
 )
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -23,7 +24,7 @@ const (
 )
 
 const (
-	Standard Mode = "standard"
+	Standard  Mode = "standard"
 	Architect Mode = "architect"
 )
 
@@ -116,30 +117,30 @@ func createPrompt(prompt *Prompt) (mcp.Prompt, server.PromptHandlerFunc) {
 		func(ctx context.Context, request mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 			// Determine mode (default to "standard") and return different prompt text accordingly.
 			mode := string(Standard) // Default to standard mode
-            if v, ok := request.Params.Arguments["mode"]; ok && v != "" {
-                mode = v
-            }
+			if v, ok := request.Params.Arguments["mode"]; ok && v != "" {
+				mode = v
+			}
 
-            // Parse the JSON-encoded map of prompt contents
-            var modeContents map[string]string
-            if err := json.Unmarshal([]byte(prompt.Text), &modeContents); err != nil {
-                slog.Error("Failed to parse prompt content JSON", "error", err, "promptName", prompt.Name)
-                return nil, err
-            }
+			// Parse the JSON-encoded map of prompt contents
+			var modeContents map[string]string
+			if err := json.Unmarshal([]byte(prompt.Text), &modeContents); err != nil {
+				slog.Error("Failed to parse prompt content JSON", "error", err, "promptName", prompt.Name)
+				return nil, err
+			}
 
-            // Get the content for the requested mode, fallback to standard if not found
-            text, ok := modeContents[mode]
-            if !ok {
-                // If the requested mode is not available, fall back to standard mode
-                text, ok = modeContents[string(Standard)]
-                if !ok {
-                    return nil, fmt.Errorf("prompt mode %s not found for prompt %s", mode, prompt.Name)
-                }
-            }
+			// Get the content for the requested mode, fallback to standard if not found
+			text, ok := modeContents[mode]
+			if !ok {
+				// If the requested mode is not available, fall back to standard mode
+				text, ok = modeContents[string(Standard)]
+				if !ok {
+					return nil, fmt.Errorf("prompt mode %s not found for prompt %s", mode, prompt.Name)
+				}
+			}
 
-            return mcp.NewGetPromptResult(
-                prompt.ResultDescription,
-                []mcp.PromptMessage{mcp.NewPromptMessage(role, mcp.NewTextContent(text))},
-            ), nil
+			return mcp.NewGetPromptResult(
+				prompt.ResultDescription,
+				[]mcp.PromptMessage{mcp.NewPromptMessage(role, mcp.NewTextContent(text))},
+			), nil
 		}
 }

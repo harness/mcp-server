@@ -16,6 +16,8 @@ import (
 	mcpClient "github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/require"
+	"github.com/harness/harness-mcp/pkg/harness/prompts"
+	"github.com/harness/harness-mcp/pkg/modules"
 )
 
 var (
@@ -148,6 +150,7 @@ func setupMCPClient(t *testing.T, options ...clientOption) *mcpClient.Client {
 			DefaultOrgID:     getE2EOrgID(),
 			DefaultProjectID: getE2EProjectID(),
 			BaseURL:          os.Getenv("HARNESS_MCP_SERVER_E2E_BASE_URL"),
+			EnableModules:    []string{"all"},
 		}
 
 		// Initialize toolsets
@@ -163,6 +166,16 @@ func setupMCPClient(t *testing.T, options ...clientOption) *mcpClient.Client {
 		// Register the tools with the server
 		tsg.RegisterTools(mcpServer)
 
+		moduleRegistry := modules.NewModuleRegistry(cfg, tsg)
+
+		prompts.RegisterPrompts(mcpServer)
+
+		// Register prompts from all enabled modules
+		err = moduleRegistry.RegisterPrompts(mcpServer)
+		if err != nil {
+			setupClientErr = err
+			return
+		}
 		// Create an in-process MCP client
 		testClient, err = mcpClient.NewInProcessClient(mcpServer)
 		if err != nil {
