@@ -10,6 +10,7 @@ import (
 
 const (
 	auditPath = "/api/audits/list"
+	auditYamlPath = "/api/auditYaml"
 )
 
 type AuditService struct {
@@ -17,6 +18,22 @@ type AuditService struct {
 }
 
 // ListUserAuditTrail fetches the audit trail.
+// GetAuditYaml fetches the YAML diff for a specific audit event
+func (a *AuditService) GetAuditYaml(ctx context.Context, scope dto.Scope, auditID string) (*dto.AuditYamlResponse, error) {
+	params := make(map[string]string)
+	params["accountIdentifier"] = scope.AccountID
+	params["routingId"] = scope.AccountID
+	params["auditId"] = auditID
+
+	resp := &dto.AuditYamlResponse{}
+	err := a.Client.Get(ctx, auditYamlPath, params, map[string]string{}, resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get audit YAML: %w", err)
+	}
+
+	return resp, nil
+}
+
 func (a *AuditService) ListUserAuditTrail(ctx context.Context, scope dto.Scope, userIDList string, actionsList string, page int, size int, startTime int64, endTime int64, opts *dto.ListAuditEventsFilter) (*dto.AuditOutput[dto.AuditListItem], error) {
 	if opts == nil {
 		opts = &dto.ListAuditEventsFilter{}
