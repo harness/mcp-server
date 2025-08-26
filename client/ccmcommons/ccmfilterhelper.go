@@ -1,17 +1,18 @@
 package ccmcommons
 
 import (
-	"time"
-	"strings"
 	"encoding/json"
-	"log/slog"
-	"github.com/harness/harness-mcp/client/dto"
 	"fmt"
+	"log/slog"
+	"strings"
+	"time"
+
+	"github.com/harness/harness-mcp/client/dto"
 )
 
-func BuildFilters(viewId string ,timeFilters string, idFilters dto.CCMGraphQLFilters, keyValueFilters dto.CCMGraphQLKeyValueFilters) ([]map[string]any) {
+func BuildFilters(viewId string, timeFilters string, idFilters dto.CCMGraphQLFilters, keyValueFilters dto.CCMGraphQLKeyValueFilters) []map[string]any {
 	filters := []map[string]any{}
-	viewFilter := BuildViewFilter(viewId) 
+	viewFilter := BuildViewFilter(viewId)
 	filters = append(filters, viewFilter...)
 	filters = append(filters, BuildTimeFilters(timeFilters)...)
 	filters = append(filters, BuildFieldFilters(idFilters, OutputFields)...)
@@ -24,39 +25,39 @@ func BuildViewFilter(viewId string) []map[string]any {
 	return []map[string]any{
 		{
 			"viewMetadataFilter": map[string]any{
-				"viewId": viewId,
+				"viewId":    viewId,
 				"isPreview": false,
 			},
 		},
 	}
 }
 
-func BuildFilterValues(options  *dto.CCMPerspectiveFilterValuesOptions) []map[string]any {
+func BuildFilterValues(options *dto.CCMPerspectiveFilterValuesOptions) []map[string]any {
 	filters := []map[string]any{}
-	viewFilter := BuildViewFilter(options.ViewId) 
+	viewFilter := BuildViewFilter(options.ViewId)
 	filters = append(filters, viewFilter...)
 	filters = append(filters, BuildTimeFilters(options.TimeFilter)...)
 
-	if options.ValueType == dto.ValueTypeCostCategory || 
-		options.ValueType == dto.ValueTypeLabel || 
+	if options.ValueType == dto.ValueTypeCostCategory ||
+		options.ValueType == dto.ValueTypeLabel ||
 		options.ValueType == dto.ValueTypeLabelV2 {
 
 		filter, err := BuildKeyValueFieldFilter(options.ValueType, options.ValueSubType, BuildOutputFieldsMap())
 		if err == nil {
 			filters = append(filters, filter...)
 		}
-	} else if options.ValueType == dto.ValueTypeLabelKey || 
+	} else if options.ValueType == dto.ValueTypeLabelKey ||
 		options.ValueType == dto.ValueTypeLabelV2Key {
 		filter, err := BuildKeyFieldFilter(options.ValueType, BuildOutputFieldsMap())
 		if err == nil {
 			filters = append(filters, filter...)
 		}
-		
+
 	} else {
 		filter := BuildFieldFilters(buildFilterForValue(options.ValueType), OutputFields)
 		filters = append(filters, filter...)
 	}
-	return filters 
+	return filters
 }
 
 func buildFilterForValue(valueType string) dto.CCMGraphQLFilters {
@@ -66,13 +67,13 @@ func buildFilterForValue(valueType string) dto.CCMGraphQLFilters {
 func buildFilterForKeyValue(valueType string, valueSubtype string) dto.CCMGraphQLKeyValueFilters {
 
 	filterType := "labels.value"
-	if strings.EqualFold(valueType, dto.ValueTypeCostCategory) {	
+	if strings.EqualFold(valueType, dto.ValueTypeCostCategory) {
 		filterType = "business_mapping"
 	}
 
 	return map[string]map[string]any{
 		filterType: {
-			"filterL1": valueSubtype, 
+			"filterL1": valueSubtype,
 			"filterL2": filterType,
 		},
 	}
@@ -104,32 +105,32 @@ func BuildTimeFilters(timeFilter string) []map[string]any {
 			},
 		},
 	}
-} 
+}
 
-func BuildAggregateFunction() ([]map[string]any) {
+func BuildAggregateFunction() []map[string]any {
 
 	return []map[string]any{
 		{
 			"operationType": "SUM",
-			"columnName": "cost",
+			"columnName":    "cost",
 		},
 	}
-} 
+}
 
-func BuildPreferences() (map[string]any) {
+func BuildPreferences() map[string]any {
 	return map[string]any{
-		"includeOthers": false,
+		"includeOthers":          false,
 		"includeUnallocatedCost": false,
 		"awsPreferences": map[string]any{
 			"includeDiscounts": false,
-			"includeCredits": false,
-			"includeRefunds": false,
-			"includeTaxes": false,
-			"awsCost": "UNBLENDED",
+			"includeCredits":   false,
+			"includeRefunds":   false,
+			"includeTaxes":     false,
+			"awsCost":          "UNBLENDED",
 		},
-		"gcpPreferences": nil,
+		"gcpPreferences":       nil,
 		"azureViewPreferences": nil,
-		"showAnomalies": false,
+		"showAnomalies":        false,
 	}
 }
 
@@ -186,11 +187,11 @@ func BuildFieldFiltersWithOperator(input map[string][]string, output []map[strin
 					"idFilter": map[string]any{
 						"values":   values,
 						"operator": operator,
-						"field": out,
+						"field":    out,
 					},
 				}
 
-			result = append(result, idFilterMap)
+				result = append(result, idFilterMap)
 			}
 		}
 	}
@@ -209,15 +210,15 @@ func BuildKeyValueFieldFiltersWithOperator(input dto.CCMGraphQLKeyValueFilters, 
 			if strings.EqualFold(fName, out["identifier"]) {
 				fieldName, ok := values["filterL1"].(string)
 				if ok {
-					out["fieldName"] = fieldName 
+					out["fieldName"] = fieldName
 					var idFilterMap = map[string]any{
 						"idFilter": map[string]any{
 							"values":   values["filterL2"],
 							"operator": operator,
-							"field": out,
+							"field":    out,
 						},
 					}
-				result = append(result, idFilterMap)
+					result = append(result, idFilterMap)
 				}
 			}
 		}
@@ -231,7 +232,7 @@ func BuildKeyFieldFilter(input string, output map[string]map[string]any) ([]map[
 
 func BuildKeyFieldFilterWithOperator(fieldKey string, output map[string]map[string]any, operator string) ([]map[string]any, error) {
 	result := make([]map[string]any, 0)
-	
+
 	fieldOut, ok := output[fieldKey]
 	if !ok {
 		return nil, fmt.Errorf("Field key not found when building filter %s", fieldKey)
@@ -243,9 +244,9 @@ func BuildKeyFieldFilterWithOperator(fieldKey string, output map[string]map[stri
 	}
 	var idFilterMap = map[string]any{
 		"idFilter": map[string]any{
-			"values":  []string{""},
+			"values":   []string{""},
 			"operator": operator,
-			"field": out,
+			"field":    out,
 		},
 	}
 	result = append(result, idFilterMap)
@@ -258,7 +259,7 @@ func BuildKeyValueFieldFilter(fieldKey string, fieldSubKey string, output map[st
 
 func BuildKeyValueFieldFilterWithOperator(fieldKey string, fieldSubKey string, output map[string]map[string]any, operator string) ([]map[string]any, error) {
 	result := make([]map[string]any, 0)
-	
+
 	fieldOut, ok := output[fieldKey]
 
 	if !ok {
@@ -273,9 +274,9 @@ func BuildKeyValueFieldFilterWithOperator(fieldKey string, fieldSubKey string, o
 	out["fieldName"] = fieldSubKey
 	var idFilterMap = map[string]any{
 		"idFilter": map[string]any{
-			"values":  []string{""},
+			"values":   []string{""},
 			"operator": operator,
-			"field": out,
+			"field":    out,
 		},
 	}
 	result = append(result, idFilterMap)
@@ -286,8 +287,8 @@ func BuildGroupBy(input map[string]any, outputFields []map[string]string, output
 	// Get the value when grouping by field only.
 	field, ok1 := input["field"].(string)
 	if ok1 == false {
-		return DefaultGroupBy 
-	}	
+		return DefaultGroupBy
+	}
 
 	for _, out := range outputFields {
 		if strings.EqualFold(field, out["fieldId"]) {
@@ -302,7 +303,7 @@ func BuildGroupBy(input map[string]any, outputFields []map[string]string, output
 	// Get the value when grouping by key,value.
 	value, ok2 := input["value"].(string)
 	if ok2 == false {
-		return DefaultGroupBy 
+		return DefaultGroupBy
 	}
 	for _, out := range outputKeyValueFields {
 		if strings.EqualFold(field, out["identifier"]) {
@@ -314,7 +315,7 @@ func BuildGroupBy(input map[string]any, outputFields []map[string]string, output
 			}
 		}
 	}
-	return DefaultGroupBy 
+	return DefaultGroupBy
 }
 
 func DebugPayload(operation string, payload map[string]any) {
@@ -324,7 +325,7 @@ func DebugPayload(operation string, payload map[string]any) {
 	slog.Debug("-----------", "----------", "--------------")
 }
 
-func MapToJSONString(m map[string]any) (string) {
+func MapToJSONString(m map[string]any) string {
 	b, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return ""

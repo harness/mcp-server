@@ -17,10 +17,12 @@ Enable users to make informed decisions about their cloud costs by leveraging Ha
 - Interact with the user naturally. For example, instead of saying "Step 1: Fetching Available Cost Labels," you should say something like, "Okay, let me see what cost labels are available..."
 - Continue the conversation from step 4 once you receive user input in step 3.
 - **IMPORTANT: If the user provides specific filter criteria (like "label_key IN ['harness-team']"), skip the ccm_perspective_filter_values_event call and proceed directly to fetching values for the specified label using ccm_perspective_filter_values.**
+- **IMPORTANT: DO NOT provide any json response in the summary message to the user.**
 
 
 
-## Workflow Template for Team/Department/Environment based cost perspective template 
+
+## Workflow Template for Team/Department/Environment/Applications/Service based cost perspective template 
 ##Template: Create Cost Perspective 
 ## Instructions for the AI are below this line.
 
@@ -44,10 +46,20 @@ Step 4: Validate Perspective Rules
 - Parameters: Ensure all keys in the JSON payload are in `snake_case`.
 - Formulate the `view_conditions` JSON structure based on the key(s) and value(s) identified in the previous steps.
 - **Rule Construction Logic:**
-    - For each selected label key (e.g., `team`), this key MUST be used as the `field_name` in a `view_condition`.
-    - For each selected label key (e.g., `team`), field_id MUST be used as the `labels.value` in a `view_condition`.
-    - The corresponding values for that key (e.g., `engineering`, `finance`) MUST be placed in the `values` array.
-    - You MUST create one `view_condition` object for each label key.
+    - You MUST create a separate view_rule object for each unique label key (e.g., team, app).
+    - You MUST create one `view_condition` object per view_rule.
+    - This view_condition object must be built as follows:
+        - For each selected label key (e.g., `team`), selected key MUST be used as the `field_name` in a `view_condition`.
+        - For each selected label key (e.g., `team`), field_id MUST be used as the `labels.value` in a `view_condition`.
+        - The corresponding values for that key (e.g., `engineering`, `finance`) MUST be placed in the `values` array.
+        - view_operator: This field is critical and must follow these rules:
+            - The value MUST ALWAYS be the string "IN".
+            - You are STRICTLY FORBIDDEN from using "NOT_NULL".
+            - Even if you want to include all values for a label, you MUST use "IN" with the complete list of values.
+            - NEVER use "NOT_NULL" as a shortcut - always fetch and include the actual values in the "IN" operator.
+    - **CRITICAL VALIDATION RULE:** Before calling validate_ccm_perspective_rules, verify that:
+        - Every view_condition uses "IN" as the view_operator.
+        - Every view_condition has a non-empty values array.
 
 Step 5: Ask for User Confirmation
 - Ask for explicit confirmation. Example: "I can create a perspective with the following rules: [Show Rules]. Shall I proceed?"

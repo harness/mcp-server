@@ -291,7 +291,7 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 			mcp.WithString("projectId", mcp.Required(), mcp.Description("Harness Project ID")),
 			mcp.WithNumber("page", mcp.Description("Page number to fetch (starting from 0)"), mcp.Min(0), mcp.DefaultNumber(0)),
 			mcp.WithNumber("pageSize", mcp.Description("Number of results per page"), mcp.DefaultNumber(5)),
-			mcp.WithString("matchesProject", mcp.Description("Comma-separated list of organization:project pairs to filter exemptions by project scope (e.g., \"default:STO,default:CCM\").")),
+
 			mcp.WithString("status", mcp.Description("Required. Exemption status: Pending, Approved, Rejected, Expired. You must provide exactly one status.")),
 			mcp.WithString("search", mcp.Description(`Free-text search that matches both issue titles and exemption titles.
 		
@@ -331,9 +331,7 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 			} else {
 				params.PageSize = &size
 			}
-			if v, _ := OptionalParam[string](request, "matchesProject"); v != "" {
-				params.MatchesProject = &v
-			}
+
 			if v, _ := OptionalParam[string](request, "status"); v != "" {
 				params.Status = generated.FrontendGlobalExemptionsParamsStatus(v)
 			}
@@ -341,7 +339,10 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 				params.Search = &v
 			}
 
-			resp, err := client.FrontendGlobalExemptionsWithResponse(ctx, params)
+			// Create request body for the new POST API
+			body := generated.GlobalExemptionsRequestBody{}
+
+			resp, err := client.FrontendGlobalExemptionsWithResponse(ctx, params, body)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -373,7 +374,7 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 				}
 				// PrincipalService: GetUserInfo(ctx, scope, userID, page, size)
 				userInfo, err := principalClient.GetUserInfo(ctx, scope, userID, 0, 1)
-				if err == nil && userInfo != nil && &userInfo.Data != nil && &userInfo.Data.User != nil {
+				if err == nil && userInfo != nil {
 					if userInfo.Data.User.Name != "" {
 						name = userInfo.Data.User.Name
 					} else if userInfo.Data.User.Email != "" {
@@ -489,7 +490,7 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 				} else {
 					responseContents = append(responseContents, tableResource)
 				}
-				
+
 				// Create prompt event and resource if we have suggestions
 				if len(suggestions) > 0 {
 					promptEvent := types.NewActionEvent(suggestions)
