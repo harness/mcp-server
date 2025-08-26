@@ -269,7 +269,10 @@ type Exemption struct {
 	Occurrences *[]int64 `json:"occurrences,omitempty"`
 
 	// OrgId ID of the Harness Organization to which the exemption applies. Cannot be specified alongside "targetId".
-	OrgId          *string        `json:"orgId,omitempty"`
+	OrgId *string `json:"orgId,omitempty"`
+
+	// OrgName Name of the organization associated with the exemption
+	OrgName        *string        `json:"orgName,omitempty"`
 	PendingChanges PendingChanges `json:"pendingChanges"`
 
 	// PipelineId ID of the Harness Pipeline to which the exemption applies. You must also specify "projectId" and "orgId". Cannot be specified alongside "targetId".
@@ -277,6 +280,9 @@ type Exemption struct {
 
 	// ProjectId ID of the Harness Project to which the exemption applies. You must also specify "orgId". Cannot be specified alongside "targetId".
 	ProjectId *string `json:"projectId,omitempty"`
+
+	// ProjectName Name of the project associated with the exemption
+	ProjectName *string `json:"projectName,omitempty"`
 
 	// Reason Text describing why this Exemption is necessary
 	Reason string `json:"reason"`
@@ -353,6 +359,9 @@ type FrontendExemption struct {
 	// IsDeleted States if the exemption is deleted
 	IsDeleted *bool `json:"isDeleted,omitempty"`
 
+	// IsOccurrenceLevelExemption States if the exemption is an occurrence level exemption
+	IsOccurrenceLevelExemption *bool `json:"isOccurrenceLevelExemption,omitempty"`
+
 	// IssueSummary Short summary of an Issue
 	IssueSummary IssueSummary `json:"issueSummary"`
 
@@ -420,6 +429,12 @@ type FrontendExemptionCounts struct {
 
 // FrontendSecurityReviewResponseBody Data needed by the Security Review page
 type FrontendSecurityReviewResponseBody = SecurityReviewResult
+
+// GlobalExemptionsRequestBody defines model for GlobalExemptionsRequestBody.
+type GlobalExemptionsRequestBody struct {
+	// OrgProjectFilter List of organization:project pairs
+	OrgProjectFilter *[]string `json:"orgProjectFilter,omitempty"`
+}
 
 // IssueSummary Short summary of an Issue
 type IssueSummary struct {
@@ -620,12 +635,12 @@ type FrontendGlobalExemptionsParams struct {
 	// PageSize Number of results per page
 	PageSize *int64 `form:"pageSize,omitempty" json:"pageSize,omitempty"`
 
-	// MatchesProject Comma-separated list of organization:project pairs
-	MatchesProject *string `form:"matchesProject,omitempty" json:"matchesProject,omitempty"`
-
 	// Status Exemption status
 	Status FrontendGlobalExemptionsParamsStatus `form:"status" json:"status"`
 	Search *string                              `form:"search,omitempty" json:"search,omitempty"`
+
+	// XApiKey Harness personal or service access token
+	XApiKey *string `json:"X-Api-Key,omitempty"`
 }
 
 // FrontendGlobalExemptionsParamsStatus defines parameters for FrontendGlobalExemptions.
@@ -636,6 +651,9 @@ type ExemptionsPromoteExemptionJSONRequestBody = PromoteExemptionRequestBody
 
 // ExemptionsApproveExemptionJSONRequestBody defines body for ExemptionsApproveExemption for application/json ContentType.
 type ExemptionsApproveExemptionJSONRequestBody = ApproveExemptionRequestBody
+
+// FrontendGlobalExemptionsJSONRequestBody defines body for FrontendGlobalExemptions for application/json ContentType.
+type FrontendGlobalExemptionsJSONRequestBody = GlobalExemptionsRequestBody
 
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -723,8 +741,10 @@ type ClientInterface interface {
 	// FrontendAllIssuesList request
 	FrontendAllIssuesList(ctx context.Context, params *FrontendAllIssuesListParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// FrontendGlobalExemptions request
-	FrontendGlobalExemptions(ctx context.Context, params *FrontendGlobalExemptionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// FrontendGlobalExemptionsWithBody request with any body
+	FrontendGlobalExemptionsWithBody(ctx context.Context, params *FrontendGlobalExemptionsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	FrontendGlobalExemptions(ctx context.Context, params *FrontendGlobalExemptionsParams, body FrontendGlobalExemptionsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) ExemptionsPromoteExemptionWithBody(ctx context.Context, id string, params *ExemptionsPromoteExemptionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -787,8 +807,20 @@ func (c *Client) FrontendAllIssuesList(ctx context.Context, params *FrontendAllI
 	return c.Client.Do(req)
 }
 
-func (c *Client) FrontendGlobalExemptions(ctx context.Context, params *FrontendGlobalExemptionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewFrontendGlobalExemptionsRequest(c.Server, params)
+func (c *Client) FrontendGlobalExemptionsWithBody(ctx context.Context, params *FrontendGlobalExemptionsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewFrontendGlobalExemptionsRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) FrontendGlobalExemptions(ctx context.Context, params *FrontendGlobalExemptionsParams, body FrontendGlobalExemptionsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewFrontendGlobalExemptionsRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1259,8 +1291,19 @@ func NewFrontendAllIssuesListRequest(server string, params *FrontendAllIssuesLis
 	return req, nil
 }
 
-// NewFrontendGlobalExemptionsRequest generates requests for FrontendGlobalExemptions
-func NewFrontendGlobalExemptionsRequest(server string, params *FrontendGlobalExemptionsParams) (*http.Request, error) {
+// NewFrontendGlobalExemptionsRequest calls the generic FrontendGlobalExemptions builder with application/json body
+func NewFrontendGlobalExemptionsRequest(server string, params *FrontendGlobalExemptionsParams, body FrontendGlobalExemptionsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewFrontendGlobalExemptionsRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewFrontendGlobalExemptionsRequestWithBody generates requests for FrontendGlobalExemptions with any type of body
+func NewFrontendGlobalExemptionsRequestWithBody(server string, params *FrontendGlobalExemptionsParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -1357,22 +1400,6 @@ func NewFrontendGlobalExemptionsRequest(server string, params *FrontendGlobalExe
 
 		}
 
-		if params.MatchesProject != nil {
-
-			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "matchesProject", runtime.ParamLocationQuery, *params.MatchesProject); err != nil {
-				return nil, err
-			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
-				return nil, err
-			} else {
-				for k, v := range parsed {
-					for _, v2 := range v {
-						queryValues.Add(k, v2)
-					}
-				}
-			}
-
-		}
-
 		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "status", runtime.ParamLocationQuery, params.Status); err != nil {
 			return nil, err
 		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
@@ -1404,9 +1431,26 @@ func NewFrontendGlobalExemptionsRequest(server string, params *FrontendGlobalExe
 		queryURL.RawQuery = queryValues.Encode()
 	}
 
-	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	req, err := http.NewRequest("POST", queryURL.String(), body)
 	if err != nil {
 		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XApiKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Api-Key", runtime.ParamLocationHeader, *params.XApiKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Api-Key", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -1468,8 +1512,10 @@ type ClientWithResponsesInterface interface {
 	// FrontendAllIssuesListWithResponse request
 	FrontendAllIssuesListWithResponse(ctx context.Context, params *FrontendAllIssuesListParams, reqEditors ...RequestEditorFn) (*FrontendAllIssuesListResponse, error)
 
-	// FrontendGlobalExemptionsWithResponse request
-	FrontendGlobalExemptionsWithResponse(ctx context.Context, params *FrontendGlobalExemptionsParams, reqEditors ...RequestEditorFn) (*FrontendGlobalExemptionsResponse, error)
+	// FrontendGlobalExemptionsWithBodyWithResponse request with any body
+	FrontendGlobalExemptionsWithBodyWithResponse(ctx context.Context, params *FrontendGlobalExemptionsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*FrontendGlobalExemptionsResponse, error)
+
+	FrontendGlobalExemptionsWithResponse(ctx context.Context, params *FrontendGlobalExemptionsParams, body FrontendGlobalExemptionsJSONRequestBody, reqEditors ...RequestEditorFn) (*FrontendGlobalExemptionsResponse, error)
 }
 
 type ExemptionsPromoteExemptionResponse struct {
@@ -1626,9 +1672,17 @@ func (c *ClientWithResponses) FrontendAllIssuesListWithResponse(ctx context.Cont
 	return ParseFrontendAllIssuesListResponse(rsp)
 }
 
-// FrontendGlobalExemptionsWithResponse request returning *FrontendGlobalExemptionsResponse
-func (c *ClientWithResponses) FrontendGlobalExemptionsWithResponse(ctx context.Context, params *FrontendGlobalExemptionsParams, reqEditors ...RequestEditorFn) (*FrontendGlobalExemptionsResponse, error) {
-	rsp, err := c.FrontendGlobalExemptions(ctx, params, reqEditors...)
+// FrontendGlobalExemptionsWithBodyWithResponse request with arbitrary body returning *FrontendGlobalExemptionsResponse
+func (c *ClientWithResponses) FrontendGlobalExemptionsWithBodyWithResponse(ctx context.Context, params *FrontendGlobalExemptionsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*FrontendGlobalExemptionsResponse, error) {
+	rsp, err := c.FrontendGlobalExemptionsWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseFrontendGlobalExemptionsResponse(rsp)
+}
+
+func (c *ClientWithResponses) FrontendGlobalExemptionsWithResponse(ctx context.Context, params *FrontendGlobalExemptionsParams, body FrontendGlobalExemptionsJSONRequestBody, reqEditors ...RequestEditorFn) (*FrontendGlobalExemptionsResponse, error) {
+	rsp, err := c.FrontendGlobalExemptions(ctx, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
