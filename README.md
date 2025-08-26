@@ -180,6 +180,10 @@ Toolset Name: `ccm`
 - `clone_ccm_budget`: Clone a budget for a specific account in Harness Cloud Cost Management.
 - `create_ccm_budget`: Create a budget for a specific account in Harness Cloud Cost Management.
 - `update_ccm_budget`: Update a budget for a specific account in Harness Cloud Cost Management.
+- `ccm_total_new_enforcement_recommendations`: Return the total number of new enforcement recommendations for an account in Harness Cloud Cost Management.
+- `ccm_total_active_enforcements`: Return the total number of active enforcement for an account in Harness Cloud Cost Management.
+- `ccm_total_evaluations`: Return the total number of evaluations for an account in Harness Cloud Cost Management.
+- `ccm_total_realised_savings`: Return the total number of realised savings for an account in Harness Cloud Cost Management.	
 - `get_ccm_commitment_coverage`: Get commitment coverage information for an account in Harness Cloud Cost Management.
 - `get_ccm_commitment_savings`: Get commitment savings information for an account in Harness Cloud Cost Management.
 - `get_ccm_commitment_utilisation`: Get commitment utilisation information for an account in Harness Cloud Cost Management broken down by Reserved Instances and Savings Plans in day wise granularity.
