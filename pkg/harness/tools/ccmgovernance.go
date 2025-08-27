@@ -91,9 +91,6 @@ func governanceHandler(
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	if cloudProvider == "" {
-		return mcp.NewToolResultError("cloudProvider is required"), nil
-	}
 
 	data, err := clientFunction(ctx, accountId, cloudProvider)
 	if err != nil {
