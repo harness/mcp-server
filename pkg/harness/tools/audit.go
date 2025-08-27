@@ -6,10 +6,13 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/harness/harness-mcp/client"
+	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -55,6 +58,45 @@ func previousWeek() string {
 	return oneWeekAgo
 }
 
+// GetAuditYamlTool creates a tool for retrieving YAML diff for a specific audit event.
+func GetAuditYamlTool(config *config.Config, auditClient *client.AuditService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("get_audit_yaml",
+			mcp.WithDescription("Get YAML diff for a specific audit event."),
+			mcp.WithString("audit_id",
+				mcp.Description("The ID of the audit event to retrieve YAML diff for."),
+				mcp.Required(),
+			),
+			common.WithScope(config, false),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			slog.Info("Handling get_audit_yaml request", "request", request.GetArguments())
+
+			auditID, err := RequiredParam[string](request, "audit_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			scope, err := common.FetchScope(config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			slog.Info("Calling GetAuditYaml API", "audit_id", auditID)
+
+			data, err := auditClient.GetAuditYaml(ctx, scope, auditID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get audit YAML: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal the audit YAML response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
 // ListAuditsOfUser creates a tool for listing the audit trail.
 func ListUserAuditTrailTool(config *config.Config, auditClient *client.AuditService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_user_audits",
@@ -78,7 +120,39 @@ func ListUserAuditTrailTool(config *config.Config, auditClient *client.AuditServ
 					"ROLE_ASSIGNMENT_CREATED", "ROLE_ASSIGNMENT_UPDATED", "ROLE_ASSIGNMENT_DELETED", "MOVE", "ENABLED", "DISABLED", "DISMISS_ANOMALY", "RERUN", "BYPASS", "STABLE_VERSION_CHANGED",
 					"SYNC_START", "START_IMPERSONATION", "END_IMPERSONATION", "MOVE_TO_GIT", "FREEZE_BYPASS", "EXPIRED", "FORCE_PUSH"),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
+
+			mcp.WithString("resource_type",
+				mcp.Description("Optional resource type to filter by."),
+				mcp.Enum("ORGANIZATION", "PROJECT", "USER_GROUP", "SECRET", "CERTIFICATE", "STREAMING_DESTINATION", "RESOURCE_GROUP",
+					"USER", "ROLE", "PIPELINE", "TRIGGER", "TEMPLATE", "INPUT_SET", "DELEGATE_CONFIGURATION", "DELEGATE_GROUPS",
+					"SERVICE", "ENVIRONMENT", "ENVIRONMENT_GROUP", "DELEGATE", "SERVICE_ACCOUNT", "CONNECTOR", "API_KEY",
+					"TOKEN", "DELEGATE_TOKEN", "DASHBOARD", "DASHBOARD_FOLDER", "GOVERNANCE_POLICY", "GOVERNANCE_POLICY_SET",
+					"VARIABLE", "CHAOS_HUB", "MONITORED_SERVICE", "CHAOS_INFRASTRUCTURE", "CHAOS_EXPERIMENT", "CHAOS_GAMEDAY",
+					"CHAOS_PROBE", "STO_TARGET", "STO_EXEMPTION", "SERVICE_LEVEL_OBJECTIVE", "PERSPECTIVE", "PERSPECTIVE_BUDGET",
+					"PERSPECTIVE_REPORT", "COST_CATEGORY", "COMMITMENT_ORCHESTRATOR_SETUP", "COMMITMENT_ACTIONS",
+					"CLUSTER_ORCHESTRATOR_SETUP", "CLUSTER_ACTIONS", "SMTP", "PERSPECTIVE_FOLDER", "AUTOSTOPPING_RULE",
+					"AUTOSTOPPING_LB", "AUTOSTOPPING_STARTSTOP", "SETTING", "NG_LOGIN_SETTINGS", "DEPLOYMENT_FREEZE",
+					"CLOUD_ASSET_GOVERNANCE_RULE", "CLOUD_ASSET_GOVERNANCE_RULE_SET", "CLOUD_ASSET_GOVERNANCE_RULE_ENFORCEMENT",
+					"TARGET_GROUP", "FEATURE_FLAG", "FEATURE_FLAG_STALE_CONFIG", "NG_ACCOUNT_DETAILS", "BUDGET_GROUP",
+					"IP_ALLOWLIST_CONFIG", "NETWORK_MAP", "CET_AGENT_TOKEN", "CET_CRITICAL_EVENT", "CHAOS_SECURITY_GOVERNANCE",
+					"END_USER_LICENSE_AGREEMENT", "WORKSPACE", "IAC_MODULE", "SEI_CONFIGURATION_SETTINGS", "SEI_COLLECTIONS",
+					"SEI_INSIGHTS", "SEI_PANORAMA", "CET_SAVED_FILTER", "GITOPS_AGENT", "GITOPS_REPOSITORY", "GITOPS_CLUSTER",
+					"GITOPS_CREDENTIAL_TEMPLATE", "GITOPS_REPOSITORY_CERTIFICATE", "GITOPS_GNUPG_KEY", "GITOPS_PROJECT_MAPPING",
+					"GITOPS_APPLICATION", "GITOPS_APPLICATION_SET", "CODE_REPOSITORY", "CODE_REPOSITORY_SETTINGS", "CODE_BRANCH_RULE",
+					"CODE_PUSH_RULE", "CODE_TAG_RULE", "CODE_BRANCH", "CODE_TAG", "CODE_WEBHOOK", "MODULE_LICENSE",
+					"IDP_BACKSTAGE_CATALOG_ENTITY", "IDP_BACKSTAGE_SCAFFOLDER_TASK", "IDP_APP_CONFIGS", "IDP_CONFIG_ENV_VARIABLES",
+					"IDP_PROXY_HOST", "IDP_SCORECARDS", "IDP_CHECKS", "IDP_ALLOW_LIST", "IDP_OAUTH_CONFIG", "IDP_CATALOG_CONNECTOR",
+					"IDP_GIT_INTEGRATIONS", "IDP_PERMISSIONS", "IDP_CATALOG", "IDP_WORKFLOW", "SERVICE_DISCOVERY_AGENT",
+					"APPLICATION_MAP", "IDP_LAYOUT", "IDP_PLUGINS", "NOTIFICATION_CHANNEL", "NOTIFICATION_RULE",
+					"IDP_CATALOG_CUSTOM_PROPERTIES", "CLOUD_ASSET_GOVERNANCE_RULE_EVALUATION", "ARTIFACT_REGISTRY_UPSTREAM_PROXY",
+					"ARTIFACT_REGISTRY", "BANNER", "GITX_WEBHOOK", "FILE", "CHAOS_IMAGE_REGISTRY", "DB_SCHEMA", "DB_INSTANCE",
+					"CCM_ANOMALY", "CCM_ANOMALY_ALERT", "CLOUD_ASSET_GOVERNANCE_NOTIFICATION", "CDE_GITSPACE", "DEFAULT_NOTIFICATION_TEMPLATE_SET"),
+			),
+			mcp.WithString("resource_identifier",
+				mcp.Description("Optional resource identifier to filter by. Must be used with resource_type."),
+			),
+			common.WithScope(config, false),
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -94,7 +168,17 @@ func ListUserAuditTrailTool(config *config.Config, auditClient *client.AuditServ
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := FetchScope(config, request, false)
+			resourceType, err := OptionalParam[string](request, "resource_type")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			resourceIdentifier, err := OptionalParam[string](request, "resource_identifier")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -115,15 +199,32 @@ func ListUserAuditTrailTool(config *config.Config, auditClient *client.AuditServ
 			endTimeMilliseconds := convertDateToMilliseconds(endTime)
 			slog.Info("Converted time range", "start_time_ms", startTimeMilliseconds, "end_time_ms", endTimeMilliseconds)
 
+			// Create filter options
+			opts := &dto.ListAuditEventsFilter{}
+
+			// Set default filter type
+			opts.FilterType = "Audit"
+
+			// Add resource filter if provided
+			if strings.TrimSpace(resourceType) != "" {
+				opts.Resources = []dto.AuditResource{{
+					Type:       resourceType,
+					Identifier: resourceIdentifier,
+				}}
+				slog.Info("Adding resource filter", "resource_type", resourceType, "resource_identifier", resourceIdentifier)
+			}
+
 			slog.Info("Calling ListUserAuditTrail API",
 				"user_id_list", userIDList,
 				"actions", actionsList,
+				"resource_type", resourceType,
+				"resource_identifier", resourceIdentifier,
 				"page", page,
 				"size", size,
 				"start_time_ms", startTimeMilliseconds,
 				"end_time_ms", endTimeMilliseconds)
 
-			data, err := auditClient.ListUserAuditTrail(ctx, scope, userIDList, actionsList, page, size, startTimeMilliseconds, endTimeMilliseconds, nil)
+			data, err := auditClient.ListUserAuditTrail(ctx, scope, userIDList, actionsList, page, size, startTimeMilliseconds, endTimeMilliseconds, opts)
 			if err != nil {
 				return nil, fmt.Errorf("failed to list the audit logs: %w", err)
 			}

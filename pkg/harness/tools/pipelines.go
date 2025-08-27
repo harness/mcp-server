@@ -8,6 +8,7 @@ import (
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -19,14 +20,14 @@ func GetPipelineTool(config *config.Config, client *client.PipelineService) (too
 				mcp.Required(),
 				mcp.Description("The ID of the pipeline"),
 			),
-			WithScope(config, true),
+			common.WithScope(config, true),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			pipelineID, err := RequiredParam[string](request, "pipeline_id")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -51,11 +52,11 @@ func ListPipelinesTool(config *config.Config, client *client.PipelineService) (t
 			mcp.WithString("search_term",
 				mcp.Description("Optional search term to filter pipelines"),
 			),
-			WithScope(config, true),
+			common.WithScope(config, true),
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -103,7 +104,7 @@ func FetchExecutionURLTool(config *config.Config, client *client.PipelineService
 				mcp.Required(),
 				mcp.Description("The ID of the plan execution"),
 			),
-			WithScope(config, true),
+			common.WithScope(config, true),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			pipelineID, err := RequiredParam[string](request, "pipeline_id")
@@ -116,7 +117,7 @@ func FetchExecutionURLTool(config *config.Config, client *client.PipelineService
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -137,7 +138,7 @@ func GetExecutionTool(config *config.Config, client *client.PipelineService) (to
 				mcp.Required(),
 				mcp.Description("The ID of the plan execution"),
 			),
-			WithScope(config, true),
+			common.WithScope(config, true),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			planExecutionID, err := RequiredParam[string](request, "plan_execution_id")
@@ -145,7 +146,7 @@ func GetExecutionTool(config *config.Config, client *client.PipelineService) (to
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -182,11 +183,11 @@ func ListExecutionsTool(config *config.Config, client *client.PipelineService) (
 			mcp.WithBoolean("my_deployments",
 				mcp.Description("Optional flag to show only my deployments"),
 			),
-			WithScope(config, true),
+			common.WithScope(config, true),
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -257,11 +258,11 @@ func ListInputSetsTool(config *config.Config, client *client.PipelineService) (t
 			mcp.WithString("search_term",
 				mcp.Description("Optional search term to filter out Input Sets based on name, identifier, tags."),
 			),
-			WithScope(config, true),
+			common.WithScope(config, true),
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -315,7 +316,7 @@ func GetInputSetTool(config *config.Config, client *client.PipelineService) (too
 				mcp.Required(),
 				mcp.Description("The identifier of the input set."),
 			),
-			WithScope(config, true),
+			common.WithScope(config, true),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			pipelineIdentifier, err := RequiredParam[string](request, "pipeline_identifier")
@@ -328,7 +329,7 @@ func GetInputSetTool(config *config.Config, client *client.PipelineService) (too
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -341,6 +342,105 @@ func GetInputSetTool(config *config.Config, client *client.PipelineService) (too
 			r, err := json.Marshal(data.Data)
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal input set: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+func GetPipelineSummaryTool(config *config.Config, client *client.PipelineService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("get_pipeline_summary",
+			mcp.WithDescription("Provides a concise summary of a pipeline's overall structure and execution info highlighting key aspects rather than detailed pipeline definition such as pipeline yaml, external references, etc."),
+			mcp.WithString("pipeline_id",
+				mcp.Required(),
+				mcp.Description("Identifier of the pipeline."),
+			),
+			mcp.WithBoolean("get_metadata_only",
+				mcp.Description("Whether to only fetch metadata without full pipeline details."),
+			),
+			common.WithScope(config, true),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			pipelineID, err := RequiredParam[string](request, "pipeline_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			scope, err := common.FetchScope(config, request, true)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			getMetadataOnly, err := OptionalParam[bool](request, "get_metadata_only")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.GetPipelineSummary(ctx, scope, pipelineID, getMetadataOnly)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get pipeline summary: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal pipeline summary: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+func ListTriggersTool(config *config.Config, client *client.PipelineService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("list_triggers",
+			mcp.WithDescription("List triggers in a Harness pipeline."),
+			mcp.WithString("target_identifier",
+				mcp.Required(),
+				mcp.Description("Identifier of the target pipeline."),
+			),
+			mcp.WithString("search_term",
+				mcp.Description("Optional search term to filter triggers based on name, identifier, tags."),
+			),
+			common.WithScope(config, true),
+			WithPagination(),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(config, request, true)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			page, size, err := FetchPagination(request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			searchTerm, err := OptionalParam[string](request, "search_term")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			targetIdentifier, err := RequiredParam[string](request, "target_identifier")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			opts := &dto.TriggerListOptions{
+				SearchTerm:       searchTerm,
+				TargetIdentifier: targetIdentifier,
+				PaginationOptions: dto.PaginationOptions{
+					Page: page,
+					Size: size,
+				},
+			}
+
+			data, err := client.ListTriggers(ctx, scope, opts)
+			if err != nil {
+				return nil, fmt.Errorf("failed to list triggers: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal trigger list: %w", err)
 			}
 
 			return mcp.NewToolResultText(string(r)), nil

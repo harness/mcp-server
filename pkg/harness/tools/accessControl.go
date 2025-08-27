@@ -10,8 +10,8 @@ import (
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
-
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -22,13 +22,13 @@ func GetAllUsersTool(config *config.Config, usersClient *client.PrincipalService
 			mcp.WithString("search_term",
 				mcp.Description("Optional search term to filter users. Search by email ID or name."),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			searchTerm, _ := OptionalParam[string](request, "search_term")
 
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -68,11 +68,11 @@ func GetUserInfoTool(config *config.Config, userInfoClient *client.PrincipalServ
 				mcp.Required(),
 				mcp.Description("The user id(UUID) to retrieve the user info."),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -111,11 +111,11 @@ func GetUserGroupInfoTool(config *config.Config, userGroupInfoClient *client.Pri
 				mcp.Required(),
 				mcp.Description("The User Group ID to retrieve the user group info."),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -146,11 +146,11 @@ func GetServiceAccountTool(config *config.Config, serviceAccountClient *client.P
 				mcp.Required(),
 				mcp.Description("The Service Account ID to retrieve the service account info."),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -181,7 +181,7 @@ func GetRoleInfoTool(config *config.Config, roleInfoClient *client.RBACService) 
 				mcp.Required(),
 				mcp.Description("The role id used to retrieve the role details."),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			roleID, err := RequiredParam[string](request, "role_id")
@@ -189,7 +189,7 @@ func GetRoleInfoTool(config *config.Config, roleInfoClient *client.RBACService) 
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -211,11 +211,11 @@ func GetRoleInfoTool(config *config.Config, roleInfoClient *client.RBACService) 
 func ListAvailableRolesTool(config *config.Config, rolesClient *client.RBACService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_available_roles",
 			mcp.WithDescription("List the roles available in the account."),
-			WithScope(config, false),
+			common.WithScope(config, false),
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -245,11 +245,11 @@ func ListAvailableRolesTool(config *config.Config, rolesClient *client.RBACServi
 func ListAvailablePermissions(config *config.Config, permissionsClient *client.RBACService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_available_permissions",
 			mcp.WithDescription("List The Permissions Available In The Account."),
-			WithScope(config, false),
+			common.WithScope(config, false),
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -295,11 +295,11 @@ func ListRoleAssignmentsTool(config *config.Config, roleAssignmentsClient *clien
 				mcp.Description("Optional array of principal filters"),
 				mcp.Items(dto.RoleAssignmentPrincipalFilter{}),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

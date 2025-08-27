@@ -14,6 +14,7 @@ import (
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness"
 	"github.com/harness/harness-mcp/pkg/harness/auth"
+	"github.com/harness/harness-mcp/pkg/harness/prompts"
 	"github.com/harness/harness-mcp/pkg/modules"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -378,7 +379,7 @@ func runStdioServer(ctx context.Context, config config.Config) error {
 
 	// Create server
 	// WithRecovery makes sure panics are logged and don't crash the server
-	harnessServer := harness.NewServer(version, server.WithHooks(hooks), server.WithRecovery())
+	harnessServer := harness.NewServer(version, &config, server.WithHooks(hooks), server.WithRecovery())
 
 	// Initialize toolsets
 	toolsets, err := harness.InitToolsets(ctx, &config)
@@ -391,6 +392,9 @@ func runStdioServer(ctx context.Context, config config.Config) error {
 
 	// Create module registry
 	moduleRegistry := modules.NewModuleRegistry(&config, toolsets)
+
+	// Register prompts generic
+	prompts.RegisterPrompts(harnessServer)
 
 	// Register prompts from all enabled modules
 	err = moduleRegistry.RegisterPrompts(harnessServer)

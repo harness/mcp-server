@@ -15,6 +15,9 @@ import (
 // Default timeout for GenAI service
 const defaultGenaiTimeout = 300 * time.Second
 
+// Default timeout for Intelligence service
+const defaultIntelligenceTimeout = 300 * time.Second
+
 // CoreModule implements the Module interface and contains all default toolsets
 type CoreModule struct {
 	config *config.Config
@@ -52,6 +55,9 @@ func (m *CoreModule) Toolsets() []string {
 		"genai",
 		"intelligence",
 		"chatbot",
+		"settings",
+		"secrets",
+		"prompts",
 	}
 }
 
@@ -100,11 +106,6 @@ func (m *CoreModule) RegisterToolsets() error {
 			if err != nil {
 				return err
 			}
-		case "genai":
-			err := RegisterGenAI(m.config, m.tsg)
-			if err != nil {
-				return err
-			}
 		case "intelligence":
 			err := RegisterIntelligence(m.config, m.tsg)
 			if err != nil {
@@ -112,6 +113,21 @@ func (m *CoreModule) RegisterToolsets() error {
 			}
 		case "chatbot":
 			err := RegisterChatbot(m.config, m.tsg)
+			if err != nil {
+				return err
+			}
+		case "settings":
+			err := RegisterSettings(m.config, m.tsg)
+			if err != nil {
+				return err
+			}
+		case "secrets":
+			err := RegisterSecrets(m.config, m.tsg)
+			if err != nil {
+				return err
+			}
+		case "prompts":
+			err := RegisterPromptTools(m.config, m.tsg)
 			if err != nil {
 				return err
 			}
@@ -175,6 +191,8 @@ func RegisterPipelines(config *config.Config, tsg *toolsets.ToolsetGroup) error 
 			toolsets.NewServerTool(tools.ListExecutionsTool(config, pipelineClient)),
 			toolsets.NewServerTool(tools.GetInputSetTool(config, pipelineClient)),
 			toolsets.NewServerTool(tools.ListInputSetsTool(config, pipelineClient)),
+			toolsets.NewServerTool(tools.GetPipelineSummaryTool(config, pipelineClient)),
+			toolsets.NewServerTool(tools.ListTriggersTool(config, pipelineClient)),
 		)
 
 	// Add toolset to the group
@@ -195,6 +213,7 @@ func RegisterConnectors(config *config.Config, tsg *toolsets.ToolsetGroup) error
 		AddReadTools(
 			toolsets.NewServerTool(tools.ListConnectorCatalogueTool(config, connectorServiceClient)),
 			toolsets.NewServerTool(tools.GetConnectorDetailsTool(config, connectorServiceClient)),
+			toolsets.NewServerTool(tools.ListConnectorsTool(config, connectorServiceClient)),
 		)
 
 	tsg.AddToolset(connectors)
@@ -240,6 +259,7 @@ func RegisterAudit(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	audit := toolsets.NewToolset("audit", "Audit log related tools").
 		AddReadTools(
 			toolsets.NewServerTool(tools.ListUserAuditTrailTool(config, auditService)),
+			toolsets.NewServerTool(tools.GetAuditYamlTool(config, auditService)),
 		)
 
 	// Add toolset to the group
@@ -292,34 +312,10 @@ func RegisterLogs(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	return nil
 }
 
-// RegisterGenAI registers the genai toolset
-func RegisterGenAI(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-	// Skip registration for external mode for now
-	if !config.Internal {
-		return nil
-	}
-
-	// Get the GenAI client
-	genaiClient, err := GetGenAIClient(config)
-	if err != nil {
-		return err
-	}
-
-	// Create the genai toolset
-	genai := toolsets.NewToolset("genai", "Harness GenAI tools").
-		AddReadTools(
-			toolsets.NewServerTool(tools.AIDevOpsAgentTool(config, genaiClient)),
-		)
-
-	// Add toolset to the group
-	tsg.AddToolset(genai)
-	return nil
-}
-
 // RegisterTemplates registers the templates toolset
 func RegisterTemplates(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for templates
-	baseURL := utils.BuildServiceURL(config, config.TemplateSvcBaseURL, config.BaseURL, "")
+	baseURL := utils.BuildServiceURL(config, config.TemplateSvcBaseURL, config.BaseURL, "template")
 	secret := config.TemplateSvcSecret
 
 	// Create base client for templates
@@ -350,7 +346,7 @@ func RegisterIntelligence(config *config.Config, tsg *toolsets.ToolsetGroup) err
 	secret := config.IntelligenceSvcSecret
 
 	// Create base client for intelligence service
-	c, err := utils.CreateClientWithIdentity(baseURL, config, secret, utils.AiServiceIdentity)
+	c, err := utils.CreateClientWithIdentity(baseURL, config, secret, utils.AiServiceIdentity, defaultIntelligenceTimeout)
 	if err != nil {
 		return err
 	}
@@ -363,6 +359,7 @@ func RegisterIntelligence(config *config.Config, tsg *toolsets.ToolsetGroup) err
 	intelligence := toolsets.NewToolset("intelligence", "Harness Intelligence related tools").
 		AddReadTools(
 			toolsets.NewServerTool(tools.FindSimilarTemplates(config, intelligenceClient)),
+			toolsets.NewServerTool(tools.AIDevOpsAgentTool(config, intelligenceClient)),
 		)
 
 	// Add toolset to the group
@@ -436,4 +433,66 @@ func RegisterChatbot(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Add toolset to the group
 	tsg.AddToolset(chatbot)
 	return nil
+}
+
+func RegisterSettings(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Determine the base URL and secret for settings
+	baseURL := utils.BuildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng/api")
+	secret := config.NgManagerSecret
+
+	// Create base client for settings
+	c, err := utils.CreateClient(baseURL, config, secret)
+	if err != nil {
+		return err
+	}
+
+	settingsClient := &client.SettingsClient{Client: c}
+
+	// Create the settings toolset
+	settings := toolsets.NewToolset("settings", "Harness Settings related tools").
+		AddReadTools(
+			toolsets.NewServerTool(tools.ListSettingsTool(config, settingsClient)),
+		)
+
+	// Add toolset to the group
+	tsg.AddToolset(settings)
+	return nil
+}
+
+func RegisterSecrets(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Determine the base URL and secret for secrets service
+	baseURL := utils.BuildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng/api")
+	secret := config.NgManagerSecret
+
+	// Create base client for secrets
+	c, err := utils.CreateClient(baseURL, config, secret)
+	if err != nil {
+		return err
+	}
+
+	secretsClient := &client.SecretsClient{Client: c}
+
+	// Create the secrets toolset
+	secrets := toolsets.NewToolset("secrets", "Harness Secrets related tools").
+		AddReadTools(
+			toolsets.NewServerTool(tools.GetSecretTool(config, secretsClient)),
+			toolsets.NewServerTool(tools.ListSecretsTool(config, secretsClient)),
+		)
+
+	// Add toolset to the group
+	tsg.AddToolset(secrets)
+	return nil
+}
+
+func RegisterPromptTools(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+    // Create the prompt toolset with both tools
+    prompt := toolsets.NewToolset("prompt", "Harness MCP Prompts tools").
+        AddReadTools(
+            toolsets.NewServerTool(tools.GetPromptTool(config)),
+            toolsets.NewServerTool(tools.ListPromptsTool(config)),
+        )
+
+    // Add toolset to the group
+    tsg.AddToolset(prompt)
+    return nil
 }

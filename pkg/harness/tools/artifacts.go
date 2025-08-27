@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	"github.com/harness/harness-mcp/client/ar"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/harness/harness-mcp/pkg/utils"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -22,7 +24,7 @@ func ListArtifactsTool(config *config.Config, client *ar.ClientWithResponses) (t
 			mcp.WithString("search",
 				mcp.Description("Optional search term to filter artifacts"),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -50,10 +52,11 @@ func ListArtifactsTool(config *config.Config, client *ar.ClientWithResponses) (t
 				params.SearchTerm = &search
 			}
 
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
 			ref := utils.GetRef(scope, registryRef)
 
 			// Call the GetAllArtifactsByRegistry API

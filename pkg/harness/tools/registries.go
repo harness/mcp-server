@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	"github.com/harness/harness-mcp/client/ar"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/harness/harness-mcp/pkg/utils"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -19,7 +21,7 @@ func GetRegistryTool(config *config.Config, client *ar.ClientWithResponses) (too
 				mcp.Required(),
 				mcp.Description("The name of the registry"),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			registryRef, err := RequiredParam[string](request, "registry")
@@ -27,7 +29,7 @@ func GetRegistryTool(config *config.Config, client *ar.ClientWithResponses) (too
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -66,7 +68,7 @@ func ListRegistriesTool(config *config.Config, client *ar.ClientWithResponses) (
 				mcp.Enum(string(ar.DOCKER), string(ar.HELM), string(ar.MAVEN), string(ar.GENERIC)),
 			),
 			WithPagination(),
-			WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			params := &ar.GetAllRegistriesParams{}
@@ -78,10 +80,11 @@ func ListRegistriesTool(config *config.Config, client *ar.ClientWithResponses) (
 			params.Page = &pageInt64
 			params.Size = &sizeInt64
 
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
 			ref := utils.GetRef(scope)
 
 			packageType, ok, err := OptionalParamOK[string](request, "package_type")
