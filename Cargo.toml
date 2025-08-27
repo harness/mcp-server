@@ -1,0 +1,86 @@
+[package]
+name = "harness-mcp-server"
+version = "0.1.0"
+edition = "2021"
+authors = ["Harness Inc."]
+description = "Harness MCP (Model Context Protocol) Server - Rust implementation"
+license = "Apache-2.0"
+repository = "https://github.com/harness/mcp-server"
+readme = "README.md"
+keywords = ["harness", "mcp", "model-context-protocol", "api", "devops"]
+categories = ["api-bindings", "development-tools"]
+
+[[bin]]
+name = "harness-mcp-server"
+path = "src/main.rs"
+
+[dependencies]
+# Core async runtime and utilities
+tokio = { version = "1.40", features = ["full"] }
+tokio-util = "0.7"
+
+# HTTP client and server
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+axum = "0.7"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+
+# JSON serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# CLI and configuration
+clap = { version = "4.5", features = ["derive", "env"] }
+config = "0.14"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Logging and tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# UUID generation
+uuid = { version = "1.10", features = ["v4", "serde"] }
+
+# JWT handling
+jsonwebtoken = "9.3"
+
+# Backoff and retry logic
+backoff = "0.4"
+
+# Time handling
+chrono = { version = "0.4", features = ["serde"] }
+
+# URL parsing
+url = "2.5"
+
+# Base64 encoding/decoding
+base64 = "0.22"
+
+# Environment variable loading
+dotenvy = "0.15"
+
+# MCP protocol implementation (placeholder - will need actual Rust MCP library)
+# mcp-rs = "0.1"  # This would be the Rust equivalent of mark3labs/mcp-go
+
+[dev-dependencies]
+# Testing framework
+tokio-test = "0.4"
+mockito = "1.5"
+tempfile = "3.12"
+
+[features]
+default = ["rustls-tls"]
+rustls-tls = ["reqwest/rustls-tls"]
+native-tls = ["reqwest/native-tls"]
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.dev]
+debug = true

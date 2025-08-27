@@ -1,0 +1,97 @@
+# Rust Makefile for Harness MCP Server
+
+# Default target
+.DEFAULT_GOAL := build
+
+# Variables
+CARGO := cargo
+BINARY_NAME := harness-mcp-server
+TARGET_DIR := target
+RELEASE_DIR := $(TARGET_DIR)/release
+DEBUG_DIR := $(TARGET_DIR)/debug
+
+# Build targets
+.PHONY: build build-release build-debug clean test fmt clippy check install run
+
+# Build the project in debug mode
+build: build-debug
+
+# Build the project in debug mode
+build-debug:
+	@echo "Building $(BINARY_NAME) in debug mode..."
+	$(CARGO) build
+
+# Build the project in release mode
+build-release:
+	@echo "Building $(BINARY_NAME) in release mode..."
+	$(CARGO) build --release
+
+# Clean build artifacts
+clean:
+	@echo "Cleaning build artifacts..."
+	$(CARGO) clean
+
+# Run tests
+test:
+	@echo "Running tests..."
+	$(CARGO) test
+
+# Format code
+fmt:
+	@echo "Formatting code..."
+	$(CARGO) fmt
+
+# Run clippy linter
+clippy:
+	@echo "Running clippy..."
+	$(CARGO) clippy -- -D warnings
+
+# Check code without building
+check:
+	@echo "Checking code..."
+	$(CARGO) check
+
+# Install the binary
+install:
+	@echo "Installing $(BINARY_NAME)..."
+	$(CARGO) install --path .
+
+# Run the binary in debug mode
+run:
+	@echo "Running $(BINARY_NAME)..."
+	$(CARGO) run -- stdio --api-key "$(HARNESS_API_KEY)"
+
+# Run the binary in release mode
+run-release:
+	@echo "Running $(BINARY_NAME) in release mode..."
+	$(CARGO) run --release -- stdio --api-key "$(HARNESS_API_KEY)"
+
+# Development workflow
+dev: fmt clippy test build
+
+# CI workflow
+ci: check clippy test build-release
+
+# Docker build (placeholder)
+docker-build:
+	@echo "Building Docker image..."
+	docker build -t harness/mcp-server-rust .
+
+# Show help
+help:
+	@echo "Available targets:"
+	@echo "  build         - Build in debug mode (default)"
+	@echo "  build-release - Build in release mode"
+	@echo "  build-debug   - Build in debug mode"
+	@echo "  clean         - Clean build artifacts"
+	@echo "  test          - Run tests"
+	@echo "  fmt           - Format code"
+	@echo "  clippy        - Run clippy linter"
+	@echo "  check         - Check code without building"
+	@echo "  install       - Install binary"
+	@echo "  run           - Run in debug mode"
+	@echo "  run-release   - Run in release mode"
+	@echo "  dev           - Development workflow (fmt + clippy + test + build)"
+	@echo "  ci            - CI workflow (check + clippy + test + build-release)"
+	@echo "  docker-build  - Build Docker image"
+	@echo "  help          - Show this help"
