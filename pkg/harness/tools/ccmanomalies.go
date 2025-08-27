@@ -35,7 +35,7 @@ func GetCcmAnomaliesSummaryTool(config *config.Config, client *client.CloudCostM
 func ListAllCcmAnomaliesTool(config *config.Config, client *client.CloudCostManagementService,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 
-	return mcp.NewToolWithRawSchema("list_all_ccm_anomalies", ccmcommons.GetAnomaliesSummaryDescription,
+	return mcp.NewToolWithRawSchema("list_all_ccm_anomalies", ccmcommons.ListAnomaliesDescription,
 			anomaliesSummaryDefinition(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -137,12 +137,12 @@ func ListFilterValuesCcmAnomaliesTool(config *config.Config, client *client.Clou
 
 			data, err := client.ListFilterFieldAnomalies(ctx, accountId, columns)
 			if err != nil {
-				return nil, fmt.Errorf("failed to list filter values CCM anomaly feedback: %w", err)
+				return nil, fmt.Errorf("failed to list filter values for CCM anomalies: %w", err)
 			}
 
 			r, err := json.Marshal(data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to list filter values anomaly feedback: %w", err)
+				return nil, fmt.Errorf("Failed to marshal list filter values for CCM anomalies response: %w", err)
 			}
 			return mcp.NewToolResultText(string(r)), nil
 		}
@@ -650,7 +650,7 @@ func generalListMap() map[string]any {
 			},
 		},
 		"searchText": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-		"offset":     map[string]any{"type": "number", "defult": 0},
+		"offset":     map[string]any{"type": "number", "default": 0},
 		"limit":      map[string]any{"type": "number", "default": 100, "minimum": 1, "maximum": 1000},
 		"status":     map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 		"anomalyIds": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
