@@ -7,6 +7,7 @@ import (
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -15,7 +16,7 @@ import (
 func GetEfficiencyLeadTimeTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_efficiency_lead_time",
 			mcp.WithDescription("Get lead time for a project"),
-			WithScope(config, true),
+			common.WithScope(config, true),
 			mcp.WithString("accountId",
 				mcp.Required(),
 				mcp.Description("Harness Account ID"),
@@ -43,7 +44,7 @@ func GetEfficiencyLeadTimeTool(config *config.Config, client *client.SEIService)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -109,7 +110,7 @@ func GetEfficiencyLeadTimeTool(config *config.Config, client *client.SEIService)
 func GetDeploymentFrequencyTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_deployment_frequency",
 			mcp.WithDescription("Get deployment frequency metrics for a project"),
-			WithScope(config, true),
+			common.WithScope(config, true),
 			mcp.WithString("accountId",
 				mcp.Required(),
 				mcp.Description("Harness Account ID"),
@@ -149,7 +150,7 @@ func GetDeploymentFrequencyTool(config *config.Config, client *client.SEIService
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -215,7 +216,7 @@ func GetDeploymentFrequencyTool(config *config.Config, client *client.SEIService
 func GetChangeFailureRateTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_change_failure_rate",
 			mcp.WithDescription("Get change failure rate metrics for a project"),
-			WithScope(config, true),
+			common.WithScope(config, true),
 			mcp.WithString("accountId",
 				mcp.Required(),
 				mcp.Description("Harness Account ID"),
@@ -255,7 +256,7 @@ func GetChangeFailureRateTool(config *config.Config, client *client.SEIService) 
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -321,7 +322,7 @@ func GetChangeFailureRateTool(config *config.Config, client *client.SEIService) 
 func GetMttrTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_mttr",
 			mcp.WithDescription("Get Mean Time to Restore metrics for a project"),
-			WithScope(config, true),
+			common.WithScope(config, true),
 			mcp.WithString("accountId",
 				mcp.Required(),
 				mcp.Description("Harness Account ID"),
@@ -361,7 +362,7 @@ func GetMttrTool(config *config.Config, client *client.SEIService) (mcp.Tool, se
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -427,7 +428,7 @@ func GetMttrTool(config *config.Config, client *client.SEIService) (mcp.Tool, se
 func GetDeploymentFrequencyDrilldownTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_deployment_frequency_drilldown",
 			mcp.WithDescription("Get deployment frequency drilldown data for detailed pipeline executions"),
-			WithScope(config, true),
+			common.WithScope(config, true),
 			mcp.WithString("accountId",
 				mcp.Required(),
 				mcp.Description("Harness Account ID"),
@@ -460,7 +461,7 @@ func GetDeploymentFrequencyDrilldownTool(config *config.Config, client *client.S
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -518,7 +519,7 @@ func GetDeploymentFrequencyDrilldownTool(config *config.Config, client *client.S
 func GetChangeFailureRateDrilldownTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_change_failure_rate_drilldown",
 			mcp.WithDescription("Get change failure rate drilldown data for detailed deployment records with failure status"),
-			WithScope(config, true),
+			common.WithScope(config, true),
 			mcp.WithString("accountId",
 				mcp.Required(),
 				mcp.Description("Harness Account ID"),
@@ -551,7 +552,7 @@ func GetChangeFailureRateDrilldownTool(config *config.Config, client *client.SEI
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

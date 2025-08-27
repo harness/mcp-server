@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/harness/harness-mcp/client"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -17,7 +18,7 @@ import (
 func GetBAAllProfilesTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_get_ba_all_profiles",
 			mcp.WithDescription("Get all BA profiles"),
-			WithScope(config, true),
+			common.WithScope(config, true),
 			mcp.WithString("accountId",
 				mcp.Required(),
 				mcp.Description("Harness Account ID"),
@@ -29,7 +30,7 @@ func GetBAAllProfilesTool(config *config.Config, client *client.SEIService) (mcp
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -61,7 +62,7 @@ func GetBAAllProfilesTool(config *config.Config, client *client.SEIService) (mcp
 func GetBAInsightMetricsTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_get_ba_insight_metrics",
 			mcp.WithDescription("Get BA insight metrics"),
-			WithScope(config, true),
+			common.WithScope(config, true),
 			mcp.WithString("accountId",
 				mcp.Required(),
 				mcp.Description("Harness Account ID"),
@@ -77,7 +78,7 @@ func GetBAInsightMetricsTool(config *config.Config, client *client.SEIService) (
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -114,7 +115,7 @@ func GetBAInsightMetricsTool(config *config.Config, client *client.SEIService) (
 func GetBAInsightSummaryTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_get_ba_insight_summary",
 			mcp.WithDescription("Get BA insight summary"),
-			WithScope(config, true),
+			common.WithScope(config, true),
 			mcp.WithString("accountId",
 				mcp.Required(),
 				mcp.Description("Harness Account ID"),
@@ -130,7 +131,7 @@ func GetBAInsightSummaryTool(config *config.Config, client *client.SEIService) (
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -167,7 +168,7 @@ func GetBAInsightSummaryTool(config *config.Config, client *client.SEIService) (
 func GetBADrilldownDataTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_get_ba_drilldown_data",
 			mcp.WithDescription("Get BA drilldown data"),
-			WithScope(config, true),
+			common.WithScope(config, true),
 			mcp.WithString("accountId",
 				mcp.Required(),
 				mcp.Description("Harness Account ID"),
@@ -183,7 +184,7 @@ func GetBADrilldownDataTool(config *config.Config, client *client.SEIService) (m
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

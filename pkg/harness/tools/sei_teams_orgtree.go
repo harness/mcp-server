@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/harness/harness-mcp/client"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -63,7 +64,7 @@ func GetTeamTool(config *config.Config, client *client.SEIService) (mcp.Tool, se
 func GetTeamsListTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_get_teams_list",
 			mcp.WithDescription("Get list of teams with pagination"),
-			WithScope(config, true),
+			common.WithScope(config, true),
 			mcp.WithString("accountId",
 				mcp.Required(),
 				mcp.Description("Harness Account ID"),
@@ -291,7 +292,7 @@ func GetTeamIntegrationFiltersTool(config *config.Config, client *client.SEIServ
 func GetOrgTreesTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_get_org_trees",
 			mcp.WithDescription("Get organization trees with pagination"),
-			WithScope(config, true),
+			common.WithScope(config, true),
 			mcp.WithString("accountId",
 				mcp.Required(),
 				mcp.Description("Harness Account ID"),
@@ -311,7 +312,7 @@ func GetOrgTreesTool(config *config.Config, client *client.SEIService) (mcp.Tool
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/harness/harness-mcp/client"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -15,7 +16,7 @@ import (
 func GetProductivityFeatureMetricsTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_productivity_feature_metrics",
 			mcp.WithDescription("Get productivity metrics for a collection"),
-			WithScope(config, true),
+			common.WithScope(config, true),
 			mcp.WithString("accountId",
 				mcp.Required(),
 				mcp.Description("Harness Account ID"),
@@ -74,7 +75,7 @@ func GetProductivityFeatureMetricsTool(config *config.Config, client *client.SEI
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
