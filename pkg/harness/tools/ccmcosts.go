@@ -10,6 +10,7 @@ import (
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/harness/harness-mcp/pkg/harness/event"
 	"github.com/harness/harness-mcp/pkg/harness/event/types"
 	"github.com/harness/harness-mcp/pkg/utils"
@@ -40,7 +41,7 @@ func GetCcmOverviewTool(config *config.Config, client *client.CloudCostManagemen
 				mcp.DefaultString(dto.PeriodTypeHour),
 				mcp.Enum(dto.PeriodTypeHour, dto.PeriodTypeDay, dto.PeriodTypeMonth, dto.PeriodTypeWeek, dto.PeriodTypeQuarter, dto.PeriodTypeYear),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			accountId, err := getAccountID(config, request)
@@ -87,7 +88,7 @@ func ListCcmCostCategoriesTool(config *config.Config, client *client.CloudCostMa
 			mcp.WithString("search_term",
 				mcp.Description("Optional search term to filter cost categories"),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			accountId, err := getAccountID(config, request)
@@ -116,7 +117,7 @@ func ListCcmCostCategoriesTool(config *config.Config, client *client.CloudCostMa
 				params.SearchTerm = searchTerm
 			}
 
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -158,7 +159,7 @@ func ListCcmCostCategoriesDetailTool(config *config.Config, client *client.Cloud
 				mcp.DefaultNumber(1),
 				mcp.Description("Offset or page number for pagination"),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			accountId, err := getAccountID(config, request)
@@ -214,7 +215,7 @@ func ListCcmCostCategoriesDetailTool(config *config.Config, client *client.Cloud
 				params.Offset = utils.SafeFloatToInt32(offset, 1)
 			}
 
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -240,7 +241,7 @@ func GetCcmCostCategoryTool(config *config.Config, client *client.CloudCostManag
 				mcp.Description("Required Cost Category ID to retrieve a specific cost category"),
 				mcp.Required(),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			accountId, err := getAccountID(config, request)
@@ -258,7 +259,7 @@ func GetCcmCostCategoryTool(config *config.Config, client *client.CloudCostManag
 			if ok && costCategoryId != "" {
 				params.CostCategoryId = costCategoryId
 			}
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -278,7 +279,7 @@ func GetCcmCostCategoryTool(config *config.Config, client *client.CloudCostManag
 }
 
 func getAccountID(config *config.Config, request mcp.CallToolRequest) (string, error) {
-	scope, _ := FetchScope(config, request, true)
+	scope, _ := common.FetchScope(config, request, true)
 	// Error ignored because it can be related to project or org id
 	// which are not required for CCM
 	if scope.AccountID != "" {
@@ -311,7 +312,7 @@ func FetchCommitmentCoverageTool(config *config.Config, client *client.CloudCost
 				mcp.Enum(dto.CommitmentType, dto.CommitmentInstanceFamily, dto.CommitmentRegion),
 				mcp.DefaultString(dto.CommitmentType),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			accountId, err := getAccountID(config, request)
@@ -356,7 +357,7 @@ func FetchCommitmentCoverageTool(config *config.Config, client *client.CloudCost
 				params.EndDate = &endDate
 			}
 
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -409,7 +410,7 @@ func FetchCommitmentSavingsTool(config *config.Config, client *client.CloudCostM
 				mcp.WithStringItems(),
 				mcp.Description("Optional cloud account IDs to filter commitment coverage"),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			accountId, err := getAccountID(config, request)
@@ -464,7 +465,7 @@ func FetchCommitmentSavingsTool(config *config.Config, client *client.CloudCostM
 				params.IsHarnessManaged = &isHarnessManaged
 			}
 
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -499,7 +500,7 @@ func FetchCommitmentUtilisationTool(config *config.Config, client *client.CloudC
 				mcp.WithStringItems(),
 				mcp.Description("Optional cloud account IDs to filter commitment utilisation"),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			accountId, err := getAccountID(config, request)
@@ -546,7 +547,7 @@ func FetchCommitmentUtilisationTool(config *config.Config, client *client.CloudC
 				params.EndDate = &endDate
 			}
 
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

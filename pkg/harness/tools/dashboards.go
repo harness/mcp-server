@@ -8,6 +8,7 @@ import (
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -55,7 +56,7 @@ func ListDashboardsTool(config *config.Config, client *client.DashboardService) 
 			// Default tags - set all module tags to true
 			defaultTags := "HARNESS=true&CD=true&CE=true&CET=true&CF=true&CHAOS=true&CI=true&DBOPS=true&IACM=true&IDP=true&SSCA=true&STO=true&SRM=true"
 
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -192,7 +193,7 @@ func GetDashboardDataTool(config *config.Config, client *client.DashboardService
 			timeframeInt := int(reportingTimeframe)
 
 			// Get scope from the request
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

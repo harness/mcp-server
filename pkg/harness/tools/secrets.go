@@ -8,6 +8,7 @@ import (
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -20,10 +21,10 @@ func GetSecretTool(config *config.Config, client *client.SecretsClient) (tool mc
 				mcp.Required(),
 				mcp.Description("Identifier of the secret to retrieve"),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -99,11 +100,11 @@ func ListSecretsTool(config *config.Config, client *client.SecretsClient) (tool 
 					"InputSet", "Webhook",
 				),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

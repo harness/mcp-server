@@ -161,7 +161,7 @@ func setupMCPClient(t *testing.T, options ...clientOption) *mcpClient.Client {
 		}
 
 		// Create an MCP server instance with default options
-		mcpServer := harness.NewServer("0.0.1")
+		mcpServer := harness.NewServer("0.0.1", cfg)
 
 		// Register the tools with the server
 		tsg.RegisterTools(mcpServer)
