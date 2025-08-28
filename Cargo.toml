@@ -1,0 +1,129 @@
+[package]
+name = "harness-mcp-server"
+version = "0.1.0"
+edition = "2021"
+authors = ["Harness Inc."]
+description = "A Harness MCP server that handles various tools and resources"
+license = "Apache-2.0"
+repository = "https://github.com/harness/harness-mcp"
+readme = "README.md"
+
+[[bin]]
+name = "harness-mcp-server"
+path = "src/main.rs"
+
+[dependencies]
+# Core async runtime and utilities
+tokio = { version = "1.0", features = ["full"] }
+tokio-util = "0.7"
+
+# HTTP client and server
+reqwest = { version = "0.12", features = ["json", "stream"] }
+hyper = { version = "1.0", features = ["full"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+
+# CLI framework
+clap = { version = "4.0", features = ["derive", "env"] }
+
+# Configuration management
+config = "0.14"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# UUID generation
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+# JWT handling
+jsonwebtoken = "9.0"
+
+# Backoff and retry
+backoff = "0.4"
+
+# Time handling
+chrono = { version = "0.4", features = ["serde"] }
+
+# URL handling
+url = "2.0"
+
+# Base64 encoding/decoding
+base64 = "0.22"
+
+# Regular expressions
+regex = "1.0"
+
+# Futures utilities
+futures = "0.3"
+
+# Environment variable handling
+dotenv = "0.15"
+
+# Template engine
+handlebars = "5.0"
+
+# File system utilities
+walkdir = "2.0"
+
+# Concurrent data structures
+dashmap = "5.0"
+
+# HTTP status codes
+http = "1.0"
+
+# YAML processing
+yaml-rust = "0.4"
+
+# String utilities
+inflector = "0.11"
+
+# Async traits
+async-trait = "0.1"
+
+# Additional utilities for file handling
+tempfile = "3.0"
+
+# HTTP utilities
+mime = "0.3"
+
+# Async utilities
+tokio-stream = "0.1"
+
+# Process handling
+which = "4.0"
+
+[dev-dependencies]
+# Testing framework
+tokio-test = "0.4"
+mockito = "1.0"
+tempfile = "3.0"
+assert_matches = "1.5"
+
+[features]
+default = ["full"]
+full = ["ccm", "pipelines", "repos", "chaos", "idp", "sto", "scs"]
+ccm = []
+pipelines = []
+repos = []
+chaos = []
+idp = []
+sto = []
+scs = []
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[profile.dev]
+opt-level = 0
+debug = true
