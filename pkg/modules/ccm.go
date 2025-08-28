@@ -156,6 +156,8 @@ func RegisterCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGro
 			toolsets.NewServerTool(tools.GetCcmTotalActiveEnforcementsTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.GetCcmTotalEvaluationsTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.GetCcmTotalRealisedSavingsTool(config, ccmClient)),
+			toolsets.NewServerTool(tools.GetCcmDayWiseTotalEvaluationsTool(config, ccmClient)),
+			toolsets.NewServerTool(tools.GetCcmTotalRealisedSavingsV2Tool(config, ccmClient)),
 			toolsets.NewServerTool(tools.FetchCommitmentCoverageTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.FetchCommitmentSavingsTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.FetchCommitmentUtilisationTool(config, ccmClient)),
