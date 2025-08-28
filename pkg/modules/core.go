@@ -485,14 +485,14 @@ func RegisterSecrets(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 }
 
 func RegisterPromptTools(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-    // Create the prompt toolset with both tools
-    prompt := toolsets.NewToolset("prompt", "Harness MCP Prompts tools").
-        AddReadTools(
-            toolsets.NewServerTool(tools.GetPromptTool(config)),
-            toolsets.NewServerTool(tools.ListPromptsTool(config)),
-        )
+	// Create the prompt toolset with both tools
+	prompt := toolsets.NewToolset("prompt", "Harness MCP Prompts tools").
+		AddReadTools(
+			toolsets.NewServerTool(tools.GetPromptTool(config)),
+			toolsets.NewServerTool(tools.ListPromptsTool(config)),
+		)
 
-    // Add toolset to the group
-    tsg.AddToolset(prompt)
-    return nil
+	// Add toolset to the group
+	tsg.AddToolset(prompt)
+	return nil
 }

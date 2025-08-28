@@ -74,7 +74,6 @@ func (r *ModuleRegistry) GetEnabledModules() []Module {
 	}
 
 	enabledModuleIDs["CORE"] = true
-	enabledModuleIDs["RMG"] = true
 
 	// Return only enabled modules
 	var enabledModules []Module

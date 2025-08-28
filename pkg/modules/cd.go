@@ -38,6 +38,7 @@ func (m *CDModule) Toolsets() []string {
 		"services",
 		"environments",
 		"infrastructure",
+		"rmg_genai",
 	}
 }
 
@@ -55,6 +56,10 @@ func (m *CDModule) RegisterToolsets() error {
 			}
 		case "infrastructure":
 			if err := RegisterInfrastructure(m.config, m.tsg); err != nil {
+				return err
+			}
+		case "rmg_genai":
+			if err := RegisterRMGGenAI(m.config, m.tsg); err != nil {
 				return err
 			}
 		}
@@ -152,5 +157,29 @@ func RegisterEnvironments(config *config.Config, tsg *toolsets.ToolsetGroup) err
 
 	// Add toolset to the group
 	tsg.AddToolset(environments)
+	return nil
+}
+
+// RegisterRMGGenAI registers the RMG GenAI toolset
+func RegisterRMGGenAI(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Skip registration for external mode for now
+	if !config.Internal {
+		return nil
+	}
+
+	// Get the GenAI client
+	genaiClient, err := GetGenAIClient(config)
+	if err != nil {
+		return err
+	}
+
+	// Create the RMG genai toolset
+	rmgGenai := toolsets.NewToolset("rmg_genai", "RMG GenAI tools").
+		AddReadTools(
+			toolsets.NewServerTool(tools.RMDevOpsAgentTool(config, genaiClient)),
+		)
+
+	// Add toolset to the group
+	tsg.AddToolset(rmgGenai)
 	return nil
 }
