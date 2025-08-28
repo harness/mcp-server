@@ -116,6 +116,7 @@ func GetPromptTool(config *config.Config) (tool mcp.Tool, handler server.ToolHan
             ),
             mcp.WithString("mode",
                 mcp.Description("Optional mode to retrieve a specific version of the prompt"),
+                mcp.Enum("CI", "CD", "CCM", "SEI", "STO", "IDP", "IACM", "SRM", "SCS", "CE", "AR", "FME", "DBDEVOPS"),
             ),
         ),
         func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
