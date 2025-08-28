@@ -1,0 +1,87 @@
+[package]
+name = "harness-mcp-server"
+version = "0.1.0"
+edition = "2021"
+authors = ["Harness Inc."]
+description = "Harness MCP (Model Context Protocol) Server - Rust implementation"
+license = "Apache-2.0"
+repository = "https://github.com/harness/mcp-server"
+readme = "README.md"
+
+[[bin]]
+name = "harness-mcp-server"
+path = "src/main.rs"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1.0", features = ["full"] }
+
+# CLI framework (replaces cobra)
+clap = { version = "4.0", features = ["derive", "env"] }
+
+# Configuration management (replaces viper)
+config = "0.14"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+
+# HTTP client (replaces go-retryablehttp)
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+
+# JWT authentication (replaces golang-jwt/jwt)
+jsonwebtoken = "9.0"
+
+# UUID generation (replaces google/uuid)
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+# Logging
+log = "0.4"
+env_logger = "0.11"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Backoff/retry functionality (replaces cenkalti/backoff)
+backoff = "0.4"
+
+# Time handling
+chrono = { version = "0.4", features = ["serde"] }
+
+# URL handling
+url = "2.0"
+
+# Base64 encoding/decoding
+base64 = "0.22"
+
+# MCP protocol implementation
+# Note: We'll need to implement this or find a Rust equivalent
+# For now, using JSON-RPC as the foundation
+jsonrpc-core = "18.0"
+jsonrpc-stdio-server = "18.0"
+
+# Additional utilities
+once_cell = "1.0"
+futures = "0.3"
+async-trait = "0.1"
+
+[dev-dependencies]
+# Testing framework (replaces stretchr/testify)
+tokio-test = "0.4"
+mockito = "1.0"
+tempfile = "3.0"
+
+[features]
+default = ["stdio"]
+stdio = []
+internal = []
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[profile.dev]
+opt-level = 0
+debug = true
