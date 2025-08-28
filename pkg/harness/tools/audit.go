@@ -31,20 +31,10 @@ func convertDateToMilliseconds(timestamp string) int64 {
 		panic(err)
 	}
 
-	year := t.Year()
-	month := int(t.Month())
-	day := t.Day()
-	hour := t.Hour()
-	minute := t.Minute()
-	second := t.Second()
-
-	t = time.Date(year, time.Month(month), day, hour, minute, second, 0, time.Local)
-
-	// Convert to Unix milliseconds
+	// Convert to Unix milliseconds directly without timezone conversion
 	unixMillis := t.UnixNano() / int64(time.Millisecond)
 
 	return unixMillis
-
 }
 
 func getCurrentTime() string {
