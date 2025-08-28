@@ -97,7 +97,8 @@ func RegisterCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGro
 	}
 
 	ccmCommOrchClient := &client.CloudCostManagementService{
-		Client: commOrchClient,
+		Client:      commOrchClient,
+		NgManClient: ngManCli,
 	}
 
 	// Create the CCM toolset
