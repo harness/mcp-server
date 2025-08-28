@@ -76,10 +76,18 @@ func RegisterCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGro
 	ngManBaseURL := utils.BuildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "")
 	ngManSecret := config.NgManagerSecret
 
-	// Create base client for CCM
-	ngManCli, err := utils.CreateClient(ngManBaseURL, config, ngManSecret)
-	if err != nil {
-		return err
+	// Create NgManager client, fallback to NextGen CE client if NgManager config is not available
+	var ngManCli *client.Client
+	if config.NgManagerBaseURL != "" && config.NgManagerSecret != "" {
+		var err error
+		ngManCli, err = utils.CreateClient(ngManBaseURL, config, ngManSecret)
+		if err != nil {
+			// Fallback to NextGen CE client if NgManager client creation fails
+			ngManCli = nextGenCli
+		}
+	} else {
+		// Use NextGen CE client as fallback when NgManager config is not provided
+		ngManCli = nextGenCli
 	}
 
 	ccmClient := &client.CloudCostManagementService{
