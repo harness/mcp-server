@@ -173,6 +173,11 @@ func RegisterRMGGenAI(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 		return err
 	}
 
+	// Additional safety check to ensure client is not nil
+	if genaiClient == nil {
+		return nil
+	}
+
 	// Create the RMG genai toolset
 	rmgGenai := toolsets.NewToolset("rmg_genai", "RMG GenAI tools").
 		AddReadTools(
