@@ -252,6 +252,7 @@ func TestPipelineWorkflow(t *testing.T) {
 	require.False(t, listResponse.IsError, "expected result not to be an error")
 
 	// Parse the response to extract pipeline ID
+	require.NotEmpty(t, listResponse.Content, "expected response content to not be empty")
 	textContent, ok := listResponse.Content[0].(mcp.TextContent)
 	require.True(t, ok, "expected content to be of type TextContent")
 
@@ -437,6 +438,7 @@ func TestInputSetWorkflow(t *testing.T) {
 	}
 
 	// Parse the response to extract pipeline ID
+	require.NotEmpty(t, listResponse.Content, "expected response content to not be empty")
 	textContent, ok := listResponse.Content[0].(mcp.TextContent)
 	require.True(t, ok, "expected content to be of type TextContent")
 
@@ -702,6 +704,7 @@ func TestListTriggers(t *testing.T) {
 	}
 
 	// Parse the response to extract pipeline ID
+	require.NotEmpty(t, listResponse.Content, "expected response content to not be empty")
 	textContent, ok := listResponse.Content[0].(mcp.TextContent)
 	require.True(t, ok, "expected content to be of type TextContent")
 
