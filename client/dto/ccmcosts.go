@@ -23,11 +23,11 @@ const (
 // CEView represents a basic ccm response.
 // The `data` field contains the response data.
 type CCMBaseResponse struct {
-	Status        string     `json:"state,omitempty"`
-	Message       string     `json:"message,omitempty"`
+	Status        string         `json:"state,omitempty"`
+	Message       string         `json:"message,omitempty"`
 	MetaData      map[string]any `json:"metaData,omitempty"`
-	CorrelationID string     `json:"correlation_id,omitempty"`
-	Error         []CCMError `json:"error,omitempty"`
+	CorrelationID string         `json:"correlation_id,omitempty"`
+	Error         []CCMError     `json:"error,omitempty"`
 }
 
 // Response error
@@ -82,12 +82,14 @@ type CCMListCostCategoriesOptions struct {
 }
 
 type CCMCommitmentOptions struct {
-	AccountIdentifier *string  `json:"accountIdentifier,omitempty"`
-	CloudAccountIDs   []string `json:"cloudAccountId,omitempty"`
-	Service           *string  `json:"service,omitempty"`
-	StartDate         *string  `json:"startDate,omitempty"`
-	EndDate           *string  `json:"endDate,omitempty"`
-	IsHarnessManaged  *bool    `json:"isHarnessManaged,omitempty"`
+	AccountIdentifier  *string  `json:"accountIdentifier,omitempty"`
+	CloudAccountIDs    []string `json:"cloudAccountId,omitempty"`
+	Service            *string  `json:"service,omitempty"`
+	StartDate          *string  `json:"startDate,omitempty"`
+	EndDate            *string  `json:"endDate,omitempty"`
+	IsHarnessManaged   *bool    `json:"isHarnessManaged,omitempty"`
+	GroupBy            *string  `json:"groupBy,omitempty"`
+	IsNetAmortizedCost *bool    `json:"net_amortized,omitempty"`
 }
 
 // CcmCostCategoryList represents a list of cost categories in CCM
@@ -124,7 +126,8 @@ type CCMCostCategoryResource struct {
 	TotalCount       int                  `json:"totalCount"`
 }
 
-type CCMBusinessMapping struct { UUID            string             `json:"uuid"`
+type CCMBusinessMapping struct {
+	UUID            string             `json:"uuid"`
 	Name            string             `json:"name"`
 	AccountID       string             `json:"accountId"`
 	CostTargets     []CCMCostTarget    `json:"costTargets"`
@@ -232,4 +235,17 @@ type CCMCommitmentAPIFilter struct {
 	CloudAccounts    []string `json:"cloud_account_ids,omitempty"`
 	Service          string   `json:"service,omitempty"`
 	IsHarnessManaged *bool    `json:"is_harness_managed,omitempty"`
+	GroupBy          *string  `json:"group_by,omitempty"`
+	NetAmortizedCost *bool    `json:"net_amortized,omitempty"`
+}
+
+type CCMMasterAccountsListResponse struct {
+	Data struct {
+		Content []struct {
+			Connector struct {
+				Identifier string `json:"identifier"`
+				Name       string `json:"name"`
+			} `json:"connector"`
+		} `json:"content"`
+	} `json:"data"`
 }

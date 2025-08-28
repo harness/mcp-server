@@ -32,7 +32,7 @@ var (
 
 	validEventJSONText = `{"type":"perspective_rules_updated","continue":true,"content":{"viewRules":[{"viewConditions":[{"type":"VIEW_ID_CONDITION","viewField":{"fieldId":"awsUsageaccountid","fieldName":"Account","identifier":"AWS","identifierName":"AWS"},"viewOperator":"IN","values":["test(test_id)"]}]}]}}`
 
-	validPromptJSONText = `{"type":"prompt","continue":true,"display_order":100,"content":{"prompts":["Create a new CCM perspective with these rules"]}}`
+	validPromptJSONText = `{"type":"prompt","continue":true,"display_order":100,"content":{"prompts":["Proceed to save perspective"]}}`
 
 	validExpectedTextContent = mcp.EmbeddedResource{
 		Type: "resource",
@@ -68,29 +68,28 @@ var (
 				}
 			]
 	}}]`
-
 )
 
 // TestGetCcmPerspectiveRulesTool tests the basic functionality of the perspective rules tool
 func TestGetCcmPerspectiveRulesTool(t *testing.T) {
 
 	testCases := []struct {
-		name     string
-		input    string
-		expectedContent mcp.EmbeddedResource
+		name                  string
+		input                 string
+		expectedContent       mcp.EmbeddedResource
 		expectedPromptContent mcp.EmbeddedResource
-		expectError bool
+		expectError           bool
 	}{
 		{
-			name:     "Valid Json Input Tests",
-			input:    validInputJSON,
-			expectedContent: validExpectedTextContent,
+			name:                  "Valid Json Input Tests",
+			input:                 validInputJSON,
+			expectedContent:       validExpectedTextContent,
 			expectedPromptContent: validExpectedPromptContent,
-			expectError: false,
+			expectError:           false,
 		},
 		{
-			name:     "Invalid Json Input Tests",
-			input:    invalidInputJSON,
+			name:        "Invalid Json Input Tests",
+			input:       invalidInputJSON,
 			expectError: true,
 		},
 	}
@@ -121,7 +120,7 @@ func TestGetCcmPerspectiveRulesTool(t *testing.T) {
 					Method: CCMPerspectiveRulesToolID,
 				},
 				Params: mcp.CallToolParams{
-					Name: 	CCMPerspectiveRulesToolID,
+					Name: CCMPerspectiveRulesToolID,
 					Arguments: map[string]any{
 						"view_rules": viewRulesArray,
 					},

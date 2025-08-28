@@ -14,6 +14,7 @@ import (
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness"
 	"github.com/harness/harness-mcp/pkg/harness/auth"
+	"github.com/harness/harness-mcp/pkg/harness/prompts"
 	"github.com/harness/harness-mcp/pkg/modules"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -162,6 +163,8 @@ var (
 				ArtifactRegistrySecret:  viper.GetString("artifact_registry_secret"),
 				NextgenCEBaseURL:        viper.GetString("nextgen_ce_base_url"),
 				NextgenCESecret:         viper.GetString("nextgen_ce_secret"),
+				CCMCommOrchBaseURL:      viper.GetString("ccm_comm_orch_base_url"),
+				CCMCommOrchSecret:       viper.GetString("ccm_comm_orch_secret"),
 				IDPSvcBaseURL:           viper.GetString("idp_svc_base_url"),
 				IDPSvcSecret:            viper.GetString("idp_svc_secret"),
 				McpSvcSecret:            viper.GetString("mcp_svc_secret"),
@@ -376,6 +379,9 @@ func runStdioServer(ctx context.Context, config config.Config) error {
 
 	// Create module registry
 	moduleRegistry := modules.NewModuleRegistry(&config, toolsets)
+
+	// Register prompts generic
+	prompts.RegisterPrompts(harnessServer)
 
 	// Register prompts from all enabled modules
 	err = moduleRegistry.RegisterPrompts(harnessServer)

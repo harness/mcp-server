@@ -79,6 +79,9 @@
 - [ ] Error cases are properly handled and return appropriate error messages
 - [ ] Rate limiting and authentication work as expected
 
+### E2E Test Verification
+- [ ] E2E tests added or not required (explain why if not required)
+
 ### Screenshot Verification
 - [ ] Screenshots are up-to-date with the current UI
 - [ ] Sensitive information is redacted from screenshots

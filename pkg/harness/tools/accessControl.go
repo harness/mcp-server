@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math"
 	"strings"
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
-
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -315,23 +315,27 @@ func ListRoleAssignmentsTool(config *config.Config, roleAssignmentsClient *clien
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+			slog.Info("resourceGroupNameList: {}", "resourceGroupNameList", resourceGroupNamesList)
 			resourceGroupNames := strings.Split(resourceGroupNamesList, ",")
 
 			roleNamesList, err := OptionalParam[string](request, "role_names")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+			slog.Info("roleNamesList: {}", "roleNamesList", roleNamesList)
 			roleNames := strings.Split(roleNamesList, ",")
 
 			principalTypesList, err := OptionalParam[string](request, "principal_type")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+			slog.Info("principalTypesList: {}", "principalTypesList", principalTypesList)
 
 			principalScopeLevelFilterList, err := OptionalParam[string](request, "principal_scope_level_filter")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+			slog.Info("principalScopeLevelFilterList: {}", "principalScopeLevelFilterList", principalScopeLevelFilterList)
 
 			var principalFilter []dto.RoleAssignmentPrincipalFilter
 			if filterParam, exists := request.GetArguments()["principal_filter"]; exists {

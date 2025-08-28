@@ -2,6 +2,36 @@
 
 The Harness MCP Server is a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/introduction) server that provides seamless integration with Harness APIs, enabling advanced automation and interaction capabilities for developers and tools.
 
+## Table of Contents
+
+- [Components](#components)
+  - [Tools](#tools)
+    - [Pipelines Toolset](#pipelines-toolset)
+    - [Pull Requests Toolset](#pull-requests-toolset)
+    - [Repositories Toolset](#repositories-toolset)
+    - [Registries Toolset](#registries-toolset)
+    - [Dashboards Toolset](#dashboards-toolset)
+    - [Cloud Cost Management Toolset](#cloud-cost-management-toolset)
+    - [Logs Toolset](#logs-toolset)
+- [Prerequisites](#prerequisites)
+- [Quickstart](#quickstart)
+- [Makefile Usage](#makefile-usage)
+- [Build from Source](#build-from-source)
+- [Use Docker Image](#use-docker-image)
+- [Integration with AI Assistants](#integration-with-ai-assistants)
+  - [Usage with Gemini CLI](#usage-with-gemini-cli)
+  - [Claude Desktop Configuration](#claude-desktop-configuration)
+  - [Usage with Claude Code](#usage-with-claude-code)
+  - [Usage with Windsurf](#usage-with-windsurf)
+  - [Usage with Amazon Q Developer CLI](#usage-with-amazon-q-developer-cli)
+  - [Cursor Configuration](#cursor-configuration)
+  - [VS Code Configuration](#vs-code-configuration)
+- [Development](#development)
+  - [Command Line Arguments](#command-line-arguments)
+  - [Environment Variables](#environment-variables)
+  - [Authentication](#authentication)
+- [Debugging](#debugging)
+
 ## Components
 
 ### Tools
@@ -16,6 +46,7 @@ Toolset Name: `default`
 
 - `get_connector_details`: Get details of a specific connector
 - `list_connector_catalogue`: List the Harness connector catalogue
+- `list_connectors`: List connectors with filtering options
 - `list_pipelines`: List pipelines in a repository
 - `get_pipeline`: Get details of a specific pipeline
 - `get_execution`: Get details of a specific pipeline execution
@@ -46,14 +77,14 @@ Toolset Name: `pullrequests`
 
 #### Services Toolset
 
-Toolset Name: `service` 
+Toolset Name: `services` 
 
 - `get_service`: Get details of a specific service
 - `list_services`: List services
 
 #### Environments Toolset
 
-Toolset Name: `environment` 
+Toolset Name: `environments` 
 
 - `get_environment`: Get details of a specific environment
 - `list_environments`: List environments
@@ -72,6 +103,7 @@ Toolset Name: `connectors`
 
 - `list_connector_catalogue`: List the Harness connector catalogue
 - `get_connector_details`: Get details of a specific connector
+- `list_connectors`: List connectors with filtering options
 
 #### Repositories Toolset
 
@@ -110,6 +142,8 @@ Toolset Name: `ccm`
 - `get_last_period_cost_ccm_perspective`:  Retrieves the cost for a specified period and perspective within a given account.
 - `get_last_twelve_months_cost_ccm_perspective`:  Retrieves a monthly cost breakdown for the past 12 months for a perspective within a specified account.
 - `create_ccm_perspective`: Creates a perspective for a specified account. 
+- `update_ccm_perspective`: Updates a perspective for a specified account. 
+- `delete_ccm_perspective`: Deletes a perspective for a specified account. 
 - `ccm_perspective_grid`: Query detailed cost perspective data in Harness Cloud Cost Management.
 - `ccm_perspective_time_series`: Query detailed cost perspective data, grouped by time in Harness Cloud Cost Management.
 - `ccm_perspective_summary_with_budget`: Query a summary of cost perspectives with budget information in Harness Cloud Cost Management, including detailed cost and budget data grouped by time.
@@ -120,9 +154,22 @@ Toolset Name: `ccm`
 - `list_ccm_recommendations`: Returns a filterable list of cost-optimization recommendations in Harness Cloud Cost Management.
 - `list_ccm_recommendations_by_resource_type`: Returns a aggregated statistics of cloud cost optimization recommendations grouped by resource type within a given account in Harness Cloud Cost Management.
 - `get_ccm_recommendations_stats`: Returns overall statistics for cloud cost optimization recommendations within a given account in Harness Cloud Cost Management.
-- `get_ccm_commitment_coverage`: Get commitment coverage information for an account in Harness Cloud Cost Management
-- `get_ccm_commitment_savings`: Get commitment savings information for an account in Harness Cloud Cost Management
+- `update_ccm_recommendation_state`: Marks a recommendation as Applied/Open/Ignored in Harness Cloud Cost Management.
+- `override_ccm_recommendation_savings`: Overrides savings for a recommendation in Harness Cloud Cost Management.
+- `create_jira_ticket_for_ccm_recommendation`: Creates a Jira ticket for a recommendation in Harness Cloud Cost Management.
+- `create_service_now_ticket_for_ccm_recommendation`: Creates a Service Now ticket for a recommendation in Harness Cloud Cost Management.
+- `get_ec2_recommendation_detail`: Returns ECS Recommendation details for the given Recommendation identifier.
+- `get_azure_vm_recommendation_detail`: Returns Azure Vm Recommendation details for the given Recommendation identifier.
+- `get_ecs_service_recommendation_detail`: Returns ECS Service Recommendation details for the given Recommendation identifier.
+- `get_node_pool_recommendation_detail`: Returns Node Pool Recommendation details for the given Recommendation identifier.
+- `get_workload_recommendation_detail`: Returns Workload Recommendation details for the given Recommendation identifier.
+- `list_jira_projects`: Returns a list of Jira projects available to create tickets for recommendations in Harness Cloud Cost Management.
+- `list_jira_issue_types`: Returns a list of Jira Issue types available to create tickets for recommendations in Harness Cloud Cost Management.
+- `get_ccm_commitment_coverage`: Get commitment coverage information for an account in Harness Cloud Cost Management.
+- `get_ccm_commitment_savings`: Get commitment savings information for an account in Harness Cloud Cost Management.
 - `get_ccm_commitment_utilisation`: Get commitment utilisation information for an account in Harness Cloud Cost Management broken down by Reserved Instances and Savings Plans in day wise granularity.
+- `get_ccm_estimated_savings`: Get estimated savings information for a cloud account in Harness Cloud Cost Management
+- `get_ccm_commitment_ec2_analysis`: Get AWS EC2 commitment analysis for an account in Harness Cloud Cost Management, including RI/SP commitment spend, utilization breakdown, current savings, estimated annualized savings, and ESR.
 
 #### Database Operations Toolset
 
@@ -156,7 +203,9 @@ Toolset Name: `scs`
 Toolset Name: `sto`
 
 - `frontend_all_issues_list`: List and filter security issues in Harness STO by target, pipeline, tool, severity, exemption status, and type.
-
+- `global_exemptions`: List all global exemptions in Harness STO.
+- `promote_exemption`: Promote a specific exemption to a global exemption.
+- `approve_exemption`: Approve a specific exemption.
 
 #### Logs Toolset
 
@@ -245,6 +294,30 @@ docker run -i --rm \
   harness/mcp-server stdio
 ```
 
+## Integration with AI Assistants
+
+### Usage with Gemini CLI
+
+Add the server configuration to your Gemini config file at: `~/.gemini/settings.json`
+
+```json
+{
+  "theme": "Default",
+  "selectedAuthType": "oauth-personal",
+  "mcpServers": {
+    "Harness": {
+      "command": "/path/to/harness-mcp-server",
+      "args": ["stdio"],
+      "env": {
+        "HARNESS_API_KEY": "<YOUR_API_KEY>",
+        "HARNESS_DEFAULT_ORG_ID": "<YOUR_ORG_ID>",
+        "HARNESS_DEFAULT_PROJECT_ID": "<YOUR_PROJECT_ID>",
+      }
+    }
+  }
+}
+```
+
 ### Claude Desktop Configuration
 
 On MacOS: `~/Library/Application\ Support/Claude/claude_desktop_config.json`  
@@ -272,8 +345,23 @@ On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
 
 ## Usage with Claude Code
 
-```bash
-HARNESS_API_KEY=your_api_key HARNESS_ACCOUNT_ID=your_account_id HARNESS_ORG_ID=your_org_id HARNESS_PROJECT_ID=your_project_id ./cmd/harness-mcp-server/harness-mcp-server stdio
+Add the server configuration to your Claude config file at: `~/.claude.json`
+
+```json
+{
+  "mcpServers": {
+    "Harness": {
+      "command": "/path/to/harness-mcp-server",
+      "args": ["stdio"],
+      "env": {
+        "HARNESS_API_KEY": "<YOUR_API_KEY>",
+        "HARNESS_DEFAULT_ORG_ID": "<YOUR_ORG_ID>",
+        "HARNESS_DEFAULT_PROJECT_ID": "<YOUR_PROJECT_ID>",
+        "HARNESS_BASE_URL": "<YOUR_BASE_URL>"
+      }
+    }
+  }
+}
 ```
 
 ## Usage with Windsurf
@@ -494,3 +582,35 @@ npx @modelcontextprotocol/inspector /path/to/harness-mcp-server stdio
 ```
 
 Upon launching, the Inspector will display a URL that you can access in your browser to begin debugging.
+
+## Testing
+
+### Running E2E Tests
+
+The project includes end-to-end (E2E) tests that validate the integration with Harness services. To run these tests:
+
+1. Set up the required environment variables:
+
+```bash
+export HARNESS_MCP_SERVER_E2E_TOKEN=<your_harness_api_token>
+export HARNESS_MCP_SERVER_E2E_ACCOUNT_ID=<your_account_id>  
+export HARNESS_MCP_SERVER_E2E_ORG_ID=<your_org_id>          
+export HARNESS_MCP_SERVER_E2E_PROJECT_ID=<your_project_id>  
+export HARNESS_MCP_SERVER_E2E_BASE_URL=<base_url>          
+```
+
+2. Run the E2E tests using the Go test command with the e2e build tag:
+
+```bash
+go test -tags=e2e ./test/e2e/... -v
+```
+
+3. To run specific E2E tests, use the `-run` flag:
+
+```bash
+go test -tags=e2e ./test/e2e/... -v -run TestPipelineWorkflow
+```
+
+4. In VS Code, you can run the E2E tests directly using the launch.json configuration. Simply open the Run and Debug view, select the E2E test configuration from the dropdown menu, and click the Run button.
+
+The E2E tests create an in-process MCP client that communicates with the Harness API using your provided credentials.

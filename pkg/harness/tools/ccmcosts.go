@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/event"
+	"github.com/harness/harness-mcp/pkg/harness/event/types"
 	"github.com/harness/harness-mcp/pkg/utils"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -299,10 +302,14 @@ func FetchCommitmentCoverageTool(config *config.Config, client *client.CloudCost
 				mcp.Description("Optional service to filter commitment coverage"),
 			),
 			mcp.WithArray("cloud_account_ids",
+				mcp.WithStringItems(),
 				mcp.Description("Optional cloud account IDs to filter commitment coverage"),
-				mcp.Items(map[string]any{
-					"type": "string",
-				}),
+			),
+			mcp.WithString("group_by",
+				mcp.Required(),
+				mcp.Description("Specify how to group commitment coverage data - options include 'Commitment Type' (default), 'Instance Family', or 'Regions'"),
+				mcp.Enum(dto.CommitmentType, dto.CommitmentInstanceFamily, dto.CommitmentRegion),
+				mcp.DefaultString(dto.CommitmentType),
 			),
 			WithScope(config, false),
 		),
@@ -323,13 +330,11 @@ func FetchCommitmentCoverageTool(config *config.Config, client *client.CloudCost
 			if ok && service != "" {
 				params.Service = &service
 			}
-
-			// Handle cloud account IDs parameter
-			cloudAccountIDs, ok, err := OptionalParamOK[[]string](request, "cloud_account_ids")
+			cloudAccountIDs, err := OptionalStringArrayParam(request, "cloud_account_ids")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			if ok && len(cloudAccountIDs) > 0 {
+			if len(cloudAccountIDs) > 0 {
 				params.CloudAccountIDs = cloudAccountIDs
 			}
 
@@ -356,9 +361,22 @@ func FetchCommitmentCoverageTool(config *config.Config, client *client.CloudCost
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			// Handle group by
+			groupBy, ok, err := OptionalParamOK[string](request, "group_by")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if ok && groupBy != "" {
+				params.GroupBy = &groupBy
+			}
+
 			data, err := client.GetComputeCoverage(ctx, scope, params)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to get commitment coverage: %s", err)), nil
+			}
+
+			if len(groupBy) > 0 && groupBy != dto.CommitmentType {
+				return processCommitmentCoverageGrouped(data, groupBy)
 			}
 
 			r, err := json.Marshal(data)
@@ -372,7 +390,7 @@ func FetchCommitmentCoverageTool(config *config.Config, client *client.CloudCost
 
 func FetchCommitmentSavingsTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_ccm_commitment_savings",
-			mcp.WithDescription("Get commitment savings information for an account in Harness Cloud Cost Management"),
+			mcp.WithDescription("Get current commitment savings generated for an account in Harness Cloud Cost Management"),
 			mcp.WithString("start_date",
 				mcp.Required(),
 				mcp.Description("Start date to filter commitment savings"),
@@ -388,10 +406,8 @@ func FetchCommitmentSavingsTool(config *config.Config, client *client.CloudCostM
 				mcp.Description("Optional service to filter commitment savings"),
 			),
 			mcp.WithArray("cloud_account_ids",
-				mcp.Description("Optional cloud account IDs to filter commitment savings"),
-				mcp.Items(map[string]any{
-					"type": "string",
-				}),
+				mcp.WithStringItems(),
+				mcp.Description("Optional cloud account IDs to filter commitment coverage"),
 			),
 			WithScope(config, false),
 		),
@@ -414,11 +430,11 @@ func FetchCommitmentSavingsTool(config *config.Config, client *client.CloudCostM
 			}
 
 			// Handle cloud account IDs parameter
-			cloudAccountIDs, ok, err := OptionalParamOK[[]string](request, "cloud_account_ids")
+			cloudAccountIDs, err := OptionalStringArrayParam(request, "cloud_account_ids")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			if ok && len(cloudAccountIDs) > 0 {
+			if len(cloudAccountIDs) > 0 {
 				params.CloudAccountIDs = cloudAccountIDs
 			}
 
@@ -480,10 +496,8 @@ func FetchCommitmentUtilisationTool(config *config.Config, client *client.CloudC
 				mcp.Description("Optional service to filter commitment utilisation"),
 			),
 			mcp.WithArray("cloud_account_ids",
+				mcp.WithStringItems(),
 				mcp.Description("Optional cloud account IDs to filter commitment utilisation"),
-				mcp.Items(map[string]any{
-					"type": "string",
-				}),
 			),
 			WithScope(config, false),
 		),
@@ -506,11 +520,11 @@ func FetchCommitmentUtilisationTool(config *config.Config, client *client.CloudC
 			}
 
 			// Handle cloud account IDs parameter
-			cloudAccountIDs, ok, err := OptionalParamOK[[]string](request, "cloud_account_ids")
+			cloudAccountIDs, err := OptionalStringArrayParam(request, "cloud_account_ids")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			if ok && len(cloudAccountIDs) > 0 {
+			if len(cloudAccountIDs) > 0 {
 				params.CloudAccountIDs = cloudAccountIDs
 			}
 
@@ -549,4 +563,119 @@ func FetchCommitmentUtilisationTool(config *config.Config, client *client.CloudC
 
 			return mcp.NewToolResultText(string(r)), nil
 		}
+}
+
+// getCoverageStatus determines the status based on coverage percentage
+func getCoverageStatus(coveragePercentage *float64) string {
+	if coveragePercentage == nil {
+		return ""
+	}
+
+	coverage := *coveragePercentage
+	if coverage > 95 {
+		return dto.CommitmentCoverageStatusWellOptimized
+	} else if coverage > 85 {
+		return dto.CommitmentCoverageStatusGood
+	} else if coverage > 80 {
+		return dto.CommitmentCoverageStatusAdequate
+	}
+	return "Low Coverage" // Default status for anything below 80%
+}
+
+func processCommitmentCoverageGrouped(data *dto.CCMCommitmentBaseResponse, groupBy string) (*mcp.CallToolResult, error) {
+	response := make(map[string]*dto.ComputeCoveragesDetail)
+
+	jsonBytes, err := json.Marshal(data.Response)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to marshal commitment savings: %s", err)), nil
+	}
+
+	if err := json.Unmarshal(jsonBytes, &response); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to unmarshal commitment savings: %s", err)), nil
+	}
+
+	// Sort by CoveragePercentage
+	type keyValuePair struct {
+		Key   string
+		Value *dto.ComputeCoveragesDetailTable
+	}
+
+	// Convert map to slice for sorting
+	var sortedPairs []keyValuePair
+	for k, v := range response {
+		if v != nil && v.Table != nil {
+			sortedPairs = append(sortedPairs, keyValuePair{k, v.Table})
+		}
+	}
+
+	// Sort the slice based on CoveragePercentage
+	sort.Slice(sortedPairs, func(i, j int) bool {
+		// Handle nil cases
+		if sortedPairs[i].Value == nil || sortedPairs[i].Value.CoveragePercentage == nil {
+			return false
+		}
+		if sortedPairs[j].Value == nil || sortedPairs[j].Value.CoveragePercentage == nil {
+			return true
+		}
+
+		// Sort by CoveragePercentage in descending order
+		return *sortedPairs[i].Value.CoveragePercentage > *sortedPairs[j].Value.CoveragePercentage
+	})
+
+	var groupedResponse []*dto.CommitmentCoverageRow
+
+	for _, pair := range sortedPairs {
+		// Get coverage status based on percentage
+		coverageStatus := getCoverageStatus(pair.Value.CoveragePercentage)
+
+		groupedResponse = append(groupedResponse, &dto.CommitmentCoverageRow{
+			Key:                &pair.Key,
+			CoveragePercentage: pair.Value.CoveragePercentage,
+			Cost:               pair.Value.TotalCost,
+			CoverageStatus:     &coverageStatus,
+			OndemandCost:       pair.Value.OnDemandCost,
+			Grouping:           groupBy,
+		})
+	}
+
+	responseContents := []mcp.Content{}
+
+	commitmentCoverageEvent := event.NewCustomEvent(CCMCommitmentCoverageEventType, groupedResponse, event.WithContinue(false))
+
+	// Create embedded resources for the event
+	eventResource, err := commitmentCoverageEvent.CreateEmbeddedResource()
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	} else {
+		responseContents = append(responseContents, eventResource)
+	}
+
+	promptResource, err := processCoverageFollowUpPrompts(groupBy)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	responseContents = append(responseContents, promptResource)
+
+	return &mcp.CallToolResult{
+		Content: responseContents,
+	}, nil
+}
+
+func processCoverageFollowUpPrompts(groupBy string) (mcp.Content, error) {
+	var promptEvent event.CustomEvent
+
+	if len(groupBy) > 0 && groupBy == dto.CommitmentRegion {
+		promptEvent = types.NewActionEvent([]string{FollowUpGroupCommitmentCoverageBySavingsPrompt}, event.WithContinue(false))
+	} else {
+		promptEvent = types.NewActionEvent([]string{FollowUpGroupCommitmentCoverageByRegionsPrompt}, event.WithContinue(false))
+	}
+
+	// Convert to an embedded resource
+	promptResource, err := promptEvent.CreateEmbeddedResource()
+	if err != nil {
+		return nil, err
+	}
+
+	return promptResource, nil
 }

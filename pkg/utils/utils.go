@@ -25,6 +25,11 @@ func FormatUnixToMMDDYYYY(ts int64) string {
 	return t.Format("01/02/2006")
 }
 
+func FormatUnixToYYYYMMDD(ts int64) string {
+	t := time.Unix(ts, 0)
+	return t.Format("2006-01-02")
+}
+
 func FormatUnixMillisToMMDDYYYY(ms int64) string {
 	t := time.Unix(0, ms*int64(time.Millisecond))
 	return t.Format("01/02/2006")
@@ -40,6 +45,14 @@ func FormatMMDDYYYYToUnixMillis(dateStr string) (int64, error) {
 		return 0, err
 	}
 	return t.UnixNano() / int64(time.Millisecond), nil
+}
+
+func FormatMMDDYYYYToHyphenYYYYMMDD(dateStr string) (string, error) {
+	t, err := time.Parse("01/02/2006", dateStr)
+	if err != nil {
+		return "", err
+	}
+	return t.Format("2006-01-02"), nil
 }
 
 func SafeIntToInt32(value int, valueIfOverflow int32) int32 {
@@ -61,4 +74,8 @@ func BoolToString(b bool) string {
 		return "true"
 	}
 	return "false"
+}
+
+func ToBoolPtr(b bool) *bool {
+	return &b
 }
