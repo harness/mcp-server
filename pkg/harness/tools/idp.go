@@ -50,12 +50,12 @@ func GetEntityTool(config *config.Config, client *client.IDPService) (tool mcp.T
 			}
 			data, err := client.GetEntity(ctx, scope, kind, entityId, entityScope)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get entity: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to get entity: %v", err)), nil
 			}
 
 			r, err := json.Marshal(data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal entity: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal entity: %v", err)), nil
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
@@ -179,12 +179,12 @@ func ListEntitiesTool(config *config.Config, client *client.IDPService) (tool mc
 
 			data, err := client.ListEntities(ctx, scope, params)
 			if err != nil {
-				return nil, fmt.Errorf("failed to list entities: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to list entities: %v", err)), nil
 			}
 
 			r, err := json.Marshal(data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal entities list: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal entities list: %v", err)), nil
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
@@ -211,12 +211,12 @@ func GetScorecardTool(config *config.Config, client *client.IDPService) (tool mc
 			}
 			data, err := client.GetScorecard(ctx, scope, scorecardId)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get scorecard: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to get scorecard: %v", err)), nil
 			}
 
 			r, err := json.Marshal(data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal scorecard: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal scorecard: %v", err)), nil
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
@@ -236,12 +236,12 @@ func ListScorecardsTool(config *config.Config, client *client.IDPService) (tool 
 			}
 			data, err := client.ListScorecards(ctx, scope)
 			if err != nil {
-				return nil, fmt.Errorf("failed to list scorecards: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to list scorecards: %v", err)), nil
 			}
 
 			r, err := json.Marshal(data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal scorecard list: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal scorecard list: %v", err)), nil
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
@@ -268,12 +268,12 @@ func GetScoreSummaryTool(config *config.Config, client *client.IDPService) (tool
 			}
 			data, err := client.GetScorecardSummary(ctx, scope, entityId)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get scorecard summary: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to get scorecard summary: %v", err)), nil
 			}
 
 			r, err := json.Marshal(data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal scorecard summary: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal scorecard summary: %v", err)), nil
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
@@ -300,12 +300,12 @@ func GetScoresTool(config *config.Config, client *client.IDPService) (tool mcp.T
 			}
 			data, err := client.GetScorecardScores(ctx, scope, entityId)
 			if err != nil {
-				return nil, fmt.Errorf("failed to list scorecards: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to list scorecards: %v", err)), nil
 			}
 
 			r, err := json.Marshal(data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal scorecard list: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal scorecard list: %v", err)), nil
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
@@ -332,12 +332,12 @@ func GetScorecardStatsTool(config *config.Config, client *client.IDPService) (to
 			}
 			data, err := client.GetScorecardStats(ctx, scope, scorecardId)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get scorecard stats: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to get scorecard stats: %v", err)), nil
 			}
 
 			r, err := json.Marshal(data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal scorecard stats: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal scorecard stats: %v", err)), nil
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
@@ -373,12 +373,12 @@ func GetCheckTool(config *config.Config, client *client.IDPService) (tool mcp.To
 
 			data, err := client.GetCheck(ctx, scope, checkId, isCustom)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get check: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to get check: %v", err)), nil
 			}
 
 			r, err := json.Marshal(data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal check: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal check: %v", err)), nil
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
@@ -425,12 +425,12 @@ func ListChecksTool(config *config.Config, client *client.IDPService) (tool mcp.
 
 			data, err := client.ListChecks(ctx, scope, params)
 			if err != nil {
-				return nil, fmt.Errorf("failed to list checks: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to list checks: %v", err)), nil
 			}
 
 			r, err := json.Marshal(data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal checks list: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal checks list: %v", err)), nil
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
@@ -466,12 +466,12 @@ func GetCheckStatsTool(config *config.Config, client *client.IDPService) (tool m
 
 			data, err := client.GetCheckStats(ctx, scope, checkId, isCustom)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get check stats: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to get check stats: %v", err)), nil
 			}
 
 			r, err := json.Marshal(data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal check stats: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal check stats: %v", err)), nil
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
@@ -523,12 +523,12 @@ func ExecuteWorkflowTool(config *config.Config, client *client.IDPService) (tool
 
 			data, err := client.ExecuteWorkflow(ctx, scope, identifier, values)
 			if err != nil {
-				return nil, fmt.Errorf("failed to execute workflow: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to execute workflow: %v", err)), nil
 			}
 
 			r, err := json.Marshal(data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal workflow execution response: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal workflow execution response: %v", err)), nil
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
