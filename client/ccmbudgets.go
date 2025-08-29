@@ -45,7 +45,7 @@ func (c *CloudCostManagementService) fetch(ctx context.Context, options map[stri
 	resp := new(map[string]any)
 	err := c.Client.Get(ctx, url, options, nil, resp)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list all ccm budgets: %w", err)
+		return nil, fmt.Errorf("failed to fetch ccm budgets data: %w", err)
 	}
 
 	return resp, nil
@@ -89,8 +89,10 @@ func (c *CloudCostManagementService) CreateBudget(ctx context.Context, accountId
 }
 
 func (c *CloudCostManagementService) UpdateBudget(ctx context.Context, accountId string, options map[string]any) (*map[string]any, error) {
-	budgetId := options["uuid"].(string)
-
+	budgetId, ok := options["uuid"].(string)
+	if !ok {
+		return nil, fmt.Errorf("uuid parameter is required and must be a string")
+	}
 	path := fmt.Sprintf(ccmUpdateBudgetPath, budgetId, accountId)
 	resp := new(map[string]any)
 

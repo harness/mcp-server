@@ -19,9 +19,9 @@ const (
 	ccmCreateRecommendationJiraTicketPath       = ccmBasePath + "/recommendation/jira/create?accountIdentifier=%s"
 	ccmCreateRecommendationServiceNowTicketPath = ccmBasePath + "/recommendation/servicenow/create?accountIdentifier=%s"
 	ccmGetRecommendationDetailPath              = ccmBasePath + "/recommendation/details/%s?accountIdentifier=%s&id=%s"
-	ccmTicketToolSettingsPath                   = ngBasePath + "/settings?accountIdentifier=%s&category=CE&group=ticketing_preferences"
-	ccmJiraProjectsPath                         = ngBasePath + "/jira/projects?accountIdentifier=%s&connectorRef=%s"
-	ccmJiraMetadataPath                         = ngBasePath + "/jira/createMetadata?accountIdentifier=%s"
+	ccmTicketToolSettingsPath                   = "/settings?accountIdentifier=%s&category=CE&group=ticketing_preferences"
+	ccmJiraProjectsPath                         = "/jira/projects?accountIdentifier=%s&connectorRef=%s"
+	ccmJiraMetadataPath                         = "/jira/createMetadata?accountIdentifier=%s"
 )
 
 const (

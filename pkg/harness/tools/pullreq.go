@@ -10,6 +10,7 @@ import (
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -26,7 +27,7 @@ func GetPullRequestTool(config *config.Config, client *client.PullRequestService
 				mcp.Required(),
 				mcp.Description("The number of the pull request"),
 			),
-			WithScope(config, true),
+			common.WithScope(config, true),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			repoID, err := RequiredParam[string](request, "repo_id")
@@ -40,7 +41,7 @@ func GetPullRequestTool(config *config.Config, client *client.PullRequestService
 			}
 			prNumber := int(prNumberFloat)
 
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -91,7 +92,7 @@ func ListPullRequestsTool(config *config.Config, client *client.PullRequestServi
 				mcp.DefaultNumber(5),
 				mcp.Description("Number of items per page"),
 			),
-			WithScope(config, true),
+			common.WithScope(config, true),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			repoID, err := RequiredParam[string](request, "repo_id")
@@ -99,7 +100,7 @@ func ListPullRequestsTool(config *config.Config, client *client.PullRequestServi
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -201,17 +202,14 @@ func splitAndTrim(s, sep string) []string {
 	if s == "" {
 		return nil
 	}
-
 	parts := strings.Split(s, sep)
 	result := make([]string, 0, len(parts))
-
 	for _, part := range parts {
 		trimmed := strings.TrimSpace(part)
 		if trimmed != "" {
 			result = append(result, trimmed)
 		}
 	}
-
 	return result
 }
 
@@ -227,7 +225,7 @@ func GetPullRequestChecksTool(config *config.Config, client *client.PullRequestS
 				mcp.Required(),
 				mcp.Description("The number of the pull request"),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			repoIdentifier, err := RequiredParam[string](request, "repo_identifier")
@@ -241,7 +239,7 @@ func GetPullRequestChecksTool(config *config.Config, client *client.PullRequestS
 			}
 			prNumber := int(prNumberFloat)
 
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -287,7 +285,7 @@ func CreatePullRequestTool(config *config.Config, client *client.PullRequestServ
 				mcp.Description("Whether the pull request should be created as a draft"),
 				mcp.DefaultBool(false),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			repoIdentifier, err := RequiredParam[string](request, "repo_identifier")
@@ -320,7 +318,7 @@ func CreatePullRequestTool(config *config.Config, client *client.PullRequestServ
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -378,7 +376,7 @@ func GetPullRequestActivitiesTool(config *config.Config, client *client.PullRequ
 				mcp.Description("The maximum number of results to return (1-100)."),
 				mcp.Max(100),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			repoID, err := RequiredParam[string](request, "repo_id")
@@ -392,7 +390,7 @@ func GetPullRequestActivitiesTool(config *config.Config, client *client.PullRequ
 			}
 			prNumber := int(prNumberFloat)
 
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
