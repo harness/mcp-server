@@ -331,10 +331,12 @@ func createOrUpdateBudgetHandler(
 	}
 
 	startTime, err := utils.FormatMMDDYYYYToUnixMillis(startTimeStr)
-
+	if err != nil {
+		return mcp.NewToolResultError("Error parsing start date" + err.Error()), nil
+	}
 	endTimeStr, err := OptionalParam[string](request, "endTime")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return mcp.NewToolResultError("Error parsing end date" + err.Error()), nil
 	}
 
 	endTime := int64(0)
@@ -542,7 +544,7 @@ func createOrUpdateBudgetDefinitionMap() map[string]any {
 		},
 		"endTime": map[string]any{
 			"type":        "string",
-			"description": "Start time of the period in format MM/DD/YYYY. (e.g. 10/30/2025)",
+			"description": "End time of the period in format MM/DD/YYYY. (e.g. 10/30/2025)",
 		},
 		"budgetHistory": map[string]any{
 			"type":        "object",
