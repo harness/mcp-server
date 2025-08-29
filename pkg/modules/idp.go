@@ -92,6 +92,10 @@ func RegisterInternalDeveloperPortal(config *config.Config, tsg *toolsets.Toolse
 		toolsets.NewServerTool(tools.ListScorecardsTool(config, idpClient)),
 		toolsets.NewServerTool(tools.GetScoreSummaryTool(config, idpClient)),
 		toolsets.NewServerTool(tools.GetScoresTool(config, idpClient)),
+		toolsets.NewServerTool(tools.GetScorecardStatsTool(config, idpClient)),
+		toolsets.NewServerTool(tools.GetCheckTool(config, idpClient)),
+		toolsets.NewServerTool(tools.ListChecksTool(config, idpClient)),
+		toolsets.NewServerTool(tools.GetCheckStatsTool(config, idpClient)),
 		toolsets.NewServerTool(tools.ExecuteWorkflowTool(config, idpClient)),
 	}
 

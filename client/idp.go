@@ -11,13 +11,17 @@ import (
 
 const (
 	// Base API paths
-	idpGetEntityPath       = "/v1/entities/%s/%s/%s"
-	idpListEntitiesPath    = "/v1/entities"
-	idpGetScorecardPath    = "/v1/scorecards/%s"
-	idpListScorecardsPath  = "/v1/scorecards"
-	idpGetScoreSummaryPath = "/v1/scores/summary"
-	idpGetScoresPath       = "/v1/scores"
-	idpExecuteWorkflowPath = "/v2/workflows/execute"
+	idpGetEntityPath         = "/v1/entities/%s/%s/%s"
+	idpListEntitiesPath      = "/v1/entities"
+	idpGetScorecardPath      = "/v1/scorecards/%s"
+	idpListScorecardsPath    = "/v1/scorecards"
+	idpGetScoreSummaryPath   = "/v1/scores/summary"
+	idpGetScoresPath         = "/v1/scores"
+	idpGetScorecardStatsPath = "/v1/scorecards/%s/stats"
+	idpGetCheckPath          = "/v1/checks/%s"
+	idpListChecksPath        = "/v1/checks"
+	idpGetCheckStatsPath     = "/v1/checks/%s/stats"
+	idpExecuteWorkflowPath   = "/v2/workflows/execute"
 
 	// Default values for requests
 	defaultKind        = "component,api,resource"
@@ -32,12 +36,12 @@ type IDPService struct {
 	Client *Client
 }
 
-func (i *IDPService) GetEntity(ctx context.Context, scope dto.Scope, kind string, identifier string) (*dto.EntityResponse, error) {
+func (i *IDPService) GetEntity(ctx context.Context, scope dto.Scope, kind string, identifier string, entityScope string) (*dto.EntityResponse, error) {
 	if kind == "" {
 		kind = defaultKind
 	}
 
-	path := fmt.Sprintf(idpGetEntityPath, generateScopeParamVal(scope), kind, identifier)
+	path := fmt.Sprintf(idpGetEntityPath, generateScopeParamVal(scope, entityScope), kind, identifier)
 
 	headers := make(map[string]string)
 	addHarnessAccountToHeaders(scope, headers)
@@ -80,7 +84,7 @@ func (i *IDPService) ListEntities(ctx context.Context, scope dto.Scope, getEntit
 		params["search_term"] = getEntitiesParams.SearchTerm
 	}
 
-	params["scopes"] = generateScopeParamVal(scope)
+	params["scopes"] = generateScopeParamVal(scope, getEntitiesParams.EntityScope)
 
 	params["owned_by_me"] = fmt.Sprintf("%v", getEntitiesParams.OwnedByMe)
 	params["favorites"] = fmt.Sprintf("%v", getEntitiesParams.Favorites)
@@ -105,6 +109,10 @@ func (i *IDPService) ListEntities(ctx context.Context, scope dto.Scope, getEntit
 
 	if getEntitiesParams.Tags != "" {
 		params["tags"] = getEntitiesParams.Tags
+	}
+
+	if getEntitiesParams.EntityScope != "" {
+		params["entity_scope"] = getEntitiesParams.EntityScope
 	}
 
 	response := make([]dto.EntityResponse, 0)
@@ -176,6 +184,96 @@ func (i *IDPService) GetScorecardScores(ctx context.Context, scope dto.Scope, id
 	params["entity_identifier"] = identifier
 
 	response := new(dto.ScorecardScoreResponse)
+	err := i.Client.Get(ctx, path, params, headers, response)
+	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
+}
+
+func (i *IDPService) GetScorecardStats(ctx context.Context, scope dto.Scope, scorecardIdentifier string) (*dto.ScorecardStatsResponse, error) {
+	path := fmt.Sprintf(idpGetScorecardStatsPath, scorecardIdentifier)
+
+	headers := make(map[string]string)
+	addHarnessAccountToHeaders(scope, headers)
+
+	params := make(map[string]string)
+
+	response := new(dto.ScorecardStatsResponse)
+	err := i.Client.Get(ctx, path, params, headers, response)
+	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
+}
+
+func (i *IDPService) GetCheck(ctx context.Context, scope dto.Scope, checkIdentifier string, isCustom bool) (*dto.CheckDetailsResponse, error) {
+	path := fmt.Sprintf(idpGetCheckPath, checkIdentifier)
+
+	headers := make(map[string]string)
+	addHarnessAccountToHeaders(scope, headers)
+
+	params := make(map[string]string)
+	params["custom"] = fmt.Sprintf("%v", isCustom)
+
+	response := new(dto.CheckDetailsResponse)
+
+	err := i.Client.Get(ctx, path, params, headers, response)
+	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
+}
+
+func (i *IDPService) ListChecks(ctx context.Context, scope dto.Scope, getChecksParams *dto.GetChecksParams) (*dto.CheckResponseList, error) {
+	path := idpListChecksPath
+
+	headers := make(map[string]string)
+	addHarnessAccountToHeaders(scope, headers)
+
+	params := make(map[string]string)
+
+	if getChecksParams.Limit == 0 {
+		params["limit"] = fmt.Sprintf("%d", defaultLimit)
+	} else if getChecksParams.Limit > maxLimit {
+		params["limit"] = fmt.Sprintf("%d", maxLimit)
+	} else {
+		params["limit"] = fmt.Sprintf("%d", getChecksParams.Limit)
+	}
+
+	params["page"] = fmt.Sprintf("%d", getChecksParams.Page)
+
+	if getChecksParams.Sort != "" {
+		params["sort"] = getChecksParams.Sort
+	}
+
+	if getChecksParams.SearchTerm != "" {
+		params["search_term"] = getChecksParams.SearchTerm
+	}
+
+	response := new(dto.CheckResponseList)
+
+	err := i.Client.Get(ctx, path, params, headers, &response)
+	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
+}
+
+func (i *IDPService) GetCheckStats(ctx context.Context, scope dto.Scope, checkIdentifier string, isCustom bool) (*dto.CheckStatsResponse, error) {
+	path := fmt.Sprintf(idpGetCheckStatsPath, checkIdentifier)
+
+	headers := make(map[string]string)
+	addHarnessAccountToHeaders(scope, headers)
+
+	params := make(map[string]string)
+	params["custom"] = fmt.Sprintf("%v", isCustom)
+
+	response := new(dto.CheckStatsResponse)
 	err := i.Client.Get(ctx, path, params, headers, response)
 	if err != nil {
 		return nil, err
