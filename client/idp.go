@@ -317,7 +317,7 @@ func (i *IDPService) ExecuteWorkflow(ctx context.Context, scope dto.Scope, ident
 	return response, nil
 }
 
-func generateScopeParamVal(scope dto.Scope) string {
+func generateScopeParamVal(scope dto.Scope, entityScope string) string {
 	scopeParam := defaultScope
 	if scope.AccountID != "" {
 		scopeParam = scopeAccountPrefix
