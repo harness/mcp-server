@@ -8,6 +8,7 @@ import (
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/harness/harness-mcp/pkg/harness/event"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -39,7 +40,7 @@ func FetchEstimatedSavingsTool(config *config.Config, client *client.CloudCostMa
 				mcp.Description("cloud account IDs to estimate savings for"),
 				mcp.Required(),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			accountId, err := getAccountID(config, request)
@@ -77,7 +78,7 @@ func FetchEstimatedSavingsTool(config *config.Config, client *client.CloudCostMa
 				targetCoverage = defaultTargetCoveragePercentage
 			}
 
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -99,7 +100,7 @@ func FetchEstimatedSavingsTool(config *config.Config, client *client.CloudCostMa
 func FetchEC2AnalysisTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_ccm_commitment_ec2_analysis",
 			mcp.WithDescription("Get AWS EC2 commitment analysis information for the account in Harness Cloud Cost Management that provides analysis on Commitment Spend across AWS Reserved Instances (RI) and Savings Plans (SP) alongside a detaied breakdown of Utilization. It also details savings derived so far along with additional potential for savings"),
-			WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			accountId, err := getAccountID(config, request)
@@ -128,7 +129,7 @@ func FetchEC2AnalysisTool(config *config.Config, client *client.CloudCostManagem
 				params.CloudAccountIDs = cloudAccountIDs
 			}
 
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

@@ -73,7 +73,7 @@ func RegisterCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGro
 		return err
 	}
 
-	ngManBaseURL := utils.BuildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "")
+	ngManBaseURL := utils.BuildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng/api")
 	ngManSecret := config.NgManagerSecret
 
 	// Create base client for CCM

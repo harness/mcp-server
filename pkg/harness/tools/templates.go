@@ -8,6 +8,7 @@ import (
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -31,7 +32,7 @@ func ListTemplates(config *config.Config, client *client.TemplateService) (tool 
 			mcp.WithBoolean("recursive",
 				mcp.Description("If true, returns all supported templates at the specified scope. Default: false"),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -79,7 +80,7 @@ func ListTemplates(config *config.Config, client *client.TemplateService) (tool 
 			}
 
 			// Try to fetch scope parameters (org_id, project_id) if provided
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
