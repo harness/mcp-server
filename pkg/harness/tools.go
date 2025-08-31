@@ -232,6 +232,9 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 			if err := modules.RegisterConnectors(config, tsg); err != nil {
 				return err
 			}
+			if err := modules.RegisterDelegateTokens(config, tsg); err != nil {
+				return err
+			}
 			if err := modules.RegisterDashboards(config, tsg); err != nil {
 				return err
 			}
@@ -322,6 +325,10 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 					}
 				case "connectors":
 					if err := modules.RegisterConnectors(config, tsg); err != nil {
+						return err
+					}
+				case "delegateTokens":
+					if err := modules.RegisterDelegateTokens(config, tsg); err != nil {
 						return err
 					}
 				case "dashboards":
@@ -423,6 +430,13 @@ func RegisterDefault(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	}
 	dashboardServiceClient := &client.DashboardService{Client: dashboardClient}
 
+	// Create delegateToken service client
+	delegateTokenClient, err := utils.CreateServiceClient(config, config.NgManagerBaseURL, config.BaseURL, "ng/api", config.NgManagerSecret)
+	if err != nil {
+		return fmt.Errorf("failed to create client for connectors: %w", err)
+	}
+	delegateTokenServiceClient := &client.DelegateTokenClient{Client: delegateTokenClient}
+
 	// Create the default toolset with essential tools
 	defaultToolset := toolsets.NewToolset("default", "Default essential Harness tools").AddReadTools(
 		// Connector Management tools
@@ -440,6 +454,9 @@ func RegisterDefault(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 		// Dashboard tools
 		toolsets.NewServerTool(tools.ListDashboardsTool(config, dashboardServiceClient)),
 		toolsets.NewServerTool(tools.GetDashboardDataTool(config, dashboardServiceClient)),
+
+		// DelegateToken tools
+		toolsets.NewServerTool(tools.ListDelegateTokensTool(config, delegateTokenServiceClient)),
 	)
 
 	// Add the default toolset to the group
