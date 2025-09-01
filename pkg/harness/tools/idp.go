@@ -26,10 +26,6 @@ func GetEntityTool(config *config.Config, client *client.IDPService) (tool mcp.T
 				mcp.Description("Kind of the entity (e.g., component, api, resource, user, workflow)"),
 				mcp.Enum(dto.EntityKindApi, dto.EntityKindComponent, dto.EntityKindEnvironment, dto.EntityKindEnvironment, dto.EntityKindEnvironmentblueprint, dto.EntityKindGroup, dto.EntityKindResource, dto.EntityKindUser, dto.EntityKindWorkflow),
 			),
-			mcp.WithString("entity_scope",
-				mcp.Description("Option to fetch only the entities for the specified scope. It is to be passed as a comma separated string"),
-				mcp.Enum(dto.EntityScopeDefault, dto.EntityScopeAccount, dto.EntityScopeOrg, dto.EntityScopeProject),
-			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			entityId, err := RequiredParam[string](request, "entity_id")
@@ -44,11 +40,7 @@ func GetEntityTool(config *config.Config, client *client.IDPService) (tool mcp.T
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			entityScope, err := OptionalParam[string](request, "entity_scope")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			data, err := client.GetEntity(ctx, scope, kind, entityId, entityScope)
+			data, err := client.GetEntity(ctx, scope, kind, entityId)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get entity: %w", err)
 			}
@@ -95,10 +87,6 @@ func ListEntitiesTool(config *config.Config, client *client.IDPService) (tool mc
 			),
 			mcp.WithString("tags",
 				mcp.Description("Option to fetch only the entities for the specified tags. It is to be passed as a comma separated string"),
-			),
-			mcp.WithString("entity_scope",
-				mcp.Description("Option to fetch only the entities for the specified scope. It is to be passed as a comma separated string"),
-				mcp.Enum(dto.EntityScopeDefault, dto.EntityScopeAccount, dto.EntityScopeOrg, dto.EntityScopeProject),
 			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -158,23 +146,17 @@ func ListEntitiesTool(config *config.Config, client *client.IDPService) (tool mc
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			entityScope, err := OptionalParam[string](request, "entity_scope")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-
 			params = &dto.GetEntitiesParams{
-				Limit:       int32(size),
-				SearchTerm:  searchTerm,
-				Sort:        sort,
-				OwnedByMe:   ownedByMe,
-				Favorites:   favorites,
-				Kind:        kind,
-				Type:        type_,
-				Owner:       owner,
-				Lifecycle:   lifecycle,
-				Tags:        tags,
-				EntityScope: entityScope,
+				Limit:      int32(size),
+				SearchTerm: searchTerm,
+				Sort:       sort,
+				OwnedByMe:  ownedByMe,
+				Favorites:  favorites,
+				Kind:       kind,
+				Type:       type_,
+				Owner:      owner,
+				Lifecycle:  lifecycle,
+				Tags:       tags,
 			}
 
 			data, err := client.ListEntities(ctx, scope, params)

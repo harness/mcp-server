@@ -112,7 +112,6 @@ type GetEntitiesParams struct {
 	Lifecycle      string `form:"lifecycle,omitempty" json:"lifecycle,omitempty"`
 	Tags           string `form:"tags,omitempty" json:"tags,omitempty"`
 	HarnessAccount string `json:"Harness-Account,omitempty"`
-	EntityScope    string `form:"entity_scope,omitempty" json:"entity_scope,omitempty"`
 }
 
 type GetScorecardsParams struct {

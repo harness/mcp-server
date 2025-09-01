@@ -36,12 +36,12 @@ type IDPService struct {
 	Client *Client
 }
 
-func (i *IDPService) GetEntity(ctx context.Context, scope dto.Scope, kind string, identifier string, entityScope string) (*dto.EntityResponse, error) {
+func (i *IDPService) GetEntity(ctx context.Context, scope dto.Scope, kind string, identifier string) (*dto.EntityResponse, error) {
 	if kind == "" {
 		kind = defaultKind
 	}
 
-	path := fmt.Sprintf(idpGetEntityPath, generateScopeParamVal(scope, entityScope), kind, identifier)
+	path := fmt.Sprintf(idpGetEntityPath, generateScopeParamVal(scope), kind, identifier)
 
 	headers := make(map[string]string)
 	addHarnessAccountToHeaders(scope, headers)
@@ -84,7 +84,7 @@ func (i *IDPService) ListEntities(ctx context.Context, scope dto.Scope, getEntit
 		params["search_term"] = getEntitiesParams.SearchTerm
 	}
 
-	params["scopes"] = generateScopeParamVal(scope, getEntitiesParams.EntityScope)
+	params["scopes"] = generateScopeParamVal(scope)
 
 	params["owned_by_me"] = fmt.Sprintf("%v", getEntitiesParams.OwnedByMe)
 	params["favorites"] = fmt.Sprintf("%v", getEntitiesParams.Favorites)
@@ -109,10 +109,6 @@ func (i *IDPService) ListEntities(ctx context.Context, scope dto.Scope, getEntit
 
 	if getEntitiesParams.Tags != "" {
 		params["tags"] = getEntitiesParams.Tags
-	}
-
-	if getEntitiesParams.EntityScope != "" {
-		params["entity_scope"] = getEntitiesParams.EntityScope
 	}
 
 	response := make([]dto.EntityResponse, 0)
