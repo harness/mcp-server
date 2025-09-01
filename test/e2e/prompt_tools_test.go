@@ -60,7 +60,7 @@ func TestListPromptTools(t *testing.T) {
 
 	require.True(t, foundListPrompts, "expected to find 'list_prompts' tool")
 	require.True(t, foundGetPrompt, "expected to find 'get_prompt' tool")
-} 
+}
 
 func TestListPromptTool(t *testing.T) {
 	t.Parallel()
