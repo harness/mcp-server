@@ -99,7 +99,41 @@ func ListDelegateTokensTool(config *config.Config, client *client.DelegateTokenC
 				opts.Order = order
 			}
 
-			tokens, totalCount, err := client.ListDelegateTokens(ctx, scope, opts)
+			// Determine scope from parameters
+			scopeParam, err := OptionalParam[string](request, "scope")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// If scope is not explicitly specified, determine it from available parameters
+			if scopeParam == "" {
+				if scope.ProjectID != "" && scope.OrgID != "" {
+					scopeParam = "project"
+				} else if scope.OrgID != "" {
+					scopeParam = "org"
+				} else {
+					scopeParam = "account"
+				}
+			}
+
+			// Call appropriate API based on scope
+			var scopeToSend dto.Scope
+			switch scopeParam {
+			case "account":
+				scopeToSend = dto.Scope{AccountID: scope.AccountID}
+			case "org":
+				if scope.OrgID == "" {
+					return mcp.NewToolResultError("org_id is required for org scope"), nil
+				}
+				scopeToSend = dto.Scope{AccountID: scope.AccountID, OrgID: scope.OrgID}
+			case "project":
+				if scope.OrgID == "" || scope.ProjectID == "" {
+					return mcp.NewToolResultError("org_id and project_id are required for project scope"), nil
+				}
+				scopeToSend = dto.Scope{AccountID: scope.AccountID, OrgID: scope.OrgID, ProjectID: scope.ProjectID}
+			}
+
+			tokens, totalCount, err := client.ListDelegateTokens(ctx, scopeToSend, opts)
 			if err != nil {
 				return nil, fmt.Errorf("failed to list delegate tokens: %w", err)
 			}
