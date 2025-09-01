@@ -12,10 +12,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cenkalti/backoff/v4"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/pkg/harness/auth"
 	"github.com/harness/harness-mcp/pkg/harness/common"
+
+	"github.com/cenkalti/backoff/v4"
 )
 
 const (

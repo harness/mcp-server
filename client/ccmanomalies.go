@@ -3,7 +3,6 @@ package client
 import (
 	"context"
 	"fmt"
-
 	"log/slog"
 )
 
