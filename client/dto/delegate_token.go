@@ -65,14 +65,28 @@ type DelegateToken struct {
 	CreatedBy       *string     `json:"createdBy"`
 	CreatedByNGUser *Principal  `json:"createdByNgUser"`
 	CreatedAt       int64       `json:"createdAt"`
+	CreatedAtTime   string      `json:"createdAtTime"`
 	Status          string      `json:"status"`
 	Value           interface{} `json:"value"`
 	OwnerIdentifier string      `json:"ownerIdentifier"`
 	ParentUniqueID  string      `json:"parentUniqueId"`
 	RevokeAfter     int64       `json:"revokeAfter"`
+	RevokeAfterTime string      `json:"revokeAfterTime"`
 	IsNG            bool        `json:"isNg"`
 	LastUsedAt      int64       `json:"lastUsedAt"`
+	LastUsedAtTime  string      `json:"lastUsedAtTime"`
 	TokenHash       string      `json:"tokenHash"`
+}
+
+// FormatTimestamps formats the Unix timestamps into human-readable format
+func (d *DelegateToken) FormatTimestamps() {
+	d.CreatedAtTime = FormatUnixMillisToRFC3339(d.CreatedAt)
+	if d.RevokeAfter > 0 {
+		d.RevokeAfterTime = FormatUnixMillisToRFC3339(d.RevokeAfter)
+	}
+	if d.LastUsedAt > 0 {
+		d.LastUsedAtTime = FormatUnixMillisToRFC3339(d.LastUsedAt)
+	}
 }
 
 // DelegateTokenListResponse represents the response from the list delegate tokens API

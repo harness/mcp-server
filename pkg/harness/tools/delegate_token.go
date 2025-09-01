@@ -138,6 +138,11 @@ func ListDelegateTokensTool(config *config.Config, client *client.DelegateTokenC
 				return nil, fmt.Errorf("failed to list delegate tokens: %w", err)
 			}
 
+			// Format timestamps for each token
+			for i := range tokens {
+				tokens[i].FormatTimestamps()
+			}
+
 			// Create response with tokens and metadata
 			response := map[string]interface{}{
 				"tokens":     tokens,
