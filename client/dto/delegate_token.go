@@ -38,8 +38,15 @@ type EmbeddedUser struct {
 
 // Principal represents an NG user in the delegate token context
 type Principal struct {
-	UUID string `json:"uuid"`
-	Name string `json:"name"`
+	Type                   string                 `json:"type"`
+	Name                   string                 `json:"name"`
+	Email                  string                 `json:"email"`
+	Username               string                 `json:"username"`
+	AccountID              string                 `json:"accountId"`
+	Role                   interface{}            `json:"role"`
+	UniqueID               string                 `json:"uniqueId"`
+	ImpersonatingPrincipal interface{}            `json:"impersonatingPrincipal"`
+	JWTClaims              map[string]interface{} `json:"jwtclaims"`
 }
 
 // DelegateTokenStatus represents the status of a delegate token
@@ -52,18 +59,20 @@ const (
 
 // DelegateToken represents a delegate token
 type DelegateToken struct {
-	UUID            *string    `json:"uuid"`
-	AccountID       string     `json:"accountId"`
-	Name            string     `json:"name"`
-	CreatedBy       *string    `json:"createdBy"`
-	CreatedByNGUser *Principal `json:"createdByNgUser"`
-	CreatedAt       int64      `json:"createdAt"`
-	RevokeAfter     int64      `json:"revokeAfter"`
-	Status          string     `json:"status"`
-	IsNG            bool       `json:"isNg"`
-	LastUsedAt      int64      `json:"lastUsedAt"`
-	TokenHash       string     `json:"tokenHash"`
-	ParentUniqueID  string     `json:"parentUniqueId"`
+	UUID            *string     `json:"uuid"`
+	AccountID       string      `json:"accountId"`
+	Name            string      `json:"name"`
+	CreatedBy       *string     `json:"createdBy"`
+	CreatedByNGUser *Principal  `json:"createdByNgUser"`
+	CreatedAt       int64       `json:"createdAt"`
+	Status          string      `json:"status"`
+	Value           interface{} `json:"value"`
+	OwnerIdentifier string      `json:"ownerIdentifier"`
+	ParentUniqueID  string      `json:"parentUniqueId"`
+	RevokeAfter     int64       `json:"revokeAfter"`
+	IsNG            bool        `json:"isNg"`
+	LastUsedAt      int64       `json:"lastUsedAt"`
+	TokenHash       string      `json:"tokenHash"`
 }
 
 // DelegateTokenListResponse represents the response from the list delegate tokens API
