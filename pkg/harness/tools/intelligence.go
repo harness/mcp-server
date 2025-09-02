@@ -33,6 +33,7 @@ func FindSimilarTemplates(config *config.Config, client *client.IntelligenceServ
 			),
 			mcp.WithNumber("count",
 				mcp.Description("Maximum number of similar templates to return"),
+				mcp.DefaultNumber(1),
 			),
 			common.WithScope(config, false),
 		),
