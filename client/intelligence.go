@@ -2,7 +2,7 @@ package client
 
 import (
 	"context"
-	"fmt"		
+	"fmt"
 
 	"github.com/harness/harness-mcp/client/dto"
 )
@@ -77,14 +77,14 @@ func (ts *IntelligenceService) SimilaritySearch(ctx context.Context, request *dt
 		if !ok {
 			continue
 		}
-		
+
 		key, keyOk := kvPair["Key"].(string)
 		value, valueOk := kvPair["Value"].(string)
-		
+
 		if !keyOk || !valueOk {
 			continue
 		}
-		
+
 		switch key {
 		case "template_id":
 			templateID = value
@@ -94,25 +94,25 @@ func (ts *IntelligenceService) SimilaritySearch(ctx context.Context, request *dt
 			projectID = value
 		}
 	}
-	
+
 	// Skip if template_id is missing
 	if templateID == "" {
 		return nil, fmt.Errorf("template_id is missing")
 	}
-	
+
 	// Build template reference based on scope
 	templateRef = buildTemplateRef(orgID, projectID, templateID)
 	templateData := dto.TemplateData("template_ref: " + templateRef + " type: " + request.TemplateType)
-	
+
 	return &templateData, nil
 }
 
 func buildTemplateRef(orgID, projectID, templateID string) string {
-    if projectID != "" {
-        return templateID
-    } else if orgID != "" {
-        return fmt.Sprintf("org.%s", templateID)
-    } else {
-        return fmt.Sprintf("account.%s", templateID)
-    }
+	if projectID != "" {
+		return templateID
+	} else if orgID != "" {
+		return fmt.Sprintf("org.%s", templateID)
+	} else {
+		return fmt.Sprintf("account.%s", templateID)
+	}
 }
