@@ -232,6 +232,9 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 			if err := modules.RegisterConnectors(config, tsg); err != nil {
 				return err
 			}
+			if err := modules.RegisterDelegateTokens(config, tsg); err != nil {
+				return err
+			}
 			if err := modules.RegisterDashboards(config, tsg); err != nil {
 				return err
 			}
@@ -322,6 +325,10 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 					}
 				case "connectors":
 					if err := modules.RegisterConnectors(config, tsg); err != nil {
+						return err
+					}
+				case "delegateTokens":
+					if err := modules.RegisterDelegateTokens(config, tsg); err != nil {
 						return err
 					}
 				case "dashboards":

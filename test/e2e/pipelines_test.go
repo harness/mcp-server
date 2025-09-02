@@ -251,6 +251,9 @@ func TestPipelineWorkflow(t *testing.T) {
 	require.NoError(t, err, "expected to call 'list_pipelines' tool successfully")
 	require.False(t, listResponse.IsError, "expected result not to be an error")
 
+	// Check if Content is empty before accessing elements
+	require.NotEmpty(t, listResponse.Content, "expected response content to not be empty")
+
 	// Parse the response to extract pipeline ID
 	textContent, ok := listResponse.Content[0].(mcp.TextContent)
 	require.True(t, ok, "expected content to be of type TextContent")
