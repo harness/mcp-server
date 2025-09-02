@@ -79,13 +79,8 @@ func FindSimilarTemplates(config *config.Config, client *client.IntelligenceServ
 				return nil, fmt.Errorf("failed to perform similarity search: %w", err)
 			}
 
-			// Marshal and return the result
-			r, err := json.Marshal(result)
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal similarity search response: %w", err)
-			}
-
-			return mcp.NewToolResultText(string(r)), nil
+			// Return the template data directly as it's already a formatted string
+			return mcp.NewToolResultText(string(*result)), nil
 		}
 }
 
