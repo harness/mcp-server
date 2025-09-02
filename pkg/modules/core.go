@@ -76,6 +76,11 @@ func (m *CoreModule) RegisterToolsets() error {
 			if err != nil {
 				return err
 			}
+		case "delegateTokens":
+			err := RegisterDelegateTokens(m.config, m.tsg)
+			if err != nil {
+				return err
+			}
 		case "audit":
 			err := RegisterAudit(m.config, m.tsg)
 			if err != nil {
@@ -217,6 +222,24 @@ func RegisterConnectors(config *config.Config, tsg *toolsets.ToolsetGroup) error
 		)
 
 	tsg.AddToolset(connectors)
+	return nil
+}
+
+// RegisterDelegateTokens registers the DelegateTokens toolset
+func RegisterDelegateTokens(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	delegateTokenClient, err := utils.CreateServiceClient(config, config.NgManagerBaseURL, config.BaseURL, "ng/api", config.NgManagerSecret)
+	if err != nil {
+		return fmt.Errorf("failed to create client for DelegateTokens: %w", err)
+	}
+	delegateTokenServiceClient := &client.DelegateTokenClient{Client: delegateTokenClient}
+
+	// Create the delegateTokens toolset
+	delegateTokens := toolsets.NewToolset("delegateTokens", "Harness DelegateTokens related tools").
+		AddReadTools(
+			toolsets.NewServerTool(tools.ListDelegateTokensTool(config, delegateTokenServiceClient)),
+		)
+
+	tsg.AddToolset(delegateTokens)
 	return nil
 }
 
