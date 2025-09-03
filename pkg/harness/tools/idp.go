@@ -332,7 +332,7 @@ func GetCheckTool(config *config.Config, client *client.IDPService) (tool mcp.To
 			WithScope(config, false),
 			mcp.WithString("check_id",
 				mcp.Required(),
-				mcp.Description("The Unique identifier of the entity within its scope and kind. This is not the name of the entity"),
+				mcp.Description("The Unique identifier of the check. This is not the name of the check"),
 			),
 			mcp.WithString("is_custom",
 				mcp.Description("Whether the check is a custom check or not. This will be mentioned in the scorecard details."),

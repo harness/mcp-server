@@ -205,7 +205,18 @@ func (i *IDPService) GetScorecardStats(ctx context.Context, scope dto.Scope, sco
 	return &dto.ScorecardStatsResponseWithHumanReadableTime{
 		Name:  response.Name,
 		Stats: response.Stats,
+if response.Timestamp != nil {
+	return &dto.ScorecardStatsResponseWithHumanReadableTime{
+		Name:  response.Name,
+		Stats: response.Stats,
 		Time:  dto.FormatUnixMillisToRFC3339(*response.Timestamp),
+	}, nil
+}
+return &dto.ScorecardStatsResponseWithHumanReadableTime{
+	Name:  response.Name,
+	Stats: response.Stats,
+	Time:  "",
+}, nil
 	}, nil
 }
 
@@ -282,7 +293,18 @@ func (i *IDPService) GetCheckStats(ctx context.Context, scope dto.Scope, checkId
 	return &dto.CheckStatsResponseWithHumanReadableTime{
 		Name:  response.Name,
 		Stats: response.Stats,
+if response.Timestamp != nil {
+	return &dto.CheckStatsResponseWithHumanReadableTime{
+		Name:  response.Name,
+		Stats: response.Stats,
 		Time:  dto.FormatUnixMillisToRFC3339(*response.Timestamp),
+	}, nil
+}
+return &dto.CheckStatsResponseWithHumanReadableTime{
+	Name:  response.Name,
+	Stats: response.Stats,
+	Time:  "",
+}, nil
 	}, nil
 }
 
