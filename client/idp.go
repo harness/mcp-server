@@ -202,22 +202,18 @@ func (i *IDPService) GetScorecardStats(ctx context.Context, scope dto.Scope, sco
 		return nil, err
 	}
 
-	return &dto.ScorecardStatsResponseWithHumanReadableTime{
+	result := &dto.ScorecardStatsResponseWithHumanReadableTime{
 		Name:  response.Name,
 		Stats: response.Stats,
-if response.Timestamp != nil {
-	return &dto.ScorecardStatsResponseWithHumanReadableTime{
-		Name:  response.Name,
-		Stats: response.Stats,
-		Time:  dto.FormatUnixMillisToRFC3339(*response.Timestamp),
-	}, nil
-}
-return &dto.ScorecardStatsResponseWithHumanReadableTime{
-	Name:  response.Name,
-	Stats: response.Stats,
-	Time:  "",
-}, nil
-	}, nil
+	}
+
+	if response.Timestamp != nil {
+		result.Time = dto.FormatUnixMillisToRFC3339(*response.Timestamp)
+	} else {
+		result.Time = ""
+	}
+
+	return result, nil
 }
 
 func (i *IDPService) GetCheck(ctx context.Context, scope dto.Scope, checkIdentifier string, isCustom bool) (*dto.CheckDetailsResponse, error) {
@@ -290,22 +286,18 @@ func (i *IDPService) GetCheckStats(ctx context.Context, scope dto.Scope, checkId
 		return nil, err
 	}
 
-	return &dto.CheckStatsResponseWithHumanReadableTime{
+	result := &dto.CheckStatsResponseWithHumanReadableTime{
 		Name:  response.Name,
 		Stats: response.Stats,
-if response.Timestamp != nil {
-	return &dto.CheckStatsResponseWithHumanReadableTime{
-		Name:  response.Name,
-		Stats: response.Stats,
-		Time:  dto.FormatUnixMillisToRFC3339(*response.Timestamp),
-	}, nil
-}
-return &dto.CheckStatsResponseWithHumanReadableTime{
-	Name:  response.Name,
-	Stats: response.Stats,
-	Time:  "",
-}, nil
-	}, nil
+	}
+
+	if response.Timestamp != nil {
+		result.Time = dto.FormatUnixMillisToRFC3339(*response.Timestamp)
+	} else {
+		result.Time = ""
+	}
+
+	return result, nil
 }
 
 func (i *IDPService) ExecuteWorkflow(ctx context.Context, scope dto.Scope, identifier string, inputSet map[string]interface{}) (*dto.ExecuteWorkflowResponse, error) {
