@@ -44,21 +44,15 @@ var (
 		Version: fmt.Sprintf("Version: %s\nCommit: %s\nBuild Date: %s", version, commit, date),
 	}
 
-	serverCmd = &cobra.Command{
-		Use:   "server",
-		Short: "Start MCP as a standalone server",
-		Long:  `Start a standalone MCP server with HTTP or stdio transport.`,
+	httpServerCmd = &cobra.Command{
+		Use:   "http-server",
+		Short: "Start MCP as a standalone server with HTTP transport",
+		Long:  `Start a standalone MCP server with HTTP transport`,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
-			transportMode := viper.GetString("transport")
-			var transportType enum.TransportType
-			if transportMode == "" {
-				transportType = enum.TransportStdio
-			} else {
-				transportType = enum.ParseTransportType(transportMode)
-			}
+			transportType := enum.TransportHTTP
 
 			var toolsets []string
 			err := viper.UnmarshalKey("toolsets", &toolsets)
@@ -90,7 +84,7 @@ var (
 				EnableModules: enableModules,
 			}
 
-			return runMCPServer(ctx, cfg)
+			return runHTTPServer(ctx, cfg)
 		},
 	}
 
@@ -170,7 +164,7 @@ var (
 			// Move this out to middleware once we move to streamable HTTP
 			session, err := auth.AuthenticateSession(bearerToken, mcpSecret)
 			if err != nil {
-				return fmt.Errorf("Failed to authenticate session: %w", err)
+				return fmt.Errorf("failed to authenticate session: %w", err)
 			}
 
 			// Store the authenticated session in the context
@@ -179,13 +173,13 @@ var (
 			var toolsets []string
 			err = viper.UnmarshalKey("toolsets", &toolsets)
 			if err != nil {
-				return fmt.Errorf("Failed to unmarshal toolsets: %w", err)
+				return fmt.Errorf("failed to unmarshal toolsets: %w", err)
 			}
 
 			var enableModules []string
 			err = viper.UnmarshalKey("enable_modules", &enableModules)
 			if err != nil {
-				return fmt.Errorf("Failed to unmarshal enabled modules: %w", err)
+				return fmt.Errorf("failed to unmarshal enabled modules: %w", err)
 			}
 
 			cfg := config.Config{
@@ -262,10 +256,8 @@ func init() {
 	rootCmd.PersistentFlags().String("log-file", "", "Path to log file")
 	rootCmd.PersistentFlags().Bool("debug", false, "Enable debug logging")
 
-	// Add transport configuration flags to server command
-	serverCmd.PersistentFlags().String("transport", "stdio", "Transport mode: 'stdio' or 'http'")
-	serverCmd.PersistentFlags().Int("http-port", 8080, "HTTP server port (when transport is 'http')")
-	serverCmd.PersistentFlags().String("http-path", "/mcp", "HTTP server path (when transport is 'http')")
+	httpServerCmd.PersistentFlags().Int("http-port", 8080, "HTTP server port (when transport is 'http')")
+	httpServerCmd.PersistentFlags().String("http-path", "/mcp", "HTTP server path (when transport is 'http')")
 
 	// Add stdio-specific flags
 	stdioCmd.Flags().String("base-url", "https://app.harness.io", "Base URL for Harness")
@@ -318,9 +310,8 @@ func init() {
 	_ = viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
 
 	// Bind transport configuration flags to viper
-	_ = viper.BindPFlag("transport", serverCmd.PersistentFlags().Lookup("transport"))
-	_ = viper.BindPFlag("http_port", serverCmd.PersistentFlags().Lookup("http-port"))
-	_ = viper.BindPFlag("http_path", serverCmd.PersistentFlags().Lookup("http-path"))
+	_ = viper.BindPFlag("http_port", httpServerCmd.PersistentFlags().Lookup("http-port"))
+	_ = viper.BindPFlag("http_path", httpServerCmd.PersistentFlags().Lookup("http-path"))
 
 	// Bind stdio-specific flags to viper
 	_ = viper.BindPFlag("base_url", stdioCmd.Flags().Lookup("base-url"))
@@ -367,7 +358,7 @@ func init() {
 	_ = viper.BindPFlag("rbac_svc_secret", internalCmd.Flags().Lookup("rbac-svc-secret"))
 
 	// Add subcommands
-	rootCmd.AddCommand(serverCmd)
+	rootCmd.AddCommand(httpServerCmd)
 	rootCmd.AddCommand(stdioCmd)
 	stdioCmd.AddCommand(internalCmd)
 }
@@ -398,15 +389,15 @@ func initLogger(outPath string, debug bool) error {
 	return nil
 }
 
-// runMCPServer starts the MCP server with the specified transport (stdio or http)
-func runMCPServer(ctx context.Context, config config.Config) error {
+// runHTTPServer starts the MCP server with http transport
+func runHTTPServer(ctx context.Context, config config.Config) error {
 	err := initLogger(config.LogFilePath, config.Debug)
 	if err != nil {
 		return fmt.Errorf("failed to initialize logger: %w", err)
 	}
 
-	slog.Info("Starting server (runMCPServer)", "transport", config.Transport)
-	slog.Info("Using config (runMCPServer)", "config", config)
+	slog.Info("Starting server (runHTTPServer)", "transport", config.Transport)
+	slog.Info("Using config (runHTTPServer)", "config", config)
 
 	// Define beforeInit function to add client info to user agent
 	beforeInit := func(_ context.Context, _ any, message *mcp.InitializeRequest) {
@@ -435,16 +426,6 @@ func runMCPServer(ctx context.Context, config config.Config) error {
 	// Set the guidelines prompts
 	prompts.RegisterPrompts(harnessServer)
 
-	// Handle different transport modes
-	if config.Transport == "http" {
-		return runHTTPServer(ctx, harnessServer, config)
-	} else {
-		return runMCPStdioServer(ctx, harnessServer, config)
-	}
-}
-
-// runHTTPServer starts the MCP server with HTTP transport
-func runHTTPServer(ctx context.Context, harnessServer *server.MCPServer, config config.Config) error {
 	// Create HTTP server
 	httpServer := server.NewStreamableHTTPServer(harnessServer)
 	// Start server
@@ -531,38 +512,6 @@ func runStdioServer(ctx context.Context, config config.Config) error {
 
 	// Output startup message
 	slog.Info("Harness MCP Server running on stdio", "version", version)
-
-	// Wait for shutdown signal
-	select {
-	case <-ctx.Done():
-		slog.Info("shutting down server...")
-	case err := <-errC:
-		if err != nil {
-			slog.Error("error running server", "error", err)
-			return fmt.Errorf("error running server: %w", err)
-		}
-	}
-
-	return nil
-}
-
-// runMCPStdioServer is the internal function that handles stdio transport with an existing server
-func runMCPStdioServer(ctx context.Context, harnessServer *server.MCPServer, config config.Config) error {
-	// Create stdio server
-	stdioServer := server.NewStdioServer(harnessServer)
-
-	// Set error logger
-	stdioServer.SetErrorLogger(slog.NewLogLogger(slog.Default().Handler(), slog.LevelError))
-
-	// Start listening for messages
-	errC := make(chan error, 1)
-	go func() {
-		in, out := io.Reader(os.Stdin), io.Writer(os.Stdout)
-		errC <- stdioServer.Listen(ctx, in, out)
-	}()
-
-	// Output startup message
-	slog.Info("Harness MCP Server running on stdio (runMCPStdioServer)", "version", version)
 
 	// Wait for shutdown signal
 	select {
