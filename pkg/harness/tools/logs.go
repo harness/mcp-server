@@ -22,12 +22,14 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 	return mcp.NewTool("download_execution_logs",
 			mcp.WithDescription("Downloads logs for an execution inside Harness"),
 			mcp.WithString("plan_execution_id",
-				mcp.Required(),
 				mcp.Description("The ID of the plan execution"),
 			),
 			mcp.WithString("logs_directory",
 				mcp.Required(),
 				mcp.Description("The absolute path to the directory where the logs should get downloaded"),
+			),
+			mcp.WithString("prefix",
+				mcp.Description("Optional custom prefix to use for downloading logs"),
 			),
 			common.WithScope(config, true),
 		),
@@ -42,7 +44,10 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			logDownloadURL, err := client.DownloadLogs(ctx, scope, planExecutionID)
+			// Get optional prefix parameter
+			prefix, _ := OptionalParam[string](request, "prefix")
+
+			logDownloadURL, err := client.DownloadLogs(ctx, scope, planExecutionID, prefix)
 			if err != nil {
 				return nil, fmt.Errorf("failed to fetch log download URL: %w", err)
 			}
@@ -76,7 +81,7 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 			}
 
 			// Get the download URL
-			logDownloadURL, err = client.DownloadLogs(ctx, scope, planExecutionID)
+			logDownloadURL, err = client.DownloadLogs(ctx, scope, planExecutionID, prefix)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to fetch log download URL: %v", err)), nil
 			}
