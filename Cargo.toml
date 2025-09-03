@@ -1,0 +1,76 @@
+[package]
+name = "harness-mcp-server"
+version = "0.1.0"
+edition = "2021"
+authors = ["Harness Inc."]
+description = "A Harness MCP server that handles various tools and resources"
+license = "Apache-2.0"
+repository = "https://github.com/harness/mcp-server"
+readme = "README.md"
+
+[[bin]]
+name = "harness-mcp-server"
+path = "src/main.rs"
+
+[dependencies]
+# Core dependencies
+tokio = { version = "1.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+thiserror = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# CLI and configuration
+clap = { version = "4.0", features = ["derive", "env"] }
+config = "0.14"
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# JWT and authentication
+jsonwebtoken = "9.0"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+# MCP protocol (placeholder - will need to find Rust equivalent or implement)
+# mcp-rs = "0.1"  # This would need to be implemented or found
+
+# Async utilities
+futures = "0.3"
+async-trait = "0.1"
+
+# Time handling
+chrono = { version = "0.4", features = ["serde"] }
+
+# URL handling
+url = "2.0"
+urlencoding = "2.1"
+
+# Base64 encoding
+base64 = "0.22"
+
+# Backoff for retries
+backoff = "0.4"
+
+[dev-dependencies]
+tokio-test = "0.4"
+mockito = "1.0"
+tempfile = "3.0"
+
+[features]
+default = []
+# Feature flags for different modules
+ccm = []
+sto = []
+scs = []
+chaos = []
+idp = []
+audit = []
+dbops = []
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"

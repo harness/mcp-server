@@ -1,43 +1,75 @@
-# ---------------------------------------------------------#
-#                   Build Harness image                    #
-# ---------------------------------------------------------#
-FROM --platform=$BUILDPLATFORM golang:1.24.3-alpine AS builder
+# Multi-stage Dockerfile for Harness MCP Server (Rust)
 
-# Setup workig dir
+# Build stage
+FROM rust:1.75-slim as builder
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
 WORKDIR /app
 
-# Get dependencies - will also be cached if we won't change mod/sum
-COPY go.mod .
-COPY go.sum .
+# Copy Cargo files
+COPY Cargo.toml Cargo.lock ./
 
-# COPY the source code as the last step
-COPY . .
+# Create a dummy main.rs to cache dependencies
+RUN mkdir src && echo "fn main() {}" > src/main.rs
 
-# set required build flags
-RUN --mount=type=cache,target=/root/.cache/go-build \
-    --mount=type=cache,target=/go/pkg \
-    CGO_ENABLED=0 \
-    GOOS=$TARGETOS GOARCH=$TARGETARCH \
-    go build -o ./cmd/harness-mcp-server/harness-mcp-server ./cmd/harness-mcp-server
+# Build dependencies (this layer will be cached)
+RUN cargo build --release && rm -rf src
 
-### Pull CA Certs
-FROM --platform=$BUILDPLATFORM alpine:latest AS cert-image
+# Copy source code
+COPY src ./src
 
-RUN apk --update add ca-certificates
+# Build the application
+RUN cargo build --release
 
-# ---------------------------------------------------------#
-#                   Create final image                     #
-# ---------------------------------------------------------#
-FROM alpine:3.21 AS final
+# Runtime stage
+FROM debian:bookworm-slim
 
-# setup app dir and its content
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN useradd -r -s /bin/false harness
+
+# Set working directory
 WORKDIR /app
-VOLUME /data
 
-ENV XDG_CACHE_HOME=/data
+# Copy binary from builder stage
+COPY --from=builder /app/target/release/harness-mcp-server /usr/local/bin/harness-mcp-server
 
-COPY --from=builder /app/cmd/harness-mcp-server/harness-mcp-server /app/harness-mcp-server
-COPY --from=cert-image /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+# Make binary executable
+RUN chmod +x /usr/local/bin/harness-mcp-server
 
-ENTRYPOINT [ "/app/harness-mcp-server"]
+# Change ownership to harness user
+RUN chown -R harness:harness /app
+
+# Switch to non-root user
+USER harness
+
+# Expose port (if running in HTTP mode)
+EXPOSE 8080
+
+# Set default command
+ENTRYPOINT ["harness-mcp-server"]
 CMD ["stdio"]
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD harness-mcp-server --version || exit 1
+
+# Labels
+LABEL maintainer="Harness Inc."
+LABEL description="Harness MCP Server - Rust Implementation"
+LABEL version="1.0.0"
+LABEL org.opencontainers.image.source="https://github.com/harness/harness-mcp"
+LABEL org.opencontainers.image.description="Model Context Protocol server for Harness platform integration"
+LABEL org.opencontainers.image.licenses="Apache-2.0"

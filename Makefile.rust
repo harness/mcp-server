@@ -1,0 +1,164 @@
+# Rust Makefile for Harness MCP Server
+
+# Variables
+CARGO := cargo
+TARGET_DIR := target
+BINARY_NAME := harness-mcp-server
+RELEASE_DIR := $(TARGET_DIR)/release
+DEBUG_DIR := $(TARGET_DIR)/debug
+
+# Default target
+.DEFAULT_GOAL := build
+
+# Build targets
+.PHONY: build
+build: ## Build the project in debug mode
+	@echo "Building $(BINARY_NAME) in debug mode..."
+	$(CARGO) build
+
+.PHONY: release
+release: ## Build the project in release mode
+	@echo "Building $(BINARY_NAME) in release mode..."
+	$(CARGO) build --release
+
+.PHONY: install
+install: release ## Install the binary to cargo bin directory
+	@echo "Installing $(BINARY_NAME)..."
+	$(CARGO) install --path .
+
+# Development targets
+.PHONY: dev
+dev: ## Run the project in development mode
+	@echo "Running $(BINARY_NAME) in development mode..."
+	$(CARGO) run
+
+.PHONY: watch
+watch: ## Watch for changes and rebuild
+	@echo "Watching for changes..."
+	$(CARGO) watch -x build
+
+# Testing targets
+.PHONY: test
+test: ## Run all tests
+	@echo "Running tests..."
+	$(CARGO) test
+
+.PHONY: test-unit
+test-unit: ## Run unit tests only
+	@echo "Running unit tests..."
+	$(CARGO) test --lib
+
+.PHONY: test-integration
+test-integration: ## Run integration tests only
+	@echo "Running integration tests..."
+	$(CARGO) test --test '*'
+
+.PHONY: test-e2e
+test-e2e: ## Run end-to-end tests
+	@echo "Running e2e tests..."
+	$(CARGO) test --test e2e
+
+.PHONY: test-coverage
+test-coverage: ## Generate test coverage report
+	@echo "Generating test coverage..."
+	$(CARGO) tarpaulin --out Html --output-dir coverage
+
+# Code quality targets
+.PHONY: fmt
+fmt: ## Format the code
+	@echo "Formatting code..."
+	$(CARGO) fmt
+
+.PHONY: fmt-check
+fmt-check: ## Check code formatting
+	@echo "Checking code formatting..."
+	$(CARGO) fmt -- --check
+
+.PHONY: clippy
+clippy: ## Run clippy linter
+	@echo "Running clippy..."
+	$(CARGO) clippy -- -D warnings
+
+.PHONY: clippy-fix
+clippy-fix: ## Fix clippy warnings automatically
+	@echo "Fixing clippy warnings..."
+	$(CARGO) clippy --fix --allow-dirty --allow-staged
+
+.PHONY: audit
+audit: ## Run security audit
+	@echo "Running security audit..."
+	$(CARGO) audit
+
+# Documentation targets
+.PHONY: doc
+doc: ## Generate documentation
+	@echo "Generating documentation..."
+	$(CARGO) doc --no-deps
+
+.PHONY: doc-open
+doc-open: ## Generate and open documentation
+	@echo "Generating and opening documentation..."
+	$(CARGO) doc --no-deps --open
+
+# Cleaning targets
+.PHONY: clean
+clean: ## Clean build artifacts
+	@echo "Cleaning build artifacts..."
+	$(CARGO) clean
+
+.PHONY: clean-deps
+clean-deps: ## Clean dependencies cache
+	@echo "Cleaning dependencies cache..."
+	$(CARGO) clean
+	rm -rf ~/.cargo/registry/cache
+
+# Dependency management
+.PHONY: update
+update: ## Update dependencies
+	@echo "Updating dependencies..."
+	$(CARGO) update
+
+.PHONY: outdated
+outdated: ## Check for outdated dependencies
+	@echo "Checking for outdated dependencies..."
+	$(CARGO) outdated
+
+# Docker targets
+.PHONY: docker-build
+docker-build: ## Build Docker image
+	@echo "Building Docker image..."
+	docker build -t harness/mcp-server:latest .
+
+.PHONY: docker-run
+docker-run: ## Run Docker container
+	@echo "Running Docker container..."
+	docker run -it --rm harness/mcp-server:latest
+
+# Benchmarking
+.PHONY: bench
+bench: ## Run benchmarks
+	@echo "Running benchmarks..."
+	$(CARGO) bench
+
+# Feature testing
+.PHONY: test-features
+test-features: ## Test all feature combinations
+	@echo "Testing all feature combinations..."
+	$(CARGO) test --all-features
+	$(CARGO) test --no-default-features
+	$(CARGO) test --features ccm
+	$(CARGO) test --features sto
+	$(CARGO) test --features scs
+
+# Help target
+.PHONY: help
+help: ## Show this help message
+	@echo "Available targets:"
+	@awk 'BEGIN {FS = ":.*##"; printf "\\nUsage:\\n  make \\033[36m<target>\\033[0m\\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \\033[36m%-15s\\033[0m %s\\n", $$1, $$2 } /^##@/ { printf "\\n\\033[1m%s\\033[0m\\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+
+# Check if cargo is installed
+check-cargo:
+	@which $(CARGO) > /dev/null || (echo "Cargo is not installed. Please install Rust and Cargo." && exit 1)
+
+# All targets depend on cargo being available
+build release install dev watch test test-unit test-integration test-e2e test-coverage fmt fmt-check clippy clippy-fix audit doc doc-open clean update outdated bench test-features: check-cargo
