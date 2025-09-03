@@ -123,7 +123,7 @@ func TestGetPromptTool(t *testing.T) {
 	listRequest := mcp.CallToolRequest{}
 	listRequest.Params.Name = "list_prompts"
 	listRequest.Params.Arguments = map[string]any{
-		"accountIdentifier": accountID,
+		"accountIdentifier": getE2EAccountID(t),
 		"orgIdentifier":     getE2EOrgID(),
 		"projectIdentifier": getE2EProjectID(),
 	}
@@ -163,7 +163,7 @@ func TestGetPromptTool(t *testing.T) {
 	getRequest := mcp.CallToolRequest{}
 	getRequest.Params.Name = "get_prompt"
 	getRequest.Params.Arguments = map[string]any{
-		"accountIdentifier": accountID,
+		"accountIdentifier": getE2EAccountID(t),
 		"orgIdentifier":     getE2EOrgID(),
 		"projectIdentifier": getE2EProjectID(),
 		"prompt_name":       promptName,
@@ -202,7 +202,7 @@ func TestGetPromptTool(t *testing.T) {
 	getModeRequest := mcp.CallToolRequest{}
 	getModeRequest.Params.Name = "get_prompt"
 	getModeRequest.Params.Arguments = map[string]any{
-		"accountIdentifier": accountID,
+		"accountIdentifier": getE2EAccountID(t),
 		"orgIdentifier":     getE2EOrgID(),
 		"projectIdentifier": getE2EProjectID(),
 		"prompt_name":       promptName,
