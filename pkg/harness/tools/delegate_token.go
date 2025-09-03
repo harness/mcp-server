@@ -337,7 +337,7 @@ func CreateDelegateTokenTool(config *config.Config, client *client.DelegateToken
 
 // RevokeDelegateTokenTool creates a tool for revoking delegate tokens
 func RevokeDelegateTokenTool(config *config.Config, client *client.DelegateTokenClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("mcp0_revoke_delegate_token",
+	return mcp.NewTool("revoke_delegate_token",
 			mcp.WithDescription("Revokes a delegate token in Harness."),
 			mcp.WithString("token_name",
 				mcp.Description("Name of the delegate token to revoke"),
