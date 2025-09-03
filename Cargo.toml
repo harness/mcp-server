@@ -1,0 +1,82 @@
+[package]
+name = "harness-mcp-server"
+version = "0.1.0"
+edition = "2021"
+authors = ["Harness Inc."]
+description = "Harness MCP Server - A Model Context Protocol server for Harness APIs"
+license = "Apache-2.0"
+repository = "https://github.com/harness/mcp-server"
+keywords = ["mcp", "harness", "api", "server"]
+categories = ["api-bindings", "command-line-utilities"]
+
+[[bin]]
+name = "harness-mcp-server"
+path = "src/main.rs"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1.0", features = ["full"] }
+
+# HTTP client and server
+reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false }
+hyper = { version = "0.14", features = ["full"] }
+tower = { version = "0.4", features = ["full"] }
+tower-http = { version = "0.4", features = ["full"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+
+# CLI and configuration
+clap = { version = "4.0", features = ["derive", "env"] }
+config = "0.13"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# UUID and time
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+# JWT handling
+jsonwebtoken = "9.0"
+
+# Retry logic
+backoff = { version = "0.4", features = ["tokio"] }
+
+# URL handling
+url = "2.0"
+
+# Base64 encoding
+base64 = "0.21"
+
+# Environment variables
+dotenvy = "0.15"
+
+# MCP protocol (we'll need to implement or find a Rust equivalent)
+# For now, we'll implement our own MCP types and handlers
+
+[dev-dependencies]
+tokio-test = "0.4"
+mockito = "1.0"
+tempfile = "3.0"
+
+[features]
+default = ["rustls-tls"]
+rustls-tls = ["reqwest/rustls-tls"]
+native-tls = ["reqwest/native-tls"]
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.dev]
+debug = true

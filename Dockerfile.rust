@@ -1,0 +1,45 @@
+# Multi-stage build for Rust
+FROM rust:1.75-slim as builder
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app directory
+WORKDIR /app
+
+# Copy Cargo files
+COPY Cargo.toml Cargo.lock ./
+
+# Copy source code
+COPY src ./src
+
+# Build the application
+RUN cargo build --release
+
+# Runtime stage
+FROM debian:bookworm-slim
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app user
+RUN useradd -r -s /bin/false appuser
+
+# Copy the binary from builder stage
+COPY --from=builder /app/target/release/harness-mcp-server /usr/local/bin/harness-mcp-server
+
+# Change ownership and make executable
+RUN chown appuser:appuser /usr/local/bin/harness-mcp-server && \
+    chmod +x /usr/local/bin/harness-mcp-server
+
+# Switch to app user
+USER appuser
+
+# Set the entrypoint
+ENTRYPOINT ["harness-mcp-server"]
+CMD ["stdio"]

@@ -1,0 +1,1 @@
+cargo:rustc-env=MIME_TYPES_GENERATED_PATH=/harness/target/debug/build/mime_guess-026dadc687468aca/out/mime_types_generated.rs
