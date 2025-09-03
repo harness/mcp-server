@@ -1,14 +1,14 @@
 package tools
 
 import (
-    "context"
-    "encoding/json"
-    "fmt"
-    "strings"
+	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
 
-    "github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
-    "github.com/mark3labs/mcp-go/mcp"
-    "github.com/mark3labs/mcp-go/server"
+	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
 )
 
 // ListPromptsTool creates a tool for listing prompts from the MCP server
