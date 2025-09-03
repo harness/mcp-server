@@ -12,13 +12,6 @@ const (
 )
 
 const (
-	EntityScopeDefault string = "ALL"
-	EntityScopeAccount string = "ACCOUNT"
-	EntityScopeOrg     string = "ORG"
-	EntityScopeProject string = "PROJECT"
-)
-
-const (
 	ScorecardDetailsWeightageStrategyCUSTOM       string = "CUSTOM"
 	ScorecardDetailsWeightageStrategyEQUALWEIGHTS string = "EQUAL_WEIGHTS"
 )
