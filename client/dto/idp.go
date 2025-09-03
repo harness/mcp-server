@@ -236,6 +236,12 @@ type ScorecardStatsResponse struct {
 	Timestamp *int64           `json:"timestamp,omitempty"`
 }
 
+type ScorecardStatsResponseWithHumanReadableTime struct {
+	Name  string           `json:"name"`
+	Stats []ScorecardStats `json:"stats"`
+	Time  string           `json:"time,omitempty"`
+}
+
 type GetChecksParams struct {
 	Page       int32
 	Limit      int32
@@ -307,6 +313,12 @@ type CheckStatsResponse struct {
 	Name      string       `json:"name"`
 	Stats     []CheckStats `json:"stats"`
 	Timestamp *int64       `json:"timestamp,omitempty"`
+}
+
+type CheckStatsResponseWithHumanReadableTime struct {
+	Name  string       `json:"name"`
+	Stats []CheckStats `json:"stats"`
+	Time  string       `json:"time,omitempty"`
 }
 
 type ExecuteWorkflowRequest struct {

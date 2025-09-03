@@ -188,7 +188,7 @@ func (i *IDPService) GetScorecardScores(ctx context.Context, scope dto.Scope, id
 	return response, nil
 }
 
-func (i *IDPService) GetScorecardStats(ctx context.Context, scope dto.Scope, scorecardIdentifier string) (*dto.ScorecardStatsResponse, error) {
+func (i *IDPService) GetScorecardStats(ctx context.Context, scope dto.Scope, scorecardIdentifier string) (*dto.ScorecardStatsResponseWithHumanReadableTime, error) {
 	path := fmt.Sprintf(idpGetScorecardStatsPath, scorecardIdentifier)
 
 	headers := make(map[string]string)
@@ -202,7 +202,11 @@ func (i *IDPService) GetScorecardStats(ctx context.Context, scope dto.Scope, sco
 		return nil, err
 	}
 
-	return response, nil
+	return &dto.ScorecardStatsResponseWithHumanReadableTime{
+		Name:  response.Name,
+		Stats: response.Stats,
+		Time:  dto.FormatUnixMillisToRFC3339(*response.Timestamp),
+	}, nil
 }
 
 func (i *IDPService) GetCheck(ctx context.Context, scope dto.Scope, checkIdentifier string, isCustom bool) (*dto.CheckDetailsResponse, error) {
@@ -260,7 +264,7 @@ func (i *IDPService) ListChecks(ctx context.Context, scope dto.Scope, getChecksP
 	return response, nil
 }
 
-func (i *IDPService) GetCheckStats(ctx context.Context, scope dto.Scope, checkIdentifier string, isCustom bool) (*dto.CheckStatsResponse, error) {
+func (i *IDPService) GetCheckStats(ctx context.Context, scope dto.Scope, checkIdentifier string, isCustom bool) (*dto.CheckStatsResponseWithHumanReadableTime, error) {
 	path := fmt.Sprintf(idpGetCheckStatsPath, checkIdentifier)
 
 	headers := make(map[string]string)
@@ -275,7 +279,11 @@ func (i *IDPService) GetCheckStats(ctx context.Context, scope dto.Scope, checkId
 		return nil, err
 	}
 
-	return response, nil
+	return &dto.CheckStatsResponseWithHumanReadableTime{
+		Name:  response.Name,
+		Stats: response.Stats,
+		Time:  dto.FormatUnixMillisToRFC3339(*response.Timestamp),
+	}, nil
 }
 
 func (i *IDPService) ExecuteWorkflow(ctx context.Context, scope dto.Scope, identifier string, inputSet map[string]interface{}) (*dto.ExecuteWorkflowResponse, error) {
