@@ -182,4 +182,4 @@ func GetPromptTool(config *config.Config) (tool mcp.Tool, handler server.ToolHan
 
             return mcp.NewToolResultText(string(r)), nil
         }
-    }
+}
