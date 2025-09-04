@@ -6,8 +6,8 @@ import (
 	"fmt"
 
 	"github.com/harness/harness-mcp/client"
-	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -148,9 +148,7 @@ func GetProductivityFeatureMetricsTool(config *config.Config, client *client.SEI
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal productivity feature metrics: %w", err)
 			}
-			
 
 			return mcp.NewToolResultText(string(r)), nil
 		}
 }
-

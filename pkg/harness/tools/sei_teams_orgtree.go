@@ -6,8 +6,8 @@ import (
 	"fmt"
 
 	"github.com/harness/harness-mcp/client"
-	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -420,7 +420,7 @@ func GetOrgTreeEfficiencyProfileTool(config *config.Config, client *client.SEISe
 
 			// Build params map
 			requestParams := map[string]interface{}{
-				"accountId":  accountID,
+				"accountId": accountID,
 				"orgTreeId": int(orgTreeId),
 			}
 
@@ -466,7 +466,7 @@ func GetOrgTreeProductivityProfileTool(config *config.Config, client *client.SEI
 
 			// Build params map
 			requestParams := map[string]interface{}{
-				"accountId":  accountID,
+				"accountId": accountID,
 				"orgTreeId": int(orgTreeId),
 			}
 
@@ -512,7 +512,7 @@ func GetOrgTreeBusinessAlignmentProfileTool(config *config.Config, client *clien
 
 			// Build params map
 			requestParams := map[string]interface{}{
-				"accountId":  accountID,
+				"accountId": accountID,
 				"orgTreeId": int(orgTreeId),
 			}
 
@@ -558,7 +558,7 @@ func GetOrgTreeIntegrationsTool(config *config.Config, client *client.SEIService
 
 			// Build params map
 			requestParams := map[string]interface{}{
-				"accountId":  accountID,
+				"accountId": accountID,
 				"orgTreeId": int(orgTreeId),
 			}
 
@@ -604,7 +604,7 @@ func GetOrgTreeTeamsTool(config *config.Config, client *client.SEIService) (mcp.
 
 			// Build params map
 			requestParams := map[string]interface{}{
-				"accountId":  accountID,
+				"accountId": accountID,
 				"orgTreeId": int(orgTreeId),
 			}
 
