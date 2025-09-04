@@ -5,6 +5,7 @@ import (
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/auth"
 	"github.com/harness/harness-mcp/pkg/harness/tools"
 	"github.com/harness/harness-mcp/pkg/modules/utils"
 	"github.com/harness/harness-mcp/pkg/toolsets"
@@ -75,8 +76,16 @@ func RegisterInternalDeveloperPortal(config *config.Config, tsg *toolsets.Toolse
 		return err
 	}
 
+	var ngManagerAuthProvider auth.Provider
+	if config.Internal {
+		ngManagerAuthProvider = auth.NewJWTProvider(config.NgManagerSecret, utils.ServiceIdentity, &utils.DefaultJWTLifetime)
+	} else {
+		ngManagerAuthProvider = auth.NewAPIKeyProvider(config.APIKey)
+	}
+
 	idpClient := &client.IDPService{
-		Client: c,
+		Client:                c,
+		NgManagerAuthProvider: ngManagerAuthProvider,
 	}
 
 	// Get the GenAI client using the shared method
