@@ -80,6 +80,7 @@ var (
 					Port: viper.GetInt("http_port"),
 					Path: viper.GetString("http_path"),
 				},
+				Internal:      true,
 				Toolsets:      toolsets,
 				EnableModules: enableModules,
 			}

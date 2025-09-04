@@ -1,0 +1,2 @@
+DOCKER_FILE_PATH: /harness/mcp-server/Dockerfile
+CONTEXT_PATH: /harness/mcp-server
