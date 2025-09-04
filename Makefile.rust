@@ -1,0 +1,86 @@
+# Rust Makefile for Harness MCP Server
+
+.PHONY: build test clean format lint check install-deps
+
+# Build the project
+build:
+	cargo build --release
+
+# Build for development
+build-dev:
+	cargo build
+
+# Run tests
+test:
+	cargo test
+
+# Run tests with coverage
+test-coverage:
+	cargo test --all-features
+	cargo tarpaulin --out Html
+
+# Check code without building
+check:
+	cargo check
+
+# Format code
+format:
+	cargo fmt
+
+# Lint code
+lint:
+	cargo clippy -- -D warnings
+
+# Clean build artifacts
+clean:
+	cargo clean
+
+# Install dependencies
+install-deps:
+	rustup update
+	rustup component add rustfmt clippy
+
+# Run the server with stdio transport
+run-stdio:
+	cargo run -- stdio
+
+# Run the server with HTTP transport
+run-http:
+	cargo run -- http-server --port 8080
+
+# Build Docker image
+docker-build:
+	docker build -t harness/mcp-server-rust .
+
+# Run with Docker
+docker-run:
+	docker run -i --rm \
+		-e HARNESS_API_KEY=${HARNESS_API_KEY} \
+		-e HARNESS_DEFAULT_ORG_ID=${HARNESS_DEFAULT_ORG_ID} \
+		-e HARNESS_DEFAULT_PROJECT_ID=${HARNESS_DEFAULT_PROJECT_ID} \
+		-e HARNESS_BASE_URL=${HARNESS_BASE_URL} \
+		harness/mcp-server-rust stdio
+
+# Development setup
+dev-setup: install-deps
+	cargo fetch
+
+# Full CI pipeline
+ci: format lint check test
+
+help:
+	@echo "Available targets:"
+	@echo "  build         - Build release version"
+	@echo "  build-dev     - Build development version"
+	@echo "  test          - Run tests"
+	@echo "  check         - Check code without building"
+	@echo "  format        - Format code"
+	@echo "  lint          - Lint code"
+	@echo "  clean         - Clean build artifacts"
+	@echo "  install-deps  - Install Rust dependencies"
+	@echo "  run-stdio     - Run server with stdio transport"
+	@echo "  run-http      - Run server with HTTP transport"
+	@echo "  docker-build  - Build Docker image"
+	@echo "  docker-run    - Run with Docker"
+	@echo "  dev-setup     - Set up development environment"
+	@echo "  ci            - Run full CI pipeline"

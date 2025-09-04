@@ -1,0 +1,58 @@
+# Multi-stage build for Rust Harness MCP Server
+
+# Build stage
+FROM rust:1.75-slim as builder
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app directory
+WORKDIR /app
+
+# Copy Cargo files
+COPY Cargo.toml Cargo.lock ./
+
+# Copy source code
+COPY src/ ./src/
+
+# Build the application
+RUN cargo build --release
+
+# Runtime stage
+FROM debian:bookworm-slim
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN useradd -r -s /bin/false harness
+
+# Create app directory
+WORKDIR /app
+
+# Copy binary from builder stage
+COPY --from=builder /app/target/release/harness-mcp-server /usr/local/bin/harness-mcp-server
+
+# Change ownership
+RUN chown harness:harness /usr/local/bin/harness-mcp-server
+
+# Switch to non-root user
+USER harness
+
+# Set entrypoint
+ENTRYPOINT ["harness-mcp-server"]
+
+# Default command
+CMD ["stdio"]
+
+# Labels
+LABEL org.opencontainers.image.title="Harness MCP Server (Rust)"
+LABEL org.opencontainers.image.description="Harness MCP Server implemented in Rust"
+LABEL org.opencontainers.image.vendor="Harness Inc."
+LABEL org.opencontainers.image.licenses="Apache-2.0"
