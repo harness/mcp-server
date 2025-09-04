@@ -263,7 +263,7 @@ func (i *IDPService) ListChecks(ctx context.Context, scope dto.Scope, getChecksP
 
 	response := new(dto.CheckResponseList)
 
-	err := i.Client.Get(ctx, path, params, headers, &response)
+	err := i.Client.GetWithoutSplittingParamValuesOnComma(ctx, path, params, headers, &response)
 	if err != nil {
 		return nil, err
 	}
