@@ -47,6 +47,9 @@ type Client struct {
 
 	// AuthProvider used for authentication
 	AuthProvider auth.Provider
+
+	// UserAgent is the User-Agent header string sent with requests
+	UserAgent string
 }
 
 type service struct {
@@ -64,16 +67,25 @@ func defaultHTTPClient(timeout ...time.Duration) *http.Client {
 	}
 }
 
-// NewWithToken creates a new client with the specified base URL and API token
-func NewWithAuthProvider(uri string, authProvider auth.Provider, timeout ...time.Duration) (*Client, error) {
+// NewWithAuthProvider creates a new client with the specified base URL, auth provider, and optional version
+// If version is an empty string, "unknown" will be used in the User-Agent header
+func NewWithAuthProvider(uri string, authProvider auth.Provider, version string, timeout ...time.Duration) (*Client, error) {
 	parsedURL, err := url.Parse(uri)
 	if err != nil {
 		return nil, err
 	}
+
+	versionStr := "unknown"
+	if version != "" {
+		versionStr = version
+	}
+	userAgent := fmt.Sprintf("harness-mcp-client/%s", versionStr)
+
 	c := &Client{
 		client:       defaultHTTPClient(timeout...),
 		BaseURL:      parsedURL,
 		AuthProvider: authProvider,
+		UserAgent:    userAgent,
 	}
 	return c, nil
 }
@@ -473,6 +485,8 @@ func (c *Client) Do(r *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 	r.Header.Set(k, v)
+
+	r.Header.Set("User-Agent", c.UserAgent)
 
 	// Check for scope in context and add account ID to headers if present
 	if scope, err := common.GetScopeFromContext(ctx); err == nil {

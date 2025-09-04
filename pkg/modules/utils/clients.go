@@ -50,7 +50,7 @@ func CreateClientWithIdentity(baseURL string, config *config.Config, secret stri
 		authProvider = auth.NewAPIKeyProvider(config.APIKey)
 	}
 
-	client, err := client.NewWithAuthProvider(baseURL, authProvider, timeout...)
+	client, err := client.NewWithAuthProvider(baseURL, authProvider, config.Version, timeout...)
 	if err != nil {
 		slog.Error("Failed to create client", "error", err)
 		return nil, fmt.Errorf("failed to create client: %w", err)

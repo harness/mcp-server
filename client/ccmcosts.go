@@ -23,7 +23,8 @@ const (
 )
 
 type CloudCostManagementService struct {
-	Client *Client
+	Client      *Client
+	NgManClient *Client
 }
 
 func (c *CloudCostManagementService) GetOverview(ctx context.Context, accID string, startTime int64, endTime int64, groupBy string) (*dto.CEView, error) {
