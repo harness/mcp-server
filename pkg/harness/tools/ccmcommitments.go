@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
@@ -274,6 +275,8 @@ func computeCommitmentUtilisationSummary(utilisationData *dto.CCMCommitmentBaseR
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal commitment utilisation: %s", err)
 	}
+
+	slog.Info("Utilization in ec2 commitment analysis", "utilisationData", string(r))
 
 	utilisationDetails := make(map[string]*dto.CommitmentUtlizationsDetail)
 
