@@ -29,7 +29,6 @@ func NewSEIService(client *Client, baseURL, secret string) *SEIService {
 	}
 }
 
-
 // makePostRequest makes a POST request with JSON body
 func (s *SEIService) makePostRequest(ctx context.Context, path string, body interface{}, queryParams map[string]string, additionalHeaders ...map[string]string) (interface{}, error) {
 	var response interface{}
@@ -57,8 +56,6 @@ func (s *SEIService) makePostRequest(ctx context.Context, path string, body inte
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request body: %w", err)
 	}
-
-	slog.Info("SEI - Post Request details", "body", body, "path", path, "queryParams", queryParams, "headers", headers)
 
 	// Use PostRaw to include custom headers
 	err = s.Client.PostRaw(ctx, path, queryParams, bytes.NewBuffer(bodyBytes), headers, &response)
@@ -307,16 +304,16 @@ func (s *SEIService) GetChangeFailureRate(ctx context.Context, params map[string
 func (s *SEIService) GetMttr(ctx context.Context, params map[string]interface{}) (interface{}, error) {
 	// Extract query parameters
 	queryParams := map[string]string{
-		"account": fmt.Sprintf("%v", params["accountId"]),
+		"account":           fmt.Sprintf("%v", params["accountId"]),
 		"projectIdentifier": fmt.Sprintf("%v", params["projectId"]),
-		"orgIdentifier": fmt.Sprintf("%v", params["orgId"]),
+		"orgIdentifier":     fmt.Sprintf("%v", params["orgId"]),
 	}
 
 	// Build request body
 	body := map[string]interface{}{
-		"teamRefId": params["teamRefId"],
-		"dateStart": params["dateStart"],
-		"dateEnd": params["dateEnd"],
+		"teamRefId":   params["teamRefId"],
+		"dateStart":   params["dateStart"],
+		"dateEnd":     params["dateEnd"],
 		"granularity": params["granularity"],
 	}
 
