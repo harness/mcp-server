@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
@@ -413,7 +412,6 @@ func ListChecksTool(config *config.Config, client *client.IDPService) (tool mcp.
 				if sortOrder != "" {
 					sort += "," + sortOrder
 				}
-				slog.Info("sort", "sort", sort)
 			}
 
 			params = &dto.GetChecksParams{
