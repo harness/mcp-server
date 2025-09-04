@@ -1,0 +1,76 @@
+[package]
+name = "harness-mcp"
+version = "0.1.0"
+edition = "2021"
+authors = ["Harness Inc."]
+description = "Harness MCP (Model Context Protocol) server implementation in Rust"
+license = "Apache-2.0"
+repository = "https://github.com/harness/harness-mcp"
+
+[[bin]]
+name = "harness-mcp-server"
+path = "src/bin/harness-mcp-server/main.rs"
+
+[dependencies]
+# CLI and configuration (maps from spf13/cobra and spf13/viper)
+clap = { version = "4.4", features = ["derive", "env"] }
+config = "0.14"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+
+# HTTP client and server (maps from hashicorp/go-retryablehttp and net/http)
+reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false }
+tokio = { version = "1.0", features = ["full"] }
+hyper = { version = "0.14", features = ["full"] }
+tower = "0.4"
+tower-http = { version = "0.4", features = ["cors", "trace"] }
+
+# Authentication and security (maps from golang-jwt/jwt)
+jsonwebtoken = "9.2"
+uuid = { version = "1.6", features = ["v4", "serde"] }
+
+# Error handling and utilities
+anyhow = "1.0"
+thiserror = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Async and concurrency
+futures = "0.3"
+async-trait = "0.1"
+
+# Retry logic (maps from cenkalti/backoff/v4)
+backoff = { version = "0.4", features = ["tokio"] }
+
+# URL and encoding utilities
+url = "2.4"
+base64 = "0.21"
+bytes = "1.5"
+
+# Regular expressions
+regex = "1.10"
+
+# Time handling (maps from Go time package)
+chrono = { version = "0.4", features = ["serde"] }
+
+# MCP protocol implementation (TODO: needs to be implemented)
+# Note: github.com/mark3labs/mcp-go needs Rust equivalent
+# This will require implementing the MCP protocol in Rust
+
+# Harness API client (TODO: needs to be implemented)
+# Note: github.com/harness/harness-go-sdk functionality will be
+# implemented using reqwest and custom client code
+
+[dev-dependencies]
+tokio-test = "0.4"
+mockito = "1.2"
+
+[features]
+default = ["rustls-tls"]
+rustls-tls = ["reqwest/rustls-tls"]
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
