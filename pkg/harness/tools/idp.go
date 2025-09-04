@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
@@ -334,7 +335,7 @@ func GetCheckTool(config *config.Config, client *client.IDPService) (tool mcp.To
 				mcp.Required(),
 				mcp.Description("The Unique identifier of the check. This is not the name of the check"),
 			),
-			mcp.WithString("is_custom",
+			mcp.WithBoolean("is_custom",
 				mcp.Description("Whether the check is a custom check or not. This will be mentioned in the scorecard details."),
 				mcp.DefaultBool(false),
 			),
@@ -375,8 +376,13 @@ func ListChecksTool(config *config.Config, client *client.IDPService) (tool mcp.
 			),
 			WithScope(config, false),
 			WithPagination(),
-			mcp.WithString("sort",
-				mcp.Description("Option to sort entities"),
+			mcp.WithString("sort_type",
+				mcp.Description("Sort type for the results (e.g., name, description or data_source)"),
+				mcp.Enum(dto.ChecksSortTypeName, dto.ChecksSortTypeDescription, dto.ChecksSortTypeDataSource),
+			),
+			mcp.WithString("sort_order",
+				mcp.Description("Sort order for the results (e.g., ASC for ascending or DESC for descending)"),
+				mcp.Enum(dto.ChecksSortOrderAsc, dto.ChecksSortOrderDesc),
 			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -393,9 +399,21 @@ func ListChecksTool(config *config.Config, client *client.IDPService) (tool mcp.
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			sort, err := OptionalParam[string](request, "sort")
+			sortType, err := OptionalParam[string](request, "sort_type")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
+			}
+			sortOrder, err := OptionalParam[string](request, "sort_order")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			sort := ""
+			if sortType != "" {
+				sort += sortType
+				if sortOrder != "" {
+					sort += "," + sortOrder
+				}
+				slog.Info("sort", "sort", sort)
 			}
 
 			params = &dto.GetChecksParams{
@@ -427,7 +445,7 @@ func GetCheckStatsTool(config *config.Config, client *client.IDPService) (tool m
 				mcp.Description("The Unique identifier of the check. This is not the name of the check"),
 			),
 			WithScope(config, false),
-			mcp.WithString("is_custom",
+			mcp.WithBoolean("is_custom",
 				mcp.Description("Whether the check is a custom check or not. This will be mentioned in the scorecard details."),
 				mcp.DefaultBool(false),
 			),

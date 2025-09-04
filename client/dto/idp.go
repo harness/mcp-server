@@ -16,6 +16,17 @@ const (
 	ScorecardDetailsWeightageStrategyEQUALWEIGHTS string = "EQUAL_WEIGHTS"
 )
 
+const (
+	ChecksSortOrderAsc  string = "ASC"
+	ChecksSortOrderDesc string = "DESC"
+)
+
+const (
+	ChecksSortTypeName        string = "name"
+	ChecksSortTypeDescription string = "description"
+	ChecksSortTypeDataSource  string = "data_source"
+)
+
 type GetEntityParams struct {
 	BranchName             string `form:"branch_name,omitempty" json:"branch_name,omitempty"`
 	ConnectorRef           string `form:"connector_ref,omitempty" json:"connector_ref,omitempty"`
