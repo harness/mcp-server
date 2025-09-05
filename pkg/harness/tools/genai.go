@@ -213,9 +213,6 @@ func createGenAIToolHandler(config *config.Config, client *client.GenaiService, 
 		case *dto.IDPWorkflowParameters:
 			req.Stream = shouldStream
 			response, respErr = client.SendIDPWorkflow(ctx, scope, req, onProgress)
-		case *dto.ProcessChatParameters:
-			req.Stream = shouldStream
-			response, respErr = client.SendProcessRequest(ctx, scope, req, onProgress)
 		default:
 			return nil, fmt.Errorf("unsupported request type: %T", requestObj)
 		}
