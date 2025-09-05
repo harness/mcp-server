@@ -221,8 +221,7 @@ func extractLinesFromFiles(logFiles []LogFileInfo, numLines int) []string {
 			}
 
 			// Process the line and add it to formattedLines (at the beginning to maintain order)
-			processedLine := processLogLine(line)
-			formattedLines = append([]string{processedLine}, formattedLines...)
+			formattedLines = append([]string{line}, formattedLines...)
 		}
 
 		// If we have enough lines or processed all files, stop
@@ -243,14 +242,6 @@ func removeAnsiCodes(s string) string {
 	// Remove any remaining color code patterns like [33;1m
 	re := regexp.MustCompile("\\[[0-9;]*[a-zA-Z]")
 	return re.ReplaceAllString(s, "")
-}
-
-// processLogLine processes a single log line, cleaning ANSI codes from the 'out' field
-// and returning the processed line as a string
-func processLogLine(line string) string {
-	// Since formatJSONLines now handles ANSI code removal, we just return the original line
-	// This avoids double-processing and ensures the JSON structure is preserved
-	return line
 }
 
 // formatJSONLines formats a slice of JSON lines for better readability
