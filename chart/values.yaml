@@ -69,6 +69,8 @@ global:
   monitoring:
     enabled: false
     managedPlatform: ""
+  serviceUpStream:
+    enabled: false
 
 command:
   - "app/harness-mcp-server"
