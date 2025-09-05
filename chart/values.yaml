@@ -38,7 +38,6 @@ global:
     minReplicas: 1
     maxReplicas: 100
     targetCPU: 80
-    targetMemory: 80
   ingress:
     # -- create ingress objects
     enabled: false
@@ -244,7 +243,6 @@ autoscaling:
   minReplicas: 1
   maxReplicas: 100
   targetCPU: 80
-  targetMemory: 80
 
 # Additional volumes on the output Deployment definition.
 volumes: []
@@ -348,5 +346,5 @@ config:
   HARNESS_SCS_SVC_BASE_URL: "http://ssca-manager:8188"
   HARNESS_DBOPS_SVC_BASE_URL: "http://db-devops-service:5001/"
   HARNESS_NG_MANAGER_BASE_URL: "http://ng-manager:7090"
-  HARNESS_TEMPLATE_SVC_BASE_URL: "http://template-service:15001"
+  HARNESS_TEMPLATE_SVC_BASE_URL: "http://template-service:15002"
   
