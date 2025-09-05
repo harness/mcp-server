@@ -76,6 +76,11 @@ func (m *CoreModule) RegisterToolsets() error {
 			if err != nil {
 				return err
 			}
+		case "delegateTokens":
+			err := RegisterDelegateTokens(m.config, m.tsg)
+			if err != nil {
+				return err
+			}
 		case "audit":
 			err := RegisterAudit(m.config, m.tsg)
 			if err != nil {
@@ -220,6 +225,24 @@ func RegisterConnectors(config *config.Config, tsg *toolsets.ToolsetGroup) error
 	return nil
 }
 
+// RegisterDelegateTokens registers the DelegateTokens toolset
+func RegisterDelegateTokens(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	delegateTokenClient, err := utils.CreateServiceClient(config, config.NgManagerBaseURL, config.BaseURL, "ng/api", config.NgManagerSecret)
+	if err != nil {
+		return fmt.Errorf("failed to create client for DelegateTokens: %w", err)
+	}
+	delegateTokenServiceClient := &client.DelegateTokenClient{Client: delegateTokenClient}
+
+	// Create the delegateTokens toolset
+	delegateTokens := toolsets.NewToolset("delegateTokens", "Harness DelegateTokens related tools").
+		AddReadTools(
+			toolsets.NewServerTool(tools.ListDelegateTokensTool(config, delegateTokenServiceClient)),
+		)
+
+	tsg.AddToolset(delegateTokens)
+	return nil
+}
+
 // RegisterDashboards registers the dashboards toolset
 func RegisterDashboards(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	baseURL := utils.BuildServiceURL(config, config.DashboardSvcBaseURL, config.BaseURL, "dashboard")
@@ -315,7 +338,7 @@ func RegisterLogs(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 // RegisterTemplates registers the templates toolset
 func RegisterTemplates(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for templates
-	baseURL := utils.BuildServiceURL(config, config.TemplateSvcBaseURL, config.BaseURL, "")
+	baseURL := utils.BuildServiceURL(config, config.TemplateSvcBaseURL, config.BaseURL, "template")
 	secret := config.TemplateSvcSecret
 
 	// Create base client for templates
@@ -485,14 +508,14 @@ func RegisterSecrets(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 }
 
 func RegisterPromptTools(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-    // Create the prompt toolset with both tools
-    prompt := toolsets.NewToolset("prompt", "Harness MCP Prompts tools").
-        AddReadTools(
-            toolsets.NewServerTool(tools.GetPromptTool(config)),
-            toolsets.NewServerTool(tools.ListPromptsTool(config)),
-        )
+	// Create the prompt toolset with both tools
+	prompt := toolsets.NewToolset("prompt", "Harness MCP Prompts tools").
+		AddReadTools(
+			toolsets.NewServerTool(tools.GetPromptTool(config)),
+			toolsets.NewServerTool(tools.ListPromptsTool(config)),
+		)
 
-    // Add toolset to the group
-    tsg.AddToolset(prompt)
-    return nil
+	// Add toolset to the group
+	tsg.AddToolset(prompt)
+	return nil
 }

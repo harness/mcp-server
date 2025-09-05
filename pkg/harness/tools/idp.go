@@ -8,6 +8,7 @@ import (
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -16,7 +17,7 @@ func GetEntityTool(config *config.Config, client *client.IDPService) (tool mcp.T
 	return mcp.NewTool("get_entity",
 			mcp.WithDescription(`Get details of a specific entity(services, APIs, user groups, resources) in the Harness IDP Catalog. Entities can represent services, APIs, user groups, resources, and more. The tool returns metadata for the Harness entities matching the filter criteria, including their identifier, scope, kind, reference type (INLINE/GIT), YAML definition, Git details (branch, path, repo), ownership, tags, lifecycle, scorecards, status, and group. Use the list_entities tool to first to get the id.
 			Note: If the fetched entity is a workflow, it might contain a token field but that is to be IGNORED.`),
-			WithScope(config, false),
+			common.WithScope(config, false),
 			mcp.WithString("entity_id",
 				mcp.Required(),
 				mcp.Description("The Unique identifier of the entity within its scope and kind. This is not the name of the entity"),
@@ -32,10 +33,11 @@ func GetEntityTool(config *config.Config, client *client.IDPService) (tool mcp.T
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
 			kind, err := OptionalParam[string](request, "kind")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -61,7 +63,7 @@ func ListEntitiesTool(config *config.Config, client *client.IDPService) (tool mc
 			mcp.WithString("search_term",
 				mcp.Description("Optional search term to filter entities"),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 			WithPagination(),
 			mcp.WithString("sort",
 				mcp.Description("Option to sort entities"),
@@ -91,7 +93,7 @@ func ListEntitiesTool(config *config.Config, client *client.IDPService) (tool mc
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			params := &dto.GetEntitiesParams{}
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -176,7 +178,7 @@ func ListEntitiesTool(config *config.Config, client *client.IDPService) (tool mc
 func GetScorecardTool(config *config.Config, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_scorecard",
 			mcp.WithDescription("Get details of a specific scorecard in the Harness IDP Catalog. Use this only when the **id** is provided or known."),
-			WithScope(config, false),
+			common.WithScope(config, false),
 			mcp.WithString("scorecard_id",
 				mcp.Required(),
 				mcp.Description("The Unique identifier of the score within its scope and kind"),
@@ -187,10 +189,11 @@ func GetScorecardTool(config *config.Config, client *client.IDPService) (tool mc
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
 			data, err := client.GetScorecard(ctx, scope, scorecardId)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get scorecard: %w", err)
@@ -208,14 +211,15 @@ func GetScorecardTool(config *config.Config, client *client.IDPService) (tool mc
 func ListScorecardsTool(config *config.Config, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_scorecards",
 			mcp.WithDescription("List scorecards in the Harness Internal Developer Portal Catalog."),
-			WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
 			data, err := client.ListScorecards(ctx, scope)
 			if err != nil {
 				return nil, fmt.Errorf("failed to list scorecards: %w", err)
@@ -237,17 +241,18 @@ func GetScoreSummaryTool(config *config.Config, client *client.IDPService) (tool
 				mcp.Required(),
 				mcp.Description("The Unique identifier of the entity within its scope and kind. This is not the name of the scorecard"),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			entityId, err := RequiredParam[string](request, "entity_identifier")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
 			data, err := client.GetScorecardSummary(ctx, scope, entityId)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get scorecard summary: %w", err)
@@ -269,17 +274,18 @@ func GetScoresTool(config *config.Config, client *client.IDPService) (tool mcp.T
 				mcp.Required(),
 				mcp.Description("The Unique identifier of the entity within its scope and kind. This is not the name of the scorecard"),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			entityId, err := RequiredParam[string](request, "entity_identifier")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
 			data, err := client.GetScorecardScores(ctx, scope, entityId)
 			if err != nil {
 				return nil, fmt.Errorf("failed to list scorecards: %w", err)
@@ -488,7 +494,7 @@ func ExecuteWorkflowTool(config *config.Config, client *client.IDPService) (tool
 			⚠️ IMPORTANT: 
 			- NEVER request or include token values when executing workflows. The system handles authentication automatically - DO NOT prompt users for tokens, even if they appear as required parameters in the workflow definition.
 			- DO NOT execute the workflow if the valueset is not sufficient.`),
-			WithScope(config, false),
+			common.WithScope(config, false),
 			mcp.WithObject("workflow_details",
 				mcp.Required(),
 				mcp.Description("A json representation of the workflow entity. This json contains the metadata of the workflow(like owner, name, description, ref etc) and a yaml field which should contain the spec.parameters against which the values should be validated. Only the parameters marked required are mandatory."),
@@ -502,10 +508,11 @@ func ExecuteWorkflowTool(config *config.Config, client *client.IDPService) (tool
 			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
 			_, err = RequiredParam[interface{}](request, "workflow_details")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil

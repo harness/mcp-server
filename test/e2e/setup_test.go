@@ -13,11 +13,11 @@ import (
 
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness"
+	"github.com/harness/harness-mcp/pkg/harness/prompts"
+	"github.com/harness/harness-mcp/pkg/modules"
 	mcpClient "github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/require"
-	"github.com/harness/harness-mcp/pkg/harness/prompts"
-	"github.com/harness/harness-mcp/pkg/modules"
 )
 
 var (
@@ -161,7 +161,7 @@ func setupMCPClient(t *testing.T, options ...clientOption) *mcpClient.Client {
 		}
 
 		// Create an MCP server instance with default options
-		mcpServer := harness.NewServer("0.0.1")
+		mcpServer := harness.NewServer("0.0.1", cfg)
 
 		// Register the tools with the server
 		tsg.RegisterTools(mcpServer)

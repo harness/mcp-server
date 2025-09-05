@@ -12,6 +12,7 @@ import (
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -65,7 +66,7 @@ func GetAuditYamlTool(config *config.Config, auditClient *client.AuditService) (
 				mcp.Description("The ID of the audit event to retrieve YAML diff for."),
 				mcp.Required(),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			slog.Info("Handling get_audit_yaml request", "request", request.GetArguments())
@@ -75,7 +76,7 @@ func GetAuditYamlTool(config *config.Config, auditClient *client.AuditService) (
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -119,6 +120,7 @@ func ListUserAuditTrailTool(config *config.Config, auditClient *client.AuditServ
 					"ROLE_ASSIGNMENT_CREATED", "ROLE_ASSIGNMENT_UPDATED", "ROLE_ASSIGNMENT_DELETED", "MOVE", "ENABLED", "DISABLED", "DISMISS_ANOMALY", "RERUN", "BYPASS", "STABLE_VERSION_CHANGED",
 					"SYNC_START", "START_IMPERSONATION", "END_IMPERSONATION", "MOVE_TO_GIT", "FREEZE_BYPASS", "EXPIRED", "FORCE_PUSH"),
 			),
+			common.WithScope(config, false),
 
 			mcp.WithString("resource_type",
 				mcp.Description("Optional resource type to filter by."),
@@ -150,7 +152,7 @@ func ListUserAuditTrailTool(config *config.Config, auditClient *client.AuditServ
 			mcp.WithString("resource_identifier",
 				mcp.Description("Optional resource identifier to filter by. Must be used with resource_type."),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -176,7 +178,7 @@ func ListUserAuditTrailTool(config *config.Config, auditClient *client.AuditServ
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

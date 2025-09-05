@@ -11,6 +11,7 @@ import (
 
 	generated "github.com/harness/harness-mcp/client/scs/generated"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/harness/harness-mcp/pkg/harness/event"
 	"github.com/harness/harness-mcp/pkg/harness/event/types"
 	"github.com/harness/harness-mcp/pkg/resources"
@@ -229,13 +230,14 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 				mcp.DefaultNumber(5),
 				mcp.Max(10),
 			),
-			WithScope(config, true),
+			common.WithScope(config, true),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
 			orgID := scope.OrgID
 			projectID := scope.ProjectID
 			order, _, page, size, sortVal := ParseArtifactListParams(request)
@@ -529,14 +531,15 @@ func ArtifactListV2Tool(config *config.Config, client *generated.ClientWithRespo
 				mcp.Description("Sort by field (severity, title)"),
 				mcp.Enum("severity", "title"),
 			),
-			WithScope(config, true),
+			common.WithScope(config, true),
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
 			orgID := scope.OrgID
 			projectID := scope.ProjectID
 			source, err := RequiredParam[string](request, "source")
@@ -600,13 +603,14 @@ func GetArtifactV2OverviewTool(config *config.Config, client *generated.ClientWi
 				mcp.Required(),
 				mcp.Description("The identifier of the artifact, eg: 'artifactId'"),
 			),
-			WithScope(config, true),
+			common.WithScope(config, true),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
 			orgID := scope.OrgID
 			projectID := scope.ProjectID
 			source, err := RequiredParam[string](request, "source")
@@ -664,13 +668,14 @@ func GetArtifactChainOfCustodyV2Tool(config *config.Config, client *generated.Cl
 				mcp.Pattern("^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"),
 				mcp.Description(`The identifier of the artifact (e.g. artifactId).`),
 			),
-			WithScope(config, true),
+			common.WithScope(config, true),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
 			orgID := scope.OrgID
 			projectID := scope.ProjectID
 			artifact, err := RequiredParam[string](request, "artifact_identifier")
@@ -758,14 +763,15 @@ func FetchComplianceResultsByArtifactTool(config *config.Config, client *generat
 				mcp.Description("Sort by field (severity, title)"),
 				mcp.Enum("severity", "title"),
 			),
-			WithScope(config, true),
+			common.WithScope(config, true),
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
 			orgID := scope.OrgID
 			projectID := scope.ProjectID
 
@@ -830,13 +836,14 @@ func GetCodeRepositoryOverviewTool(config *config.Config, client *generated.Clie
 						- Use the 'list_scs_code_repos' tool to find the repository by name or URL and copy its artifactId.
 						`),
 			),
-			WithScope(config, true),
+			common.WithScope(config, true),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
 			orgID := scope.OrgID
 			projectID := scope.ProjectID
 
@@ -891,10 +898,10 @@ func CreateOPAPolicyTool(config *config.Config, client *generated.ClientWithResp
 				}),
 			),
 
-			WithScope(config, true),
+			common.WithScope(config, true),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			_, err := FetchScope(config, request, true)
+			_, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -1013,13 +1020,14 @@ func DownloadSbomTool(config *config.Config, client *generated.ClientWithRespons
 				mcp.Required(),
 				mcp.Description(`Required. The orchestration ID for the artifact whose SBOM you want to download. eg: '8nehRXghR2C8ZWMHiyzxCg'`),
 			),
-			WithScope(config, true),
+			common.WithScope(config, true),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
 			orgID := scope.OrgID
 			projectID := scope.ProjectID
 			orchestrationID, err := RequiredParam[string](request, "orchestration_id")
@@ -1065,7 +1073,7 @@ func DownloadSbomTool(config *config.Config, client *generated.ClientWithRespons
 		}
 }
 
-// GetSCSTool returns a tool for getting SCS (Supply Chain Security) details
+// ListSCSCodeReposTool returns a tool for listing code repositories from Harness SCS.
 func ListSCSCodeReposTool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_scs_code_repos",
 			mcp.WithDescription(`
@@ -1158,15 +1166,16 @@ func ListSCSCodeReposTool(config *config.Config, client *generated.ClientWithRes
 				mcp.Description("Optional parameter to sort by field (compliance_results, last_scan).If you skip this parameter it will sort on repository name"),
 				mcp.Enum("compliance_results", "last_scan"),
 			),
-			WithScope(config, true),
+			common.WithScope(config, true),
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			// Extract org and project from scope
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
 			orgID := scope.OrgID
 			projectID := scope.ProjectID
 			order, sort, page, size, _ := ParseArtifactListParams(request)
