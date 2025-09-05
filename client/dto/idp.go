@@ -16,6 +16,17 @@ const (
 	ScorecardDetailsWeightageStrategyEQUALWEIGHTS string = "EQUAL_WEIGHTS"
 )
 
+const (
+	ChecksSortOrderAsc  string = "ASC"
+	ChecksSortOrderDesc string = "DESC"
+)
+
+const (
+	ChecksSortTypeName        string = "name"
+	ChecksSortTypeDescription string = "description"
+	ChecksSortTypeDataSource  string = "data_source"
+)
+
 type GetEntityParams struct {
 	BranchName             string `form:"branch_name,omitempty" json:"branch_name,omitempty"`
 	ConnectorRef           string `form:"connector_ref,omitempty" json:"connector_ref,omitempty"`
@@ -216,6 +227,109 @@ type ScorecardScore struct {
 	Description   string `json:"description"`
 	Score         int    `json:"score"`
 	ScorecardName string `json:"scorecard_name"`
+}
+
+// ScorecardStats ScorecardStats
+type ScorecardStats struct {
+	Kind      string `json:"kind"`
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+	Owner     string `json:"owner"`
+	Score     int    `json:"score"`
+	System    string `json:"system"`
+	Type      string `json:"type"`
+}
+
+// ScorecardStatsResponse ScorecardStatsResponse
+type ScorecardStatsResponse struct {
+	Name      string           `json:"name"`
+	Stats     []ScorecardStats `json:"stats"`
+	Timestamp *int64           `json:"timestamp,omitempty"`
+}
+
+type ScorecardStatsResponseWithHumanReadableTime struct {
+	Name  string           `json:"name"`
+	Stats []ScorecardStats `json:"stats"`
+	Time  string           `json:"time,omitempty"`
+}
+
+type GetChecksParams struct {
+	Page       int32
+	Limit      int32
+	Sort       string
+	SearchTerm string
+}
+
+type CheckResponseList = []CheckResponse
+
+type CheckListItem struct {
+	Custom      bool      `json:"custom"`
+	DataSource  []string  `json:"data_source"`
+	Description *string   `json:"description,omitempty"`
+	Expression  *string   `json:"expression,omitempty"`
+	Identifier  string    `json:"identifier"`
+	Name        string    `json:"name"`
+	Percentage  *float64  `json:"percentage,omitempty"`
+	Tags        *[]string `json:"tags,omitempty"`
+}
+
+type CheckResponse struct {
+	Check *CheckListItem `json:"check,omitempty"`
+}
+
+type CheckDetails struct {
+	Custom           bool      `json:"custom"`
+	DefaultBehaviour string    `json:"default_behaviour"`
+	Description      *string   `json:"description,omitempty"`
+	Expression       *string   `json:"expression,omitempty"`
+	FailMessage      *string   `json:"fail_message,omitempty"`
+	HarnessManaged   *bool     `json:"harness_managed,omitempty"`
+	Identifier       string    `json:"identifier"`
+	Name             string    `json:"name"`
+	Percentage       *float64  `json:"percentage,omitempty"`
+	RuleStrategy     string    `json:"rule_strategy"`
+	Rules            []Rule    `json:"rules"`
+	Tags             *[]string `json:"tags,omitempty"`
+}
+
+type Rule struct {
+	DataPointIdentifier  string        `json:"data_point_identifier"`
+	DataSourceIdentifier string        `json:"data_source_identifier"`
+	Identifier           *string       `json:"identifier,omitempty"`
+	InputValues          *[]InputValue `json:"input_values,omitempty"`
+	Operator             string        `json:"operator"`
+	Value                *string       `json:"value,omitempty"`
+}
+
+type InputValue struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+type CheckDetailsResponse struct {
+	CheckDetails CheckDetails `json:"check_details"`
+}
+
+type CheckStats struct {
+	Kind      string `json:"kind"`
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+	Owner     string `json:"owner"`
+	Status    string `json:"status"`
+	System    string `json:"system"`
+	Type      string `json:"type"`
+}
+
+type CheckStatsResponse struct {
+	Name      string       `json:"name"`
+	Stats     []CheckStats `json:"stats"`
+	Timestamp *int64       `json:"timestamp,omitempty"`
+}
+
+type CheckStatsResponseWithHumanReadableTime struct {
+	Name  string       `json:"name"`
+	Stats []CheckStats `json:"stats"`
+	Time  string       `json:"time,omitempty"`
 }
 
 type ExecuteWorkflowRequest struct {

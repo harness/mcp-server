@@ -105,6 +105,30 @@ func (c *Client) Get(
 	}
 
 	addQueryParams(httpReq, params)
+	return c.doRequest(httpReq, headers, response)
+}
+
+func (c *Client) GetWithoutSplittingParamValuesOnComma(
+	ctx context.Context,
+	path string,
+	params map[string]string,
+	headers map[string]string,
+	response interface{},
+) error {
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, appendPath(c.BaseURL.String(), path), nil)
+	if err != nil {
+		return fmt.Errorf("unable to create new http request : %w", err)
+	}
+
+	addQueryParamsWithoutSplittingValuesOnComma(httpReq, params)
+	return c.doRequest(httpReq, headers, response)
+}
+
+func (c *Client) doRequest(
+	httpReq *http.Request,
+	headers map[string]string,
+	response interface{},
+) error {
 	for key, value := range headers {
 		httpReq.Header.Add(key, value)
 	}
@@ -582,6 +606,20 @@ func addQueryParams(req *http.Request, params map[string]string) {
 		for _, value := range strings.Split(value, ",") {
 			q.Add(key, value)
 		}
+	}
+
+	req.URL.RawQuery = q.Encode()
+}
+
+func addQueryParamsWithoutSplittingValuesOnComma(req *http.Request, params map[string]string) {
+	if len(params) == 0 {
+		return
+	}
+
+	q := req.URL.Query()
+
+	for key, value := range params {
+		q.Add(key, value)
 	}
 
 	req.URL.RawQuery = q.Encode()
