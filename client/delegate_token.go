@@ -156,3 +156,24 @@ func (d *DelegateTokenClient) RevokeDelegateToken(ctx context.Context, scope dto
 
 	return response.Resource, nil
 }
+
+// DeleteDelegateToken deletes a revoked delegate token with the specified name.
+// Parameters:
+// - ctx: Context for the request
+// - scope: The scope (account/org/project) for the token
+// - tokenName: Name of the delegate token to delete
+// Returns:
+// - error: Any error that occurred during the request
+func (d *DelegateTokenClient) DeleteDelegateToken(ctx context.Context, scope dto.Scope, tokenName string) error {
+	path := delegateTokenPath
+	params := make(map[string]string)
+	addScope(scope, params)
+	params["tokenName"] = tokenName
+
+	err := d.Client.Delete(ctx, path, params, nil, nil)
+	if err != nil {
+		return fmt.Errorf("failed to delete delegate token. Please make sure the token exists and is REVOKED: %w", err)
+	}
+
+	return nil
+}

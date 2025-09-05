@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
@@ -169,6 +170,7 @@ func GetDelegateTokenTool(config *config.Config, client *client.DelegateTokenCli
 			),
 			mcp.WithString("status",
 				mcp.Description("Status of Delegate Token (ACTIVE or REVOKED). If left empty both active and revoked tokens will be retrieved"),
+				mcp.Enum("ACTIVE", "REVOKED"),
 			),
 			common.WithScope(config, false),
 		),
@@ -273,6 +275,10 @@ func CreateDelegateTokenTool(config *config.Config, client *client.DelegateToken
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			if err := validateTokenName(tokenName); err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
 			var revokeAfter *int64
 			if revokeAfterFloat, err := OptionalParam[float64](request, "revoke_after"); err == nil && revokeAfterFloat > 0 {
 				revokeAfterInt := int64(revokeAfterFloat)
@@ -352,6 +358,10 @@ func RevokeDelegateTokenTool(config *config.Config, client *client.DelegateToken
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			if err := validateTokenName(tokenName); err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
 			// Fetch scope from config and request
 			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
@@ -411,4 +421,86 @@ func RevokeDelegateTokenTool(config *config.Config, client *client.DelegateToken
 
 			return mcp.NewToolResultText(string(r)), nil
 		}
+}
+
+// DeleteDelegateTokenTool creates a tool for deleting revoked delegate tokens
+func DeleteDelegateTokenTool(config *config.Config, client *client.DelegateTokenClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("delete_delegate_token",
+			mcp.WithDescription("Deletes a revoked delegate token in Harness."),
+			mcp.WithString("token_name",
+				mcp.Description("Name of the delegate token to delete which is already revoked"),
+				mcp.Required(),
+			),
+			common.WithScope(config, false),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			// Get token name
+			tokenName, err := RequiredParam[string](request, "token_name")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			if err := validateTokenName(tokenName); err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// Fetch scope from config and request
+			scope, err := common.FetchScope(config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// Call appropriate API based on scope
+			var scopeToSend dto.Scope
+			scopeParam, err := OptionalParam[string](request, "scope")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// If scope is not explicitly specified, determine it from available parameters
+			if scopeParam == "" {
+				if scope.ProjectID != "" && scope.OrgID != "" {
+					scopeParam = "project"
+				} else if scope.OrgID != "" {
+					scopeParam = "org"
+				} else {
+					scopeParam = "account"
+				}
+			}
+
+			switch scopeParam {
+			case "account":
+				scopeToSend = dto.Scope{AccountID: scope.AccountID}
+			case "org":
+				if scope.OrgID == "" {
+					return mcp.NewToolResultError("org_id is required for org scope"), nil
+				}
+				scopeToSend = dto.Scope{AccountID: scope.AccountID, OrgID: scope.OrgID}
+			case "project":
+				if scope.OrgID == "" || scope.ProjectID == "" {
+					return mcp.NewToolResultError("org_id and project_id are required for project scope"), nil
+				}
+				scopeToSend = dto.Scope{AccountID: scope.AccountID, OrgID: scope.OrgID, ProjectID: scope.ProjectID}
+			}
+
+			err = client.DeleteDelegateToken(ctx, scopeToSend, tokenName)
+			if err != nil {
+				return nil, fmt.Errorf("failed to delete delegate token: %w", err)
+			}
+
+			return mcp.NewToolResultText("Delegate token deleted successfully"), nil
+		}
+}
+
+func validateTokenName(name string) error {
+	if name == "" {
+		return fmt.Errorf("token name cannot be empty string")
+	}
+
+	trimmedName := strings.TrimSpace(name)
+	if trimmedName == "" {
+		return fmt.Errorf("token name cannot be empty string")
+	}
+
+	return nil
 }
