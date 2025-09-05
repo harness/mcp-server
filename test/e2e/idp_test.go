@@ -307,10 +307,14 @@ func TestScorecardTools(t *testing.T) {
 	}
 
 	getScorecardStatsResponse, err := mcpClient.CallTool(ctx, getScorecardStatsRequest)
-	if getScorecardStatsResponse.IsError {
+	if getScorecardStatsResponse == nil {
+		err = errors.New("nil response")
+		t.Logf("Nil scorecard stats response")
+	} else if getScorecardStatsResponse.IsError {
 		t.Logf("Error response: %v", getScorecardStatsResponse.Content)
 	}
 	require.NoError(t, err, "expected to call 'get_scorecard_stats' tool successfully")
+	require.NotNil(t, getScorecardStatsResponse, "expected response not to be nil")
 	require.False(t, getScorecardStatsResponse.IsError, "expected result not to be an error")
 	// Verify response content
 	t.Logf("Scorecard Stats Response content: %v\n", getScorecardStatsResponse.Content)
@@ -411,10 +415,14 @@ func TestScorecardCheckTools(t *testing.T) {
 	}
 
 	getCheckStatsResponse, err := mcpClient.CallTool(ctx, getCheckStatsRequest)
-	if getCheckStatsResponse.IsError {
+	if getCheckStatsResponse == nil {
+		err = errors.New("nil response")
+		t.Logf("Nil check stats response")
+	} else if getCheckStatsResponse.IsError {
 		t.Logf("Error response: %v", getCheckStatsResponse.Content)
 	}
 	require.NoError(t, err, "expected to call 'get_scorecard_check_stats' tool successfully")
+	require.NotNil(t, getCheckStatsResponse, "expected response not to be nil")
 	require.False(t, getCheckStatsResponse.IsError, "expected result not to be an error")
 	// Verify response content
 	t.Logf("Check Stats Response content: %v\n", getCheckStatsResponse.Content)
