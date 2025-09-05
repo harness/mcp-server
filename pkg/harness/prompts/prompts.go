@@ -33,10 +33,10 @@ func RegisterPrompts(mcpServer *server.MCPServer) {
 			Build())
 
 	prompts.Append(
-		p.NewPrompt().SetName("rmg_genai_prompt").
-			SetDescription("Prompt for the RMG GenAI tool").
-			SetResultDescription("RMG GenAI prompt").
-			SetText(`{"standard": "When calling ask_rm_devops_agent, ensure you have the required parameters for release process operations:\n- First, clarify the user's release requirements; echo back your understanding before calling the tool.\n- If scope parameters (accountIdentifier, orgIdentifier, projectIdentifier) are missing, ask the user for the specific value(s).\n- Include relevant context for release processes, such as:\n  - Release process requirements\n- The RMG AI DevOps Agent specializes in creating release processes and will automatically use the CREATE_PROCESS action.\n- Provide detailed requirements to get the most accurate release process configuration.\n- Do not use the words \"pipeline\" or \"stages\" in your response."}`).
+		p.NewPrompt().SetName("ask_release_agent_prompt").
+			SetDescription("Prompt for the Ask Release Agent tool").
+			SetResultDescription("Ask Release Agent prompt").
+			SetText(`{"standard": "When calling ask_release_agent, ensure you have the required parameters for release process operations:\n- First, clarify the user's release requirements; echo back your understanding before calling the tool.\n- Include relevant context for release processes, such as:\n  - Release process requirements\n- The RMG AI DevOps Agent specializes in creating release processes and will automatically use the CREATE_PROCESS action.\n- Provide detailed requirements to get the most accurate release process configuration.\n- Do not use the words \"pipeline\" or \"stages\" in your response."}`).
 			Build())
 
 	p.AddPrompts(prompts, mcpServer)

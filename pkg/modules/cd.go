@@ -38,7 +38,7 @@ func (m *CDModule) Toolsets() []string {
 		"services",
 		"environments",
 		"infrastructure",
-		"rmg_genai",
+		"release_management",
 	}
 }
 
@@ -58,8 +58,8 @@ func (m *CDModule) RegisterToolsets() error {
 			if err := RegisterInfrastructure(m.config, m.tsg); err != nil {
 				return err
 			}
-		case "rmg_genai":
-			if err := RegisterRMGGenAI(m.config, m.tsg); err != nil {
+		case "release_management":
+			if err := RegisterReleaseManagementTools(m.config, m.tsg); err != nil {
 				return err
 			}
 		}
@@ -160,8 +160,8 @@ func RegisterEnvironments(config *config.Config, tsg *toolsets.ToolsetGroup) err
 	return nil
 }
 
-// RegisterRMGGenAI registers the RMG GenAI toolset
-func RegisterRMGGenAI(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+// RegisterReleaseManagementTools registers the Release Management tools
+func RegisterReleaseManagementTools(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Skip registration for external mode for now
 	if !config.Internal {
 		return nil
@@ -173,13 +173,13 @@ func RegisterRMGGenAI(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 		return err
 	}
 
-	// Create the RMG genai toolset
-	rmgGenai := toolsets.NewToolset("rmg_genai", "RMG GenAI tools").
+	// Create the Ask Release Agent toolset
+	askReleaseAgent := toolsets.NewToolset("release_management", "Release Management tools").
 		AddReadTools(
-			toolsets.NewServerTool(tools.RMDevOpsAgentTool(config, genaiClient)),
+			toolsets.NewServerTool(tools.AskReleaseAgentTool(config, genaiClient)),
 		)
 
 	// Add toolset to the group
-	tsg.AddToolset(rmgGenai)
+	tsg.AddToolset(askReleaseAgent)
 	return nil
 }
