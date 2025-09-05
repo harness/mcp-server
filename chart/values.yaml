@@ -101,7 +101,7 @@ image:
 terminationGracePeriodSeconds: "60"
 # -- set progressDealineSeconds in seconds, number of seconds the Deployment controller waits before indicating failure
 ## ref: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
-progressDeadlineSeconds: 720
+progressDeadlineSeconds: 120
 pdb:
   # --pdb.create Enable/disable a Pod Disruption Budget creation
   ##
