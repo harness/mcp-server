@@ -227,7 +227,7 @@ func (c *Client) PostRaw(
 		req.Header.Set("Content-Type", "application/json")
 		// Add custom headers from the headers map
 		for key, value := range headers {
-			req.Header.Add(key, value)
+			req.Header.Set(key, value)
 		}
 		addQueryParams(req, params)
 
@@ -363,7 +363,7 @@ func (c *Client) PostRawStream(
 		req.Header.Set("Content-Type", "application/json")
 		// Add custom headers from the headers map
 		for key, value := range headers {
-			req.Header.Add(key, value)
+			req.Header.Set(key, value)
 		}
 		addQueryParams(req, params)
 
