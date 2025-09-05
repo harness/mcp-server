@@ -307,14 +307,14 @@ func GetScorecardStatsTool(config *config.Config, client *client.IDPService) (to
 				mcp.Required(),
 				mcp.Description("The Unique identifier of the scorecard. This is not the name of the scorecard"),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scorecardId, err := RequiredParam[string](request, "scorecard_identifier")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -335,7 +335,7 @@ func GetScorecardStatsTool(config *config.Config, client *client.IDPService) (to
 func GetCheckTool(config *config.Config, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_scorecard_check",
 			mcp.WithDescription(`Get details of a specific check configured in a scorecard. A check is a query performed against a data point for a software component which results in either Pass or Fail.`),
-			WithScope(config, false),
+			common.WithScope(config, false),
 			mcp.WithString("check_id",
 				mcp.Required(),
 				mcp.Description("The Unique identifier of the check. This is not the name of the check"),
@@ -346,7 +346,7 @@ func GetCheckTool(config *config.Config, client *client.IDPService) (tool mcp.To
 			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -379,7 +379,7 @@ func ListChecksTool(config *config.Config, client *client.IDPService) (tool mcp.
 			mcp.WithString("search_term",
 				mcp.Description("Optional search term to filter entities"),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 			WithPagination(),
 			mcp.WithString("sort_type",
 				mcp.Description("Sort type for the results (e.g., name, description or data_source)"),
@@ -392,7 +392,7 @@ func ListChecksTool(config *config.Config, client *client.IDPService) (tool mcp.
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			params := &dto.GetChecksParams{}
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -448,7 +448,7 @@ func GetCheckStatsTool(config *config.Config, client *client.IDPService) (tool m
 				mcp.Required(),
 				mcp.Description("The Unique identifier of the check. This is not the name of the check"),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 			mcp.WithBoolean("is_custom",
 				mcp.Description("Whether the check is a custom check or not. This will be mentioned in the scorecard details."),
 				mcp.DefaultBool(false),
@@ -459,7 +459,7 @@ func GetCheckStatsTool(config *config.Config, client *client.IDPService) (tool m
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
