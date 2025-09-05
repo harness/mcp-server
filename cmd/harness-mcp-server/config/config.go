@@ -1,5 +1,7 @@
 package config
 
+import "github.com/harness/harness-mcp/pkg/types/enum"
+
 type Config struct {
 	// Common fields for both modes
 	Version       string
@@ -9,6 +11,13 @@ type Config struct {
 	LogFilePath   string
 	Debug         bool
 	EnableLicense bool
+
+	// Server configuration
+	Transport enum.TransportType
+	HTTP      struct {
+		Port int    `envconfig:"MCP_HTTP_PORT" default:"8080"`
+		Path string `envconfig:"MCP_HTTP_PATH" default:"/mcp"`
+	}
 
 	Internal bool
 
