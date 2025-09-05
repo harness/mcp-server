@@ -107,14 +107,30 @@ func (s *ServiceChatParameters) IsStreaming() bool {
 }
 
 type ServiceChatResponseIntelligence struct {
-    ConversationID    string                   `json:"conversation_id"`
-    ConversationRaw   string                   `json:"conversation_raw"`
-    InteractionID     string                   `json:"interaction_id,omitempty"`
-    CapabilitiesToRun []map[string]interface{} `json:"capabilities_to_run,omitempty"`
-    ModelUsage        map[string]interface{}   `json:"model_usage,omitempty"`
-    // Keep these for backward compatibility if needed elsewhere
-    Response string `json:"response,omitempty"`
-    Error    string `json:"error,omitempty"`
+	ConversationID    string                   `json:"conversation_id"`
+	ConversationRaw   string                   `json:"conversation_raw"`
+	InteractionID     string                   `json:"interaction_id,omitempty"`
+	CapabilitiesToRun []map[string]interface{} `json:"capabilities_to_run,omitempty"`
+	ModelUsage        map[string]interface{}   `json:"model_usage,omitempty"`
+	// Keep these for backward compatibility if needed elsewhere
+	Response string `json:"response,omitempty"`
+	Error    string `json:"error,omitempty"`
+}
+
+// ProcessChatParameters defines the parameters for release management AI agent requests
+type ProcessChatParameters struct {
+	BaseRequestParameters
+	Action RequestAction `json:"action,omitempty"`
+}
+
+// GetBaseParameters returns the base parameters for ProcessChatParameters
+func (p *ProcessChatParameters) GetBaseParameters() *BaseRequestParameters {
+	return &p.BaseRequestParameters
+}
+
+// IsStreaming returns whether the request is streaming for ProcessChatParameters
+func (p *ProcessChatParameters) IsStreaming() bool {
+	return p.Stream
 }
 
 // ProgressUpdate represents progress information for streaming responses
