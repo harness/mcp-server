@@ -14,11 +14,11 @@ import (
 // ListPromptsTool creates a tool for listing prompts from the MCP server
 func ListPromptsTool(config *config.Config) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_prompts",
-		mcp.WithDescription("Lists available prompts from the MCP server"),
-		mcp.WithString("prefix",
-			mcp.Description("Optional prefix to filter prompts by name"),
+			mcp.WithDescription("Lists available prompts from the MCP server"),
+			mcp.WithString("prefix",
+				mcp.Description("Optional prefix to filter prompts by name"),
+			),
 		),
-	),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			// Get MCP server from context
 			mcpServer := server.ServerFromContext(ctx)
@@ -109,15 +109,15 @@ func ListPromptsTool(config *config.Config) (tool mcp.Tool, handler server.ToolH
 // GetPromptTool creates a tool for retrieving a single prompt from the MCP server
 func GetPromptTool(config *config.Config) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_prompt",
-		mcp.WithDescription("Retrieves a specific prompt from the MCP server by name"),
-		mcp.WithString("prompt_name",
-			mcp.Description("The name of the prompt to retrieve"),
-			mcp.Required(),
+			mcp.WithDescription("Retrieves a specific prompt from the MCP server by name"),
+			mcp.WithString("prompt_name",
+				mcp.Description("The name of the prompt to retrieve"),
+				mcp.Required(),
+			),
+			mcp.WithString("mode",
+				mcp.Description("Optional mode to retrieve a specific version of the prompt"),
+			),
 		),
-		mcp.WithString("mode",
-			mcp.Description("Optional mode to retrieve a specific version of the prompt"),
-		),
-	),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			// Get MCP server from context
 			mcpServer := server.ServerFromContext(ctx)

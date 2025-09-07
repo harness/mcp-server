@@ -113,7 +113,7 @@ func TestGetAuditYaml(t *testing.T) {
 
 	yamlResponse, err := mcpClient.CallTool(ctx, yamlRequest)
 	require.NoError(t, err, "expected to call 'get_audit_yaml' tool successfully")
-	
+
 	// Note: Some audit events might not have YAML content, so we don't strictly require success
 	if yamlResponse.IsError {
 		t.Logf("Error response from get_audit_yaml: %v", yamlResponse.Content)
@@ -133,13 +133,13 @@ func TestGetAuditYaml(t *testing.T) {
 
 	// Verify the response structure
 	require.Equal(t, "SUCCESS", auditYamlResponse.Status, "expected status to be SUCCESS")
-	
+
 	// Log the YAML content lengths for debugging
 	oldYamlLen := len(auditYamlResponse.Data.OldYaml)
 	newYamlLen := len(auditYamlResponse.Data.NewYaml)
 	t.Logf("Old YAML length: %d, New YAML length: %d", oldYamlLen, newYamlLen)
-	
+
 	// At least one of the YAMLs should be non-empty
-	require.True(t, oldYamlLen > 0 || newYamlLen > 0, 
+	require.True(t, oldYamlLen > 0 || newYamlLen > 0,
 		"expected at least one of old or new YAML to be non-empty")
 }
