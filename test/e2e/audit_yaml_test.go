@@ -27,7 +27,7 @@ func TestGetAuditYamlTool(t *testing.T) {
 
 	// Check that audit yaml tool is available
 	var foundAuditYamlTool bool
-	
+
 	// Print all available tools
 	fmt.Println("Available tools in TestGetAuditYamlTool:")
 	for _, tool := range response.Tools {
