@@ -22,28 +22,28 @@ type LogService struct {
 func (l *LogService) DownloadLogs(ctx context.Context, scope dto.Scope, planExecutionID string) (string, error) {
 	// First, get the pipeline execution details to determine the prefix format
 	pipelineService := &PipelineService{Client: l.PipelineClient} // TODO: needs to be changed for internal case, we should move this above
-	execution, err := pipelineService.GetExecution(ctx, scope, planExecutionID)
+	execution, err := pipelineService.GetExecutionWithLogKeys(ctx, scope, planExecutionID, "")
 	if err != nil {
 		return "", fmt.Errorf("failed to get execution details: %w", err)
 	}
 
 	// Build the prefix based on the execution details
 	var prefix string
-	if execution.Data.ShouldUseSimplifiedBaseKey {
+	if execution.Data.Execution.ShouldUseSimplifiedBaseKey {
 		// Simplified key format
 		prefix = fmt.Sprintf("%s/pipeline/%s/%d/-%s",
 			scope.AccountID,
-			execution.Data.PipelineIdentifier,
-			execution.Data.RunSequence,
+			execution.Data.Execution.PipelineIdentifier,
+			execution.Data.Execution.RunSequence,
 			planExecutionID)
 	} else {
 		// Standard key format
 		prefix = fmt.Sprintf("accountId:%s/orgId:%s/projectId:%s/pipelineId:%s/runSequence:%d/level0:pipeline",
 			scope.AccountID,
-			execution.Data.OrgIdentifier,
-			execution.Data.ProjectIdentifier,
-			execution.Data.PipelineIdentifier,
-			execution.Data.RunSequence)
+			execution.Data.Execution.OrgIdentifier,
+			execution.Data.Execution.ProjectIdentifier,
+			execution.Data.Execution.PipelineIdentifier,
+			execution.Data.Execution.RunSequence)
 	}
 
 	// Prepare query parameters

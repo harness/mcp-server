@@ -152,6 +152,21 @@ type PipelineExecutionOptions struct {
 // PipelineExecutionResponse represents the full response structure for pipeline execution details
 type PipelineExecutionResponse struct {
 	PipelineExecutionSummary PipelineExecution `json:"pipelineExecutionSummary,omitempty"`
+	ExecutionGraph           ExecutionGraph    `json:"executionGraph,omitempty"`
+	ChildGraph               ChildGraph        `json:"childGraph,omitempty"`
+}
+
+type ChildGraph struct {
+	PipelineExecutionSummary PipelineExecution `json:"pipelineExecutionSummary,omitempty"`
+	ExecutionGraph           ExecutionGraph    `json:"executionGraph,omitempty"`
+}
+
+type FinalLogKeys struct {
+	Stages map[string]StepLogKeys `json:"stages,omitempty"`
+}
+
+type StepLogKeys struct {
+	Steps map[string][]string `json:"steps,omitempty"`
 }
 
 // PipelineExecution represents a pipeline execution
@@ -180,6 +195,7 @@ type PipelineExecution struct {
 
 // ExecutionFailureInfo represents the failure information of a pipeline execution
 type ExecutionFailureInfo struct {
+	Message          string                     `json:"message,omitempty"`
 	FailureTypeList  []string                   `json:"failureTypeList,omitempty"`
 	ResponseMessages []ExecutionResponseMessage `json:"responseMessages,omitempty"`
 }
@@ -193,6 +209,30 @@ type ExecutionResponseMessage struct {
 
 type ExecutionException struct {
 	Message string `json:"message,omitempty"`
+}
+
+type ExecutionGraph struct {
+	RootNodeId string                   `json:"rootNodeId,omitempty"`
+	NodeMap    map[string]ExecutionNode `json:"nodeMap,omitempty"`
+}
+
+type ExecutionNode struct {
+	Uuid           string         `json:"uuid,omitempty"`
+	SetupId        string         `json:"setupId,omitempty"`
+	Name           string         `json:"name,omitempty"`
+	Identifier     string         `json:"identifier,omitempty"`
+	BaseFqn        string         `json:"baseFqn,omitempty"`
+	StepType       string         `json:"stepType,omitempty"`
+	Status         string         `json:"status,omitempty"`
+	UnitProgresses []UnitProgress `json:"unitProgresses,omitempty"`
+	LogBaseKey     string         `json:"logBaseKey,omitempty"`
+}
+
+type UnitProgress struct {
+	UnitName  string `json:"unitName,omitempty"`
+	Status    string `json:"status,omitempty"`
+	StartTime string `json:"startTime,omitempty"`
+	EndTime   string `json:"endTime,omitempty"`
 }
 
 type User struct {
