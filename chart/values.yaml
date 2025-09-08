@@ -284,9 +284,6 @@ secrets:
           NEXTGEN_CE_SECRET:
             name: ""
             property: ""
-          CHAOS_MANAGER_SVC_SECRET:
-            name: ""
-            property: ""
           CODE_SVC_SECRET:
             name: ""
             property: ""
@@ -299,13 +296,7 @@ secrets:
           AUDIT_SVC_SECRET:
             name: ""
             property: ""
-          CCM_COMM_ORCH_SECRET:
-            name: ""
-            property: ""
           INTELLIGENCE_SVC_SECRET:
-            name: ""
-            property: ""
-          PIPELINE_SVC_SECRET:
             name: ""
             property: ""
           GENAI_SECRET:
@@ -317,16 +308,10 @@ secrets:
           DASHBOARD_SVC_SECRET:
             name: ""
             property: ""
-          DBOPS_SVC_SECRET:
-            name: ""
-            property: ""
           RBAC_SVC_SECRET:
             name: ""
             property: ""
           STO_SVC_SECRET:
-            name: ""
-            property: ""
-          SCS_SVC_SECRET:
             name: ""
             property: ""
     
