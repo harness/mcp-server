@@ -8,8 +8,8 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-// RMDevOpsAgentTool creates a tool for RMG DevOps agent with CREATE_PROCESS action
-func RMDevOpsAgentTool(config *config.Config, client *client.GenaiService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+// AskReleaseAgentTool creates a tool for Ask Release Agent with CREATE_PROCESS action
+func AskReleaseAgentTool(config *config.Config, client *client.GenaiService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	// Get common parameters
 	commonParams := getCommonGenAIParameters()
 
