@@ -29,7 +29,7 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 				mcp.Description("The absolute path to the directory where the logs should get downloaded"),
 			),
 			mcp.WithString("prefix",
-				mcp.Description("Optional custom prefix to use for downloading logs"),
+				mcp.Description("Optional custom prefix to be used as log key for downloading logs"),
 			),
 			common.WithScope(config, true),
 		),
