@@ -5,6 +5,7 @@ import (
 
 	"github.com/harness/harness-mcp/client/scs"
 	generated "github.com/harness/harness-mcp/client/scs/generated"
+
 	"github.com/mark3labs/mcp-go/mcp"
 )
 

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	clientdto "github.com/harness/harness-mcp/client/dto"
+
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/require"
 )

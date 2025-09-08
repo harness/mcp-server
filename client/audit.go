@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	auditPath = "/api/audits/list"
+	auditPath     = "/api/audits/list"
 	auditYamlPath = "/api/auditYaml"
 )
 

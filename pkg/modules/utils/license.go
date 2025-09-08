@@ -1,8 +1,9 @@
 package utils
 
 import (
-	"github.com/harness/harness-go-sdk/harness/nextgen"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+
+	"github.com/harness/harness-go-sdk/harness/nextgen"
 	"github.com/hashicorp/go-retryablehttp"
 )
 

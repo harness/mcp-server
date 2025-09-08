@@ -2,6 +2,7 @@ package prompts
 
 import (
 	p "github.com/harness/harness-mcp/pkg/prompts"
+
 	"github.com/mark3labs/mcp-go/server"
 )
 
