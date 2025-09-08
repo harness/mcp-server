@@ -265,6 +265,10 @@ nodeSelector: {}
 
 tolerations: []
 
+service:
+  sessionAffinity: "ClientIP"
+  sessionAffinityTimeout: 3600
+
 secrets:
   secretManagement:
     externalSecretsOperator:

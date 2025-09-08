@@ -26,3 +26,9 @@ spec:
       targetPort: {{.Values.service.port}}
   selector:
     {{- include "mcp-server.selectorLabels" . | nindent 4 }}
+  sessionAffinity: {{ .Values.service.sessionAffinity }}
+  {{- if and (eq .Values.service.sessionAffinity "ClientIP") .Values.service.sessionAffinityTimeout }}
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: {{ .Values.service.sessionAffinityTimeout }}
+  {{- end }}
