@@ -25,7 +25,7 @@ func RMDevOpsAgentTool(config *config.Config, client *client.GenaiService) (tool
 
 	handler = createGenAIToolHandler(config, client, func(baseParams *dto.BaseRequestParameters, request mcp.CallToolRequest) (interface{}, error) {
 		// Create the service chat parameters
-		return &dto.ProcessChatParameters{
+		return &dto.ServiceChatParameters{
 			BaseRequestParameters: *baseParams,
 			Action:                dto.RequestAction("CREATE_PROCESS"),
 		}, nil
