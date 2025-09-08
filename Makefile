@@ -48,7 +48,7 @@ test: ## Run the go tests
 .PHONY: help format tools test
 
 $(GOBIN)/gci:
-	go install github.com/daixiang0/gci@v0.13.1
+	go install github.com/daixiang0/gci@v0.13.7
 	
 # Install goimports to format code
 $(GOBIN)/goimports:
