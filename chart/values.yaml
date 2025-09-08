@@ -73,7 +73,7 @@ global:
     enabled: false
 
 command:
-  - "app/harness-mcp-server"
+  - "/app/harness-mcp-server"
 args:
   - "http-server"
 # This will set the replicaset count more information can be found here: https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/
