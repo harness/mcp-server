@@ -398,6 +398,9 @@ func RegisterAccessControl(config *config.Config, tsg *toolsets.ToolsetGroup) er
 	baseURLPrincipal := utils.BuildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng/api")
 	principalSecret := config.NgManagerSecret
 
+	baseURLResource := utils.BuildServiceURL(config, config.AuditSvcBaseURL, config.BaseURL, "resourcegroup")
+	resourceSecret := config.AuditSvcSecret
+
 	c, err := utils.CreateClient(baseURLRBAC, config, secret)
 	if err != nil {
 		return err
@@ -408,8 +411,14 @@ func RegisterAccessControl(config *config.Config, tsg *toolsets.ToolsetGroup) er
 		return err
 	}
 
+	resourceC, err := utils.CreateClient(baseURLResource, config, resourceSecret)
+	if err != nil {
+		return err
+	}
+
 	rbacClient := &client.RBACService{Client: c}
 	principalClient := &client.PrincipalService{Client: principalC}
+	resourceClient := &client.ResourceGroupService{Client: resourceC}
 
 	accessControl := toolsets.NewToolset("access_control", "Access control related tools").
 		AddReadTools(
@@ -421,6 +430,16 @@ func RegisterAccessControl(config *config.Config, tsg *toolsets.ToolsetGroup) er
 			toolsets.NewServerTool(tools.GetServiceAccountTool(config, principalClient)),
 			toolsets.NewServerTool(tools.GetAllUsersTool(config, principalClient)),
 			toolsets.NewServerTool(tools.GetRoleInfoTool(config, rbacClient)),
+			toolsets.NewServerTool(tools.CreateUserGroupTool(config, principalClient)),
+			toolsets.NewServerTool(tools.CreateRoleAssignmentTool(config, rbacClient)),
+			toolsets.NewServerTool(tools.CreateServiceAccountTool(config, principalClient)),
+			toolsets.NewServerTool(tools.CreateResourceGroupTool(config, resourceClient)),
+			toolsets.NewServerTool(tools.CreateRoleTool(config, rbacClient)),
+			toolsets.NewServerTool(tools.InviteUsersTool(config, principalClient)),
+			toolsets.NewServerTool(tools.DeleteUserGroupTool(config, principalClient)),
+			toolsets.NewServerTool(tools.DeleteServiceAccountTool(config, principalClient)),
+			toolsets.NewServerTool(tools.DeleteRoleTool(config, rbacClient)),
+			toolsets.NewServerTool(tools.DeleteResourceGroupTool(config, resourceClient)),
 		)
 
 	// Add toolset to the group
