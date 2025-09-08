@@ -2,7 +2,6 @@ package tools
 
 import (
 	"archive/zip"
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -33,9 +32,9 @@ type LogFileInfo struct {
 	Content   []byte
 }
 
-// extractAndAnalyzeLogs extracts log files from the ZIP content, finds the most recent ones,
+// extractAndAnalyzeLogs extracts log files from the ZIP file path, finds the most recent ones,
 // and returns the last N lines across those files
-func extractAndAnalyzeLogs(zipContent []byte, numLines int) (string, error) {
+func extractAndAnalyzeLogs(zipFilePath string, numLines int) (string, error) {
 	// If numLines is not specified, default to 10 (approx. 1KB of data)
 	if numLines <= 0 {
 		numLines = 10
@@ -48,7 +47,7 @@ func extractAndAnalyzeLogs(zipContent []byte, numLines int) (string, error) {
 	}
 
 	// Extract log files from the ZIP archive
-	logFiles, err := extractLogFilesFromZip(zipContent)
+	logFiles, err := extractLogFilesFromZipPath(zipFilePath)
 	if err != nil {
 		return "", err
 	}
@@ -69,10 +68,23 @@ func extractAndAnalyzeLogs(zipContent []byte, numLines int) (string, error) {
 	return result, nil
 }
 
-// extractLogFilesFromZip extracts all log files from a ZIP archive
-func extractLogFilesFromZip(zipContent []byte) ([]LogFileInfo, error) {
+// extractLogFilesFromZipPath extracts all log files from a ZIP file path
+func extractLogFilesFromZipPath(zipFilePath string) ([]LogFileInfo, error) {
+	// Open the ZIP file
+	zipFile, err := os.Open(zipFilePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open ZIP file: %v", err)
+	}
+	defer zipFile.Close()
+
+	// Get file info to determine size
+	fileInfo, err := zipFile.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ZIP file info: %v", err)
+	}
+
 	// Create a reader for the ZIP content
-	zipr, err := zip.NewReader(bytes.NewReader(zipContent), int64(len(zipContent)))
+	zipr, err := zip.NewReader(zipFile, fileInfo.Size())
 	if err != nil {
 		return nil, fmt.Errorf("failed to read ZIP content: %v", err)
 	}
@@ -104,11 +116,30 @@ func extractLogFilesFromZip(zipContent []byte) ([]LogFileInfo, error) {
 		}
 		defer rc.Close()
 
-		// Read the file content
-		content, err := io.ReadAll(rc)
-		if err != nil {
-			slog.Error("Failed to read file", "file", file.Name, "error", err)
-			continue
+		// Create a buffer for reading the file in chunks
+		bufSize := 64 * 1024 // 64KB chunks
+		buf := make([]byte, bufSize)
+		var content []byte
+
+		// Read the file in chunks to avoid loading very large files entirely into memory
+		for {
+			n, err := rc.Read(buf)
+			if n > 0 {
+				content = append(content, buf[:n]...)
+
+				// If the file is getting too large, stop reading and just use what we have
+				if len(content) > 10*1024*1024 { // 10MB limit
+					slog.Warn("File too large, truncating", "file", file.Name, "size_read", len(content))
+					break
+				}
+			}
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				slog.Error("Failed to read file", "file", file.Name, "error", err)
+				break
+			}
 		}
 
 		// Extract timestamp from the last non-empty line with a timestamp
@@ -335,11 +366,6 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			logDownloadURL, err := client.DownloadLogs(ctx, scope, planExecutionID)
-			if err != nil {
-				return nil, fmt.Errorf("failed to fetch log download URL: %w", err)
-			}
-
 			logsDirectory, err := RequiredParam[string](request, "logs_directory")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -369,7 +395,7 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 			}
 
 			// Get the download URL
-			logDownloadURL, err = client.DownloadLogs(ctx, scope, planExecutionID)
+			logDownloadURL, err := client.DownloadLogs(ctx, scope, planExecutionID)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to fetch log download URL: %v", err)), nil
 			}
@@ -395,33 +421,50 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 			}
 			defer outputFile.Close()
 
-			// Read the response body into a variable
-			bodyBytes, err := io.ReadAll(resp.Body)
+			// Log information about the response
+			slog.Info("Response received",
+				"content_type", resp.Header.Get("Content-Type"),
+				"content_length", resp.ContentLength)
+
+			// Create a temporary buffer to check if the file is a ZIP
+			headerBuf := make([]byte, 2)
+			_, err = io.ReadFull(resp.Body, headerBuf)
 			if err != nil {
-				return mcp.NewToolResultError(fmt.Sprintf("failed to read response body: %v", err)), nil
+				return mcp.NewToolResultError(fmt.Sprintf("failed to read response header: %v", err)), nil
 			}
 
-			// Log information about the binary data
-			slog.Info("Response body received",
-				"content_type", resp.Header.Get("Content-Type"),
-				"content_length", len(bodyBytes),
-				"is_zip", len(bodyBytes) >= 2 && bodyBytes[0] == 'P' && bodyBytes[1] == 'K')
+			// Check if it's a ZIP file (PK signature)
+			isZip := headerBuf[0] == 'P' && headerBuf[1] == 'K'
+			slog.Info("File type check", "is_zip", isZip)
 
-			// Write the body to the output file
-			_, err = outputFile.Write(bodyBytes)
+			// Write the header bytes we've already read
+			_, err = outputFile.Write(headerBuf)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to write header bytes: %v", err)), nil
+			}
+
+			// Stream the rest of the response body directly to the file
+			written, err := io.Copy(outputFile, resp.Body)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to write logs to file: %v", err)), nil
 			}
 
+			// Log the total bytes written
+			totalWritten := written + 2 // Add the 2 bytes we wrote separately
+			slog.Info("File download completed", "bytes_written", totalWritten)
+
 			if !config.Internal {
 				// Success message with download details
-				instruction := fmt.Sprintf("Successfully downloaded logs to %s (%d bytes)! You can unzip and analyze these logs.", logsZipPath, len(bodyBytes))
+				instruction := fmt.Sprintf("Successfully downloaded logs to %s (%d bytes)! You can unzip and analyze these logs.", logsZipPath, totalWritten)
 
 				return mcp.NewToolResultText(instruction), nil
 			}
 
-			// Now extract and analyze the logs from the ZIP content
-			logContent, err := extractAndAnalyzeLogs(bodyBytes, 10)
+			// For internal mode, we need to close the file first to ensure all data is flushed
+			outputFile.Close()
+
+			// Now extract and analyze the logs from the ZIP file path
+			logContent, err := extractAndAnalyzeLogs(logsZipPath, 10)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to extract and analyze logs: %v", err)), nil
 			}
