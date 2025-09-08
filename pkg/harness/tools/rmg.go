@@ -19,7 +19,7 @@ func RMDevOpsAgentTool(config *config.Config, client *client.GenaiService) (tool
 	)
 
 	tool = mcp.NewTool("ask_release_agent",
-		append([]mcp.ToolOption{mcp.WithDescription("The RMG AI DevOps Agent is an expert in planning and executing requests related to generation/updation of Harness release processes. ALWAYS PASS ORIGINAL PROMPT FROM USER TO THIS.")},
+		append([]mcp.ToolOption{mcp.WithDescription("The Ask Release Agent is an expert in planning and executing requests related to generation/updation of Harness release processes. ALWAYS PASS ORIGINAL PROMPT FROM USER TO THIS.")},
 			toolParams...)...,
 	)
 
