@@ -72,6 +72,7 @@ var (
 				LogFilePath:   viper.GetString("log_file"),
 				Debug:         viper.GetBool("debug"),
 				EnableLicense: viper.GetBool("enable_license"),
+				OutputDir:     viper.GetString("output_dir"),
 				Transport:     transportType,
 				HTTP: struct {
 					Port int    `envconfig:"MCP_HTTP_PORT" default:"8080"`
@@ -132,6 +133,7 @@ var (
 				Debug:            viper.GetBool("debug"),
 				EnableModules:    enableModules,
 				EnableLicense:    viper.GetBool("enable_license"),
+				OutputDir:        viper.GetString("output_dir"),
 			}
 
 			if err := runStdioServer(ctx, cfg); err != nil {
@@ -191,6 +193,7 @@ var (
 				LogFilePath:   viper.GetString("log_file"),
 				Debug:         viper.GetBool("debug"),
 				EnableLicense: viper.GetBool("enable_license"),
+				OutputDir:     viper.GetString("output_dir"),
 				Internal:      true,
 				AccountID:     session.Principal.AccountID,
 				// Internal mode specific fields
