@@ -28,6 +28,9 @@ type Config struct {
 	DefaultProjectID string
 	APIKey           string
 
+	// FME (Feature Management Engine) configuration
+	FMEBaseURL string `envconfig:"FME_BASE_URL" default:"https://api.split.io"`
+
 	// Only used for internal mode
 	BearerToken             string
 	PipelineSvcBaseURL      string

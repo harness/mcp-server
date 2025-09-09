@@ -437,6 +437,10 @@ func RegisterDefault(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	}
 	dashboardServiceClient := &client.DashboardService{Client: dashboardClient}
 
+	// Create FME service client
+	// Note: FME uses external authentication (PAT/SAT tokens) rather than internal service auth
+	fmeServiceClient := client.NewFMEService(config.FMEBaseURL, nil)
+
 	// Create the default toolset with essential tools
 	defaultToolset := toolsets.NewToolset("default", "Default essential Harness tools").AddReadTools(
 		// Connector Management tools
@@ -454,6 +458,12 @@ func RegisterDefault(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 		// Dashboard tools
 		toolsets.NewServerTool(tools.ListDashboardsTool(config, dashboardServiceClient)),
 		toolsets.NewServerTool(tools.GetDashboardDataTool(config, dashboardServiceClient)),
+
+		// FME (Feature Management Engine) tools
+		toolsets.NewServerTool(tools.GetListFMEWorkspacesTool(config, fmeServiceClient)),
+		toolsets.NewServerTool(tools.GetListFMEEnvironmentsTool(config, fmeServiceClient)),
+		toolsets.NewServerTool(tools.GetListFMEFeatureFlagsTool(config, fmeServiceClient)),
+		toolsets.NewServerTool(tools.GetFMEFeatureFlagRolloutStatusTool(config, fmeServiceClient)),
 	)
 
 	// Add the default toolset to the group
