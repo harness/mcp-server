@@ -20,16 +20,16 @@ type LogService struct {
 }
 
 // DownloadLogs fetches a download URL for pipeline execution logs
-// If customPrefix is not empty, it will use that prefix to fetch logs instead of building one from execution details
-func (l *LogService) DownloadLogs(ctx context.Context, scope dto.Scope, planExecutionID string, customPrefix string) (string, error) {
-	// Use custom prefix if provided, otherwise build it from execution details
+// If logKey is not empty, it will use that log key to fetch logs instead of building one from execution details
+func (l *LogService) DownloadLogs(ctx context.Context, scope dto.Scope, planExecutionID string, logKey string) (string, error) {
+	// Use custom log key if provided, otherwise build it from execution details
 	var prefix string
 	var err error
-	if customPrefix != "" {
-		slog.Info("Using custom prefix for log download", "prefix", customPrefix)
-		prefix = customPrefix
+	if logKey != "" {
+		slog.Info("Using custom log key for log download", "logKey", logKey)
+		prefix = logKey
 	} else {
-		slog.Info("Building prefix for log download from execution details")
+		slog.Info("Building log key for log download from execution details")
 		// First, get the pipeline execution details to determine the prefix format
 		pipelineService := &PipelineService{Client: l.PipelineClient} // TODO: needs to be changed for internal case, we should move this above
 		execution, err := pipelineService.GetExecution(ctx, scope, planExecutionID)
