@@ -23,11 +23,11 @@ type LogService struct {
 // If logKey is not empty, it will use that log key to fetch logs instead of building one from execution details
 func (l *LogService) DownloadLogs(ctx context.Context, scope dto.Scope, planExecutionID string, logKey string) (string, error) {
 	// Use custom log key if provided, otherwise build it from execution details
-	var prefix string
+	var finalLogKey string
 	var err error
 	if logKey != "" {
 		slog.Info("Using custom log key for log download", "logKey", logKey)
-		prefix = logKey
+		finalLogKey = logKey
 	} else {
 		slog.Info("Building log key for log download from execution details")
 		// First, get the pipeline execution details to determine the prefix format
@@ -37,17 +37,17 @@ func (l *LogService) DownloadLogs(ctx context.Context, scope dto.Scope, planExec
 			return "", fmt.Errorf("failed to get execution details: %w", err)
 		}
 
-		// Build the prefix based on the execution details
+		// Build the log key based on the execution details
 		if execution.Data.ShouldUseSimplifiedBaseKey {
 			// Simplified key format
-			prefix = fmt.Sprintf("%s/pipeline/%s/%d/-%s",
+			finalLogKey = fmt.Sprintf("%s/pipeline/%s/%d/-%s",
 				scope.AccountID,
 				execution.Data.PipelineIdentifier,
 				execution.Data.RunSequence,
 				planExecutionID)
 		} else {
 			// Standard key format
-			prefix = fmt.Sprintf("accountId:%s/orgId:%s/projectId:%s/pipelineId:%s/runSequence:%d/level0:pipeline",
+			finalLogKey = fmt.Sprintf("accountId:%s/orgId:%s/projectId:%s/pipelineId:%s/runSequence:%d/level0:pipeline",
 				scope.AccountID,
 				execution.Data.OrgIdentifier,
 				execution.Data.ProjectIdentifier,
@@ -59,7 +59,7 @@ func (l *LogService) DownloadLogs(ctx context.Context, scope dto.Scope, planExec
 	// Prepare query parameters
 	params := make(map[string]string)
 	params["accountID"] = scope.AccountID
-	params["prefix"] = prefix
+	params["prefix"] = finalLogKey
 
 	// Initialize the response object
 	response := &dto.LogDownloadResponse{}
