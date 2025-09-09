@@ -26,7 +26,7 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 			),
 			mcp.WithString("logs_directory",
 				mcp.Required(),
-				mcp.Description("The absolute path to the directory where the logs should get downloaded"),
+				mcp.Description("The absolute path to the directory where the logs should get downloaded."),
 			),
 			mcp.WithString("log_key",
 				mcp.Description("Optional log key to be used for downloading logs directly"),
@@ -55,6 +55,22 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 			logsDirectory, err := RequiredParam[string](request, "logs_directory")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// If OutputDir is configured, use it as the base directory for logs
+			if config.OutputDir != "" {
+				if !strings.HasPrefix(logsDirectory, config.OutputDir) {
+					// Create a subdirectory within the output directory for logs
+					oldLogsDirectory := logsDirectory
+					logsDirectoryName := filepath.Base(logsDirectory)
+					// If the logs directory is just a root path like /tmp, use a more descriptive name
+					if logsDirectoryName == "/" || logsDirectoryName == "" {
+						logsDirectoryName = "pipeline-logs"
+					}
+					logsDirectory = filepath.Join(config.OutputDir, logsDirectoryName)
+					fmt.Printf("Redirecting logs from %s to %s to ensure host accessibility when running in Docker\n",
+						oldLogsDirectory, logsDirectory)
+				}
 			}
 
 			// Create the logs folder path (creates all parent directories if needed)

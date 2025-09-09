@@ -257,6 +257,7 @@ func init() {
 	rootCmd.PersistentFlags().Bool("read-only", false, "Restrict the server to read-only operations")
 	rootCmd.PersistentFlags().String("log-file", "", "Path to log file")
 	rootCmd.PersistentFlags().Bool("debug", false, "Enable debug logging")
+	rootCmd.PersistentFlags().String("output-dir", "", "Directory for tool outputs that will be accessible from host when running in Docker")
 
 	httpServerCmd.PersistentFlags().Int("http-port", 8080, "HTTP server port (when transport is 'http')")
 	httpServerCmd.PersistentFlags().String("http-path", "/mcp", "HTTP server path (when transport is 'http')")
@@ -312,6 +313,7 @@ func init() {
 	_ = viper.BindPFlag("read_only", rootCmd.PersistentFlags().Lookup("read-only"))
 	_ = viper.BindPFlag("log_file", rootCmd.PersistentFlags().Lookup("log-file"))
 	_ = viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
+	_ = viper.BindPFlag("output_dir", rootCmd.PersistentFlags().Lookup("output-dir"))
 
 	// Bind transport configuration flags to viper
 	_ = viper.BindPFlag("http_port", httpServerCmd.PersistentFlags().Lookup("http-port"))
