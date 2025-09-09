@@ -372,11 +372,7 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 			// Get optional log key parameter
 			logKey, _ := OptionalParam[string](request, "log_key")
 
-			logDownloadURL, err := client.DownloadLogs(ctx, scope, planExecutionID, logKey)
-			if err != nil {
-				return nil, fmt.Errorf("failed to fetch log download URL: %w", err)
-			}
-
+			// Get the logs directory
 			logsDirectory, err := RequiredParam[string](request, "logs_directory")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -391,7 +387,7 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 			}
 
 			// Get the download URL
-			logDownloadURL, err = client.DownloadLogs(ctx, scope, planExecutionID, logKey)
+			logDownloadURL, err := client.DownloadLogs(ctx, scope, planExecutionID, logKey)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to fetch log download URL: %v", err)), nil
 			}
