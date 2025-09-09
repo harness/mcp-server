@@ -57,27 +57,12 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			// Check if logs directory exists, if not create it
-			_, err = os.Stat(logsDirectory)
-			if err != nil {
-				// Directory does not exist, create it
-				if os.IsNotExist(err) {
-					createErr := os.Mkdir(logsDirectory, 0755)
-					if createErr != nil {
-						return mcp.NewToolResultError(createErr.Error()), nil
-					}
-				} else {
-					return mcp.NewToolResultError(err.Error()), nil
-				}
-			}
-
-			// Create the logs folder with plan execution ID
+			// Create the logs folder path (creates all parent directories if needed)
 			logsFolderName := fmt.Sprintf("logs-%s", planExecutionID)
 			logsFolderPath := filepath.Join(logsDirectory, logsFolderName)
-
-			err = os.Mkdir(logsFolderPath, 0755)
+			err = os.MkdirAll(logsFolderPath, 0755)
 			if err != nil {
-				return mcp.NewToolResultError(fmt.Sprintf("failed to create logs folder: %v", err)), nil
+				return mcp.NewToolResultError(fmt.Sprintf("failed to create logs directory: %v", err)), nil
 			}
 
 			// Get the download URL
