@@ -350,8 +350,7 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 				mcp.Description("The absolute path to the directory where the logs should get downloaded"),
 			),
 			mcp.WithNumber("num_lines",
-				mcp.Description("Number of log lines to return. Default is 10, maximum is 20."),
-				mcp.DefaultNumber(10),
+				mcp.Description("Number of log lines to return. Default is 10."),
 			),
 			mcp.WithString("log_key",
 				mcp.Description("Optional log key to be used for downloading logs directly"),
@@ -452,14 +451,14 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 				return mcp.NewToolResultText(instruction), nil
 			}
 
+			numLines, err := OptionalParam[float64](request, "num_lines")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 			// For internal mode, we need to close the file first to ensure all data is flushed
 			outputFile.Close()
-
-			// Get the number of lines parameter
-			numLines, _ := OptionalParam[int](request, "num_lines")
-
 			// Now extract and analyze the logs from the ZIP file path
-			logContent, err := extractAndAnalyzeLogs(logsZipPath, numLines)
+			logContent, err := extractAndAnalyzeLogs(logsZipPath, int(numLines))
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to extract and analyze logs: %v", err)), nil
 			}
