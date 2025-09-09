@@ -1,0 +1,19 @@
+[package]
+name = "harness-mcp-tools"
+version = "0.1.0"
+edition = "2021"
+description = "MCP tools for Harness services"
+
+[dependencies]
+harness-mcp-config = { path = "../harness-mcp-config" }
+harness-mcp-client = { path = "../harness-mcp-client" }
+harness-mcp-dto = { path = "../harness-mcp-dto" }
+harness-mcp-auth = { path = "../harness-mcp-auth" }
+
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+anyhow = "1.0"
+thiserror = "1.0"
+tracing = "0.1"
+uuid = { version = "1.0", features = ["v4", "serde"] }

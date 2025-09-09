@@ -1,0 +1,2 @@
+fn({type error}, {type error}, {type error}) -> impl std::future::Future<Output = std::result::Result<{type error}, McpError>> {handle_mcp_request}
+fn({type error}, {type error}, {type error}) -> impl std::future::Future<Output = std::result::Result<{type error}, McpError>> {handle_mcp_request}: Handler<_, _>

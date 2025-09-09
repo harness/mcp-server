@@ -1,0 +1,78 @@
+[package]
+name = "harness-mcp-server"
+version = "0.1.0"
+edition = "2021"
+authors = ["Harness Inc."]
+description = "Harness MCP (Model Context Protocol) Server - Rust implementation"
+license = "Apache-2.0"
+repository = "https://github.com/harness/mcp-server"
+readme = "README.md"
+keywords = ["harness", "mcp", "model-context-protocol", "api", "server"]
+categories = ["api-bindings", "command-line-utilities", "web-programming"]
+
+[workspace]
+members = [
+    "crates/harness-mcp-core",
+    "crates/harness-mcp-client", 
+    "crates/harness-mcp-tools",
+    "crates/harness-mcp-auth",
+    "crates/harness-mcp-config",
+    "crates/harness-mcp-dto",
+]
+
+[[bin]]
+name = "harness-mcp-server"
+path = "src/main.rs"
+
+[dependencies]
+# Workspace crates
+harness-mcp-core = { path = "crates/harness-mcp-core" }
+harness-mcp-client = { path = "crates/harness-mcp-client" }
+harness-mcp-tools = { path = "crates/harness-mcp-tools" }
+harness-mcp-auth = { path = "crates/harness-mcp-auth" }
+harness-mcp-config = { path = "crates/harness-mcp-config" }
+harness-mcp-dto = { path = "crates/harness-mcp-dto" }
+
+# CLI and configuration
+clap = { version = "4.4", features = ["derive", "env"] }
+config = "0.14"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+
+# Async runtime and HTTP
+tokio = { version = "1.0", features = ["full"] }
+axum = "0.7"
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+
+# Logging and tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Utilities
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+[dev-dependencies]
+tokio-test = "0.4"
+tempfile = "3.0"
+assert_matches = "1.5"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.dev]
+debug = true
+opt-level = 0
+
+[features]
+default = ["stdio", "http"]
+stdio = []
+http = []

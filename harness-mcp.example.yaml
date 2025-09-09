@@ -1,0 +1,72 @@
+# Harness MCP Server Configuration Example
+# Copy this file to harness-mcp.yaml and customize as needed
+
+# Common settings
+debug: false
+read_only: false
+enable_license: false
+toolsets:
+  - pipelines
+  - connectors
+  - environments
+enable_modules:
+  - cd
+  - ci
+log_file: null
+
+# External mode settings (default)
+base_url: "https://app.harness.io"
+api_key: null  # Set via HARNESS_API_KEY environment variable
+default_org_id: null  # Set via HARNESS_DEFAULT_ORG_ID environment variable
+default_project_id: null  # Set via HARNESS_DEFAULT_PROJECT_ID environment variable
+
+# HTTP server configuration
+http_port: 8080
+http_path: "/mcp"
+
+# Internal mode settings (for Harness internal use)
+internal: false
+bearer_token: null  # Set via BEARER_TOKEN environment variable
+mcp_svc_secret: null
+
+# Internal service URLs (only needed for internal mode)
+pipeline_svc_base_url: null
+pipeline_svc_secret: null
+ng_manager_base_url: null
+ng_manager_secret: null
+chatbot_base_url: null
+chatbot_secret: null
+genai_base_url: null
+genai_secret: null
+artifact_registry_base_url: null
+artifact_registry_secret: null
+nextgen_ce_base_url: null
+nextgen_ce_secret: null
+ccm_comm_orch_base_url: null
+ccm_comm_orch_secret: null
+idp_svc_base_url: null
+idp_svc_secret: null
+chaos_manager_svc_base_url: null
+chaos_manager_svc_secret: null
+template_svc_base_url: null
+template_svc_secret: null
+intelligence_svc_base_url: null
+intelligence_svc_secret: null
+code_svc_base_url: null
+code_svc_secret: null
+log_svc_base_url: null
+log_svc_secret: null
+dashboard_svc_base_url: null
+dashboard_svc_secret: null
+scs_svc_base_url: null
+scs_svc_secret: null
+sto_svc_base_url: null
+sto_svc_secret: null
+sei_svc_base_url: null
+sei_svc_secret: null
+audit_svc_base_url: null
+audit_svc_secret: null
+dbops_svc_base_url: null
+dbops_svc_secret: null
+rbac_svc_base_url: null
+rbac_svc_secret: null

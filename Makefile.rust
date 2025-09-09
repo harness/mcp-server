@@ -1,0 +1,113 @@
+# Rust Makefile for Harness MCP Server
+
+.PHONY: build test clean format lint check install-tools dev release docker
+
+# Default target
+all: build
+
+# Build the project
+build:
+	@echo "Building Harness MCP Server (Rust)..."
+	cargo build
+
+# Build release version
+release:
+	@echo "Building release version..."
+	cargo build --release
+
+# Run tests
+test:
+	@echo "Running tests..."
+	cargo test
+
+# Run tests with coverage
+test-coverage:
+	@echo "Running tests with coverage..."
+	cargo tarpaulin --out Html --output-dir coverage
+
+# Format code
+format:
+	@echo "Formatting code..."
+	cargo fmt
+
+# Check formatting
+format-check:
+	@echo "Checking code formatting..."
+	cargo fmt -- --check
+
+# Run linter
+lint:
+	@echo "Running clippy..."
+	cargo clippy -- -D warnings
+
+# Check code without building
+check:
+	@echo "Checking code..."
+	cargo check
+
+# Install development tools
+install-tools:
+	@echo "Installing development tools..."
+	rustup component add rustfmt clippy
+	cargo install cargo-tarpaulin
+	cargo install cargo-audit
+	cargo install cargo-outdated
+
+# Run in development mode (stdio)
+dev:
+	@echo "Running in development mode..."
+	cargo run -- stdio --debug --api-key="${HARNESS_API_KEY}" --default-org-id="${HARNESS_DEFAULT_ORG_ID}" --default-project-id="${HARNESS_DEFAULT_PROJECT_ID}"
+
+# Run HTTP server in development mode
+dev-http:
+	@echo "Running HTTP server in development mode..."
+	cargo run -- http-server --port=8080
+
+# Clean build artifacts
+clean:
+	@echo "Cleaning build artifacts..."
+	cargo clean
+
+# Security audit
+audit:
+	@echo "Running security audit..."
+	cargo audit
+
+# Check for outdated dependencies
+outdated:
+	@echo "Checking for outdated dependencies..."
+	cargo outdated
+
+# Build Docker image
+docker:
+	@echo "Building Docker image..."
+	docker build -t harness/mcp-server:rust .
+
+# Run all checks (format, lint, test)
+ci: format-check lint test
+
+# Development workflow
+dev-setup: install-tools
+	@echo "Development environment setup complete!"
+
+# Help
+help:
+	@echo "Available targets:"
+	@echo "  build         - Build the project"
+	@echo "  release       - Build release version"
+	@echo "  test          - Run tests"
+	@echo "  test-coverage - Run tests with coverage"
+	@echo "  format        - Format code"
+	@echo "  format-check  - Check code formatting"
+	@echo "  lint          - Run clippy linter"
+	@echo "  check         - Check code without building"
+	@echo "  install-tools - Install development tools"
+	@echo "  dev           - Run in development mode (stdio)"
+	@echo "  dev-http      - Run HTTP server in development mode"
+	@echo "  clean         - Clean build artifacts"
+	@echo "  audit         - Run security audit"
+	@echo "  outdated      - Check for outdated dependencies"
+	@echo "  docker        - Build Docker image"
+	@echo "  ci            - Run all CI checks"
+	@echo "  dev-setup     - Set up development environment"
+	@echo "  help          - Show this help"

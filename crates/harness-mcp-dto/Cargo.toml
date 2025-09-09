@@ -1,0 +1,11 @@
+[package]
+name = "harness-mcp-dto"
+version = "0.1.0"
+edition = "2021"
+description = "Data transfer objects for Harness APIs"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }

@@ -1,0 +1,7 @@
+# Clippy configuration
+msrv = "1.70.0"
+cognitive-complexity-threshold = 30
+too-many-arguments-threshold = 8
+type-complexity-threshold = 250
+single-char-binding-names-threshold = 4
+trivial-copy-size-limit = 64
