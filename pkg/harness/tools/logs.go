@@ -28,8 +28,8 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 				mcp.Required(),
 				mcp.Description("The absolute path to the directory where the logs should get downloaded"),
 			),
-			mcp.WithString("prefix",
-				mcp.Description("Optional custom prefix to be used as log key for downloading logs"),
+			mcp.WithString("log_key_prefix",
+				mcp.Description("Optional prefix to be used as log key for downloading logs"),
 			),
 			common.WithScope(config, true),
 		),
@@ -45,9 +45,9 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 			}
 
 			// Get optional prefix parameter
-			prefix, _ := OptionalParam[string](request, "prefix")
+			logKeyPrefix, _ := OptionalParam[string](request, "log_key_prefix")
 
-			logDownloadURL, err := client.DownloadLogs(ctx, scope, planExecutionID, prefix)
+			logDownloadURL, err := client.DownloadLogs(ctx, scope, planExecutionID, logKeyPrefix)
 			if err != nil {
 				return nil, fmt.Errorf("failed to fetch log download URL: %w", err)
 			}
@@ -81,7 +81,7 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 			}
 
 			// Get the download URL
-			logDownloadURL, err = client.DownloadLogs(ctx, scope, planExecutionID, prefix)
+			logDownloadURL, err = client.DownloadLogs(ctx, scope, planExecutionID, logKeyPrefix)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to fetch log download URL: %v", err)), nil
 			}
