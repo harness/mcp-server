@@ -259,8 +259,8 @@ func init() {
 	rootCmd.PersistentFlags().String("log-file", "", "Path to log file")
 	rootCmd.PersistentFlags().Bool("debug", false, "Enable debug logging")
 
-	httpServerCmd.Flags().Int("http-port", 8080, "HTTP server port (when transport is 'http')")
-	httpServerCmd.Flags().String("http-path", "/mcp", "HTTP server path (when transport is 'http')")
+	httpServerCmd.PersistentFlags().Int("http-port", 8080, "HTTP server port (when transport is 'http')")
+	httpServerCmd.PersistentFlags().String("http-path", "/mcp", "HTTP server path (when transport is 'http')")
 	httpServerCmd.Flags().String("pipeline-svc-base-url", "", "Base URL for pipeline service")
 	httpServerCmd.Flags().String("pipeline-svc-secret", "", "Secret for pipeline service")
 
