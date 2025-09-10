@@ -16,11 +16,11 @@ type FMEEnvironment struct {
 
 // FMEFeatureFlag represents a feature flag in FME
 type FMEFeatureFlag struct {
-	ID            string `json:"id"`
-	Name          string `json:"name"`
-	Description   string `json:"description"`
-	RolloutStatus string `json:"rolloutStatus"`
-	CreationTime  int64  `json:"creationTime,omitempty"`
+	ID            string   `json:"id"`
+	Name          string   `json:"name"`
+	Description   string   `json:"description"`
+	RolloutStatus string   `json:"rolloutStatus"`
+	CreationTime  int64    `json:"creationTime,omitempty"`
 	Tags          []string `json:"tags,omitempty"`
 }
 
@@ -47,11 +47,11 @@ type FMETreatment struct {
 
 // FMETargetingRule represents a targeting rule for a feature flag
 type FMETargetingRule struct {
-	Condition   string  `json:"condition"`
-	Treatment   string  `json:"treatment"`
-	Percentage  float64 `json:"percentage,omitempty"`
-	BucketBy    string  `json:"bucketBy,omitempty"`
-	Rollout     bool    `json:"rollout,omitempty"`
+	Condition  string  `json:"condition"`
+	Treatment  string  `json:"treatment"`
+	Percentage float64 `json:"percentage,omitempty"`
+	BucketBy   string  `json:"bucketBy,omitempty"`
+	Rollout    bool    `json:"rollout,omitempty"`
 }
 
 // FMEWorkspaceListResponse represents the API response for listing workspaces

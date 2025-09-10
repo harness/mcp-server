@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/pkg/harness/auth"
@@ -136,9 +137,11 @@ func (s *FMEService) makeRequest(ctx context.Context, method, path string, param
 
 	// Add authentication headers
 	if s.auth != nil {
-		if err := s.auth.Apply(req); err != nil {
-			return fmt.Errorf("failed to apply authentication: %w", err)
+		key, value, err := s.auth.GetHeader(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get authentication header: %w", err)
 		}
+		req.Header.Set(key, value)
 	}
 
 	// Set headers
