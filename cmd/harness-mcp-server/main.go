@@ -257,8 +257,10 @@ func init() {
 	rootCmd.PersistentFlags().String("log-file", "", "Path to log file")
 	rootCmd.PersistentFlags().Bool("debug", false, "Enable debug logging")
 
-	httpServerCmd.PersistentFlags().Int("http-port", 8080, "HTTP server port (when transport is 'http')")
-	httpServerCmd.PersistentFlags().String("http-path", "/mcp", "HTTP server path (when transport is 'http')")
+	httpServerCmd.Flags().Int("http-port", 8080, "HTTP server port (when transport is 'http')")
+	httpServerCmd.Flags().String("http-path", "/mcp", "HTTP server path (when transport is 'http')")
+	httpServerCmd.Flags().String("pipeline-svc-base-url", "", "Base URL for pipeline service")
+	httpServerCmd.Flags().String("pipeline-svc-secret", "", "Secret for pipeline service")
 
 	// Add stdio-specific flags
 	stdioCmd.Flags().String("base-url", "https://app.harness.io", "Base URL for Harness")
@@ -313,6 +315,9 @@ func init() {
 	// Bind transport configuration flags to viper
 	_ = viper.BindPFlag("http_port", httpServerCmd.PersistentFlags().Lookup("http-port"))
 	_ = viper.BindPFlag("http_path", httpServerCmd.PersistentFlags().Lookup("http-path"))
+	_ = viper.BindPFlag("pipeline_svc_base_url", httpServerCmd.Flags().Lookup("pipeline-svc-base-url"))
+	_ = viper.BindPFlag("pipeline_svc_secret", httpServerCmd.Flags().Lookup("pipeline-svc-secret"))
+	
 
 	// Bind stdio-specific flags to viper
 	_ = viper.BindPFlag("base_url", stdioCmd.Flags().Lookup("base-url"))
