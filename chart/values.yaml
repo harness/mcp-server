@@ -165,6 +165,8 @@ service:
   annotations: {}
   type: ClusterIP
   port: 8080
+  sessionAffinity: "ClientIP"
+  sessionAffinityTimeout: 3600
 ## Pod resource requests and limits
 ## ref: https://kubernetes.io/docs/user-guide/compute-resources/
 # --resources.limits The resources limits for the containers
@@ -264,10 +266,6 @@ initContainers: []
 nodeSelector: {}
 
 tolerations: []
-
-service:
-  sessionAffinity: "ClientIP"
-  sessionAffinityTimeout: 3600
 
 secrets:
   secretManagement:
