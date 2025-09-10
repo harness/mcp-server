@@ -83,6 +83,8 @@ var (
 				Internal:      true,
 				Toolsets:      toolsets,
 				EnableModules: enableModules,
+				PipelineSvcBaseURL: viper.GetString("pipeline_svc_base_url"),
+				PipelineSvcSecret: viper.GetString("pipeline_svc_secret"),
 			}
 
 			return runHTTPServer(ctx, cfg)
