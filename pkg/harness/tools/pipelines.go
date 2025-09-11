@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
@@ -391,12 +392,23 @@ func GetPipelineSummaryTool(config *config.Config, client *client.PipelineServic
 		}
 }
 
+type ActionData struct {
+	Actions []struct {
+		Text   string `json:"text"`
+		Action string `json:"action"`
+		Data   struct {
+			PageName string            `json:"pageName"`
+			Metadata map[string]string `json:"metadata"`
+		} `json:"data"`
+	} `json:"actions"`
+}
+
 func CreateFollowUpPromptTool(config *config.Config, client *client.PipelineService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("create_follow_up_prompt",
 			mcp.WithDescription("Creates a follow up prompt event with the specified data."),
 			mcp.WithString("action_data",
 				mcp.Required(),
-				mcp.Description("A JSON string in one of these formats: 1) An array of action objects: {\"actions\": [{\"text\": \"Button Text\", \"action\": \"OPEN_ENTITY_NEW_TAB\", \"data\": {\"pageName\": \"PAGE_NAME\", \"metadata\": {\"id\": \"ID_VALUE\"}}}]} OR 2) just a single string action without any array: \"Action1\""),
+				mcp.Description("A JSON string in one of these formats: 1) An array of action objects: {\"actions\": [{\"text\": \"Button Text\", \"action\": \"OPEN_ENTITY_NEW_TAB\", \"data\": {\"pageName\": \"PAGE_NAME\", \"metadata\": {\"<KEY>\": \"<VALUE>\"}}}]} OR 2) just a single string action without any array: \"Action1\""),
 			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -405,47 +417,37 @@ func CreateFollowUpPromptTool(config *config.Config, client *client.PipelineServ
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			// Try different formats for action data
+			// Parse action data into actionStrings (array of JSON strings)
 			var actionStrings []string
+			var actionObject interface{}
 
-			var actionString string
-
-			// First try if it's already an array of strings
-			if err := json.Unmarshal([]byte(actionDataStr), &actionString); err == nil {
-				actionStrings = append(actionStrings, actionString)
+			// Check if the input is a plain text message (not JSON)
+			if !strings.HasPrefix(strings.TrimSpace(actionDataStr), "{") && !strings.HasPrefix(strings.TrimSpace(actionDataStr), "[") {
+				actionStrings = append(actionStrings, actionDataStr)
+				actionObject = actionStrings
 			} else {
-				// Try if it's a wrapper with "actions" field
-				var actionDataWrapper struct {
-					Actions []struct {
-						Text   string `json:"text"`
-						Action string `json:"action"`
-						Data   struct {
-							PageName string `json:"pageName"`
-							Metadata struct {
-								Id string `json:"id"`
-							} `json:"metadata"`
-						} `json:"data"`
-					} `json:"actions"`
-				}
-
-				if err := json.Unmarshal([]byte(actionDataStr), &actionDataWrapper); err == nil {
-					// Convert each action to a stringified JSON
-					actionStrings = make([]string, len(actionDataWrapper.Actions))
-					for i, action := range actionDataWrapper.Actions {
-						actionBytes, err := json.Marshal(action)
-						if err != nil {
-							return mcp.NewToolResultError(fmt.Sprintf("Failed to stringify action: %v", err)), nil
-						}
-						actionStrings[i] = string(actionBytes)
-					}
+				// Try to parse as JSON
+				var actionString string
+				// First try if it's already a JSON string
+				if err := json.Unmarshal([]byte(actionDataStr), &actionString); err == nil {
+					actionStrings = append(actionStrings, actionString)
+					actionObject = actionStrings
 				} else {
-					return mcp.NewToolResultError(fmt.Sprintf("Failed to parse action data: %v", err)), nil
-				}
+					// Try if it's a wrapper with "actions" field
+					var actionDataWrapper ActionData
 
+					if err := json.Unmarshal([]byte(actionDataStr), &actionDataWrapper); err == nil {
+						// Convert each action to a stringified JSON
+						actionObject = actionDataWrapper.Actions
+					} else {
+						return mcp.NewToolResultError(fmt.Sprintf("Failed to parse action data: %v", err)), nil
+					}
+
+				}
 			}
 
 			// Create a custom event with the stringified action data
-			promptEvent := types.NewActionEvent(actionStrings)
+			promptEvent := types.NewActionEvent(actionObject)
 
 			// Create an embedded resource from the event
 			resource, err := promptEvent.CreateEmbeddedResource()
