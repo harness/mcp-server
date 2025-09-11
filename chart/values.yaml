@@ -244,7 +244,7 @@ readinessProbe:
 ##
 autoscaling:
   enabled: true
-  minReplicas: 1
+  minReplicas: 3
   maxReplicas: 100
   targetCPU: 80
 
