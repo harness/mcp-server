@@ -30,7 +30,7 @@ const (
 	deleteRoleAssignmentPath = "/api/roleassignments"
 )
 
-type RBACService struct {
+type ACLService struct {
 	Client *Client
 }
 
@@ -63,7 +63,7 @@ func (u *PrincipalService) GetAllUsers(ctx context.Context, scope dto.Scope, sea
 	return resp, nil
 }
 
-func (u *RBACService) GetRoleInfo(ctx context.Context, scope dto.Scope, roleID string) (*dto.AccessControlOutput[dto.RoleInfoOutputData], error) {
+func (u *ACLService) GetRoleInfo(ctx context.Context, scope dto.Scope, roleID string) (*dto.AccessControlOutput[dto.RoleInfoOutputData], error) {
 	params := make(map[string]string)
 
 	path := fmt.Sprintf(getRolePath+"/%s", roleID)
@@ -77,7 +77,7 @@ func (u *RBACService) GetRoleInfo(ctx context.Context, scope dto.Scope, roleID s
 	return resp, nil
 }
 
-func (r *RBACService) ListAvailableRoles(ctx context.Context, scope dto.Scope, page int, size int) (*dto.AccessControlOutput[dto.RolesOutputData], error) {
+func (r *ACLService) ListAvailableRoles(ctx context.Context, scope dto.Scope, page int, size int) (*dto.AccessControlOutput[dto.RolesOutputData], error) {
 
 	params := make(map[string]string)
 	params["accountIdentifier"] = scope.AccountID
@@ -96,7 +96,7 @@ func (r *RBACService) ListAvailableRoles(ctx context.Context, scope dto.Scope, p
 
 }
 
-func (p *RBACService) ListAvailablePermissions(ctx context.Context, scope dto.Scope, page int, size int) (*dto.AccessControlOutput[[]dto.PermissionsOutputData], error) {
+func (p *ACLService) ListAvailablePermissions(ctx context.Context, scope dto.Scope, page int, size int) (*dto.AccessControlOutput[[]dto.PermissionsOutputData], error) {
 
 	params := make(map[string]string)
 	params["accountIdentifier"] = scope.AccountID
@@ -114,7 +114,7 @@ func (p *RBACService) ListAvailablePermissions(ctx context.Context, scope dto.Sc
 	return resp, nil
 }
 
-func (ra *RBACService) ListRoleAssignmentsTool(ctx context.Context, scope dto.Scope, page int, size int, opts *dto.RoleAssignmentRequestBody, resourceGroupNames []string, roleNames []string, principalTypes string, principalScopeLevelFilter string, principalFilter []dto.RoleAssignmentPrincipalFilter) (*dto.AccessControlOutput[dto.RoleAssignmentsOutputData], error) {
+func (ra *ACLService) ListRoleAssignmentsTool(ctx context.Context, scope dto.Scope, page int, size int, opts *dto.RoleAssignmentRequestBody, resourceGroupNames []string, roleNames []string, principalTypes string, principalScopeLevelFilter string, principalFilter []dto.RoleAssignmentPrincipalFilter) (*dto.AccessControlOutput[dto.RoleAssignmentsOutputData], error) {
 	if opts == nil {
 		opts = &dto.RoleAssignmentRequestBody{}
 	}
@@ -241,7 +241,7 @@ func (currentUserInfo *PrincipalService) GetCurrentUser(ctx context.Context, sco
 	return resp, nil
 }
 
-func (rAssignment *RBACService) CreateRoleAssignment(ctx context.Context, scope dto.Scope, opts *dto.CreateRoleAssignmentRequestBody) (*dto.AccessControlOutput[dto.CreateRoleAssignmentOutputData], error) {
+func (rAssignment *ACLService) CreateRoleAssignment(ctx context.Context, scope dto.Scope, opts *dto.CreateRoleAssignmentRequestBody) (*dto.AccessControlOutput[dto.CreateRoleAssignmentOutputData], error) {
 	if opts == nil {
 		opts = &dto.CreateRoleAssignmentRequestBody{}
 	}
@@ -280,7 +280,7 @@ func (cResourceGroup *ResourceGroupService) CreateResourceGroup(ctx context.Cont
 	return resp, nil
 }
 
-func (cRole *RBACService) CreateRole(ctx context.Context, scope dto.Scope, opts *dto.Role) (*dto.AccessControlOutput[dto.CreateRoleOutputData], error) {
+func (cRole *ACLService) CreateRole(ctx context.Context, scope dto.Scope, opts *dto.Role) (*dto.AccessControlOutput[dto.CreateRoleOutputData], error) {
 	if opts == nil {
 		opts = &dto.Role{}
 	}
@@ -391,7 +391,7 @@ func (dServiceAccount *PrincipalService) DeleteServiceAccount(ctx context.Contex
 	return resp, nil
 }
 
-func (dRole *RBACService) DeleteRole(ctx context.Context, scope dto.Scope, roleIdentifier string) (*dto.AccessControlOutput[dto.RoleInfoOutputData], error) {
+func (dRole *ACLService) DeleteRole(ctx context.Context, scope dto.Scope, roleIdentifier string) (*dto.AccessControlOutput[dto.RoleInfoOutputData], error) {
 
 	params := make(map[string]string)
 
@@ -425,7 +425,7 @@ func (dResourceGroup *ResourceGroupService) DeleteResourceGroup(ctx context.Cont
 	return resp, nil
 }
 
-func (dRoleAssignment *RBACService) DeleteRoleAssignment(ctx context.Context, scope dto.Scope, roleAssignmentIdentifier string) (*dto.AccessControlOutput[dto.RoleAssignmentsOutputDataContent], error) {
+func (dRoleAssignment *ACLService) DeleteRoleAssignment(ctx context.Context, scope dto.Scope, roleAssignmentIdentifier string) (*dto.AccessControlOutput[dto.RoleAssignmentsOutputDataContent], error) {
 
 	params := make(map[string]string)
 

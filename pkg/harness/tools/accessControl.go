@@ -174,7 +174,7 @@ func GetServiceAccountTool(config *config.Config, serviceAccountClient *client.P
 		}
 }
 
-func GetRoleInfoTool(config *config.Config, roleInfoClient *client.RBACService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetRoleInfoTool(config *config.Config, roleInfoClient *client.ACLService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_role_info",
 			mcp.WithDescription("Get details of a role."),
 			mcp.WithString("role_id",
@@ -208,7 +208,7 @@ func GetRoleInfoTool(config *config.Config, roleInfoClient *client.RBACService) 
 		}
 }
 
-func ListAvailableRolesTool(config *config.Config, rolesClient *client.RBACService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListAvailableRolesTool(config *config.Config, rolesClient *client.ACLService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_available_roles",
 			mcp.WithDescription("List the roles available in the account."),
 			common.WithScope(config, false),
@@ -242,7 +242,7 @@ func ListAvailableRolesTool(config *config.Config, rolesClient *client.RBACServi
 		}
 }
 
-func ListAvailablePermissions(config *config.Config, permissionsClient *client.RBACService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListAvailablePermissions(config *config.Config, permissionsClient *client.ACLService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_available_permissions",
 			mcp.WithDescription("List The Permissions Available In The Account."),
 			common.WithScope(config, false),
@@ -276,7 +276,7 @@ func ListAvailablePermissions(config *config.Config, permissionsClient *client.R
 		}
 }
 
-func ListRoleAssignmentsTool(config *config.Config, roleAssignmentsClient *client.RBACService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListRoleAssignmentsTool(config *config.Config, roleAssignmentsClient *client.ACLService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_role_assignments",
 			mcp.WithDescription("List The Role Assignments."),
 			mcp.WithString("resource_group_names",
@@ -385,7 +385,7 @@ func ListRoleAssignmentsTool(config *config.Config, roleAssignmentsClient *clien
 		}
 }
 
-func CreateRoleAssignmentTool(config *config.Config, roleAssignmentsClient *client.RBACService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func CreateRoleAssignmentTool(config *config.Config, roleAssignmentsClient *client.ACLService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("create_role_assignment",
 			mcp.WithDescription("Create a new role assignment."),
 			mcp.WithString("role_assignment_identifier",
@@ -631,7 +631,7 @@ func CreateResourceGroupTool(config *config.Config, resourceGroupClient *client.
 		}
 }
 
-func CreateRoleTool(config *config.Config, rolesClient *client.RBACService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func CreateRoleTool(config *config.Config, rolesClient *client.ACLService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("create_role",
 			mcp.WithDescription("Create a new role."),
 			mcp.WithString("role_identifier", mcp.Required(), mcp.Description("The identifier of the role to create.")),
@@ -1010,7 +1010,7 @@ func DeleteServiceAccountTool(config *config.Config, serviceAccountClient *clien
 		}
 }
 
-func DeleteRoleTool(config *config.Config, roleClient *client.RBACService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func DeleteRoleTool(config *config.Config, roleClient *client.ACLService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("delete_role",
 			mcp.WithDescription("Delete a role."),
 			mcp.WithString("role_identifier",
@@ -1078,7 +1078,7 @@ func DeleteResourceGroupTool(config *config.Config, resourceGroupClient *client.
 		}
 }
 
-func DeleteRoleAssignmentTool(config *config.Config, roleAssignmentClient *client.RBACService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func DeleteRoleAssignmentTool(config *config.Config, roleAssignmentClient *client.ACLService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("delete_role_assignment",
 			mcp.WithDescription("Delete a role assignment."),
 			mcp.WithString("role_assignment_identifier",
