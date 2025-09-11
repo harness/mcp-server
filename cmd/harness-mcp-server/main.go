@@ -307,7 +307,6 @@ func init() {
 	httpServerCmd.Flags().String("chatbot-secret", "", "Secret for chatbot service")
 	httpServerCmd.Flags().String("genai-base-url", "", "Base URL for genai service")
 	httpServerCmd.Flags().String("genai-secret", "", "Secret for genai service")
-	httpServerCmd.Flags().String("mcp-svc-secret", "", "Secret for MCP service")
 	httpServerCmd.Flags().String("artifact-registry-base-url", "", "Base URL for artifact registry service")
 	httpServerCmd.Flags().String("artifact-registry-secret", "", "Secret for artifact registry service")
 	httpServerCmd.Flags().String("nextgen-ce-base-url", "", "Base URL for Nextgen CE service")
