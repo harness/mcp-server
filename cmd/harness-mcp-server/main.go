@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net/http"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -81,12 +81,12 @@ var (
 					Port: viper.GetInt("http_port"),
 					Path: viper.GetString("http_path"),
 				},
-				Internal:           true,
-				Toolsets:           toolsets,
-				EnableModules:      enableModules,
-				PipelineSvcBaseURL: viper.GetString("pipeline_svc_base_url"),
-				PipelineSvcSecret:  viper.GetString("pipeline_svc_secret"),
-				McpSvcSecret:       viper.GetString("mcp_svc_secret"),
+				Internal:                true,
+				Toolsets:                toolsets,
+				EnableModules:           enableModules,
+				PipelineSvcBaseURL:      viper.GetString("pipeline_svc_base_url"),
+				PipelineSvcSecret:       viper.GetString("pipeline_svc_secret"),
+				McpSvcSecret:            viper.GetString("mcp_svc_secret"),
 				NgManagerBaseURL:        viper.GetString("ng_manager_base_url"),
 				NgManagerSecret:         viper.GetString("ng_manager_secret"),
 				ChatbotBaseURL:          viper.GetString("chatbot_base_url"),
@@ -121,7 +121,6 @@ var (
 				DBOpsSvcSecret:          viper.GetString("dbops_svc_secret"),
 				RBACSvcBaseURL:          viper.GetString("rbac_svc_base_url"),
 				RBACSvcSecret:           viper.GetString("rbac_svc_secret"),
-
 			}
 
 			return runHTTPServer(ctx, cfg)
@@ -418,7 +417,6 @@ func init() {
 	_ = viper.BindPFlag("dbops_svc_secret", httpServerCmd.Flags().Lookup("dbops-svc-secret"))
 	_ = viper.BindPFlag("rbac_svc_base_url", httpServerCmd.Flags().Lookup("rbac-svc-base-url"))
 	_ = viper.BindPFlag("rbac_svc_secret", httpServerCmd.Flags().Lookup("rbac-svc-secret"))
-
 
 	// Bind stdio-specific flags to viper
 	_ = viper.BindPFlag("base_url", stdioCmd.Flags().Lookup("base-url"))
