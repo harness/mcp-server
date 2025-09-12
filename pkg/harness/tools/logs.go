@@ -71,7 +71,7 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 						logsDirectoryName = "pipeline-logs"
 					}
 					logsDirectory = filepath.Join(config.OutputDir, logsDirectoryName)
-					slog.Info("Redirecting logs from %s to %s to ensure host accessibility", oldLogsDirectory, logsDirectory)
+					slog.Info("Redirecting logs from %s to %s to ensure access", oldLogsDirectory, logsDirectory)
 				}
 			}
 
