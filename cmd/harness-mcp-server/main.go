@@ -260,7 +260,7 @@ func init() {
 	rootCmd.PersistentFlags().Bool("read-only", false, "Restrict the server to read-only operations")
 	rootCmd.PersistentFlags().String("log-file", "", "Path to log file")
 	rootCmd.PersistentFlags().Bool("debug", false, "Enable debug logging")
-	rootCmd.PersistentFlags().String("output-dir", "", "Directory for tool outputs that will be accessible from host when running in Docker")
+	rootCmd.PersistentFlags().String("output-dir", "", "Directory for tool outputs")
 
 	httpServerCmd.PersistentFlags().Int("http-port", 8080, "HTTP server port (when transport is 'http')")
 	httpServerCmd.PersistentFlags().String("http-path", "/mcp", "HTTP server path (when transport is 'http')")
