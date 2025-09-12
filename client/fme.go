@@ -16,7 +16,7 @@ type FMEService struct {
 // GET https://api.split.io/internal/api/v2/workspaces
 func (f *FMEService) ListWorkspaces(ctx context.Context) (*dto.FMEWorkspacesResponse, error) {
 	var response dto.FMEWorkspacesResponse
-	
+
 	err := f.Client.Get(ctx, "internal/api/v2/workspaces", nil, nil, &response)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list workspaces: %w", err)

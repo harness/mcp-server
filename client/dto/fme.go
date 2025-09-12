@@ -48,14 +48,14 @@ type FMERolloutStatus struct {
 
 // FMEFeatureFlag represents a feature flag (split) in Split.io
 type FMEFeatureFlag struct {
-	Name                    string           `json:"name"`
-	Description             string           `json:"description"`
-	ID                      string           `json:"id"`
-	TrafficType             FMETrafficType   `json:"trafficType"`
-	CreationTime            int64            `json:"creationTime"`
-	Tags                    []FMETag         `json:"tags"`
-	RolloutStatus           FMERolloutStatus `json:"rolloutStatus"`
-	RolloutStatusTimestamp  int64            `json:"rolloutStatusTimestamp"`
+	Name                   string           `json:"name"`
+	Description            string           `json:"description"`
+	ID                     string           `json:"id"`
+	TrafficType            FMETrafficType   `json:"trafficType"`
+	CreationTime           int64            `json:"creationTime"`
+	Tags                   []FMETag         `json:"tags"`
+	RolloutStatus          FMERolloutStatus `json:"rolloutStatus"`
+	RolloutStatusTimestamp int64            `json:"rolloutStatusTimestamp"`
 }
 
 // FMEFeatureFlagsResponse represents the response from listing feature flags
@@ -105,19 +105,19 @@ type FMEDefaultRule struct {
 
 // FMEFeatureFlagDefinition represents the complete definition of a feature flag in an environment
 type FMEFeatureFlagDefinition struct {
-	Name                    string               `json:"name"`
-	Environment             FMEEnvironment       `json:"environment"`
-	TrafficType             FMETrafficType       `json:"trafficType"`
-	Killed                  bool                 `json:"killed"`
-	LastTrafficReceivedAt   int64                `json:"lastTrafficReceivedAt"`
-	Treatments              []FMETreatment       `json:"treatments"`
-	DefaultTreatment        string               `json:"defaultTreatment"`
-	BaselineTreatment       string               `json:"baselineTreatment"`
-	TrafficAllocation       int                  `json:"trafficAllocation"`
-	Rules                   []FMERule            `json:"rules"`
-	DefaultRule             []FMEDefaultRule     `json:"defaultRule"`
-	CreationTime            int64                `json:"creationTime"`
-	LastUpdateTime          int64                `json:"lastUpdateTime"`
+	Name                  string           `json:"name"`
+	Environment           FMEEnvironment   `json:"environment"`
+	TrafficType           FMETrafficType   `json:"trafficType"`
+	Killed                bool             `json:"killed"`
+	LastTrafficReceivedAt int64            `json:"lastTrafficReceivedAt"`
+	Treatments            []FMETreatment   `json:"treatments"`
+	DefaultTreatment      string           `json:"defaultTreatment"`
+	BaselineTreatment     string           `json:"baselineTreatment"`
+	TrafficAllocation     int              `json:"trafficAllocation"`
+	Rules                 []FMERule        `json:"rules"`
+	DefaultRule           []FMEDefaultRule `json:"defaultRule"`
+	CreationTime          int64            `json:"creationTime"`
+	LastUpdateTime        int64            `json:"lastUpdateTime"`
 }
 
 // FMEFeatureFlagDefinitionResponse represents the response from getting a feature flag definition
