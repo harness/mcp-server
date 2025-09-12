@@ -69,10 +69,8 @@ func RegisterFeatureManagementAndExperimentation(config *config.Config, tsg *too
 	// Create FME client with Split.io base URL
 	splitIOBaseURL := "https://api.split.io"
 
-	// Use the existing API key as Split.io API key for now
-	// TODO: Add separate SPLIT_IO_API_KEY environment variable
-	// Split.io uses Bearer token authentication, not x-api-key
-	authProvider := auth.NewBearerTokenProvider(config.APIKey)
+	// Split.io uses x-api-key header with API key (same as Harness)
+	authProvider := auth.NewAPIKeyProvider(config.APIKey)
 
 	// Create client with Split.io base URL
 	fmeClient, err := client.NewWithAuthProvider(splitIOBaseURL, authProvider, "")
