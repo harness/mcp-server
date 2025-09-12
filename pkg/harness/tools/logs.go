@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -70,8 +71,7 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 						logsDirectoryName = "pipeline-logs"
 					}
 					logsDirectory = filepath.Join(config.OutputDir, logsDirectoryName)
-					fmt.Printf("Redirecting logs from %s to %s to ensure host accessibility when running in Docker\n",
-						oldLogsDirectory, logsDirectory)
+					slog.Info("Redirecting logs from %s to %s to ensure host accessibility", oldLogsDirectory, logsDirectory)
 				}
 			}
 
