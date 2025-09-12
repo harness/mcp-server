@@ -82,6 +82,7 @@ var (
 				},
 				Toolsets:      toolsets,
 				EnableModules: enableModules,
+				OutputDir:     viper.GetString("output_dir"),
 			}
 
 			return runHTTPServer(ctx, cfg)
@@ -132,6 +133,7 @@ var (
 				Debug:            viper.GetBool("debug"),
 				EnableModules:    enableModules,
 				EnableLicense:    viper.GetBool("enable_license"),
+				OutputDir:        viper.GetString("output_dir"),
 			}
 
 			if err := runStdioServer(ctx, cfg); err != nil {
@@ -192,6 +194,7 @@ var (
 				Debug:         viper.GetBool("debug"),
 				EnableLicense: viper.GetBool("enable_license"),
 				Internal:      true,
+				OutputDir:     viper.GetString("output_dir"),
 				AccountID:     session.Principal.AccountID,
 				// Internal mode specific fields
 				BearerToken:             viper.GetString("bearer_token"),

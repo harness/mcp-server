@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
@@ -59,6 +60,7 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 
 			// If OutputDir is configured, use it as the base directory for logs
 			if config.OutputDir != "" {
+
 				if !strings.HasPrefix(logsDirectory, config.OutputDir) {
 					// Create a subdirectory within the output directory for logs
 					oldLogsDirectory := logsDirectory
