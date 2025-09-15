@@ -19,9 +19,9 @@ type LogService struct {
 	PipelineClient   *Client
 }
 
-// DownloadLogs fetches a download URL for pipeline execution logs
+// GetDownloadLogsURL fetches a download URL for pipeline execution logs
 // If logKey is not empty, it will use that log key to fetch logs instead of building one from execution details
-func (l *LogService) DownloadLogs(ctx context.Context, scope dto.Scope, planExecutionID string, logKey string) (string, error) {
+func (l *LogService) GetDownloadLogsURL(ctx context.Context, scope dto.Scope, planExecutionID string, logKey string) (string, error) {
 	// Use custom log key if provided, otherwise build it from execution details
 	var finalLogKey string
 	var err error
