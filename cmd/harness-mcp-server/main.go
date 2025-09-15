@@ -121,7 +121,7 @@ var (
 				DBOpsSvcSecret:          viper.GetString("dbops_svc_secret"),
 				RBACSvcBaseURL:          viper.GetString("rbac_svc_base_url"),
 				RBACSvcSecret:           viper.GetString("rbac_svc_secret"),
-				OutputDir:     viper.GetString("output_dir"),
+				OutputDir:               viper.GetString("output_dir"),
 			}
 
 			return runHTTPServer(ctx, cfg)
@@ -316,6 +316,14 @@ func init() {
 	httpServerCmd.Flags().String("artifact-registry-secret", "", "Secret for artifact registry service")
 	httpServerCmd.Flags().String("nextgen-ce-base-url", "", "Base URL for Nextgen CE service")
 	httpServerCmd.Flags().String("nextgen-ce-secret", "", "Secret for Nextgen CE service")
+	httpServerCmd.Flags().String("ccm-comm-orch-base-url", "", "Base URL for CCM comm orch service")
+	httpServerCmd.Flags().String("ccm-comm-orch-secret", "", "Secret for CCM comm orch service")
+	httpServerCmd.Flags().String("idp-svc-base-url", "", "Base URL for IDP service")
+	httpServerCmd.Flags().String("idp-svc-secret", "", "Secret for IDP service")
+	httpServerCmd.Flags().String("template-svc-base-url", "", "Base URL for template service")
+	httpServerCmd.Flags().String("template-svc-secret", "", "Secret for template service")
+	httpServerCmd.Flags().String("intelligence-svc-base-url", "", "Base URL for intelligence service")
+	httpServerCmd.Flags().String("intelligence-svc-secret", "", "Secret for intelligence service")
 	httpServerCmd.Flags().String("chaos-manager-svc-base-url", "", "Base URL for chaos manager service")
 	httpServerCmd.Flags().String("chaos-manager-svc-secret", "", "Secret for chaos manager service")
 	httpServerCmd.Flags().String("code-svc-base-url", "", "Base URL for code service")
@@ -404,6 +412,10 @@ func init() {
 	_ = viper.BindPFlag("artifact_registry_secret", httpServerCmd.Flags().Lookup("artifact-registry-secret"))
 	_ = viper.BindPFlag("nextgen_ce_base_url", httpServerCmd.Flags().Lookup("nextgen-ce-base-url"))
 	_ = viper.BindPFlag("nextgen_ce_secret", httpServerCmd.Flags().Lookup("nextgen-ce-secret"))
+	_ = viper.BindPFlag("ccm_comm_orch_base_url", httpServerCmd.Flags().Lookup("ccm-comm-orch-base-url"))
+	_ = viper.BindPFlag("ccm_comm_orch_secret", httpServerCmd.Flags().Lookup("ccm-comm-orch-secret"))
+	_ = viper.BindPFlag("idp_svc_base_url", httpServerCmd.Flags().Lookup("idp-svc-base-url"))
+	_ = viper.BindPFlag("idp_svc_secret", httpServerCmd.Flags().Lookup("idp-svc-secret"))
 	_ = viper.BindPFlag("template_svc_base_url", httpServerCmd.Flags().Lookup("template-svc-base-url"))
 	_ = viper.BindPFlag("template_svc_secret", httpServerCmd.Flags().Lookup("template-svc-secret"))
 	_ = viper.BindPFlag("intelligence_svc_base_url", httpServerCmd.Flags().Lookup("intelligence-svc-base-url"))
@@ -415,7 +427,7 @@ func init() {
 	_ = viper.BindPFlag("dashboard_svc_base_url", httpServerCmd.Flags().Lookup("dashboard-svc-base-url"))
 	_ = viper.BindPFlag("dashboard_svc_secret", httpServerCmd.Flags().Lookup("dashboard-svc-secret"))
 	_ = viper.BindPFlag("log_svc_base_url", httpServerCmd.Flags().Lookup("log-svc-base-url"))
-	_ = viper.BindPFlag("log_svc_secret", httpServerCmd.Flags().Lookup("log-svc-secret"))
+	_ = viper.BindPFlag("log_svc_secret", httpServerCmd.Flags().Lookup("log-service-secret"))
 	_ = viper.BindPFlag("scs_svc_secret", httpServerCmd.Flags().Lookup("scs-svc-secret"))
 	_ = viper.BindPFlag("scs_svc_base_url", httpServerCmd.Flags().Lookup("scs-svc-base-url"))
 	_ = viper.BindPFlag("sto_svc_secret", httpServerCmd.Flags().Lookup("sto-svc-secret"))
@@ -459,7 +471,7 @@ func init() {
 	_ = viper.BindPFlag("dashboard_svc_base_url", internalCmd.Flags().Lookup("dashboard-svc-base-url"))
 	_ = viper.BindPFlag("dashboard_svc_secret", internalCmd.Flags().Lookup("dashboard-svc-secret"))
 	_ = viper.BindPFlag("log_svc_base_url", internalCmd.Flags().Lookup("log-svc-base-url"))
-	_ = viper.BindPFlag("log_svc_secret", internalCmd.Flags().Lookup("log-svc-secret"))
+	_ = viper.BindPFlag("log_svc_secret", internalCmd.Flags().Lookup("log-service-secret"))
 	_ = viper.BindPFlag("scs_svc_secret", internalCmd.Flags().Lookup("scs-svc-secret"))
 	_ = viper.BindPFlag("scs_svc_base_url", internalCmd.Flags().Lookup("scs-svc-base-url"))
 	_ = viper.BindPFlag("sto_svc_secret", internalCmd.Flags().Lookup("sto-svc-secret"))
