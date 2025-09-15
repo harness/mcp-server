@@ -351,7 +351,7 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 			),
 			mcp.WithNumber("num_lines",
 				mcp.Description("Number of log lines to return. Default is 10."),
-                mcp.DefaultNumber(10)
+			mcp.DefaultNumber(10),
 			),
 			mcp.WithString("log_key",
 				mcp.Description("Optional log key to be used for downloading logs directly"),
