@@ -341,7 +341,7 @@ func extractTimestamp(line string) string {
 
 func DownloadExecutionLogsTool(config *config.Config, client *client.LogService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("download_execution_logs",
-			mcp.WithDescription("Downloads logs for an execution inside Harness. Returns the last N non-empty lines as human-readable formatted logs with timestamps and ANSI codes removed."),
+			mcp.WithDescription("Downloads logs for a pipeline execution. Returns the last N non-empty lines as human-readable formatted logs with timestamps and ANSI codes removed."),
 			mcp.WithString("plan_execution_id",
 				mcp.Description("The ID of the plan execution"),
 			),
