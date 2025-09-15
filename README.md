@@ -648,6 +648,52 @@ Environment variables are prefixed with `HARNESS_`:
 
 The server uses a Harness API key for authentication. This can be set via the `HARNESS_API_KEY` environment variable.
 
+### Using the create_follow_up_prompt Tool to generate actionable prompt events
+
+The `create_follow_up_prompt` tool allows you to generate actionable prompt events that appear as buttons in the UI. These buttons can navigate users to specific pages within the Harness platform.
+
+Here's how to use it:
+
+```json
+{
+  "actions": [
+    {
+      "text": "Button Text",
+      "action": "OPEN_ENTITY_NEW_TAB",
+      "data": {
+        "pageName": "PAGE_NAME",
+        "metadata": {
+          "<KEY>": "<VALUE>"
+        }
+      }
+    }
+  ]
+}
+```
+
+#### Parameters:
+
+- `text`: The text to display on the button
+- `action`: The action to perform (currently supports `OPEN_ENTITY_NEW_TAB`)
+- `data`: Contains navigation information
+  - `pageName`: The page to navigate to (e.g., `ExecutionPipelineView`, `PipelineStudio`, etc.)
+  - `metadata`: Key-value pairs needed for the target page (e.g., `{"executionId": "abc123", "pipelineId": "xyz789"}`)
+
+#### Example:
+
+```go
+actionData := `{"actions": [{"text": "View Pipeline", "action": "OPEN_ENTITY_NEW_TAB", "data": {"pageName": "PipelineStudio", "metadata": {"id": "pipeline-id"}}}]}`
+```
+
+#### Alternative: Quick Prompts
+
+If you provide an array of strings instead of the actions object, these strings will be added to the message box as quick prompts that users can click on:
+
+```go
+// Add quick prompts to the message box
+quickPrompts := `["Show me pipeline details", "List recent executions", "Analyze performance"]`
+```
+
 ## Notes for Local Testing
 
 There might be certain tools that are not added in external mode or vice-versa, for local testing, following changes in `pkg/harness/tools.go` need to be done in mcp-server code to enable that certain tool in both internal and external modes.
