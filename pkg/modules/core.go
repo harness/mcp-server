@@ -237,6 +237,10 @@ func RegisterDelegateTokens(config *config.Config, tsg *toolsets.ToolsetGroup) e
 	delegateTokens := toolsets.NewToolset("delegateTokens", "Harness DelegateTokens related tools").
 		AddReadTools(
 			toolsets.NewServerTool(tools.ListDelegateTokensTool(config, delegateTokenServiceClient)),
+			toolsets.NewServerTool(tools.GetDelegateTokenTool(config, delegateTokenServiceClient)),
+			toolsets.NewServerTool(tools.CreateDelegateTokenTool(config, delegateTokenServiceClient)),
+			toolsets.NewServerTool(tools.RevokeDelegateTokenTool(config, delegateTokenServiceClient)),
+			toolsets.NewServerTool(tools.DeleteDelegateTokenTool(config, delegateTokenServiceClient)),
 		)
 
 	tsg.AddToolset(delegateTokens)

@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
@@ -22,12 +24,14 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 	return mcp.NewTool("download_execution_logs",
 			mcp.WithDescription("Downloads logs for an execution inside Harness"),
 			mcp.WithString("plan_execution_id",
-				mcp.Required(),
 				mcp.Description("The ID of the plan execution"),
 			),
 			mcp.WithString("logs_directory",
 				mcp.Required(),
-				mcp.Description("The absolute path to the directory where the logs should get downloaded"),
+				mcp.Description("The absolute path to the directory where the logs should get downloaded."),
+			),
+			mcp.WithString("log_key",
+				mcp.Description("Optional log key to be used for downloading logs directly"),
 			),
 			common.WithScope(config, true),
 		),
@@ -42,7 +46,10 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			logDownloadURL, err := client.DownloadLogs(ctx, scope, planExecutionID)
+			// Get optional log key parameter
+			logKey, _ := OptionalParam[string](request, "log_key")
+
+			logDownloadURL, err := client.DownloadLogs(ctx, scope, planExecutionID, logKey)
 			if err != nil {
 				return nil, fmt.Errorf("failed to fetch log download URL: %w", err)
 			}
@@ -52,31 +59,32 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			// Check if logs directory exists, if not create it
-			_, err = os.Stat(logsDirectory)
-			if err != nil {
-				// Directory does not exist, create it
-				if os.IsNotExist(err) {
-					createErr := os.Mkdir(logsDirectory, 0755)
-					if createErr != nil {
-						return mcp.NewToolResultError(createErr.Error()), nil
+			// If OutputDir is configured, use it as the base directory for logs
+			if config.OutputDir != "" {
+
+				if !strings.HasPrefix(logsDirectory, config.OutputDir) {
+					// Create a subdirectory within the output directory for logs
+					oldLogsDirectory := logsDirectory
+					logsDirectoryName := filepath.Base(logsDirectory)
+					// If the logs directory is just a root path like /tmp, use a more descriptive name
+					if logsDirectoryName == "/" || logsDirectoryName == "" {
+						logsDirectoryName = "pipeline-logs"
 					}
-				} else {
-					return mcp.NewToolResultError(err.Error()), nil
+					logsDirectory = filepath.Join(config.OutputDir, logsDirectoryName)
+					slog.Info("Redirecting logs from %s to %s to ensure access", oldLogsDirectory, logsDirectory)
 				}
 			}
 
-			// Create the logs folder with plan execution ID
+			// Create the logs folder path (creates all parent directories if needed)
 			logsFolderName := fmt.Sprintf("logs-%s", planExecutionID)
 			logsFolderPath := filepath.Join(logsDirectory, logsFolderName)
-
-			err = os.Mkdir(logsFolderPath, 0755)
+			err = os.MkdirAll(logsFolderPath, 0755)
 			if err != nil {
-				return mcp.NewToolResultError(fmt.Sprintf("failed to create logs folder: %v", err)), nil
+				return mcp.NewToolResultError(fmt.Sprintf("failed to create logs directory: %v", err)), nil
 			}
 
 			// Get the download URL
-			logDownloadURL, err = client.DownloadLogs(ctx, scope, planExecutionID)
+			logDownloadURL, err = client.DownloadLogs(ctx, scope, planExecutionID, logKey)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to fetch log download URL: %v", err)), nil
 			}

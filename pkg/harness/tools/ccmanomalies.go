@@ -122,6 +122,7 @@ func ListFilterValuesCcmAnomaliesTool(config *config.Config, client *client.Clou
 			mcp.WithArray("columns",
 				mcp.Required(),
 				mcp.Description("List of anomaly fields to get distinct values for. "),
+				mcp.WithStringItems(),
 			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
