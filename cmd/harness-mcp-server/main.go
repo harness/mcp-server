@@ -82,6 +82,7 @@ var (
 				},
 				Toolsets:      toolsets,
 				EnableModules: enableModules,
+				OutputDir:     viper.GetString("output_dir"),
 			}
 
 			return runHTTPServer(ctx, cfg)
@@ -132,6 +133,7 @@ var (
 				Debug:            viper.GetBool("debug"),
 				EnableModules:    enableModules,
 				EnableLicense:    viper.GetBool("enable_license"),
+				OutputDir:        viper.GetString("output_dir"),
 			}
 
 			if err := runStdioServer(ctx, cfg); err != nil {
@@ -192,6 +194,7 @@ var (
 				Debug:         viper.GetBool("debug"),
 				EnableLicense: viper.GetBool("enable_license"),
 				Internal:      true,
+				OutputDir:     viper.GetString("output_dir"),
 				AccountID:     session.Principal.AccountID,
 				// Internal mode specific fields
 				BearerToken:             viper.GetString("bearer_token"),
@@ -257,6 +260,7 @@ func init() {
 	rootCmd.PersistentFlags().Bool("read-only", false, "Restrict the server to read-only operations")
 	rootCmd.PersistentFlags().String("log-file", "", "Path to log file")
 	rootCmd.PersistentFlags().Bool("debug", false, "Enable debug logging")
+	rootCmd.PersistentFlags().String("output-dir", "", "Directory where the tool writes output files (e.g., pipeline logs)")
 
 	httpServerCmd.PersistentFlags().Int("http-port", 8080, "HTTP server port (when transport is 'http')")
 	httpServerCmd.PersistentFlags().String("http-path", "/mcp", "HTTP server path (when transport is 'http')")
@@ -312,6 +316,7 @@ func init() {
 	_ = viper.BindPFlag("read_only", rootCmd.PersistentFlags().Lookup("read-only"))
 	_ = viper.BindPFlag("log_file", rootCmd.PersistentFlags().Lookup("log-file"))
 	_ = viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
+	_ = viper.BindPFlag("output_dir", rootCmd.PersistentFlags().Lookup("output-dir"))
 
 	// Bind transport configuration flags to viper
 	_ = viper.BindPFlag("http_port", httpServerCmd.PersistentFlags().Lookup("http-port"))

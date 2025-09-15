@@ -175,7 +175,7 @@ type PipelineExecution struct {
 	AbortedBy                  User                 `json:"abortedBy,omitempty"`
 	QueuedType                 string               `json:"queuedType,omitempty"`
 	RunSequence                int32                `json:"runSequence,omitempty"`
-	ShouldUseSimplifiedBaseKey bool                 `json:"shouldUseSimplifiedBaseKey,omitempty"`
+	ShouldUseSimplifiedBaseKey bool                 `json:"shouldUseSimplifiedKey,omitempty"`
 }
 
 // ExecutionFailureInfo represents the failure information of a pipeline execution

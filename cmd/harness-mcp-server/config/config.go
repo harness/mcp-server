@@ -11,6 +11,7 @@ type Config struct {
 	LogFilePath   string
 	Debug         bool
 	EnableLicense bool
+	OutputDir     string
 
 	// Server configuration
 	Transport enum.TransportType

@@ -514,6 +514,104 @@ To use the Harness MCP Server with Amazon Q Developer CLI:
 
 [VS Code MCP Guide](https://code.visualstudio.com/docs/copilot/chat/mcp-servers)
 
+## Tool Usage Guide
+
+### Download Execution Logs
+
+#### Using Docker:
+
+We need to mount the logs directory to the container to download the logs.
+
+```bash
+docker run -d --name mcp-server -p 8080:8080 -v /path/to/logs/in/host:/path/in/container harness/mcp-server --output-dir=/path/in/container
+```
+This ensures that the logs downloaded to container are accessible in the host.
+
+Example:
+
+```bash
+docker run -d --name mcp-server -p 8080:8080 -v /Users/testuser/logs:/logs harness/mcp-server --output-dir=/logs
+```
+
+Sample MCP Configuration:
+
+```bash
+{
+  "mcpServers": {
+    "harness": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-v",
+        "/Users/testuser/logs:/logs",
+        "-e",
+        "HARNESS_MCP_USER_PAT",
+        "-e",
+        "HARNESS_DEFAULT_ORG_ID",
+        "-e",
+        "HARNESS_DEFAULT_PROJECT_ID",
+        "-e",
+        "HARNESS_MCP_BASE_URL",
+        "harness/mcp-server",
+        "stdio",
+        "--output-dir=/logs", #/path/in/container
+        "--toolsets=logs",
+        "--api-key="
+      ],
+      "env": {
+        "HARNESS_MCP_USER_PAT": "<YOUR_API_KEY>",
+        "HARNESS_DEFAULT_ORG_ID": "<YOUR_ORG_ID>",
+        "HARNESS_DEFAULT_PROJECT_ID": "<YOUR_PROJECT_ID>",
+        "HARNESS_MCP_BASE_URL": "<YOUR_BASE_URL>"
+      }
+    }
+  }
+}
+```
+
+Example Tool Input:
+
+```json
+{
+  "logs_directory": "pipeline-logs",
+  "org_id": "<YOUR_ORG_ID>",
+  "plan_execution_id": "<YOUR_PLAN_EXECUTION_ID>",
+  "project_id": "<YOUR_PROJECT_ID>"
+}
+```
+
+Sample Response:
+
+```json
+Files downloaded to : /Users/testuser/logs/pipeline-logs/logs-<YOUR_PLAN_EXECUTION_ID>/logs.zip
+```
+
+### Using Local Binary:
+
+Example configuration:
+
+```json
+"args": ["stdio", "--toolsets=logs", "--api-key=", "--output-dir=/Users/testuser/log-files"]
+```
+
+Example Tool Input:
+
+```json
+{
+  "logs_directory": "logs1",
+  "project_id": "<YOUR_PROJECT_ID>",
+  "plan_execution_id": "<YOUR_PLAN_EXECUTION_ID>",
+  "org_id": "<YOUR_ORG_ID>"
+}
+```
+
+Sample Response:
+
+```json
+Files downloaded to : /Users/testuser/log-files/logs1/logs-<YOUR_PLAN_EXECUTION_ID>/logs.zip
+```
 
 ## Development
 
@@ -530,6 +628,7 @@ The Harness MCP Server supports the following command line arguments:
 - `--version`: Show version information
 - `--help`: Show help message
 - `--base-url`: Base URL for Harness (default: "https://app.harness.io")
+- `--output-dir`: Directory where the tool writes output files (e.g., pipeline logs)
 
 
 ### Environment Variables
