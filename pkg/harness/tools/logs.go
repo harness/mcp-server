@@ -18,13 +18,11 @@ import (
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness/common"
+
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
 
-// DownloadExecutionLogsTool creates a tool for downloading logs for a pipeline execution
-// TODO: to make this easy to use, we ask to pass in an output path and do the complete download of the logs.
-// This is less work for the user, but we may want to only return the download instruction instead in the future.
 // LogFileInfo stores information about a log file
 type LogFileInfo struct {
 	Name      string
@@ -339,6 +337,9 @@ func extractTimestamp(line string) string {
 // The functionality has been incorporated into the extractAndAnalyzeLogs function
 // which now handles multiple files and processes lines with dedicated helper functions.
 
+// DownloadExecutionLogsTool creates a tool for downloading logs for a pipeline execution
+// TODO: to make this easy to use, we ask to pass in an output path and do the complete download of the logs.
+// This is less work for the user, but we may want to only return the download instruction instead in the future.
 func DownloadExecutionLogsTool(config *config.Config, client *client.LogService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("download_execution_logs",
 			mcp.WithDescription("Downloads logs for a pipeline execution. Returns the last N non-empty lines as human-readable formatted logs with timestamps and ANSI codes removed."),
@@ -351,7 +352,7 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 			),
 			mcp.WithNumber("num_lines",
 				mcp.Description("Number of log lines to return. Default is 10."),
-			mcp.DefaultNumber(10),
+				mcp.DefaultNumber(10),
 			),
 			mcp.WithString("log_key",
 				mcp.Description("Optional log key to be used for downloading logs directly"),
