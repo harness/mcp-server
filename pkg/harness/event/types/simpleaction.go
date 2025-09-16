@@ -8,11 +8,11 @@ const (
 )
 
 type ActionWrapper struct {
-	Prompts []string `json:"prompts"`
+	Prompts interface{} `json:"prompts"`
 }
 
 // NewActionEvent uses strings and makes simple selectable actions in the UI (always displayed last)
-func NewActionEvent(actions []string, opts ...event.CustomEventOption) event.CustomEvent {
+func NewActionEvent(actions interface{}, opts ...event.CustomEventOption) event.CustomEvent {
 	allOpts := append([]event.CustomEventOption{event.WithDisplayOrder(ActionDisplayOrder)}, opts...)
 	wrapper := ActionWrapper{Prompts: actions}
 	return event.NewCustomEvent("prompt", wrapper, allOpts...)

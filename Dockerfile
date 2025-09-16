@@ -39,4 +39,5 @@ ENV XDG_CACHE_HOME=/data
 COPY --from=builder /app/cmd/harness-mcp-server/harness-mcp-server /app/harness-mcp-server
 COPY --from=cert-image /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
-ENTRYPOINT [ "/app/harness-mcp-server", "stdio" ]
+ENTRYPOINT [ "/app/harness-mcp-server"]
+CMD ["stdio"]

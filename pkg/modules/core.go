@@ -198,6 +198,7 @@ func RegisterPipelines(config *config.Config, tsg *toolsets.ToolsetGroup) error 
 			toolsets.NewServerTool(tools.ListInputSetsTool(config, pipelineClient)),
 			toolsets.NewServerTool(tools.GetPipelineSummaryTool(config, pipelineClient)),
 			toolsets.NewServerTool(tools.ListTriggersTool(config, pipelineClient)),
+			toolsets.NewServerTool(tools.CreateFollowUpPromptTool(config, pipelineClient)),
 		)
 
 	// Add toolset to the group
@@ -237,6 +238,10 @@ func RegisterDelegateTokens(config *config.Config, tsg *toolsets.ToolsetGroup) e
 	delegateTokens := toolsets.NewToolset("delegateTokens", "Harness DelegateTokens related tools").
 		AddReadTools(
 			toolsets.NewServerTool(tools.ListDelegateTokensTool(config, delegateTokenServiceClient)),
+			toolsets.NewServerTool(tools.GetDelegateTokenTool(config, delegateTokenServiceClient)),
+			toolsets.NewServerTool(tools.CreateDelegateTokenTool(config, delegateTokenServiceClient)),
+			toolsets.NewServerTool(tools.RevokeDelegateTokenTool(config, delegateTokenServiceClient)),
+			toolsets.NewServerTool(tools.DeleteDelegateTokenTool(config, delegateTokenServiceClient)),
 		)
 
 	tsg.AddToolset(delegateTokens)
