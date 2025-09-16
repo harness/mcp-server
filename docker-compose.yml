@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  # Harness MCP Server in stdio mode (default)
+  harness-mcp-stdio:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: harness-mcp-stdio
+    environment:
+      - RUST_LOG=debug
+      - HARNESS_MCP_MODE=stdio
+      - HARNESS_MCP_LOG_LEVEL=debug
+      - HARNESS_API_KEY=${HARNESS_API_KEY}
+      - HARNESS_BASE_URL=${HARNESS_BASE_URL:-https://app.harness.io}
+      - HARNESS_ACCOUNT_ID=${HARNESS_ACCOUNT_ID}
+      - HARNESS_ORG_ID=${HARNESS_ORG_ID}
+      - HARNESS_PROJECT_ID=${HARNESS_PROJECT_ID}
+    volumes:
+      - ./logs:/app/logs
+      - ./config:/app/config
+    stdin_open: true
+    tty: true
+    profiles:
+      - stdio
+
+  # Harness MCP Server in HTTP mode
+  harness-mcp-http:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: harness-mcp-http
+    ports:
+      - "8080:8080"
+    environment:
+      - RUST_LOG=info
+      - HARNESS_MCP_MODE=http
+      - HARNESS_MCP_HTTP_PORT=8080
+      - HARNESS_MCP_HTTP_HOST=0.0.0.0
+      - HARNESS_MCP_LOG_LEVEL=info
+      - HARNESS_API_KEY=${HARNESS_API_KEY}
+      - HARNESS_BASE_URL=${HARNESS_BASE_URL:-https://app.harness.io}
+      - HARNESS_ACCOUNT_ID=${HARNESS_ACCOUNT_ID}
+      - HARNESS_ORG_ID=${HARNESS_ORG_ID}
+      - HARNESS_PROJECT_ID=${HARNESS_PROJECT_ID}
+    volumes:
+      - ./logs:/app/logs
+      - ./config:/app/config
+    command: ["--mode", "http", "--port", "8080", "--host", "0.0.0.0"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    profiles:
+      - http
+
+  # Development environment with volume mounts for live reloading
+  harness-mcp-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: harness-mcp-dev
+    ports:
+      - "8080:8080"
+    environment:
+      - RUST_LOG=debug
+      - HARNESS_MCP_MODE=http
+      - HARNESS_MCP_HTTP_PORT=8080
+      - HARNESS_MCP_HTTP_HOST=0.0.0.0
+      - HARNESS_MCP_LOG_LEVEL=debug
+      - HARNESS_API_KEY=${HARNESS_API_KEY}
+      - HARNESS_BASE_URL=${HARNESS_BASE_URL:-https://app.harness.io}
+      - HARNESS_ACCOUNT_ID=${HARNESS_ACCOUNT_ID}
+      - HARNESS_ORG_ID=${HARNESS_ORG_ID}
+      - HARNESS_PROJECT_ID=${HARNESS_PROJECT_ID}
+    volumes:
+      - .:/app
+      - cargo-cache:/usr/local/cargo/registry
+      - target-cache:/app/target
+    working_dir: /app
+    command: ["cargo", "run", "--", "--mode", "http", "--port", "8080", "--host", "0.0.0.0"]
+    profiles:
+      - dev
+
+volumes:
+  cargo-cache:
+  target-cache:

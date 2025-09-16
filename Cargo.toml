@@ -1,0 +1,77 @@
+[package]
+name = "harness-mcp-server"
+version = "0.1.0"
+edition = "2021"
+authors = ["Harness Inc."]
+description = "Harness MCP Server - A Model Context Protocol server for Harness APIs"
+license = "Apache-2.0"
+repository = "https://github.com/harness/mcp-server"
+readme = "README.md"
+
+[workspace]
+members = [
+    "crates/harness-mcp-core",
+    "crates/harness-mcp-client", 
+    "crates/harness-mcp-tools",
+    "crates/harness-mcp-modules",
+    "crates/harness-mcp-auth",
+    "crates/harness-mcp-config",
+]
+
+[[bin]]
+name = "harness-mcp-server"
+path = "src/main.rs"
+
+[dependencies]
+# Workspace dependencies
+harness-mcp-core = { path = "crates/harness-mcp-core" }
+harness-mcp-client = { path = "crates/harness-mcp-client" }
+harness-mcp-tools = { path = "crates/harness-mcp-tools" }
+harness-mcp-modules = { path = "crates/harness-mcp-modules" }
+harness-mcp-auth = { path = "crates/harness-mcp-auth" }
+harness-mcp-config = { path = "crates/harness-mcp-config" }
+
+# Core async runtime
+tokio = { version = "1.0", features = ["full"] }
+
+# CLI framework
+clap = { version = "4.0", features = ["derive", "env"] }
+
+# Configuration
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+config = "0.14"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# HTTP server
+axum = { version = "0.7", features = ["macros", "tracing"] }
+tower = { version = "0.4", features = ["timeout", "limit"] }
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# Utilities
+uuid = { version = "1.0", features = ["v4", "serde"] }
+url = "2.0"
+
+[dev-dependencies]
+tokio-test = "0.4"
+mockito = "1.0"
+tempfile = "3.0"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[profile.dev]
+debug = true

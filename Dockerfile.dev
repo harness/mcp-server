@@ -1,0 +1,37 @@
+# Development Dockerfile for Harness MCP Server (Rust)
+FROM rust:1.75-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    ca-certificates \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install cargo-watch for live reloading
+RUN cargo install cargo-watch
+
+# Create non-root user for development
+RUN groupadd -r harness && useradd -r -g harness -s /bin/bash harness
+
+# Set working directory
+WORKDIR /app
+
+# Change ownership of the app directory
+RUN chown -R harness:harness /app
+
+# Switch to non-root user
+USER harness
+
+# Set environment variables
+ENV RUST_LOG=debug
+ENV HARNESS_MCP_MODE=http
+ENV HARNESS_MCP_LOG_LEVEL=debug
+
+# Expose port for HTTP transport
+EXPOSE 8080
+
+# Default command for development (with live reloading)
+CMD ["cargo", "watch", "-x", "run -- --mode http --port 8080 --host 0.0.0.0"]
