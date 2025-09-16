@@ -4,6 +4,7 @@ import (
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -15,7 +16,7 @@ func AskReleaseAgentTool(config *config.Config, client *client.GenaiService) (to
 
 	// Add tool-specific parameters (removing action since it's hardcoded)
 	toolParams := append(commonParams,
-		WithScope(config, false),
+		common.WithScope(config, false),
 	)
 
 	tool = mcp.NewTool("ask_release_agent",
