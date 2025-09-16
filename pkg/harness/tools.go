@@ -271,6 +271,9 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 			if err := modules.RegisterInfrastructure(config, tsg); err != nil {
 				return err
 			}
+			if err := modules.RegisterReleaseManagementTools(config, tsg); err != nil {
+				return err
+			}
 			if err := modules.RegisterACM(config, tsg); err != nil {
 				return err
 			}
@@ -380,6 +383,10 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 					}
 				case "infrastructure":
 					if err := modules.RegisterInfrastructure(config, tsg); err != nil {
+						return err
+					}
+				case "release_management":
+					if err := modules.RegisterReleaseManagementTools(config, tsg); err != nil {
 						return err
 					}
 				case "acm":
