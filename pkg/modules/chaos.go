@@ -67,7 +67,7 @@ func (m *CHAOSModule) IsDefault() bool {
 // RegisterChaos registers the chaos toolset
 func RegisterChaos(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for CHAOS
-	baseURL := utils.BuildServiceURL(config, config.ChaosManagerSvcBaseURL, config.BaseURL, "chaos/manager/api")
+	baseURL := utils.BuildServiceURL(config, config.ChaosManagerSvcBaseURL, config.BaseURL, "chaos/manager")
 	secret := config.ChaosManagerSvcSecret
 
 	// Create base client for CHAOS

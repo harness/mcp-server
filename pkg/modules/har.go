@@ -80,10 +80,10 @@ func RegisterRegistries(config *config.Config, tsg *toolsets.ToolsetGroup) error
 
 	if config.Internal {
 		authProvider := auth.NewJWTProvider(secret, "Basic", &utils.DefaultJWTLifetime)
-		c, err = client.NewWithAuthProvider(baseURL, authProvider, config.Version)
+		c, err = client.NewWithAuthProvider(baseURL, authProvider)
 	} else {
 		authProvider := auth.NewAPIKeyProvider(config.APIKey)
-		c, err = client.NewWithAuthProvider(baseURL, authProvider, config.Version)
+		c, err = client.NewWithAuthProvider(baseURL, authProvider)
 	}
 
 	if err != nil {

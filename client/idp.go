@@ -4,24 +4,20 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/harness/harness-mcp/client/dto"
-	"github.com/harness/harness-mcp/pkg/harness/auth"
 )
 
 const (
 	// Base API paths
-	idpGetEntityPath         = "/v1/entities/%s/%s/%s"
-	idpListEntitiesPath      = "/v1/entities"
-	idpGetScorecardPath      = "/v1/scorecards/%s"
-	idpListScorecardsPath    = "/v1/scorecards"
-	idpGetScoreSummaryPath   = "/v1/scores/summary"
-	idpGetScoresPath         = "/v1/scores"
-	idpGetScorecardStatsPath = "/v1/scorecards/%s/stats"
-	idpGetCheckPath          = "/v1/checks/%s"
-	idpListChecksPath        = "/v1/checks"
-	idpGetCheckStatsPath     = "/v1/checks/%s/stats"
-	idpExecuteWorkflowPath   = "/v2/workflows/execute"
+	idpGetEntityPath       = "/v1/entities/%s/%s/%s"
+	idpListEntitiesPath    = "/v1/entities"
+	idpGetScorecardPath    = "/v1/scorecards/%s"
+	idpListScorecardsPath  = "/v1/scorecards"
+	idpGetScoreSummaryPath = "/v1/scores/summary"
+	idpGetScoresPath       = "/v1/scores"
+	idpExecuteWorkflowPath = "/v2/workflows/execute"
 
 	// Default values for requests
 	defaultKind        = "component,api,resource"
@@ -33,8 +29,7 @@ const (
 )
 
 type IDPService struct {
-	Client                *Client
-	NgManagerAuthProvider auth.Provider
+	Client *Client
 }
 
 func (i *IDPService) GetEntity(ctx context.Context, scope dto.Scope, kind string, identifier string) (*dto.EntityResponse, error) {
@@ -189,118 +184,6 @@ func (i *IDPService) GetScorecardScores(ctx context.Context, scope dto.Scope, id
 	return response, nil
 }
 
-func (i *IDPService) GetScorecardStats(ctx context.Context, scope dto.Scope, scorecardIdentifier string) (*dto.ScorecardStatsResponseWithHumanReadableTime, error) {
-	path := fmt.Sprintf(idpGetScorecardStatsPath, scorecardIdentifier)
-
-	headers := make(map[string]string)
-	addHarnessAccountToHeaders(scope, headers)
-
-	params := make(map[string]string)
-
-	response := new(dto.ScorecardStatsResponse)
-	err := i.Client.Get(ctx, path, params, headers, response)
-	if err != nil {
-		return nil, err
-	}
-
-	result := &dto.ScorecardStatsResponseWithHumanReadableTime{
-		Name:  response.Name,
-		Stats: response.Stats,
-	}
-
-	if response.Timestamp != nil {
-		result.Time = dto.FormatUnixMillisToRFC3339(*response.Timestamp)
-	} else {
-		result.Time = ""
-	}
-
-	return result, nil
-}
-
-func (i *IDPService) GetCheck(ctx context.Context, scope dto.Scope, checkIdentifier string, isCustom bool) (*dto.CheckDetailsResponse, error) {
-	path := fmt.Sprintf(idpGetCheckPath, checkIdentifier)
-
-	headers := make(map[string]string)
-	addHarnessAccountToHeaders(scope, headers)
-
-	params := make(map[string]string)
-	params["custom"] = fmt.Sprintf("%v", isCustom)
-
-	response := new(dto.CheckDetailsResponse)
-
-	err := i.Client.Get(ctx, path, params, headers, response)
-	if err != nil {
-		return nil, err
-	}
-
-	return response, nil
-}
-
-func (i *IDPService) ListChecks(ctx context.Context, scope dto.Scope, getChecksParams *dto.GetChecksParams) (*dto.CheckResponseList, error) {
-	path := idpListChecksPath
-
-	headers := make(map[string]string)
-	addHarnessAccountToHeaders(scope, headers)
-
-	params := make(map[string]string)
-
-	if getChecksParams.Limit == 0 {
-		params["limit"] = fmt.Sprintf("%d", defaultLimit)
-	} else if getChecksParams.Limit > maxLimit {
-		params["limit"] = fmt.Sprintf("%d", maxLimit)
-	} else {
-		params["limit"] = fmt.Sprintf("%d", getChecksParams.Limit)
-	}
-
-	params["page"] = fmt.Sprintf("%d", getChecksParams.Page)
-
-	if getChecksParams.Sort != "" {
-		params["sort"] = getChecksParams.Sort
-	}
-
-	if getChecksParams.SearchTerm != "" {
-		params["search_term"] = getChecksParams.SearchTerm
-	}
-
-	response := new(dto.CheckResponseList)
-
-	err := i.Client.GetWithoutSplittingParamValuesOnComma(ctx, path, params, headers, &response)
-	if err != nil {
-		return nil, err
-	}
-
-	return response, nil
-}
-
-func (i *IDPService) GetCheckStats(ctx context.Context, scope dto.Scope, checkIdentifier string, isCustom bool) (*dto.CheckStatsResponseWithHumanReadableTime, error) {
-	path := fmt.Sprintf(idpGetCheckStatsPath, checkIdentifier)
-
-	headers := make(map[string]string)
-	addHarnessAccountToHeaders(scope, headers)
-
-	params := make(map[string]string)
-	params["custom"] = fmt.Sprintf("%v", isCustom)
-
-	response := new(dto.CheckStatsResponse)
-	err := i.Client.Get(ctx, path, params, headers, response)
-	if err != nil {
-		return nil, err
-	}
-
-	result := &dto.CheckStatsResponseWithHumanReadableTime{
-		Name:  response.Name,
-		Stats: response.Stats,
-	}
-
-	if response.Timestamp != nil {
-		result.Time = dto.FormatUnixMillisToRFC3339(*response.Timestamp)
-	} else {
-		result.Time = ""
-	}
-
-	return result, nil
-}
-
 func (i *IDPService) ExecuteWorkflow(ctx context.Context, scope dto.Scope, identifier string, inputSet map[string]interface{}) (*dto.ExecuteWorkflowResponse, error) {
 	path := idpExecuteWorkflowPath
 
@@ -310,12 +193,17 @@ func (i *IDPService) ExecuteWorkflow(ctx context.Context, scope dto.Scope, ident
 	params := make(map[string]string)
 	addScope(scope, params)
 
-	_, authHeaderVal, err := i.NgManagerAuthProvider.GetHeader(ctx)
+	_, authHeaderVal, err := i.Client.AuthProvider.GetHeader(ctx)
 	if err != nil {
 		slog.Error("Failed to get auth header", "error", err)
 		return nil, err
 	}
-	inputSet["token"] = authHeaderVal
+	token := authHeaderVal
+	parts := strings.Split(authHeaderVal, " ")
+	if len(parts) == 2 {
+		token = parts[1]
+	}
+	inputSet["token"] = token
 	body := new(dto.ExecuteWorkflowRequest)
 	body.Identifier = identifier
 	body.Values = inputSet

@@ -59,23 +59,23 @@ const (
 
 // DelegateToken represents a delegate token
 type DelegateToken struct {
-	UUID            *string    `json:"uuid"`
-	AccountID       string     `json:"accountId"`
-	Name            string     `json:"name"`
-	CreatedBy       *string    `json:"createdBy"`
-	CreatedByNGUser *Principal `json:"createdByNgUser"`
-	CreatedAt       int64      `json:"createdAt"`
-	CreatedAtTime   string     `json:"createdAtTime"`
-	Status          string     `json:"status"`
-	Value           string     `json:"value"`
-	OwnerIdentifier string     `json:"ownerIdentifier"`
-	ParentUniqueID  string     `json:"parentUniqueId"`
-	RevokeAfter     int64      `json:"revokeAfter"`
-	RevokeAfterTime string     `json:"revokeAfterTime"`
-	IsNG            bool       `json:"isNg"`
-	LastUsedAt      int64      `json:"lastUsedAt"`
-	LastUsedAtTime  string     `json:"lastUsedAtTime"`
-	TokenHash       string     `json:"tokenHash"`
+	UUID            *string     `json:"uuid"`
+	AccountID       string      `json:"accountId"`
+	Name            string      `json:"name"`
+	CreatedBy       *string     `json:"createdBy"`
+	CreatedByNGUser *Principal  `json:"createdByNgUser"`
+	CreatedAt       int64       `json:"createdAt"`
+	CreatedAtTime   string      `json:"createdAtTime"`
+	Status          string      `json:"status"`
+	Value           interface{} `json:"value"`
+	OwnerIdentifier string      `json:"ownerIdentifier"`
+	ParentUniqueID  string      `json:"parentUniqueId"`
+	RevokeAfter     int64       `json:"revokeAfter"`
+	RevokeAfterTime string      `json:"revokeAfterTime"`
+	IsNG            bool        `json:"isNg"`
+	LastUsedAt      int64       `json:"lastUsedAt"`
+	LastUsedAtTime  string      `json:"lastUsedAtTime"`
+	TokenHash       string      `json:"tokenHash"`
 }
 
 // FormatTimestamps formats the Unix timestamps into human-readable format
@@ -91,16 +91,8 @@ func (d *DelegateToken) FormatTimestamps() {
 
 // DelegateTokenListResponse represents the response from the list delegate tokens API
 type DelegateTokenListResponse struct {
-	MetaData         interface{}     `json:"metaData"`
-	Resource         []DelegateToken `json:"resource"`
-	ResponseMessages []string        `json:"responseMessages"`
-}
-
-// DelegateTokenResponse represents the response from the create/get delegate token API
-type DelegateTokenResponse struct {
-	MetaData         map[string]interface{} `json:"metaData"`
-	Resource         DelegateToken          `json:"resource"`
-	ResponseMessages []string               `json:"responseMessages"`
+	MetaData interface{}     `json:"metaData"`
+	Resource []DelegateToken `json:"resource"`
 }
 
 // DelegateTokenOptions represents the options for listing delegate tokens

@@ -47,9 +47,6 @@ type Client struct {
 
 	// AuthProvider used for authentication
 	AuthProvider auth.Provider
-
-	// UserAgent is the User-Agent header string sent with requests
-	UserAgent string
 }
 
 type service struct {
@@ -67,25 +64,16 @@ func defaultHTTPClient(timeout ...time.Duration) *http.Client {
 	}
 }
 
-// NewWithAuthProvider creates a new client with the specified base URL, auth provider, and optional version
-// If version is an empty string, "unknown" will be used in the User-Agent header
-func NewWithAuthProvider(uri string, authProvider auth.Provider, version string, timeout ...time.Duration) (*Client, error) {
+// NewWithToken creates a new client with the specified base URL and API token
+func NewWithAuthProvider(uri string, authProvider auth.Provider, timeout ...time.Duration) (*Client, error) {
 	parsedURL, err := url.Parse(uri)
 	if err != nil {
 		return nil, err
 	}
-
-	versionStr := "unknown"
-	if version != "" {
-		versionStr = version
-	}
-	userAgent := fmt.Sprintf("harness-mcp-client/%s", versionStr)
-
 	c := &Client{
 		client:       defaultHTTPClient(timeout...),
 		BaseURL:      parsedURL,
 		AuthProvider: authProvider,
-		UserAgent:    userAgent,
 	}
 	return c, nil
 }
@@ -105,30 +93,6 @@ func (c *Client) Get(
 	}
 
 	addQueryParams(httpReq, params)
-	return c.doRequest(httpReq, headers, response)
-}
-
-func (c *Client) GetWithoutSplittingParamValuesOnComma(
-	ctx context.Context,
-	path string,
-	params map[string]string,
-	headers map[string]string,
-	response interface{},
-) error {
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, appendPath(c.BaseURL.String(), path), nil)
-	if err != nil {
-		return fmt.Errorf("unable to create new http request : %w", err)
-	}
-
-	addQueryParamsWithoutSplittingValuesOnComma(httpReq, params)
-	return c.doRequest(httpReq, headers, response)
-}
-
-func (c *Client) doRequest(
-	httpReq *http.Request,
-	headers map[string]string,
-	response interface{},
-) error {
 	for key, value := range headers {
 		httpReq.Header.Add(key, value)
 	}
@@ -227,7 +191,7 @@ func (c *Client) PostRaw(
 		req.Header.Set("Content-Type", "application/json")
 		// Add custom headers from the headers map
 		for key, value := range headers {
-			req.Header.Set(key, value)
+			req.Header.Add(key, value)
 		}
 		addQueryParams(req, params)
 
@@ -363,7 +327,7 @@ func (c *Client) PostRawStream(
 		req.Header.Set("Content-Type", "application/json")
 		// Add custom headers from the headers map
 		for key, value := range headers {
-			req.Header.Set(key, value)
+			req.Header.Add(key, value)
 		}
 		addQueryParams(req, params)
 
@@ -510,8 +474,6 @@ func (c *Client) Do(r *http.Request) (*http.Response, error) {
 	}
 	r.Header.Set(k, v)
 
-	r.Header.Set("User-Agent", c.UserAgent)
-
 	// Check for scope in context and add account ID to headers if present
 	if scope, err := common.GetScopeFromContext(ctx); err == nil {
 		if scope.AccountID != "" {
@@ -606,20 +568,6 @@ func addQueryParams(req *http.Request, params map[string]string) {
 		for _, value := range strings.Split(value, ",") {
 			q.Add(key, value)
 		}
-	}
-
-	req.URL.RawQuery = q.Encode()
-}
-
-func addQueryParamsWithoutSplittingValuesOnComma(req *http.Request, params map[string]string) {
-	if len(params) == 0 {
-		return
-	}
-
-	q := req.URL.Query()
-
-	for key, value := range params {
-		q.Add(key, value)
 	}
 
 	req.URL.RawQuery = q.Encode()

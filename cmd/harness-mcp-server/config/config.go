@@ -11,7 +11,6 @@ type Config struct {
 	LogFilePath   string
 	Debug         bool
 	EnableLicense bool
-	OutputDir     string
 
 	// Server configuration
 	Transport enum.TransportType
@@ -64,8 +63,6 @@ type Config struct {
 	SCSSvcBaseURL           string // Added for SCS toolset
 	STOSvcSecret            string // Added for STO toolset
 	STOSvcBaseURL           string // Added for STO toolset
-	SEISvcBaseURL           string // Added for SEI toolset
-	SEISvcSecret            string // Added for SEI toolset
 	AuditSvcBaseURL         string
 	AuditSvcSecret          string
 	DBOpsSvcBaseURL         string
