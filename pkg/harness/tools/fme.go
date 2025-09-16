@@ -19,7 +19,7 @@ func ListFMEWorkspacesTool(config *config.Config, fmeService *client.FMEService)
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			workspaces, err := fmeService.ListWorkspaces(ctx)
 			if err != nil {
-				return nil, fmt.Errorf("failed to list FME workspaces: %w", err)
+return mcp.NewToolResultError(fmt.Sprintf("failed to list FME workspaces: %v", err)), nil
 			}
 
 			responseBytes, err := json.Marshal(workspaces)
@@ -48,7 +48,7 @@ func ListFMEEnvironmentsTool(config *config.Config, fmeService *client.FMEServic
 
 			environments, err := fmeService.ListEnvironments(ctx, wsID)
 			if err != nil {
-				return nil, fmt.Errorf("failed to list FME environments: %w", err)
+return mcp.NewToolResultError(fmt.Sprintf("failed to list FME environments: %v", err)), nil
 			}
 
 			responseBytes, err := json.Marshal(environments)
@@ -77,7 +77,7 @@ func ListFMEFeatureFlagsTool(config *config.Config, fmeService *client.FMEServic
 
 			featureFlags, err := fmeService.ListFeatureFlags(ctx, wsID)
 			if err != nil {
-				return nil, fmt.Errorf("failed to list FME feature flags: %w", err)
+return mcp.NewToolResultError(fmt.Sprintf("failed to list FME feature flags: %v", err)), nil
 			}
 
 			responseBytes, err := json.Marshal(featureFlags)
@@ -124,7 +124,7 @@ func GetFMEFeatureFlagDefinitionTool(config *config.Config, fmeService *client.F
 
 			definition, err := fmeService.GetFeatureFlagDefinition(ctx, wsID, flagName, envIDOrName)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get FME feature flag definition: %w", err)
+return mcp.NewToolResultError(fmt.Sprintf("failed to get FME feature flag definition: %v", err)), nil
 			}
 
 			responseBytes, err := json.Marshal(definition)
