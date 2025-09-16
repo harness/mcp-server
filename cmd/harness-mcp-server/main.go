@@ -247,7 +247,7 @@ func runMCPServer(ctx context.Context, config config.Config) error {
 
 	// Create server
 	// WithRecovery makes sure panics are logged and don't crash the server
-	harnessServer := harness.NewServer(version, server.WithHooks(hooks), server.WithRecovery())
+	harnessServer := harness.NewServer(version, &config, server.WithHooks(hooks), server.WithRecovery())
 
 	// Initialize toolsets
 	toolsets, err := harness.InitToolsets(ctx, &config)
