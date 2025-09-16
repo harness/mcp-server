@@ -8,6 +8,7 @@ import (
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -30,7 +31,7 @@ Once a task is created, you need to trigger it for a repository and branch to ex
 			mcp.Required(),
 			mcp.Description("The instructions for the task"),
 		),
-		WithScope(config, false),
+		common.WithScope(config, false),
 	)
 
 	handler = func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -51,7 +52,7 @@ Once a task is created, you need to trigger it for a repository and branch to ex
 		}
 
 		// Get scope
-		scope, err := FetchScope(config, request, false)
+		scope, err := common.FetchScope(config, request, false)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -114,7 +115,7 @@ func TriggerAutonomousCodeMaintenanceTaskTool(config *config.Config, client *cli
 			mcp.Required(),
 			mcp.Description("The source branch to run the task against"),
 		),
-		WithScope(config, false),
+		common.WithScope(config, false),
 	)
 
 	handler = func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -135,7 +136,7 @@ func TriggerAutonomousCodeMaintenanceTaskTool(config *config.Config, client *cli
 		}
 
 		// Get scope
-		scope, err := FetchScope(config, request, false)
+		scope, err := common.FetchScope(config, request, false)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -194,7 +195,7 @@ func GetAutonomousCodeMaintenanceTaskExecutionsTool(config *config.Config, clien
 			mcp.Description("Number of results per page"),
 			mcp.DefaultNumber(10),
 		),
-		WithScope(config, false),
+		common.WithScope(config, false),
 	)
 
 	handler = func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -216,7 +217,7 @@ func GetAutonomousCodeMaintenanceTaskExecutionsTool(config *config.Config, clien
 		}
 
 		// Get scope
-		scope, err := FetchScope(config, request, false)
+		scope, err := common.FetchScope(config, request, false)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

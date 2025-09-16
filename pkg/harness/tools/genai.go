@@ -9,6 +9,7 @@ import (
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -78,7 +79,7 @@ func createGenAIToolHandler(config *config.Config, client *client.GenaiService, 
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		scope, err := FetchScope(config, request, false)
+		scope, err := common.FetchScope(config, request, false)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -253,7 +254,7 @@ func DBChangesetTool(config *config.Config, client *client.GenaiService) (tool m
 		mcp.WithString("error_context",
 			mcp.Description("Optional error context if this is a retry after an error for a given changeset"),
 		),
-		WithScope(config, false),
+		common.WithScope(config, false),
 	)
 
 	tool = mcp.NewTool("generate_db_changeset",
@@ -323,7 +324,7 @@ func GenerateWorflowTool(config *config.Config, client *client.GenaiService) (to
 		mcp.WithString("error_context",
 			mcp.Description("Optional error context if this is a retry after an error for a given workflow"),
 		),
-		WithScope(config, false),
+		common.WithScope(config, false),
 	)
 
 	tool = mcp.NewTool("generate_idp_workflow",

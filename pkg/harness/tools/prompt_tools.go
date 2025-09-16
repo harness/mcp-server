@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
@@ -116,6 +117,7 @@ func GetPromptTool(config *config.Config) (tool mcp.Tool, handler server.ToolHan
 			),
 			mcp.WithString("mode",
 				mcp.Description("Optional mode to retrieve a specific version of the prompt"),
+				mcp.Enum("CI", "CD", "CCM", "SEI", "STO", "IDP", "IACM", "SRM", "SCS", "CE", "AR", "FME", "DBDEVOPS"),
 			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -165,19 +167,22 @@ func GetPromptTool(config *config.Config) (tool mcp.Tool, handler server.ToolHan
 
 			// Check for error
 			if errResp, isErr := getResponse.(mcp.JSONRPCError); isErr {
-				return nil, fmt.Errorf("error getting prompt: %s", errResp.Error.Message)
+				slog.Error("error getting prompt", "error", errResp.Error.Message)
+				return mcp.NewToolResultText(string("")), nil
 			}
 
 			// Parse response
 			jsonResp, ok := getResponse.(mcp.JSONRPCResponse)
 			if !ok {
-				return nil, fmt.Errorf("unexpected response type from get prompt")
+				slog.Error("unexpected response type from get prompt")
+				return mcp.NewToolResultText(string("")), nil
 			}
 
 			// Return the result as JSON string
 			r, err := json.Marshal(jsonResp.Result)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal result: %w", err)
+				slog.Error("failed to marshal result", "error", err.Error())
+				return mcp.NewToolResultText(string("")), nil
 			}
 
 			return mcp.NewToolResultText(string(r)), nil

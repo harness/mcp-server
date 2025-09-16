@@ -9,6 +9,7 @@ import (
 	"github.com/harness/harness-mcp/client"
 	clientdto "github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	pkgdto "github.com/harness/harness-mcp/pkg/harness/dto"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -32,10 +33,10 @@ func parseStringSlice(input string) []string {
 func ListConnectorCatalogueTool(harnessConfig *config.Config, connectorService *client.ConnectorService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("list_connector_catalogue",
 			mcp.WithDescription("List the Harness connector catalogue."),
-			WithScope(harnessConfig, false),
+			common.WithScope(harnessConfig, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(harnessConfig, request, false)
+			scope, err := common.FetchScope(harnessConfig, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -63,7 +64,7 @@ func GetConnectorDetailsTool(config *config.Config, connectorService *client.Con
 				mcp.Required(),
 				mcp.Description("The identifier of the connector"),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			connectorIdentifier, err := RequiredParam[string](request, "connector_identifier")
@@ -71,7 +72,7 @@ func GetConnectorDetailsTool(config *config.Config, connectorService *client.Con
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -140,10 +141,10 @@ func ListConnectorsTool(config *config.Config, connectorService *client.Connecto
 			mcp.WithString("tags",
 				mcp.Description("JSON object of tags to filter by (e.g., {\"env\":\"prod\"})"),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

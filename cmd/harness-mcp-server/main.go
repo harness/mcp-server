@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -16,6 +15,7 @@ import (
 	"github.com/harness/harness-mcp/pkg/harness/auth"
 	"github.com/harness/harness-mcp/pkg/harness/prompts"
 	"github.com/harness/harness-mcp/pkg/modules"
+	"github.com/harness/harness-mcp/pkg/types/enum"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/spf13/cobra"
@@ -44,6 +44,51 @@ var (
 		Version: fmt.Sprintf("Version: %s\nCommit: %s\nBuild Date: %s", version, commit, date),
 	}
 
+	httpServerCmd = &cobra.Command{
+		Use:   "http-server",
+		Short: "Start MCP as a standalone server with HTTP transport",
+		Long:  `Start a standalone MCP server with HTTP transport`,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+			defer stop()
+
+			transportType := enum.TransportHTTP
+
+			var toolsets []string
+			err := viper.UnmarshalKey("toolsets", &toolsets)
+			if err != nil {
+				return fmt.Errorf("failed to unmarshal toolsets: %w", err)
+			}
+
+			var enableModules []string
+			err = viper.UnmarshalKey("enable_modules", &enableModules)
+			if err != nil {
+				return fmt.Errorf("failed to unmarshal enabled modules: %w", err)
+			}
+
+			cfg := config.Config{
+				Version:       version,
+				ReadOnly:      viper.GetBool("read_only"),
+				LogFilePath:   viper.GetString("log_file"),
+				Debug:         viper.GetBool("debug"),
+				EnableLicense: viper.GetBool("enable_license"),
+				Transport:     transportType,
+				HTTP: struct {
+					Port int    `envconfig:"MCP_HTTP_PORT" default:"8080"`
+					Path string `envconfig:"MCP_HTTP_PATH" default:"/mcp"`
+				}{
+					Port: viper.GetInt("http_port"),
+					Path: viper.GetString("http_path"),
+				},
+				Toolsets:      toolsets,
+				EnableModules: enableModules,
+				OutputDir:     viper.GetString("output_dir"),
+			}
+
+			return runHTTPServer(ctx, cfg)
+		},
+	}
+
 	stdioCmd = &cobra.Command{
 		Use:   "stdio",
 		Short: "Start stdio server",
@@ -66,13 +111,13 @@ var (
 			var toolsets []string
 			err = viper.UnmarshalKey("toolsets", &toolsets)
 			if err != nil {
-				return fmt.Errorf("Failed to unmarshal toolsets: %w", err)
+				return fmt.Errorf("failed to unmarshal toolsets: %w", err)
 			}
 
 			var enableModules []string
 			err = viper.UnmarshalKey("enable_modules", &enableModules)
 			if err != nil {
-				return fmt.Errorf("Failed to unmarshal enabled modules: %w", err)
+				return fmt.Errorf("failed to unmarshal enabled modules: %w", err)
 			}
 
 			cfg := config.Config{
@@ -88,6 +133,7 @@ var (
 				Debug:            viper.GetBool("debug"),
 				EnableModules:    enableModules,
 				EnableLicense:    viper.GetBool("enable_license"),
+				OutputDir:        viper.GetString("output_dir"),
 			}
 
 			if err := runStdioServer(ctx, cfg); err != nil {
@@ -120,7 +166,7 @@ var (
 			// Move this out to middleware once we move to streamable HTTP
 			session, err := auth.AuthenticateSession(bearerToken, mcpSecret)
 			if err != nil {
-				return fmt.Errorf("Failed to authenticate session: %w", err)
+				return fmt.Errorf("failed to authenticate session: %w", err)
 			}
 
 			// Store the authenticated session in the context
@@ -129,13 +175,13 @@ var (
 			var toolsets []string
 			err = viper.UnmarshalKey("toolsets", &toolsets)
 			if err != nil {
-				return fmt.Errorf("Failed to unmarshal toolsets: %w", err)
+				return fmt.Errorf("failed to unmarshal toolsets: %w", err)
 			}
 
 			var enableModules []string
 			err = viper.UnmarshalKey("enable_modules", &enableModules)
 			if err != nil {
-				return fmt.Errorf("Failed to unmarshal enabled modules: %w", err)
+				return fmt.Errorf("failed to unmarshal enabled modules: %w", err)
 			}
 
 			cfg := config.Config{
@@ -148,6 +194,7 @@ var (
 				Debug:         viper.GetBool("debug"),
 				EnableLicense: viper.GetBool("enable_license"),
 				Internal:      true,
+				OutputDir:     viper.GetString("output_dir"),
 				AccountID:     session.Principal.AccountID,
 				// Internal mode specific fields
 				BearerToken:             viper.GetString("bearer_token"),
@@ -182,6 +229,8 @@ var (
 				SCSSvcBaseURL:           viper.GetString("scs_svc_base_url"),
 				STOSvcSecret:            viper.GetString("sto_svc_secret"),
 				STOSvcBaseURL:           viper.GetString("sto_svc_base_url"),
+				SEISvcSecret:            viper.GetString("sei_svc_secret"),
+				SEISvcBaseURL:           viper.GetString("sei_svc_base_url"),
 				AuditSvcBaseURL:         viper.GetString("audit_svc_base_url"),
 				AuditSvcSecret:          viper.GetString("audit_svc_secret"),
 				DBOpsSvcBaseURL:         viper.GetString("dbops_svc_base_url"),
@@ -211,6 +260,10 @@ func init() {
 	rootCmd.PersistentFlags().Bool("read-only", false, "Restrict the server to read-only operations")
 	rootCmd.PersistentFlags().String("log-file", "", "Path to log file")
 	rootCmd.PersistentFlags().Bool("debug", false, "Enable debug logging")
+	rootCmd.PersistentFlags().String("output-dir", "", "Directory where the tool writes output files (e.g., pipeline logs)")
+
+	httpServerCmd.PersistentFlags().Int("http-port", 8080, "HTTP server port (when transport is 'http')")
+	httpServerCmd.PersistentFlags().String("http-path", "/mcp", "HTTP server path (when transport is 'http')")
 
 	// Add stdio-specific flags
 	stdioCmd.Flags().String("base-url", "https://app.harness.io", "Base URL for Harness")
@@ -247,6 +300,8 @@ func init() {
 	internalCmd.Flags().String("scs-svc-base-url", "", "Base URL for SCS service")
 	internalCmd.Flags().String("sto-svc-secret", "", "Secret for STO service")
 	internalCmd.Flags().String("sto-svc-base-url", "", "Base URL for STO service")
+	internalCmd.Flags().String("sei-svc-secret", "", "Secret for SEI service")
+	internalCmd.Flags().String("sei-svc-base-url", "", "Base URL for SEI service")
 	internalCmd.Flags().String("audit-svc-base-url", "", "Base URL for audit service")
 	internalCmd.Flags().String("audit-svc-secret", "", "Secret for audit service")
 	internalCmd.Flags().String("dbops-svc-base-url", "", "Base URL for dbops service")
@@ -261,6 +316,11 @@ func init() {
 	_ = viper.BindPFlag("read_only", rootCmd.PersistentFlags().Lookup("read-only"))
 	_ = viper.BindPFlag("log_file", rootCmd.PersistentFlags().Lookup("log-file"))
 	_ = viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
+	_ = viper.BindPFlag("output_dir", rootCmd.PersistentFlags().Lookup("output-dir"))
+
+	// Bind transport configuration flags to viper
+	_ = viper.BindPFlag("http_port", httpServerCmd.PersistentFlags().Lookup("http-port"))
+	_ = viper.BindPFlag("http_path", httpServerCmd.PersistentFlags().Lookup("http-path"))
 
 	// Bind stdio-specific flags to viper
 	_ = viper.BindPFlag("base_url", stdioCmd.Flags().Lookup("base-url"))
@@ -299,6 +359,8 @@ func init() {
 	_ = viper.BindPFlag("scs_svc_base_url", internalCmd.Flags().Lookup("scs-svc-base-url"))
 	_ = viper.BindPFlag("sto_svc_secret", internalCmd.Flags().Lookup("sto-svc-secret"))
 	_ = viper.BindPFlag("sto_svc_base_url", internalCmd.Flags().Lookup("sto-svc-base-url"))
+	_ = viper.BindPFlag("sei_svc_secret", internalCmd.Flags().Lookup("sei-svc-secret"))
+	_ = viper.BindPFlag("sei_svc_base_url", internalCmd.Flags().Lookup("sei-svc-base-url"))
 	_ = viper.BindPFlag("audit_svc_base_url", internalCmd.Flags().Lookup("audit-svc-base-url"))
 	_ = viper.BindPFlag("audit_svc_secret", internalCmd.Flags().Lookup("audit-svc-secret"))
 	_ = viper.BindPFlag("dbops_svc_base_url", internalCmd.Flags().Lookup("dbops-svc-base-url"))
@@ -307,6 +369,7 @@ func init() {
 	_ = viper.BindPFlag("rbac_svc_secret", internalCmd.Flags().Lookup("rbac-svc-secret"))
 
 	// Add subcommands
+	rootCmd.AddCommand(httpServerCmd)
 	rootCmd.AddCommand(stdioCmd)
 	stdioCmd.AddCommand(internalCmd)
 }
@@ -337,14 +400,70 @@ func initLogger(outPath string, debug bool) error {
 	return nil
 }
 
-type runConfig struct {
-	readOnly        bool
-	logger          *log.Logger
-	logCommands     bool
-	enabledToolsets []string
+// runHTTPServer starts the MCP server with http transport
+func runHTTPServer(ctx context.Context, config config.Config) error {
+	err := initLogger(config.LogFilePath, config.Debug)
+	if err != nil {
+		return fmt.Errorf("failed to initialize logger: %w", err)
+	}
+
+	slog.Info("Starting server (runHTTPServer)", "transport", config.Transport)
+	slog.Info("Using config (runHTTPServer)", "config", config)
+
+	// Define beforeInit function to add client info to user agent
+	beforeInit := func(_ context.Context, _ any, message *mcp.InitializeRequest) {
+		slog.Info("Client connected", "name", message.Params.ClientInfo.Name, "version",
+			message.Params.ClientInfo.Version)
+	}
+
+	// Setup server hooks
+	hooks := &server.Hooks{
+		OnBeforeInitialize: []server.OnBeforeInitializeFunc{beforeInit},
+	}
+
+	// Create server
+	// WithRecovery makes sure panics are logged and don't crash the server
+	harnessServer := harness.NewServer(version, &config, server.WithHooks(hooks), server.WithRecovery())
+
+	// Initialize toolsets
+	toolsets, err := harness.InitToolsets(ctx, &config)
+	if err != nil {
+		slog.Error("Failed to initialize toolsets", "error", err)
+	}
+
+	// Register the tools with the server
+	toolsets.RegisterTools(harnessServer)
+
+	// Set the guidelines prompts
+	prompts.RegisterPrompts(harnessServer)
+
+	// Create HTTP server
+	httpServer := server.NewStreamableHTTPServer(harnessServer)
+	// Start server
+	address := fmt.Sprintf(":%d", config.HTTP.Port)
+	slog.Info("Harness MCP Server running on HTTP", "version", version, "address", address, "path", config.HTTP.Path)
+	errChan := make(chan error, 1)
+	go func() {
+		errChan <- httpServer.Start(address)
+	}()
+
+	// Wait for shutdown signal
+	select {
+	case <-ctx.Done():
+		slog.Info("shutting down HTTP server...")
+		return nil
+	case err := <-errChan:
+		if err != nil {
+			slog.Error("error running HTTP server", "error", err)
+			return fmt.Errorf("error running HTTP server: %w", err)
+		}
+		return nil
+	}
 }
 
+// runStdioServer starts the MCP server with stdio transport
 func runStdioServer(ctx context.Context, config config.Config) error {
+	// Initialize the MCP server as before
 	err := initLogger(config.LogFilePath, config.Debug)
 	if err != nil {
 		return fmt.Errorf("failed to initialize logger: %w", err)
@@ -366,7 +485,7 @@ func runStdioServer(ctx context.Context, config config.Config) error {
 
 	// Create server
 	// WithRecovery makes sure panics are logged and don't crash the server
-	harnessServer := harness.NewServer(version, server.WithHooks(hooks), server.WithRecovery())
+	harnessServer := harness.NewServer(version, &config, server.WithHooks(hooks), server.WithRecovery())
 
 	// Initialize toolsets
 	toolsets, err := harness.InitToolsets(ctx, &config)
@@ -399,7 +518,6 @@ func runStdioServer(ctx context.Context, config config.Config) error {
 	errC := make(chan error, 1)
 	go func() {
 		in, out := io.Reader(os.Stdin), io.Writer(os.Stdout)
-
 		errC <- stdioServer.Listen(ctx, in, out)
 	}()
 

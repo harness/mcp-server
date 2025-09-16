@@ -64,17 +64,27 @@ func (m *CCMModule) IsDefault() bool {
 
 func RegisterCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for CCM
-	baseURL := utils.BuildServiceURL(config, config.NextgenCEBaseURL, config.BaseURL, "")
-	secret := config.NextgenCESecret
+	nextGenBaseURL := utils.BuildServiceURL(config, config.NextgenCEBaseURL, config.BaseURL, "")
+	nextGenSecret := config.NextgenCESecret
 
 	// Create base client for CCM
-	c, err := utils.CreateClient(baseURL, config, secret)
+	nextGenCli, err := utils.CreateClient(nextGenBaseURL, config, nextGenSecret)
+	if err != nil {
+		return err
+	}
+
+	ngManBaseURL := utils.BuildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng/api")
+	ngManSecret := config.NgManagerSecret
+
+	// Create base client for CCM
+	ngManCli, err := utils.CreateClient(ngManBaseURL, config, ngManSecret)
 	if err != nil {
 		return err
 	}
 
 	ccmClient := &client.CloudCostManagementService{
-		Client: c,
+		Client:      nextGenCli,
+		NgManClient: ngManCli,
 	}
 
 	commOrchBaseURL := utils.BuildServiceURL(config, config.CCMCommOrchBaseURL, config.BaseURL, "lw/co/api")
@@ -127,6 +137,13 @@ func RegisterCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGro
 			toolsets.NewServerTool(tools.GetWorkloadRecommendationDetailTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.ListJiraProjectsTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.ListJiraIssueTypesTool(config, ccmClient)),
+			toolsets.NewServerTool(tools.GetCcmAnomaliesSummaryTool(config, ccmClient)),
+			toolsets.NewServerTool(tools.ListCcmAnomaliesTool(config, ccmClient)),
+			toolsets.NewServerTool(tools.ListAllCcmAnomaliesTool(config, ccmClient)),
+			toolsets.NewServerTool(tools.ListCcmIgnoredAnomaliesTool(config, ccmClient)),
+			toolsets.NewServerTool(tools.GetCcmAnomaliesForPerspectiveTool(config, ccmClient)),
+			toolsets.NewServerTool(tools.ReportCcmAnomalyFeedbackTool(config, ccmClient)),
+			toolsets.NewServerTool(tools.ListFilterValuesCcmAnomaliesTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.FetchCommitmentCoverageTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.FetchCommitmentSavingsTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.FetchCommitmentUtilisationTool(config, ccmClient)),

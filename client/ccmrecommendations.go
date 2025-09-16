@@ -19,9 +19,9 @@ const (
 	ccmCreateRecommendationJiraTicketPath       = ccmBasePath + "/recommendation/jira/create?accountIdentifier=%s"
 	ccmCreateRecommendationServiceNowTicketPath = ccmBasePath + "/recommendation/servicenow/create?accountIdentifier=%s"
 	ccmGetRecommendationDetailPath              = ccmBasePath + "/recommendation/details/%s?accountIdentifier=%s&id=%s"
-	ccmTicketToolSettingsPath                   = ngBasePath + "/settings?accountIdentifier=%s&category=CE&group=ticketing_preferences"
-	ccmJiraProjectsPath                         = ngBasePath + "/jira/projects?accountIdentifier=%s&connectorRef=%s"
-	ccmJiraMetadataPath                         = ngBasePath + "/jira/createMetadata?accountIdentifier=%s"
+	ccmTicketToolSettingsPath                   = "/settings?accountIdentifier=%s&category=CE&group=ticketing_preferences"
+	ccmJiraProjectsPath                         = "/jira/projects?accountIdentifier=%s&connectorRef=%s"
+	ccmJiraMetadataPath                         = "/jira/createMetadata?accountIdentifier=%s"
 )
 
 const (
@@ -204,7 +204,7 @@ func (r *CloudCostManagementService) ListJiraProjects(
 
 	items := new(map[string]any)
 
-	err := r.Client.Get(ctx, path, nil, nil, &items)
+	err := r.NgManClient.Get(ctx, path, nil, nil, &items)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to list Jira Projects: %w", err)
 	}
@@ -225,7 +225,7 @@ func (r *CloudCostManagementService) ListJiraIssueTypes(
 	}
 
 	resp := new(dto.CCMJiraIssueTypesResponse)
-	err := r.Client.Get(ctx, path, params, nil, &resp)
+	err := r.NgManClient.Get(ctx, path, params, nil, &resp)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to list Jira Issue Types: %w", err)
 	}
@@ -273,7 +273,7 @@ func (r *CloudCostManagementService) getTicketingToolSettings(
 	path := fmt.Sprintf(ccmTicketToolSettingsPath, accountId)
 
 	resp := new(dto.CCMTicketToolSettingsResponse)
-	err := r.Client.Get(ctx, path, nil, nil, &resp)
+	err := r.NgManClient.Get(ctx, path, nil, nil, &resp)
 	if err != nil {
 		return "", fmt.Errorf("Failed to get ticket tool settings in cloud cost management recommendations: %w", err)
 	}

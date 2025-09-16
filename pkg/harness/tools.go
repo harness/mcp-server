@@ -232,6 +232,9 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 			if err := modules.RegisterConnectors(config, tsg); err != nil {
 				return err
 			}
+			if err := modules.RegisterDelegateTokens(config, tsg); err != nil {
+				return err
+			}
 			if err := modules.RegisterDashboards(config, tsg); err != nil {
 				return err
 			}
@@ -283,6 +286,9 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 			if err := modules.RegisterPromptTools(config, tsg); err != nil {
 				return err
 			}
+			if err := modules.RegisterSoftwareEngineeringInsights(config, tsg); err != nil {
+				return err
+			}
 		} else {
 			// Register specified toolsets
 			for _, toolset := range config.Toolsets {
@@ -325,6 +331,10 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 					}
 				case "connectors":
 					if err := modules.RegisterConnectors(config, tsg); err != nil {
+						return err
+					}
+				case "delegateTokens":
+					if err := modules.RegisterDelegateTokens(config, tsg); err != nil {
 						return err
 					}
 				case "dashboards":
@@ -393,6 +403,10 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 					}
 				case "prompts":
 					if err := modules.RegisterPromptTools(config, tsg); err != nil {
+						return err
+					}
+				case "sei":
+					if err := modules.RegisterSoftwareEngineeringInsights(config, tsg); err != nil {
 						return err
 					}
 				}
