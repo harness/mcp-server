@@ -367,7 +367,7 @@ You will need to run the following command to install the Harness MCP as an exte
 gemini extensions install https://github.com/harness/mcp-server
 ```
 
-Then you will need to set the environment variables for the extension
+Then you will need to set the environment variables for the extension:
 
 ```sh
 export HARNESS_API_KEY="your_api_key_here"
