@@ -359,7 +359,6 @@ Below is the Gemini Extension File needed to configure the extension.
   },
   "contextFileName": "docs/gemini.md"
 }
-```
 
 You will need to run the following command to install the Harness MCP as an extension:
 
