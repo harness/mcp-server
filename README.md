@@ -325,6 +325,27 @@ Add the server configuration to your Gemini config file at: `~/.gemini/settings.
 }
 ```
 
+### Usage with Gemini CLI Extensions
+
+You will need to run the following command to install the Harness MCP as an extension:
+
+```sh
+gemini extensions install https://github.com/harness/mcp-server
+```
+
+Then you will need to set the environment variables for the extension:
+
+```sh
+export HARNESS_API_KEY="your_api_key_here"
+```
+
+Launch Gemini and start asking questions about Harness!
+
+```sh
+gemini
+```
+
+
 ### Claude Desktop Configuration
 
 On MacOS: `~/Library/Application\ Support/Claude/claude_desktop_config.json`  
