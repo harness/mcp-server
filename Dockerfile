@@ -6,6 +6,9 @@ FROM --platform=$BUILDPLATFORM golang:1.24.3-alpine AS builder
 # Setup workig dir
 WORKDIR /app
 
+ARG TARGETOS
+ARG TARGETARCH
+
 # Get dependencies - will also be cached if we won't change mod/sum
 COPY go.mod .
 COPY go.sum .
