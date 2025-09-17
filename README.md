@@ -361,7 +361,7 @@ Below is the Gemini Extension File needed to configure the extension.
 }
 ```
 
-You will need to run to install the Harness MCP as an extension
+You will need to run the following command to install the Harness MCP as an extension:
 
 ```sh
 gemini extensions install https://github.com/harness/mcp-server
