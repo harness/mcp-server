@@ -77,18 +77,19 @@ func initLicenseValidation(ctx context.Context, config *config.Config) (*License
 	}
 
 	// Use the NGManager service for license validation
-	licenseClient, err := utils.CreateLicenseClient(
+	licenseClient, err := utils.CreateLicenseClientWithContext(
+		ctx,
 		config,
 		config.NgManagerBaseURL,
 		config.BaseURL,
-		"ng/api",
+		"",
 		config.NgManagerSecret,
 	)
 	if err != nil {
 		return licenseInfo, fmt.Errorf("failed to create license client, error: %w", err)
 	}
 
-	slog.Info("Successfully created license client", "baseURL", config.NgManagerBaseURL)
+	slog.Info("Successfully created license client")
 
 	// Call GetAccountLicensesWithResponse to get account licenses
 	// Make the API call
