@@ -21,7 +21,7 @@
         "stdio"
       ],
       "env": {
-        "HARNESS_BASE_URL": "https://app.harness.io",
+        "HARNESS_BASE_URL": "https://app.harness.io"
       }
     }
   },
