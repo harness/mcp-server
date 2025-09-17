@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"syscall"
 
@@ -25,6 +26,20 @@ import (
 var version = "0.1.0"
 var commit = "dev"
 var date = "unknown"
+
+// logBuildInfo logs diagnostic information about the build
+func logBuildInfo() {
+	slog.Info("Build Information",
+		"version", version,
+		"commit", commit,
+		"build_date", date,
+		"go_version", runtime.Version(),
+		"go_os", runtime.GOOS,
+		"go_arch", runtime.GOARCH,
+		"num_cpu", runtime.NumCPU(),
+		"num_goroutine", runtime.NumGoroutine(),
+	)
+}
 
 // extractAccountIDFromAPIKey extracts the account ID from a Harness API key
 // API key format: pat.ACCOUNT_ID.TOKEN_ID.<>
@@ -471,6 +486,9 @@ func runStdioServer(ctx context.Context, config config.Config) error {
 
 	slog.Info("Starting server", "url", config.BaseURL)
 	slog.Debug("Using ", "Config ->", config)
+	
+	// Log build diagnostics
+	logBuildInfo()
 
 	// Define beforeInit function to add client info to user agent
 	beforeInit := func(_ context.Context, _ any, message *mcp.InitializeRequest) {

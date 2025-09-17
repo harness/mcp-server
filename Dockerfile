@@ -3,7 +3,7 @@
 # ---------------------------------------------------------#
 FROM --platform=$BUILDPLATFORM golang:1.24.3-alpine AS builder
 
-# Setup workig dir
+# Setup working dir
 WORKDIR /app
 
 # Get dependencies - will also be cached if we won't change mod/sum
@@ -13,12 +13,17 @@ COPY go.sum .
 # COPY the source code as the last step
 COPY . .
 
+# Build arguments for version info
+ARG VERSION=dev
+ARG COMMIT=unknown
+ARG BUILD_DATE=unknown
+
 # set required build flags
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
     CGO_ENABLED=0 \
     GOOS=$TARGETOS GOARCH=$TARGETARCH \
-    go build -o ./cmd/harness-mcp-server/harness-mcp-server ./cmd/harness-mcp-server
+    go build -a -installsuffix cgo -ldflags="-s -w -extldflags '-static' -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${BUILD_DATE}" -o ./cmd/harness-mcp-server/harness-mcp-server ./cmd/harness-mcp-server
 
 ### Pull CA Certs
 FROM --platform=$BUILDPLATFORM alpine:latest AS cert-image
