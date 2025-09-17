@@ -327,39 +327,6 @@ Add the server configuration to your Gemini config file at: `~/.gemini/settings.
 
 ### Usage with Gemini CLI Extensions
 
-Below is the Gemini Extension File needed to configure the extension.
-
-```json
-{
-  "name": "harness-platform",
-  "description": "Comprehensive Harness Platform integration with CI/CD, cost management, security, and infrastructure automation",
-  "version": "1.0.0",
-  "mcpServers": {
-    "harness": {
-      "command": "docker",
-      "args": [
-        "run",
-        "-i",
-        "--rm",
-        "-e",
-        "HARNESS_API_KEY",
-        "-e",
-        "HARNESS_DEFAULT_ORG_ID",
-        "-e",
-        "HARNESS_DEFAULT_PROJECT_ID",
-        "-e",
-        "HARNESS_BASE_URL",
-        "harness/mcp-server:latest",
-        "stdio"
-      ],
-      "env": {
-        "HARNESS_BASE_URL": "https://app.harness.io"
-      }
-    }
-  },
-  "contextFileName": "docs/gemini.md"
-}
-
 You will need to run the following command to install the Harness MCP as an extension:
 
 ```sh
