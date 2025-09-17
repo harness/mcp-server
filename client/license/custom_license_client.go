@@ -270,7 +270,7 @@ func (a *CustomLicensesApiService) GetAccountLicenses(ctx context.Context, accou
 	if localVarHttpResponse.StatusCode >= 300 {
 		// Create a custom error with the response body and status
 		errorMsg := fmt.Sprintf("HTTP error %s with body: %s", localVarHttpResponse.Status, string(localVarBody))
-		return localVarReturnValue, localVarHttpResponse, fmt.Errorf(errorMsg)
+		return localVarReturnValue, localVarHttpResponse, fmt.Errorf("%s", errorMsg)
 	}
 
 	return localVarReturnValue, localVarHttpResponse, nil
