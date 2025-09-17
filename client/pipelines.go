@@ -197,7 +197,7 @@ func (p *PipelineService) GetExecutionWithLogKeys(
 // extractLogKeys extracts log keys from the execution graph
 func extractLogKeys(executionResponse dto.PipelineExecutionResponse) dto.FinalLogKeys {
 	logKeys := dto.FinalLogKeys{
-		Stages: make(map[string]dto.StepLogKeys),
+		StepLogBaseKeys: []string{},
 	}
 
 	// Process the main execution graph
@@ -215,79 +215,26 @@ func extractLogKeys(executionResponse dto.PipelineExecutionResponse) dto.FinalLo
 
 // processExecutionGraph processes an execution graph to extract log keys
 func processExecutionGraph(graph dto.ExecutionGraph, logKeys *dto.FinalLogKeys) {
-	for _, node := range graph.NodeMap {
-		// Extract stage and step information from the node
-		stageName, stepName := extractStageAndStepNames(node)
-		if stageName == "" {
-			continue // Skip nodes that don't represent stages or steps
-		}
+	// Extract all log base keys for steps
+	stepLogBaseKeys := extractLogBaseKeysForSteps(graph.NodeMap)
 
-		// Extract log keys from the node
-		nodeLogKeys := extractNodeLogKeys(node)
-		if len(nodeLogKeys) == 0 {
-			continue // Skip nodes without log keys
-		}
-
-		// Add the log keys to the result
-		if _, exists := logKeys.Stages[stageName]; !exists {
-			logKeys.Stages[stageName] = dto.StepLogKeys{
-				Steps: make(map[string][]string),
-			}
-		}
-		logKeys.Stages[stageName].Steps[stepName] = nodeLogKeys
-	}
+	// Store the step log base keys in the result
+	logKeys.StepLogBaseKeys = append(logKeys.StepLogBaseKeys, stepLogBaseKeys...)
 }
 
-// extractStageAndStepNames extracts stage and step names from a node
-func extractStageAndStepNames(node dto.ExecutionNode) (string, string) {
-	// Use BaseFqn to determine the stage and step names
-	// BaseFqn format is typically: pipeline.stages.<stage_name>.spec.execution.steps.<step_name>
-	parts := strings.Split(node.BaseFqn, ".")
-	if len(parts) < 3 {
-		return "", "" // Not enough parts to determine stage/step
-	}
+// extractLogBaseKeysForSteps extracts an array of logbasekeys where node.BaseFqn contains "steps"
+func extractLogBaseKeysForSteps(nodes map[string]dto.ExecutionNode) []string {
+	var logBaseKeys []string
 
-	// Find the stage name (after "stages.")
-	stageIndex := -1
-	for i, part := range parts {
-		if part == "stages" && i+1 < len(parts) {
-			stageIndex = i + 1
-			break
+	// Iterate through all nodes and find those containing "steps" in BaseFqn
+	for _, node := range nodes {
+		// Check if the BaseFqn contains "steps"
+		if strings.Contains(node.BaseFqn, ".steps.") && node.LogBaseKey != "" {
+			logBaseKeys = append(logBaseKeys, node.LogBaseKey)
 		}
 	}
 
-	// Find the step name (after "steps.")
-	stepIndex := -1
-	for i, part := range parts {
-		if part == "steps" && i+1 < len(parts) {
-			stepIndex = i + 1
-			break
-		}
-	}
-
-	// Only include nodes where the FQN contains "steps." which indicates it's an actual step
-	// If we didn't find "steps." in the FQN, it's not a step node
-	if stepIndex == -1 {
-		return "", ""
-	}
-
-	// If we found both stage and step
-	if stageIndex >= 0 && stepIndex >= 0 {
-		return parts[stageIndex], parts[stepIndex]
-	}
-
-	return "", "" // Couldn't determine stage/step
-}
-
-// extractNodeLogKeys extracts log keys from a node
-func extractNodeLogKeys(node dto.ExecutionNode) []string {
-	var logKeys []string
-
-	if node.LogBaseKey != "" {
-		logKeys = append(logKeys, node.LogBaseKey)
-	}
-
-	return logKeys
+	return logBaseKeys
 }
 
 func (p *PipelineService) FetchExecutionURL(

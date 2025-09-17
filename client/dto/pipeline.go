@@ -162,11 +162,7 @@ type ChildGraph struct {
 }
 
 type FinalLogKeys struct {
-	Stages map[string]StepLogKeys `json:"stages,omitempty"`
-}
-
-type StepLogKeys struct {
-	Steps map[string][]string `json:"steps,omitempty"`
+	StepLogBaseKeys []string `json:"stepLogBaseKeys,omitempty"`
 }
 
 // PipelineExecution represents a pipeline execution
