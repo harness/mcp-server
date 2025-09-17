@@ -6,6 +6,9 @@ FROM --platform=$BUILDPLATFORM golang:1.24.3-alpine AS builder
 # Setup workig dir
 WORKDIR /app
 
+ARG TARGETOS
+ARG TARGETARCH
+
 # Get dependencies - will also be cached if we won't change mod/sum
 COPY go.mod .
 COPY go.sum .
@@ -39,4 +42,5 @@ ENV XDG_CACHE_HOME=/data
 COPY --from=builder /app/cmd/harness-mcp-server/harness-mcp-server /app/harness-mcp-server
 COPY --from=cert-image /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
-ENTRYPOINT [ "/app/harness-mcp-server", "stdio" ]
+ENTRYPOINT [ "/app/harness-mcp-server"]
+CMD ["stdio"]

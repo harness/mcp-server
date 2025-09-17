@@ -9,10 +9,10 @@ import (
 
 const (
 	// Base API paths
-	chaosListExperimentsPath  = "api/rest/v2/experiment"
-	chaosGetExperimentPath    = "api/rest/v2/experiments/%s"
-	chaosGetExperimentRunPath = "api/rest/v2/experiments/%s/run"
-	chaosExperimentRunPath    = "api/rest/v2/experiments/%s/run"
+	chaosListExperimentsPath  = "rest/v2/experiment"
+	chaosGetExperimentPath    = "rest/v2/experiments/%s"
+	chaosGetExperimentRunPath = "rest/v2/experiments/%s/run"
+	chaosExperimentRunPath    = "rest/v2/experiments/%s/run"
 )
 
 type ChaosService struct {

@@ -19,7 +19,8 @@ import (
 // FindSimilarTemplates creates a tool that allows finding similar templates based on provided description.
 func FindSimilarTemplates(config *config.Config, client *client.IntelligenceService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("intelligent_template_search",
-			mcp.WithDescription("Finds the most relevant templates based on a natural language description. "+
+			mcp.WithDescription("The tool is used to find most relevant entity template for any entity everytime a template is explicitly requested for any of pipeline/stage/step"+
+				"Finds the most relevant templates based on a natural language description. "+
 				"Searches across template identifiers, names, types, capabilities, and use cases to find the best matches. "+
 				"Returns templates ranked by similarity score with metadata including template IDs and organizational context. "+
 				"Ideal for discovering templates that fulfill specific requirements without knowing exact identifiers."),
@@ -32,6 +33,7 @@ func FindSimilarTemplates(config *config.Config, client *client.IntelligenceServ
 			),
 			mcp.WithNumber("count",
 				mcp.Description("Maximum number of similar templates to return"),
+				mcp.DefaultNumber(1),
 			),
 			common.WithScope(config, false),
 		),

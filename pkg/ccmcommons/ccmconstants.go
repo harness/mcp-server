@@ -3,6 +3,7 @@ package ccmcommons
 import (
 	"fmt"
 )
+
 var CCMPerspectiveGridDescription = `
 Query detailed cost perspective grid data in Harness Cloud Cost Management.
 This tool allows you to retrieve tabular cost data for a given perspective (view) with advanced filtering, grouping, and aggregation options.
@@ -235,4 +236,20 @@ Retrieves aggregated statistics of cloud cost optimization recommendations group
 
 var GetRecommendationsStatsDescription = `
 Retrieves overall statistics for cloud cost optimization recommendations within a given account. The response provides aggregated metrics such as the total number of recommendations, total estimated cost savings, and the count of open and applied recommendations. This helps track the overall state and impact of cost optimization efforts across all resources.
+`
+
+var GetAnomaliesSummaryDescription = `
+Fetch the anomalies summary in Harness Cloud Cost Management.
+`
+
+var ListAnomaliesDescription = `
+Fetch the result of anomaly query in Harness Cloud Cost Management.
+`
+
+var ListIgnoredAnomaliesDescription = `
+Fetch the list of anomalies present in the ignore list according to the filters applied in Harness Cloud Cost Management.
+`
+
+var GetAnomaliesForPerspectiveDescription = `
+Fetch cost anomalies filtered by a specific perspective in Harness Cloud Cost Management
 `

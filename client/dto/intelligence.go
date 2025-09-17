@@ -23,6 +23,8 @@ type SimilaritySearchResponse struct {
 	Results []SimilaritySearchResult `json:"results"`
 }
 
+type TemplateData string
+
 // ContextType defines the type of context for AI DevOps agent
 type ContextType string
 

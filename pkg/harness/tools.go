@@ -232,6 +232,9 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 			if err := modules.RegisterConnectors(config, tsg); err != nil {
 				return err
 			}
+			if err := modules.RegisterDelegateTokens(config, tsg); err != nil {
+				return err
+			}
 			if err := modules.RegisterDashboards(config, tsg); err != nil {
 				return err
 			}
@@ -268,6 +271,9 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 			if err := modules.RegisterInfrastructure(config, tsg); err != nil {
 				return err
 			}
+			if err := modules.RegisterReleaseManagementTools(config, tsg); err != nil {
+				return err
+			}
 			if err := modules.RegisterACM(config, tsg); err != nil {
 				return err
 			}
@@ -278,6 +284,9 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 				return err
 			}
 			if err := modules.RegisterPromptTools(config, tsg); err != nil {
+				return err
+			}
+			if err := modules.RegisterSoftwareEngineeringInsights(config, tsg); err != nil {
 				return err
 			}
 		} else {
@@ -322,6 +331,10 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 					}
 				case "connectors":
 					if err := modules.RegisterConnectors(config, tsg); err != nil {
+						return err
+					}
+				case "delegateTokens":
+					if err := modules.RegisterDelegateTokens(config, tsg); err != nil {
 						return err
 					}
 				case "dashboards":
@@ -372,6 +385,10 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 					if err := modules.RegisterInfrastructure(config, tsg); err != nil {
 						return err
 					}
+				case "release_management":
+					if err := modules.RegisterReleaseManagementTools(config, tsg); err != nil {
+						return err
+					}
 				case "acm":
 					if err := modules.RegisterACM(config, tsg); err != nil {
 						return err
@@ -386,6 +403,10 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 					}
 				case "prompts":
 					if err := modules.RegisterPromptTools(config, tsg); err != nil {
+						return err
+					}
+				case "sei":
+					if err := modules.RegisterSoftwareEngineeringInsights(config, tsg); err != nil {
 						return err
 					}
 				}

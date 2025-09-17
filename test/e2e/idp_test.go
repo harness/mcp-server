@@ -5,6 +5,7 @@ package e2e
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -217,4 +218,205 @@ func TestExecuteWorkflow(t *testing.T) {
 	// Verify response content
 	t.Logf("Response content: %v\n", executeWorkflowResponse.Content)
 	require.NotEmpty(t, executeWorkflowResponse.Content, "expected content to not be empty")
+}
+
+func TestScorecardTools(t *testing.T) {
+	t.Parallel()
+
+	mcpClient := setupMCPClient(t)
+	ctx := context.Background()
+	accountID := getE2EAccountID(t)
+
+	// Call the list_entities tool
+	request := mcp.CallToolRequest{}
+	request.Params.Name = "list_scorecards"
+	request.Params.Arguments = map[string]any{
+		"accountIdentifier": accountID,
+		"orgIdentifier":     getE2EOrgID(),
+		"projectIdentifier": getE2EProjectID(),
+	}
+
+	response, err := mcpClient.CallTool(ctx, request)
+	require.NoError(t, err, "expected to call 'list_scorecards' tool successfully")
+	if response.IsError {
+		t.Logf("Error response: %v", response.Content)
+	}
+	require.False(t, response.IsError, "expected result not to be an error")
+
+	// Verify response content
+	require.NotEmpty(t, response.Content, "expected content to not be empty")
+
+	textContent, ok := response.Content[0].(mcp.TextContent)
+	require.True(t, ok, "expected content to be of type TextContent")
+
+	var listScorecardsResponse []*dto.ScorecardResponse
+
+	err = json.Unmarshal([]byte(textContent.Text), &listScorecardsResponse)
+	require.NoError(t, err, "expected to unmarshal response successfully")
+
+	// Skip further tests if no scorecards are found
+	if len(listScorecardsResponse) == 0 {
+		t.Log("No scorecards found, skipping get test")
+		return
+	}
+
+	// Store the first scorecard ID for subsequent tests
+	t.Logf("Found %d scorecards", len(listScorecardsResponse))
+	scorecardId := ""
+
+	for _, scorecard := range listScorecardsResponse {
+		if scorecard.Scorecard.Identifier != "" && scorecard.Scorecard.Components > 0 {
+			scorecardId = scorecard.Scorecard.Identifier
+			break
+		}
+	}
+	if scorecardId == "" {
+		t.Log("No valid scorecards found, skipping get test")
+		return
+	}
+	t.Logf("Using scorecard ID: %s", scorecardId)
+
+	// Test get scorecard details
+	getScorecardDetailsRequest := mcp.CallToolRequest{}
+	getScorecardDetailsRequest.Params.Name = "get_scorecard"
+	getScorecardDetailsRequest.Params.Arguments = map[string]any{
+		"accountIdentifier": accountID,
+		"orgIdentifier":     getE2EOrgID(),
+		"projectIdentifier": getE2EProjectID(),
+		"scorecard_id":      scorecardId,
+	}
+
+	getScorecardDetailsResponse, err := mcpClient.CallTool(ctx, getScorecardDetailsRequest)
+	if getScorecardDetailsResponse.IsError {
+		t.Logf("Error response: %v", getScorecardDetailsResponse.Content)
+	}
+	require.NoError(t, err, "expected to call 'get_scorecard' tool successfully")
+	require.False(t, getScorecardDetailsResponse.IsError, "expected result not to be an error")
+	// Verify response content
+	t.Logf("Scorecard Details Response content: %v\n", getScorecardDetailsResponse.Content)
+	require.NotEmpty(t, getScorecardDetailsResponse.Content, "expected content to not be empty")
+
+	// Test get scorecard stats
+	getScorecardStatsRequest := mcp.CallToolRequest{}
+	getScorecardStatsRequest.Params.Name = "get_scorecard_stats"
+	getScorecardStatsRequest.Params.Arguments = map[string]any{
+		"accountIdentifier":    accountID,
+		"orgIdentifier":        getE2EOrgID(),
+		"projectIdentifier":    getE2EProjectID(),
+		"scorecard_identifier": scorecardId,
+	}
+
+	getScorecardStatsResponse, err := mcpClient.CallTool(ctx, getScorecardStatsRequest)
+	if getScorecardStatsResponse.IsError {
+		t.Logf("Error response: %v", getScorecardStatsResponse.Content)
+	}
+	require.NoError(t, err, "expected to call 'get_scorecard_stats' tool successfully")
+	require.False(t, getScorecardStatsResponse.IsError, "expected result not to be an error")
+	// Verify response content
+	t.Logf("Scorecard Stats Response content: %v\n", getScorecardStatsResponse.Content)
+	require.NotEmpty(t, getScorecardStatsResponse.Content, "expected content to not be empty")
+}
+
+func TestScorecardCheckTools(t *testing.T) {
+	t.Parallel()
+
+	mcpClient := setupMCPClient(t)
+	ctx := context.Background()
+	accountID := getE2EAccountID(t)
+
+	// Call the list_entities tool
+	request := mcp.CallToolRequest{}
+	request.Params.Name = "list_scorecard_checks"
+	request.Params.Arguments = map[string]any{
+		"accountIdentifier": accountID,
+		"orgIdentifier":     getE2EOrgID(),
+		"projectIdentifier": getE2EProjectID(),
+	}
+
+	response, err := mcpClient.CallTool(ctx, request)
+	require.NoError(t, err, "expected to call 'list_scorecard_checks' tool successfully")
+	if response.IsError {
+		t.Logf("Error response: %v", response.Content)
+	}
+	require.False(t, response.IsError, "expected result not to be an error")
+
+	// Verify response content
+	require.NotEmpty(t, response.Content, "expected content to not be empty")
+
+	textContent, ok := response.Content[0].(mcp.TextContent)
+	require.True(t, ok, "expected content to be of type TextContent")
+
+	var listChecksResponse dto.CheckResponseList
+
+	err = json.Unmarshal([]byte(textContent.Text), &listChecksResponse)
+	require.NoError(t, err, "expected to unmarshal response successfully")
+
+	// Skip further tests if no scorecards are found
+	if len(listChecksResponse) == 0 {
+		t.Log("No scorecards found, skipping get test")
+		return
+	}
+
+	// Store the first scorecard ID for subsequent tests
+	t.Logf("Found %d checks", len(listChecksResponse))
+	checkId := ""
+	isCustom := false
+
+	for _, check := range listChecksResponse {
+		if check.Check.Identifier != "" {
+			checkId = check.Check.Identifier
+			isCustom = check.Check.Custom
+			break
+		}
+	}
+	if checkId == "" {
+		t.Log("No valid scorecards found, skipping get test")
+		return
+	}
+	t.Logf("Using check ID: %s", checkId)
+
+	// Test get check details
+	getCheckDetailsRequest := mcp.CallToolRequest{}
+	getCheckDetailsRequest.Params.Name = "get_scorecard_check"
+	getCheckDetailsRequest.Params.Arguments = map[string]any{
+		"accountIdentifier": accountID,
+		"orgIdentifier":     getE2EOrgID(),
+		"projectIdentifier": getE2EProjectID(),
+		"check_id":          checkId,
+		"is_custom":         isCustom,
+	}
+
+	getCheckDetailsResponse, err := mcpClient.CallTool(ctx, getCheckDetailsRequest)
+	if getCheckDetailsResponse == nil {
+		err = errors.New("nil response")
+		t.Logf("Nil check details response")
+	} else if getCheckDetailsResponse.IsError {
+		t.Logf("Error response: %v", getCheckDetailsResponse.Content)
+	}
+	require.NoError(t, err, "expected to call 'get_scorecard_check' tool successfully")
+	require.False(t, getCheckDetailsResponse.IsError, "expected result not to be an error")
+	// Verify response content
+	t.Logf("Check Details Response content: %v\n", getCheckDetailsResponse.Content)
+	require.NotEmpty(t, getCheckDetailsResponse.Content, "expected content to not be empty")
+
+	// Test get check stats
+	getCheckStatsRequest := mcp.CallToolRequest{}
+	getCheckStatsRequest.Params.Name = "get_scorecard_check_stats"
+	getCheckStatsRequest.Params.Arguments = map[string]any{
+		"accountIdentifier": accountID,
+		"orgIdentifier":     getE2EOrgID(),
+		"projectIdentifier": getE2EProjectID(),
+		"check_identifier":  checkId,
+		"is_custom":         isCustom,
+	}
+
+	getCheckStatsResponse, err := mcpClient.CallTool(ctx, getCheckStatsRequest)
+	if getCheckStatsResponse.IsError {
+		t.Logf("Error response: %v", getCheckStatsResponse.Content)
+	}
+	require.NoError(t, err, "expected to call 'get_scorecard_check_stats' tool successfully")
+	require.False(t, getCheckStatsResponse.IsError, "expected result not to be an error")
+	// Verify response content
+	t.Logf("Check Stats Response content: %v\n", getCheckStatsResponse.Content)
+	require.NotEmpty(t, getCheckStatsResponse.Content, "expected content to not be empty")
 }

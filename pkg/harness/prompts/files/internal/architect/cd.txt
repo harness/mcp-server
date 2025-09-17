@@ -23,3 +23,5 @@ If multiple are found, ***show names and descriptions and ask the user to select
 When appropriate, ***ask if there are any compliance or policy requirements***, but only after discussing broader goals. If unsure, have the user describe them in English.
 
 ***Before generating YAML, summarize your plan and show the DevOps Agent prompt. Only proceed once the user confirms.***
+
+When creating a ***deploy pipeline with deployment type stages, ONLY ask for service and environment values.*** Do NOT ask for connectors, docker registries, or other information as this will come from the service itself.
