@@ -82,7 +82,7 @@ func initLicenseValidation(ctx context.Context, config *config.Config) (*License
 		config,
 		config.NgManagerBaseURL,
 		config.BaseURL,
-		"",
+		"ng/api",
 		config.NgManagerSecret,
 	)
 	if err != nil {
@@ -173,7 +173,7 @@ func InitToolsets(ctx context.Context, config *config.Config) (*toolsets.Toolset
 		enabledModules := getEnabledModules(configEnabledModules, licenseInfo)
 		// Register toolsets for enabled modules
 		for _, module := range enabledModules {
-			slog.Info("registering toolsets for", "modules: ", module.ID())
+			slog.Info("registering toolsets for", "modules", module.ID())
 			if err := module.RegisterToolsets(); err != nil {
 				return nil, fmt.Errorf("failed to register toolsets for module %s: %w", module.ID(), err)
 			}
