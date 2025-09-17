@@ -327,7 +327,7 @@ Add the server configuration to your Gemini config file at: `~/.gemini/settings.
 
 ### Usage with Gemini CLI Extensions
 
-The Gemini Extension File needed to configure the extension.
+Below is the Gemini Extension File needed to configure the extension.
 
 ```json
 {
