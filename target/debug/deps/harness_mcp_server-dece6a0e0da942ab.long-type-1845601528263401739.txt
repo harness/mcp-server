@@ -1,0 +1,2 @@
+fn(axum::extract::State<AppState>) -> impl Future<Output = std::result::Result<axum::Json<serde_json::Value>, HarnessError>> {mcp_handler}
+fn(axum::extract::State<AppState>) -> impl Future<Output = std::result::Result<axum::Json<serde_json::Value>, HarnessError>> {mcp_handler}: Handler<_, _>
