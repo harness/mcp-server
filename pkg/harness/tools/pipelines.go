@@ -143,6 +143,9 @@ func GetExecutionTool(config *config.Config, client *client.PipelineService) (to
 			mcp.WithString("stage_node_id",
 				mcp.Description("Optional ID of the stage node to filter the execution details"),
 			),
+			mcp.WithString("child_stage_node_id",
+				mcp.Description("Optional ID of the child stage node to filter the execution details"),
+			),
 			common.WithScope(config, true),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -154,12 +157,16 @@ func GetExecutionTool(config *config.Config, client *client.PipelineService) (to
 			// Get optional stage node ID
 			stageNodeID, _ := OptionalParam[string](request, "stage_node_id")
 
+			// Get optional child stage node ID
+			childStageNodeID, _ := OptionalParam[string](request, "child_stage_node_id")
+
 			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			data, err := client.GetExecutionWithLogKeys(ctx, scope, planExecutionID, stageNodeID)
+			// Pass both stageNodeID and childStageNodeID to the client
+			data, err := client.GetExecutionWithLogKeys(ctx, scope, planExecutionID, stageNodeID, childStageNodeID)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get execution details: %w", err)
 			}

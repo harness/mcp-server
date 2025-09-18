@@ -32,7 +32,7 @@ func (l *LogService) GetDownloadLogsURL(ctx context.Context, scope dto.Scope, pl
 		slog.Info("Building log key for log download from execution details")
 		// First, get the pipeline execution details to determine the prefix format
 		pipelineService := &PipelineService{Client: l.PipelineClient} // TODO: needs to be changed for internal case, we should move this above
-		execution, err := pipelineService.GetExecutionWithLogKeys(ctx, scope, planExecutionID, "")
+		execution, err := pipelineService.GetExecutionWithLogKeys(ctx, scope, planExecutionID, "", "")
 		if err != nil {
 			return "", fmt.Errorf("failed to get execution details: %w", err)
 		}

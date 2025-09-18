@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 
@@ -160,6 +161,7 @@ func (p *PipelineService) GetExecutionWithLogKeys(
 	scope dto.Scope,
 	planExecutionID string,
 	stageNodeID string,
+	childStageNodeID string,
 ) (*dto.Entity[PipelineExecutionResult], error) {
 	path := fmt.Sprintf(pipelineExecutionGetPath, planExecutionID)
 
@@ -172,6 +174,12 @@ func (p *PipelineService) GetExecutionWithLogKeys(
 		params["stageNodeId"] = stageNodeID
 	}
 
+	// Add childStageNodeId if provided
+	if childStageNodeID != "" {
+		params["childStageNodeId"] = childStageNodeID
+	}
+
+	slog.Info("Fetching execution details with log keys", "planExecutionID", planExecutionID, "stageNodeID", stageNodeID, "childStageNodeID", childStageNodeID)
 	// Initialize the response object with the new structure that matches the API response
 	response := &dto.Entity[dto.PipelineExecutionResponse]{}
 
@@ -191,6 +199,7 @@ func (p *PipelineService) GetExecutionWithLogKeys(
 			LogKeys:   logKeys,
 		},
 	}
+	slog.Info("Returning execution result with child graph", "childGraphExists", response.Data.ChildGraph.ExecutionGraph.NodeMap != nil, "childPipelineId", response.Data.ChildGraph.PipelineExecutionSummary.PipelineIdentifier)
 	return result, nil
 }
 
