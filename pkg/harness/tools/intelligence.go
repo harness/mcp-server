@@ -186,10 +186,35 @@ func AIDevOpsAgentTool(config *config.Config, client *client.IntelligenceService
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			harnessContextRaw, err := OptionalParam[map[string]interface{}](request, "harness_context")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
 			// Try to fetch scope parameters (account_id, org_id, project_id) if provided
 			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// Create harness context from scope
+			harnessContext := &dto.HarnessContext{
+				AccountID: scope.AccountID,
+				OrgID:     scope.OrgID,
+				ProjectID: scope.ProjectID,
+			}
+
+			// Override with values from request if provided
+			if harnessContextRaw != nil {
+				if accountID, ok := harnessContextRaw["account_id"].(string); ok && accountID != "" {
+					harnessContext.AccountID = accountID
+				}
+				if orgID, ok := harnessContextRaw["org_id"].(string); ok && orgID != "" {
+					harnessContext.OrgID = orgID
+				}
+				if projectID, ok := harnessContextRaw["project_id"].(string); ok && projectID != "" {
+					harnessContext.ProjectID = projectID
+				}
 			}
 
 			// Process context items
@@ -211,13 +236,6 @@ func AIDevOpsAgentTool(config *config.Config, client *client.IntelligenceService
 			}
 			if interactionID == "" {
 				interactionID = uuid.New().String()
-			}
-
-			// Create harness context from scope
-			harnessContext := &dto.HarnessContext{
-				AccountID: scope.AccountID,
-				OrgID:     scope.OrgID,
-				ProjectID: scope.ProjectID,
 			}
 
 			// Create AI DevOps request
