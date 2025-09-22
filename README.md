@@ -325,6 +325,27 @@ Add the server configuration to your Gemini config file at: `~/.gemini/settings.
 }
 ```
 
+### Usage with Gemini CLI Extensions
+
+You will need to run the following command to install the Harness MCP as an extension:
+
+```sh
+gemini extensions install https://github.com/harness/mcp-server
+```
+
+Then you will need to set the environment variables for the extension:
+
+```sh
+export HARNESS_API_KEY="your_api_key_here"
+```
+
+Launch Gemini and start asking questions about Harness!
+
+```sh
+gemini
+```
+
+
 ### Claude Desktop Configuration
 
 On MacOS: `~/Library/Application\ Support/Claude/claude_desktop_config.json`  
@@ -647,6 +668,52 @@ Environment variables are prefixed with `HARNESS_`:
 ### Authentication
 
 The server uses a Harness API key for authentication. This can be set via the `HARNESS_API_KEY` environment variable.
+
+### Using the create_follow_up_prompt Tool to generate actionable prompt events
+
+The `create_follow_up_prompt` tool allows you to generate actionable prompt events that appear as buttons in the UI. These buttons can navigate users to specific pages within the Harness platform.
+
+Here's how to use it:
+
+```json
+{
+  "actions": [
+    {
+      "text": "Button Text",
+      "action": "OPEN_ENTITY_NEW_TAB",
+      "data": {
+        "pageName": "PAGE_NAME",
+        "metadata": {
+          "<KEY>": "<VALUE>"
+        }
+      }
+    }
+  ]
+}
+```
+
+#### Parameters:
+
+- `text`: The text to display on the button
+- `action`: The action to perform (currently supports `OPEN_ENTITY_NEW_TAB`)
+- `data`: Contains navigation information
+  - `pageName`: The page to navigate to (e.g., `ExecutionPipelineView`, `PipelineStudio`, etc.)
+  - `metadata`: Key-value pairs needed for the target page (e.g., `{"executionId": "abc123", "pipelineId": "xyz789"}`)
+
+#### Example:
+
+```go
+actionData := `{"actions": [{"text": "View Pipeline", "action": "OPEN_ENTITY_NEW_TAB", "data": {"pageName": "PipelineStudio", "metadata": {"id": "pipeline-id"}}}]}`
+```
+
+#### Alternative: Quick Prompts
+
+If you provide an array of strings instead of the actions object, these strings will be added to the message box as quick prompts that users can click on:
+
+```go
+// Add quick prompts to the message box
+quickPrompts := `["Show me pipeline details", "List recent executions", "Analyze performance"]`
+```
 
 ## Notes for Local Testing
 

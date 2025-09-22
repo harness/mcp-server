@@ -38,6 +38,7 @@ func (m *CDModule) Toolsets() []string {
 		"services",
 		"environments",
 		"infrastructure",
+		"release_management",
 	}
 }
 
@@ -55,6 +56,10 @@ func (m *CDModule) RegisterToolsets() error {
 			}
 		case "infrastructure":
 			if err := RegisterInfrastructure(m.config, m.tsg); err != nil {
+				return err
+			}
+		case "release_management":
+			if err := RegisterReleaseManagementTools(m.config, m.tsg); err != nil {
 				return err
 			}
 		}
@@ -152,5 +157,29 @@ func RegisterEnvironments(config *config.Config, tsg *toolsets.ToolsetGroup) err
 
 	// Add toolset to the group
 	tsg.AddToolset(environments)
+	return nil
+}
+
+// RegisterReleaseManagementTools registers the Release Management tools
+func RegisterReleaseManagementTools(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Skip registration for external mode for now
+	if !config.Internal {
+		return nil
+	}
+
+	// Get the GenAI client
+	genaiClient, err := GetGenAIClient(config)
+	if err != nil {
+		return err
+	}
+
+	// Create the Ask Release Agent toolset
+	askReleaseAgent := toolsets.NewToolset("release_management", "Release Management tools").
+		AddReadTools(
+			toolsets.NewServerTool(tools.AskReleaseAgentTool(config, genaiClient)),
+		)
+
+	// Add toolset to the group
+	tsg.AddToolset(askReleaseAgent)
 	return nil
 }

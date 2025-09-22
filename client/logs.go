@@ -19,9 +19,9 @@ type LogService struct {
 	PipelineClient   *Client
 }
 
-// DownloadLogs fetches a download URL for pipeline execution logs
+// GetDownloadLogsURL fetches a download URL for pipeline execution logs
 // If logKey is not empty, it will use that log key to fetch logs instead of building one from execution details
-func (l *LogService) DownloadLogs(ctx context.Context, scope dto.Scope, planExecutionID string, logKey string) (string, error) {
+func (l *LogService) GetDownloadLogsURL(ctx context.Context, scope dto.Scope, planExecutionID string, logKey string) (string, error) {
 	// Use custom log key if provided, otherwise build it from execution details
 	var finalLogKey string
 	var err error
@@ -32,27 +32,27 @@ func (l *LogService) DownloadLogs(ctx context.Context, scope dto.Scope, planExec
 		slog.Info("Building log key for log download from execution details")
 		// First, get the pipeline execution details to determine the prefix format
 		pipelineService := &PipelineService{Client: l.PipelineClient} // TODO: needs to be changed for internal case, we should move this above
-		execution, err := pipelineService.GetExecution(ctx, scope, planExecutionID)
+		execution, err := pipelineService.GetExecutionWithLogKeys(ctx, scope, planExecutionID, "", "")
 		if err != nil {
 			return "", fmt.Errorf("failed to get execution details: %w", err)
 		}
 
 		// Build the log key based on the execution details
-		if execution.Data.ShouldUseSimplifiedBaseKey {
+		if execution.Data.Execution.ShouldUseSimplifiedBaseKey {
 			// Simplified key format
 			finalLogKey = fmt.Sprintf("%s/pipeline/%s/%d/-%s",
 				scope.AccountID,
-				execution.Data.PipelineIdentifier,
-				execution.Data.RunSequence,
+				execution.Data.Execution.PipelineIdentifier,
+				execution.Data.Execution.RunSequence,
 				planExecutionID)
 		} else {
 			// Standard key format
 			finalLogKey = fmt.Sprintf("accountId:%s/orgId:%s/projectId:%s/pipelineId:%s/runSequence:%d/level0:pipeline",
 				scope.AccountID,
-				execution.Data.OrgIdentifier,
-				execution.Data.ProjectIdentifier,
-				execution.Data.PipelineIdentifier,
-				execution.Data.RunSequence)
+				execution.Data.Execution.OrgIdentifier,
+				execution.Data.Execution.ProjectIdentifier,
+				execution.Data.Execution.PipelineIdentifier,
+				execution.Data.Execution.RunSequence)
 		}
 	}
 

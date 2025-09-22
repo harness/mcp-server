@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness/common"
+	"github.com/harness/harness-mcp/pkg/harness/event/types"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -138,6 +140,12 @@ func GetExecutionTool(config *config.Config, client *client.PipelineService) (to
 				mcp.Required(),
 				mcp.Description("The ID of the plan execution"),
 			),
+			mcp.WithString("stage_node_id",
+				mcp.Description("Optional ID of the stage node to filter the execution details"),
+			),
+			mcp.WithString("child_stage_node_id",
+				mcp.Description("Optional ID of the child stage node to filter the execution details"),
+			),
 			common.WithScope(config, true),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -146,12 +154,19 @@ func GetExecutionTool(config *config.Config, client *client.PipelineService) (to
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			// Get optional stage node ID
+			stageNodeID, _ := OptionalParam[string](request, "stage_node_id")
+
+			// Get optional child stage node ID
+			childStageNodeID, _ := OptionalParam[string](request, "child_stage_node_id")
+
 			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			data, err := client.GetExecution(ctx, scope, planExecutionID)
+			// Pass both stageNodeID and childStageNodeID to the client
+			data, err := client.GetExecutionWithLogKeys(ctx, scope, planExecutionID, stageNodeID, childStageNodeID)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get execution details: %w", err)
 			}
@@ -387,6 +402,76 @@ func GetPipelineSummaryTool(config *config.Config, client *client.PipelineServic
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+type ActionData struct {
+	Actions []struct {
+		Text   string `json:"text"`
+		Action string `json:"action"`
+		Data   struct {
+			PageName string            `json:"pageName"`
+			Metadata map[string]string `json:"metadata"`
+		} `json:"data"`
+	} `json:"actions"`
+}
+
+func CreateFollowUpPromptTool(config *config.Config, client *client.PipelineService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("create_follow_up_prompt",
+			mcp.WithDescription("Creates a follow up prompt event with the specified data."),
+			mcp.WithString("action_data",
+				mcp.Required(),
+				mcp.Description("A JSON string in one of these formats: 1) An array of action objects: {\"actions\": [{\"text\": \"Button Text\", \"action\": \"OPEN_ENTITY_NEW_TAB\", \"data\": {\"pageName\": \"PAGE_NAME\", \"metadata\": {\"<KEY>\": \"<VALUE>\"}}}]} OR 2) just a single string action without any array: \"Action1\""),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			actionDataStr, err := RequiredParam[string](request, "action_data")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// Parse action data into actionStrings (array of JSON strings)
+			var actionStrings []string
+			var actionObject interface{}
+
+			// Check if the input is a plain text message (not JSON)
+			if !strings.HasPrefix(strings.TrimSpace(actionDataStr), "{") && !strings.HasPrefix(strings.TrimSpace(actionDataStr), "[") {
+				actionStrings = append(actionStrings, actionDataStr)
+				actionObject = actionStrings
+			} else {
+				// Try to parse as JSON
+				var actionString string
+				// First try if it's already a JSON string
+				if err := json.Unmarshal([]byte(actionDataStr), &actionString); err == nil {
+					actionStrings = append(actionStrings, actionString)
+					actionObject = actionStrings
+				} else {
+					// Try if it's a wrapper with "actions" field
+					var actionDataWrapper ActionData
+
+					if err := json.Unmarshal([]byte(actionDataStr), &actionDataWrapper); err == nil {
+						// Convert each action to a stringified JSON
+						actionObject = actionDataWrapper.Actions
+					} else {
+						return mcp.NewToolResultError(fmt.Sprintf("Failed to parse action data: %v", err)), nil
+					}
+
+				}
+			}
+
+			// Create a custom event with the stringified action data
+			promptEvent := types.NewActionEvent(actionObject)
+
+			// Create an embedded resource from the event
+			resource, err := promptEvent.CreateEmbeddedResource()
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("Failed to create embedded resource: %v", err)), nil
+			}
+
+			// Return the resource as the tool result
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{resource},
+			}, nil
 		}
 }
 
