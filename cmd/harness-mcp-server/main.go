@@ -121,7 +121,7 @@ var (
 				DBOpsSvcSecret:          viper.GetString("dbops_svc_secret"),
 				RBACSvcBaseURL:          viper.GetString("rbac_svc_base_url"),
 				RBACSvcSecret:           viper.GetString("rbac_svc_secret"),
-				OutputDir:               viper.GetString("output_dir"),
+				OutputDir:     viper.GetString("output_dir"),
 			}
 
 			return runHTTPServer(ctx, cfg)
@@ -233,7 +233,7 @@ var (
 				Debug:         viper.GetBool("debug"),
 				EnableLicense: viper.GetBool("enable_license"),
 				Internal:      true,
-				OutputDir:               viper.GetString("output_dir"),
+				OutputDir:     viper.GetString("output_dir"),
 				AccountID:     session.Principal.AccountID,
 				// Internal mode specific fields
 				BearerToken:             viper.GetString("bearer_token"),
