@@ -23,6 +23,7 @@ func NewServer(version string, config *config.Config, opts ...server.ServerOptio
 					HeaderExtractor: &middleware.DefaultHeaderExtractor{},
 					CacheTTL:       5 * time.Minute,
 					Logger:         slog.Default(),
+					Config:         config,
 				}),
 				middleware.WithHarnessScope(config),
 			),

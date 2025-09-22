@@ -8,7 +8,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness/common"
+	licenseFactory "github.com/harness/harness-mcp/pkg/license"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -72,6 +74,7 @@ type DynamicToolFilteringConfig struct {
 	Cache           *ModuleIntersectionCache
 	CacheTTL        time.Duration
 	Logger          *slog.Logger
+	Config          *config.Config // Harness configuration for license client
 }
 
 // WithDynamicToolFiltering creates middleware that filters tools based on request-scoped modules
@@ -106,7 +109,7 @@ func WithDynamicToolFiltering(config *DynamicToolFilteringConfig) server.ToolHan
 			}
 
 			// Step 3: Get licensed modules for the account
-			licensedModules, err := getLicensedModulesForAccount(ctx, accountID, requestLogger)
+			licensedModules, err := getLicensedModulesForAccount(ctx, accountID, config.Config, requestLogger)
 			if err != nil {
 				requestLogger.Error("Failed to get licensed modules, proceeding without filtering", "error", err)
 				return next(ctx, request)
@@ -207,14 +210,80 @@ func extractRequestedModulesFromContext(ctx context.Context, logger *slog.Logger
 	return []string{}
 }
 
-func getLicensedModulesForAccount(ctx context.Context, accountID string, logger *slog.Logger) ([]string, error) {
-	logger.Debug("Getting licensed modules for account", "account_id", accountID)
+func getLicensedModulesForAccount(ctx context.Context, accountID string, config *config.Config, logger *slog.Logger) ([]string, error) {
+	// Use the shared license client factory for consistent license client creation
+	licenseFactory := licenseFactory.NewClientFactory(config, logger)
+	licenseClient, err := licenseFactory.CreateLicenseClient(ctx)
+	if err != nil {
+		logger.Error("Failed to create license client", "error", err, "account_id", accountID)
+		// Fallback to CORE only on license client creation failure
+		return []string{"CORE"}, nil
+	}
 
-	// This should integrate with the existing license validation logic
-	// For now, return all modules as licensed (placeholder)
-	licensedModules := []string{"CORE", "CI", "CD", "CCM", "STO", "FF", "CE", "SRM", "SEI", "IACM", "CET", "SSCA"}
+	// Call GetAccountLicenses API
+	accountLicense, rawHttpResponse, err := licenseClient.GetAccountLicenses(ctx, accountID)
+	if err != nil {
+		logger.Error("Failed to get account licenses", "error", err, "account_id", accountID)
+		// Fallback to CORE only on API call failure
+		return []string{"CORE"}, nil
+	}
 
-	logger.Debug("Licensed modules retrieved", "account_id", accountID, "modules", licensedModules)
+	// Check response status
+	if rawHttpResponse.StatusCode != 200 {
+		logger.Error("Unexpected license API response status",
+			"status", rawHttpResponse.Status,
+			"status_code", rawHttpResponse.StatusCode,
+			"account_id", accountID)
+		// Fallback to CORE only on non-200 response
+		return []string{"CORE"}, nil
+	}
+
+	logger.Debug("Successfully retrieved account licenses",
+		"status", rawHttpResponse.Status,
+		"account_id", accountID,
+		"has_data", accountLicense.Data != nil)
+
+	// Process license data
+	var licensedModules []string
+
+	// Always include CORE module
+	licensedModules = append(licensedModules, "CORE")
+
+	// Process module licenses if available
+	if accountLicense.Data != nil && accountLicense.Data.AllModuleLicenses != nil {
+		logger.Debug("Processing module licenses",
+			"account_id", accountID,
+			"module_count", len(accountLicense.Data.AllModuleLicenses))
+
+		// Iterate through all module types in allModuleLicenses
+		for moduleType, licenses := range accountLicense.Data.AllModuleLicenses {
+			if len(licenses) > 0 {
+				// Use the first license to determine status
+				license := licenses[0]
+
+				// Check if the module license is ACTIVE
+				isValid := license.Status == "ACTIVE"
+
+				logger.Debug("Processing module license",
+					"module", moduleType,
+					"status", license.Status,
+					"is_valid", isValid,
+					"account_id", accountID)
+
+				if isValid {
+					licensedModules = append(licensedModules, moduleType)
+				}
+			}
+		}
+	} else {
+		logger.Warn("No module license data found in response", "account_id", accountID)
+	}
+
+	logger.Info("Licensed modules retrieved successfully",
+		"account_id", accountID,
+		"modules", licensedModules,
+		"module_count", len(licensedModules))
+
 	return licensedModules, nil
 }
 

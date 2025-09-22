@@ -76,7 +76,7 @@ var (
 				EnableLicense: viper.GetBool("enable_license"),
 				Transport:     transportType,
 				HTTP: struct {
-					Port int    `envconfig:"MCP_HTTP_PORT" default:"8080"`
+					Port int    `envconfig:"MCP_HTTP_PORT" default:"8081"`
 					Path string `envconfig:"MCP_HTTP_PATH" default:"/mcp"`
 				}{
 					Port: viper.GetInt("http_port"),
@@ -302,7 +302,7 @@ func init() {
 	rootCmd.PersistentFlags().Bool("debug", false, "Enable debug logging")
 	rootCmd.PersistentFlags().String("output-dir", "", "Directory where the tool writes output files (e.g., pipeline logs)")
 
-	httpServerCmd.PersistentFlags().Int("http-port", 8080, "HTTP server port (when transport is 'http')")
+	httpServerCmd.PersistentFlags().Int("http-port", 8081, "HTTP server port (when transport is 'http')")
 	httpServerCmd.PersistentFlags().String("http-path", "/mcp", "HTTP server path (when transport is 'http')")
 	httpServerCmd.Flags().String("pipeline-svc-base-url", "", "Base URL for pipeline service")
 	httpServerCmd.Flags().String("pipeline-svc-secret", "", "Secret for pipeline service")
@@ -547,17 +547,27 @@ func runHTTPServer(ctx context.Context, config config.Config) error {
 	httpServer := server.NewStreamableHTTPServer(harnessServer)
 
 	// Create middleware instances
-	toolFilteringMiddleware := middleware.NewHTTPToolFilteringMiddleware(slog.Default())
+	toolFilteringMiddleware := middleware.NewHTTPToolFilteringMiddleware(slog.Default(), &config)
 
 	// Build mux to attach to correct path
 	mux := http.NewServeMux()
-	// Chain the middlewares in the correct order: auth first, then tool filtering
-	// First wrap the httpServer with tool filtering middleware
-	filteredHandler := toolFilteringMiddleware.Wrap(httpServer)
-	// Then wrap the filtered handler with auth middleware
-	authWrappedHandler := auth.AuthMiddleware(&config, filteredHandler)
+
+	// Chain the middlewares in the correct order:
+	// 1. Tool filtering middleware (filters tools based on context)
+	// 2. Account middleware (extracts and adds scope to context)
+	// 3. Auth middleware (handles authentication)
+
+	// Create account middleware
+	accountMiddleware := middleware.HTTPAccountMiddleware(&config, slog.Default())
+
+	// Apply middleware chain: tool filtering -> account -> auth
+	// This ensures that all requests, including tools/list, go through the account middleware
+	toolFilteredHandler := toolFilteringMiddleware.Wrap(httpServer)
+	accountWrappedHandler := accountMiddleware(toolFilteredHandler)
+	filteredHandler := auth.AuthMiddleware(&config, accountWrappedHandler)
+
 	// Register the fully wrapped handler
-	mux.Handle(config.HTTP.Path, authWrappedHandler)
+	mux.Handle(config.HTTP.Path, filteredHandler)
 
 	address := fmt.Sprintf(":%d", config.HTTP.Port)
 	slog.Info("Harness MCP Server running on HTTP",

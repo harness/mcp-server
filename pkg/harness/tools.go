@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/harness/harness-mcp/client"
-	"github.com/harness/harness-mcp/client/license"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness/tools"
+	licenseFactory "github.com/harness/harness-mcp/pkg/license"
 	"github.com/harness/harness-mcp/pkg/modules"
 	"github.com/harness/harness-mcp/pkg/modules/utils"
 	"github.com/harness/harness-mcp/pkg/toolsets"
@@ -77,15 +77,9 @@ func initLicenseValidation(ctx context.Context, config *config.Config) (*License
 		IsValid:        false,
 	}
 
-	// Use the NGManager service for license validation
-	licenseClient, err := license.CreateCustomLicenseClientWithContext(
-		ctx,
-		config,
-		config.NgManagerBaseURL,
-		config.BaseURL,
-		"ng/api",
-		config.NgManagerSecret,
-	)
+	// Use the shared license client factory for consistent license client creation
+	licenseFactory := licenseFactory.NewClientFactory(config, slog.Default())
+	licenseClient, err := licenseFactory.CreateLicenseClient(ctx)
 	if err != nil {
 		return licenseInfo, fmt.Errorf("failed to create license client, error: %w", err)
 	}

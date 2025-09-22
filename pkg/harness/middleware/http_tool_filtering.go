@@ -10,24 +10,26 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/harness/harness-go-sdk/harness/nextgen"
+	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
 // HTTPToolFilteringMiddleware wraps HTTP handlers to provide dynamic tool filtering
 type HTTPToolFilteringMiddleware struct {
-	Logger             *slog.Logger
-	LicensesApiService *nextgen.LicensesApiService
+	Logger *slog.Logger
+	Config *config.Config // Harness configuration for license client
 }
 
 // NewHTTPToolFilteringMiddleware creates a new HTTP tool filtering middleware
-func NewHTTPToolFilteringMiddleware(logger *slog.Logger) *HTTPToolFilteringMiddleware {
+func NewHTTPToolFilteringMiddleware(logger *slog.Logger, config *config.Config) *HTTPToolFilteringMiddleware {
 	if logger == nil {
 		logger = slog.Default()
 	}
 
 	return &HTTPToolFilteringMiddleware{
 		Logger: logger.With("component", "http_tool_filtering_middleware"),
+		Config: config,
 	}
 }
 
@@ -154,6 +156,7 @@ func (m *HTTPToolFilteringMiddleware) enrichContextWithDynamicFiltering(ctx cont
 
 	// Extract account ID from existing context or headers
 	accountID := extractAccountIDFromHTTPRequest(r, logger)
+	//TODO: (remove)
 	if accountID == "" {
 		logger.Warn("No account ID found in request")
 		return ctx
@@ -171,7 +174,7 @@ func (m *HTTPToolFilteringMiddleware) enrichContextWithDynamicFiltering(ctx cont
 		"requested_modules", requestedModules)
 
 	// Get licensed modules for the account (placeholder - this should call the actual license validation)
-	licensedModules, err := getLicensedModulesForAccount(ctx, accountID, logger)
+	licensedModules, err := getLicensedModulesForAccount(ctx, accountID, m.Config, logger)
 	if err != nil {
 		logger.Error("Failed to get licensed modules", "error", err, "account_id", accountID)
 		return ctx
@@ -323,14 +326,10 @@ func extractRequestIDFromHTTPRequest(r *http.Request) string {
 }
 
 func extractAccountIDFromHTTPRequest(r *http.Request, logger *slog.Logger) string {
-	// Try to extract account ID from headers
-	if accountID := r.Header.Get("X-Harness-Account-ID"); accountID != "" {
-		logger.Debug("Account ID extracted from X-Harness-Account-ID header", "account_id", accountID)
-		return accountID
-	}
-	if accountID := r.Header.Get("X-Account-ID"); accountID != "" {
-		logger.Debug("Account ID extracted from X-Account-ID header", "account_id", accountID)
-		return accountID
+	scope, _ := common.GetScopeFromContext(r.Context())
+	if scope.AccountID != "" {
+		logger.Debug("Account ID extracted from scope context", "account_id", scope.AccountID)
+		return scope.AccountID
 	}
 
 	logger.Debug("No account ID found in request headers")
