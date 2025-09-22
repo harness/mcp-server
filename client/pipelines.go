@@ -3,7 +3,9 @@ package client
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strconv"
+	"strings"
 
 	"github.com/harness/harness-mcp/client/dto"
 )
@@ -147,18 +149,37 @@ func (p *PipelineService) ListExecutions(
 	return response, nil
 }
 
-// GetExecution retrieves details of a specific pipeline execution
-func (p *PipelineService) GetExecution(
+// PipelineExecutionResult contains the pipeline execution details and log keys
+type PipelineExecutionResult struct {
+	Execution dto.PipelineExecution `json:"execution,omitempty"`
+	LogKeys   dto.FinalLogKeys      `json:"logKeys,omitempty"`
+}
+
+// GetExecutionWithLogKeys retrieves details of a specific pipeline execution along with log keys
+func (p *PipelineService) GetExecutionWithLogKeys(
 	ctx context.Context,
 	scope dto.Scope,
 	planExecutionID string,
-) (*dto.Entity[dto.PipelineExecution], error) {
+	stageNodeID string,
+	childStageNodeID string,
+) (*dto.Entity[PipelineExecutionResult], error) {
 	path := fmt.Sprintf(pipelineExecutionGetPath, planExecutionID)
 
 	// Prepare query parameters
 	params := make(map[string]string)
 	addScope(scope, params)
 
+	// Add stageNodeId if provided
+	if stageNodeID != "" {
+		params["stageNodeId"] = stageNodeID
+	}
+
+	// Add childStageNodeId if provided
+	if childStageNodeID != "" {
+		params["childStageNodeId"] = childStageNodeID
+	}
+
+	slog.Info("Fetching execution details with log keys", "planExecutionID", planExecutionID, "stageNodeID", stageNodeID, "childStageNodeID", childStageNodeID)
 	// Initialize the response object with the new structure that matches the API response
 	response := &dto.Entity[dto.PipelineExecutionResponse]{}
 
@@ -167,14 +188,62 @@ func (p *PipelineService) GetExecution(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get execution details: %w", err)
 	}
+	// Extract log keys from the execution graph
+	logKeys := extractLogKeys(response.Data)
 
-	// Extract the execution details from the nested structure
-	result := &dto.Entity[dto.PipelineExecution]{
+	// Create the result with both execution details and log keys
+	result := &dto.Entity[PipelineExecutionResult]{
 		Status: response.Status,
-		Data:   response.Data.PipelineExecutionSummary,
+		Data: PipelineExecutionResult{
+			Execution: response.Data.PipelineExecutionSummary,
+			LogKeys:   logKeys,
+		},
+	}
+	slog.Info("Returning execution result with child graph", "childGraphExists", response.Data.ChildGraph.ExecutionGraph.NodeMap != nil, "childPipelineId", response.Data.ChildGraph.PipelineExecutionSummary.PipelineIdentifier)
+	return result, nil
+}
+
+// extractLogKeys extracts log keys from the execution graph
+func extractLogKeys(executionResponse dto.PipelineExecutionResponse) dto.FinalLogKeys {
+	logKeys := dto.FinalLogKeys{
+		StepLogBaseKeys: []string{},
 	}
 
-	return result, nil
+	// Process the main execution graph
+	if executionResponse.ExecutionGraph.NodeMap != nil {
+		processExecutionGraph(executionResponse.ExecutionGraph, &logKeys)
+	}
+
+	// Process child graphs if they exist
+	if executionResponse.ChildGraph.ExecutionGraph.NodeMap != nil {
+		processExecutionGraph(executionResponse.ChildGraph.ExecutionGraph, &logKeys)
+	}
+
+	return logKeys
+}
+
+// processExecutionGraph processes an execution graph to extract log keys
+func processExecutionGraph(graph dto.ExecutionGraph, logKeys *dto.FinalLogKeys) {
+	// Extract all log base keys for steps
+	stepLogBaseKeys := extractLogBaseKeysForSteps(graph.NodeMap)
+
+	// Store the step log base keys in the result
+	logKeys.StepLogBaseKeys = append(logKeys.StepLogBaseKeys, stepLogBaseKeys...)
+}
+
+// extractLogBaseKeysForSteps extracts an array of logbasekeys where node.BaseFqn contains "steps"
+func extractLogBaseKeysForSteps(nodes map[string]dto.ExecutionNode) []string {
+	var logBaseKeys []string
+
+	// Iterate through all nodes and find those containing "steps" in BaseFqn
+	for _, node := range nodes {
+		// Check if the BaseFqn contains "steps"
+		if strings.Contains(node.BaseFqn, ".steps.") && node.LogBaseKey != "" {
+			logBaseKeys = append(logBaseKeys, node.LogBaseKey)
+		}
+	}
+
+	return logBaseKeys
 }
 
 func (p *PipelineService) FetchExecutionURL(
@@ -187,6 +256,7 @@ func (p *PipelineService) FetchExecutionURL(
 	// Prepare query parameters
 	params := make(map[string]string)
 	addScope(scope, params)
+
 	params["pipelineIdentifier"] = pipelineID
 	params["planExecutionId"] = planExecutionID
 
@@ -256,6 +326,7 @@ func (p *PipelineService) GetInputSet(
 	// Prepare query parameters
 	params := make(map[string]string)
 	addScope(scope, params)
+
 	params["pipelineIdentifier"] = pipelineIdentifier
 
 	// Initialize the response object
