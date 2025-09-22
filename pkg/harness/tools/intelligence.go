@@ -8,10 +8,10 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -19,7 +19,8 @@ import (
 // FindSimilarTemplates creates a tool that allows finding similar templates based on provided description.
 func FindSimilarTemplates(config *config.Config, client *client.IntelligenceService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("intelligent_template_search",
-			mcp.WithDescription("Finds the most relevant templates based on a natural language description. "+
+			mcp.WithDescription("The tool is used to find most relevant entity template for any entity everytime a template is explicitly requested for any of pipeline/stage/step"+
+				"Finds the most relevant templates based on a natural language description. "+
 				"Searches across template identifiers, names, types, capabilities, and use cases to find the best matches. "+
 				"Returns templates ranked by similarity score with metadata including template IDs and organizational context. "+
 				"Ideal for discovering templates that fulfill specific requirements without knowing exact identifiers."),
@@ -32,8 +33,9 @@ func FindSimilarTemplates(config *config.Config, client *client.IntelligenceServ
 			),
 			mcp.WithNumber("count",
 				mcp.Description("Maximum number of similar templates to return"),
+				mcp.DefaultNumber(1),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			// Get required description parameter
@@ -56,7 +58,7 @@ func FindSimilarTemplates(config *config.Config, client *client.IntelligenceServ
 			count := int(countFloat)
 
 			// Try to fetch scope parameters (account_id, org_id, project_id) if provided
-			scope, err := FetchScope(config, request, false)
+			scope, err := common.FetchScope(config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -142,7 +144,7 @@ func AIDevOpsAgentTool(config *config.Config, client *client.IntelligenceService
 					"required": []string{"role", "content"},
 				}),
 			),
-			WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			// Get required parameters
@@ -184,10 +186,35 @@ func AIDevOpsAgentTool(config *config.Config, client *client.IntelligenceService
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			// Try to fetch scope parameters (account_id, org_id, project_id) if provided
-			scope, err := FetchScope(config, request, false)
+			harnessContextRaw, err := OptionalParam[map[string]interface{}](request, "harness_context")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// Try to fetch scope parameters (account_id, org_id, project_id) if provided
+			scope, err := common.FetchScope(config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// Create harness context from scope
+			harnessContext := &dto.HarnessContext{
+				AccountID: scope.AccountID,
+				OrgID:     scope.OrgID,
+				ProjectID: scope.ProjectID,
+			}
+
+			// Override with values from request if provided
+			if harnessContextRaw != nil {
+				if accountID, ok := harnessContextRaw["account_id"].(string); ok && accountID != "" {
+					harnessContext.AccountID = accountID
+				}
+				if orgID, ok := harnessContextRaw["org_id"].(string); ok && orgID != "" {
+					harnessContext.OrgID = orgID
+				}
+				if projectID, ok := harnessContextRaw["project_id"].(string); ok && projectID != "" {
+					harnessContext.ProjectID = projectID
+				}
 			}
 
 			// Process context items
@@ -209,13 +236,6 @@ func AIDevOpsAgentTool(config *config.Config, client *client.IntelligenceService
 			}
 			if interactionID == "" {
 				interactionID = uuid.New().String()
-			}
-
-			// Create harness context from scope
-			harnessContext := &dto.HarnessContext{
-				AccountID: scope.AccountID,
-				OrgID:     scope.OrgID,
-				ProjectID: scope.ProjectID,
 			}
 
 			// Create AI DevOps request

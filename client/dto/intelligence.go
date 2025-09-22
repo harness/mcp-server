@@ -23,6 +23,8 @@ type SimilaritySearchResponse struct {
 	Results []SimilaritySearchResult `json:"results"`
 }
 
+type TemplateData string
+
 // ContextType defines the type of context for AI DevOps agent
 type ContextType string
 
@@ -107,14 +109,14 @@ func (s *ServiceChatParameters) IsStreaming() bool {
 }
 
 type ServiceChatResponseIntelligence struct {
-    ConversationID    string                   `json:"conversation_id"`
-    ConversationRaw   string                   `json:"conversation_raw"`
-    InteractionID     string                   `json:"interaction_id,omitempty"`
-    CapabilitiesToRun []map[string]interface{} `json:"capabilities_to_run,omitempty"`
-    ModelUsage        map[string]interface{}   `json:"model_usage,omitempty"`
-    // Keep these for backward compatibility if needed elsewhere
-    Response string `json:"response,omitempty"`
-    Error    string `json:"error,omitempty"`
+	ConversationID    string                   `json:"conversation_id"`
+	ConversationRaw   string                   `json:"conversation_raw"`
+	InteractionID     string                   `json:"interaction_id,omitempty"`
+	CapabilitiesToRun []map[string]interface{} `json:"capabilities_to_run,omitempty"`
+	ModelUsage        map[string]interface{}   `json:"model_usage,omitempty"`
+	// Keep these for backward compatibility if needed elsewhere
+	Response string `json:"response,omitempty"`
+	Error    string `json:"error,omitempty"`
 }
 
 // ProgressUpdate represents progress information for streaming responses

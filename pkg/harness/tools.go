@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/harness/harness-mcp/client"
+	"github.com/harness/harness-mcp/client/license"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness/tools"
 	"github.com/harness/harness-mcp/pkg/modules"
@@ -77,7 +78,8 @@ func initLicenseValidation(ctx context.Context, config *config.Config) (*License
 	}
 
 	// Use the NGManager service for license validation
-	licenseClient, err := utils.CreateLicenseClient(
+	licenseClient, err := license.CreateCustomLicenseClientWithContext(
+		ctx,
 		config,
 		config.NgManagerBaseURL,
 		config.BaseURL,
@@ -88,7 +90,7 @@ func initLicenseValidation(ctx context.Context, config *config.Config) (*License
 		return licenseInfo, fmt.Errorf("failed to create license client, error: %w", err)
 	}
 
-	slog.Info("Successfully created license client", "baseURL", config.NgManagerBaseURL)
+	slog.Info("Successfully created license client")
 
 	// Call GetAccountLicensesWithResponse to get account licenses
 	// Make the API call
@@ -172,7 +174,7 @@ func InitToolsets(ctx context.Context, config *config.Config) (*toolsets.Toolset
 		enabledModules := getEnabledModules(configEnabledModules, licenseInfo)
 		// Register toolsets for enabled modules
 		for _, module := range enabledModules {
-			slog.Info("registering toolsets for", "modules: ", module.ID())
+			slog.Info("registering toolsets for", "modules", module.ID())
 			if err := module.RegisterToolsets(); err != nil {
 				return nil, fmt.Errorf("failed to register toolsets for module %s: %w", module.ID(), err)
 			}
@@ -232,6 +234,9 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 			if err := modules.RegisterConnectors(config, tsg); err != nil {
 				return err
 			}
+			if err := modules.RegisterDelegateTokens(config, tsg); err != nil {
+				return err
+			}
 			if err := modules.RegisterDashboards(config, tsg); err != nil {
 				return err
 			}
@@ -268,6 +273,9 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 			if err := modules.RegisterInfrastructure(config, tsg); err != nil {
 				return err
 			}
+			if err := modules.RegisterReleaseManagementTools(config, tsg); err != nil {
+				return err
+			}
 			if err := modules.RegisterACM(config, tsg); err != nil {
 				return err
 			}
@@ -275,6 +283,12 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 				return err
 			}
 			if err := modules.RegisterSecrets(config, tsg); err != nil {
+				return err
+			}
+			if err := modules.RegisterPromptTools(config, tsg); err != nil {
+				return err
+			}
+			if err := modules.RegisterSoftwareEngineeringInsights(config, tsg); err != nil {
 				return err
 			}
 		} else {
@@ -319,6 +333,10 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 					}
 				case "connectors":
 					if err := modules.RegisterConnectors(config, tsg); err != nil {
+						return err
+					}
+				case "delegateTokens":
+					if err := modules.RegisterDelegateTokens(config, tsg); err != nil {
 						return err
 					}
 				case "dashboards":
@@ -369,6 +387,10 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 					if err := modules.RegisterInfrastructure(config, tsg); err != nil {
 						return err
 					}
+				case "release_management":
+					if err := modules.RegisterReleaseManagementTools(config, tsg); err != nil {
+						return err
+					}
 				case "acm":
 					if err := modules.RegisterACM(config, tsg); err != nil {
 						return err
@@ -379,6 +401,14 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 					}
 				case "secrets":
 					if err := modules.RegisterSecrets(config, tsg); err != nil {
+						return err
+					}
+				case "prompts":
+					if err := modules.RegisterPromptTools(config, tsg); err != nil {
+						return err
+					}
+				case "sei":
+					if err := modules.RegisterSoftwareEngineeringInsights(config, tsg); err != nil {
 						return err
 					}
 				}

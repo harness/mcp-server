@@ -7,6 +7,7 @@ import (
 
 	"github.com/harness/harness-mcp/client/dbops"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -32,14 +33,15 @@ func GetDatabaseInfoTool(config *config.Config, dbopsClient *dbops.Client) (tool
 			mcp.WithString("db_schema_identifier",
 				mcp.Description(`Required. The unique identifier of the database schema for which you want to retrieve metadata.`),
 			),
-			WithScope(config, true),
+			common.WithScope(config, true),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			// Extract org and project from scope
-			scope, err := FetchScope(config, request, true)
+			scope, err := common.FetchScope(config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
 			orgID := scope.OrgID
 			projectID := scope.ProjectID
 

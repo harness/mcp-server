@@ -47,6 +47,14 @@ func FormatMMDDYYYYToUnixMillis(dateStr string) (int64, error) {
 	return t.UnixNano() / int64(time.Millisecond), nil
 }
 
+func FormatMMDDYYYYToHyphenYYYYMMDD(dateStr string) (string, error) {
+	t, err := time.Parse("01/02/2006", dateStr)
+	if err != nil {
+		return "", err
+	}
+	return t.Format("2006-01-02"), nil
+}
+
 func SafeIntToInt32(value int, valueIfOverflow int32) int32 {
 	if value > math.MaxInt32 || value < math.MinInt32 {
 		return valueIfOverflow

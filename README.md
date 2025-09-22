@@ -154,10 +154,26 @@ Toolset Name: `ccm`
 - `list_ccm_recommendations`: Returns a filterable list of cost-optimization recommendations in Harness Cloud Cost Management.
 - `list_ccm_recommendations_by_resource_type`: Returns a aggregated statistics of cloud cost optimization recommendations grouped by resource type within a given account in Harness Cloud Cost Management.
 - `get_ccm_recommendations_stats`: Returns overall statistics for cloud cost optimization recommendations within a given account in Harness Cloud Cost Management.
-- `update_ccm_recommendation_state`: Marks a recommendation as Applied/Open/Ignored in Harness Cloud Cost Management
-- `override_ccm_recommendation_savings`: Overrides savings for a recommendation in Harness Cloud Cost Management
-- `get_ccm_commitment_coverage`: Get commitment coverage information for an account in Harness Cloud Cost Management
-- `get_ccm_commitment_savings`: Get commitment savings information for an account in Harness Cloud Cost Management
+- `update_ccm_recommendation_state`: Marks a recommendation as Applied/Open/Ignored in Harness Cloud Cost Management.
+- `override_ccm_recommendation_savings`: Overrides savings for a recommendation in Harness Cloud Cost Management.
+- `create_jira_ticket_for_ccm_recommendation`: Creates a Jira ticket for a recommendation in Harness Cloud Cost Management.
+- `create_service_now_ticket_for_ccm_recommendation`: Creates a Service Now ticket for a recommendation in Harness Cloud Cost Management.
+- `get_ec2_recommendation_detail`: Returns ECS Recommendation details for the given Recommendation identifier.
+- `get_azure_vm_recommendation_detail`: Returns Azure Vm Recommendation details for the given Recommendation identifier.
+- `get_ecs_service_recommendation_detail`: Returns ECS Service Recommendation details for the given Recommendation identifier.
+- `get_node_pool_recommendation_detail`: Returns Node Pool Recommendation details for the given Recommendation identifier.
+- `get_workload_recommendation_detail`: Returns Workload Recommendation details for the given Recommendation identifier.
+- `list_jira_projects`: Returns a list of Jira projects available to create tickets for recommendations in Harness Cloud Cost Management.
+- `list_jira_issue_types`: Returns a list of Jira Issue types available to create tickets for recommendations in Harness Cloud Cost Management.
+- `get_ccm_anomalies_summary`: Returns a summary of cost anomalies for a specified account in Harness Cloud Cost Management.
+- `list_ccm_anomalies`: Returns a list of cost anomalies for a specified account in Harness Cloud Cost Management.
+- `list_ccm_ignored_anomalies`: Returns a list of ignored cost anomalies for a specified account in Harness Cloud Cost Management.
+- `get_ccm_anomalies_for_perspective`: Returns a anomalies for a perspective and account in Harness Cloud Cost Management.
+- `list_all_ccm_anomalies`: Returns a list of all cost anomalies for a specified account in Harness Cloud Cost Management.
+- `list_filter_values_ccm_anomalies`: Returns the list of distinct values for all the specified anomalies for a specified account in Harness Cloud Cost Management.
+- `report_ccm_anomaly_feedback`: Reports feedback for an anomaly and account in Harness Cloud Cost Management.
+- `get_ccm_commitment_coverage`: Get commitment coverage information for an account in Harness Cloud Cost Management.
+- `get_ccm_commitment_savings`: Get commitment savings information for an account in Harness Cloud Cost Management.
 - `get_ccm_commitment_utilisation`: Get commitment utilisation information for an account in Harness Cloud Cost Management broken down by Reserved Instances and Savings Plans in day wise granularity.
 - `get_ccm_estimated_savings`: Get estimated savings information for a cloud account in Harness Cloud Cost Management
 - `get_ccm_commitment_ec2_analysis`: Get AWS EC2 commitment analysis for an account in Harness Cloud Cost Management, including RI/SP commitment spend, utilization breakdown, current savings, estimated annualized savings, and ESR.
@@ -308,6 +324,27 @@ Add the server configuration to your Gemini config file at: `~/.gemini/settings.
   }
 }
 ```
+
+### Usage with Gemini CLI Extensions
+
+You will need to run the following command to install the Harness MCP as an extension:
+
+```sh
+gemini extensions install https://github.com/harness/mcp-server
+```
+
+Then you will need to set the environment variables for the extension:
+
+```sh
+export HARNESS_API_KEY="your_api_key_here"
+```
+
+Launch Gemini and start asking questions about Harness!
+
+```sh
+gemini
+```
+
 
 ### Claude Desktop Configuration
 
@@ -498,6 +535,104 @@ To use the Harness MCP Server with Amazon Q Developer CLI:
 
 [VS Code MCP Guide](https://code.visualstudio.com/docs/copilot/chat/mcp-servers)
 
+## Tool Usage Guide
+
+### Download Execution Logs
+
+#### Using Docker:
+
+We need to mount the logs directory to the container to download the logs.
+
+```bash
+docker run -d --name mcp-server -p 8080:8080 -v /path/to/logs/in/host:/path/in/container harness/mcp-server --output-dir=/path/in/container
+```
+This ensures that the logs downloaded to container are accessible in the host.
+
+Example:
+
+```bash
+docker run -d --name mcp-server -p 8080:8080 -v /Users/testuser/logs:/logs harness/mcp-server --output-dir=/logs
+```
+
+Sample MCP Configuration:
+
+```bash
+{
+  "mcpServers": {
+    "harness": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-v",
+        "/Users/testuser/logs:/logs",
+        "-e",
+        "HARNESS_MCP_USER_PAT",
+        "-e",
+        "HARNESS_DEFAULT_ORG_ID",
+        "-e",
+        "HARNESS_DEFAULT_PROJECT_ID",
+        "-e",
+        "HARNESS_MCP_BASE_URL",
+        "harness/mcp-server",
+        "stdio",
+        "--output-dir=/logs", #/path/in/container
+        "--toolsets=logs",
+        "--api-key="
+      ],
+      "env": {
+        "HARNESS_MCP_USER_PAT": "<YOUR_API_KEY>",
+        "HARNESS_DEFAULT_ORG_ID": "<YOUR_ORG_ID>",
+        "HARNESS_DEFAULT_PROJECT_ID": "<YOUR_PROJECT_ID>",
+        "HARNESS_MCP_BASE_URL": "<YOUR_BASE_URL>"
+      }
+    }
+  }
+}
+```
+
+Example Tool Input:
+
+```json
+{
+  "logs_directory": "pipeline-logs",
+  "org_id": "<YOUR_ORG_ID>",
+  "plan_execution_id": "<YOUR_PLAN_EXECUTION_ID>",
+  "project_id": "<YOUR_PROJECT_ID>"
+}
+```
+
+Sample Response:
+
+```json
+Files downloaded to : /Users/testuser/logs/pipeline-logs/logs-<YOUR_PLAN_EXECUTION_ID>/logs.zip
+```
+
+### Using Local Binary:
+
+Example configuration:
+
+```json
+"args": ["stdio", "--toolsets=logs", "--api-key=", "--output-dir=/Users/testuser/log-files"]
+```
+
+Example Tool Input:
+
+```json
+{
+  "logs_directory": "logs1",
+  "project_id": "<YOUR_PROJECT_ID>",
+  "plan_execution_id": "<YOUR_PLAN_EXECUTION_ID>",
+  "org_id": "<YOUR_ORG_ID>"
+}
+```
+
+Sample Response:
+
+```json
+Files downloaded to : /Users/testuser/log-files/logs1/logs-<YOUR_PLAN_EXECUTION_ID>/logs.zip
+```
 
 ## Development
 
@@ -514,6 +649,7 @@ The Harness MCP Server supports the following command line arguments:
 - `--version`: Show version information
 - `--help`: Show help message
 - `--base-url`: Base URL for Harness (default: "https://app.harness.io")
+- `--output-dir`: Directory where the tool writes output files (e.g., pipeline logs)
 
 
 ### Environment Variables
@@ -532,6 +668,52 @@ Environment variables are prefixed with `HARNESS_`:
 ### Authentication
 
 The server uses a Harness API key for authentication. This can be set via the `HARNESS_API_KEY` environment variable.
+
+### Using the create_follow_up_prompt Tool to generate actionable prompt events
+
+The `create_follow_up_prompt` tool allows you to generate actionable prompt events that appear as buttons in the UI. These buttons can navigate users to specific pages within the Harness platform.
+
+Here's how to use it:
+
+```json
+{
+  "actions": [
+    {
+      "text": "Button Text",
+      "action": "OPEN_ENTITY_NEW_TAB",
+      "data": {
+        "pageName": "PAGE_NAME",
+        "metadata": {
+          "<KEY>": "<VALUE>"
+        }
+      }
+    }
+  ]
+}
+```
+
+#### Parameters:
+
+- `text`: The text to display on the button
+- `action`: The action to perform (currently supports `OPEN_ENTITY_NEW_TAB`)
+- `data`: Contains navigation information
+  - `pageName`: The page to navigate to (e.g., `ExecutionPipelineView`, `PipelineStudio`, etc.)
+  - `metadata`: Key-value pairs needed for the target page (e.g., `{"executionId": "abc123", "pipelineId": "xyz789"}`)
+
+#### Example:
+
+```go
+actionData := `{"actions": [{"text": "View Pipeline", "action": "OPEN_ENTITY_NEW_TAB", "data": {"pageName": "PipelineStudio", "metadata": {"id": "pipeline-id"}}}]}`
+```
+
+#### Alternative: Quick Prompts
+
+If you provide an array of strings instead of the actions object, these strings will be added to the message box as quick prompts that users can click on:
+
+```go
+// Add quick prompts to the message box
+quickPrompts := `["Show me pipeline details", "List recent executions", "Analyze performance"]`
+```
 
 ## Notes for Local Testing
 

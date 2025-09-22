@@ -57,6 +57,7 @@ func (m *CoreModule) Toolsets() []string {
 		"chatbot",
 		"settings",
 		"secrets",
+		"prompts",
 	}
 }
 
@@ -72,6 +73,11 @@ func (m *CoreModule) RegisterToolsets() error {
 			}
 		case "connectors":
 			err := RegisterConnectors(m.config, m.tsg)
+			if err != nil {
+				return err
+			}
+		case "delegateTokens":
+			err := RegisterDelegateTokens(m.config, m.tsg)
 			if err != nil {
 				return err
 			}
@@ -122,6 +128,11 @@ func (m *CoreModule) RegisterToolsets() error {
 			}
 		case "secrets":
 			err := RegisterSecrets(m.config, m.tsg)
+			if err != nil {
+				return err
+			}
+		case "prompts":
+			err := RegisterPromptTools(m.config, m.tsg)
 			if err != nil {
 				return err
 			}
@@ -187,6 +198,7 @@ func RegisterPipelines(config *config.Config, tsg *toolsets.ToolsetGroup) error 
 			toolsets.NewServerTool(tools.ListInputSetsTool(config, pipelineClient)),
 			toolsets.NewServerTool(tools.GetPipelineSummaryTool(config, pipelineClient)),
 			toolsets.NewServerTool(tools.ListTriggersTool(config, pipelineClient)),
+			toolsets.NewServerTool(tools.CreateFollowUpPromptTool(config, pipelineClient)),
 		)
 
 	// Add toolset to the group
@@ -211,6 +223,28 @@ func RegisterConnectors(config *config.Config, tsg *toolsets.ToolsetGroup) error
 		)
 
 	tsg.AddToolset(connectors)
+	return nil
+}
+
+// RegisterDelegateTokens registers the DelegateTokens toolset
+func RegisterDelegateTokens(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	delegateTokenClient, err := utils.CreateServiceClient(config, config.NgManagerBaseURL, config.BaseURL, "ng/api", config.NgManagerSecret)
+	if err != nil {
+		return fmt.Errorf("failed to create client for DelegateTokens: %w", err)
+	}
+	delegateTokenServiceClient := &client.DelegateTokenClient{Client: delegateTokenClient}
+
+	// Create the delegateTokens toolset
+	delegateTokens := toolsets.NewToolset("delegateTokens", "Harness DelegateTokens related tools").
+		AddReadTools(
+			toolsets.NewServerTool(tools.ListDelegateTokensTool(config, delegateTokenServiceClient)),
+			toolsets.NewServerTool(tools.GetDelegateTokenTool(config, delegateTokenServiceClient)),
+			toolsets.NewServerTool(tools.CreateDelegateTokenTool(config, delegateTokenServiceClient)),
+			toolsets.NewServerTool(tools.RevokeDelegateTokenTool(config, delegateTokenServiceClient)),
+			toolsets.NewServerTool(tools.DeleteDelegateTokenTool(config, delegateTokenServiceClient)),
+		)
+
+	tsg.AddToolset(delegateTokens)
 	return nil
 }
 
@@ -309,7 +343,7 @@ func RegisterLogs(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 // RegisterTemplates registers the templates toolset
 func RegisterTemplates(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for templates
-	baseURL := utils.BuildServiceURL(config, config.TemplateSvcBaseURL, config.BaseURL, "")
+	baseURL := utils.BuildServiceURL(config, config.TemplateSvcBaseURL, config.BaseURL, "template")
 	secret := config.TemplateSvcSecret
 
 	// Create base client for templates
@@ -429,7 +463,6 @@ func RegisterChatbot(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	return nil
 }
 
-// RegisterSettings registers the settings toolset
 func RegisterSettings(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for settings
 	baseURL := utils.BuildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng/api")
@@ -476,5 +509,18 @@ func RegisterSecrets(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 	// Add toolset to the group
 	tsg.AddToolset(secrets)
+	return nil
+}
+
+func RegisterPromptTools(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Create the prompt toolset with both tools
+	prompt := toolsets.NewToolset("prompt", "Harness MCP Prompts tools").
+		AddReadTools(
+			toolsets.NewServerTool(tools.GetPromptTool(config)),
+			toolsets.NewServerTool(tools.ListPromptsTool(config)),
+		)
+
+	// Add toolset to the group
+	tsg.AddToolset(prompt)
 	return nil
 }
