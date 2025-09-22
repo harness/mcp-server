@@ -121,7 +121,7 @@ var (
 				DBOpsSvcSecret:          viper.GetString("dbops_svc_secret"),
 				RBACSvcBaseURL:          viper.GetString("rbac_svc_base_url"),
 				RBACSvcSecret:           viper.GetString("rbac_svc_secret"),
-				OutputDir:     viper.GetString("output_dir"),
+				OutputDir:               viper.GetString("output_dir"),
 			}
 
 			return runHTTPServer(ctx, cfg)
