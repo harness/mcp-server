@@ -173,8 +173,9 @@ func (m *HTTPToolFilteringMiddleware) enrichContextWithDynamicFiltering(ctx cont
 		"account_id", accountID,
 		"requested_modules", requestedModules)
 
-	// Get licensed modules for the account (placeholder - this should call the actual license validation)
 	licensedModules, err := getLicensedModulesForAccount(ctx, accountID, m.Config, logger)
+	//TODO: (remove)
+	licensedModules = []string{"CORE"}
 	if err != nil {
 		logger.Error("Failed to get licensed modules", "error", err, "account_id", accountID)
 		return ctx
@@ -185,7 +186,6 @@ func (m *HTTPToolFilteringMiddleware) enrichContextWithDynamicFiltering(ctx cont
 
 	// Store account ID, requested modules, and computed toolsets in context
 	// This allows the tool handler middleware to access all necessary information
-	ctx = context.WithValue(ctx, accountIDContextKey, accountID)
 	ctx = context.WithValue(ctx, requestedModulesContextKey, requestedModules)
 	ctx = context.WithValue(ctx, allowedToolsetsContextKey, allowedToolsets)
 
@@ -202,11 +202,13 @@ func (m *HTTPToolFilteringMiddleware) filterToolsListResponse(responseBody []byt
 		"response_size", len(responseBody),
 		"allowed_toolsets", allowedToolsets)
 
-	// Parse the JSON-RPC response
+	// Parse the JSON-RPC response with complete structure
 	var jsonRPCResponse struct {
-		ID     interface{} `json:"id"`
-		Result struct {
-			Tools []mcp.Tool `json:"tools"`
+		JSONRPC string      `json:"jsonrpc"`
+		ID      interface{} `json:"id"`
+		Result  struct {
+			Tools      []mcp.Tool `json:"tools"`
+			NextCursor *string    `json:"nextCursor,omitempty"`
 		} `json:"result"`
 		Error interface{} `json:"error,omitempty"`
 	}
@@ -216,8 +218,10 @@ func (m *HTTPToolFilteringMiddleware) filterToolsListResponse(responseBody []byt
 	}
 
 	logger.Debug("Parsed JSON-RPC response",
+		"jsonrpc", jsonRPCResponse.JSONRPC,
 		"total_tools", len(jsonRPCResponse.Result.Tools),
-		"has_error", jsonRPCResponse.Error != nil)
+		"has_error", jsonRPCResponse.Error != nil,
+		"has_next_cursor", jsonRPCResponse.Result.NextCursor != nil)
 
 	// If there's an error in the response, return as-is
 	if jsonRPCResponse.Error != nil {
@@ -228,18 +232,23 @@ func (m *HTTPToolFilteringMiddleware) filterToolsListResponse(responseBody []byt
 	// Filter the tools
 	filteredTools := m.filterToolsByToolsets(jsonRPCResponse.Result.Tools, allowedToolsets, logger)
 
-	// Create the filtered response
+	// Create the filtered response with complete JSON-RPC 2.0 structure
 	filteredResponse := struct {
-		ID     interface{} `json:"id"`
-		Result struct {
-			Tools []mcp.Tool `json:"tools"`
+		JSONRPC string      `json:"jsonrpc"`
+		ID      interface{} `json:"id"`
+		Result  struct {
+			Tools      []mcp.Tool `json:"tools"`
+			NextCursor *string    `json:"nextCursor,omitempty"`
 		} `json:"result"`
 	}{
-		ID: jsonRPCResponse.ID,
+		JSONRPC: "2.0", // Ensure JSON-RPC 2.0 compliance
+		ID:      jsonRPCResponse.ID,
 		Result: struct {
-			Tools []mcp.Tool `json:"tools"`
+			Tools      []mcp.Tool `json:"tools"`
+			NextCursor *string    `json:"nextCursor,omitempty"`
 		}{
-			Tools: filteredTools,
+			Tools:      filteredTools,
+			NextCursor: jsonRPCResponse.Result.NextCursor, // Preserve nextCursor if present
 		},
 	}
 
@@ -252,7 +261,8 @@ func (m *HTTPToolFilteringMiddleware) filterToolsListResponse(responseBody []byt
 	logger.Info("Tools/list response filtered",
 		"original_count", len(jsonRPCResponse.Result.Tools),
 		"filtered_count", len(filteredTools),
-		"allowed_toolsets", allowedToolsets)
+		"allowed_toolsets", allowedToolsets,
+		"preserved_next_cursor", jsonRPCResponse.Result.NextCursor != nil)
 
 	return filteredResponseBody, nil
 }
