@@ -576,7 +576,7 @@ func runHTTPServer(ctx context.Context, config config.Config) error {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			errChan <- err
 		}
-
+	}()
 
 	// Wait for shutdown signal
 	select {
