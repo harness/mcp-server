@@ -14,6 +14,7 @@ import (
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness"
 	"github.com/harness/harness-mcp/pkg/harness/auth"
+	"github.com/harness/harness-mcp/pkg/harness/middleware"
 	"github.com/harness/harness-mcp/pkg/harness/prompts"
 	"github.com/harness/harness-mcp/pkg/modules"
 	"github.com/harness/harness-mcp/pkg/types/enum"
@@ -545,12 +546,18 @@ func runHTTPServer(ctx context.Context, config config.Config) error {
 	// Create HTTP server
 	httpServer := server.NewStreamableHTTPServer(harnessServer)
 
-	// Wrap with auth middleware
-	authHandler := auth.AuthMiddleware(&config, httpServer)
+	// Create middleware instances
+	toolFilteringMiddleware := middleware.NewHTTPToolFilteringMiddleware(slog.Default())
 
 	// Build mux to attach to correct path
 	mux := http.NewServeMux()
-	mux.Handle(config.HTTP.Path, authHandler)
+	// Chain the middlewares in the correct order: auth first, then tool filtering
+	// First wrap the httpServer with tool filtering middleware
+	filteredHandler := toolFilteringMiddleware.Wrap(httpServer)
+	// Then wrap the filtered handler with auth middleware
+	authWrappedHandler := auth.AuthMiddleware(&config, filteredHandler)
+	// Register the fully wrapped handler
+	mux.Handle(config.HTTP.Path, authWrappedHandler)
 
 	address := fmt.Sprintf(":%d", config.HTTP.Port)
 	slog.Info("Harness MCP Server running on HTTP",
@@ -569,7 +576,7 @@ func runHTTPServer(ctx context.Context, config config.Config) error {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			errChan <- err
 		}
-	}()
+
 
 	// Wait for shutdown signal
 	select {
