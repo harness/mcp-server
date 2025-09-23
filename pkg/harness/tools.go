@@ -145,8 +145,9 @@ func initLicenseValidation(ctx context.Context, config *config.Config) (*License
 
 // InitToolsets initializes and returns the toolset groups
 func InitToolsets(ctx context.Context, config *config.Config) (*toolsets.ToolsetGroup, error) {
-	// Create a toolset group
-	tsg := toolsets.NewToolsetGroup(config.ReadOnly)
+	// Create a toolset group that automatically registers with the main tracker
+	artg := toolsets.CreateAutoRegisteringGroup(config.ReadOnly)
+	tsg := artg.ToolsetGroup
 
 	// Initialize license validation if enabled
 	var licenseInfo *LicenseInfo
@@ -159,7 +160,7 @@ func InitToolsets(ctx context.Context, config *config.Config) (*toolsets.Toolset
 		}
 
 		// Create a module registry
-		registry := modules.NewModuleRegistry(config, tsg)
+		registry := modules.NewModuleRegistry(config, artg.ToolsetGroup)
 
 		// Get all modules that are enabled based on configuration
 		configEnabledModules := registry.GetEnabledModules()
@@ -174,13 +175,13 @@ func InitToolsets(ctx context.Context, config *config.Config) (*toolsets.Toolset
 			}
 
 			// Enable toolsets for this module
-			if err := module.EnableToolsets(tsg); err != nil {
+			if err := module.EnableToolsets(artg.ToolsetGroup); err != nil {
 				return nil, fmt.Errorf("failed to enable toolsets for module %s: %w", module.ID(), err)
 			}
 		}
 	} else {
 		// License validation is disabled, use legacy toolset registration
-		if err := initLegacyToolsets(config, tsg); err != nil {
+		if err := initLegacyToolsets(config, artg); err != nil {
 			return nil, err
 		}
 	}
@@ -188,11 +189,11 @@ func InitToolsets(ctx context.Context, config *config.Config) (*toolsets.Toolset
 	return tsg, nil
 }
 
-func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+func initLegacyToolsets(config *config.Config, artg *toolsets.AutoRegisteringToolGroup) error {
 	// Check if specific toolsets are enabled
 	if len(config.Toolsets) == 0 {
 		// Only register default toolset
-		if err := RegisterDefault(config, tsg); err != nil {
+		if err := RegisterDefault(config, artg); err != nil {
 			return err
 		}
 	} else {
@@ -201,88 +202,88 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 
 		if allToolsets {
 			// Register all available toolsets
-			if err := modules.RegisterPipelines(config, tsg); err != nil {
+			if err := modules.RegisterPipelines(config, artg.ToolsetGroup); err != nil {
 				return err
 			}
-			if err := modules.RegisterChatbot(config, tsg); err != nil {
+			if err := modules.RegisterChatbot(config, artg.ToolsetGroup); err != nil {
 				return err
 			}
-			if err := modules.RegisterPullRequests(config, tsg); err != nil {
+			if err := modules.RegisterPullRequests(config, artg.ToolsetGroup); err != nil {
 				return err
 			}
-			if err := modules.RegisterRepositories(config, tsg); err != nil {
+			if err := modules.RegisterRepositories(config, artg.ToolsetGroup); err != nil {
 				return err
 			}
-			if err := modules.RegisterRegistries(config, tsg); err != nil {
+			if err := modules.RegisterRegistries(config, artg.ToolsetGroup); err != nil {
 				return err
 			}
-			if err := modules.RegisterLogs(config, tsg); err != nil {
+			if err := modules.RegisterLogs(config, artg.ToolsetGroup); err != nil {
 				return err
 			}
-			if err := modules.RegisterCloudCostManagement(config, tsg); err != nil {
+			if err := modules.RegisterCloudCostManagement(config, artg.ToolsetGroup); err != nil {
 				return err
 			}
-			if err := modules.RegisterServices(config, tsg); err != nil {
+			if err := modules.RegisterServices(config, artg.ToolsetGroup); err != nil {
 				return err
 			}
-			if err := modules.RegisterConnectors(config, tsg); err != nil {
+			if err := modules.RegisterConnectors(config, artg.ToolsetGroup); err != nil {
 				return err
 			}
-			if err := modules.RegisterDelegateTokens(config, tsg); err != nil {
+			if err := modules.RegisterDelegateTokens(config, artg.ToolsetGroup); err != nil {
 				return err
 			}
-			if err := modules.RegisterDashboards(config, tsg); err != nil {
+			if err := modules.RegisterDashboards(config, artg.ToolsetGroup); err != nil {
 				return err
 			}
-			if err := modules.RegisterAudit(config, tsg); err != nil {
+			if err := modules.RegisterAudit(config, artg.ToolsetGroup); err != nil {
 				return err
 			}
-			if err := modules.RegisterTemplates(config, tsg); err != nil {
+			if err := modules.RegisterTemplates(config, artg.ToolsetGroup); err != nil {
 				return err
 			}
-			if err := modules.RegisterIntelligence(config, tsg); err != nil {
+			if err := modules.RegisterIntelligence(config, artg.ToolsetGroup); err != nil {
 				return err
 			}
-			if err := modules.RegisterDbops(config, tsg); err != nil {
+			if err := modules.RegisterDbops(config, artg.ToolsetGroup); err != nil {
 				return err
 			}
-			if err := modules.RegisterAccessControl(config, tsg); err != nil {
+			if err := modules.RegisterAccessControl(config, artg.ToolsetGroup); err != nil {
 				return err
 			}
-			if err := modules.RegisterSCS(config, tsg); err != nil {
+			if err := modules.RegisterSCS(config, artg.ToolsetGroup); err != nil {
 				return err
 			}
-			if err := modules.RegisterSTO(config, tsg); err != nil {
+			if err := modules.RegisterSTO(config, artg.ToolsetGroup); err != nil {
 				return err
 			}
-			if err := modules.RegisterInternalDeveloperPortal(config, tsg); err != nil {
+			if err := modules.RegisterInternalDeveloperPortal(config, artg.ToolsetGroup); err != nil {
 				return err
 			}
-			if err := modules.RegisterChaos(config, tsg); err != nil {
+			if err := modules.RegisterChaos(config, artg.ToolsetGroup); err != nil {
 				return err
 			}
-			if err := modules.RegisterEnvironments(config, tsg); err != nil {
+			if err := modules.RegisterEnvironments(config, artg.ToolsetGroup); err != nil {
 				return err
 			}
-			if err := modules.RegisterInfrastructure(config, tsg); err != nil {
+			if err := modules.RegisterInfrastructure(config, artg.ToolsetGroup); err != nil {
 				return err
 			}
-			if err := modules.RegisterReleaseManagementTools(config, tsg); err != nil {
+			if err := modules.RegisterReleaseManagementTools(config, artg.ToolsetGroup); err != nil {
 				return err
 			}
-			if err := modules.RegisterACM(config, tsg); err != nil {
+			if err := modules.RegisterACM(config, artg.ToolsetGroup); err != nil {
 				return err
 			}
-			if err := modules.RegisterSettings(config, tsg); err != nil {
+			if err := modules.RegisterSettings(config, artg.ToolsetGroup); err != nil {
 				return err
 			}
-			if err := modules.RegisterSecrets(config, tsg); err != nil {
+			if err := modules.RegisterSecrets(config, artg.ToolsetGroup); err != nil {
 				return err
 			}
-			if err := modules.RegisterPromptTools(config, tsg); err != nil {
+			if err := modules.RegisterPromptTools(config, artg.ToolsetGroup); err != nil {
 				return err
 			}
-			if err := modules.RegisterSoftwareEngineeringInsights(config, tsg); err != nil {
+			if err := modules.RegisterSoftwareEngineeringInsights(config, artg.ToolsetGroup); err != nil {
 				return err
 			}
 		} else {
@@ -290,119 +291,119 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 			for _, toolset := range config.Toolsets {
 				switch toolset {
 				case "default":
-					if err := RegisterDefault(config, tsg); err != nil {
+					if err := RegisterDefault(config, artg); err != nil {
 						return err
 					}
 				case "pipelines":
-					if err := modules.RegisterPipelines(config, tsg); err != nil {
+					if err := modules.RegisterPipelines(config, artg.ToolsetGroup); err != nil {
 						return err
 					}
 				case "chatbot":
-					if err := modules.RegisterChatbot(config, tsg); err != nil {
+					if err := modules.RegisterChatbot(config, artg.ToolsetGroup); err != nil {
 						return err
 					}
 				case "pullrequests":
-					if err := modules.RegisterPullRequests(config, tsg); err != nil {
+					if err := modules.RegisterPullRequests(config, artg.ToolsetGroup); err != nil {
 						return err
 					}
 				case "repositories":
-					if err := modules.RegisterRepositories(config, tsg); err != nil {
+					if err := modules.RegisterRepositories(config, artg.ToolsetGroup); err != nil {
 						return err
 					}
 				case "registries":
-					if err := modules.RegisterRegistries(config, tsg); err != nil {
+					if err := modules.RegisterRegistries(config, artg.ToolsetGroup); err != nil {
 						return err
 					}
 				case "logs":
-					if err := modules.RegisterLogs(config, tsg); err != nil {
+					if err := modules.RegisterLogs(config, artg.ToolsetGroup); err != nil {
 						return err
 					}
 				case "ccm":
-					if err := modules.RegisterCloudCostManagement(config, tsg); err != nil {
+					if err := modules.RegisterCloudCostManagement(config, artg.ToolsetGroup); err != nil {
 						return err
 					}
 				case "services":
-					if err := modules.RegisterServices(config, tsg); err != nil {
+					if err := modules.RegisterServices(config, artg.ToolsetGroup); err != nil {
 						return err
 					}
 				case "connectors":
-					if err := modules.RegisterConnectors(config, tsg); err != nil {
+					if err := modules.RegisterConnectors(config, artg.ToolsetGroup); err != nil {
 						return err
 					}
 				case "delegateTokens":
-					if err := modules.RegisterDelegateTokens(config, tsg); err != nil {
+					if err := modules.RegisterDelegateTokens(config, artg.ToolsetGroup); err != nil {
 						return err
 					}
 				case "dashboards":
-					if err := modules.RegisterDashboards(config, tsg); err != nil {
+					if err := modules.RegisterDashboards(config, artg.ToolsetGroup); err != nil {
 						return err
 					}
 				case "audit":
-					if err := modules.RegisterAudit(config, tsg); err != nil {
+					if err := modules.RegisterAudit(config, artg.ToolsetGroup); err != nil {
 						return err
 					}
 				case "templates":
-					if err := modules.RegisterTemplates(config, tsg); err != nil {
+					if err := modules.RegisterTemplates(config, artg.ToolsetGroup); err != nil {
 						return err
 					}
 				case "intelligence":
-					if err := modules.RegisterIntelligence(config, tsg); err != nil {
+					if err := modules.RegisterIntelligence(config, artg.ToolsetGroup); err != nil {
 						return err
 					}
 				case "dbops":
-					if err := modules.RegisterDbops(config, tsg); err != nil {
+					if err := modules.RegisterDbops(config, artg.ToolsetGroup); err != nil {
 						return err
 					}
 				case "access_control":
-					if err := modules.RegisterAccessControl(config, tsg); err != nil {
+					if err := modules.RegisterAccessControl(config, artg.ToolsetGroup); err != nil {
 						return err
 					}
 				case "scs":
-					if err := modules.RegisterSCS(config, tsg); err != nil {
+					if err := modules.RegisterSCS(config, artg.ToolsetGroup); err != nil {
 						return err
 					}
 				case "sto":
-					if err := modules.RegisterSTO(config, tsg); err != nil {
+					if err := modules.RegisterSTO(config, artg.ToolsetGroup); err != nil {
 						return err
 					}
 				case "idp":
-					if err := modules.RegisterInternalDeveloperPortal(config, tsg); err != nil {
+					if err := modules.RegisterInternalDeveloperPortal(config, artg.ToolsetGroup); err != nil {
 						return err
 					}
 				case "chaos":
-					if err := modules.RegisterChaos(config, tsg); err != nil {
+					if err := modules.RegisterChaos(config, artg.ToolsetGroup); err != nil {
 						return err
 					}
 				case "environments":
-					if err := modules.RegisterEnvironments(config, tsg); err != nil {
+					if err := modules.RegisterEnvironments(config, artg.ToolsetGroup); err != nil {
 						return err
 					}
 				case "infrastructure":
-					if err := modules.RegisterInfrastructure(config, tsg); err != nil {
+					if err := modules.RegisterInfrastructure(config, artg.ToolsetGroup); err != nil {
 						return err
 					}
 				case "release_management":
-					if err := modules.RegisterReleaseManagementTools(config, tsg); err != nil {
+					if err := modules.RegisterReleaseManagementTools(config, artg.ToolsetGroup); err != nil {
 						return err
 					}
 				case "acm":
-					if err := modules.RegisterACM(config, tsg); err != nil {
+					if err := modules.RegisterACM(config, artg.ToolsetGroup); err != nil {
 						return err
 					}
 				case "settings":
-					if err := modules.RegisterSettings(config, tsg); err != nil {
+					if err := modules.RegisterSettings(config, artg.ToolsetGroup); err != nil {
 						return err
 					}
 				case "secrets":
-					if err := modules.RegisterSecrets(config, tsg); err != nil {
+					if err := modules.RegisterSecrets(config, artg.ToolsetGroup); err != nil {
 						return err
 					}
 				case "prompts":
-					if err := modules.RegisterPromptTools(config, tsg); err != nil {
+					if err := modules.RegisterPromptTools(config, artg.ToolsetGroup); err != nil {
 						return err
 					}
 				case "sei":
-					if err := modules.RegisterSoftwareEngineeringInsights(config, tsg); err != nil {
+					if err := modules.RegisterSoftwareEngineeringInsights(config, artg.ToolsetGroup); err != nil {
 						return err
 					}
 				}
@@ -410,14 +411,14 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 		}
 	}
 	// Enable requested toolsets
-	if err := tsg.EnableToolsets(config.Toolsets); err != nil {
+	if err := artg.EnableToolsets(config.Toolsets); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func RegisterDefault(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+func RegisterDefault(config *config.Config, artg *toolsets.AutoRegisteringToolGroup) error {
 	// Create pipeline service client
 	pipelineClient, err := utils.CreateServiceClient(config, config.PipelineSvcBaseURL, config.BaseURL, "pipeline", config.PipelineSvcSecret)
 	if err != nil {
@@ -460,6 +461,6 @@ func RegisterDefault(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	)
 
 	// Add the default toolset to the group
-	tsg.AddToolset(defaultToolset)
+	artg.AddToolset(defaultToolset)
 	return nil
 }

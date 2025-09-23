@@ -11,6 +11,7 @@ import (
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness/common"
 	licenseFactory "github.com/harness/harness-mcp/pkg/license"
+	"github.com/harness/harness-mcp/pkg/modules"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -79,6 +80,13 @@ type DynamicToolFilteringConfig struct {
 
 // WithDynamicToolFiltering creates middleware that filters tools based on request-scoped modules
 func WithDynamicToolFiltering(config *DynamicToolFilteringConfig) server.ToolHandlerMiddleware {
+	// Set defaults
+	if config.HeaderExtractor == nil {
+		config.HeaderExtractor = &DefaultHeaderExtractor{}
+	}
+	if config.CacheTTL == 0 {
+		config.CacheTTL = 5 * time.Minute
+	}
 	if config.Cache == nil {
 		config.Cache = NewModuleIntersectionCache(config.CacheTTL)
 	}
@@ -139,7 +147,7 @@ func WithDynamicToolFiltering(config *DynamicToolFilteringConfig) server.ToolHan
 			}
 
 			// Step 7: Check if the requested tool is allowed
-			toolset := determineToolsetForTool(request.Params.Name, requestLogger)
+			toolset := findToolGroup(request.Params.Name, requestLogger)
 			allowedToolsets, _ := GetAllowedToolsetsFromContext(ctx)
 
 			if !IsToolsetAllowed(toolset, allowedToolsets) {
@@ -217,7 +225,8 @@ func getLicensedModulesForAccount(ctx context.Context, accountID string, config 
 	if err != nil {
 		logger.Error("Failed to create license client", "error", err, "account_id", accountID)
 		// Fallback to CORE only on license client creation failure
-		return []string{"CORE"}, nil
+		//TODO: Set to CORE
+		return []string{"CCM"}, nil
 	}
 
 	// Call GetAccountLicenses API
@@ -343,125 +352,19 @@ func computeAllowedToolsetsWithMetrics(requestedModules, licensedModules []strin
 }
 
 func moduleToToolsets(module string) []string {
-	moduleToolsetMap := map[string][]string{
-		"CORE": {"pipelines", "connectors", "dashboards", "audit"},
-		"CI":   {"ci"},
-		"CD":   {"cd"},
-		"CCM":  {"ccm"},
-		"STO":  {"sto"},
-		"FF":   {"ff"},
-		"CE":   {"ce"},
-		"SRM":  {"srm"},
-		"SEI":  {"sei"},
-		"IACM": {"iacm"},
-		"CET":  {"cet"},
-		"SSCA": {"ssca"},
-	}
+	logger := slog.Default().With("component", "moduleToToolsets", "module", module)
+	// Get the global registry
+	registry := modules.GetGlobalRegistry()
 
-	if toolsets, exists := moduleToolsetMap[module]; exists {
+	// If registry is available, use it to get toolsets for the module
+	if registry != nil {
+		toolsets := registry.GetToolsetsForModule(module)
+		logger.Debug("Retrieved toolsets from registry", "toolsets", toolsets)
 		return toolsets
 	}
 
+	logger.Warn("No toolsets found for module in fallback mapping")
 	return []string{}
-}
-
-func determineToolsetForTool(toolName string, logger *slog.Logger) string {
-	// Tool name to toolset mapping
-	toolToToolsetMap := map[string]string{
-		// CORE toolset tools
-		"list_pipelines":           "pipelines",
-		"get_pipeline":             "pipelines",
-		"create_pipeline":          "pipelines",
-		"update_pipeline":          "pipelines",
-		"delete_pipeline":          "pipelines",
-		"execute_pipeline":         "pipelines",
-		"list_pipeline_executions": "pipelines",
-		"get_pipeline_execution":   "pipelines",
-		"stop_pipeline_execution":  "pipelines",
-		"retry_pipeline_execution": "pipelines",
-		"list_connectors":          "connectors",
-		"get_connector_details":    "connectors",
-		"list_connector_catalogue": "connectors",
-		"create_connector":         "connectors",
-		"update_connector":         "connectors",
-		"delete_connector":         "connectors",
-		"test_connector":           "connectors",
-		"list_dashboards":          "dashboards",
-		"get_dashboard":            "dashboards",
-		"create_dashboard":         "dashboards",
-		"update_dashboard":         "dashboards",
-		"delete_dashboard":         "dashboards",
-		"list_audit_events":        "audit",
-		"get_audit_event":          "audit",
-		"get_audit_logs":           "audit",
-		"search_audit_events":      "audit",
-
-		// CI toolset tools
-		"list_builds":          "ci",
-		"get_build":            "ci",
-		"trigger_build":        "ci",
-		"stop_build":           "ci",
-		"get_build_logs":       "ci",
-		"list_build_artifacts": "ci",
-
-		// CD toolset tools
-		"list_deployments":    "cd",
-		"get_deployment":      "cd",
-		"trigger_deployment":  "cd",
-		"rollback_deployment": "cd",
-		"list_environments":   "cd",
-		"get_environment":     "cd",
-		"create_environment":  "cd",
-		"update_environment":  "cd",
-		"delete_environment":  "cd",
-
-		// Other toolsets
-		"get_cost_overview":     "ccm",
-		"get_cost_data":         "ccm",
-		"list_cost_categories":  "ccm",
-		"get_cost_details":      "ccm",
-		"list_recommendations":  "ccm",
-		"get_recommendation":    "ccm",
-		"list_security_scans":   "sto",
-		"get_security_scan":     "sto",
-		"trigger_security_scan": "sto",
-		"scan_repository":       "sto",
-		"list_vulnerabilities":  "sto",
-		"get_vulnerability":     "sto",
-	}
-
-	if toolset, exists := toolToToolsetMap[toolName]; exists {
-		return toolset
-	}
-
-	// Try to infer from naming patterns
-	lowerToolName := strings.ToLower(toolName)
-	patterns := map[string]string{
-		"pipeline":      "pipelines",
-		"connector":     "connectors",
-		"dashboard":     "dashboards",
-		"audit":         "audit",
-		"build":         "ci",
-		"ci_":           "ci",
-		"deploy":        "cd",
-		"cd_":           "cd",
-		"environment":   "cd",
-		"cost":          "ccm",
-		"ccm_":          "ccm",
-		"security":      "sto",
-		"sto_":          "sto",
-		"vulnerability": "sto",
-	}
-
-	for pattern, toolset := range patterns {
-		if strings.Contains(lowerToolName, pattern) {
-			return toolset
-		}
-	}
-
-	// Default to pipelines toolset for unknown tools (CORE)
-	logger.Debug("Unknown tool, defaulting to pipelines toolset", "tool_name", toolName)
-	return "pipelines"
 }
 
 // GetAllowedToolsetsFromContext retrieves allowed toolsets from context

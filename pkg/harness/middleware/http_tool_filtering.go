@@ -156,7 +156,6 @@ func (m *HTTPToolFilteringMiddleware) enrichContextWithDynamicFiltering(ctx cont
 
 	// Extract account ID from existing context or headers
 	accountID := extractAccountIDFromHTTPRequest(r, logger)
-	//TODO: (remove)
 	if accountID == "" {
 		logger.Warn("No account ID found in request")
 		return ctx
@@ -174,8 +173,6 @@ func (m *HTTPToolFilteringMiddleware) enrichContextWithDynamicFiltering(ctx cont
 		"requested_modules", requestedModules)
 
 	licensedModules, err := getLicensedModulesForAccount(ctx, accountID, m.Config, logger)
-	//TODO: (remove)
-	licensedModules = []string{"CORE"}
 	if err != nil {
 		logger.Error("Failed to get licensed modules", "error", err, "account_id", accountID)
 		return ctx
@@ -204,13 +201,13 @@ func (m *HTTPToolFilteringMiddleware) filterToolsListResponse(responseBody []byt
 
 	// Parse the JSON-RPC response with complete structure
 	var jsonRPCResponse struct {
-		JSONRPC string      `json:"jsonrpc"`
-		ID      interface{} `json:"id"`
+		JSONRPC string `json:"jsonrpc"`
+		ID      any    `json:"id"`
 		Result  struct {
 			Tools      []mcp.Tool `json:"tools"`
 			NextCursor *string    `json:"nextCursor,omitempty"`
 		} `json:"result"`
-		Error interface{} `json:"error,omitempty"`
+		Error any `json:"error,omitempty"`
 	}
 
 	if err := json.Unmarshal(responseBody, &jsonRPCResponse); err != nil {
@@ -234,8 +231,8 @@ func (m *HTTPToolFilteringMiddleware) filterToolsListResponse(responseBody []byt
 
 	// Create the filtered response with complete JSON-RPC 2.0 structure
 	filteredResponse := struct {
-		JSONRPC string      `json:"jsonrpc"`
-		ID      interface{} `json:"id"`
+		JSONRPC string `json:"jsonrpc"`
+		ID      any    `json:"id"`
 		Result  struct {
 			Tools      []mcp.Tool `json:"tools"`
 			NextCursor *string    `json:"nextCursor,omitempty"`
@@ -284,7 +281,7 @@ func (m *HTTPToolFilteringMiddleware) filterToolsByToolsets(tools []mcp.Tool, al
 	var deniedTools []string
 
 	for _, tool := range tools {
-		toolset := determineToolsetForToolName(tool.Name, logger)
+		toolset := findToolGroup(tool.Name, logger)
 
 		if allowedSet[toolset] {
 			filteredTools = append(filteredTools, tool)
@@ -331,11 +328,11 @@ func extractRequestIDFromHTTPRequest(r *http.Request) string {
 		return requestID
 	}
 
-	// Generate a simple request ID if none found
-	return fmt.Sprintf("http_req_%d", r.Context().Value("start_time"))
+	return ""
 }
 
 func extractAccountIDFromHTTPRequest(r *http.Request, logger *slog.Logger) string {
+	// First try to get from scope context
 	scope, _ := common.GetScopeFromContext(r.Context())
 	if scope.AccountID != "" {
 		logger.Debug("Account ID extracted from scope context", "account_id", scope.AccountID)
@@ -411,113 +408,23 @@ func computeAllowedToolsetsFromModules(requestedModules, licensedModules []strin
 		allowedToolsets = append(allowedToolsets, toolsets...)
 	}
 
+	// Always include "default" toolset
+	defaultIncluded := false
+	for _, toolset := range allowedToolsets {
+		if toolset == "default" {
+			defaultIncluded = true
+			break
+		}
+	}
+	if !defaultIncluded {
+		allowedToolsets = append(allowedToolsets, "default")
+	}
+
 	logger.Debug("Computed allowed toolsets",
 		"allowed_modules", allowedModules,
 		"allowed_toolsets", allowedToolsets)
 
 	return allowedToolsets
-}
-
-// moduleToToolsets is implemented in dynamic_tool_filtering.go
-
-func determineToolsetForToolName(toolName string, logger *slog.Logger) string {
-	// Tool name to toolset mapping (same as in the other file)
-	toolToToolsetMap := map[string]string{
-		// CORE toolset tools
-		"list_pipelines":           "pipelines",
-		"get_pipeline":             "pipelines",
-		"create_pipeline":          "pipelines",
-		"update_pipeline":          "pipelines",
-		"delete_pipeline":          "pipelines",
-		"execute_pipeline":         "pipelines",
-		"list_pipeline_executions": "pipelines",
-		"get_pipeline_execution":   "pipelines",
-		"stop_pipeline_execution":  "pipelines",
-		"retry_pipeline_execution": "pipelines",
-		"list_connectors":          "connectors",
-		"get_connector_details":    "connectors",
-		"list_connector_catalogue": "connectors",
-		"create_connector":         "connectors",
-		"update_connector":         "connectors",
-		"delete_connector":         "connectors",
-		"test_connector":           "connectors",
-		"list_dashboards":          "dashboards",
-		"get_dashboard":            "dashboards",
-		"create_dashboard":         "dashboards",
-		"update_dashboard":         "dashboards",
-		"delete_dashboard":         "dashboards",
-		"list_audit_events":        "audit",
-		"get_audit_event":          "audit",
-		"get_audit_logs":           "audit",
-		"search_audit_events":      "audit",
-
-		// CI toolset tools
-		"list_builds":          "ci",
-		"get_build":            "ci",
-		"trigger_build":        "ci",
-		"stop_build":           "ci",
-		"get_build_logs":       "ci",
-		"list_build_artifacts": "ci",
-
-		// CD toolset tools
-		"list_deployments":    "cd",
-		"get_deployment":      "cd",
-		"trigger_deployment":  "cd",
-		"rollback_deployment": "cd",
-		"list_environments":   "cd",
-		"get_environment":     "cd",
-		"create_environment":  "cd",
-		"update_environment":  "cd",
-		"delete_environment":  "cd",
-
-		// Other toolsets...
-		"get_cost_overview":     "ccm",
-		"get_cost_data":         "ccm",
-		"list_cost_categories":  "ccm",
-		"get_cost_details":      "ccm",
-		"list_recommendations":  "ccm",
-		"get_recommendation":    "ccm",
-		"list_security_scans":   "sto",
-		"get_security_scan":     "sto",
-		"trigger_security_scan": "sto",
-		"scan_repository":       "sto",
-		"list_vulnerabilities":  "sto",
-		"get_vulnerability":     "sto",
-	}
-
-	// Look up the toolset for this tool
-	if toolset, exists := toolToToolsetMap[toolName]; exists {
-		return toolset
-	}
-
-	// Try to infer from naming patterns
-	lowerToolName := strings.ToLower(toolName)
-	patterns := map[string]string{
-		"pipeline":      "pipelines",
-		"connector":     "connectors",
-		"dashboard":     "dashboards",
-		"audit":         "audit",
-		"build":         "ci",
-		"ci_":           "ci",
-		"deploy":        "cd",
-		"cd_":           "cd",
-		"environment":   "cd",
-		"cost":          "ccm",
-		"ccm_":          "ccm",
-		"security":      "sto",
-		"sto_":          "sto",
-		"vulnerability": "sto",
-	}
-
-	for pattern, toolset := range patterns {
-		if strings.Contains(lowerToolName, pattern) {
-			return toolset
-		}
-	}
-
-	// Default to pipelines toolset for unknown tools (CORE)
-	logger.Debug("Unknown tool, defaulting to pipelines toolset", "tool_name", toolName)
-	return "pipelines"
 }
 
 // isToolsCallRequest checks if the HTTP request is for tools/call
@@ -587,7 +494,7 @@ func (m *HTTPToolFilteringMiddleware) handleToolsCallRequest(w http.ResponseWrit
 	logger.Debug("Extracted tool name from request", "tool_name", toolName)
 
 	// Determine which toolset this tool belongs to
-	toolset := determineToolsetForToolName(toolName, logger)
+	toolset := findToolGroup(toolName, logger)
 
 	// Check if the toolset is allowed
 	if !m.isToolsetAllowed(toolset, allowedToolsets) {
