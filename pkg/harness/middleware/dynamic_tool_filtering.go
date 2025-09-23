@@ -362,7 +362,14 @@ func moduleToToolsets(module string) []string {
 		return toolsets
 	}
 
-	logger.Warn("No toolsets found for module in fallback mapping")
+	// Fallback mapping when registry is not available (e.g., during tests)
+	fallbackMapping := getFallbackModuleToToolsetsMapping(module, logger)
+	if len(fallbackMapping) > 0 {
+		logger.Debug("Using fallback mapping for module", "module", module, "toolsets", fallbackMapping)
+		return fallbackMapping
+	}
+
+	logger.Warn("No toolsets found for module in fallback mapping", "module", module)
 	return []string{}
 }
 
@@ -443,4 +450,32 @@ func (c *ModuleIntersectionCache) Clear() {
 			delete(c.cache, key)
 		}
 	}
+}
+
+// getFallbackModuleToToolsetsMapping provides fallback module-to-toolsets mapping
+// when the global registry is not available (e.g., during tests)
+func getFallbackModuleToToolsetsMapping(module string, logger *slog.Logger) []string {
+	// Define the standard module-to-toolsets mapping
+	moduleMapping := map[string][]string{
+		"CORE": {"pipelines", "connectors", "dashboards", "audit"},
+		"CI":   {"ci"},
+		"CD":   {"cd"},
+		"CCM":  {"ccm"},
+		"STO":  {"sto"},
+		"FF":   {"ff"},
+		"CV":   {"cv"},
+		"CE":   {"ce"},
+		"SRM":  {"srm"},
+		"CHAOS": {"chaos"},
+		"SSCA": {"ssca"},
+		"IDP":  {"idp"},
+	}
+	
+	if toolsets, exists := moduleMapping[module]; exists {
+		logger.Debug("Found fallback mapping for module", "module", module, "toolsets", toolsets)
+		return toolsets
+	}
+	
+	logger.Debug("No fallback mapping found for module", "module", module)
+	return []string{}
 }

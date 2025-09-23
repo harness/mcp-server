@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness/common"
@@ -328,7 +329,8 @@ func extractRequestIDFromHTTPRequest(r *http.Request) string {
 		return requestID
 	}
 
-	return ""
+	// Generate a request ID if none is present
+	return fmt.Sprintf("http_req_%d", time.Now().UnixNano())
 }
 
 func extractAccountIDFromHTTPRequest(r *http.Request, logger *slog.Logger) string {
@@ -337,6 +339,17 @@ func extractAccountIDFromHTTPRequest(r *http.Request, logger *slog.Logger) strin
 	if scope.AccountID != "" {
 		logger.Debug("Account ID extracted from scope context", "account_id", scope.AccountID)
 		return scope.AccountID
+	}
+
+	// Try to extract from headers
+	if accountID := r.Header.Get("X-Harness-Account-ID"); accountID != "" {
+		logger.Debug("Account ID extracted from X-Harness-Account-ID header", "account_id", accountID)
+		return accountID
+	}
+
+	if accountID := r.Header.Get("Harness-Account"); accountID != "" {
+		logger.Debug("Account ID extracted from Harness-Account header", "account_id", accountID)
+		return accountID
 	}
 
 	logger.Debug("No account ID found in request headers")
