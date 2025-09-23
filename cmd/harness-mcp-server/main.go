@@ -76,7 +76,7 @@ var (
 				EnableLicense: viper.GetBool("enable_license"),
 				Transport:     transportType,
 				HTTP: struct {
-					Port int    `envconfig:"MCP_HTTP_PORT" default:"8081"`
+					Port int    `envconfig:"MCP_HTTP_PORT" default:"8080"`
 					Path string `envconfig:"MCP_HTTP_PATH" default:"/mcp"`
 				}{
 					Port: viper.GetInt("http_port"),
@@ -539,7 +539,7 @@ func runHTTPServer(ctx context.Context, config config.Config) error {
 
 	// Create module registry for HTTP mode
 	moduleRegistry := modules.NewModuleRegistry(&config, toolsets)
-	
+
 	// Set the global registry for use by middleware
 	modules.SetGlobalRegistry(moduleRegistry)
 
@@ -645,7 +645,7 @@ func runStdioServer(ctx context.Context, config config.Config) error {
 
 	// Create module registry
 	moduleRegistry := modules.NewModuleRegistry(&config, toolsets)
-	
+
 	// Set the global registry for use by middleware
 	modules.SetGlobalRegistry(moduleRegistry)
 
