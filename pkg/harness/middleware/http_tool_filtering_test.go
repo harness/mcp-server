@@ -14,14 +14,16 @@ import (
 
 func TestNewHTTPToolFilteringMiddleware(t *testing.T) {
 	logger := createTestLogger()
-	middleware := NewHTTPToolFilteringMiddleware(logger)
+	middleware := NewHTTPToolFilteringMiddleware(logger, createTestConfig())
 	
 	assert.NotNil(t, middleware)
-	assert.Equal(t, logger, middleware.Logger)
+	// Logger is modified with component, so just check it's not nil
+	assert.NotNil(t, middleware.Logger)
+	assert.NotNil(t, middleware.Config)
 }
 
 func TestHTTPToolFilteringMiddleware_isToolsListRequest(t *testing.T) {
-	middleware := NewHTTPToolFilteringMiddleware(createTestLogger())
+	middleware := NewHTTPToolFilteringMiddleware(createTestLogger(), createTestConfig())
 	logger := createTestLogger()
 
 	tests := []struct {
@@ -72,7 +74,7 @@ func TestHTTPToolFilteringMiddleware_isToolsListRequest(t *testing.T) {
 }
 
 func TestHTTPToolFilteringMiddleware_isToolsCallRequest(t *testing.T) {
-	middleware := NewHTTPToolFilteringMiddleware(createTestLogger())
+	middleware := NewHTTPToolFilteringMiddleware(createTestLogger(), createTestConfig())
 	logger := createTestLogger()
 
 	tests := []struct {
@@ -117,7 +119,7 @@ func TestHTTPToolFilteringMiddleware_isToolsCallRequest(t *testing.T) {
 }
 
 func TestHTTPToolFilteringMiddleware_extractToolNameFromRequest(t *testing.T) {
-	middleware := NewHTTPToolFilteringMiddleware(createTestLogger())
+	middleware := NewHTTPToolFilteringMiddleware(createTestLogger(), createTestConfig())
 	logger := createTestLogger()
 
 	tests := []struct {
@@ -168,7 +170,7 @@ func TestHTTPToolFilteringMiddleware_extractToolNameFromRequest(t *testing.T) {
 }
 
 func TestHTTPToolFilteringMiddleware_isToolsetAllowed(t *testing.T) {
-	middleware := NewHTTPToolFilteringMiddleware(createTestLogger())
+	middleware := NewHTTPToolFilteringMiddleware(createTestLogger(), createTestConfig())
 
 	tests := []struct {
 		name           string
@@ -204,7 +206,7 @@ func TestHTTPToolFilteringMiddleware_isToolsetAllowed(t *testing.T) {
 	}
 }
 
-func TestDetermineToolsetForToolName(t *testing.T) {
+func TestFindToolGroup(t *testing.T) {
 	logger := createTestLogger()
 
 	tests := []struct {
@@ -261,14 +263,14 @@ func TestDetermineToolsetForToolName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := determineToolsetForToolName(tt.toolName, logger)
+			result := findToolGroup(tt.toolName, logger)
 			assert.Equal(t, tt.expectedResult, result)
 		})
 	}
 }
 
 func TestHTTPToolFilteringMiddleware_enrichContextWithDynamicFiltering(t *testing.T) {
-	middleware := NewHTTPToolFilteringMiddleware(createTestLogger())
+	middleware := NewHTTPToolFilteringMiddleware(createTestLogger(), createTestConfig())
 	logger := createTestLogger()
 
 	tests := []struct {
@@ -346,7 +348,7 @@ func TestExtractAccountIDFromHTTPRequest(t *testing.T) {
 				req := httptest.NewRequest("POST", "/mcp", nil)
 				return req
 			},
-			expectedResult: "",
+			expectedResult: "", // Will be generated, so we'll check it's not empty
 		},
 		{
 			name: "empty account ID header",
@@ -397,13 +399,19 @@ func TestExtractRequestIDFromHTTPRequest(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := tt.setupRequest()
 			result := extractRequestIDFromHTTPRequest(req)
-			assert.Equal(t, tt.expectedResult, result)
+			if tt.expectedResult == "" {
+				// For cases where no header is set, function should generate an ID
+				assert.NotEmpty(t, result)
+				assert.Contains(t, result, "http_req_")
+			} else {
+				assert.Equal(t, tt.expectedResult, result)
+			}
 		})
 	}
 }
 
 func TestHTTPToolFilteringMiddleware_writeErrorResponse(t *testing.T) {
-	middleware := NewHTTPToolFilteringMiddleware(createTestLogger())
+	middleware := NewHTTPToolFilteringMiddleware(createTestLogger(), createTestConfig())
 	logger := createTestLogger()
 
 	w := httptest.NewRecorder()
@@ -430,7 +438,7 @@ func TestHTTPToolFilteringMiddleware_writeErrorResponse(t *testing.T) {
 }
 
 func TestHTTPToolFilteringMiddleware_writeAuthorizationErrorResponse(t *testing.T) {
-	middleware := NewHTTPToolFilteringMiddleware(createTestLogger())
+	middleware := NewHTTPToolFilteringMiddleware(createTestLogger(), createTestConfig())
 	logger := createTestLogger()
 
 	w := httptest.NewRecorder()
@@ -460,7 +468,7 @@ func TestHTTPToolFilteringMiddleware_writeAuthorizationErrorResponse(t *testing.
 }
 
 func TestHTTPToolFilteringMiddleware_PassThrough(t *testing.T) {
-	middleware := NewHTTPToolFilteringMiddleware(createTestLogger())
+	middleware := NewHTTPToolFilteringMiddleware(createTestLogger(), createTestConfig())
 
 	// Mock handler
 	mockHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
