@@ -225,8 +225,7 @@ func getLicensedModulesForAccount(ctx context.Context, accountID string, config 
 	if err != nil {
 		logger.Error("Failed to create license client", "error", err, "account_id", accountID)
 		// Fallback to CORE only on license client creation failure
-		//TODO: Set to CORE
-		return []string{"CCM"}, nil
+		return []string{"CORE"}, nil
 	}
 
 	// Call GetAccountLicenses API
