@@ -251,7 +251,7 @@ func (ts *IntelligenceService) processStreamingResponse(body io.ReadCloser, fina
 					}
 				}
 
-				if eventType == "error" {
+				if eventType == "error" && eventData != "eof" {
 					finalResponse.Error = eventData
 				}
 			}
