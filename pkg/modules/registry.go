@@ -40,16 +40,16 @@ func NewModuleRegistry(config *config.Config, tsg *toolsets.ToolsetGroup) *Modul
 			NewDbOpsModule(config, tsg),
 			NewACMModule(config, tsg),
 		},
-		config: config,
-		tsg:    tsg,
+		config:           config,
+		tsg:              tsg,
 		moduleToToolsets: make(map[string][]string),
 	}
-	
+
 	// Populate the moduleToToolsets mapping
 	for _, module := range registry.modules {
 		registry.moduleToToolsets[module.ID()] = module.Toolsets()
 	}
-	
+
 	return registry
 }
 

@@ -15,7 +15,7 @@ import (
 func TestNewHTTPToolFilteringMiddleware(t *testing.T) {
 	logger := createTestLogger()
 	middleware := NewHTTPToolFilteringMiddleware(logger, createTestConfig())
-	
+
 	assert.NotNil(t, middleware)
 	// Logger is modified with component, so just check it's not nil
 	assert.NotNil(t, middleware.Logger)
@@ -158,7 +158,7 @@ func TestHTTPToolFilteringMiddleware_extractToolNameFromRequest(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest("POST", "/mcp", strings.NewReader(tt.body))
 			result, err := middleware.extractToolNameFromRequest(req, logger)
-			
+
 			if tt.expectedError {
 				assert.Error(t, err)
 			} else {
@@ -173,28 +173,28 @@ func TestHTTPToolFilteringMiddleware_isToolsetAllowed(t *testing.T) {
 	middleware := NewHTTPToolFilteringMiddleware(createTestLogger(), createTestConfig())
 
 	tests := []struct {
-		name           string
-		toolset        string
+		name            string
+		toolset         string
 		allowedToolsets []string
-		expectedResult bool
+		expectedResult  bool
 	}{
 		{
-			name:           "allowed toolset",
-			toolset:        "ci",
+			name:            "allowed toolset",
+			toolset:         "ci",
 			allowedToolsets: []string{"pipelines", "ci", "cd"},
-			expectedResult: true,
+			expectedResult:  true,
 		},
 		{
-			name:           "disallowed toolset",
-			toolset:        "ccm",
+			name:            "disallowed toolset",
+			toolset:         "ccm",
 			allowedToolsets: []string{"pipelines", "ci", "cd"},
-			expectedResult: false,
+			expectedResult:  false,
 		},
 		{
-			name:           "empty allowed toolsets",
-			toolset:        "ci",
+			name:            "empty allowed toolsets",
+			toolset:         "ci",
 			allowedToolsets: []string{},
-			expectedResult: false,
+			expectedResult:  false,
 		},
 	}
 
@@ -312,9 +312,9 @@ func TestHTTPToolFilteringMiddleware_enrichContextWithDynamicFiltering(t *testin
 		t.Run(tt.name, func(t *testing.T) {
 			req := tt.setupRequest()
 			ctx := context.Background()
-			
+
 			enrichedCtx := middleware.enrichContextWithDynamicFiltering(ctx, req, logger)
-			
+
 			// Check if context was enriched by looking for account ID
 			accountID := extractAccountIDFromHTTPRequest(req, logger)
 			if tt.expectedResult && accountID != "" {
@@ -430,7 +430,7 @@ func TestHTTPToolFilteringMiddleware_writeErrorResponse(t *testing.T) {
 
 	assert.Equal(t, "2.0", response["jsonrpc"])
 	assert.Nil(t, response["id"])
-	
+
 	errorObj, ok := response["error"].(map[string]interface{})
 	require.True(t, ok)
 	assert.Equal(t, float64(-32600), errorObj["code"])
@@ -458,7 +458,7 @@ func TestHTTPToolFilteringMiddleware_writeAuthorizationErrorResponse(t *testing.
 
 	assert.Equal(t, "2.0", response["jsonrpc"])
 	assert.Nil(t, response["id"])
-	
+
 	errorObj, ok := response["error"].(map[string]interface{})
 	require.True(t, ok)
 	assert.Equal(t, float64(-32601), errorObj["code"])

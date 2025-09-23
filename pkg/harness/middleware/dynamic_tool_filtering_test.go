@@ -38,7 +38,7 @@ func createTestLogger() *slog.Logger {
 
 func createTestConfig() *config.Config {
 	return &config.Config{
-		AccountID:         "test-account-123",
+		AccountID:        "test-account-123",
 		APIKey:           "test-api-key",
 		BaseURL:          "https://app.harness.io",
 		NgManagerBaseURL: "https://app.harness.io",
@@ -98,10 +98,10 @@ func TestWithDynamicToolFiltering(t *testing.T) {
 			// Create config with real cache
 			config := &DynamicToolFilteringConfig{
 				HeaderExtractor: mockExtractor,
-				Cache:          NewModuleIntersectionCache(5 * time.Minute),
-				CacheTTL:       5 * time.Minute,
-				Logger:         createTestLogger(),
-				Config:         createTestConfig(),
+				Cache:           NewModuleIntersectionCache(5 * time.Minute),
+				CacheTTL:        5 * time.Minute,
+				Logger:          createTestLogger(),
+				Config:          createTestConfig(),
 			}
 
 			// Create middleware
@@ -145,13 +145,13 @@ func TestWithDynamicToolFiltering(t *testing.T) {
 
 func TestWithDynamicToolFiltering_NoAccountID(t *testing.T) {
 	mockExtractor := &MockHeaderExtractor{}
-	
+
 	config := &DynamicToolFilteringConfig{
 		HeaderExtractor: mockExtractor,
-		Cache:          NewModuleIntersectionCache(5 * time.Minute),
-		CacheTTL:       5 * time.Minute,
-		Logger:         createTestLogger(),
-		Config:         createTestConfig(),
+		Cache:           NewModuleIntersectionCache(5 * time.Minute),
+		CacheTTL:        5 * time.Minute,
+		Logger:          createTestLogger(),
+		Config:          createTestConfig(),
 	}
 
 	middleware := WithDynamicToolFiltering(config)
@@ -225,34 +225,34 @@ func TestGetAllowedToolsetsFromContext(t *testing.T) {
 
 func TestIsToolsetAllowed(t *testing.T) {
 	tests := []struct {
-		name           string
-		toolset        string
+		name            string
+		toolset         string
 		allowedToolsets []string
-		expectedResult bool
+		expectedResult  bool
 	}{
 		{
-			name:           "allowed toolset",
-			toolset:        "ci",
+			name:            "allowed toolset",
+			toolset:         "ci",
 			allowedToolsets: []string{"pipelines", "ci", "cd"},
-			expectedResult: true,
+			expectedResult:  true,
 		},
 		{
-			name:           "disallowed toolset",
-			toolset:        "ccm",
+			name:            "disallowed toolset",
+			toolset:         "ccm",
 			allowedToolsets: []string{"pipelines", "ci", "cd"},
-			expectedResult: false,
+			expectedResult:  false,
 		},
 		{
-			name:           "empty allowed toolsets",
-			toolset:        "ci",
+			name:            "empty allowed toolsets",
+			toolset:         "ci",
 			allowedToolsets: []string{},
-			expectedResult: false,
+			expectedResult:  false,
 		},
 		{
-			name:           "nil allowed toolsets",
-			toolset:        "ci",
+			name:            "nil allowed toolsets",
+			toolset:         "ci",
 			allowedToolsets: nil,
-			expectedResult: false,
+			expectedResult:  false,
 		},
 	}
 
@@ -316,7 +316,7 @@ func TestDefaultHeaderExtractor(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := extractor.ExtractRequestedModules(tt.headers)
-			
+
 			if tt.expectedError {
 				assert.Error(t, err)
 			} else {
@@ -352,7 +352,7 @@ func TestModuleIntersectionCache(t *testing.T) {
 	t.Run("clear expired entries", func(t *testing.T) {
 		// Create cache with very short TTL
 		shortCache := NewModuleIntersectionCache(10 * time.Millisecond)
-		
+
 		key := "test-key-2"
 		value := []string{"pipelines"}
 
@@ -377,7 +377,7 @@ func TestModuleIntersectionCache(t *testing.T) {
 	t.Run("TTL expiration", func(t *testing.T) {
 		// Create cache with very short TTL
 		shortCache := NewModuleIntersectionCache(10 * time.Millisecond)
-		
+
 		key := "test-key-ttl"
 		value := []string{"pipelines"}
 
@@ -402,13 +402,13 @@ func TestModuleIntersectionCache(t *testing.T) {
 func TestWithDynamicToolFiltering_Integration(t *testing.T) {
 	// Create a real header extractor that simulates HTTP headers
 	headerExtractor := &DefaultHeaderExtractor{}
-	
+
 	config := &DynamicToolFilteringConfig{
 		HeaderExtractor: headerExtractor,
-		Cache:          NewModuleIntersectionCache(5 * time.Minute),
-		CacheTTL:       5 * time.Minute,
-		Logger:         createTestLogger(),
-		Config:         createTestConfig(),
+		Cache:           NewModuleIntersectionCache(5 * time.Minute),
+		CacheTTL:        5 * time.Minute,
+		Logger:          createTestLogger(),
+		Config:          createTestConfig(),
 	}
 
 	middleware := WithDynamicToolFiltering(config)
@@ -453,13 +453,13 @@ func TestWithDynamicToolFiltering_ConfigDefaults(t *testing.T) {
 func TestWithDynamicToolFiltering_CacheHit(t *testing.T) {
 	mockExtractor := &MockHeaderExtractor{}
 	cache := NewModuleIntersectionCache(5 * time.Minute)
-	
+
 	config := &DynamicToolFilteringConfig{
 		HeaderExtractor: mockExtractor,
-		Cache:          cache,
-		CacheTTL:       5 * time.Minute,
-		Logger:         createTestLogger(),
-		Config:         createTestConfig(),
+		Cache:           cache,
+		CacheTTL:        5 * time.Minute,
+		Logger:          createTestLogger(),
+		Config:          createTestConfig(),
 	}
 
 	// Pre-populate cache
@@ -471,7 +471,7 @@ func TestWithDynamicToolFiltering_CacheHit(t *testing.T) {
 	mockExtractor.On("ExtractRequestedModules", mock.Anything).Return([]string{"CI", "CD"}, nil)
 
 	middleware := WithDynamicToolFiltering(config)
-	
+
 	var capturedToolsets []string
 	testHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		toolsets, _ := GetAllowedToolsetsFromContext(ctx)

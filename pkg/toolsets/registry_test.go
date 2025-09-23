@@ -27,7 +27,7 @@ func mockToolHandler() server.ToolHandlerFunc {
 // Helper function to create a test toolset
 func createTestToolset(name string, toolNames []string) *Toolset {
 	toolset := NewToolset(name, "Test toolset: "+name)
-	
+
 	var serverTools []server.ServerTool
 	for _, toolName := range toolNames {
 		tool := mcp.Tool{
@@ -46,10 +46,10 @@ func createTestToolset(name string, toolNames []string) *Toolset {
 		serverTool := NewServerTool(tool, mockToolHandler())
 		serverTools = append(serverTools, serverTool)
 	}
-	
+
 	// Add tools as read tools (available in both read-only and full mode)
 	toolset.AddReadTools(serverTools...)
-	
+
 	return toolset
 }
 
@@ -58,7 +58,7 @@ func TestSimpleToolGroupTracker_RegisterToolGroup(t *testing.T) {
 
 	// Test registering a toolset with multiple tools
 	toolset := createTestToolset("test-toolset", []string{"tool1", "tool2", "tool3"})
-	
+
 	err := tracker.RegisterToolGroup(toolset)
 	require.NoError(t, err)
 
@@ -81,7 +81,7 @@ func TestSimpleToolGroupTracker_RegisterToolGroup_EmptyToolset(t *testing.T) {
 
 	// Test registering an empty toolset
 	toolset := NewToolset("empty-toolset", "Empty test toolset")
-	
+
 	err := tracker.RegisterToolGroup(toolset)
 	require.NoError(t, err)
 
@@ -107,7 +107,7 @@ func TestSimpleToolGroupTracker_GetGroupForTool(t *testing.T) {
 	// Register multiple toolsets
 	toolset1 := createTestToolset("toolset1", []string{"tool1", "tool2"})
 	toolset2 := createTestToolset("toolset2", []string{"tool3", "tool4"})
-	
+
 	err := tracker.RegisterToolGroup(toolset1)
 	require.NoError(t, err)
 	err = tracker.RegisterToolGroup(toolset2)
@@ -133,7 +133,7 @@ func TestSimpleToolGroupTracker_GetAllToolMappings(t *testing.T) {
 	// Register toolsets
 	toolset1 := createTestToolset("toolset1", []string{"tool1", "tool2"})
 	toolset2 := createTestToolset("toolset2", []string{"tool3", "tool4"})
-	
+
 	err := tracker.RegisterToolGroup(toolset1)
 	require.NoError(t, err)
 	err = tracker.RegisterToolGroup(toolset2)
@@ -141,19 +141,19 @@ func TestSimpleToolGroupTracker_GetAllToolMappings(t *testing.T) {
 
 	// Get all mappings
 	mappings := tracker.GetAllToolMappings()
-	
+
 	expected := map[string]string{
 		"tool1": "toolset1",
 		"tool2": "toolset1",
 		"tool3": "toolset2",
 		"tool4": "toolset2",
 	}
-	
+
 	assert.Equal(t, expected, mappings)
 
 	// Verify returned map is a copy (modifying it shouldn't affect registry)
 	mappings["tool5"] = "toolset3"
-	
+
 	newMappings := tracker.GetAllToolMappings()
 	assert.NotContains(t, newMappings, "tool5")
 }
@@ -168,7 +168,7 @@ func TestSimpleToolGroupTracker_GetRegisteredGroups(t *testing.T) {
 	// Register toolsets
 	toolset1 := createTestToolset("toolset1", []string{"tool1"})
 	toolset2 := createTestToolset("toolset2", []string{"tool2"})
-	
+
 	err := tracker.RegisterToolGroup(toolset1)
 	require.NoError(t, err)
 	err = tracker.RegisterToolGroup(toolset2)
@@ -187,7 +187,7 @@ func TestSimpleToolGroupTracker_Clear(t *testing.T) {
 	// Register toolsets
 	toolset1 := createTestToolset("toolset1", []string{"tool1", "tool2"})
 	toolset2 := createTestToolset("toolset2", []string{"tool3", "tool4"})
-	
+
 	err := tracker.RegisterToolGroup(toolset1)
 	require.NoError(t, err)
 	err = tracker.RegisterToolGroup(toolset2)
@@ -310,7 +310,7 @@ func TestAutoRegisteringToolGroup_MultipleToolsets(t *testing.T) {
 	// Add multiple toolsets
 	toolset1 := createTestToolset("toolset1", []string{"tool1", "tool2"})
 	toolset2 := createTestToolset("toolset2", []string{"tool3", "tool4"})
-	
+
 	group.AddToolset(toolset1)
 	group.AddToolset(toolset2)
 
@@ -344,20 +344,20 @@ func TestAutoRegisteringToolGroup_ReadOnlyMode(t *testing.T) {
 
 	// Create toolset with both read and write tools
 	toolset := NewToolset("test-toolset", "Test toolset")
-	
+
 	readTool := NewServerTool(mcp.Tool{
 		Name:        "read_tool",
 		Description: "Read tool",
 	}, mockToolHandler())
-	
+
 	writeTool := NewServerTool(mcp.Tool{
-		Name:        "write_tool", 
+		Name:        "write_tool",
 		Description: "Write tool",
 	}, mockToolHandler())
-	
+
 	toolset.AddReadTools(readTool)
 	toolset.AddWriteTools(writeTool)
-	
+
 	group.AddToolset(toolset)
 
 	// Verify toolset is set to read-only
@@ -401,44 +401,44 @@ func TestMainToolTrackerManagement(t *testing.T) {
 func TestToolGroupTracker_Interface(t *testing.T) {
 	// Verify SimpleToolGroupTracker implements ToolGroupTracker interface
 	var tracker ToolGroupTracker = NewSimpleToolGroupTracker()
-	
+
 	// Test all interface methods
 	toolset := createTestToolset("test-toolset", []string{"test-tool"})
-	
+
 	err := tracker.RegisterToolGroup(toolset)
 	assert.NoError(t, err)
-	
+
 	toolsetName, found := tracker.GetGroupForTool("test-tool")
 	assert.True(t, found)
 	assert.Equal(t, "test-toolset", toolsetName)
-	
+
 	mappings := tracker.GetAllToolMappings()
 	assert.Contains(t, mappings, "test-tool")
-	
+
 	toolsets := tracker.GetRegisteredGroups()
 	assert.Contains(t, toolsets, "test-toolset")
-	
+
 	tracker.Clear()
-	
+
 	mappings = tracker.GetAllToolMappings()
 	assert.Empty(t, mappings)
 }
 
 func TestNewAutoRegisteringToolGroup_WithCustomTracker(t *testing.T) {
 	customTracker := NewSimpleToolGroupTracker()
-	
+
 	// Create group with custom registry
 	group := NewAutoRegisteringToolGroup(false, customTracker)
-	
+
 	// Add toolset
 	toolset := createTestToolset("test-toolset", []string{"test-tool"})
 	group.AddToolset(toolset)
-	
+
 	// Verify tool is registered in custom registry
 	toolsetName, found := customTracker.GetGroupForTool("test-tool")
 	assert.True(t, found)
 	assert.Equal(t, "test-toolset", toolsetName)
-	
+
 	// Verify tool is NOT in global registry (since we used custom registry)
 	_, found = GetMainToolTracker().GetGroupForTool("test-tool")
 	assert.False(t, found)
@@ -450,14 +450,14 @@ func TestNewAutoRegisteringToolGroup_WithNilTracker(t *testing.T) {
 	testTracker := NewSimpleToolGroupTracker()
 	SetMainToolTracker(testTracker)
 	defer SetMainToolTracker(originalTracker)
-	
+
 	// Create group with nil registry (should use global registry)
 	group := NewAutoRegisteringToolGroup(false, nil)
-	
+
 	// Add toolset
 	toolset := createTestToolset("test-toolset", []string{"test-tool"})
 	group.AddToolset(toolset)
-	
+
 	// Verify tool is registered in global registry
 	toolsetName, found := testTracker.GetGroupForTool("test-tool")
 	assert.True(t, found)
@@ -467,7 +467,7 @@ func TestNewAutoRegisteringToolGroup_WithNilTracker(t *testing.T) {
 // Benchmark tests for performance validation
 func BenchmarkSimpleToolGroupTracker_RegisterToolGroup(b *testing.B) {
 	tracker := NewSimpleToolGroupTracker()
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		toolset := createTestToolset("toolset"+string(rune(i)), []string{"tool" + string(rune(i))})
@@ -477,13 +477,13 @@ func BenchmarkSimpleToolGroupTracker_RegisterToolGroup(b *testing.B) {
 
 func BenchmarkSimpleToolGroupTracker_GetGroupForTool(b *testing.B) {
 	tracker := NewSimpleToolGroupTracker()
-	
+
 	// Pre-populate registry
 	for i := 0; i < 100; i++ {
 		toolset := createTestToolset("toolset"+string(rune(i)), []string{"tool" + string(rune(i))})
 		tracker.RegisterToolGroup(toolset)
 	}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		tracker.GetGroupForTool("tool" + string(rune(i%100)))
@@ -492,13 +492,13 @@ func BenchmarkSimpleToolGroupTracker_GetGroupForTool(b *testing.B) {
 
 func BenchmarkSimpleToolGroupTracker_GetAllToolMappings(b *testing.B) {
 	tracker := NewSimpleToolGroupTracker()
-	
+
 	// Pre-populate registry
 	for i := 0; i < 100; i++ {
 		toolset := createTestToolset("toolset"+string(rune(i)), []string{"tool" + string(rune(i))})
 		tracker.RegisterToolGroup(toolset)
 	}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		tracker.GetAllToolMappings()

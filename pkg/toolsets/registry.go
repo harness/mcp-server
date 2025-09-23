@@ -10,16 +10,16 @@ import (
 type ToolGroupTracker interface {
 	// GetGroupForTool returns the group name for a given tool name
 	GetGroupForTool(toolName string) (string, bool)
-	
+
 	// GetAllToolMappings returns a copy of all tool-to-group mappings
 	GetAllToolMappings() map[string]string
-	
+
 	// RegisterToolGroup registers a tool group and captures its tool mappings
 	RegisterToolGroup(toolset *Toolset) error
-	
+
 	// Clear removes all registered mappings (useful for testing)
 	Clear()
-	
+
 	// GetRegisteredGroups returns all registered group names
 	GetRegisteredGroups() []string
 }
@@ -28,10 +28,10 @@ type ToolGroupTracker interface {
 type SimpleToolGroupTracker struct {
 	// toolToGroupMap maps tool names to their containing group names
 	toolToGroupMap map[string]string
-	
+
 	// groupNames tracks all registered group names
 	groupNames map[string]bool
-	
+
 	// mu protects concurrent access to the maps
 	mu sync.RWMutex
 }
@@ -48,7 +48,7 @@ func NewSimpleToolGroupTracker() *SimpleToolGroupTracker {
 func (r *SimpleToolGroupTracker) GetGroupForTool(toolName string) (string, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	group, exists := r.toolToGroupMap[toolName]
 	return group, exists
 }
@@ -57,7 +57,7 @@ func (r *SimpleToolGroupTracker) GetGroupForTool(toolName string) (string, bool)
 func (r *SimpleToolGroupTracker) GetAllToolMappings() map[string]string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	// Return a copy to prevent external modification
 	mappings := make(map[string]string, len(r.toolToGroupMap))
 	for tool, group := range r.toolToGroupMap {
@@ -71,23 +71,23 @@ func (r *SimpleToolGroupTracker) RegisterToolGroup(toolset *Toolset) error {
 	if toolset == nil {
 		return nil // Gracefully handle nil toolsets
 	}
-	
+
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	// Track the group name
 	r.groupNames[toolset.Name] = true
-	
+
 	// Extract tool names from all available tools (both read and write)
 	allTools := toolset.GetAvailableTools()
-	
+
 	for _, serverTool := range allTools {
 		toolName := serverTool.Tool.Name
 		if toolName != "" {
 			r.toolToGroupMap[toolName] = toolset.Name
 		}
 	}
-	
+
 	return nil
 }
 
@@ -95,7 +95,7 @@ func (r *SimpleToolGroupTracker) RegisterToolGroup(toolset *Toolset) error {
 func (r *SimpleToolGroupTracker) Clear() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	r.toolToGroupMap = make(map[string]string)
 	r.groupNames = make(map[string]bool)
 }
@@ -104,7 +104,7 @@ func (r *SimpleToolGroupTracker) Clear() {
 func (r *SimpleToolGroupTracker) GetRegisteredGroups() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	groups := make([]string, 0, len(r.groupNames))
 	for name := range r.groupNames {
 		groups = append(groups, name)
@@ -136,7 +136,7 @@ func NewAutoRegisteringToolGroup(readOnly bool, tracker ToolGroupTracker) *AutoR
 	if tracker == nil {
 		tracker = GetMainToolTracker()
 	}
-	
+
 	return &AutoRegisteringToolGroup{
 		ToolsetGroup: NewToolsetGroup(readOnly),
 		tracker:      tracker,
@@ -147,7 +147,7 @@ func NewAutoRegisteringToolGroup(readOnly bool, tracker ToolGroupTracker) *AutoR
 func (artg *AutoRegisteringToolGroup) AddToolset(ts *Toolset) {
 	// Add to the underlying toolset group
 	artg.ToolsetGroup.AddToolset(ts)
-	
+
 	// Register with the tracker to capture tool mappings
 	if artg.tracker != nil {
 		artg.tracker.RegisterToolGroup(ts)

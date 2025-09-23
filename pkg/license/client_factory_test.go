@@ -21,24 +21,24 @@ func TestNewClientFactory(t *testing.T) {
 		{
 			name: "valid config and logger",
 			config: &config.Config{
-				AccountID:         "test-account",
-				NgManagerBaseURL:  "https://app.harness.io",
-				BaseURL:           "https://app.harness.io",
-				NgManagerSecret:   "test-secret",
+				AccountID:        "test-account",
+				NgManagerBaseURL: "https://app.harness.io",
+				BaseURL:          "https://app.harness.io",
+				NgManagerSecret:  "test-secret",
 			},
 			logger: slog.New(slog.NewTextHandler(os.Stdout, nil)),
 			want: &ClientFactory{
 				config: &config.Config{
-					AccountID:         "test-account",
-					NgManagerBaseURL:  "https://app.harness.io",
-					BaseURL:           "https://app.harness.io",
-					NgManagerSecret:   "test-secret",
+					AccountID:        "test-account",
+					NgManagerBaseURL: "https://app.harness.io",
+					BaseURL:          "https://app.harness.io",
+					NgManagerSecret:  "test-secret",
 				},
 				logger: slog.New(slog.NewTextHandler(os.Stdout, nil)),
 			},
 		},
 		{
-			name: "nil config",
+			name:   "nil config",
 			config: nil,
 			logger: slog.New(slog.NewTextHandler(os.Stdout, nil)),
 			want: &ClientFactory{
@@ -64,10 +64,10 @@ func TestNewClientFactory(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := NewClientFactory(tt.config, tt.logger)
-			
+
 			require.NotNil(t, got)
 			assert.Equal(t, tt.config, got.config)
-			
+
 			// For logger comparison, we check if both are nil or both are not nil
 			// since slog.Logger doesn't have a direct equality comparison
 			if tt.logger == nil {
@@ -81,17 +81,17 @@ func TestNewClientFactory(t *testing.T) {
 
 func TestClientFactory_GetConfig(t *testing.T) {
 	testConfig := &config.Config{
-		AccountID:         "test-account",
-		NgManagerBaseURL:  "https://app.harness.io",
-		BaseURL:           "https://app.harness.io",
-		NgManagerSecret:   "test-secret",
+		AccountID:        "test-account",
+		NgManagerBaseURL: "https://app.harness.io",
+		BaseURL:          "https://app.harness.io",
+		NgManagerSecret:  "test-secret",
 	}
-	
+
 	factory := NewClientFactory(testConfig, slog.Default())
-	
+
 	got := factory.GetConfig()
 	assert.Equal(t, testConfig, got)
-	
+
 	// Verify it returns the same reference, not a copy
 	assert.Same(t, testConfig, got)
 }
@@ -99,12 +99,12 @@ func TestClientFactory_GetConfig(t *testing.T) {
 func TestClientFactory_GetLogger(t *testing.T) {
 	testLogger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	testConfig := &config.Config{AccountID: "test-account"}
-	
+
 	factory := NewClientFactory(testConfig, testLogger)
-	
+
 	got := factory.GetLogger()
 	assert.Equal(t, testLogger, got)
-	
+
 	// Test with nil logger
 	factoryWithNilLogger := NewClientFactory(testConfig, nil)
 	gotNil := factoryWithNilLogger.GetLogger()
@@ -113,48 +113,48 @@ func TestClientFactory_GetLogger(t *testing.T) {
 
 func TestClientFactory_CreateLicenseClient(t *testing.T) {
 	tests := []struct {
-		name           string
-		config         *config.Config
-		expectError    bool
-		errorContains  string
+		name          string
+		config        *config.Config
+		expectError   bool
+		errorContains string
 	}{
 		{
 			name: "valid config",
 			config: &config.Config{
-				AccountID:         "test-account",
-				NgManagerBaseURL:  "https://app.harness.io",
-				BaseURL:           "https://app.harness.io",
-				NgManagerSecret:   "test-secret",
+				AccountID:        "test-account",
+				NgManagerBaseURL: "https://app.harness.io",
+				BaseURL:          "https://app.harness.io",
+				NgManagerSecret:  "test-secret",
 			},
 			expectError: false,
 		},
 		{
 			name: "empty NgManagerBaseURL",
 			config: &config.Config{
-				AccountID:         "test-account",
-				NgManagerBaseURL:  "",
-				BaseURL:           "https://app.harness.io",
-				NgManagerSecret:   "test-secret",
+				AccountID:        "test-account",
+				NgManagerBaseURL: "",
+				BaseURL:          "https://app.harness.io",
+				NgManagerSecret:  "test-secret",
 			},
 			expectError: false, // The license client creation doesn't validate empty URLs
 		},
 		{
 			name: "empty BaseURL",
 			config: &config.Config{
-				AccountID:         "test-account",
-				NgManagerBaseURL:  "https://app.harness.io",
-				BaseURL:           "",
-				NgManagerSecret:   "test-secret",
+				AccountID:        "test-account",
+				NgManagerBaseURL: "https://app.harness.io",
+				BaseURL:          "",
+				NgManagerSecret:  "test-secret",
 			},
 			expectError: false, // The license client creation doesn't validate empty URLs
 		},
 		{
 			name: "empty NgManagerSecret",
 			config: &config.Config{
-				AccountID:         "test-account",
-				NgManagerBaseURL:  "https://app.harness.io",
-				BaseURL:           "https://app.harness.io",
-				NgManagerSecret:   "",
+				AccountID:        "test-account",
+				NgManagerBaseURL: "https://app.harness.io",
+				BaseURL:          "https://app.harness.io",
+				NgManagerSecret:  "",
 			},
 			expectError: false, // The license client creation doesn't validate empty secrets
 		},
@@ -169,9 +169,9 @@ func TestClientFactory_CreateLicenseClient(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 			factory := NewClientFactory(tt.config, logger)
-			
+
 			ctx := context.Background()
-			
+
 			if tt.expectError {
 				// For nil config, we expect a panic or error
 				assert.Panics(t, func() {
@@ -190,19 +190,19 @@ func TestClientFactory_CreateLicenseClient(t *testing.T) {
 
 func TestClientFactory_CreateLicenseClientForAccount(t *testing.T) {
 	tests := []struct {
-		name           string
-		config         *config.Config
-		accountID      string
-		expectError    bool
-		errorContains  string
+		name          string
+		config        *config.Config
+		accountID     string
+		expectError   bool
+		errorContains string
 	}{
 		{
 			name: "valid config and account ID",
 			config: &config.Config{
-				AccountID:         "original-account",
-				NgManagerBaseURL:  "https://app.harness.io",
-				BaseURL:           "https://app.harness.io",
-				NgManagerSecret:   "test-secret",
+				AccountID:        "original-account",
+				NgManagerBaseURL: "https://app.harness.io",
+				BaseURL:          "https://app.harness.io",
+				NgManagerSecret:  "test-secret",
 			},
 			accountID:   "different-account",
 			expectError: false,
@@ -210,10 +210,10 @@ func TestClientFactory_CreateLicenseClientForAccount(t *testing.T) {
 		{
 			name: "empty account ID",
 			config: &config.Config{
-				AccountID:         "original-account",
-				NgManagerBaseURL:  "https://app.harness.io",
-				BaseURL:           "https://app.harness.io",
-				NgManagerSecret:   "test-secret",
+				AccountID:        "original-account",
+				NgManagerBaseURL: "https://app.harness.io",
+				BaseURL:          "https://app.harness.io",
+				NgManagerSecret:  "test-secret",
 			},
 			accountID:   "",
 			expectError: false, // Should still work, just with empty account ID
@@ -221,10 +221,10 @@ func TestClientFactory_CreateLicenseClientForAccount(t *testing.T) {
 		{
 			name: "empty NgManagerBaseURL",
 			config: &config.Config{
-				AccountID:         "original-account",
-				NgManagerBaseURL:  "",
-				BaseURL:           "https://app.harness.io",
-				NgManagerSecret:   "test-secret",
+				AccountID:        "original-account",
+				NgManagerBaseURL: "",
+				BaseURL:          "https://app.harness.io",
+				NgManagerSecret:  "test-secret",
 			},
 			accountID:   "test-account",
 			expectError: false, // The license client creation doesn't validate empty URLs
@@ -241,9 +241,9 @@ func TestClientFactory_CreateLicenseClientForAccount(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 			factory := NewClientFactory(tt.config, logger)
-			
+
 			ctx := context.Background()
-			
+
 			if tt.expectError {
 				// For nil config, we expect a panic or error
 				assert.Panics(t, func() {
@@ -262,19 +262,19 @@ func TestClientFactory_CreateLicenseClientForAccount(t *testing.T) {
 
 func TestClientFactory_CreateLicenseClient_WithContext(t *testing.T) {
 	config := &config.Config{
-		AccountID:         "test-account",
-		NgManagerBaseURL:  "https://app.harness.io",
-		BaseURL:           "https://app.harness.io",
-		NgManagerSecret:   "test-secret",
+		AccountID:        "test-account",
+		NgManagerBaseURL: "https://app.harness.io",
+		BaseURL:          "https://app.harness.io",
+		NgManagerSecret:  "test-secret",
 	}
-	
+
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	factory := NewClientFactory(config, logger)
 
 	t.Run("context with timeout", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		
+
 		client, err := factory.CreateLicenseClient(ctx)
 		assert.NoError(t, err)
 		assert.NotNil(t, client)
@@ -283,7 +283,7 @@ func TestClientFactory_CreateLicenseClient_WithContext(t *testing.T) {
 	t.Run("cancelled context", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel() // Cancel immediately
-		
+
 		// The license client creation itself doesn't check context cancellation
 		// but we test that it doesn't panic with cancelled context
 		client, err := factory.CreateLicenseClient(ctx)
@@ -296,25 +296,25 @@ func TestClientFactory_CreateLicenseClient_WithContext(t *testing.T) {
 func TestClientFactory_Consistency(t *testing.T) {
 	// Test that multiple calls with same parameters return equivalent clients
 	config := &config.Config{
-		AccountID:         "test-account",
-		NgManagerBaseURL:  "https://app.harness.io",
-		BaseURL:           "https://app.harness.io",
-		NgManagerSecret:   "test-secret",
+		AccountID:        "test-account",
+		NgManagerBaseURL: "https://app.harness.io",
+		BaseURL:          "https://app.harness.io",
+		NgManagerSecret:  "test-secret",
 	}
-	
+
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	factory := NewClientFactory(config, logger)
-	
+
 	ctx := context.Background()
-	
+
 	client1, err1 := factory.CreateLicenseClient(ctx)
 	require.NoError(t, err1)
 	require.NotNil(t, client1)
-	
+
 	client2, err2 := factory.CreateLicenseClient(ctx)
 	require.NoError(t, err2)
 	require.NotNil(t, client2)
-	
+
 	// Both clients should be created successfully
 	// Note: The factory reuses the same client instance for efficiency
 	// so both calls should return the same instance
@@ -324,20 +324,20 @@ func TestClientFactory_Consistency(t *testing.T) {
 func TestClientFactory_ThreadSafety(t *testing.T) {
 	// Test concurrent access to the factory
 	config := &config.Config{
-		AccountID:         "test-account",
-		NgManagerBaseURL:  "https://app.harness.io",
-		BaseURL:           "https://app.harness.io",
-		NgManagerSecret:   "test-secret",
+		AccountID:        "test-account",
+		NgManagerBaseURL: "https://app.harness.io",
+		BaseURL:          "https://app.harness.io",
+		NgManagerSecret:  "test-secret",
 	}
-	
+
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	factory := NewClientFactory(config, logger)
-	
+
 	const numGoroutines = 10
 	results := make(chan error, numGoroutines)
-	
+
 	ctx := context.Background()
-	
+
 	// Launch multiple goroutines that create license clients concurrently
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
@@ -353,7 +353,7 @@ func TestClientFactory_ThreadSafety(t *testing.T) {
 			results <- nil
 		}()
 	}
-	
+
 	// Collect results
 	for i := 0; i < numGoroutines; i++ {
 		err := <-results
@@ -364,16 +364,16 @@ func TestClientFactory_ThreadSafety(t *testing.T) {
 // Benchmark tests
 func BenchmarkClientFactory_CreateLicenseClient(b *testing.B) {
 	config := &config.Config{
-		AccountID:         "test-account",
-		NgManagerBaseURL:  "https://app.harness.io",
-		BaseURL:           "https://app.harness.io",
-		NgManagerSecret:   "test-secret",
+		AccountID:        "test-account",
+		NgManagerBaseURL: "https://app.harness.io",
+		BaseURL:          "https://app.harness.io",
+		NgManagerSecret:  "test-secret",
 	}
-	
+
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	factory := NewClientFactory(config, logger)
 	ctx := context.Background()
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		client, err := factory.CreateLicenseClient(ctx)
@@ -388,16 +388,16 @@ func BenchmarkClientFactory_CreateLicenseClient(b *testing.B) {
 
 func BenchmarkClientFactory_CreateLicenseClientForAccount(b *testing.B) {
 	config := &config.Config{
-		AccountID:         "original-account",
-		NgManagerBaseURL:  "https://app.harness.io",
-		BaseURL:           "https://app.harness.io",
-		NgManagerSecret:   "test-secret",
+		AccountID:        "original-account",
+		NgManagerBaseURL: "https://app.harness.io",
+		BaseURL:          "https://app.harness.io",
+		NgManagerSecret:  "test-secret",
 	}
-	
+
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	factory := NewClientFactory(config, logger)
 	ctx := context.Background()
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		client, err := factory.CreateLicenseClientForAccount(ctx, "test-account")
