@@ -1,0 +1,92 @@
+# ---------------------------------------------------------#
+#                   Build Harness MCP Server (Rust)       #
+# ---------------------------------------------------------#
+FROM --platform=$BUILDPLATFORM rust:1.90-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache \
+    musl-dev \
+    pkgconfig \
+    openssl-dev \
+    openssl-libs-static
+
+# Setup working directory
+WORKDIR /app
+
+ARG TARGETOS
+ARG TARGETARCH
+
+# Copy dependency files first for better caching
+COPY Cargo.toml Cargo.lock ./
+COPY crates/harness-mcp-server/Cargo.toml ./crates/harness-mcp-server/
+COPY crates/harness-mcp-core/Cargo.toml ./crates/harness-mcp-core/
+COPY crates/harness-mcp-tools/Cargo.toml ./crates/harness-mcp-tools/
+COPY crates/harness-mcp-auth/Cargo.toml ./crates/harness-mcp-auth/
+COPY crates/harness-mcp-client/Cargo.toml ./crates/harness-mcp-client/
+
+# Create dummy source files to build dependencies
+RUN mkdir -p crates/harness-mcp-server/src \
+    crates/harness-mcp-core/src \
+    crates/harness-mcp-tools/src \
+    crates/harness-mcp-auth/src \
+    crates/harness-mcp-client/src && \
+    echo "fn main() {}" > crates/harness-mcp-server/src/main.rs && \
+    echo "// dummy" > crates/harness-mcp-core/src/lib.rs && \
+    echo "// dummy" > crates/harness-mcp-tools/src/lib.rs && \
+    echo "// dummy" > crates/harness-mcp-auth/src/lib.rs && \
+    echo "// dummy" > crates/harness-mcp-client/src/lib.rs
+
+# Build dependencies
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/app/target \
+    cargo build --release && \
+    rm -rf crates/*/src
+
+# Copy the actual source code
+COPY crates/ ./crates/
+COPY rustfmt.toml clippy.toml ./
+
+# Build the application
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/app/target \
+    cargo build --release && \
+    cp target/release/harness-mcp-server /usr/local/bin/harness-mcp-server
+
+### Pull CA Certs
+FROM --platform=$BUILDPLATFORM alpine:latest AS cert-image
+RUN apk --update add ca-certificates
+
+# ---------------------------------------------------------#
+#                   Create final image                     #
+# ---------------------------------------------------------#
+FROM alpine:3.21 AS final
+
+# Install runtime dependencies
+RUN apk add --no-cache \
+    ca-certificates \
+    libgcc
+
+# Setup app directory
+WORKDIR /app
+VOLUME /data
+
+ENV XDG_CACHE_HOME=/data
+
+# Copy the binary from builder
+COPY --from=builder /usr/local/bin/harness-mcp-server /app/harness-mcp-server
+
+# Copy CA certificates
+COPY --from=cert-image /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+
+# Create non-root user
+RUN addgroup -g 1001 -S harness && \
+    adduser -u 1001 -S harness -G harness
+
+# Change ownership of app directory
+RUN chown -R harness:harness /app /data
+
+# Switch to non-root user
+USER harness
+
+ENTRYPOINT ["/app/harness-mcp-server"]
+CMD ["stdio"]

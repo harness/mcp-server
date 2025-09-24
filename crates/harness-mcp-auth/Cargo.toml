@@ -1,0 +1,42 @@
+[package]
+name = "harness-mcp-auth"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Authentication and authorization for Harness MCP Server"
+
+[dependencies]
+# Workspace crates
+harness-mcp-core = { path = "../harness-mcp-core" }
+
+# Async runtime
+tokio.workspace = true
+
+# HTTP
+axum.workspace = true
+tower.workspace = true
+http.workspace = true
+
+# Serialization
+serde.workspace = true
+serde_json.workspace = true
+
+# Error handling
+thiserror.workspace = true
+anyhow.workspace = true
+
+# Logging
+tracing.workspace = true
+
+# Auth
+jsonwebtoken.workspace = true
+
+# Utilities
+uuid.workspace = true
+chrono.workspace = true
+
+[dev-dependencies]
+mockito.workspace = true

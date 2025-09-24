@@ -1,0 +1,139 @@
+# Rust Makefile for Harness MCP Server
+
+# Variables
+CARGO := cargo
+BINARY_NAME := harness-mcp-server
+TARGET_DIR := target
+RELEASE_DIR := $(TARGET_DIR)/release
+DEBUG_DIR := $(TARGET_DIR)/debug
+
+# Default target
+.PHONY: all
+all: build
+
+# Build targets
+.PHONY: build
+build: ## Build the project in debug mode
+	$(CARGO) build
+
+.PHONY: release
+release: ## Build the project in release mode
+	$(CARGO) build --release
+
+.PHONY: install
+install: release ## Install the binary to cargo bin directory
+	$(CARGO) install --path crates/harness-mcp-server
+
+# Development targets
+.PHONY: check
+check: ## Check the project for errors
+	$(CARGO) check
+
+.PHONY: test
+test: ## Run all tests
+	$(CARGO) test
+
+.PHONY: test-e2e
+test-e2e: ## Run end-to-end tests
+	$(CARGO) test --test '*' --features e2e
+
+.PHONY: bench
+bench: ## Run benchmarks
+	$(CARGO) bench
+
+# Code quality targets
+.PHONY: fmt
+fmt: ## Format the code
+	$(CARGO) fmt
+
+.PHONY: fmt-check
+fmt-check: ## Check if code is formatted
+	$(CARGO) fmt -- --check
+
+.PHONY: clippy
+clippy: ## Run clippy lints
+	$(CARGO) clippy -- -D warnings
+
+.PHONY: clippy-fix
+clippy-fix: ## Fix clippy suggestions
+	$(CARGO) clippy --fix
+
+.PHONY: audit
+audit: ## Audit dependencies for security vulnerabilities
+	$(CARGO) audit
+
+# Documentation targets
+.PHONY: doc
+doc: ## Generate documentation
+	$(CARGO) doc --no-deps
+
+.PHONY: doc-open
+doc-open: ## Generate and open documentation
+	$(CARGO) doc --no-deps --open
+
+# Clean targets
+.PHONY: clean
+clean: ## Clean build artifacts
+	$(CARGO) clean
+
+.PHONY: clean-all
+clean-all: clean ## Clean all artifacts including Cargo.lock
+	rm -f Cargo.lock
+
+# Docker targets
+.PHONY: docker-build
+docker-build: ## Build Docker image
+	docker build -t harness/mcp-server:latest .
+
+.PHONY: docker-run
+docker-run: ## Run Docker container
+	docker run -it --rm harness/mcp-server:latest
+
+# Development setup
+.PHONY: setup
+setup: ## Set up development environment
+	rustup component add rustfmt clippy
+	cargo install cargo-audit
+
+.PHONY: update
+update: ## Update dependencies
+	$(CARGO) update
+
+# Binary targets
+.PHONY: run
+run: ## Run the binary in debug mode
+	$(CARGO) run --bin $(BINARY_NAME)
+
+.PHONY: run-release
+run-release: ## Run the binary in release mode
+	$(CARGO) run --release --bin $(BINARY_NAME)
+
+# Utility targets
+.PHONY: size
+size: release ## Show binary size
+	@echo "Binary size:"
+	@ls -lh $(RELEASE_DIR)/$(BINARY_NAME) | awk '{print $$5 "\t" $$9}'
+
+.PHONY: deps
+deps: ## Show dependency tree
+	$(CARGO) tree
+
+.PHONY: outdated
+outdated: ## Check for outdated dependencies
+	$(CARGO) outdated
+
+# CI targets
+.PHONY: ci
+ci: fmt-check clippy test ## Run CI checks
+
+.PHONY: ci-full
+ci-full: fmt-check clippy test audit doc ## Run full CI checks
+
+# Help target
+.PHONY: help
+help: ## Show this help message
+	@echo "Available targets:"
+	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+
+# Default help
+.DEFAULT_GOAL := help

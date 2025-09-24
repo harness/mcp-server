@@ -1,0 +1,39 @@
+[package]
+name = "harness-mcp-client"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "HTTP client for Harness services"
+
+[dependencies]
+# Workspace crates
+harness-mcp-core = { path = "../harness-mcp-core" }
+
+# Async runtime
+tokio.workspace = true
+
+# HTTP client
+reqwest.workspace = true
+
+# Serialization
+serde.workspace = true
+serde_json.workspace = true
+
+# Error handling
+thiserror.workspace = true
+anyhow.workspace = true
+
+# Logging
+tracing.workspace = true
+
+# Utilities
+uuid.workspace = true
+chrono.workspace = true
+url.workspace = true
+bytes.workspace = true
+
+[dev-dependencies]
+mockito.workspace = true

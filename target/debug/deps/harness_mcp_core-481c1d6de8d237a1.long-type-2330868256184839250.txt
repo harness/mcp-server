@@ -1,0 +1,2 @@
+fn(axum::extract::State<Arc<Config>>, Json<serde_json::Value>) -> impl futures::Future<Output = std::result::Result<Json<serde_json::Value>, error::Error>> {handle_mcp_request}
+fn(axum::extract::State<Arc<Config>>, Json<serde_json::Value>) -> impl futures::Future<Output = std::result::Result<Json<serde_json::Value>, error::Error>> {handle_mcp_request}: Handler<_, _>
