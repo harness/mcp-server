@@ -1,0 +1,158 @@
+# Test configuration for Harness MCP Server
+# This file contains test scenarios and expected behaviors
+
+[test_scenarios]
+
+[test_scenarios.basic_stdio]
+description = "Basic stdio mode test"
+mode = "stdio"
+api_key = "pat.test_account.test_token.test_secret"
+expected_tools = ["test"]
+expected_capabilities = ["tools"]
+
+[test_scenarios.http_server]
+description = "HTTP server mode test"
+mode = "http"
+port = 8080
+path = "/mcp"
+internal = true
+bearer_token = "test_bearer_token"
+
+[test_scenarios.pipeline_tools]
+description = "Pipeline tools enabled"
+mode = "stdio"
+api_key = "pat.test_account.test_token.test_secret"
+toolsets = ["pipelines"]
+expected_tools = ["test", "list_pipelines", "get_pipeline"]
+
+[test_scenarios.read_only]
+description = "Read-only mode test"
+mode = "stdio"
+api_key = "pat.test_account.test_token.test_secret"
+read_only = true
+expected_behavior = "no_write_operations"
+
+[test_scenarios.debug_logging]
+description = "Debug logging enabled"
+mode = "stdio"
+api_key = "pat.test_account.test_token.test_secret"
+debug = true
+log_file = "/tmp/test_harness_mcp.log"
+
+[mcp_protocol_tests]
+
+[mcp_protocol_tests.initialize]
+description = "Test MCP initialize handshake"
+request = '''
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "initialize",
+  "params": {
+    "protocolVersion": "2024-11-05",
+    "capabilities": {},
+    "clientInfo": {
+      "name": "test-client",
+      "version": "1.0.0"
+    }
+  }
+}
+'''
+expected_response_fields = ["protocolVersion", "capabilities", "serverInfo"]
+
+[mcp_protocol_tests.tools_list]
+description = "Test tools/list method"
+request = '''
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/list"
+}
+'''
+expected_response_fields = ["tools"]
+requires_initialization = true
+
+[mcp_protocol_tests.tools_call]
+description = "Test tools/call method"
+request = '''
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "method": "tools/call",
+  "params": {
+    "name": "test",
+    "arguments": {
+      "message": "Hello from test!"
+    }
+  }
+}
+'''
+expected_response_fields = ["content", "isError"]
+requires_initialization = true
+
+[api_compatibility_tests]
+
+[api_compatibility_tests.harness_api_key]
+description = "Test Harness API key format validation"
+valid_keys = [
+  "pat.account123.token456.secret789",
+  "pat.my_account.my_token.my_secret"
+]
+invalid_keys = [
+  "invalid_key",
+  "pat.only_two_parts",
+  "",
+  "bearer_token_format"
+]
+
+[api_compatibility_tests.scope_handling]
+description = "Test scope parameter handling"
+test_cases = [
+  { account_id = "test_account", org_id = "test_org", project_id = "test_project" },
+  { account_id = "test_account", org_id = "test_org" },
+  { account_id = "test_account" }
+]
+
+[error_handling_tests]
+
+[error_handling_tests.invalid_json]
+description = "Test handling of invalid JSON"
+invalid_requests = [
+  "invalid json",
+  '{"incomplete": json',
+  '{"jsonrpc": "1.0"}',  # Wrong version
+  '{"jsonrpc": "2.0", "method": "unknown_method"}'  # Missing ID
+]
+
+[error_handling_tests.missing_parameters]
+description = "Test handling of missing required parameters"
+test_cases = [
+  { method = "tools/call", missing = "name" },
+  { method = "tools/call", missing = "arguments" }
+]
+
+[performance_tests]
+
+[performance_tests.concurrent_requests]
+description = "Test handling of concurrent requests"
+concurrent_count = 10
+request_type = "tools/list"
+
+[performance_tests.large_responses]
+description = "Test handling of large tool responses"
+tool_name = "test"
+large_message_size = 10000  # characters
+
+[integration_tests]
+
+[integration_tests.stdio_transport]
+description = "Test stdio transport end-to-end"
+input_file = "tests/fixtures/stdio_input.jsonl"
+expected_output_file = "tests/fixtures/stdio_expected_output.jsonl"
+
+[integration_tests.http_transport]
+description = "Test HTTP transport end-to-end"
+server_port = 8081
+test_requests = [
+  { method = "POST", path = "/mcp", content_type = "application/json" }
+]

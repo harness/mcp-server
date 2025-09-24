@@ -1,0 +1,26 @@
+[package]
+name = "harness-mcp-server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Harness MCP Server - Model Context Protocol server for Harness platform"
+
+[[bin]]
+name = "harness-mcp-server"
+path = "src/main.rs"
+
+[dependencies]
+# Workspace dependencies
+tokio = { workspace = true }
+clap = { workspace = true }
+tracing = { workspace = true }
+anyhow = { workspace = true }
+
+# Local dependencies
+harness-mcp-core = { path = "../harness-mcp-core" }
+
+[dev-dependencies]
+tokio-test = "0.4"

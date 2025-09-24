@@ -1,0 +1,3 @@
+{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05","capabilities":{"tools":{"listChanged":false}},"serverInfo":{"name":"harness-mcp-server","version":"0.1.0"}}}
+{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"test","description":"A simple test tool","inputSchema":{"type":"object","properties":{"message":{"type":"string","description":"A test message"}}}}]}}
+{"jsonrpc":"2.0","id":3,"result":{"content":[{"type":"text","text":"Test tool executed with message: Hello from integration test!"}],"isError":false}}
