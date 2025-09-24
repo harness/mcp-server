@@ -145,38 +145,13 @@ func initLicenseValidation(ctx context.Context, config *config.Config) (*License
 
 // InitToolsets initializes and returns the toolset groups
 func InitToolsets(ctx context.Context, config *config.Config) (*toolsets.ToolsetGroup, error) {
-	// Create a toolset group
+	// Create a toolset tsg
 	tsg := toolsets.NewToolsetGroup(config.ReadOnly)
 
 	// Initialize license validation if enabled
-	var licenseInfo *LicenseInfo
-	var err error
 	if config.EnableLicense {
-		licenseInfo, err = initLicenseValidation(ctx, config)
-		if err != nil {
-			slog.Warn("License validation failed", "error", err)
-			return nil, fmt.Errorf("failed to fetch license details, error: %w", err)
-		}
-
-		// Create a module registry
-		registry := modules.NewModuleRegistry(config, tsg)
-
-		// Get all modules that are enabled based on configuration
-		configEnabledModules := registry.GetEnabledModules()
-		// Get enabled modules based on configuration and license
-
-		enabledModules := getEnabledModules(configEnabledModules, licenseInfo)
-		// Register toolsets for enabled modules
-		for _, module := range enabledModules {
-			slog.Info("registering toolsets for", "modules", module.ID())
-			if err := module.RegisterToolsets(); err != nil {
-				return nil, fmt.Errorf("failed to register toolsets for module %s: %w", module.ID(), err)
-			}
-
-			// Enable toolsets for this module
-			if err := module.EnableToolsets(tsg); err != nil {
-				return nil, fmt.Errorf("failed to enable toolsets for module %s: %w", module.ID(), err)
-			}
+		if err := initModuleBasedToolsets(ctx, config, tsg); err != nil {
+			return nil, err
 		}
 	} else {
 		// License validation is disabled, use legacy toolset registration
@@ -185,9 +160,57 @@ func InitToolsets(ctx context.Context, config *config.Config) (*toolsets.Toolset
 		}
 	}
 
+	// Register all toolsets with the main tracker for tool-to-toolset mapping
+	registerAllToolsetsWithTracker(tsg)
+
 	return tsg, nil
 }
 
+// registerAllToolsetsWithTracker registers all toolsets in the group with the main tracker
+// This ensures that findToolGroup() can find which toolset a tool belongs to
+func registerAllToolsetsWithTracker(group *toolsets.ToolsetGroup) {
+	tracker := toolsets.GetMainToolTracker()
+
+	// Register each toolset with the tracker
+	for _, toolset := range group.Toolsets {
+		if err := tracker.RegisterToolGroup(toolset); err != nil {
+			slog.Warn("Failed to register toolset with tracker", "toolset", toolset.Name, "error", err)
+		}
+	}
+
+	slog.Info("Registered toolsets with tracker", "count", len(group.Toolsets))
+}
+
+// New function that handles the module-based initialization
+func initModuleBasedToolsets(ctx context.Context, config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Get license info
+	licenseInfo, err := initLicenseValidation(ctx, config)
+	if err != nil {
+		slog.Warn("License validation failed", "error", err)
+		return fmt.Errorf("failed to fetch license details, error: %w", err)
+	}
+
+	// Create module registry and get enabled modules
+	registry := modules.NewModuleRegistry(config, tsg)
+	configEnabledModules := registry.GetEnabledModules()
+	enabledModules := getEnabledModules(configEnabledModules, licenseInfo)
+
+	// Register and enable toolsets for each module
+	for _, module := range enabledModules {
+		slog.Info("registering toolsets for", "modules", module.ID())
+		if err := module.RegisterToolsets(); err != nil {
+			return fmt.Errorf("failed to register toolsets for module %s: %w", module.ID(), err)
+		}
+
+		if err := module.EnableToolsets(tsg); err != nil {
+			return fmt.Errorf("failed to enable toolsets for module %s: %w", module.ID(), err)
+		}
+	}
+
+	return nil
+}
+
+// initLegacyToolsets initializes toolsets using the legacy approach (without modules)
 func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Check if specific toolsets are enabled
 	if len(config.Toolsets) == 0 {

@@ -536,6 +536,11 @@ func runHTTPServer(ctx context.Context, config config.Config) error {
 		slog.Error("Failed to initialize toolsets", "error", err)
 	}
 
+	// Create module registry for HTTP mode
+	moduleRegistry := modules.NewModuleRegistry(&config, toolsets)
+	// Set the global registry for use by middleware
+	modules.SetGlobalRegistry(moduleRegistry)
+
 	// Register the tools with the server
 	toolsets.RegisterTools(harnessServer)
 

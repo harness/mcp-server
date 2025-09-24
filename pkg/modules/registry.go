@@ -15,14 +15,15 @@ import (
 
 // ModuleRegistry holds all available modules
 type ModuleRegistry struct {
-	modules []Module
-	config  *config.Config
-	tsg     *toolsets.ToolsetGroup
+	modules          []Module
+	config           *config.Config
+	tsg              *toolsets.ToolsetGroup
+	moduleToToolsets map[string][]string // Maps module IDs to their toolsets
 }
 
 // NewModuleRegistry creates a new module registry with all available modules
 func NewModuleRegistry(config *config.Config, tsg *toolsets.ToolsetGroup) *ModuleRegistry {
-	return &ModuleRegistry{
+	registry := &ModuleRegistry{
 		modules: []Module{
 			NewCoreModule(config, tsg),
 			NewCIModule(config, tsg),
@@ -38,11 +39,18 @@ func NewModuleRegistry(config *config.Config, tsg *toolsets.ToolsetGroup) *Modul
 			NewHARModule(config, tsg),
 			NewDbOpsModule(config, tsg),
 			NewACMModule(config, tsg),
-			NewFMEModule(config, tsg),
 		},
-		config: config,
-		tsg:    tsg,
+		config:           config,
+		tsg:              tsg,
+		moduleToToolsets: make(map[string][]string),
 	}
+
+	// Populate the moduleToToolsets mapping
+	for _, module := range registry.modules {
+		registry.moduleToToolsets[module.ID()] = module.Toolsets()
+	}
+
+	return registry
 }
 
 // GetAllModules returns all available modules
@@ -86,6 +94,19 @@ func (r *ModuleRegistry) GetEnabledModules() []Module {
 	return enabledModules
 }
 
+// GetToolsetsForModule returns the toolsets associated with a module ID
+func (r *ModuleRegistry) GetToolsetsForModule(moduleID string) []string {
+	if toolsets, exists := r.moduleToToolsets[moduleID]; exists {
+		return toolsets
+	}
+	return []string{}
+}
+
+// GetToolsetGroup returns the underlying toolset group
+func (r *ModuleRegistry) GetToolsetGroup() *toolsets.ToolsetGroup {
+	return r.tsg
+}
+
 // RegisterPrompts registers all prompts for enabled modules with the given MCP server.
 // It loops through all enabled modules, checks if each module has prompts, and if so,
 // registers the prompts with the MCP server.
@@ -101,6 +122,19 @@ func (r *ModuleRegistry) RegisterPrompts(mcpServer *server.MCPServer) error {
 	}
 
 	return nil
+}
+
+// Global registry instance
+var globalRegistry *ModuleRegistry
+
+// SetGlobalRegistry sets the global module registry instance
+func SetGlobalRegistry(registry *ModuleRegistry) {
+	globalRegistry = registry
+}
+
+// GetGlobalRegistry returns the global module registry instance
+func GetGlobalRegistry() *ModuleRegistry {
+	return globalRegistry
 }
 
 func registerPrompts(moduleID string, cfg *config.Config, mcpServer *server.MCPServer) error {
