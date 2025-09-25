@@ -230,12 +230,12 @@ var (
 			if err != nil {
 				return fmt.Errorf("failed to unmarshal enabled modules: %w", err)
 			}
-			
+
 			var logFormat enum.LogFormatType = enum.LogFormatText
 			if viper.GetString("log_format") == "json" {
 				logFormat = enum.LogFormatJSON
 			}
-				
+
 			cfg := config.Config{
 				// Common fields
 				Version:       version,
@@ -402,7 +402,7 @@ func init() {
 	_ = viper.BindPFlag("log_file", rootCmd.PersistentFlags().Lookup("log-file"))
 	_ = viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
 	_ = viper.BindPFlag("output_dir", rootCmd.PersistentFlags().Lookup("output-dir"))
-
+	_ = viper.BindPFlag("log_format", rootCmd.PersistentFlags().Lookup("log-format"))
 	// Bind transport configuration flags to viper
 	_ = viper.BindPFlag("http_port", httpServerCmd.PersistentFlags().Lookup("http-port"))
 	_ = viper.BindPFlag("http_path", httpServerCmd.PersistentFlags().Lookup("http-path"))
@@ -536,7 +536,7 @@ func initLogger(config config.Config) error {
 	// Set the default logger
 	logger := slog.New(handler)
 	slog.SetDefault(logger)
-	
+
 	return nil
 }
 
