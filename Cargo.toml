@@ -1,0 +1,67 @@
+[package]
+name = "harness-mcp-server"
+version = "0.1.0"
+edition = "2021"
+authors = ["Harness Inc."]
+description = "Harness MCP Server - A Model Context Protocol server for Harness APIs"
+license = "Apache-2.0"
+repository = "https://github.com/harness/mcp-server"
+readme = "README.md"
+
+[[bin]]
+name = "harness-mcp-server"
+path = "src/main.rs"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1.0", features = ["full"] }
+
+# HTTP server and routing
+axum = { version = "0.7", features = ["macros", "tracing"] }
+tower = { version = "0.4", features = ["util", "timeout", "load-shed", "limit"] }
+tower-http = { version = "0.5", features = ["fs", "trace", "cors"] }
+hyper = { version = "1.0", features = ["full"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Configuration
+figment = { version = "0.10", features = ["toml", "json", "yaml", "env"] }
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Logging and tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# CLI
+clap = { version = "4.0", features = ["derive", "env"] }
+
+# HTTP client
+reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false }
+
+# Utilities
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+url = "2.0"
+async-trait = "0.1"
+
+# MCP protocol (placeholder - will need actual MCP Rust implementation)
+# mcp = { git = "https://github.com/modelcontextprotocol/rust-sdk", branch = "main" }
+
+[dev-dependencies]
+tokio-test = "0.4"
+proptest = "1.0"
+tempfile = "3.0"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.dev]
+debug = true

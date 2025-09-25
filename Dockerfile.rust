@@ -1,0 +1,81 @@
+# ---------------------------------------------------------#
+#                   Build Rust image                       #
+# ---------------------------------------------------------#
+FROM --platform=$BUILDPLATFORM rust:1.75-alpine AS builder
+
+# Setup working dir
+WORKDIR /app
+
+ARG TARGETOS
+ARG TARGETARCH
+
+# Install build dependencies
+RUN apk add --no-cache \
+    musl-dev \
+    pkgconfig \
+    openssl-dev \
+    openssl-libs-static
+
+# Set up Rust target for cross-compilation
+RUN case "$TARGETARCH" in \
+    "amd64") RUST_TARGET="x86_64-unknown-linux-musl" ;; \
+    "arm64") RUST_TARGET="aarch64-unknown-linux-musl" ;; \
+    *) echo "Unsupported architecture: $TARGETARCH" && exit 1 ;; \
+    esac && \
+    rustup target add $RUST_TARGET && \
+    echo "RUST_TARGET=$RUST_TARGET" > /tmp/rust_target
+
+# Copy dependency files first for better caching
+COPY Cargo.toml Cargo.lock ./
+
+# Create a dummy main.rs to build dependencies
+RUN mkdir src && echo "fn main() {}" > src/main.rs
+
+# Build dependencies
+RUN . /tmp/rust_target && \
+    cargo build --release --target $RUST_TARGET && \
+    rm -rf src
+
+# Copy the actual source code
+COPY src ./src
+
+# Build the application
+RUN . /tmp/rust_target && \
+    cargo build --release --target $RUST_TARGET && \
+    cp target/$RUST_TARGET/release/harness-mcp-server /app/harness-mcp-server
+
+### Pull CA Certs
+FROM --platform=$BUILDPLATFORM alpine:latest AS cert-image
+
+RUN apk --update add ca-certificates
+
+# ---------------------------------------------------------#
+#                   Create final image                     #
+# ---------------------------------------------------------#
+FROM alpine:3.19 AS final
+
+# Setup app dir and its content
+WORKDIR /app
+VOLUME /data
+
+ENV XDG_CACHE_HOME=/data
+
+# Install runtime dependencies
+RUN apk add --no-cache \
+    ca-certificates \
+    libgcc
+
+COPY --from=builder /app/harness-mcp-server /app/harness-mcp-server
+COPY --from=cert-image /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+
+# Create non-root user
+RUN addgroup -g 1001 -S harness && \
+    adduser -u 1001 -S harness -G harness
+
+# Change ownership of app directory
+RUN chown -R harness:harness /app /data
+
+USER harness
+
+ENTRYPOINT ["/app/harness-mcp-server"]
+CMD ["stdio"]

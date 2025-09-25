@@ -1,0 +1,127 @@
+# Rust-specific Makefile for Harness MCP Server
+
+# Variables
+CARGO := cargo
+BINARY_NAME := harness-mcp-server
+TARGET_DIR := target
+RELEASE_DIR := $(TARGET_DIR)/release
+DEBUG_DIR := $(TARGET_DIR)/debug
+
+# Default target
+.PHONY: all
+all: build
+
+# Build targets
+.PHONY: build
+build: ## Build the project in debug mode
+	$(CARGO) build
+
+.PHONY: release
+release: ## Build the project in release mode
+	$(CARGO) build --release
+
+.PHONY: clean
+clean: ## Clean build artifacts
+	$(CARGO) clean
+
+# Development targets
+.PHONY: check
+check: ## Check the project for errors
+	$(CARGO) check
+
+.PHONY: clippy
+clippy: ## Run clippy linter
+	$(CARGO) clippy --all-targets --all-features -- -D warnings
+
+.PHONY: fmt
+fmt: ## Format the code
+	$(CARGO) fmt
+
+.PHONY: fmt-check
+fmt-check: ## Check if code is formatted
+	$(CARGO) fmt -- --check
+
+# Testing targets
+.PHONY: test
+test: ## Run tests
+	$(CARGO) test
+
+.PHONY: test-release
+test-release: ## Run tests in release mode
+	$(CARGO) test --release
+
+.PHONY: test-e2e
+test-e2e: ## Run end-to-end tests
+	$(CARGO) test --test e2e
+
+# Security and audit
+.PHONY: audit
+audit: ## Run security audit
+	$(CARGO) audit
+
+.PHONY: outdated
+outdated: ## Check for outdated dependencies
+	$(CARGO) outdated
+
+# Documentation
+.PHONY: doc
+doc: ## Generate documentation
+	$(CARGO) doc --no-deps
+
+.PHONY: doc-open
+doc-open: ## Generate and open documentation
+	$(CARGO) doc --no-deps --open
+
+# Installation targets
+.PHONY: install
+install: ## Install the binary
+	$(CARGO) install --path .
+
+.PHONY: install-tools
+install-tools: ## Install development tools
+	$(CARGO) install cargo-audit
+	$(CARGO) install cargo-outdated
+	$(CARGO) install cargo-watch
+
+# Development workflow
+.PHONY: dev
+dev: ## Run in development mode with auto-reload
+	$(CARGO) watch -x 'run -- stdio'
+
+.PHONY: dev-http
+dev-http: ## Run HTTP server in development mode with auto-reload
+	$(CARGO) watch -x 'run -- http-server'
+
+# CI targets
+.PHONY: ci
+ci: fmt-check clippy test audit ## Run all CI checks
+
+.PHONY: ci-release
+ci-release: fmt-check clippy test-release audit ## Run all CI checks in release mode
+
+# Docker targets
+.PHONY: docker-build
+docker-build: ## Build Docker image
+	docker build -t harness/mcp-server:latest -f Dockerfile.rust .
+
+.PHONY: docker-run
+docker-run: ## Run Docker container
+	docker run -it --rm harness/mcp-server:latest
+
+# Utility targets
+.PHONY: deps
+deps: ## Update dependencies
+	$(CARGO) update
+
+.PHONY: tree
+tree: ## Show dependency tree
+	$(CARGO) tree
+
+.PHONY: bloat
+bloat: ## Analyze binary size
+	$(CARGO) bloat --release
+
+# Help target
+.PHONY: help
+help: ## Show this help message
+	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
