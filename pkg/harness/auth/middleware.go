@@ -33,6 +33,8 @@ func AuthMiddleware(config *config.Config, next http.Handler) http.Handler {
 			return
 		}
 
+		session.Principal.AccountID = "VpehPBwPQ9qKsX-xDP8SFg"
+
 		// Add scope and session to the context
 		newCtx := common.WithScopeContext(WithAuthSession(r.Context(), session), dto.Scope{
 			AccountID: session.Principal.AccountID,

@@ -1,6 +1,10 @@
 package config
 
-import "github.com/harness/harness-mcp/pkg/types/enum"
+import (
+	"time"
+
+	"github.com/harness/harness-mcp/pkg/types/enum"
+)
 
 type Config struct {
 	// Common fields for both modes
@@ -73,4 +77,9 @@ type Config struct {
 	DBOpsSvcSecret          string
 	ACLSvcBaseURL           string
 	ACLSvcSecret            string
+	RBACSvcBaseURL          string
+	RBACSvcSecret           string
+
+	LicenseCacheTTL           time.Duration
+	LicenseCacheCleanInterval time.Duration
 }
