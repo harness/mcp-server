@@ -163,7 +163,7 @@ func (m *HTTPToolFilteringMiddleware) enrichContextWithDynamicFiltering(ctx cont
 
 	// Extract requested modules from headers
 	requestedModules := extractRequestedModulesFromHTTPHeaders(r, logger)
-	
+
 	// Get licensed modules for the account
 	licensedModules, err := getLicensedModulesForAccount(ctx, accountID, m.Config, logger)
 	if err != nil {
@@ -173,7 +173,7 @@ func (m *HTTPToolFilteringMiddleware) enrichContextWithDynamicFiltering(ctx cont
 
 	// If no requested modules, use all licensed modules
 	if len(requestedModules) == 0 {
-		logger.Debug("No requested modules found in headers, using all licensed modules", 
+		logger.Debug("No requested modules found in headers, using all licensed modules",
 			"licensed_modules", licensedModules)
 		requestedModules = licensedModules
 	}
