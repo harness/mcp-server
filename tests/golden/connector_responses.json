@@ -1,0 +1,55 @@
+{
+  "list_connector_catalogue": {
+    "request": {
+      "name": "list_connector_catalogue",
+      "arguments": {
+        "account_id": "test_account"
+      }
+    },
+    "expected_response": {
+      "content": [
+        {
+          "text": "{\"data\":[{\"name\":\"GitHub\",\"type\":\"Github\",\"category\":\"CODE_REPO\",\"description\":\"Connect to GitHub repositories\"},{\"name\":\"Docker Registry\",\"type\":\"DockerRegistry\",\"category\":\"ARTIFACT_SERVER\",\"description\":\"Connect to Docker registries\"},{\"name\":\"Kubernetes Cluster\",\"type\":\"K8sCluster\",\"category\":\"CLOUD_PROVIDER\",\"description\":\"Connect to Kubernetes clusters\"}]}"
+        }
+      ],
+      "is_error": null
+    }
+  },
+  "get_connector_details": {
+    "request": {
+      "name": "get_connector_details",
+      "arguments": {
+        "connector_type": "Github",
+        "account_id": "test_account"
+      }
+    },
+    "expected_response": {
+      "content": [
+        {
+          "text": "{\"data\":{\"name\":\"GitHub\",\"type\":\"Github\",\"category\":\"CODE_REPO\",\"description\":\"Connect to GitHub repositories\",\"fields\":[{\"name\":\"url\",\"type\":\"string\",\"required\":true,\"description\":\"GitHub repository URL\"},{\"name\":\"username\",\"type\":\"string\",\"required\":false,\"description\":\"GitHub username\"},{\"name\":\"token\",\"type\":\"secret\",\"required\":true,\"description\":\"GitHub personal access token\"}]}}"
+        }
+      ],
+      "is_error": null
+    }
+  },
+  "list_connectors": {
+    "request": {
+      "name": "list_connectors",
+      "arguments": {
+        "account_id": "test_account",
+        "org_id": "test_org",
+        "project_id": "test_project",
+        "page": 0,
+        "size": 20
+      }
+    },
+    "expected_response": {
+      "content": [
+        {
+          "text": "{\"data\":{\"content\":[{\"identifier\":\"github_connector_1\",\"name\":\"GitHub Main\",\"type\":\"Github\",\"category\":\"CODE_REPO\",\"description\":\"Main GitHub connector\"},{\"identifier\":\"docker_connector_1\",\"name\":\"Docker Hub\",\"type\":\"DockerRegistry\",\"category\":\"ARTIFACT_SERVER\",\"description\":\"Docker Hub connector\"}],\"totalPages\":1,\"totalElements\":2,\"pageSize\":20,\"pageIndex\":0}}"
+        }
+      ],
+      "is_error": null
+    }
+  }
+}

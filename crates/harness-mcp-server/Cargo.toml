@@ -1,0 +1,41 @@
+[package]
+name = "harness-mcp-server"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description.workspace = true
+
+[[bin]]
+name = "harness-mcp-server"
+path = "src/main.rs"
+
+[dependencies]
+# Workspace crates
+harness-mcp-core = { path = "../harness-mcp-core" }
+harness-mcp-client = { path = "../harness-mcp-client" }
+harness-mcp-tools = { path = "../harness-mcp-tools" }
+harness-mcp-auth = { path = "../harness-mcp-auth" }
+harness-mcp-config = { path = "../harness-mcp-config" }
+
+# External dependencies
+tokio.workspace = true
+axum.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+clap.workspace = true
+figment.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+tokio-test = "0.4"

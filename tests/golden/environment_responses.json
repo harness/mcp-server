@@ -1,0 +1,41 @@
+{
+  "list_environments": {
+    "request": {
+      "name": "list_environments",
+      "arguments": {
+        "account_id": "test_account",
+        "org_id": "test_org",
+        "project_id": "test_project",
+        "page": 0,
+        "size": 20
+      }
+    },
+    "expected_response": {
+      "content": [
+        {
+          "text": "{\"data\":{\"content\":[{\"identifier\":\"prod_env\",\"name\":\"Production\",\"description\":\"Production environment\",\"type\":\"Production\",\"tags\":{}},{\"identifier\":\"staging_env\",\"name\":\"Staging\",\"description\":\"Staging environment\",\"type\":\"PreProduction\",\"tags\":{}}],\"totalPages\":1,\"totalElements\":2,\"pageSize\":20,\"pageIndex\":0}}"
+        }
+      ],
+      "is_error": null
+    }
+  },
+  "get_environment": {
+    "request": {
+      "name": "get_environment",
+      "arguments": {
+        "environment_id": "prod_env",
+        "account_id": "test_account",
+        "org_id": "test_org",
+        "project_id": "test_project"
+      }
+    },
+    "expected_response": {
+      "content": [
+        {
+          "text": "{\"data\":{\"identifier\":\"prod_env\",\"name\":\"Production\",\"description\":\"Production environment\",\"type\":\"Production\",\"tags\":{},\"yaml\":\"environment:\\n  name: Production\\n  identifier: prod_env\\n  type: Production\\n  variables: []\"}}"
+        }
+      ],
+      "is_error": null
+    }
+  }
+}

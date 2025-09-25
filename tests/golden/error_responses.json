@@ -1,0 +1,105 @@
+{
+  "tool_not_found": {
+    "request": {
+      "name": "nonexistent_tool",
+      "arguments": {}
+    },
+    "expected_response": {
+      "content": [
+        {
+          "text": "Tool 'nonexistent_tool' not found"
+        }
+      ],
+      "is_error": true
+    }
+  },
+  "missing_required_parameter": {
+    "request": {
+      "name": "get_pipeline",
+      "arguments": {
+        "account_id": "test_account"
+      }
+    },
+    "expected_response": {
+      "content": [
+        {
+          "text": "Missing required parameter: pipeline_id"
+        }
+      ],
+      "is_error": true
+    }
+  },
+  "invalid_account_id": {
+    "request": {
+      "name": "list_pipelines",
+      "arguments": {
+        "account_id": "invalid_account",
+        "org_id": "test_org",
+        "project_id": "test_project"
+      }
+    },
+    "expected_response": {
+      "content": [
+        {
+          "text": "Invalid account ID: invalid_account"
+        }
+      ],
+      "is_error": true
+    }
+  },
+  "authentication_failed": {
+    "request": {
+      "name": "list_pipelines",
+      "arguments": {
+        "account_id": "test_account",
+        "org_id": "test_org",
+        "project_id": "test_project"
+      }
+    },
+    "expected_response": {
+      "content": [
+        {
+          "text": "Authentication failed: Invalid API key"
+        }
+      ],
+      "is_error": true
+    }
+  },
+  "resource_not_found": {
+    "request": {
+      "name": "get_pipeline",
+      "arguments": {
+        "pipeline_id": "nonexistent_pipeline",
+        "account_id": "test_account",
+        "org_id": "test_org",
+        "project_id": "test_project"
+      }
+    },
+    "expected_response": {
+      "content": [
+        {
+          "text": "Pipeline not found: nonexistent_pipeline"
+        }
+      ],
+      "is_error": true
+    }
+  },
+  "permission_denied": {
+    "request": {
+      "name": "list_pipelines",
+      "arguments": {
+        "account_id": "restricted_account",
+        "org_id": "restricted_org",
+        "project_id": "restricted_project"
+      }
+    },
+    "expected_response": {
+      "content": [
+        {
+          "text": "Permission denied: Insufficient privileges to access this resource"
+        }
+      ],
+      "is_error": true
+    }
+  }
+}

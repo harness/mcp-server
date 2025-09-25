@@ -1,0 +1,26 @@
+[package]
+name = "harness-mcp-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Core MCP protocol implementation and types for Harness MCP Server"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+async-trait.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tokio.workspace = true
+futures.workspace = true
+pin-project.workspace = true
+
+[dev-dependencies]
+tokio-test = "0.4"

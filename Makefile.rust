@@ -1,0 +1,128 @@
+# Rust-specific Makefile for Harness MCP Server
+
+# Build variables
+RUST_VERSION ?= 1.75
+BINARY_NAME = harness-mcp-server
+TARGET_DIR = target/release
+
+# Default target
+.PHONY: all
+all: build
+
+# Build the project
+.PHONY: build
+build:
+	@echo "Building Rust MCP server..."
+	cargo build --release
+
+# Build for development
+.PHONY: build-dev
+build-dev:
+	@echo "Building Rust MCP server (debug)..."
+	cargo build
+
+# Run tests
+.PHONY: test
+test:
+	@echo "Running tests..."
+	cargo test
+
+# Run tests with output
+.PHONY: test-verbose
+test-verbose:
+	@echo "Running tests with output..."
+	cargo test -- --nocapture
+
+# Check code without building
+.PHONY: check
+check:
+	@echo "Checking code..."
+	cargo check
+
+# Format code
+.PHONY: format
+format:
+	@echo "Formatting code..."
+	cargo fmt
+
+# Lint code
+.PHONY: lint
+lint:
+	@echo "Linting code..."
+	cargo clippy -- -D warnings
+
+# Clean build artifacts
+.PHONY: clean
+clean:
+	@echo "Cleaning build artifacts..."
+	cargo clean
+
+# Install dependencies
+.PHONY: deps
+deps:
+	@echo "Installing dependencies..."
+	cargo fetch
+
+# Run the server in stdio mode
+.PHONY: run-stdio
+run-stdio:
+	@echo "Running server in stdio mode..."
+	cargo run --bin $(BINARY_NAME) -- stdio
+
+# Run the server in HTTP mode
+.PHONY: run-http
+run-http:
+	@echo "Running server in HTTP mode..."
+	cargo run --bin $(BINARY_NAME) -- http --port 8080
+
+# Build Docker image
+.PHONY: docker-build
+docker-build:
+	@echo "Building Docker image..."
+	docker build -f Dockerfile.rust -t harness/mcp-server-rust .
+
+# Run Docker container
+.PHONY: docker-run
+docker-run:
+	@echo "Running Docker container..."
+	docker run -i --rm \
+		-e HARNESS_API_KEY=${HARNESS_API_KEY} \
+		-e HARNESS_DEFAULT_ORG_ID=${HARNESS_DEFAULT_ORG_ID} \
+		-e HARNESS_DEFAULT_PROJECT_ID=${HARNESS_DEFAULT_PROJECT_ID} \
+		harness/mcp-server-rust stdio
+
+# Development workflow
+.PHONY: dev
+dev: format lint check test
+
+# CI workflow
+.PHONY: ci
+ci: format lint check test build
+
+# Install the binary locally
+.PHONY: install
+install: build
+	@echo "Installing binary..."
+	cargo install --path crates/$(BINARY_NAME)
+
+# Show help
+.PHONY: help
+help:
+	@echo "Available targets:"
+	@echo "  build        - Build the project in release mode"
+	@echo "  build-dev    - Build the project in debug mode"
+	@echo "  test         - Run tests"
+	@echo "  test-verbose - Run tests with output"
+	@echo "  check        - Check code without building"
+	@echo "  format       - Format code"
+	@echo "  lint         - Lint code with clippy"
+	@echo "  clean        - Clean build artifacts"
+	@echo "  deps         - Install dependencies"
+	@echo "  run-stdio    - Run server in stdio mode"
+	@echo "  run-http     - Run server in HTTP mode"
+	@echo "  docker-build - Build Docker image"
+	@echo "  docker-run   - Run Docker container"
+	@echo "  dev          - Development workflow (format, lint, check, test)"
+	@echo "  ci           - CI workflow (format, lint, check, test, build)"
+	@echo "  install      - Install binary locally"
+	@echo "  help         - Show this help"

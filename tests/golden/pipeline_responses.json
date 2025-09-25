@@ -1,0 +1,99 @@
+{
+  "list_pipelines": {
+    "request": {
+      "name": "list_pipelines",
+      "arguments": {
+        "account_id": "test_account",
+        "org_id": "test_org",
+        "project_id": "test_project",
+        "page": 0,
+        "size": 20
+      }
+    },
+    "expected_response": {
+      "content": [
+        {
+          "text": "{\"data\":{\"content\":[{\"identifier\":\"test_pipeline_1\",\"name\":\"Test Pipeline 1\",\"description\":\"A test pipeline\",\"tags\":{},\"version\":1},{\"identifier\":\"test_pipeline_2\",\"name\":\"Test Pipeline 2\",\"description\":\"Another test pipeline\",\"tags\":{},\"version\":1}],\"totalPages\":1,\"totalElements\":2,\"pageSize\":20,\"pageIndex\":0}}"
+        }
+      ],
+      "is_error": null
+    }
+  },
+  "get_pipeline": {
+    "request": {
+      "name": "get_pipeline",
+      "arguments": {
+        "pipeline_id": "test_pipeline_1",
+        "account_id": "test_account",
+        "org_id": "test_org",
+        "project_id": "test_project"
+      }
+    },
+    "expected_response": {
+      "content": [
+        {
+          "text": "{\"data\":{\"identifier\":\"test_pipeline_1\",\"name\":\"Test Pipeline 1\",\"description\":\"A test pipeline\",\"tags\":{},\"version\":1,\"yaml\":\"pipeline:\\n  name: Test Pipeline 1\\n  identifier: test_pipeline_1\\n  stages:\\n    - stage:\\n        name: Build\\n        identifier: build\\n        type: CI\"}}"
+        }
+      ],
+      "is_error": null
+    }
+  },
+  "list_executions": {
+    "request": {
+      "name": "list_executions",
+      "arguments": {
+        "account_id": "test_account",
+        "org_id": "test_org",
+        "project_id": "test_project",
+        "page": 0,
+        "limit": 10
+      }
+    },
+    "expected_response": {
+      "content": [
+        {
+          "text": "{\"data\":{\"content\":[{\"planExecutionId\":\"exec_123\",\"pipelineIdentifier\":\"test_pipeline_1\",\"status\":\"Success\",\"startTs\":1640995200000,\"endTs\":1640995800000},{\"planExecutionId\":\"exec_124\",\"pipelineIdentifier\":\"test_pipeline_2\",\"status\":\"Running\",\"startTs\":1640995900000,\"endTs\":null}],\"totalPages\":1,\"totalElements\":2,\"pageSize\":10,\"pageIndex\":0}}"
+        }
+      ],
+      "is_error": null
+    }
+  },
+  "get_execution": {
+    "request": {
+      "name": "get_execution",
+      "arguments": {
+        "execution_id": "exec_123",
+        "account_id": "test_account",
+        "org_id": "test_org",
+        "project_id": "test_project"
+      }
+    },
+    "expected_response": {
+      "content": [
+        {
+          "text": "{\"data\":{\"planExecutionId\":\"exec_123\",\"pipelineIdentifier\":\"test_pipeline_1\",\"status\":\"Success\",\"startTs\":1640995200000,\"endTs\":1640995800000,\"executionTriggerInfo\":{\"triggerType\":\"MANUAL\"},\"moduleInfo\":{\"ci\":{\"ciExecutionInfoDTO\":{\"branch\":{\"name\":\"main\",\"commitId\":\"abc123\"}}}}}}"
+        }
+      ],
+      "is_error": null
+    }
+  },
+  "fetch_execution_url": {
+    "request": {
+      "name": "fetch_execution_url",
+      "arguments": {
+        "execution_id": "exec_123",
+        "account_id": "test_account",
+        "org_id": "test_org",
+        "project_id": "test_project"
+      }
+    },
+    "expected_response": {
+      "content": [
+        {
+          "text": "{\"data\":{\"url\":\"https://app.harness.io/ng/account/test_account/cd/orgs/test_org/projects/test_project/pipelines/test_pipeline_1/executions/exec_123/pipeline\"}}"
+        }
+      ],
+      "is_error": null
+    }
+  }
+}

@@ -1,0 +1,6 @@
+Validation errors:
+File: harness-mcp-server lib.rs: File does not exist: crates/harness-mcp-server/src/lib.rs
+Config structure: Config struct not found
+Rust compilation: Cargo not available
+Golden test success rate: Only - **Success Rate:** 69%% success rate (expected ≥70%)
+Error handling: harness-mcp-tools: No error handling found
