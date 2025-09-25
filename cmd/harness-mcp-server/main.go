@@ -73,16 +73,22 @@ var (
 			if viper.GetString("log_format") == "json" {
 				logFormat = enum.LogFormatJSON
 			}
-			var licenseCacheTTL time.Duration
-			err = viper.UnmarshalKey("license_cache_ttl", &licenseCacheTTL)
-			if err != nil {
-				return fmt.Errorf("failed to unmarshal license cache TTL: %w", err)
+			// Set default license cache TTL to 30 minutes
+			licenseCacheTTL := 30 * time.Minute
+			if viper.IsSet("license_cache_ttl") {
+				err = viper.UnmarshalKey("license_cache_ttl", &licenseCacheTTL)
+				if err != nil {
+					return fmt.Errorf("failed to unmarshal license cache TTL: %w", err)
+				}
 			}
 
-			var licenseCacheCleanInterval time.Duration
-			err = viper.UnmarshalKey("license_cache_clean_interval", &licenseCacheCleanInterval)
-			if err != nil {
-				return fmt.Errorf("failed to unmarshal license cache clean interval: %w", err)
+			// Set default license cache clean interval to 5 minutes
+			licenseCacheCleanInterval := 5 * time.Minute
+			if viper.IsSet("license_cache_clean_interval") {
+				err = viper.UnmarshalKey("license_cache_clean_interval", &licenseCacheCleanInterval)
+				if err != nil {
+					return fmt.Errorf("failed to unmarshal license cache clean interval: %w", err)
+				}
 			}
 
 			cfg := config.Config{
