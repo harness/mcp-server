@@ -45,7 +45,7 @@ test: ## Run the go tests
 	@go test ./... -coverprofile=coverage.out
 	@go tool cover -html=coverage.out
 
-.PHONY: help format tools test
+.PHONY: help format tools test build
 
 $(GOBIN)/gci:
 	go install github.com/daixiang0/gci@v0.13.1
