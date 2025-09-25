@@ -378,6 +378,8 @@ func init() {
 	internalCmd.Flags().String("dbops-svc-secret", "", "Secret for dbops service")
 	internalCmd.Flags().String("rbac-svc-base-url", "", "Base URL for RBAC service")
 	internalCmd.Flags().String("rbac-svc-secret", "", "Secret for RBAC service")
+	internalCmd.Flags().String("intelligence-svc-base-url", "", "Base URL for intelligence service")
+	internalCmd.Flags().String("intelligence-svc-secret", "", "Secret for intelligence service")
 
 	// Bind global flags to viper
 	_ = viper.BindPFlag("toolsets", rootCmd.PersistentFlags().Lookup("toolsets"))
