@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -20,6 +19,7 @@ import (
 	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"log/slog"
 )
 
 // DownloadExecutionLogsTool creates a tool for downloading logs for a pipeline execution
@@ -294,13 +294,13 @@ func formatJSONLines(lines []string) string {
 			if t, err := time.Parse(time.RFC3339Nano, logEntry.Time); err == nil {
 				// Format timestamp in IST
 				ist := t.Add(5*time.Hour + 30*time.Minute)
-				formattedOutput.WriteString(fmt.Sprintf("[%s] %s: %s\n", 
+				formattedOutput.WriteString(fmt.Sprintf("[%s] %s: %s\n",
 					ist.Format("2006-01-02 15:04:05"),
 					logEntry.Level,
 					removeAnsiCodes(logEntry.Out)))
 			} else {
 				// Fallback to original timestamp if parsing fails
-				formattedOutput.WriteString(fmt.Sprintf("[%s] %s: %s\n", 
+				formattedOutput.WriteString(fmt.Sprintf("[%s] %s: %s\n",
 					logEntry.Time,
 					logEntry.Level,
 					removeAnsiCodes(logEntry.Out)))

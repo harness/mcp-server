@@ -1,7 +1,6 @@
 package modules
 
 import (
-	"log/slog"
 	"time"
 
 	"github.com/harness/harness-mcp/client"
@@ -9,6 +8,7 @@ import (
 	"github.com/harness/harness-mcp/pkg/harness/tools"
 	"github.com/harness/harness-mcp/pkg/modules/utils"
 	"github.com/harness/harness-mcp/pkg/toolsets"
+	"log/slog"
 )
 
 // SEIModule implements the Module interface for Software Engineering Insights

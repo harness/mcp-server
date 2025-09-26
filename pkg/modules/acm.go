@@ -1,13 +1,12 @@
 package modules
 
 import (
-	"log/slog"
-
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness/tools"
 	"github.com/harness/harness-mcp/pkg/modules/utils"
 	"github.com/harness/harness-mcp/pkg/toolsets"
+	"log/slog"
 )
 
 // ACMModule implements the Module interface for Autonomous Code Maintenance

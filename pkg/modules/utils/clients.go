@@ -2,12 +2,12 @@ package utils
 
 import (
 	"fmt"
-	"log/slog"
 	"time"
 
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness/auth"
+	"log/slog"
 )
 
 // ServiceIdentity Service identity for JWT auth

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness/auth"
 	"github.com/hashicorp/go-retryablehttp"
+	"log/slog"
 )
 
 // CustomLicensesApiService is a custom implementation of the LicensesApiService

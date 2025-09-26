@@ -3,9 +3,7 @@ package harness
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"net/http"
-	"slices"
 	"time"
 
 	"github.com/harness/harness-mcp/client"
@@ -15,6 +13,8 @@ import (
 	"github.com/harness/harness-mcp/pkg/modules"
 	"github.com/harness/harness-mcp/pkg/modules/utils"
 	"github.com/harness/harness-mcp/pkg/toolsets"
+	"log/slog"
+	"slices"
 )
 
 // DefaultTools Default tools to enable

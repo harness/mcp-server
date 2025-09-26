@@ -10,12 +10,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/oapi-codegen/runtime"
+	"log/slog"
 )
 
 // Defines values for AuthType.

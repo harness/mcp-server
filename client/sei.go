@@ -5,8 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"strings"
+
+	"log/slog"
 )
 
 // SEIService handles communication with the SEI API
