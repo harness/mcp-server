@@ -1,11 +1,11 @@
 package auth
 
 import (
+	"log/slog"
 	"net/http"
 	"strings"
 
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
-	"log/slog"
 )
 
 // AuthMiddleware creates an HTTP middleware that extracts bearer tokens from

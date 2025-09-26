@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -15,7 +16,6 @@ import (
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/pkg/harness/auth"
 	"github.com/harness/harness-mcp/pkg/harness/common"
-	"log/slog"
 )
 
 const (

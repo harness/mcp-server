@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/harness/harness-mcp/client"
@@ -14,7 +15,6 @@ import (
 	"github.com/harness/harness-mcp/pkg/harness/event"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"log/slog"
 )
 
 var defaultLimit int32 = 15

@@ -3,11 +3,11 @@ package ccmcommons
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/harness/harness-mcp/client/dto"
-	"log/slog"
 )
 
 func BuildFilters(viewId string, timeFilters string, idFilters dto.CCMGraphQLFilters, keyValueFilters dto.CCMGraphQLKeyValueFilters) []map[string]any {

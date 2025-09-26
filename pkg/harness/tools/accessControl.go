@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math"
 	"strings"
 
@@ -13,7 +14,6 @@ import (
 	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"log/slog"
 )
 
 func GetAllUsersTool(config *config.Config, usersClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
