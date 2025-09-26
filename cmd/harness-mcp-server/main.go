@@ -67,6 +67,10 @@ var (
 				return fmt.Errorf("failed to unmarshal enabled modules: %w", err)
 			}
 
+			var logFormat enum.LogFormatType = enum.LogFormatText
+			if viper.GetString("log_format") == "json" {
+				logFormat = enum.LogFormatJSON
+			}
 			cfg := config.Config{
 				Version:       version,
 				ReadOnly:      viper.GetBool("read_only"),
@@ -84,6 +88,7 @@ var (
 				Internal:                true,
 				Toolsets:                toolsets,
 				EnableModules:           enableModules,
+				LogFormat:               logFormat,
 				PipelineSvcBaseURL:      viper.GetString("pipeline_svc_base_url"),
 				PipelineSvcSecret:       viper.GetString("pipeline_svc_secret"),
 				McpSvcSecret:            viper.GetString("mcp_svc_secret"),
@@ -159,6 +164,11 @@ var (
 				return fmt.Errorf("failed to unmarshal enabled modules: %w", err)
 			}
 
+			var logFormat enum.LogFormatType = enum.LogFormatText
+			if viper.GetString("log_format") == "json" {
+				logFormat = enum.LogFormatJSON
+			}
+
 			cfg := config.Config{
 				Version:          version,
 				BaseURL:          viper.GetString("base_url"),
@@ -173,6 +183,7 @@ var (
 				EnableModules:    enableModules,
 				EnableLicense:    viper.GetBool("enable_license"),
 				OutputDir:        viper.GetString("output_dir"),
+				LogFormat:        logFormat,
 			}
 
 			if err := runStdioServer(ctx, cfg); err != nil {
@@ -223,6 +234,11 @@ var (
 				return fmt.Errorf("failed to unmarshal enabled modules: %w", err)
 			}
 
+			var logFormat enum.LogFormatType = enum.LogFormatText
+			if viper.GetString("log_format") == "json" {
+				logFormat = enum.LogFormatJSON
+			}
+
 			cfg := config.Config{
 				// Common fields
 				Version:       version,
@@ -236,6 +252,7 @@ var (
 				OutputDir:     viper.GetString("output_dir"),
 				AccountID:     session.Principal.AccountID,
 				// Internal mode specific fields
+				LogFormat:               logFormat,
 				BearerToken:             viper.GetString("bearer_token"),
 				PipelineSvcBaseURL:      viper.GetString("pipeline_svc_base_url"),
 				PipelineSvcSecret:       viper.GetString("pipeline_svc_secret"),
@@ -300,6 +317,7 @@ func init() {
 	rootCmd.PersistentFlags().String("log-file", "", "Path to log file")
 	rootCmd.PersistentFlags().Bool("debug", false, "Enable debug logging")
 	rootCmd.PersistentFlags().String("output-dir", "", "Directory where the tool writes output files (e.g., pipeline logs)")
+	rootCmd.PersistentFlags().String("log-format", "text", "Log format (text or json)")
 
 	httpServerCmd.PersistentFlags().Int("http-port", 8080, "HTTP server port (when transport is 'http')")
 	httpServerCmd.PersistentFlags().String("http-path", "/mcp", "HTTP server path (when transport is 'http')")
@@ -389,7 +407,7 @@ func init() {
 	_ = viper.BindPFlag("log_file", rootCmd.PersistentFlags().Lookup("log-file"))
 	_ = viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
 	_ = viper.BindPFlag("output_dir", rootCmd.PersistentFlags().Lookup("output-dir"))
-
+	_ = viper.BindPFlag("log_format", rootCmd.PersistentFlags().Lookup("log-format"))
 	// Bind transport configuration flags to viper
 	_ = viper.BindPFlag("http_port", httpServerCmd.PersistentFlags().Lookup("http-port"))
 	_ = viper.BindPFlag("http_path", httpServerCmd.PersistentFlags().Lookup("http-path"))
@@ -487,29 +505,49 @@ func initConfig() {
 	viper.AutomaticEnv()
 }
 
-func initLogger(outPath string, debug bool) error {
-	if outPath == "" {
-		return nil
-	}
-
-	file, err := os.OpenFile(outPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err != nil {
-		return fmt.Errorf("failed to open log file: %w", err)
-	}
-
+func initLogger(config config.Config) error {
+	debug := config.Debug
+	logFormat := config.LogFormat
+	transport := config.Transport
+	outPath := config.LogFilePath
 	handlerOpts := &slog.HandlerOptions{}
 	if debug {
 		handlerOpts.Level = slog.LevelDebug
 	}
 
-	logger := slog.New(slog.NewTextHandler(file, handlerOpts))
+	// For HTTP transport with text format, return error early
+	if transport == enum.TransportHTTP && logFormat == enum.LogFormatText {
+		return fmt.Errorf("text format logs not supported by stackdriver")
+	}
+
+	// Determine the output writer (file or stdout)
+	var writer io.Writer = os.Stdout
+	if outPath != "" {
+		file, err := os.OpenFile(outPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		if err != nil {
+			return fmt.Errorf("failed to open log file: %w", err)
+		}
+		writer = file
+	}
+
+	// Create the appropriate handler based on format
+	var handler slog.Handler
+	if logFormat == enum.LogFormatJSON {
+		handler = slog.NewJSONHandler(writer, handlerOpts)
+	} else {
+		handler = slog.NewTextHandler(writer, handlerOpts)
+	}
+
+	// Set the default logger
+	logger := slog.New(handler)
 	slog.SetDefault(logger)
+
 	return nil
 }
 
 // runHTTPServer starts the MCP server with http transport
 func runHTTPServer(ctx context.Context, config config.Config) error {
-	err := initLogger(config.LogFilePath, config.Debug)
+	err := initLogger(config)
 	if err != nil {
 		return fmt.Errorf("failed to initialize logger: %w", err)
 	}
@@ -595,7 +633,7 @@ func runHTTPServer(ctx context.Context, config config.Config) error {
 // runStdioServer starts the MCP server with stdio transport
 func runStdioServer(ctx context.Context, config config.Config) error {
 	// Initialize the MCP server as before
-	err := initLogger(config.LogFilePath, config.Debug)
+	err := initLogger(config)
 	if err != nil {
 		return fmt.Errorf("failed to initialize logger: %w", err)
 	}
