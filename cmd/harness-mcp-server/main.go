@@ -124,8 +124,8 @@ var (
 				AuditSvcSecret:          viper.GetString("audit_svc_secret"),
 				DBOpsSvcBaseURL:         viper.GetString("dbops_svc_base_url"),
 				DBOpsSvcSecret:          viper.GetString("dbops_svc_secret"),
-				RBACSvcBaseURL:          viper.GetString("rbac_svc_base_url"),
-				RBACSvcSecret:           viper.GetString("rbac_svc_secret"),
+				ACLSvcBaseURL:           viper.GetString("acl_svc_base_url"),
+				ACLSvcSecret:            viper.GetString("acl_svc_secret"),
 				OutputDir:               viper.GetString("output_dir"),
 			}
 
@@ -350,8 +350,8 @@ func init() {
 	httpServerCmd.Flags().String("audit-svc-secret", "", "Secret for audit service")
 	httpServerCmd.Flags().String("dbops-svc-base-url", "", "Base URL for dbops service")
 	httpServerCmd.Flags().String("dbops-svc-secret", "", "Secret for dbops service")
-	httpServerCmd.Flags().String("rbac-svc-base-url", "", "Base URL for RBAC service")
-	httpServerCmd.Flags().String("rbac-svc-secret", "", "Secret for RBAC service")
+	httpServerCmd.Flags().String("acl-svc-base-url", "", "Base URL for ACL service")
+	httpServerCmd.Flags().String("acl-svc-secret", "", "Secret for ACL service")
 
 	// Add stdio-specific flags
 	stdioCmd.Flags().String("base-url", "https://app.harness.io", "Base URL for Harness")
@@ -444,8 +444,8 @@ func init() {
 	_ = viper.BindPFlag("audit_svc_secret", httpServerCmd.Flags().Lookup("audit-svc-secret"))
 	_ = viper.BindPFlag("dbops_svc_base_url", httpServerCmd.Flags().Lookup("dbops-svc-base-url"))
 	_ = viper.BindPFlag("dbops_svc_secret", httpServerCmd.Flags().Lookup("dbops-svc-secret"))
-	_ = viper.BindPFlag("rbac_svc_base_url", httpServerCmd.Flags().Lookup("rbac-svc-base-url"))
-	_ = viper.BindPFlag("rbac_svc_secret", httpServerCmd.Flags().Lookup("rbac-svc-secret"))
+	_ = viper.BindPFlag("acl_svc_base_url", httpServerCmd.Flags().Lookup("acl-svc-base-url"))
+	_ = viper.BindPFlag("acl_svc_secret", httpServerCmd.Flags().Lookup("acl-svc-secret"))
 
 	// Bind stdio-specific flags to viper
 	_ = viper.BindPFlag("base_url", stdioCmd.Flags().Lookup("base-url"))
