@@ -74,6 +74,11 @@ func (u *ACLService) GetRoleInfo(ctx context.Context, scope dto.Scope, roleID st
 	if err != nil {
 		return nil, fmt.Errorf("failed to get role info: %w", err)
 	}
+
+	// Format timestamps
+	resp.Data.CreatedAtTime = dto.FormatUnixMillisToRFC3339(resp.Data.CreatedAt)
+	resp.Data.LastModifiedAtTime = dto.FormatUnixMillisToRFC3339(resp.Data.LastModifiedAt)
+
 	return resp, nil
 }
 
@@ -90,6 +95,14 @@ func (r *ACLService) ListAvailableRoles(ctx context.Context, scope dto.Scope, pa
 	err := r.Client.Get(ctx, getRolePath, params, map[string]string{}, resp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list the roles assigned to the user: %w", err)
+	}
+
+	// Format timestamps
+	for i := range resp.Data.Content {
+		createdAt := resp.Data.Content[i].CreatedAt
+		lastModifiedAt := resp.Data.Content[i].LastModifiedAt
+		resp.Data.Content[i].CreatedAtTime = dto.FormatUnixMillisToRFC3339(createdAt)
+		resp.Data.Content[i].LastModifiedAtTime = dto.FormatUnixMillisToRFC3339(lastModifiedAt)
 	}
 
 	return resp, nil
@@ -173,6 +186,12 @@ func (ra *ACLService) ListRoleAssignmentsTool(ctx context.Context, scope dto.Sco
 		return nil, fmt.Errorf("failed to list the role assignments: %w\nRequest body: %s", err, string(optsJSON))
 	}
 
+	// Format timestamps
+	for i := range resp.Data.Content {
+		resp.Data.Content[i].CreatedAtTime = dto.FormatUnixMillisToRFC3339(resp.Data.Content[i].CreatedAt)
+		resp.Data.Content[i].LastModifiedAtTime = dto.FormatUnixMillisToRFC3339(resp.Data.Content[i].LastModifiedAt)
+	}
+
 	return resp, nil
 }
 
@@ -222,6 +241,10 @@ func (sAccount *PrincipalService) GetServiceAccount(ctx context.Context, scope d
 		return nil, fmt.Errorf("Failed to list the service account info: %w", err)
 	}
 
+	// Format timestamps
+	resp.Data.CreatedAtTime = dto.FormatUnixMillisToRFC3339(resp.Data.CreatedAt)
+	resp.Data.LastModifiedAtTime = dto.FormatUnixMillisToRFC3339(resp.Data.LastModifiedAt)
+
 	return resp, nil
 }
 
@@ -237,6 +260,11 @@ func (currentUserInfo *PrincipalService) GetCurrentUser(ctx context.Context, sco
 	if err != nil {
 		return nil, fmt.Errorf("Failed to list the user info: %w", err)
 	}
+
+	// Format timestamps
+	resp.Data.CreatedAtTime = dto.FormatUnixMillisToRFC3339(resp.Data.CreatedAt)
+	resp.Data.LastUpdatedAtTime = dto.FormatUnixMillisToRFC3339(resp.Data.LastUpdatedAt)
+	resp.Data.LastLoginTime = dto.FormatUnixMillisToRFC3339(resp.Data.LastLogin)
 
 	return resp, nil
 }
@@ -255,6 +283,10 @@ func (rAssignment *ACLService) CreateRoleAssignment(ctx context.Context, scope d
 	if err != nil {
 		return nil, fmt.Errorf("Client Side failed to create role assignment: %w", err)
 	}
+
+	// Format timestamps
+	resp.Data.CreatedAtTime = dto.FormatUnixMillisToRFC3339(resp.Data.CreatedAt)
+	resp.Data.LastModifiedAtTime = dto.FormatUnixMillisToRFC3339(resp.Data.LastModifiedAt)
 
 	return resp, nil
 }
@@ -276,6 +308,10 @@ func (cResourceGroup *ResourceGroupService) CreateResourceGroup(ctx context.Cont
 		optsJSON, _ := json.MarshalIndent(opts, "", "  ")
 		return nil, fmt.Errorf("failed to create resource group: %w\nRequest body: %s", err, string(optsJSON))
 	}
+
+	// Format timestamps
+	resp.Data.CreatedAtTime = dto.FormatUnixMillisToRFC3339(resp.Data.CreatedAt)
+	resp.Data.LastModifiedAtTime = dto.FormatUnixMillisToRFC3339(resp.Data.LastModifiedAt)
 
 	return resp, nil
 }

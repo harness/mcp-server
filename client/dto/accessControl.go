@@ -31,9 +31,11 @@ type RolesOutputDataContent struct {
 	Role                              RoleData `json:"role,omitempty"`
 	CreatedAt                         int64    `json:"createdAt,omitempty"`
 	LastModifiedAt                    int64    `json:"lastModifiedAt,omitempty"`
-	RoleAssignedToUserCount           int64    `json:"roleAssignedToUserCount,omitempty"`
-	RoleAssignedToUserGroupCount      int64    `json:"roleAssignedToUserGroupCount,omitempty"`
-	RoleAssignedToServiceAccountCount int64    `json:"roleAssignedToServiceAccountCount,omitempty"`
+	CreatedAtTime                     string
+	LastModifiedAtTime                string
+	RoleAssignedToUserCount           int64 `json:"roleAssignedToUserCount,omitempty"`
+	RoleAssignedToUserGroupCount      int64 `json:"roleAssignedToUserGroupCount,omitempty"`
+	RoleAssignedToServiceAccountCount int64 `json:"roleAssignedToServiceAccountCount,omitempty"`
 }
 
 type RoleData struct {
@@ -65,11 +67,13 @@ type RoleAssignmentsOutputData struct {
 }
 
 type RoleAssignmentsOutputDataContent struct {
-	RoleAssignment RoleAssignment `json:"roleAssignment,omitempty"`
-	Scope          Scope          `json:"scope,omitempty"`
-	CreatedAt      int64          `json:"createdAt,omitempty"`
-	LastModifiedAt int64          `json:"lastModifiedAt,omitempty"`
-	HarnessManaged bool           `json:"harnessManaged,omitempty"`
+	RoleAssignment     RoleAssignment `json:"roleAssignment,omitempty"`
+	Scope              Scope          `json:"scope,omitempty"`
+	CreatedAt          int64          `json:"createdAt,omitempty"`
+	LastModifiedAt     int64          `json:"lastModifiedAt,omitempty"`
+	HarnessManaged     bool           `json:"harnessManaged,omitempty"`
+	CreatedAtTime      string
+	LastModifiedAtTime string
 }
 
 type RoleAssignment struct {
@@ -129,11 +133,13 @@ type UsersRequestBody struct {
 }
 
 type RoleInfoOutputData struct {
-	Role           Role  `json:"role,omitempty"`
-	Scope          Scope `json:"scope,omitempty"`
-	HarnessManaged bool  `json:"harnessManaged,omitempty"`
-	CreatedAt      int64 `json:"createdAt,omitempty"`
-	LastModifiedAt int64 `json:"lastModifiedAt,omitempty"`
+	Role               Role  `json:"role,omitempty"`
+	Scope              Scope `json:"scope,omitempty"`
+	HarnessManaged     bool  `json:"harnessManaged,omitempty"`
+	CreatedAt          int64 `json:"createdAt,omitempty"`
+	LastModifiedAt     int64 `json:"lastModifiedAt,omitempty"`
+	CreatedAtTime      string
+	LastModifiedAtTime string
 }
 
 type Role struct {
@@ -188,6 +194,8 @@ type ServiceAccountData struct {
 	LastModifiedAt               int64                          `json:"lastModifiedAt,omitempty"`
 	TokensCount                  int64                          `json:"tokensCount,omitempty"`
 	RoleAssignmentMetadataObject []RoleAssignmentMetadataObject `json:"roleAssignmentsMetadataDTO,omitempty"`
+	CreatedAtTime                string
+	LastModifiedAtTime           string
 }
 
 type ServiceAccountInfo struct {
@@ -230,11 +238,13 @@ type CreateRoleAssignmentRequestBody struct {
 }
 
 type CreateRoleAssignmentOutputData struct {
-	RoleAssignment RoleAssignment `json:"roleAssignment,omitempty"`
-	Scope          Scope          `json:"scope,omitempty"`
-	CreatedAt      int64          `json:"createdAt,omitempty"`
-	LastModifiedAt int64          `json:"lastModifiedAt,omitempty"`
-	HarnessManaged bool           `json:"harnessManaged,omitempty"`
+	RoleAssignment     RoleAssignment `json:"roleAssignment,omitempty"`
+	Scope              Scope          `json:"scope,omitempty"`
+	CreatedAt          int64          `json:"createdAt,omitempty"`
+	LastModifiedAt     int64          `json:"lastModifiedAt,omitempty"`
+	HarnessManaged     bool           `json:"harnessManaged,omitempty"`
+	CreatedAtTime      string
+	LastModifiedAtTime string
 }
 
 type CreateResourceGroupRequestBody struct {
@@ -251,18 +261,22 @@ type ResourceSelectorV2 struct {
 }
 
 type CreateResourceGroupOutputData struct {
-	ResourceGroup  ResourceGroup `json:"resourceGroup,omitempty"`
-	CreatedAt      int64         `json:"createdAt,omitempty"`
-	LastModifiedAt int64         `json:"lastModifiedAt,omitempty"`
-	HarnessManaged bool          `json:"harnessManaged,omitempty"`
+	ResourceGroup      ResourceGroup `json:"resourceGroup,omitempty"`
+	CreatedAt          int64         `json:"createdAt,omitempty"`
+	LastModifiedAt     int64         `json:"lastModifiedAt,omitempty"`
+	HarnessManaged     bool          `json:"harnessManaged,omitempty"`
+	CreatedAtTime      string
+	LastModifiedAtTime string
 }
 
 type CreateRoleOutputData struct {
-	Role           Role  `json:"role,omitempty"`
-	CreatedAt      int64 `json:"createdAt,omitempty"`
-	LastModifiedAt int64 `json:"lastModifiedAt,omitempty"`
-	HarnessManaged bool  `json:"harnessManaged,omitempty"`
-	Scope          Scope `json:"scope,omitempty"`
+	Role               Role  `json:"role,omitempty"`
+	CreatedAt          int64 `json:"createdAt,omitempty"`
+	LastModifiedAt     int64 `json:"lastModifiedAt,omitempty"`
+	HarnessManaged     bool  `json:"harnessManaged,omitempty"`
+	Scope              Scope `json:"scope,omitempty"`
+	CreatedAtTime      string
+	LastModifiedAtTime string
 }
 
 type CreateUserGroupRequestBody struct {
@@ -340,6 +354,9 @@ type CurrentUserData struct {
 	UserPreferences                UserPreferences `json:"userPreferences,omitempty"`
 	IsEnrichedInfoCollected        bool            `json:"isEnrichedInfoCollected,omitempty"`
 	LastLogin                      int64           `json:"lastLogin,omitempty"`
+	CreatedAtTime                  string
+	LastUpdatedAtTime              string
+	LastLoginTime                  string
 }
 
 type AccountInfo struct {
