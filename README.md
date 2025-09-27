@@ -244,6 +244,15 @@ Toolset Name: `audit`
 
 - `list_user_audits`: Retrieve the complete audit trail for a specified user.
 
+#### Feature Management and Experimentation (FME) Toolset
+
+Toolset Name: `fme`
+
+- `list_fme_workspaces`: List all FME workspaces
+- `list_fme_environments`: List environments for a specific workspace
+- `list_fme_feature_flags`: List feature flags for a specific workspace
+- `get_fme_feature_flag_definition`: Get the definition of a specific feature flag in an environment
+
 
 ## Prerequisites
 
@@ -324,6 +333,27 @@ Add the server configuration to your Gemini config file at: `~/.gemini/settings.
   }
 }
 ```
+
+### Usage with Gemini CLI Extensions
+
+You will need to run the following command to install the Harness MCP as an extension:
+
+```sh
+gemini extensions install https://github.com/harness/mcp-server
+```
+
+Then you will need to set the environment variables for the extension:
+
+```sh
+export HARNESS_API_KEY="your_api_key_here"
+```
+
+Launch Gemini and start asking questions about Harness!
+
+```sh
+gemini
+```
+
 
 ### Claude Desktop Configuration
 
@@ -514,6 +544,104 @@ To use the Harness MCP Server with Amazon Q Developer CLI:
 
 [VS Code MCP Guide](https://code.visualstudio.com/docs/copilot/chat/mcp-servers)
 
+## Tool Usage Guide
+
+### Download Execution Logs
+
+#### Using Docker:
+
+We need to mount the logs directory to the container to download the logs.
+
+```bash
+docker run -d --name mcp-server -p 8080:8080 -v /path/to/logs/in/host:/path/in/container harness/mcp-server --output-dir=/path/in/container
+```
+This ensures that the logs downloaded to container are accessible in the host.
+
+Example:
+
+```bash
+docker run -d --name mcp-server -p 8080:8080 -v /Users/testuser/logs:/logs harness/mcp-server --output-dir=/logs
+```
+
+Sample MCP Configuration:
+
+```bash
+{
+  "mcpServers": {
+    "harness": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-v",
+        "/Users/testuser/logs:/logs",
+        "-e",
+        "HARNESS_MCP_USER_PAT",
+        "-e",
+        "HARNESS_DEFAULT_ORG_ID",
+        "-e",
+        "HARNESS_DEFAULT_PROJECT_ID",
+        "-e",
+        "HARNESS_MCP_BASE_URL",
+        "harness/mcp-server",
+        "stdio",
+        "--output-dir=/logs", #/path/in/container
+        "--toolsets=logs",
+        "--api-key="
+      ],
+      "env": {
+        "HARNESS_MCP_USER_PAT": "<YOUR_API_KEY>",
+        "HARNESS_DEFAULT_ORG_ID": "<YOUR_ORG_ID>",
+        "HARNESS_DEFAULT_PROJECT_ID": "<YOUR_PROJECT_ID>",
+        "HARNESS_MCP_BASE_URL": "<YOUR_BASE_URL>"
+      }
+    }
+  }
+}
+```
+
+Example Tool Input:
+
+```json
+{
+  "logs_directory": "pipeline-logs",
+  "org_id": "<YOUR_ORG_ID>",
+  "plan_execution_id": "<YOUR_PLAN_EXECUTION_ID>",
+  "project_id": "<YOUR_PROJECT_ID>"
+}
+```
+
+Sample Response:
+
+```json
+Files downloaded to : /Users/testuser/logs/pipeline-logs/logs-<YOUR_PLAN_EXECUTION_ID>/logs.zip
+```
+
+### Using Local Binary:
+
+Example configuration:
+
+```json
+"args": ["stdio", "--toolsets=logs", "--api-key=", "--output-dir=/Users/testuser/log-files"]
+```
+
+Example Tool Input:
+
+```json
+{
+  "logs_directory": "logs1",
+  "project_id": "<YOUR_PROJECT_ID>",
+  "plan_execution_id": "<YOUR_PLAN_EXECUTION_ID>",
+  "org_id": "<YOUR_ORG_ID>"
+}
+```
+
+Sample Response:
+
+```json
+Files downloaded to : /Users/testuser/log-files/logs1/logs-<YOUR_PLAN_EXECUTION_ID>/logs.zip
+```
 
 ## Development
 
@@ -530,6 +658,7 @@ The Harness MCP Server supports the following command line arguments:
 - `--version`: Show version information
 - `--help`: Show help message
 - `--base-url`: Base URL for Harness (default: "https://app.harness.io")
+- `--output-dir`: Directory where the tool writes output files (e.g., pipeline logs)
 
 
 ### Environment Variables
@@ -548,6 +677,52 @@ Environment variables are prefixed with `HARNESS_`:
 ### Authentication
 
 The server uses a Harness API key for authentication. This can be set via the `HARNESS_API_KEY` environment variable.
+
+### Using the create_follow_up_prompt Tool to generate actionable prompt events
+
+The `create_follow_up_prompt` tool allows you to generate actionable prompt events that appear as buttons in the UI. These buttons can navigate users to specific pages within the Harness platform.
+
+Here's how to use it:
+
+```json
+{
+  "actions": [
+    {
+      "text": "Button Text",
+      "action": "OPEN_ENTITY_NEW_TAB",
+      "data": {
+        "pageName": "PAGE_NAME",
+        "metadata": {
+          "<KEY>": "<VALUE>"
+        }
+      }
+    }
+  ]
+}
+```
+
+#### Parameters:
+
+- `text`: The text to display on the button
+- `action`: The action to perform (currently supports `OPEN_ENTITY_NEW_TAB`)
+- `data`: Contains navigation information
+  - `pageName`: The page to navigate to (e.g., `ExecutionPipelineView`, `PipelineStudio`, etc.)
+  - `metadata`: Key-value pairs needed for the target page (e.g., `{"executionId": "abc123", "pipelineId": "xyz789"}`)
+
+#### Example:
+
+```go
+actionData := `{"actions": [{"text": "View Pipeline", "action": "OPEN_ENTITY_NEW_TAB", "data": {"pageName": "PipelineStudio", "metadata": {"id": "pipeline-id"}}}]}`
+```
+
+#### Alternative: Quick Prompts
+
+If you provide an array of strings instead of the actions object, these strings will be added to the message box as quick prompts that users can click on:
+
+```go
+// Add quick prompts to the message box
+quickPrompts := `["Show me pipeline details", "List recent executions", "Analyze performance"]`
+```
 
 ## Notes for Local Testing
 

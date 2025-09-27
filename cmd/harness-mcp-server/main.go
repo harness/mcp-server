@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -66,6 +67,10 @@ var (
 				return fmt.Errorf("failed to unmarshal enabled modules: %w", err)
 			}
 
+			var logFormat enum.LogFormatType = enum.LogFormatText
+			if viper.GetString("log_format") == "json" {
+				logFormat = enum.LogFormatJSON
+			}
 			cfg := config.Config{
 				Version:       version,
 				ReadOnly:      viper.GetBool("read_only"),
@@ -80,8 +85,48 @@ var (
 					Port: viper.GetInt("http_port"),
 					Path: viper.GetString("http_path"),
 				},
-				Toolsets:      toolsets,
-				EnableModules: enableModules,
+				Internal:                true,
+				Toolsets:                toolsets,
+				EnableModules:           enableModules,
+				LogFormat:               logFormat,
+				PipelineSvcBaseURL:      viper.GetString("pipeline_svc_base_url"),
+				PipelineSvcSecret:       viper.GetString("pipeline_svc_secret"),
+				McpSvcSecret:            viper.GetString("mcp_svc_secret"),
+				NgManagerBaseURL:        viper.GetString("ng_manager_base_url"),
+				NgManagerSecret:         viper.GetString("ng_manager_secret"),
+				ChatbotBaseURL:          viper.GetString("chatbot_base_url"),
+				ChatbotSecret:           viper.GetString("chatbot_secret"),
+				GenaiBaseURL:            viper.GetString("genai_base_url"),
+				GenaiSecret:             viper.GetString("genai_secret"),
+				ArtifactRegistryBaseURL: viper.GetString("artifact_registry_base_url"),
+				ArtifactRegistrySecret:  viper.GetString("artifact_registry_secret"),
+				NextgenCEBaseURL:        viper.GetString("nextgen_ce_base_url"),
+				NextgenCESecret:         viper.GetString("nextgen_ce_secret"),
+				CCMCommOrchBaseURL:      viper.GetString("ccm_comm_orch_base_url"),
+				CCMCommOrchSecret:       viper.GetString("ccm_comm_orch_secret"),
+				IDPSvcBaseURL:           viper.GetString("idp_svc_base_url"),
+				IDPSvcSecret:            viper.GetString("idp_svc_secret"),
+				ChaosManagerSvcBaseURL:  viper.GetString("chaos_manager_svc_base_url"),
+				ChaosManagerSvcSecret:   viper.GetString("chaos_manager_svc_secret"),
+				TemplateSvcBaseURL:      viper.GetString("template_svc_base_url"),
+				TemplateSvcSecret:       viper.GetString("template_svc_secret"),
+				IntelligenceSvcBaseURL:  viper.GetString("intelligence_svc_base_url"),
+				IntelligenceSvcSecret:   viper.GetString("intelligence_svc_secret"),
+				CodeSvcBaseURL:          viper.GetString("code_svc_base_url"),
+				CodeSvcSecret:           viper.GetString("code_svc_secret"),
+				LogSvcBaseURL:           viper.GetString("log_svc_base_url"),
+				LogSvcSecret:            viper.GetString("log_svc_secret"),
+				SCSSvcSecret:            viper.GetString("scs_svc_secret"),
+				SCSSvcBaseURL:           viper.GetString("scs_svc_base_url"),
+				STOSvcSecret:            viper.GetString("sto_svc_secret"),
+				STOSvcBaseURL:           viper.GetString("sto_svc_base_url"),
+				AuditSvcBaseURL:         viper.GetString("audit_svc_base_url"),
+				AuditSvcSecret:          viper.GetString("audit_svc_secret"),
+				DBOpsSvcBaseURL:         viper.GetString("dbops_svc_base_url"),
+				DBOpsSvcSecret:          viper.GetString("dbops_svc_secret"),
+				RBACSvcBaseURL:          viper.GetString("rbac_svc_base_url"),
+				RBACSvcSecret:           viper.GetString("rbac_svc_secret"),
+				OutputDir:               viper.GetString("output_dir"),
 			}
 
 			return runHTTPServer(ctx, cfg)
@@ -119,6 +164,11 @@ var (
 				return fmt.Errorf("failed to unmarshal enabled modules: %w", err)
 			}
 
+			var logFormat enum.LogFormatType = enum.LogFormatText
+			if viper.GetString("log_format") == "json" {
+				logFormat = enum.LogFormatJSON
+			}
+
 			cfg := config.Config{
 				Version:          version,
 				BaseURL:          viper.GetString("base_url"),
@@ -132,6 +182,8 @@ var (
 				Debug:            viper.GetBool("debug"),
 				EnableModules:    enableModules,
 				EnableLicense:    viper.GetBool("enable_license"),
+				OutputDir:        viper.GetString("output_dir"),
+				LogFormat:        logFormat,
 			}
 
 			if err := runStdioServer(ctx, cfg); err != nil {
@@ -182,6 +234,11 @@ var (
 				return fmt.Errorf("failed to unmarshal enabled modules: %w", err)
 			}
 
+			var logFormat enum.LogFormatType = enum.LogFormatText
+			if viper.GetString("log_format") == "json" {
+				logFormat = enum.LogFormatJSON
+			}
+
 			cfg := config.Config{
 				// Common fields
 				Version:       version,
@@ -192,8 +249,10 @@ var (
 				Debug:         viper.GetBool("debug"),
 				EnableLicense: viper.GetBool("enable_license"),
 				Internal:      true,
+				OutputDir:     viper.GetString("output_dir"),
 				AccountID:     session.Principal.AccountID,
 				// Internal mode specific fields
+				LogFormat:               logFormat,
 				BearerToken:             viper.GetString("bearer_token"),
 				PipelineSvcBaseURL:      viper.GetString("pipeline_svc_base_url"),
 				PipelineSvcSecret:       viper.GetString("pipeline_svc_secret"),
@@ -257,9 +316,42 @@ func init() {
 	rootCmd.PersistentFlags().Bool("read-only", false, "Restrict the server to read-only operations")
 	rootCmd.PersistentFlags().String("log-file", "", "Path to log file")
 	rootCmd.PersistentFlags().Bool("debug", false, "Enable debug logging")
+	rootCmd.PersistentFlags().String("output-dir", "", "Directory where the tool writes output files (e.g., pipeline logs)")
+	rootCmd.PersistentFlags().String("log-format", "text", "Log format (text or json)")
 
 	httpServerCmd.PersistentFlags().Int("http-port", 8080, "HTTP server port (when transport is 'http')")
 	httpServerCmd.PersistentFlags().String("http-path", "/mcp", "HTTP server path (when transport is 'http')")
+	httpServerCmd.Flags().String("pipeline-svc-base-url", "", "Base URL for pipeline service")
+	httpServerCmd.Flags().String("pipeline-svc-secret", "", "Secret for pipeline service")
+	httpServerCmd.Flags().String("mcp-svc-secret", "", "Secret for MCP service")
+	httpServerCmd.Flags().String("ng-manager-base-url", "", "Base URL for NG manager")
+	httpServerCmd.Flags().String("ng-manager-secret", "", "Secret for NG manager")
+	httpServerCmd.Flags().String("chatbot-base-url", "", "Base URL for chatbot service")
+	httpServerCmd.Flags().String("chatbot-secret", "", "Secret for chatbot service")
+	httpServerCmd.Flags().String("genai-base-url", "", "Base URL for genai service")
+	httpServerCmd.Flags().String("genai-secret", "", "Secret for genai service")
+	httpServerCmd.Flags().String("artifact-registry-base-url", "", "Base URL for artifact registry service")
+	httpServerCmd.Flags().String("artifact-registry-secret", "", "Secret for artifact registry service")
+	httpServerCmd.Flags().String("nextgen-ce-base-url", "", "Base URL for Nextgen CE service")
+	httpServerCmd.Flags().String("nextgen-ce-secret", "", "Secret for Nextgen CE service")
+	httpServerCmd.Flags().String("chaos-manager-svc-base-url", "", "Base URL for chaos manager service")
+	httpServerCmd.Flags().String("chaos-manager-svc-secret", "", "Secret for chaos manager service")
+	httpServerCmd.Flags().String("code-svc-base-url", "", "Base URL for code service")
+	httpServerCmd.Flags().String("code-svc-secret", "", "Secret for code service")
+	httpServerCmd.Flags().String("dashboard-svc-base-url", "", "Base URL for dashboard service")
+	httpServerCmd.Flags().String("dashboard-svc-secret", "", "Secret for dashboard service")
+	httpServerCmd.Flags().String("log-svc-base-url", "", "Base URL for log service")
+	httpServerCmd.Flags().String("log-service-secret", "", "Secret for log service")
+	httpServerCmd.Flags().String("scs-svc-secret", "", "Secret for SCS service")
+	httpServerCmd.Flags().String("scs-svc-base-url", "", "Base URL for SCS service")
+	httpServerCmd.Flags().String("sto-svc-secret", "", "Secret for STO service")
+	httpServerCmd.Flags().String("sto-svc-base-url", "", "Base URL for STO service")
+	httpServerCmd.Flags().String("audit-svc-base-url", "", "Base URL for audit service")
+	httpServerCmd.Flags().String("audit-svc-secret", "", "Secret for audit service")
+	httpServerCmd.Flags().String("dbops-svc-base-url", "", "Base URL for dbops service")
+	httpServerCmd.Flags().String("dbops-svc-secret", "", "Secret for dbops service")
+	httpServerCmd.Flags().String("rbac-svc-base-url", "", "Base URL for RBAC service")
+	httpServerCmd.Flags().String("rbac-svc-secret", "", "Secret for RBAC service")
 
 	// Add stdio-specific flags
 	stdioCmd.Flags().String("base-url", "https://app.harness.io", "Base URL for Harness")
@@ -304,6 +396,8 @@ func init() {
 	internalCmd.Flags().String("dbops-svc-secret", "", "Secret for dbops service")
 	internalCmd.Flags().String("acl-svc-base-url", "", "Base URL for ACL service")
 	internalCmd.Flags().String("acl-svc-secret", "", "Secret for ACL service")
+	internalCmd.Flags().String("intelligence-svc-base-url", "", "Base URL for intelligence service")
+	internalCmd.Flags().String("intelligence-svc-secret", "", "Secret for intelligence service")
 
 	// Bind global flags to viper
 	_ = viper.BindPFlag("toolsets", rootCmd.PersistentFlags().Lookup("toolsets"))
@@ -312,10 +406,46 @@ func init() {
 	_ = viper.BindPFlag("read_only", rootCmd.PersistentFlags().Lookup("read-only"))
 	_ = viper.BindPFlag("log_file", rootCmd.PersistentFlags().Lookup("log-file"))
 	_ = viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
-
+	_ = viper.BindPFlag("output_dir", rootCmd.PersistentFlags().Lookup("output-dir"))
+	_ = viper.BindPFlag("log_format", rootCmd.PersistentFlags().Lookup("log-format"))
 	// Bind transport configuration flags to viper
 	_ = viper.BindPFlag("http_port", httpServerCmd.PersistentFlags().Lookup("http-port"))
 	_ = viper.BindPFlag("http_path", httpServerCmd.PersistentFlags().Lookup("http-path"))
+	_ = viper.BindPFlag("pipeline_svc_base_url", httpServerCmd.Flags().Lookup("pipeline-svc-base-url"))
+	_ = viper.BindPFlag("pipeline_svc_secret", httpServerCmd.Flags().Lookup("pipeline-svc-secret"))
+	_ = viper.BindPFlag("mcp_svc_secret", httpServerCmd.Flags().Lookup("mcp-svc-secret"))
+	_ = viper.BindPFlag("ng_manager_base_url", httpServerCmd.Flags().Lookup("ng-manager-base-url"))
+	_ = viper.BindPFlag("ng_manager_secret", httpServerCmd.Flags().Lookup("ng-manager-secret"))
+	_ = viper.BindPFlag("chatbot_base_url", httpServerCmd.Flags().Lookup("chatbot-base-url"))
+	_ = viper.BindPFlag("chatbot_secret", httpServerCmd.Flags().Lookup("chatbot-secret"))
+	_ = viper.BindPFlag("genai_base_url", httpServerCmd.Flags().Lookup("genai-base-url"))
+	_ = viper.BindPFlag("genai_secret", httpServerCmd.Flags().Lookup("genai-secret"))
+	_ = viper.BindPFlag("artifact_registry_base_url", httpServerCmd.Flags().Lookup("artifact-registry-base-url"))
+	_ = viper.BindPFlag("artifact_registry_secret", httpServerCmd.Flags().Lookup("artifact-registry-secret"))
+	_ = viper.BindPFlag("nextgen_ce_base_url", httpServerCmd.Flags().Lookup("nextgen-ce-base-url"))
+	_ = viper.BindPFlag("nextgen_ce_secret", httpServerCmd.Flags().Lookup("nextgen-ce-secret"))
+	_ = viper.BindPFlag("template_svc_base_url", httpServerCmd.Flags().Lookup("template-svc-base-url"))
+	_ = viper.BindPFlag("template_svc_secret", httpServerCmd.Flags().Lookup("template-svc-secret"))
+	_ = viper.BindPFlag("intelligence_svc_base_url", httpServerCmd.Flags().Lookup("intelligence-svc-base-url"))
+	_ = viper.BindPFlag("intelligence_svc_secret", httpServerCmd.Flags().Lookup("intelligence-svc-secret"))
+	_ = viper.BindPFlag("chaos_manager_svc_base_url", httpServerCmd.Flags().Lookup("chaos-manager-svc-base-url"))
+	_ = viper.BindPFlag("chaos_manager_svc_secret", httpServerCmd.Flags().Lookup("chaos-manager-svc-secret"))
+	_ = viper.BindPFlag("code_svc_base_url", httpServerCmd.Flags().Lookup("code-svc-base-url"))
+	_ = viper.BindPFlag("code_svc_secret", httpServerCmd.Flags().Lookup("code-svc-secret"))
+	_ = viper.BindPFlag("dashboard_svc_base_url", httpServerCmd.Flags().Lookup("dashboard-svc-base-url"))
+	_ = viper.BindPFlag("dashboard_svc_secret", httpServerCmd.Flags().Lookup("dashboard-svc-secret"))
+	_ = viper.BindPFlag("log_svc_base_url", httpServerCmd.Flags().Lookup("log-svc-base-url"))
+	_ = viper.BindPFlag("log_svc_secret", httpServerCmd.Flags().Lookup("log-svc-secret"))
+	_ = viper.BindPFlag("scs_svc_secret", httpServerCmd.Flags().Lookup("scs-svc-secret"))
+	_ = viper.BindPFlag("scs_svc_base_url", httpServerCmd.Flags().Lookup("scs-svc-base-url"))
+	_ = viper.BindPFlag("sto_svc_secret", httpServerCmd.Flags().Lookup("sto-svc-secret"))
+	_ = viper.BindPFlag("sto_svc_base_url", httpServerCmd.Flags().Lookup("sto-svc-base-url"))
+	_ = viper.BindPFlag("audit_svc_base_url", httpServerCmd.Flags().Lookup("audit-svc-base-url"))
+	_ = viper.BindPFlag("audit_svc_secret", httpServerCmd.Flags().Lookup("audit-svc-secret"))
+	_ = viper.BindPFlag("dbops_svc_base_url", httpServerCmd.Flags().Lookup("dbops-svc-base-url"))
+	_ = viper.BindPFlag("dbops_svc_secret", httpServerCmd.Flags().Lookup("dbops-svc-secret"))
+	_ = viper.BindPFlag("rbac_svc_base_url", httpServerCmd.Flags().Lookup("rbac-svc-base-url"))
+	_ = viper.BindPFlag("rbac_svc_secret", httpServerCmd.Flags().Lookup("rbac-svc-secret"))
 
 	// Bind stdio-specific flags to viper
 	_ = viper.BindPFlag("base_url", stdioCmd.Flags().Lookup("base-url"))
@@ -375,29 +505,49 @@ func initConfig() {
 	viper.AutomaticEnv()
 }
 
-func initLogger(outPath string, debug bool) error {
-	if outPath == "" {
-		return nil
-	}
-
-	file, err := os.OpenFile(outPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err != nil {
-		return fmt.Errorf("failed to open log file: %w", err)
-	}
-
+func initLogger(config config.Config) error {
+	debug := config.Debug
+	logFormat := config.LogFormat
+	transport := config.Transport
+	outPath := config.LogFilePath
 	handlerOpts := &slog.HandlerOptions{}
 	if debug {
 		handlerOpts.Level = slog.LevelDebug
 	}
 
-	logger := slog.New(slog.NewTextHandler(file, handlerOpts))
+	// For HTTP transport with text format, return error early
+	if transport == enum.TransportHTTP && logFormat == enum.LogFormatText {
+		return fmt.Errorf("text format logs not supported by stackdriver")
+	}
+
+	// Determine the output writer (file or stdout)
+	var writer io.Writer = os.Stdout
+	if outPath != "" {
+		file, err := os.OpenFile(outPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		if err != nil {
+			return fmt.Errorf("failed to open log file: %w", err)
+		}
+		writer = file
+	}
+
+	// Create the appropriate handler based on format
+	var handler slog.Handler
+	if logFormat == enum.LogFormatJSON {
+		handler = slog.NewJSONHandler(writer, handlerOpts)
+	} else {
+		handler = slog.NewTextHandler(writer, handlerOpts)
+	}
+
+	// Set the default logger
+	logger := slog.New(handler)
 	slog.SetDefault(logger)
+
 	return nil
 }
 
 // runHTTPServer starts the MCP server with http transport
 func runHTTPServer(ctx context.Context, config config.Config) error {
-	err := initLogger(config.LogFilePath, config.Debug)
+	err := initLogger(config)
 	if err != nil {
 		return fmt.Errorf("failed to initialize logger: %w", err)
 	}
@@ -426,6 +576,11 @@ func runHTTPServer(ctx context.Context, config config.Config) error {
 		slog.Error("Failed to initialize toolsets", "error", err)
 	}
 
+	// Create module registry for HTTP mode
+	moduleRegistry := modules.NewModuleRegistry(&config, toolsets)
+	// Set the global registry for use by middleware
+	modules.SetGlobalRegistry(moduleRegistry)
+
 	// Register the tools with the server
 	toolsets.RegisterTools(harnessServer)
 
@@ -434,12 +589,31 @@ func runHTTPServer(ctx context.Context, config config.Config) error {
 
 	// Create HTTP server
 	httpServer := server.NewStreamableHTTPServer(harnessServer)
-	// Start server
+
+	// Wrap with auth middleware
+	authHandler := auth.AuthMiddleware(&config, httpServer)
+
+	// Build mux to attach to correct path
+	mux := http.NewServeMux()
+	mux.Handle(config.HTTP.Path, authHandler)
+
 	address := fmt.Sprintf(":%d", config.HTTP.Port)
-	slog.Info("Harness MCP Server running on HTTP", "version", version, "address", address, "path", config.HTTP.Path)
+	slog.Info("Harness MCP Server running on HTTP",
+		"version", version,
+		"address", address,
+		"path", config.HTTP.Path,
+	)
+
+	srv := &http.Server{
+		Addr:    address,
+		Handler: mux,
+	}
+
 	errChan := make(chan error, 1)
 	go func() {
-		errChan <- httpServer.Start(address)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errChan <- err
+		}
 	}()
 
 	// Wait for shutdown signal
@@ -459,7 +633,7 @@ func runHTTPServer(ctx context.Context, config config.Config) error {
 // runStdioServer starts the MCP server with stdio transport
 func runStdioServer(ctx context.Context, config config.Config) error {
 	// Initialize the MCP server as before
-	err := initLogger(config.LogFilePath, config.Debug)
+	err := initLogger(config)
 	if err != nil {
 		return fmt.Errorf("failed to initialize logger: %w", err)
 	}

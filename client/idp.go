@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strings"
 
 	"github.com/harness/harness-mcp/client/dto"
+	"github.com/harness/harness-mcp/pkg/harness/auth"
 )
 
 const (
@@ -33,7 +33,8 @@ const (
 )
 
 type IDPService struct {
-	Client *Client
+	Client                *Client
+	NgManagerAuthProvider auth.Provider
 }
 
 func (i *IDPService) GetEntity(ctx context.Context, scope dto.Scope, kind string, identifier string) (*dto.EntityResponse, error) {
@@ -309,17 +310,12 @@ func (i *IDPService) ExecuteWorkflow(ctx context.Context, scope dto.Scope, ident
 	params := make(map[string]string)
 	addScope(scope, params)
 
-	_, authHeaderVal, err := i.Client.AuthProvider.GetHeader(ctx)
+	_, authHeaderVal, err := i.NgManagerAuthProvider.GetHeader(ctx)
 	if err != nil {
 		slog.Error("Failed to get auth header", "error", err)
 		return nil, err
 	}
-	token := authHeaderVal
-	parts := strings.Split(authHeaderVal, " ")
-	if len(parts) == 2 {
-		token = parts[1]
-	}
-	inputSet["token"] = token
+	inputSet["token"] = authHeaderVal
 	body := new(dto.ExecuteWorkflowRequest)
 	body.Identifier = identifier
 	body.Values = inputSet
