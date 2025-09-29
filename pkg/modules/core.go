@@ -397,13 +397,16 @@ func RegisterIntelligence(config *config.Config, tsg *toolsets.ToolsetGroup) err
 
 func RegisterAccessControl(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for access control service
-	baseURLRBAC := utils.BuildServiceURL(config, config.RBACSvcBaseURL, config.BaseURL, "authz")
-	secret := config.RBACSvcSecret
+	baseURLACL := utils.BuildServiceURL(config, config.ACLSvcBaseURL, config.BaseURL, "authz")
+	secret := config.ACLSvcSecret
 
 	baseURLPrincipal := utils.BuildServiceURL(config, config.NgManagerBaseURL, config.BaseURL, "ng/api")
 	principalSecret := config.NgManagerSecret
 
-	c, err := utils.CreateClient(baseURLRBAC, config, secret)
+	baseURLResource := utils.BuildServiceURL(config, config.AuditSvcBaseURL, config.BaseURL, "resourcegroup")
+	resourceSecret := config.AuditSvcSecret
+
+	c, err := utils.CreateClient(baseURLACL, config, secret)
 	if err != nil {
 		return err
 	}
@@ -413,19 +416,35 @@ func RegisterAccessControl(config *config.Config, tsg *toolsets.ToolsetGroup) er
 		return err
 	}
 
-	rbacClient := &client.RBACService{Client: c}
+	resourceC, err := utils.CreateClient(baseURLResource, config, resourceSecret)
+	if err != nil {
+		return err
+	}
+
+	aclClient := &client.ACLService{Client: c}
 	principalClient := &client.PrincipalService{Client: principalC}
+	resourceClient := &client.ResourceGroupService{Client: resourceC}
 
 	accessControl := toolsets.NewToolset("access_control", "Access control related tools").
 		AddReadTools(
-			toolsets.NewServerTool(tools.ListAvailableRolesTool(config, rbacClient)),
-			toolsets.NewServerTool(tools.ListAvailablePermissions(config, rbacClient)),
-			toolsets.NewServerTool(tools.ListRoleAssignmentsTool(config, rbacClient)),
+			toolsets.NewServerTool(tools.ListAvailableRolesTool(config, aclClient)),
+			toolsets.NewServerTool(tools.ListAvailablePermissions(config, aclClient)),
+			toolsets.NewServerTool(tools.ListRoleAssignmentsTool(config, aclClient)),
 			toolsets.NewServerTool(tools.GetUserInfoTool(config, principalClient)),
 			toolsets.NewServerTool(tools.GetUserGroupInfoTool(config, principalClient)),
 			toolsets.NewServerTool(tools.GetServiceAccountTool(config, principalClient)),
 			toolsets.NewServerTool(tools.GetAllUsersTool(config, principalClient)),
-			toolsets.NewServerTool(tools.GetRoleInfoTool(config, rbacClient)),
+			toolsets.NewServerTool(tools.GetRoleInfoTool(config, aclClient)),
+			toolsets.NewServerTool(tools.CreateUserGroupTool(config, principalClient)),
+			toolsets.NewServerTool(tools.CreateRoleAssignmentTool(config, aclClient)),
+			toolsets.NewServerTool(tools.CreateServiceAccountTool(config, principalClient)),
+			toolsets.NewServerTool(tools.CreateResourceGroupTool(config, resourceClient)),
+			toolsets.NewServerTool(tools.CreateRoleTool(config, aclClient)),
+			toolsets.NewServerTool(tools.InviteUsersTool(config, principalClient)),
+			toolsets.NewServerTool(tools.DeleteUserGroupTool(config, principalClient)),
+			toolsets.NewServerTool(tools.DeleteServiceAccountTool(config, principalClient)),
+			toolsets.NewServerTool(tools.DeleteRoleTool(config, aclClient)),
+			toolsets.NewServerTool(tools.DeleteResourceGroupTool(config, resourceClient)),
 		)
 
 	// Add toolset to the group
