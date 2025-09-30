@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/harness/common"
 )
 
 // AuthMiddleware creates an HTTP middleware that extracts bearer tokens from
@@ -14,32 +16,30 @@ import (
 func AuthMiddleware(config *config.Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Extract the Authorization header
-		bearerToken := r.Header.Get("Authorization")
-		token := bearerToken
-		if strings.HasPrefix(strings.ToLower(bearerToken), "bearer ") {
-			token = bearerToken[7:] // Remove "Bearer " prefix (7 characters)
+		authHeader := r.Header.Get("Authorization")
+		parts := strings.Split(authHeader, " ")
+
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			slog.Error("invalid authorization header")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
 		}
-		if config.McpSvcSecret != "" && token != "" {
-			// Authenticate the session
-			session, err := AuthenticateSession(token, config.McpSvcSecret)
-			if err != nil {
-				slog.Error("failed to authenticate session", "error", err)
-				w.WriteHeader(http.StatusUnauthorized)
-				return
-			}
 
-			// Update the config with the account ID from the session
-			if session.Principal.AccountID != "" {
-				config.AccountID = session.Principal.AccountID
-				slog.Info("Updated config with account ID from session", "accountID", config.AccountID)
-			}
-
-			// Create a new context with the authenticated session
-			newCtx := WithAuthSession(r.Context(), session)
-
-			// Update request with new context
-			r = r.WithContext(newCtx)
+		token := parts[1]
+		session, err := AuthenticateSession(token, config.McpSvcSecret)
+		if err != nil {
+			slog.Error("failed to authenticate session", "error", err)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
 		}
+
+		// Add scope and session to the context
+		newCtx := common.WithScopeContext(WithAuthSession(r.Context(), session), dto.Scope{
+			AccountID: session.Principal.AccountID,
+		})
+
+		// Update request with new context
+		r = r.WithContext(newCtx)
 
 		// Pass the request to the next handler
 		next.ServeHTTP(w, r)

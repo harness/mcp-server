@@ -39,7 +39,7 @@ func (m *IDPModule) Name() string {
 // Toolsets returns the names of toolsets provided by this module
 func (m *IDPModule) Toolsets() []string {
 	return []string{
-		"Internal Developer Portal",
+		"idp",
 	}
 }
 
@@ -47,7 +47,7 @@ func (m *IDPModule) Toolsets() []string {
 func (m *IDPModule) RegisterToolsets() error {
 	for _, t := range m.Toolsets() {
 		switch t {
-		case "Internal Developer Portal":
+		case "idp":
 			if err := RegisterInternalDeveloperPortal(m.config, m.tsg); err != nil {
 				return err
 			}

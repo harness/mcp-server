@@ -6,7 +6,7 @@
     "configurations": [
         
         {
-            "name": "Launch MCP Server",
+            "name": "STDIO Server",
             "type": "go",
             "request": "launch",
             "mode": "auto",
@@ -20,6 +20,24 @@
                 "HARNESS_DEFAULT_ORG_ID": "<HARNESS_DEFAULT_ORG_ID>",
                 "HARNESS_DEFAULT_PROJECT_ID": "<HARNESS_DEFAULT_PROJECT_ID>",
                 "HARNESS_BASE_URL": "<HARNESS_BASE_URL>"
+            }
+        },
+        {
+            "name": "HTTP Server",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/cmd/harness-mcp-server",
+            "args": ["http-server"],
+            "env": {
+                "NG_MANAGER_BASE_URL": "<NG_MANAGER_BASE_URL>",
+                "NG_MANAGER_SECRET": "<NG_MANAGER_SECRET>",
+                "HARNESS_MCP_MODE": "<HARNESS_MCP_MODE>",
+                "HARNESS_API_KEY": "<HARNESS_API_KEY>",
+                "HARNESS_MCP_SVC_SECRET": "<HARNESS_MCP_SVC_SECRET>",
+                "HARNESS_DEFAULT_ORG_ID": "<HARNESS_DEFAULT_ORG_ID>",
+                "HARNESS_DEFAULT_PROJECT_ID": "<HARNESS_DEFAULT_PROJECT_ID>",
+                "HARNESS_BASE_URL": "<HARNESS_BASE_URL>",
             }
         },
         {

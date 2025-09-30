@@ -31,9 +31,11 @@ type RolesOutputDataContent struct {
 	Role                              RoleData `json:"role,omitempty"`
 	CreatedAt                         int64    `json:"createdAt,omitempty"`
 	LastModifiedAt                    int64    `json:"lastModifiedAt,omitempty"`
-	RoleAssignedToUserCount           int64    `json:"roleAssignedToUserCount,omitempty"`
-	RoleAssignedToUserGroupCount      int64    `json:"roleAssignedToUserGroupCount,omitempty"`
-	RoleAssignedToServiceAccountCount int64    `json:"roleAssignedToServiceAccountCount,omitempty"`
+	CreatedAtTime                     string
+	LastModifiedAtTime                string
+	RoleAssignedToUserCount           int64 `json:"roleAssignedToUserCount,omitempty"`
+	RoleAssignedToUserGroupCount      int64 `json:"roleAssignedToUserGroupCount,omitempty"`
+	RoleAssignedToServiceAccountCount int64 `json:"roleAssignedToServiceAccountCount,omitempty"`
 }
 
 type RoleData struct {
@@ -65,11 +67,13 @@ type RoleAssignmentsOutputData struct {
 }
 
 type RoleAssignmentsOutputDataContent struct {
-	RoleAssignment RoleAssignment `json:"roleAssignment,omitempty"`
-	Scope          Scope          `json:"scope,omitempty"`
-	CreatedAt      int64          `json:"createdAt,omitempty"`
-	LastModifiedAt int64          `json:"lastModifiedAt,omitempty"`
-	HarnessManaged bool           `json:"harnessManaged,omitempty"`
+	RoleAssignment     RoleAssignment `json:"roleAssignment,omitempty"`
+	Scope              Scope          `json:"scope,omitempty"`
+	CreatedAt          int64          `json:"createdAt,omitempty"`
+	LastModifiedAt     int64          `json:"lastModifiedAt,omitempty"`
+	HarnessManaged     bool           `json:"harnessManaged,omitempty"`
+	CreatedAtTime      string
+	LastModifiedAtTime string
 }
 
 type RoleAssignment struct {
@@ -80,7 +84,7 @@ type RoleAssignment struct {
 	Managed                 bool                   `json:"managed,omitempty"`
 	Internal                bool                   `json:"internal,omitempty"`
 	Disabled                bool                   `json:"disabled,omitempty"`
-	RoleReference           RoleReference          `json:"roleReference,omitempty"`
+	RoleReference           *RoleReference         `json:"roleReference,omitempty"`
 }
 
 type AccessControlPrincipal struct {
@@ -129,11 +133,13 @@ type UsersRequestBody struct {
 }
 
 type RoleInfoOutputData struct {
-	Role           Role  `json:"role,omitempty"`
-	Scope          Scope `json:"scope,omitempty"`
-	HarnessManaged bool  `json:"harnessManaged,omitempty"`
-	CreatedAt      int64 `json:"createdAt,omitempty"`
-	LastModifiedAt int64 `json:"lastModifiedAt,omitempty"`
+	Role               Role  `json:"role,omitempty"`
+	Scope              Scope `json:"scope,omitempty"`
+	HarnessManaged     bool  `json:"harnessManaged,omitempty"`
+	CreatedAt          int64 `json:"createdAt,omitempty"`
+	LastModifiedAt     int64 `json:"lastModifiedAt,omitempty"`
+	CreatedAtTime      string
+	LastModifiedAtTime string
 }
 
 type Role struct {
@@ -142,11 +148,6 @@ type Role struct {
 	Permissions        []string `json:"permissions,omitempty"`
 	AllowedScopeLevels []string `json:"allowedScopeLevels,omitempty"`
 	Description        string   `json:"description,omitempty"`
-	Tags               Tags     `json:"tags,omitempty"`
-}
-
-type Tags struct {
-	PropertyName string `json:"propertyName,omitempty"`
 }
 
 type RoleAssignmentRequestBody struct {
@@ -169,6 +170,17 @@ type UserGroupInfoData struct {
 	Identifier        string          `json:"identifier,omitempty"`
 	Name              string          `json:"name,omitempty"`
 	Users             []UserBasicInfo `json:"users,omitempty"`
+	Description       string          `json:"description,omitempty"`
+}
+
+type UserGroupInfoDataId struct {
+	AccountIdentifier string   `json:"accountIdentifier,omitempty"`
+	OrgIdentifier     string   `json:"orgIdentifier,omitempty"`
+	ProjectIdentifier string   `json:"projectIdentifier,omitempty"`
+	Identifier        string   `json:"identifier,omitempty"`
+	Name              string   `json:"name,omitempty"`
+	Users             []string `json:"users,omitempty"`
+	Description       string   `json:"description,omitempty"`
 }
 
 type UserBasicInfo struct {
@@ -182,6 +194,8 @@ type ServiceAccountData struct {
 	LastModifiedAt               int64                          `json:"lastModifiedAt,omitempty"`
 	TokensCount                  int64                          `json:"tokensCount,omitempty"`
 	RoleAssignmentMetadataObject []RoleAssignmentMetadataObject `json:"roleAssignmentsMetadataDTO,omitempty"`
+	CreatedAtTime                string
+	LastModifiedAtTime           string
 }
 
 type ServiceAccountInfo struct {
@@ -202,13 +216,116 @@ type RoleAssignmentPrincipalFilter struct {
 }
 
 type ResourceGroup struct {
+	AccountIdentifier string                      `json:"accountIdentifier,omitempty"`
+	OrgIdentifier     string                      `json:"orgIdentifier,omitempty"`
+	ProjectIdentifier string                      `json:"projectIdentifier,omitempty"`
+	Identifier        string                      `json:"identifier,omitempty"`
+	Name              string                      `json:"name,omitempty"`
+	Color             string                      `json:"color,omitempty"`
+	Description       string                      `json:"description,omitempty"`
+	ResourceFilter    ResourceGroupResourceFilter `json:"resourceFilter,omitempty"`
+}
+
+type CreateRoleAssignmentRequestBody struct {
+	Identifier              string                 `json:"identifier,omitempty"`
+	ResourceGroupIdentifier string                 `json:"resourceGroupIdentifier,omitempty"`
+	RoleIdentifier          string                 `json:"roleIdentifier,omitempty"`
+	Principal               AccessControlPrincipal `json:"principal,omitempty"`
+	Managed                 bool                   `json:"managed,omitempty"`
+	Internal                bool                   `json:"internal,omitempty"`
+	Disabled                bool                   `json:"disabled,omitempty"`
+	RoleReference           *RoleReference         `json:"roleReference,omitempty"`
+}
+
+type CreateRoleAssignmentOutputData struct {
+	RoleAssignment     RoleAssignment `json:"roleAssignment,omitempty"`
+	Scope              Scope          `json:"scope,omitempty"`
+	CreatedAt          int64          `json:"createdAt,omitempty"`
+	LastModifiedAt     int64          `json:"lastModifiedAt,omitempty"`
+	HarnessManaged     bool           `json:"harnessManaged,omitempty"`
+	CreatedAtTime      string
+	LastModifiedAtTime string
+}
+
+type CreateResourceGroupRequestBody struct {
+	ResourceGroup ResourceGroup `json:"resourceGroup,omitempty"`
+}
+
+type ResourceGroupResourceFilter struct {
+	Resources []ResourceSelectorV2 `json:"resources,omitempty"`
+}
+
+type ResourceSelectorV2 struct {
+	Identifiers  []string `json:"identifiers,omitempty"`
+	ResourceType string   `json:"resourceType,omitempty"`
+}
+
+type CreateResourceGroupOutputData struct {
+	ResourceGroup      ResourceGroup `json:"resourceGroup,omitempty"`
+	CreatedAt          int64         `json:"createdAt,omitempty"`
+	LastModifiedAt     int64         `json:"lastModifiedAt,omitempty"`
+	HarnessManaged     bool          `json:"harnessManaged,omitempty"`
+	CreatedAtTime      string
+	LastModifiedAtTime string
+}
+
+type CreateRoleOutputData struct {
+	Role               Role  `json:"role,omitempty"`
+	CreatedAt          int64 `json:"createdAt,omitempty"`
+	LastModifiedAt     int64 `json:"lastModifiedAt,omitempty"`
+	HarnessManaged     bool  `json:"harnessManaged,omitempty"`
+	Scope              Scope `json:"scope,omitempty"`
+	CreatedAtTime      string
+	LastModifiedAtTime string
+}
+
+type CreateUserGroupRequestBody struct {
+	AccountIdentifier string   `json:"accountIdentifier,omitempty"`
+	OrgIdentifier     string   `json:"orgIdentifier,omitempty"`
+	ProjectIdentifier string   `json:"projectIdentifier,omitempty"`
+	Identifier        string   `json:"identifier,omitempty"`
+	Name              string   `json:"name,omitempty"`
+	Description       string   `json:"description,omitempty"`
+	Users             []string `json:"users,omitempty"`
+}
+
+type CreateUserGroupOutputData struct {
+	AccountIdentifier string          `json:"accountIdentifier,omitempty"`
+	OrgIdentifier     string          `json:"orgIdentifier,omitempty"`
+	ProjectIdentifier string          `json:"projectIdentifier,omitempty"`
+	Identifier        string          `json:"identifier,omitempty"`
+	Name              string          `json:"name,omitempty"`
+	Description       string          `json:"description,omitempty"`
+	Users             []UserBasicInfo `json:"users,omitempty"`
+}
+
+type CreateServiceAccountRequestBody struct {
+	Identifier        string `json:"identifier,omitempty"`
+	Name              string `json:"name,omitempty"`
+	Email             string `json:"email,omitempty"`
+	Description       string `json:"description,omitempty"`
 	AccountIdentifier string `json:"accountIdentifier,omitempty"`
 	OrgIdentifier     string `json:"orgIdentifier,omitempty"`
 	ProjectIdentifier string `json:"projectIdentifier,omitempty"`
-	Identifier        string `json:"identifier,omitempty"`
-	Name              string `json:"name,omitempty"`
-	Color             string `json:"color,omitempty"`
-	Description       string `json:"description,omitempty"`
+}
+
+type InviteUserRequestBody struct {
+	Emails       []string      `json:"emails,omitempty"`
+	UserGroups   []string      `json:"userGroups,omitempty"`
+	RoleBindings []RoleBinding `json:"roleBindings,omitempty"`
+}
+
+type RoleBinding struct {
+	ResourceGroupIdentifier string `json:"resourceGroupIdentifier,omitempty"`
+	RoleIdentifier          string `json:"roleIdentifier,omitempty"`
+	RoleScopeLevel          string `json:"roleScopeLevel,omitempty"`
+	RoleName                string `json:"roleName,omitempty"`
+	ResourceGroupName       string `json:"resourceGroupName,omitempty"`
+	ManagedRole             bool   `json:"managedRole"`
+}
+
+type InviteUserOutputData struct {
+	AddUserResponseMap map[string]string `json:"addUserResponseMap,omitempty"`
 }
 
 type CurrentUserData struct {
@@ -237,6 +354,9 @@ type CurrentUserData struct {
 	UserPreferences                UserPreferences `json:"userPreferences,omitempty"`
 	IsEnrichedInfoCollected        bool            `json:"isEnrichedInfoCollected,omitempty"`
 	LastLogin                      int64           `json:"lastLogin,omitempty"`
+	CreatedAtTime                  string
+	LastUpdatedAtTime              string
+	LastLoginTime                  string
 }
 
 type AccountInfo struct {

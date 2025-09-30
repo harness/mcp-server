@@ -10,20 +10,35 @@ import (
 )
 
 const (
-	getUsersPath            = "/user/aggregate"
-	getRolePath             = "/api/roles"
-	listPermissionsPath     = "/api/permissions"
-	listRoleAssignmentsPath = "/api/roleassignments/filter"
-	getUserGroupPath        = "/v2/user-groups"
-	getServiceAccountPath   = "/serviceaccount/aggregate"
-	getCurrentUserPath      = "/user/currentUser"
+	getUsersPath             = "/user/aggregate"
+	getRolePath              = "/api/roles"
+	listPermissionsPath      = "/api/permissions"
+	listRoleAssignmentsPath  = "/api/roleassignments/filter"
+	getUserGroupPath         = "/v2/user-groups"
+	getServiceAccountPath    = "/serviceaccount/aggregate"
+	getCurrentUserPath       = "/user/currentUser"
+	createRoleAssignmentPath = "/api/roleassignments"
+	createRolePath           = "/api/roles"
+	createUserGroupPath      = "/v2/user-groups"
+	createServiceAccountPath = "/serviceaccount"
+	createResourceGroupPath  = "/api/v2/resourcegroup"
+	inviteUserPath           = "/user/users"
+	deleteUserGroupPath      = "/user-groups"
+	deleteServiceAccountPath = "/serviceaccount"
+	deleteRolePath           = "/api/roles"
+	deleteResourceGroupPath  = "/api/v2/resourcegroup"
+	deleteRoleAssignmentPath = "/api/roleassignments"
 )
 
-type RBACService struct {
+type ACLService struct {
 	Client *Client
 }
 
 type PrincipalService struct {
+	Client *Client
+}
+
+type ResourceGroupService struct {
 	Client *Client
 }
 
@@ -48,7 +63,7 @@ func (u *PrincipalService) GetAllUsers(ctx context.Context, scope dto.Scope, sea
 	return resp, nil
 }
 
-func (u *RBACService) GetRoleInfo(ctx context.Context, scope dto.Scope, roleID string) (*dto.AccessControlOutput[dto.RoleInfoOutputData], error) {
+func (u *ACLService) GetRoleInfo(ctx context.Context, scope dto.Scope, roleID string) (*dto.AccessControlOutput[dto.RoleInfoOutputData], error) {
 	params := make(map[string]string)
 
 	path := fmt.Sprintf(getRolePath+"/%s", roleID)
@@ -59,10 +74,15 @@ func (u *RBACService) GetRoleInfo(ctx context.Context, scope dto.Scope, roleID s
 	if err != nil {
 		return nil, fmt.Errorf("failed to get role info: %w", err)
 	}
+
+	// Format timestamps
+	resp.Data.CreatedAtTime = dto.FormatUnixMillisToRFC3339(resp.Data.CreatedAt)
+	resp.Data.LastModifiedAtTime = dto.FormatUnixMillisToRFC3339(resp.Data.LastModifiedAt)
+
 	return resp, nil
 }
 
-func (r *RBACService) ListAvailableRoles(ctx context.Context, scope dto.Scope, page int, size int) (*dto.AccessControlOutput[dto.RolesOutputData], error) {
+func (r *ACLService) ListAvailableRoles(ctx context.Context, scope dto.Scope, page int, size int) (*dto.AccessControlOutput[dto.RolesOutputData], error) {
 
 	params := make(map[string]string)
 	params["accountIdentifier"] = scope.AccountID
@@ -77,11 +97,19 @@ func (r *RBACService) ListAvailableRoles(ctx context.Context, scope dto.Scope, p
 		return nil, fmt.Errorf("failed to list the roles assigned to the user: %w", err)
 	}
 
+	// Format timestamps
+	for i := range resp.Data.Content {
+		createdAt := resp.Data.Content[i].CreatedAt
+		lastModifiedAt := resp.Data.Content[i].LastModifiedAt
+		resp.Data.Content[i].CreatedAtTime = dto.FormatUnixMillisToRFC3339(createdAt)
+		resp.Data.Content[i].LastModifiedAtTime = dto.FormatUnixMillisToRFC3339(lastModifiedAt)
+	}
+
 	return resp, nil
 
 }
 
-func (p *RBACService) ListAvailablePermissions(ctx context.Context, scope dto.Scope, page int, size int) (*dto.AccessControlOutput[[]dto.PermissionsOutputData], error) {
+func (p *ACLService) ListAvailablePermissions(ctx context.Context, scope dto.Scope, page int, size int) (*dto.AccessControlOutput[[]dto.PermissionsOutputData], error) {
 
 	params := make(map[string]string)
 	params["accountIdentifier"] = scope.AccountID
@@ -99,7 +127,7 @@ func (p *RBACService) ListAvailablePermissions(ctx context.Context, scope dto.Sc
 	return resp, nil
 }
 
-func (ra *RBACService) ListRoleAssignmentsTool(ctx context.Context, scope dto.Scope, page int, size int, opts *dto.RoleAssignmentRequestBody, resourceGroupNames []string, roleNames []string, principalTypes string, principalScopeLevelFilter string, principalFilter []dto.RoleAssignmentPrincipalFilter) (*dto.AccessControlOutput[dto.RoleAssignmentsOutputData], error) {
+func (ra *ACLService) ListRoleAssignmentsTool(ctx context.Context, scope dto.Scope, page int, size int, opts *dto.RoleAssignmentRequestBody, resourceGroupNames []string, roleNames []string, principalTypes string, principalScopeLevelFilter string, principalFilter []dto.RoleAssignmentPrincipalFilter) (*dto.AccessControlOutput[dto.RoleAssignmentsOutputData], error) {
 	if opts == nil {
 		opts = &dto.RoleAssignmentRequestBody{}
 	}
@@ -158,6 +186,12 @@ func (ra *RBACService) ListRoleAssignmentsTool(ctx context.Context, scope dto.Sc
 		return nil, fmt.Errorf("failed to list the role assignments: %w\nRequest body: %s", err, string(optsJSON))
 	}
 
+	// Format timestamps
+	for i := range resp.Data.Content {
+		resp.Data.Content[i].CreatedAtTime = dto.FormatUnixMillisToRFC3339(resp.Data.Content[i].CreatedAt)
+		resp.Data.Content[i].LastModifiedAtTime = dto.FormatUnixMillisToRFC3339(resp.Data.Content[i].LastModifiedAt)
+	}
+
 	return resp, nil
 }
 
@@ -207,6 +241,10 @@ func (sAccount *PrincipalService) GetServiceAccount(ctx context.Context, scope d
 		return nil, fmt.Errorf("Failed to list the service account info: %w", err)
 	}
 
+	// Format timestamps
+	resp.Data.CreatedAtTime = dto.FormatUnixMillisToRFC3339(resp.Data.CreatedAt)
+	resp.Data.LastModifiedAtTime = dto.FormatUnixMillisToRFC3339(resp.Data.LastModifiedAt)
+
 	return resp, nil
 }
 
@@ -221,6 +259,220 @@ func (currentUserInfo *PrincipalService) GetCurrentUser(ctx context.Context, sco
 	err := currentUserInfo.Client.Get(ctx, path, params, map[string]string{}, resp)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to list the user info: %w", err)
+	}
+
+	// Format timestamps
+	resp.Data.CreatedAtTime = dto.FormatUnixMillisToRFC3339(resp.Data.CreatedAt)
+	resp.Data.LastUpdatedAtTime = dto.FormatUnixMillisToRFC3339(resp.Data.LastUpdatedAt)
+	resp.Data.LastLoginTime = dto.FormatUnixMillisToRFC3339(resp.Data.LastLogin)
+
+	return resp, nil
+}
+
+func (rAssignment *ACLService) CreateRoleAssignment(ctx context.Context, scope dto.Scope, opts *dto.CreateRoleAssignmentRequestBody) (*dto.AccessControlOutput[dto.CreateRoleAssignmentOutputData], error) {
+	if opts == nil {
+		opts = &dto.CreateRoleAssignmentRequestBody{}
+	}
+
+	params := make(map[string]string)
+
+	addScope(scope, params)
+
+	resp := &dto.AccessControlOutput[dto.CreateRoleAssignmentOutputData]{}
+	err := rAssignment.Client.Post(ctx, createRoleAssignmentPath, params, opts, map[string]string{}, resp)
+	if err != nil {
+		return nil, fmt.Errorf("Client Side failed to create role assignment: %w", err)
+	}
+
+	// Format timestamps
+	resp.Data.CreatedAtTime = dto.FormatUnixMillisToRFC3339(resp.Data.CreatedAt)
+	resp.Data.LastModifiedAtTime = dto.FormatUnixMillisToRFC3339(resp.Data.LastModifiedAt)
+
+	return resp, nil
+}
+
+func (cResourceGroup *ResourceGroupService) CreateResourceGroup(ctx context.Context, scope dto.Scope, resourceGroup dto.ResourceGroup, opts *dto.CreateResourceGroupRequestBody) (*dto.AccessControlOutput[dto.CreateResourceGroupOutputData], error) {
+	if opts == nil {
+		opts = &dto.CreateResourceGroupRequestBody{}
+	}
+
+	params := make(map[string]string)
+
+	addScope(scope, params)
+
+	opts.ResourceGroup = resourceGroup
+
+	resp := &dto.AccessControlOutput[dto.CreateResourceGroupOutputData]{}
+	err := cResourceGroup.Client.Post(ctx, createResourceGroupPath, params, opts, map[string]string{}, resp)
+	if err != nil {
+		optsJSON, _ := json.MarshalIndent(opts, "", "  ")
+		return nil, fmt.Errorf("failed to create resource group: %w\nRequest body: %s", err, string(optsJSON))
+	}
+
+	// Format timestamps
+	resp.Data.CreatedAtTime = dto.FormatUnixMillisToRFC3339(resp.Data.CreatedAt)
+	resp.Data.LastModifiedAtTime = dto.FormatUnixMillisToRFC3339(resp.Data.LastModifiedAt)
+
+	return resp, nil
+}
+
+func (cRole *ACLService) CreateRole(ctx context.Context, scope dto.Scope, opts *dto.Role) (*dto.AccessControlOutput[dto.CreateRoleOutputData], error) {
+	if opts == nil {
+		opts = &dto.Role{}
+	}
+
+	params := make(map[string]string)
+
+	addScope(scope, params)
+
+	resp := &dto.AccessControlOutput[dto.CreateRoleOutputData]{}
+	err := cRole.Client.Post(ctx, createRolePath, params, opts, map[string]string{}, resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create role: %w", err)
+	}
+
+	return resp, nil
+}
+
+func (cUserGroup *PrincipalService) CreateUserGroup(ctx context.Context, scope dto.Scope, opts *dto.CreateUserGroupRequestBody) (*dto.AccessControlOutput[dto.CreateUserGroupOutputData], error) {
+	if opts == nil {
+		opts = &dto.CreateUserGroupRequestBody{}
+	}
+
+	params := make(map[string]string)
+
+	addScope(scope, params)
+
+	resp := &dto.AccessControlOutput[dto.CreateUserGroupOutputData]{}
+	err := cUserGroup.Client.Post(ctx, createUserGroupPath, params, opts, map[string]string{}, resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create user group: %w", err)
+	}
+
+	return resp, nil
+}
+
+func (cServiceAccount *PrincipalService) CreateServiceAccount(ctx context.Context, scope dto.Scope, opts *dto.CreateServiceAccountRequestBody) (*dto.AccessControlOutput[dto.ServiceAccountInfo], error) {
+	if opts == nil {
+		opts = &dto.CreateServiceAccountRequestBody{}
+	}
+
+	params := make(map[string]string)
+
+	addScope(scope, params)
+
+	resp := &dto.AccessControlOutput[dto.ServiceAccountInfo]{}
+	err := cServiceAccount.Client.Post(ctx, createServiceAccountPath, params, opts, map[string]string{}, resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create service account: %w", err)
+	}
+
+	return resp, nil
+}
+
+func (iUser *PrincipalService) InviteUsers(ctx context.Context, scope dto.Scope, emails []string, userGroups []string, roleBindings []dto.RoleBinding, opts *dto.InviteUserRequestBody) (*dto.AccessControlOutput[dto.InviteUserOutputData], error) {
+	if opts == nil {
+		opts = &dto.InviteUserRequestBody{}
+	}
+
+	params := make(map[string]string)
+
+	addScope(scope, params)
+
+	opts.Emails = emails
+	opts.UserGroups = userGroups
+	opts.RoleBindings = roleBindings
+
+	resp := &dto.AccessControlOutput[dto.InviteUserOutputData]{}
+	err := iUser.Client.Post(ctx, inviteUserPath, params, opts, map[string]string{}, resp)
+	if err != nil {
+		optsJSON, _ := json.MarshalIndent(opts, "", "  ")
+		return nil, fmt.Errorf("failed to invite users: %w\nRequest body: %s", err, string(optsJSON))
+	}
+
+	return resp, nil
+}
+
+func (dUserGroup *PrincipalService) DeleteUserGroup(ctx context.Context, scope dto.Scope, userGroupIdentifier string) (*dto.AccessControlOutput[dto.UserGroupInfoDataId], error) {
+
+	params := make(map[string]string)
+
+	addScope(scope, params)
+
+	path := fmt.Sprintf(deleteUserGroupPath+"/%s", userGroupIdentifier)
+
+	resp := &dto.AccessControlOutput[dto.UserGroupInfoDataId]{}
+	err := dUserGroup.Client.Delete(ctx, path, params, map[string]string{}, resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete user group: %w", err)
+	}
+
+	return resp, nil
+}
+
+func (dServiceAccount *PrincipalService) DeleteServiceAccount(ctx context.Context, scope dto.Scope, serviceAccountIdentifier string) (*dto.AccessControlOutput[bool], error) {
+
+	params := make(map[string]string)
+
+	addScope(scope, params)
+
+	path := fmt.Sprintf(deleteServiceAccountPath+"/%s", serviceAccountIdentifier)
+
+	resp := &dto.AccessControlOutput[bool]{}
+	err := dServiceAccount.Client.Delete(ctx, path, params, map[string]string{}, resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete service account: %w", err)
+	}
+
+	return resp, nil
+}
+
+func (dRole *ACLService) DeleteRole(ctx context.Context, scope dto.Scope, roleIdentifier string) (*dto.AccessControlOutput[dto.RoleInfoOutputData], error) {
+
+	params := make(map[string]string)
+
+	addScope(scope, params)
+
+	path := fmt.Sprintf(deleteRolePath+"/%s", roleIdentifier)
+
+	resp := &dto.AccessControlOutput[dto.RoleInfoOutputData]{}
+	err := dRole.Client.Delete(ctx, path, params, map[string]string{}, resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete role: %w", err)
+	}
+
+	return resp, nil
+}
+
+func (dResourceGroup *ResourceGroupService) DeleteResourceGroup(ctx context.Context, scope dto.Scope, resourceGroupIdentifier string) (*dto.AccessControlOutput[bool], error) {
+
+	params := make(map[string]string)
+
+	addScope(scope, params)
+
+	path := fmt.Sprintf(deleteResourceGroupPath+"/%s", resourceGroupIdentifier)
+
+	resp := &dto.AccessControlOutput[bool]{}
+	err := dResourceGroup.Client.Delete(ctx, path, params, map[string]string{}, resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete resource group: %w", err)
+	}
+
+	return resp, nil
+}
+
+func (dRoleAssignment *ACLService) DeleteRoleAssignment(ctx context.Context, scope dto.Scope, roleAssignmentIdentifier string) (*dto.AccessControlOutput[dto.RoleAssignmentsOutputDataContent], error) {
+
+	params := make(map[string]string)
+
+	addScope(scope, params)
+
+	path := fmt.Sprintf(deleteRoleAssignmentPath+"/%s", roleAssignmentIdentifier)
+
+	resp := &dto.AccessControlOutput[dto.RoleAssignmentsOutputDataContent]{}
+	err := dRoleAssignment.Client.Delete(ctx, path, params, map[string]string{}, resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete role assignment: %w", err)
 	}
 
 	return resp, nil

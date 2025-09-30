@@ -418,7 +418,7 @@ type ActionData struct {
 
 func CreateFollowUpPromptTool(config *config.Config, client *client.PipelineService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("create_follow_up_prompt",
-			mcp.WithDescription("Creates a follow up prompt event with the specified data."),
+			mcp.WithDescription("Creates a follow up prompt event with the specified data. MUST NOT be called unless explicitly requested"),
 			mcp.WithString("action_data",
 				mcp.Required(),
 				mcp.Description("A JSON string in one of these formats: 1) An array of action objects: {\"actions\": [{\"text\": \"Button Text\", \"action\": \"OPEN_ENTITY_NEW_TAB\", \"data\": {\"pageName\": \"PAGE_NAME\", \"metadata\": {\"<KEY>\": \"<VALUE>\"}}}]} OR 2) just a single string action without any array: \"Action1\""),

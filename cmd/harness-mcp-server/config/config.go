@@ -12,6 +12,7 @@ type Config struct {
 	Debug         bool
 	EnableLicense bool
 	OutputDir     string
+	LogFormat     enum.LogFormatType
 
 	// Server configuration
 	Transport enum.TransportType
@@ -70,6 +71,6 @@ type Config struct {
 	AuditSvcSecret          string
 	DBOpsSvcBaseURL         string
 	DBOpsSvcSecret          string
-	RBACSvcBaseURL          string
-	RBACSvcSecret           string
+	ACLSvcBaseURL           string
+	ACLSvcSecret            string
 }

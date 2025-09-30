@@ -2,6 +2,7 @@ package toolsets
 
 import (
 	"fmt"
+	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -131,6 +132,7 @@ func (tg *ToolsetGroup) EnableToolsets(names []string) error {
 		}
 		return nil
 	}
+
 	for _, name := range names {
 		if name == "all" {
 			tg.everythingOn = true
@@ -149,8 +151,8 @@ func (tg *ToolsetGroup) EnableToolsets(names []string) error {
 				return err
 			}
 		}
-		return nil
 	}
+
 	return nil
 }
 
@@ -160,8 +162,18 @@ func (tg *ToolsetGroup) EnableToolset(name string) error {
 	if !exists {
 		return fmt.Errorf("toolset %s does not exist", name)
 	}
-	toolset.Enabled = true
-	tg.Toolsets[name] = toolset
+
+	// Only log if not already enabled
+	if !toolset.Enabled {
+		toolset.Enabled = true
+		tg.Toolsets[name] = toolset
+
+		// Log each tool in this toolset
+		for _, tool := range toolset.GetAvailableTools() {
+			slog.Info("Tool enabled", "toolset", name, "tool", tool.Tool.Name)
+		}
+	}
+
 	return nil
 }
 
