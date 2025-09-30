@@ -293,13 +293,13 @@ func formatJSONLines(lines []string) string {
 			// Parse and format the timestamp
 			if t, err := time.Parse(time.RFC3339Nano, logEntry.Time); err == nil {
 				// Format timestamp in UTC
-				formattedOutput.WriteString(fmt.Sprintf("[%s] %s: %s\n", 
+				formattedOutput.WriteString(fmt.Sprintf("[%s] %s: %s\n",
 					t.UTC().Format("2006-01-02 15:04:05 UTC"),
 					logEntry.Level,
 					removeAnsiCodes(logEntry.Out)))
 			} else {
 				// Fallback to original timestamp if parsing fails
-				formattedOutput.WriteString(fmt.Sprintf("[%s] %s: %s\n", 
+				formattedOutput.WriteString(fmt.Sprintf("[%s] %s: %s\n",
 					logEntry.Time,
 					logEntry.Level,
 					removeAnsiCodes(logEntry.Out)))
