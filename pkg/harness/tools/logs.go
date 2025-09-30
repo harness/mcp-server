@@ -37,13 +37,13 @@ type LogFileInfo struct {
 func extractAndAnalyzeLogs(internalMode bool, zipFilePath string, numLines int) (string, error) {
 	// If numLines is not specified, default to 10 (approx. 1KB of data)
 	if numLines <= 0 {
-		numLines = 10
+		numLines = 100
 	}
 
-	// Cap numLines at a maximum of 20
-	if numLines > 20 && internalMode {
-		slog.Info("Limiting requested lines to maximum allowed", "requested", numLines, "max_allowed", 20)
-		numLines = 20
+	// Cap numLines at a maximum of 100
+	if numLines > 100 && internalMode {
+		slog.Info("Limiting requested lines to maximum allowed", "requested", numLines, "max_allowed", 100)
+		numLines = 100
 	}
 
 	// Extract log files from the ZIP archive
@@ -63,7 +63,7 @@ func extractAndAnalyzeLogs(internalMode bool, zipFilePath string, numLines int) 
 	// Extract the required number of lines from the files
 	formattedLines := extractLinesFromFiles(logFiles, numLines)
 
-	// Format the JSON output for better readability
+	// Format the log output for better readability
 	result := formatJSONLines(formattedLines)
 	return result, nil
 }
@@ -264,44 +264,48 @@ func extractLinesFromFiles(logFiles []LogFileInfo, numLines int) []string {
 	return formattedLines
 }
 
-// removeAnsiCodes removes ANSI color codes from a string
+// removeAnsiCodes removes ANSI color codes and escape sequences from a string
 func removeAnsiCodes(s string) string {
-	// Simple string replacement for ANSI color codes
-	s = strings.ReplaceAll(s, "\u001b", "")
-	s = strings.ReplaceAll(s, "\x1b", "")
+	// Remove ANSI escape sequences with color codes
+	re := regexp.MustCompile(`\x1b\[([0-9]{1,2}(;[0-9]{1,2})*)?[mK]`)
+	s = re.ReplaceAllString(s, "")
 
-	// Remove any remaining color code patterns like [33;1m
-	re := regexp.MustCompile("\\[[0-9;]*[a-zA-Z]")
-	return re.ReplaceAllString(s, "")
+	// Remove escaped ANSI sequences
+	s = strings.ReplaceAll(s, "\u001b", "")
+
+	return s
 }
 
-// formatJSONLines formats a slice of JSON lines for better readability
+// formatJSONLines formats a slice of log lines for better readability
 // Returns a human-readable format of the log entries
 func formatJSONLines(lines []string) string {
 	var formattedOutput strings.Builder
 
 	for _, line := range lines {
 		// Try to parse the JSON
-		var parsed map[string]interface{}
-		if err := json.Unmarshal([]byte(line), &parsed); err == nil {
-			// Extract timestamp and log message
-			timestamp, _ := parsed["time"].(string)
-			level, _ := parsed["level"].(string)
-			output, _ := parsed["out"].(string)
+		var logEntry struct {
+			Level string `json:"level"`
+			Out   string `json:"out"`
+			Time  string `json:"time"`
+		}
 
-			// Clean ANSI codes from the output
-			output = removeAnsiCodes(output)
-
-			// Format the timestamp if possible
-			formattedTime := timestamp
-			if t, err := time.Parse(time.RFC3339Nano, timestamp); err == nil {
-				formattedTime = t.Format("2006-01-02 15:04:05")
+		if err := json.Unmarshal([]byte(line), &logEntry); err == nil {
+			// Parse and format the timestamp
+			if t, err := time.Parse(time.RFC3339Nano, logEntry.Time); err == nil {
+				// Format timestamp in UTC
+				formattedOutput.WriteString(fmt.Sprintf("[%s] %s: %s\n",
+					t.UTC().Format("2006-01-02 15:04:05 UTC"),
+					logEntry.Level,
+					removeAnsiCodes(logEntry.Out)))
+			} else {
+				// Fallback to original timestamp if parsing fails
+				formattedOutput.WriteString(fmt.Sprintf("[%s] %s: %s\n",
+					logEntry.Time,
+					logEntry.Level,
+					removeAnsiCodes(logEntry.Out)))
 			}
-
-			// Add a line to the output
-			formattedOutput.WriteString(fmt.Sprintf("[%s] %s: %s\n", formattedTime, level, output))
 		} else {
-			// If we can't parse it, just add the raw line
+			// If JSON parsing fails, just add the raw line
 			formattedOutput.WriteString(line)
 			formattedOutput.WriteString("\n")
 		}
@@ -350,8 +354,8 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 				mcp.Description("The absolute path to the directory where the logs should get downloaded."),
 			),
 			mcp.WithNumber("num_lines",
-				mcp.Description("Number of log lines to return. Default is 10."),
-				mcp.DefaultNumber(10),
+				mcp.Description("Number of log lines to return. Default is 100."),
+				mcp.DefaultNumber(100),
 			),
 			mcp.WithString("log_key",
 				mcp.Description("Optional log key to be used for downloading logs directly"),
