@@ -37,7 +37,7 @@ func GetDatabaseInfoTool(config *config.Config, dbopsClient *dbops.Client) (tool
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			// Extract org and project from scope
-			scope, err := common.FetchScope(config, request, true)
+			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

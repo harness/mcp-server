@@ -33,7 +33,7 @@ func GetEntityTool(config *config.Config, client *client.IDPService) (tool mcp.T
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -93,7 +93,7 @@ func ListEntitiesTool(config *config.Config, client *client.IDPService) (tool mc
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			params := &dto.GetEntitiesParams{}
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -189,7 +189,7 @@ func GetScorecardTool(config *config.Config, client *client.IDPService) (tool mc
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -215,7 +215,7 @@ func ListScorecardsTool(config *config.Config, client *client.IDPService) (tool 
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -248,7 +248,7 @@ func GetScoreSummaryTool(config *config.Config, client *client.IDPService) (tool
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -281,7 +281,7 @@ func GetScoresTool(config *config.Config, client *client.IDPService) (tool mcp.T
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -314,7 +314,7 @@ func GetScorecardStatsTool(config *config.Config, client *client.IDPService) (to
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -346,7 +346,7 @@ func GetCheckTool(config *config.Config, client *client.IDPService) (tool mcp.To
 			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -392,7 +392,7 @@ func ListChecksTool(config *config.Config, client *client.IDPService) (tool mcp.
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			params := &dto.GetChecksParams{}
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -459,7 +459,7 @@ func GetCheckStatsTool(config *config.Config, client *client.IDPService) (tool m
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -508,7 +508,7 @@ func ExecuteWorkflowTool(config *config.Config, client *client.IDPService) (tool
 			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

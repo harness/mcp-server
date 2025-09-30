@@ -64,7 +64,7 @@ func ListArtifactVersionsTool(config *config.Config, client *ar.ClientWithRespon
 				params.SearchTerm = &search
 			}
 
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -164,7 +164,7 @@ func ListArtifactFilesTool(config *config.Config, client *ar.ClientWithResponses
 				params.SortField = &sortField
 			}
 
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

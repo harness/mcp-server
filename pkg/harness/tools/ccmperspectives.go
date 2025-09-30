@@ -58,7 +58,7 @@ func ListCcmPerspectivesDetailTool(config *config.Config, client *client.CloudCo
 			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			accountId, err := getAccountID(config, request)
+			accountId, err := getAccountID(ctx, config, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -110,7 +110,7 @@ func ListCcmPerspectivesDetailTool(config *config.Config, client *client.CloudCo
 				params.Offset = utils.SafeFloatToInt32(offset, 1)
 			}
 
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -138,7 +138,7 @@ func GetCcmPerspectiveTool(config *config.Config, client *client.CloudCostManage
 			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			accountId, err := getAccountID(config, request)
+			accountId, err := getAccountID(ctx, config, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -152,7 +152,7 @@ func GetCcmPerspectiveTool(config *config.Config, client *client.CloudCostManage
 			params.AccountIdentifier = accountId
 			params.PerspectiveId = perspectiveId
 
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -196,7 +196,7 @@ func GetLastPeriodCostCcmPerspectiveTool(config *config.Config, client *client.C
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 
-			accountId, err := getAccountID(config, request)
+			accountId, err := getAccountID(ctx, config, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -223,7 +223,7 @@ func GetLastPeriodCostCcmPerspectiveTool(config *config.Config, client *client.C
 			params.StartTime = startTime
 			params.Period = period
 
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -263,7 +263,7 @@ func GetLastTwelveMonthsCostCcmPerspectiveTool(config *config.Config, client *cl
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 
-			accountId, err := getAccountID(config, request)
+			accountId, err := getAccountID(ctx, config, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -286,7 +286,7 @@ func GetLastTwelveMonthsCostCcmPerspectiveTool(config *config.Config, client *cl
 			params.PerspectiveId = perspectiveId
 			params.StartTime = startTime
 
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -462,7 +462,7 @@ func createOrUpdatePerspectiveHandler(
 ) (*mcp.CallToolResult, error) {
 
 	// Account Id for querystring.
-	accountId, err := getAccountID(config, request)
+	accountId, err := getAccountID(ctx, config, request)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -673,7 +673,7 @@ func createOrUpdatePerspectiveHandler(
 
 	params.Body.ViewType = viewType
 	params.Body.ViewState = viewState
-	scope, err := common.FetchScope(config, request, false)
+	scope, err := common.FetchScope(ctx, config, request, false)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -869,11 +869,11 @@ func DeleteCcmPerspectiveTool(config *config.Config, client *client.CloudCostMan
 			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			accountId, err := getAccountID(config, request)
+			accountId, err := getAccountID(ctx, config, request)
 
 			perspectiveId, err := OptionalParam[string](request, "perspective_id")
 
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

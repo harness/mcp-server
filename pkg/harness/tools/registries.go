@@ -29,7 +29,7 @@ func GetRegistryTool(config *config.Config, client *ar.ClientWithResponses) (too
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -80,7 +80,7 @@ func ListRegistriesTool(config *config.Config, client *ar.ClientWithResponses) (
 			params.Page = &pageInt64
 			params.Size = &sizeInt64
 
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

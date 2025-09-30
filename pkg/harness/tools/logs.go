@@ -364,7 +364,7 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := common.FetchScope(config, request, true)
+			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

@@ -41,7 +41,7 @@ func GetPullRequestTool(config *config.Config, client *client.PullRequestService
 			}
 			prNumber := int(prNumberFloat)
 
-			scope, err := common.FetchScope(config, request, true)
+			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -100,7 +100,7 @@ func ListPullRequestsTool(config *config.Config, client *client.PullRequestServi
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := common.FetchScope(config, request, true)
+			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -239,7 +239,7 @@ func GetPullRequestChecksTool(config *config.Config, client *client.PullRequestS
 			}
 			prNumber := int(prNumberFloat)
 
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -318,7 +318,7 @@ func CreatePullRequestTool(config *config.Config, client *client.PullRequestServ
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -390,7 +390,7 @@ func GetPullRequestActivitiesTool(config *config.Config, client *client.PullRequ
 			}
 			prNumber := int(prNumberFloat)
 
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

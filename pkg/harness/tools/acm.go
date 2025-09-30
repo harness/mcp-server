@@ -52,7 +52,7 @@ Once a task is created, you need to trigger it for a repository and branch to ex
 		}
 
 		// Get scope
-		scope, err := common.FetchScope(config, request, false)
+		scope, err := common.FetchScope(ctx, config, request, false)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -136,7 +136,7 @@ func TriggerAutonomousCodeMaintenanceTaskTool(config *config.Config, client *cli
 		}
 
 		// Get scope
-		scope, err := common.FetchScope(config, request, false)
+		scope, err := common.FetchScope(ctx, config, request, false)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -217,7 +217,7 @@ func GetAutonomousCodeMaintenanceTaskExecutionsTool(config *config.Config, clien
 		}
 
 		// Get scope
-		scope, err := common.FetchScope(config, request, false)
+		scope, err := common.FetchScope(ctx, config, request, false)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

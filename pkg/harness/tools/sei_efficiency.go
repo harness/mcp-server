@@ -44,7 +44,7 @@ func GetEfficiencyLeadTimeTool(config *config.Config, client *client.SEIService)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := common.FetchScope(config, request, true)
+			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -150,7 +150,7 @@ func GetDeploymentFrequencyTool(config *config.Config, client *client.SEIService
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := common.FetchScope(config, request, true)
+			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -256,7 +256,7 @@ func GetChangeFailureRateTool(config *config.Config, client *client.SEIService) 
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := common.FetchScope(config, request, true)
+			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -362,7 +362,7 @@ func GetMttrTool(config *config.Config, client *client.SEIService) (mcp.Tool, se
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := common.FetchScope(config, request, true)
+			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -461,7 +461,7 @@ func GetDeploymentFrequencyDrilldownTool(config *config.Config, client *client.S
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := common.FetchScope(config, request, true)
+			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -552,7 +552,7 @@ func GetChangeFailureRateDrilldownTool(config *config.Config, client *client.SEI
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := common.FetchScope(config, request, true)
+			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

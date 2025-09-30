@@ -76,7 +76,7 @@ func GetAuditYamlTool(config *config.Config, auditClient *client.AuditService) (
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -178,7 +178,7 @@ func ListUserAuditTrailTool(config *config.Config, auditClient *client.AuditServ
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

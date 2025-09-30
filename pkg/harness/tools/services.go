@@ -30,7 +30,7 @@ func GetServiceTool(config *config.Config, client *client.ServiceClient) (tool m
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -72,7 +72,7 @@ func ListServicesTool(config *config.Config, client *client.ServiceClient) (tool
 			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

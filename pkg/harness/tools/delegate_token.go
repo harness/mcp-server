@@ -42,7 +42,7 @@ func ListDelegateTokensTool(config *config.Config, client *client.DelegateTokenC
 			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -175,7 +175,7 @@ func GetDelegateTokenTool(config *config.Config, client *client.DelegateTokenCli
 			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -265,7 +265,7 @@ func CreateDelegateTokenTool(config *config.Config, client *client.DelegateToken
 			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -363,7 +363,7 @@ func RevokeDelegateTokenTool(config *config.Config, client *client.DelegateToken
 			}
 
 			// Fetch scope from config and request
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -445,7 +445,7 @@ func DeleteDelegateTokenTool(config *config.Config, client *client.DelegateToken
 			}
 
 			// Fetch scope from config and request
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

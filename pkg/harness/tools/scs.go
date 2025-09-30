@@ -233,7 +233,7 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 			common.WithScope(config, true),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := common.FetchScope(config, request, true)
+			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -535,7 +535,7 @@ func ArtifactListV2Tool(config *config.Config, client *generated.ClientWithRespo
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := common.FetchScope(config, request, true)
+			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -606,7 +606,7 @@ func GetArtifactV2OverviewTool(config *config.Config, client *generated.ClientWi
 			common.WithScope(config, true),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := common.FetchScope(config, request, true)
+			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -671,7 +671,7 @@ func GetArtifactChainOfCustodyV2Tool(config *config.Config, client *generated.Cl
 			common.WithScope(config, true),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := common.FetchScope(config, request, true)
+			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -767,7 +767,7 @@ func FetchComplianceResultsByArtifactTool(config *config.Config, client *generat
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := common.FetchScope(config, request, true)
+			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -839,7 +839,7 @@ func GetCodeRepositoryOverviewTool(config *config.Config, client *generated.Clie
 			common.WithScope(config, true),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := common.FetchScope(config, request, true)
+			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -901,7 +901,7 @@ func CreateOPAPolicyTool(config *config.Config, client *generated.ClientWithResp
 			common.WithScope(config, true),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			_, err := common.FetchScope(config, request, true)
+			_, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -1023,7 +1023,7 @@ func DownloadSbomTool(config *config.Config, client *generated.ClientWithRespons
 			common.WithScope(config, true),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := common.FetchScope(config, request, true)
+			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -1171,7 +1171,7 @@ func ListSCSCodeReposTool(config *config.Config, client *generated.ClientWithRes
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			// Extract org and project from scope
-			scope, err := common.FetchScope(config, request, true)
+			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

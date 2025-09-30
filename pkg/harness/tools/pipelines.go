@@ -29,7 +29,7 @@ func GetPipelineTool(config *config.Config, client *client.PipelineService) (too
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := common.FetchScope(config, request, true)
+			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -58,7 +58,7 @@ func ListPipelinesTool(config *config.Config, client *client.PipelineService) (t
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := common.FetchScope(config, request, true)
+			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -119,7 +119,7 @@ func FetchExecutionURLTool(config *config.Config, client *client.PipelineService
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := common.FetchScope(config, request, true)
+			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -160,7 +160,7 @@ func GetExecutionTool(config *config.Config, client *client.PipelineService) (to
 			// Get optional child stage node ID
 			childStageNodeID, _ := OptionalParam[string](request, "child_stage_node_id")
 
-			scope, err := common.FetchScope(config, request, true)
+			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -202,7 +202,7 @@ func ListExecutionsTool(config *config.Config, client *client.PipelineService) (
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := common.FetchScope(config, request, true)
+			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -277,7 +277,7 @@ func ListInputSetsTool(config *config.Config, client *client.PipelineService) (t
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := common.FetchScope(config, request, true)
+			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -344,7 +344,7 @@ func GetInputSetTool(config *config.Config, client *client.PipelineService) (too
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := common.FetchScope(config, request, true)
+			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -381,7 +381,7 @@ func GetPipelineSummaryTool(config *config.Config, client *client.PipelineServic
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := common.FetchScope(config, request, true)
+			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -489,7 +489,7 @@ func ListTriggersTool(config *config.Config, client *client.PipelineService) (to
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := common.FetchScope(config, request, true)
+			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

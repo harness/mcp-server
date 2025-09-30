@@ -79,7 +79,7 @@ func createGenAIToolHandler(config *config.Config, client *client.GenaiService, 
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		scope, err := common.FetchScope(config, request, false)
+		scope, err := common.FetchScope(ctx, config, request, false)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

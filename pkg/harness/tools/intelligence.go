@@ -58,7 +58,7 @@ func FindSimilarTemplates(config *config.Config, client *client.IntelligenceServ
 			count := int(countFloat)
 
 			// Try to fetch scope parameters (account_id, org_id, project_id) if provided
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -192,7 +192,7 @@ func AIDevOpsAgentTool(config *config.Config, client *client.IntelligenceService
 			}
 
 			// Try to fetch scope parameters (account_id, org_id, project_id) if provided
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

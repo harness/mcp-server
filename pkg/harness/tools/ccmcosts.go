@@ -44,7 +44,7 @@ func GetCcmOverviewTool(config *config.Config, client *client.CloudCostManagemen
 			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			accountId, err := getAccountID(config, request)
+			accountId, err := getAccountID(ctx, config, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -91,7 +91,7 @@ func ListCcmCostCategoriesTool(config *config.Config, client *client.CloudCostMa
 			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			accountId, err := getAccountID(config, request)
+			accountId, err := getAccountID(ctx, config, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -117,7 +117,7 @@ func ListCcmCostCategoriesTool(config *config.Config, client *client.CloudCostMa
 				params.SearchTerm = searchTerm
 			}
 
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -162,7 +162,7 @@ func ListCcmCostCategoriesDetailTool(config *config.Config, client *client.Cloud
 			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			accountId, err := getAccountID(config, request)
+			accountId, err := getAccountID(ctx, config, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -215,7 +215,7 @@ func ListCcmCostCategoriesDetailTool(config *config.Config, client *client.Cloud
 				params.Offset = utils.SafeFloatToInt32(offset, 1)
 			}
 
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -244,7 +244,7 @@ func GetCcmCostCategoryTool(config *config.Config, client *client.CloudCostManag
 			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			accountId, err := getAccountID(config, request)
+			accountId, err := getAccountID(ctx, config, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -259,7 +259,7 @@ func GetCcmCostCategoryTool(config *config.Config, client *client.CloudCostManag
 			if ok && costCategoryId != "" {
 				params.CostCategoryId = costCategoryId
 			}
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -278,8 +278,8 @@ func GetCcmCostCategoryTool(config *config.Config, client *client.CloudCostManag
 		}
 }
 
-func getAccountID(config *config.Config, request mcp.CallToolRequest) (string, error) {
-	scope, _ := common.FetchScope(config, request, true)
+func getAccountID(ctx context.Context, config *config.Config, request mcp.CallToolRequest) (string, error) {
+	scope, _ := common.FetchScope(ctx, config, request, true)
 	// Error ignored because it can be related to project or org id
 	// which are not required for CCM
 	if scope.AccountID != "" {
@@ -315,7 +315,7 @@ func FetchCommitmentCoverageTool(config *config.Config, client *client.CloudCost
 			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			accountId, err := getAccountID(config, request)
+			accountId, err := getAccountID(ctx, config, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -357,7 +357,7 @@ func FetchCommitmentCoverageTool(config *config.Config, client *client.CloudCost
 				params.EndDate = &endDate
 			}
 
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -413,7 +413,7 @@ func FetchCommitmentSavingsTool(config *config.Config, client *client.CloudCostM
 			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			accountId, err := getAccountID(config, request)
+			accountId, err := getAccountID(ctx, config, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -465,7 +465,7 @@ func FetchCommitmentSavingsTool(config *config.Config, client *client.CloudCostM
 				params.IsHarnessManaged = &isHarnessManaged
 			}
 
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -503,7 +503,7 @@ func FetchCommitmentUtilisationTool(config *config.Config, client *client.CloudC
 			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			accountId, err := getAccountID(config, request)
+			accountId, err := getAccountID(ctx, config, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -547,7 +547,7 @@ func FetchCommitmentUtilisationTool(config *config.Config, client *client.CloudC
 				params.EndDate = &endDate
 			}
 
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

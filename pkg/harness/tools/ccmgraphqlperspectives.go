@@ -27,7 +27,7 @@ func CcmPerspectiveGridTool(config *config.Config, client *client.CloudCostManag
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 
 			// Account Id for querystring.
-			accountId, err := getAccountID(config, request)
+			accountId, err := getAccountID(ctx, config, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -50,7 +50,7 @@ func CcmPerspectiveGridTool(config *config.Config, client *client.CloudCostManag
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -95,7 +95,7 @@ func CcmPerspectiveTimeSeriesTool(config *config.Config, client *client.CloudCos
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 
 			// Account Id for querystring.
-			accountId, err := getAccountID(config, request)
+			accountId, err := getAccountID(ctx, config, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -123,7 +123,7 @@ func CcmPerspectiveTimeSeriesTool(config *config.Config, client *client.CloudCos
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -169,7 +169,7 @@ func CcmPerspectiveSummaryWithBudgetTool(config *config.Config, client *client.C
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 
 			// Account Id for querystring.
-			accountId, err := getAccountID(config, request)
+			accountId, err := getAccountID(ctx, config, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -192,7 +192,7 @@ func CcmPerspectiveSummaryWithBudgetTool(config *config.Config, client *client.C
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -238,7 +238,7 @@ func CcmPerspectiveBudgetTool(config *config.Config, client *client.CloudCostMan
 			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			accountId, err := getAccountID(config, request)
+			accountId, err := getAccountID(ctx, config, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -252,7 +252,7 @@ func CcmPerspectiveBudgetTool(config *config.Config, client *client.CloudCostMan
 			params.AccountId = accountId
 			params.PerspectiveId = perspectiveId
 
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -276,12 +276,12 @@ func CcmMetadataTool(config *config.Config, client *client.CloudCostManagementSe
 			mcp.WithDescription(ccmcommons.CCMGetCcmMetadataDescription),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			accountId, err := getAccountID(config, request)
+			accountId, err := getAccountID(ctx, config, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -307,7 +307,7 @@ func CcmPerspectiveRecommendationsTool(config *config.Config, client *client.Clo
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 
 			// Account Id for querystring.
-			accountId, err := getAccountID(config, request)
+			accountId, err := getAccountID(ctx, config, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -325,7 +325,7 @@ func CcmPerspectiveRecommendationsTool(config *config.Config, client *client.Clo
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -402,7 +402,7 @@ func CcmPerspectiveFilterValuesTool(config *config.Config, client *client.CloudC
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 
 			// Account Id for querystring.
-			accountId, err := getAccountID(config, request)
+			accountId, err := getAccountID(ctx, config, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -446,7 +446,7 @@ func CcmPerspectiveFilterValuesTool(config *config.Config, client *client.CloudC
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

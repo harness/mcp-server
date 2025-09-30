@@ -88,7 +88,7 @@ func ReportCcmAnomalyFeedbackTool(config *config.Config, client *client.CloudCos
 			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			accountId, err := getAccountID(config, request)
+			accountId, err := getAccountID(ctx, config, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -126,7 +126,7 @@ func ListFilterValuesCcmAnomaliesTool(config *config.Config, client *client.Clou
 			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			accountId, err := getAccountID(config, request)
+			accountId, err := getAccountID(ctx, config, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -156,7 +156,7 @@ func anomaliesListHandler(
 	clientFunction ClientFunctionAnomaliesListInterface,
 ) (*mcp.CallToolResult, error) {
 
-	accountId, err := getAccountID(config, request)
+	accountId, err := getAccountID(ctx, config, request)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -321,7 +321,7 @@ func anomaliesListDTOHandler(
 	clientFunction ClientFunctionAnomaliesListInterface,
 ) (*mcp.CallToolResult, error) {
 
-	accountId, err := getAccountID(config, request)
+	accountId, err := getAccountID(ctx, config, request)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -365,7 +365,7 @@ func anomaliesForPerspectiveHandler(
 	client *client.CloudCostManagementService,
 ) (*mcp.CallToolResult, error) {
 
-	accountId, err := getAccountID(config, request)
+	accountId, err := getAccountID(ctx, config, request)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
