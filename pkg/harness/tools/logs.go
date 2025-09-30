@@ -292,10 +292,9 @@ func formatJSONLines(lines []string) string {
 		if err := json.Unmarshal([]byte(line), &logEntry); err == nil {
 			// Parse and format the timestamp
 			if t, err := time.Parse(time.RFC3339Nano, logEntry.Time); err == nil {
-				// Format timestamp in IST
-				ist := t.Add(5*time.Hour + 30*time.Minute)
+				// Format timestamp in UTC
 				formattedOutput.WriteString(fmt.Sprintf("[%s] %s: %s\n", 
-					ist.Format("2006-01-02 15:04:05"),
+					t.UTC().Format("2006-01-02 15:04:05 UTC"),
 					logEntry.Level,
 					removeAnsiCodes(logEntry.Out)))
 			} else {
