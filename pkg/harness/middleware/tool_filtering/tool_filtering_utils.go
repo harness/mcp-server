@@ -56,8 +56,8 @@ func getLicensedModulesForAccount(ctx context.Context, accountID string, config 
 	licenseClient, err := licenseFactory.CreateLicenseClient(ctx)
 	if err != nil {
 		logger.Error("Failed to create license client", "error", err, "account_id", accountID)
-		// Fallback to CORE only on license client creation failure
-		fallbackModules := []string{"CORE"}
+		// Fallback to CORE and UNLICENSED on license client creation failure
+		fallbackModules := []string{"CORE", "UNLICENSED"}
 		// Cache the fallback result to avoid repeated failures
 		cache.Set(accountID, fallbackModules)
 		return fallbackModules, nil
@@ -67,8 +67,8 @@ func getLicensedModulesForAccount(ctx context.Context, accountID string, config 
 	accountLicense, rawHttpResponse, err := licenseClient.GetAccountLicenses(ctx, accountID)
 	if err != nil {
 		logger.Error("Failed to get account licenses", "error", err, "account_id", accountID)
-		// Fallback to CORE only on API call failure
-		fallbackModules := []string{"CORE"}
+		// Fallback to CORE and UNLICENSED on API call failure
+		fallbackModules := []string{"CORE", "UNLICENSED"}
 		// Cache the fallback result to avoid repeated failures
 		cache.Set(accountID, fallbackModules)
 		return fallbackModules, nil
@@ -80,8 +80,8 @@ func getLicensedModulesForAccount(ctx context.Context, accountID string, config 
 			"status", rawHttpResponse.Status,
 			"status_code", rawHttpResponse.StatusCode,
 			"account_id", accountID)
-		// Fallback to CORE only on non-200 response
-		fallbackModules := []string{"CORE"}
+		// Fallback to CORE and UNLICENSED on non-200 response
+		fallbackModules := []string{"CORE", "UNLICENSED"}
 		// Cache the fallback result to avoid repeated failures
 		cache.Set(accountID, fallbackModules)
 		return fallbackModules, nil
@@ -95,8 +95,9 @@ func getLicensedModulesForAccount(ctx context.Context, accountID string, config 
 	// Process license data
 	var licensedModules []string
 
-	// Always include CORE module
+	// Always include CORE and UNLICENSED modules
 	licensedModules = append(licensedModules, "CORE")
+	licensedModules = append(licensedModules, "UNLICENSED")
 
 	// Process module licenses if available
 	if accountLicense.Data != nil && accountLicense.Data.AllModuleLicenses != nil {

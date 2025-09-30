@@ -394,17 +394,19 @@ func computeAllowedToolsetsFromModules(requestedModules, licensedModules []strin
 		}
 	}
 
-	// Always include CORE
-	coreIncluded := false
-	for _, module := range allowedModules {
-		if module == "CORE" {
-			coreIncluded = true
-			break
+	// Helper function to ensure a module is included
+	ensureModuleIncluded := func(modules []string, moduleToInclude string) []string {
+		for _, module := range modules {
+			if module == moduleToInclude {
+				return modules
+			}
 		}
+		return append(modules, moduleToInclude)
 	}
-	if !coreIncluded {
-		allowedModules = append(allowedModules, "CORE")
-	}
+
+	// Always include required modules
+	allowedModules = ensureModuleIncluded(allowedModules, "CORE")
+	allowedModules = ensureModuleIncluded(allowedModules, "UNLICENSED")
 
 	// Convert modules to toolsets
 	var allowedToolsets []string
@@ -413,17 +415,8 @@ func computeAllowedToolsetsFromModules(requestedModules, licensedModules []strin
 		allowedToolsets = append(allowedToolsets, toolsets...)
 	}
 
-	// Always include "default" toolset
-	defaultIncluded := false
-	for _, toolset := range allowedToolsets {
-		if toolset == "default" {
-			defaultIncluded = true
-			break
-		}
-	}
-	if !defaultIncluded {
-		allowedToolsets = append(allowedToolsets, "default")
-	}
+	// Ensure default toolset is included
+	allowedToolsets = ensureModuleIncluded(allowedToolsets, "default")
 
 	logger.Debug("Computed allowed toolsets",
 		"allowed_modules", allowedModules,
