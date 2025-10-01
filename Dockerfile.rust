@@ -1,4 +1,4 @@
-# Multi-stage build for Harness MCP Server
+# Multi-stage build for Rust Harness MCP Server
 FROM rust:1.75-slim as builder
 
 # Install system dependencies
@@ -42,9 +42,13 @@ RUN chown appuser:appuser /usr/local/bin/harness-mcp-server
 # Switch to app user
 USER appuser
 
-# Expose port (for HTTP mode)
+# Expose port for HTTP mode
 EXPOSE 8080
 
-# Default command
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD harness-mcp-server --help || exit 1
+
+# Default command (stdio mode)
 ENTRYPOINT ["harness-mcp-server"]
-CMD ["--help"]
+CMD ["stdio"]

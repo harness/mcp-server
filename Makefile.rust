@@ -1,0 +1,163 @@
+# Rust Makefile for Harness MCP Server
+
+.PHONY: help build test clean fmt lint check install run-stdio run-http dev-deps audit
+
+# Default target
+help:
+	@echo "Available targets:"
+	@echo "  build      - Build the project in release mode"
+	@echo "  build-dev  - Build the project in debug mode"
+	@echo "  test       - Run all tests"
+	@echo "  test-unit  - Run unit tests only"
+	@echo "  test-int   - Run integration tests only"
+	@echo "  clean      - Clean build artifacts"
+	@echo "  fmt        - Format code"
+	@echo "  lint       - Run clippy linter"
+	@echo "  check      - Check code without building"
+	@echo "  install    - Install the binary"
+	@echo "  run-stdio  - Run in stdio mode (requires env vars)"
+	@echo "  run-http   - Run in HTTP mode (requires env vars)"
+	@echo "  dev-deps   - Install development dependencies"
+	@echo "  audit      - Security audit"
+	@echo "  bench      - Run benchmarks"
+	@echo "  doc        - Generate documentation"
+
+# Build targets
+build:
+	cargo build --release
+
+build-dev:
+	cargo build
+
+# Test targets
+test:
+	cargo test
+
+test-unit:
+	cargo test --lib
+
+test-int:
+	cargo test --test '*'
+
+test-verbose:
+	cargo test -- --nocapture
+
+# Development targets
+clean:
+	cargo clean
+
+fmt:
+	cargo fmt
+
+fmt-check:
+	cargo fmt -- --check
+
+lint:
+	cargo clippy -- -D warnings
+
+lint-fix:
+	cargo clippy --fix
+
+check:
+	cargo check
+
+# Installation
+install:
+	cargo install --path .
+
+# Running
+run-stdio:
+	cargo run -- stdio \
+		--account-id "${HARNESS_ACCOUNT_ID}" \
+		--api-key "${HARNESS_API_KEY}" \
+		--org-id "${HARNESS_ORG_ID}" \
+		--project-id "${HARNESS_PROJECT_ID}"
+
+run-http:
+	cargo run -- http-server \
+		--port 8080 \
+		--account-id "${HARNESS_ACCOUNT_ID}" \
+		--api-key "${HARNESS_API_KEY}" \
+		--org-id "${HARNESS_ORG_ID}" \
+		--project-id "${HARNESS_PROJECT_ID}"
+
+run-internal:
+	cargo run -- internal \
+		--account-id "${HARNESS_ACCOUNT_ID}" \
+		--bearer-token "${HARNESS_BEARER_TOKEN}"
+
+# Development dependencies
+dev-deps:
+	rustup component add rustfmt clippy
+	cargo install cargo-audit cargo-watch cargo-expand
+
+# Security and quality
+audit:
+	cargo audit
+
+audit-fix:
+	cargo audit fix
+
+# Performance
+bench:
+	cargo bench
+
+# Documentation
+doc:
+	cargo doc --open
+
+doc-build:
+	cargo doc --no-deps
+
+# Watch mode for development
+watch:
+	cargo watch -x check -x test
+
+watch-run:
+	cargo watch -x 'run -- stdio'
+
+# Release preparation
+pre-commit: fmt-check lint test audit
+
+release-check: pre-commit
+	cargo build --release
+	cargo test --release
+
+# Docker targets (if needed)
+docker-build:
+	docker build -t harness-mcp-server:latest .
+
+docker-run:
+	docker run --rm -it \
+		-e HARNESS_ACCOUNT_ID \
+		-e HARNESS_API_KEY \
+		-e HARNESS_ORG_ID \
+		-e HARNESS_PROJECT_ID \
+		harness-mcp-server:latest
+
+# CI targets
+ci-test: fmt-check lint test audit
+
+ci-build: build test
+
+# Utility targets
+deps-update:
+	cargo update
+
+deps-tree:
+	cargo tree
+
+size:
+	cargo bloat --release
+
+# Environment setup
+env-example:
+	@echo "# Example environment variables"
+	@echo "export HARNESS_ACCOUNT_ID=your_account_id"
+	@echo "export HARNESS_API_KEY=your_api_key"
+	@echo "export HARNESS_ORG_ID=your_org_id"
+	@echo "export HARNESS_PROJECT_ID=your_project_id"
+	@echo "export HARNESS_BASE_URL=https://app.harness.io"
+	@echo "export HARNESS_READ_ONLY=false"
+	@echo "export HARNESS_DEBUG=false"
+	@echo "export RUST_LOG=info"
