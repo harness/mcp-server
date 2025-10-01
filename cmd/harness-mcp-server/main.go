@@ -74,7 +74,6 @@ var (
 			cfg := config.Config{
 				Version:       version,
 				ReadOnly:      viper.GetBool("read_only"),
-				LogFilePath:   viper.GetString("log_file"),
 				Debug:         viper.GetBool("debug"),
 				EnableLicense: viper.GetBool("enable_license"),
 				Transport:     transportType,
@@ -508,19 +507,12 @@ func initConfig() {
 func initLogger(config config.Config) error {
 	debug := config.Debug
 	logFormat := config.LogFormat
-	transport := config.Transport
 	outPath := config.LogFilePath
 	handlerOpts := &slog.HandlerOptions{}
 	if debug {
 		handlerOpts.Level = slog.LevelDebug
 	}
 
-	// For HTTP transport with text format, return error early
-	if transport == enum.TransportHTTP && logFormat == enum.LogFormatText {
-		return fmt.Errorf("text format logs not supported by stackdriver")
-	}
-
-	// Determine the output writer (file or stdout)
 	var writer io.Writer = os.Stdout
 	if outPath != "" {
 		file, err := os.OpenFile(outPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
