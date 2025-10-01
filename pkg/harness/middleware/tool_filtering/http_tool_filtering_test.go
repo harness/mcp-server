@@ -127,7 +127,7 @@ func TestComputeAllowedToolsetsFromModules(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotToolsets := testComputeAllowedToolsetsFromModules(tt.requestedModules, tt.licensedModules, logger)
-			
+
 			// Check if the expected toolsets are included in the result
 			for _, expectedToolset := range tt.expectedToolsets {
 				found := false
@@ -141,10 +141,10 @@ func TestComputeAllowedToolsetsFromModules(t *testing.T) {
 					t.Errorf("testComputeAllowedToolsetsFromModules() = %v, expected to include %v", gotToolsets, expectedToolset)
 				}
 			}
-			
+
 			// Check if the result has the expected length
 			if len(gotToolsets) != len(tt.expectedToolsets) {
-				t.Errorf("testComputeAllowedToolsetsFromModules() returned %d toolsets, expected %d. Got: %v, Expected: %v", 
+				t.Errorf("testComputeAllowedToolsetsFromModules() returned %d toolsets, expected %d. Got: %v, Expected: %v",
 					len(gotToolsets), len(tt.expectedToolsets), gotToolsets, tt.expectedToolsets)
 			}
 		})
@@ -164,28 +164,28 @@ func TestEnsureModuleIncluded(t *testing.T) {
 	}
 
 	tests := []struct {
-		name           string
-		modules        []string
+		name            string
+		modules         []string
 		moduleToInclude string
-		expected       []string
+		expected        []string
 	}{
 		{
-			name:           "Empty modules list",
-			modules:        []string{},
+			name:            "Empty modules list",
+			modules:         []string{},
 			moduleToInclude: "CORE",
-			expected:       []string{"CORE"},
+			expected:        []string{"CORE"},
 		},
 		{
-			name:           "Module already included",
-			modules:        []string{"CORE", "CI"},
+			name:            "Module already included",
+			modules:         []string{"CORE", "CI"},
 			moduleToInclude: "CORE",
-			expected:       []string{"CORE", "CI"},
+			expected:        []string{"CORE", "CI"},
 		},
 		{
-			name:           "Module not included",
-			modules:        []string{"CI", "CD"},
+			name:            "Module not included",
+			modules:         []string{"CI", "CD"},
 			moduleToInclude: "CORE",
-			expected:       []string{"CI", "CD", "CORE"},
+			expected:        []string{"CI", "CD", "CORE"},
 		},
 	}
 
