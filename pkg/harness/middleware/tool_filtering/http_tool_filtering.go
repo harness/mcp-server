@@ -415,9 +415,6 @@ func computeAllowedToolsetsFromModules(requestedModules, licensedModules []strin
 		allowedToolsets = append(allowedToolsets, toolsets...)
 	}
 
-	// Ensure default toolset is included
-	allowedToolsets = ensureModuleIncluded(allowedToolsets, "default")
-
 	logger.Debug("Computed allowed toolsets",
 		"allowed_modules", allowedModules,
 		"allowed_toolsets", allowedToolsets)
