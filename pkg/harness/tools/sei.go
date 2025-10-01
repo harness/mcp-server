@@ -75,7 +75,7 @@ func GetProductivityFeatureMetricsTool(config *config.Config, client *client.SEI
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := common.FetchScope(config, request, true)
+			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

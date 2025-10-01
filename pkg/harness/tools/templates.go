@@ -80,7 +80,7 @@ func ListTemplates(config *config.Config, client *client.TemplateService) (tool 
 			}
 
 			// Try to fetch scope parameters (org_id, project_id) if provided
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

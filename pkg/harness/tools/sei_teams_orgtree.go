@@ -312,7 +312,7 @@ func GetOrgTreesTool(config *config.Config, client *client.SEIService) (mcp.Tool
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			scope, err := common.FetchScope(config, request, true)
+			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

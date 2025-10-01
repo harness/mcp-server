@@ -80,7 +80,7 @@ func UpdateCcmRecommendationStateTool(config *config.Config, client *client.Clou
 			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			accountId, err := getAccountID(config, request)
+			accountId, err := getAccountID(ctx, config, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -129,7 +129,7 @@ func OverrideCcmRecommendationSavingsTool(config *config.Config, client *client.
 			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			accountId, err := getAccountID(config, request)
+			accountId, err := getAccountID(ctx, config, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -164,7 +164,7 @@ func recommendationsHandler(
 ) (*mcp.CallToolResult, error) {
 
 	// Account Id for querystring.
-	accountId, err := getAccountID(config, request)
+	accountId, err := getAccountID(ctx, config, request)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -340,7 +340,7 @@ func createTicketTool(name string, description string, config *config.Config, cl
 	return mcp.NewTool(name, options...,
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			accountId, err := getAccountID(config, request)
+			accountId, err := getAccountID(ctx, config, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -508,7 +508,7 @@ func createRecommendationDetailTool(
 
 	return mcp.NewTool(name, options...),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			accountId, err := getAccountID(config, request)
+			accountId, err := getAccountID(ctx, config, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -573,7 +573,7 @@ func ListJiraProjectsTool(config *config.Config, client *client.CloudCostManagem
 			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			accountId, err := getAccountID(config, request)
+			accountId, err := getAccountID(ctx, config, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -612,7 +612,7 @@ func ListJiraIssueTypesTool(
 			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			accountId, err := getAccountID(config, request)
+			accountId, err := getAccountID(ctx, config, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

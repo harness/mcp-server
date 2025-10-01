@@ -1,6 +1,7 @@
 package common
 
 import (
+	"context"
 	"testing"
 
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
@@ -16,7 +17,7 @@ func newRequest(args map[string]any) mcp.CallToolRequest {
 func TestFetchScope_ErrorWhenNoAccountID(t *testing.T) {
 	cfg := &config.Config{AccountID: ""}
 	r := newRequest(nil)
-	_, err := FetchScope(cfg, r, false)
+	_, err := FetchScope(context.Background(), cfg, r, false)
 	if err == nil || err.Error() != "account ID is required" {
 		t.Fatalf("expected account ID required error, got: %v", err)
 	}
@@ -25,7 +26,7 @@ func TestFetchScope_ErrorWhenNoAccountID(t *testing.T) {
 func TestFetchScope_UsesConfigDefaultsWhenNotProvided(t *testing.T) {
 	cfg := &config.Config{AccountID: "acc", DefaultOrgID: "org", DefaultProjectID: "proj"}
 	r := newRequest(nil)
-	scope, err := FetchScope(cfg, r, false)
+	scope, err := FetchScope(context.Background(), cfg, r, false)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -38,7 +39,7 @@ func TestFetchScope_RequestOverridesConfig(t *testing.T) {
 	cfg := &config.Config{AccountID: "acc", DefaultOrgID: "org", DefaultProjectID: "proj"}
 	args := map[string]any{"org_id": "o2", "project_id": "p2"}
 	r := newRequest(args)
-	scope, err := FetchScope(cfg, r, false)
+	scope, err := FetchScope(context.Background(), cfg, r, false)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -50,7 +51,7 @@ func TestFetchScope_RequestOverridesConfig(t *testing.T) {
 func TestFetchScope_RequiredMissingOrg(t *testing.T) {
 	cfg := &config.Config{AccountID: "acc", DefaultOrgID: "", DefaultProjectID: "proj"}
 	r := newRequest(nil)
-	_, err := FetchScope(cfg, r, true)
+	_, err := FetchScope(context.Background(), cfg, r, true)
 	if err == nil || err.Error() != "org ID is required" {
 		t.Fatalf("expected org ID required error, got: %v", err)
 	}
@@ -59,7 +60,7 @@ func TestFetchScope_RequiredMissingOrg(t *testing.T) {
 func TestFetchScope_RequiredMissingProject(t *testing.T) {
 	cfg := &config.Config{AccountID: "acc", DefaultOrgID: "org", DefaultProjectID: ""}
 	r := newRequest(nil)
-	_, err := FetchScope(cfg, r, true)
+	_, err := FetchScope(context.Background(), cfg, r, true)
 	if err == nil || err.Error() != "project ID is required" {
 		t.Fatalf("expected project ID required error, got: %v", err)
 	}

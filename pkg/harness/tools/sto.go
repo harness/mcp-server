@@ -105,7 +105,7 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
                                             `)),
 			common.WithScope(config, true),
 		), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			scope, err := common.FetchScope(config, request, true)
+			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -307,7 +307,7 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 		), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			page := int64(0)
 			size := int64(5)
-			scope, err := common.FetchScope(config, request, true)
+			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

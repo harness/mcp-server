@@ -44,7 +44,7 @@ func FetchEstimatedSavingsTool(config *config.Config, client *client.CloudCostMa
 			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			accountId, err := getAccountID(config, request)
+			accountId, err := getAccountID(ctx, config, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -79,7 +79,7 @@ func FetchEstimatedSavingsTool(config *config.Config, client *client.CloudCostMa
 				targetCoverage = defaultTargetCoveragePercentage
 			}
 
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -104,7 +104,7 @@ func FetchEC2AnalysisTool(config *config.Config, client *client.CloudCostManagem
 			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			accountId, err := getAccountID(config, request)
+			accountId, err := getAccountID(ctx, config, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -130,7 +130,7 @@ func FetchEC2AnalysisTool(config *config.Config, client *client.CloudCostManagem
 				params.CloudAccountIDs = cloudAccountIDs
 			}
 
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

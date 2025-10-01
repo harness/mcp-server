@@ -15,7 +15,7 @@ func WithHarnessScope(config *config.Config) server.ToolHandlerMiddleware {
 	return func(next server.ToolHandlerFunc) server.ToolHandlerFunc {
 		return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			// Extract scope from the request
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				// If we can't get the scope, continue with the request
 				// The tool handler will handle this error if needed

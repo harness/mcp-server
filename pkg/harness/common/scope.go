@@ -6,6 +6,7 @@ import (
 
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/types/enum"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -46,10 +47,20 @@ func WithScope(config *config.Config, required bool) mcp.ToolOption {
 }
 
 // FetchScope fetches the scope from the config and MCP request.
-// It looks in the config first and then in the request (if it was defined). The request is given preference
+// If the transport type is HTTP, it fetches the scope from the context.
+// Otherwise, it looks in the config first and then in the request (if it was defined). The request is given preference
 // so anything passed by the user in the request will override the config.
 // If orgID and projectID are required fields, it will return an error if they are not present.
-func FetchScope(config *config.Config, request mcp.CallToolRequest, required bool) (dto.Scope, error) {
+func FetchScope(ctx context.Context, config *config.Config, request mcp.CallToolRequest, required bool) (dto.Scope, error) {
+	// If transport type is HTTP, fetch scope from context
+	if config.Transport == enum.TransportHTTP {
+		scope, err := GetScopeFromContext(ctx)
+		if err != nil {
+			return dto.Scope{}, fmt.Errorf("failed to get scope from context: %w", err)
+		}
+		return scope, nil
+	}
+
 	// account ID is always required
 	if config.AccountID == "" {
 		return dto.Scope{}, fmt.Errorf("account ID is required")

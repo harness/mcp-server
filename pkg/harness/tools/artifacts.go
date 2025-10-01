@@ -52,7 +52,7 @@ func ListArtifactsTool(config *config.Config, client *ar.ClientWithResponses) (t
 				params.SearchTerm = &search
 			}
 
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

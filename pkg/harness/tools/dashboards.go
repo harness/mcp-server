@@ -56,7 +56,7 @@ func ListDashboardsTool(config *config.Config, client *client.DashboardService) 
 			// Default tags - set all module tags to true
 			defaultTags := "HARNESS=true&CD=true&CE=true&CET=true&CF=true&CHAOS=true&CI=true&DBOPS=true&IACM=true&IDP=true&SSCA=true&STO=true&SRM=true"
 
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -193,7 +193,7 @@ func GetDashboardDataTool(config *config.Config, client *client.DashboardService
 			timeframeInt := int(reportingTimeframe)
 
 			// Get scope from the request
-			scope, err := common.FetchScope(config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
