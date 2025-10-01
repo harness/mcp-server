@@ -14,6 +14,7 @@ import (
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness"
 	"github.com/harness/harness-mcp/pkg/harness/auth"
+	"github.com/harness/harness-mcp/pkg/harness/middleware/tool_filtering"
 	"github.com/harness/harness-mcp/pkg/harness/prompts"
 	"github.com/harness/harness-mcp/pkg/modules"
 	"github.com/harness/harness-mcp/pkg/types/enum"
@@ -71,12 +72,20 @@ var (
 			if viper.GetString("log_format") == "json" {
 				logFormat = enum.LogFormatJSON
 			}
+			// Configure license cache TTL and clean interval
+			licenseCacheTTL, licenseCacheCleanInterval, err := config.ConfigureLicenseCache()
+			if err != nil {
+				return err
+			}
+
 			cfg := config.Config{
-				Version:       version,
-				ReadOnly:      viper.GetBool("read_only"),
-				Debug:         viper.GetBool("debug"),
-				EnableLicense: viper.GetBool("enable_license"),
-				Transport:     transportType,
+				Version:                   version,
+				ReadOnly:                  viper.GetBool("read_only"),
+				Debug:                     viper.GetBool("debug"),
+				EnableLicense:             false,
+				LicenseCacheTTL:           licenseCacheTTL,
+				LicenseCacheCleanInterval: licenseCacheCleanInterval,
+				Transport:                 transportType,
 				HTTP: struct {
 					Port int    `envconfig:"MCP_HTTP_PORT" default:"8080"`
 					Path string `envconfig:"MCP_HTTP_PATH" default:"/mcp"`
@@ -85,8 +94,8 @@ var (
 					Path: viper.GetString("http_path"),
 				},
 				Internal:                true,
-				Toolsets:                toolsets,
-				EnableModules:           enableModules,
+				Toolsets:                []string{"all"},
+				EnableModules:           []string{"all"},
 				LogFormat:               logFormat,
 				PipelineSvcBaseURL:      viper.GetString("pipeline_svc_base_url"),
 				PipelineSvcSecret:       viper.GetString("pipeline_svc_secret"),
@@ -582,11 +591,12 @@ func runHTTPServer(ctx context.Context, config config.Config) error {
 	// Create HTTP server
 	httpServer := server.NewStreamableHTTPServer(harnessServer)
 
-	// Wrap with auth middleware
-	authHandler := auth.AuthMiddleware(&config, httpServer)
+	toolFilter := tool_filtering.NewHTTPToolFilteringMiddleware(slog.Default(), &config).Wrap(httpServer)
 
-	// Build mux to attach to correct path
+	authHandler := auth.AuthMiddleware(&config, toolFilter)
+
 	mux := http.NewServeMux()
+	// authhandler -> toolFilter -> httpServer
 	mux.Handle(config.HTTP.Path, authHandler)
 
 	address := fmt.Sprintf(":%d", config.HTTP.Port)
