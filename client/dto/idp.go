@@ -1,6 +1,7 @@
 package dto
 
 const (
+	EntityKindDefault              string = "component,api,resource"
 	EntityKindApi                  string = "api"
 	EntityKindComponent            string = "component"
 	EntityKindEnvironment          string = "environment"

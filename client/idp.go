@@ -349,36 +349,33 @@ func generateScopeParamVal(scope dto.Scope) string {
 }
 
 func generateScopeSelectorParamVal(scope dto.Scope, scopeLevel string) string {
-	if scopeLevel != "" {
-		switch scopeLevel {
-		case dto.ScopeLevelDefault:
-			if scope.OrgID != "" && scope.ProjectID != "" {
-				return scopeAccountPrefix + "." + scope.OrgID + "." + scope.ProjectID
-			}
-			if scope.OrgID != "" {
-				return scopeAccountPrefix + "." + scope.OrgID + ".*"
-			}
-			return defaultScopeSelector
-		case dto.ScopeLevelAccount:
-			return accountLevelScopeSelector
-		case dto.ScopeLevelOrg:
-			if scope.OrgID != "" {
-				return scopeAccountPrefix + "." + scope.OrgID
-			}
-			return orgLevelScopeSelector
-		case dto.ScopeLevelProject:
-			if scope.OrgID != "" && scope.ProjectID != "" {
-				return scopeAccountPrefix + "." + scope.OrgID + "." + scope.ProjectID
-			}
-			if scope.OrgID != "" {
-				return scopeAccountPrefix + "." + scope.OrgID + projectLevelScopeSelectorSuffix
-			}
-			return projectLevelScopeSelector
-		default:
-			return defaultScopeSelector
+	switch scopeLevel {
+	case dto.ScopeLevelDefault:
+		if scope.OrgID != "" && scope.ProjectID != "" {
+			return scopeAccountPrefix + "." + scope.OrgID + "." + scope.ProjectID
 		}
+		if scope.OrgID != "" {
+			return scopeAccountPrefix + "." + scope.OrgID + ".*"
+		}
+		return defaultScopeSelector
+	case dto.ScopeLevelAccount:
+		return accountLevelScopeSelector
+	case dto.ScopeLevelOrg:
+		if scope.OrgID != "" {
+			return scopeAccountPrefix + "." + scope.OrgID
+		}
+		return orgLevelScopeSelector
+	case dto.ScopeLevelProject:
+		if scope.OrgID != "" && scope.ProjectID != "" {
+			return scopeAccountPrefix + "." + scope.OrgID + "." + scope.ProjectID
+		}
+		if scope.OrgID != "" {
+			return scopeAccountPrefix + "." + scope.OrgID + projectLevelScopeSelectorSuffix
+		}
+		return projectLevelScopeSelector
+	default:
+		return defaultScopeSelector
 	}
-	return defaultScopeSelector
 }
 
 func addHarnessAccountToHeaders(scope dto.Scope, headers map[string]string) {
