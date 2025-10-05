@@ -59,12 +59,22 @@ func GetEntityTool(config *config.Config, client *client.IDPService) (tool mcp.T
 func ListEntitiesTool(config *config.Config, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_entities",
 			mcp.WithDescription(`List entities in the Harness Internal Developer Portal Catalog. Entities can represent services, APIs, user groups, resources, and more. The tool returns metadata for the Harness entities matching the filter criteria, including their identifier, scope, kind, reference type (INLINE/GIT), YAML definition, Git details (branch, path, repo), ownership, tags, lifecycle, scorecards, status, and group.
+			If limit is not provided, use the tool multiple times to fetch all the entities in a paginated manner.
 			Note: If the fetched entity is a workflow, it might contain a token field but that is to be IGNORED.`),
 			mcp.WithString("search_term",
 				mcp.Description("Optional search term to filter entities"),
 			),
 			common.WithScope(config, false),
-			WithPagination(),
+			mcp.WithNumber("page",
+				mcp.Description("Page number for pagination - page 0 is the first page"),
+				mcp.Min(0),
+				mcp.DefaultNumber(0),
+			),
+			mcp.WithNumber("size",
+				mcp.Description("Number of items per page"),
+				mcp.DefaultNumber(20),
+				mcp.Max(100),
+			),
 			mcp.WithString("sort",
 				mcp.Description("Option to sort entities"),
 			),
@@ -98,7 +108,12 @@ func ListEntitiesTool(config *config.Config, client *client.IDPService) (tool mc
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			_, size, err := FetchPagination(request)
+			scopeLevel, err := OptionalParam[string](request, "scope_level")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			page, size, err := FetchPagination(request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -149,6 +164,7 @@ func ListEntitiesTool(config *config.Config, client *client.IDPService) (tool mc
 			}
 
 			params = &dto.GetEntitiesParams{
+				Page:       int32(page),
 				Limit:      int32(size),
 				SearchTerm: searchTerm,
 				Sort:       sort,
@@ -161,7 +177,7 @@ func ListEntitiesTool(config *config.Config, client *client.IDPService) (tool mc
 				Tags:       tags,
 			}
 
-			data, err := client.ListEntities(ctx, scope, params)
+			data, err := client.ListEntities(ctx, scope, scopeLevel, params)
 			if err != nil {
 				return nil, fmt.Errorf("failed to list entities: %w", err)
 			}

@@ -12,6 +12,13 @@ const (
 )
 
 const (
+	ScopeLevelDefault string = "ALL"
+	ScopeLevelAccount string = "ACCOUNT"
+	ScopeLevelOrg     string = "ORG"
+	ScopeLevelProject string = "PROJECT"
+)
+
+const (
 	ScorecardDetailsWeightageStrategyCUSTOM       string = "CUSTOM"
 	ScorecardDetailsWeightageStrategyEQUALWEIGHTS string = "EQUAL_WEIGHTS"
 )
