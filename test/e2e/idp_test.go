@@ -159,8 +159,9 @@ func TestExecuteWorkflow(t *testing.T) {
 		"orgIdentifier":     getE2EOrgID(),
 		"projectIdentifier": getE2EProjectID(),
 		"page":              0,
-		"limit":             10,
+		"size":              10,
 		"kind":              "Workflow",
+		"scope_level":       "ALL",
 	}
 
 	response, err := mcpClient.CallTool(ctx, request)
