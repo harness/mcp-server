@@ -118,7 +118,7 @@ func ListEntitiesTool(config *config.Config, client *client.IDPService) (tool mc
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			scopeLevel, err := OptionalParam[string](request, "scope_level")
+			scopeLevel, err := RequiredParam[string](request, "scope_level")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -148,7 +148,7 @@ func ListEntitiesTool(config *config.Config, client *client.IDPService) (tool mc
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			kind, err := OptionalParam[string](request, "kind")
+			kind, err := RequiredParam[string](request, "kind")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
