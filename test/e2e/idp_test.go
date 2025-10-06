@@ -161,6 +161,7 @@ func TestExecuteWorkflow(t *testing.T) {
 		"page":              0,
 		"limit":             10,
 		"kind":              "Workflow",
+		"scope_level":       dto.ScopeLevelDefault,
 	}
 
 	response, err := mcpClient.CallTool(ctx, request)

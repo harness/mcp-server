@@ -24,12 +24,16 @@ const (
 	idpExecuteWorkflowPath   = "/v2/workflows/execute"
 
 	// Default values for requests
-	defaultKind        = "component,api,resource"
-	defaultScope       = "account.*"
-	scopeAccountPrefix = "account"
-	defaultSort        = "name,ASC"
-	defaultLimit       = 10
-	maxLimit           = 50
+	defaultKind                     = "component,api,resource"
+	scopeAccountPrefix              = "account"
+	defaultScopeSelector            = "account.*"
+	accountLevelScopeSelector       = "account"
+	orgLevelScopeSelector           = "account.org"
+	projectLevelScopeSelector       = "account.org.project"
+	projectLevelScopeSelectorSuffix = ".project"
+	defaultSort                     = "name,ASC"
+	defaultLimit                    = 20
+	maxLimit                        = 100
 )
 
 type IDPService struct {
@@ -60,7 +64,7 @@ func (i *IDPService) GetEntity(ctx context.Context, scope dto.Scope, kind string
 	return response, nil
 }
 
-func (i *IDPService) ListEntities(ctx context.Context, scope dto.Scope, getEntitiesParams *dto.GetEntitiesParams) (*[]dto.EntityResponse, error) {
+func (i *IDPService) ListEntities(ctx context.Context, scope dto.Scope, scopeLevel string, getEntitiesParams *dto.GetEntitiesParams) (*[]dto.EntityResponse, error) {
 	path := idpListEntitiesPath
 
 	headers := make(map[string]string)
@@ -77,6 +81,8 @@ func (i *IDPService) ListEntities(ctx context.Context, scope dto.Scope, getEntit
 		params["limit"] = fmt.Sprintf("%d", getEntitiesParams.Limit)
 	}
 
+	params["page"] = fmt.Sprintf("%d", getEntitiesParams.Page)
+
 	if getEntitiesParams.Sort != "" {
 		params["sort"] = getEntitiesParams.Sort
 	}
@@ -85,7 +91,7 @@ func (i *IDPService) ListEntities(ctx context.Context, scope dto.Scope, getEntit
 		params["search_term"] = getEntitiesParams.SearchTerm
 	}
 
-	params["scopes"] = generateScopeParamVal(scope)
+	params["scopes"] = generateScopeSelectorParamVal(scope, scopeLevel)
 
 	params["owned_by_me"] = fmt.Sprintf("%v", getEntitiesParams.OwnedByMe)
 	params["favorites"] = fmt.Sprintf("%v", getEntitiesParams.Favorites)
@@ -332,17 +338,44 @@ func (i *IDPService) ExecuteWorkflow(ctx context.Context, scope dto.Scope, ident
 }
 
 func generateScopeParamVal(scope dto.Scope) string {
-	scopeParam := defaultScope
-	if scope.AccountID != "" {
-		scopeParam = scopeAccountPrefix
-		if scope.OrgID != "" {
-			scopeParam = scopeAccountPrefix + "." + scope.OrgID
-			if scope.ProjectID != "" {
-				scopeParam += "." + scope.ProjectID
-			}
+	scopeParam := scopeAccountPrefix
+	if scope.OrgID != "" {
+		scopeParam += "." + scope.OrgID
+		if scope.ProjectID != "" {
+			scopeParam += "." + scope.ProjectID
 		}
 	}
 	return scopeParam
+}
+
+func generateScopeSelectorParamVal(scope dto.Scope, scopeLevel string) string {
+	switch scopeLevel {
+	case dto.ScopeLevelDefault:
+		if scope.OrgID != "" && scope.ProjectID != "" {
+			return scopeAccountPrefix + "." + scope.OrgID + "." + scope.ProjectID
+		}
+		if scope.OrgID != "" {
+			return scopeAccountPrefix + "." + scope.OrgID + ".*"
+		}
+		return defaultScopeSelector
+	case dto.ScopeLevelAccount:
+		return accountLevelScopeSelector
+	case dto.ScopeLevelOrg:
+		if scope.OrgID != "" {
+			return scopeAccountPrefix + "." + scope.OrgID
+		}
+		return orgLevelScopeSelector
+	case dto.ScopeLevelProject:
+		if scope.OrgID != "" && scope.ProjectID != "" {
+			return scopeAccountPrefix + "." + scope.OrgID + "." + scope.ProjectID
+		}
+		if scope.OrgID != "" {
+			return scopeAccountPrefix + "." + scope.OrgID + projectLevelScopeSelectorSuffix
+		}
+		return projectLevelScopeSelector
+	default:
+		return defaultScopeSelector
+	}
 }
 
 func addHarnessAccountToHeaders(scope dto.Scope, headers map[string]string) {
