@@ -319,6 +319,28 @@ secrets:
           HARNESS_MCP_SVC_SECRET:
             name: ""
             property: ""
+          HARNESS_ACL_SVC_SECRET:
+            name: ""
+            property: ""
+          HARNESS_DBOPS_SVC_SECRET:
+            name: ""
+            property: ""
+          HARNESS_CHAOS_MANAGER_SVC_SECRET:
+            name: ""
+            property: ""
+          HARNESS_SEI_SVC_SECRET:
+            name: ""
+            property: ""
+          HARNESS_CHATBOT_SECRET:
+            name: ""
+            property: ""
+          HARNESS_SCS_SVC_SECRET:
+            name: ""
+            property: ""
+          HARNESS_CCM_COMM_ORCH_SECRET:
+            name: ""
+            property: ""
+                    
     
 config:
   HARNESS_INTELLIGENCE_SVC_BASE_URL: "http://harness-intelligence:80"
