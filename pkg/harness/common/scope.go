@@ -58,6 +58,12 @@ func FetchScope(ctx context.Context, config *config.Config, request mcp.CallTool
 		if err != nil {
 			return dto.Scope{}, fmt.Errorf("failed to get scope from context: %w", err)
 		}
+
+		scope, err = enrichScopeWithOrgProjectFromRequest(scope, request, required)
+		if err != nil {
+			return scope, err
+		}
+
 		return scope, nil
 	}
 
@@ -72,7 +78,15 @@ func FetchScope(ctx context.Context, config *config.Config, request mcp.CallTool
 		ProjectID: config.DefaultProjectID,
 	}
 
-	// try to fetch it from the MCP request
+	scope, err := enrichScopeWithOrgProjectFromRequest(scope, request, required)
+	if err != nil {
+		return scope, err
+	}
+
+	return scope, nil
+}
+
+func enrichScopeWithOrgProjectFromRequest(scope dto.Scope, request mcp.CallToolRequest, required bool) (dto.Scope, error) {
 	org, _ := OptionalParam[string](request, "org_id")
 	if org != "" {
 		scope.OrgID = org
@@ -92,7 +106,6 @@ func FetchScope(ctx context.Context, config *config.Config, request mcp.CallTool
 			return scope, fmt.Errorf("project ID is required")
 		}
 	}
-
 	return scope, nil
 }
 
