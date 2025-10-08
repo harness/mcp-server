@@ -4,7 +4,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/types/enum"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -61,6 +63,79 @@ func TestFetchScope_RequiredMissingProject(t *testing.T) {
 	cfg := &config.Config{AccountID: "acc", DefaultOrgID: "org", DefaultProjectID: ""}
 	r := newRequest(nil)
 	_, err := FetchScope(context.Background(), cfg, r, true)
+	if err == nil || err.Error() != "project ID is required" {
+		t.Fatalf("expected project ID required error, got: %v", err)
+	}
+}
+
+func TestFetchScope_HTTPTransport_EnrichesFromRequest(t *testing.T) {
+	// Setup config with HTTP transport
+	cfg := &config.Config{AccountID: "acc", Transport: enum.TransportHTTP}
+
+	// Create a context with scope
+	ctx := context.Background()
+	ctx = WithScopeContext(ctx, dto.Scope{
+		AccountID: "ctx-acc",
+		OrgID:     "ctx-org",
+		ProjectID: "ctx-proj",
+	})
+
+	// Create request with different org and project
+	args := map[string]any{"org_id": "req-org", "project_id": "req-proj"}
+	r := newRequest(args)
+
+	// Call FetchScope
+	scope, err := FetchScope(ctx, cfg, r, false)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	// Verify that request values override context values
+	if scope.AccountID != "ctx-acc" || scope.OrgID != "req-org" || scope.ProjectID != "req-proj" {
+		t.Fatalf("expected scope (ctx-acc,req-org,req-proj), got: (%s,%s,%s)",
+			scope.AccountID, scope.OrgID, scope.ProjectID)
+	}
+}
+
+func TestFetchScope_HTTPTransport_RequiredMissingOrg(t *testing.T) {
+	// Setup config with HTTP transport
+	cfg := &config.Config{AccountID: "acc", Transport: enum.TransportHTTP}
+
+	// Create a context with scope missing org
+	ctx := context.Background()
+	ctx = WithScopeContext(ctx, dto.Scope{
+		AccountID: "ctx-acc",
+		OrgID:     "", // Missing org
+		ProjectID: "ctx-proj",
+	})
+
+	// Call FetchScope with required=true
+	r := newRequest(nil)
+	_, err := FetchScope(ctx, cfg, r, true)
+
+	// Verify error
+	if err == nil || err.Error() != "org ID is required" {
+		t.Fatalf("expected org ID required error, got: %v", err)
+	}
+}
+
+func TestFetchScope_HTTPTransport_RequiredMissingProject(t *testing.T) {
+	// Setup config with HTTP transport
+	cfg := &config.Config{AccountID: "acc", Transport: enum.TransportHTTP}
+
+	// Create a context with scope missing project
+	ctx := context.Background()
+	ctx = WithScopeContext(ctx, dto.Scope{
+		AccountID: "ctx-acc",
+		OrgID:     "ctx-org",
+		ProjectID: "", // Missing project
+	})
+
+	// Call FetchScope with required=true
+	r := newRequest(nil)
+	_, err := FetchScope(ctx, cfg, r, true)
+
+	// Verify error
 	if err == nil || err.Error() != "project ID is required" {
 		t.Fatalf("expected project ID required error, got: %v", err)
 	}
