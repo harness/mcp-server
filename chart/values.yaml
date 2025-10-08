@@ -25,10 +25,10 @@ global:
       imagePullSecrets: []
     resources:
       limits:
-        memory: 128Mi
+        memory: 500Mi
       requests:
-        cpu: 128m
-        memory: 128Mi
+        cpu: 500m
+        memory: 500Mi
     securityContext:
       runAsUser: 65534
       runAsNonRoot: true
