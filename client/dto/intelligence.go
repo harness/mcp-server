@@ -51,10 +51,10 @@ type RequestAction string
 
 // Constants for the various action types
 const (
-	CreateStep      RequestAction = "CREATE_STEP"
-	UpdateStep      RequestAction = "UPDATE_STEP"
-	CreateStage     RequestAction = "CREATE_STAGE"
-	UpdateStage     RequestAction = "UPDATE_STAGE"
+	CreateStep RequestAction = "CREATE_STEP"
+	UpdateStep RequestAction = "UPDATE_STEP"
+	// CreateStage     RequestAction = "CREATE_STAGE"
+	// UpdateStage     RequestAction = "UPDATE_STAGE"
 	CreatePipeline  RequestAction = "CREATE_PIPELINE"
 	UpdatePipeline  RequestAction = "UPDATE_PIPELINE"
 	CreateEnv       RequestAction = "CREATE_ENVIRONMENT"
