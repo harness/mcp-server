@@ -25,10 +25,10 @@ global:
       imagePullSecrets: []
     resources:
       limits:
-        memory: 128Mi
+        memory: 500Mi
       requests:
-        cpu: 128m
-        memory: 128Mi
+        cpu: 500m
+        memory: 500Mi
     securityContext:
       runAsUser: 65534
       runAsNonRoot: true
@@ -167,17 +167,13 @@ service:
   port: 8080
   sessionAffinity: "ClientIP"
   sessionAffinityTimeout: 3600
-## Pod resource requests and limits
-## ref: https://kubernetes.io/docs/user-guide/compute-resources/
-# --resources.limits The resources limits for the containers
-# --resources.requests The requested resources for the containers
-##
+
 resources:
   limits:
-    memory: 1Gi
+    memory: 500Mi
   requests:
-    cpu: 1
-    memory: 1Gi
+    cpu: 500m
+    memory: 500Mi
 
 virtualService:
   annotations: {}
@@ -204,18 +200,6 @@ ingress:
             nginx.ingress.kubernetes.io/upstream-vhost: '{{ include "mcp-server.name" . }}.{{.Release.Namespace}}.svc.cluster.local'
       paths:
         - path: '{{ .Values.global.ingress.pathPrefix }}/mcp-server(/|$)(.*)'
-
-resources: {}
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
 
 livenessProbe:
   tcpSocket:

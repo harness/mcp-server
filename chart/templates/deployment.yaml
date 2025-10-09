@@ -60,47 +60,47 @@ spec:
         {{- include "harnesscommon.tplvalues.render" (dict "value" .Values.initContainers "context" $) | nindent 8 }}
       {{- end }}
       containers:
-        - name: {{ include "mcp-server.name" . }}
-          image: {{ include "common.images.image" (dict "imageRoot" .Values.image "global" .Values.global) }}
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
-          {{- with .Values.securityContext }}
-          securityContext:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-          {{- if .Values.command }}
-          command: {{ toYaml .Values.command | nindent 12 }}
-          {{- end }}
-          {{- if .Values.args }}
-          args: {{ toYaml .Values.args | nindent 12 }}
-          {{- end }}
-          env: 
-            {{- include "harnesscommon.renderSecretsAsEnvironmentVariables" (dict "ctx" $) | indent 10 }}
-          envFrom: 
-            - configMapRef:
-                name: {{ include "mcp-server.fullname" . }}
-          ports:
-            - name: mcp
-              containerPort: {{ .Values.service.port }}
-              protocol: TCP
-          {{- with .Values.livenessProbe }}
-          livenessProbe:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-          {{- with .Values.readinessProbe }}
-          readinessProbe:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-          {{- if .Values.resources }}
-          resources:
-          {{- include "harnesscommon.tplvalues.render" (dict "value" .Values.resources "context" $) | nindent 10 }}
-          {{- end }}
-          {{- with .Values.volumeMounts }}
-          volumeMounts:
-          {{- if .Values.extraVolumeMounts }}
-          {{- include "harnesscommon.tplvalues.render" (dict "value" .Values.extraVolumeMounts "context" $) | nindent 10 }}
-          {{- end }}
-          {{- include "harnesscommon.mountRenderedSecretsAsVolumeMounts" (dict "ctx" $) | indent 10 }}
-          {{- end}}
+      - name: {{ include "mcp-server.name" . }}
+        image: {{ include "common.images.image" (dict "imageRoot" .Values.image "global" .Values.global) }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        {{- with .Values.securityContext }}
+        securityContext:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- if .Values.command }}
+        command: {{ toYaml .Values.command | nindent 10 }}
+        {{- end }}
+        {{- if .Values.args }}
+        args: {{ toYaml .Values.args | nindent 10 }}
+        {{- end }}
+        env: 
+          {{- include "harnesscommon.renderSecretsAsEnvironmentVariables" (dict "ctx" $) | indent 10 }}
+        envFrom: 
+          - configMapRef:
+              name: {{ include "mcp-server.fullname" . }}
+        ports:
+          - name: mcp
+            containerPort: {{ .Values.service.port }}
+            protocol: TCP
+        {{- with .Values.livenessProbe }}
+        livenessProbe:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with .Values.readinessProbe }}
+        readinessProbe:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- if .Values.resources }}
+        resources:
+        {{- include "harnesscommon.tplvalues.render" (dict "value" .Values.resources "context" $) | nindent 10 }}
+        {{- end }}
+        {{- with .Values.volumeMounts }}
+        volumeMounts:
+        {{- if .Values.extraVolumeMounts }}
+        {{- include "harnesscommon.tplvalues.render" (dict "value" .Values.extraVolumeMounts "context" $) | nindent 10 }}
+        {{- end }}
+        {{- include "harnesscommon.mountRenderedSecretsAsVolumeMounts" (dict "ctx" $) | indent 10 }}
+        {{- end}}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
