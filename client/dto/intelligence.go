@@ -73,22 +73,23 @@ const (
 func ActionTypeValues() []string {
 	return []string{
 		string(CreateStep),
-		string(CreateStage),
+		//ML-1508: Deprecating create/update stage
+		// string(UpdateStage),
+		// string(CreateStage),
+		// string(UpdateStepGroup),
+		// string(CreateStepGroup),
 		string(CreatePipeline),
 		string(CreateEnv),
 		string(CreateSecret),
 		string(CreateService),
 		string(CreateConnector),
-		string(CreateStepGroup),
 		string(CreateProcess),
 		string(UpdateStep),
-		string(UpdateStage),
 		string(UpdatePipeline),
 		string(UpdateEnv),
 		string(UpdateSecret),
 		string(UpdateService),
 		string(UpdateConnector),
-		string(UpdateStepGroup),
 	}
 }
 
