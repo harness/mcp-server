@@ -287,6 +287,8 @@ func CreateCustomLicenseClientWithContext(ctx context.Context, config *config.Co
 	// Create a standard HTTP client
 	httpClient := retryablehttp.NewClient()
 	httpClient.RetryMax = 5
+	// Use slog for retryablehttp logging instead of the default stderr logger
+	httpClient.Logger = nil // Disable default logging that doesn't follow our format
 
 	// Build the service URL based on whether we're in internal or external mode
 	serviceURL := buildServiceURL(config, licenseBaseURL, baseURL, path)
@@ -295,7 +297,7 @@ func CreateCustomLicenseClientWithContext(ctx context.Context, config *config.Co
 		AccountId:    config.AccountID,
 		BasePath:     serviceURL,
 		HTTPClient:   httpClient,
-		DebugLogging: true,
+		DebugLogging: false, // Disable debug logging
 	}
 
 	// Set up authentication based on internal/external mode
