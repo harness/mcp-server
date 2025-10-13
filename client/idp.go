@@ -49,10 +49,10 @@ func (i *IDPService) GetEntity(ctx context.Context, scope dto.Scope, kind string
 	path := fmt.Sprintf(idpGetEntityPath, generateScopeParamVal(scope), kind, identifier)
 
 	headers := make(map[string]string)
-	addHarnessAccountToHeaders(scope, headers)
+	addHarnessAccountToHeaders(ctx, scope, headers)
 
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	response := new(dto.EntityResponse)
 
@@ -68,10 +68,10 @@ func (i *IDPService) ListEntities(ctx context.Context, scope dto.Scope, scopeLev
 	path := idpListEntitiesPath
 
 	headers := make(map[string]string)
-	addHarnessAccountToHeaders(scope, headers)
+	addHarnessAccountToHeaders(ctx, scope, headers)
 
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	if getEntitiesParams.Limit == 0 {
 		params["limit"] = fmt.Sprintf("%d", defaultLimit)
@@ -132,7 +132,7 @@ func (i *IDPService) GetScorecard(ctx context.Context, scope dto.Scope, identifi
 	path := fmt.Sprintf(idpGetScorecardPath, identifier)
 
 	headers := make(map[string]string)
-	addHarnessAccountToHeaders(scope, headers)
+	addHarnessAccountToHeaders(ctx, scope, headers)
 
 	response := new(dto.ScorecardDetailsResponse)
 
@@ -148,7 +148,7 @@ func (i *IDPService) ListScorecards(ctx context.Context, scope dto.Scope) (*[]dt
 	path := idpListScorecardsPath
 
 	headers := make(map[string]string)
-	addHarnessAccountToHeaders(scope, headers)
+	addHarnessAccountToHeaders(ctx, scope, headers)
 
 	response := make([]dto.ScorecardResponse, 0)
 	err := i.Client.Get(ctx, path, map[string]string{}, headers, &response)
@@ -163,7 +163,7 @@ func (i *IDPService) GetScorecardSummary(ctx context.Context, scope dto.Scope, i
 	path := idpGetScoreSummaryPath
 
 	headers := make(map[string]string)
-	addHarnessAccountToHeaders(scope, headers)
+	addHarnessAccountToHeaders(ctx, scope, headers)
 
 	params := make(map[string]string)
 	params["entity_identifier"] = identifier
@@ -181,7 +181,7 @@ func (i *IDPService) GetScorecardScores(ctx context.Context, scope dto.Scope, id
 	path := idpGetScoresPath
 
 	headers := make(map[string]string)
-	addHarnessAccountToHeaders(scope, headers)
+	addHarnessAccountToHeaders(ctx, scope, headers)
 
 	params := make(map[string]string)
 	params["entity_identifier"] = identifier
@@ -199,7 +199,7 @@ func (i *IDPService) GetScorecardStats(ctx context.Context, scope dto.Scope, sco
 	path := fmt.Sprintf(idpGetScorecardStatsPath, scorecardIdentifier)
 
 	headers := make(map[string]string)
-	addHarnessAccountToHeaders(scope, headers)
+	addHarnessAccountToHeaders(ctx, scope, headers)
 
 	params := make(map[string]string)
 
@@ -227,7 +227,7 @@ func (i *IDPService) GetCheck(ctx context.Context, scope dto.Scope, checkIdentif
 	path := fmt.Sprintf(idpGetCheckPath, checkIdentifier)
 
 	headers := make(map[string]string)
-	addHarnessAccountToHeaders(scope, headers)
+	addHarnessAccountToHeaders(ctx, scope, headers)
 
 	params := make(map[string]string)
 	params["custom"] = fmt.Sprintf("%v", isCustom)
@@ -246,7 +246,7 @@ func (i *IDPService) ListChecks(ctx context.Context, scope dto.Scope, getChecksP
 	path := idpListChecksPath
 
 	headers := make(map[string]string)
-	addHarnessAccountToHeaders(scope, headers)
+	addHarnessAccountToHeaders(ctx, scope, headers)
 
 	params := make(map[string]string)
 
@@ -282,7 +282,7 @@ func (i *IDPService) GetCheckStats(ctx context.Context, scope dto.Scope, checkId
 	path := fmt.Sprintf(idpGetCheckStatsPath, checkIdentifier)
 
 	headers := make(map[string]string)
-	addHarnessAccountToHeaders(scope, headers)
+	addHarnessAccountToHeaders(ctx, scope, headers)
 
 	params := make(map[string]string)
 	params["custom"] = fmt.Sprintf("%v", isCustom)
@@ -311,14 +311,14 @@ func (i *IDPService) ExecuteWorkflow(ctx context.Context, scope dto.Scope, ident
 	path := idpExecuteWorkflowPath
 
 	headers := make(map[string]string)
-	addHarnessAccountToHeaders(scope, headers)
+	addHarnessAccountToHeaders(ctx, scope, headers)
 
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	_, authHeaderVal, err := i.NgManagerAuthProvider.GetHeader(ctx)
 	if err != nil {
-		slog.Error("Failed to get auth header", "error", err)
+		slog.ErrorContext(ctx, "Failed to get auth header", "error", err)
 		return nil, err
 	}
 	inputSet["token"] = authHeaderVal
@@ -330,7 +330,7 @@ func (i *IDPService) ExecuteWorkflow(ctx context.Context, scope dto.Scope, ident
 
 	err = i.Client.Post(ctx, path, params, body, headers, response)
 	if err != nil {
-		slog.Error("Failed to execute workflow", "error", err)
+		slog.ErrorContext(ctx, "Failed to execute workflow", "error", err)
 		return nil, err
 	}
 
@@ -378,9 +378,9 @@ func generateScopeSelectorParamVal(scope dto.Scope, scopeLevel string) string {
 	}
 }
 
-func addHarnessAccountToHeaders(scope dto.Scope, headers map[string]string) {
+func addHarnessAccountToHeaders(ctx context.Context, scope dto.Scope, headers map[string]string) {
 	if scope.AccountID == "" {
-		slog.Error("Account ID is empty in scope")
+		slog.ErrorContext(ctx, "Account ID is empty in scope")
 	} else {
 		headers["Harness-Account"] = scope.AccountID
 	}

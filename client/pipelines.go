@@ -34,7 +34,7 @@ func (p *PipelineService) Get(ctx context.Context, scope dto.Scope, pipelineID s
 
 	// Prepare query parameters
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	// Initialize the response object
 	response := &dto.Entity[dto.PipelineData]{}
@@ -56,7 +56,7 @@ func (p *PipelineService) List(
 	path := pipelineListPath
 	// Prepare query parameters
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	// Handle nil options by creating default options
 	if opts == nil {
@@ -100,7 +100,7 @@ func (p *PipelineService) ListExecutions(
 	path := pipelineExecutionSummaryPath
 	// Prepare query parameters
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	// Handle nil options by creating default options
 	if opts == nil {
@@ -167,7 +167,7 @@ func (p *PipelineService) GetExecutionWithLogKeys(
 
 	// Prepare query parameters
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	// Add stageNodeId if provided
 	if stageNodeID != "" {
@@ -179,7 +179,7 @@ func (p *PipelineService) GetExecutionWithLogKeys(
 		params["childStageNodeId"] = childStageNodeID
 	}
 
-	slog.Info("Fetching execution details with log keys", "planExecutionID", planExecutionID, "stageNodeID", stageNodeID, "childStageNodeID", childStageNodeID)
+	slog.InfoContext(ctx, "Fetching execution details with log keys", "planExecutionID", planExecutionID, "stageNodeID", stageNodeID, "childStageNodeID", childStageNodeID)
 	// Initialize the response object with the new structure that matches the API response
 	response := &dto.Entity[dto.PipelineExecutionResponse]{}
 
@@ -199,7 +199,7 @@ func (p *PipelineService) GetExecutionWithLogKeys(
 			LogKeys:   logKeys,
 		},
 	}
-	slog.Info("Returning execution result with child graph", "childGraphExists", response.Data.ChildGraph.ExecutionGraph.NodeMap != nil, "childPipelineId", response.Data.ChildGraph.PipelineExecutionSummary.PipelineIdentifier)
+	slog.InfoContext(ctx, "Returning execution result with child graph", "childGraphExists", response.Data.ChildGraph.ExecutionGraph.NodeMap != nil, "childPipelineId", response.Data.ChildGraph.PipelineExecutionSummary.PipelineIdentifier)
 	return result, nil
 }
 
@@ -255,7 +255,7 @@ func (p *PipelineService) FetchExecutionURL(
 
 	// Prepare query parameters
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	params["pipelineIdentifier"] = pipelineID
 	params["planExecutionId"] = planExecutionID
@@ -281,7 +281,7 @@ func (p *PipelineService) ListInputSets(
 
 	// Prepare query parameters
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	// Handle nil options by creating default options
 	if opts == nil {
@@ -325,7 +325,7 @@ func (p *PipelineService) GetInputSet(
 
 	// Prepare query parameters
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	params["pipelineIdentifier"] = pipelineIdentifier
 
@@ -350,7 +350,7 @@ func (p *PipelineService) ListTriggers(
 
 	// Prepare query parameters
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	// Handle nil options by creating default options
 	if opts == nil {
@@ -404,7 +404,7 @@ func (p *PipelineService) GetPipelineSummary(
 
 	// Prepare query parameters
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	// Add the getMetadataOnly parameter
 	params["getMetadataOnly"] = strconv.FormatBool(getMetadataOnly)

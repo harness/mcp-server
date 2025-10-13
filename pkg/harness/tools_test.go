@@ -1,6 +1,7 @@
 package harness
 
 import (
+	"context"
 	"testing"
 
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
@@ -121,8 +122,10 @@ func TestGetEnabledModules(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 
+			ctx := context.Background()
+
 			// Call our test version of getEnabledModules that accepts our mock registry
-			result := getEnabledModules(tc.modules, tc.licenseInfo)
+			result := getEnabledModules(ctx, tc.modules, tc.licenseInfo)
 
 			// Verify results
 			if len(result) != tc.expectedModules {

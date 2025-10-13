@@ -161,7 +161,7 @@ func (ts *IntelligenceService) sendAIDevOpsChatRequest(ctx context.Context, path
 		if err != nil {
 			return nil, fmt.Errorf("failed to send request to intelligence service: %w", err)
 		}
-		slog.Info("Non-streaming request completed", "response", response)
+		slog.InfoContext(ctx, "Non-streaming request completed", "response", response)
 
 		return &response, nil
 	}
@@ -169,7 +169,7 @@ func (ts *IntelligenceService) sendAIDevOpsChatRequest(ctx context.Context, path
 	// Execute the streaming request
 	resp, err := ts.Client.PostStream(ctx, path, params, request)
 	if err != nil {
-		slog.Warn("Failed to execute streaming request", "error", err.Error())
+		slog.WarnContext(ctx, "Failed to execute streaming request", "error", err.Error())
 		return nil, fmt.Errorf("failed to execute streaming request: %w", err)
 	}
 	defer resp.Body.Close()
@@ -186,9 +186,9 @@ func (ts *IntelligenceService) sendAIDevOpsChatRequest(ctx context.Context, path
 	}
 
 	// Process the streaming response
-	err = ts.processStreamingResponse(resp.Body, finalResponse, onProgress)
+	err = ts.processStreamingResponse(ctx, resp.Body, finalResponse, onProgress)
 	if err != nil {
-		slog.Warn("Error processing streaming response", "error", err.Error())
+		slog.WarnContext(ctx, "Error processing streaming response", "error", err.Error())
 		return finalResponse, fmt.Errorf("error processing streaming response: %w", err)
 	}
 
@@ -205,7 +205,7 @@ func (ts *IntelligenceService) SendAIDevOpsChat(ctx context.Context, scope dto.S
 
 // processStreamingResponse handles Server-Sent Events (SSE) streaming responses
 // and accumulates complete events before forwarding them with appropriate event types
-func (ts *IntelligenceService) processStreamingResponse(body io.ReadCloser, finalResponse *dto.ServiceChatResponseIntelligence, onProgress func(dto.ProgressUpdate) error) error {
+func (ts *IntelligenceService) processStreamingResponse(ctx context.Context, body io.ReadCloser, finalResponse *dto.ServiceChatResponseIntelligence, onProgress func(dto.ProgressUpdate) error) error {
 	scanner := bufio.NewScanner(body)
 	var allContent, currentEvent strings.Builder
 	inEvent := false
@@ -240,14 +240,14 @@ func (ts *IntelligenceService) processStreamingResponse(body io.ReadCloser, fina
 				// Convert to JSON string
 				jsonPayload, err := json.Marshal(eventPayload)
 				if err != nil {
-					slog.Warn("Error creating JSON payload", "error", err.Error())
+					slog.WarnContext(ctx, "Error creating JSON payload", "error", err.Error())
 				} else {
 					progress := dto.ProgressUpdate{
 						Message: string(jsonPayload),
 					}
 
 					if err := onProgress(progress); err != nil {
-						slog.Warn("Error forwarding event", "type", eventType, "error", err.Error())
+						slog.WarnContext(ctx, "Error forwarding event", "type", eventType, "error", err.Error())
 					}
 				}
 
@@ -271,7 +271,7 @@ func (ts *IntelligenceService) processStreamingResponse(body io.ReadCloser, fina
 	finalResponse.Response = instructionNote + allContent.String()
 
 	if err := scanner.Err(); err != nil {
-		slog.Warn("Error in scanner", "error", err.Error())
+		slog.WarnContext(ctx, "Error in scanner", "error", err.Error())
 		return fmt.Errorf("error reading response stream: %w", err)
 	}
 

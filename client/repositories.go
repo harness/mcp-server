@@ -19,7 +19,7 @@ type RepositoryService struct {
 func (r *RepositoryService) Get(ctx context.Context, scope dto.Scope, repoIdentifier string) (*dto.Repository, error) {
 	path := fmt.Sprintf(repositoryGetPath, repoIdentifier)
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	repo := new(dto.Repository)
 	err := r.Client.Get(ctx, path, params, nil, repo)
@@ -49,7 +49,7 @@ func setDefaultPaginationForRepo(opts *dto.RepositoryOptions) {
 func (r *RepositoryService) List(ctx context.Context, scope dto.Scope, opts *dto.RepositoryOptions) ([]*dto.Repository, error) {
 	path := repositoryBasePath
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	// Handle nil options by creating default options
 	if opts == nil {

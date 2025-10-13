@@ -1,6 +1,7 @@
 package ccmcommons
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -318,11 +319,11 @@ func BuildGroupBy(input map[string]any, outputFields []map[string]string, output
 	return DefaultGroupBy
 }
 
-func DebugPayload(operation string, payload map[string]any) {
+func DebugPayload(ctx context.Context, operation string, payload map[string]any) {
 	jsonPayload := MapToJSONString(payload)
-	slog.Debug("-----------", "----------", "--------------")
-	slog.Debug(operation, "Payload", jsonPayload)
-	slog.Debug("-----------", "----------", "--------------")
+	slog.DebugContext(ctx, "-----------", "----------", "--------------")
+	slog.DebugContext(ctx, operation, "Payload", jsonPayload)
+	slog.DebugContext(ctx, "-----------", "----------", "--------------")
 }
 
 func MapToJSONString(m map[string]any) string {

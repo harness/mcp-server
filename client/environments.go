@@ -22,7 +22,7 @@ type EnvironmentClient struct {
 func (e *EnvironmentClient) Get(ctx context.Context, scope dto.Scope, environmentIdentifier string) (*dto.Environment, error) {
 	path := fmt.Sprintf(environmentGetPath, environmentIdentifier)
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	var response dto.EnvironmentResponse
 	err := e.Client.Get(ctx, path, params, nil, &response)
@@ -54,7 +54,7 @@ func setDefaultPaginationForEnvironment(opts *dto.EnvironmentOptions) {
 func (e *EnvironmentClient) List(ctx context.Context, scope dto.Scope, opts *dto.EnvironmentOptions) ([]dto.Environment, int, error) {
 	path := environmentListPath
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	// Handle nil options by creating default options
 	if opts == nil {
@@ -89,7 +89,7 @@ func (e *EnvironmentClient) MoveConfigs(ctx context.Context, scope dto.Scope, re
 	path := fmt.Sprintf(environmentMoveConfigsPath, request.EnvironmentIdentifier)
 
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	// Explicitly add org and project identifiers from the request
 	if request.OrgIdentifier != "" {

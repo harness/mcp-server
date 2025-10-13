@@ -37,7 +37,7 @@ func setDefaultPaginationForInfrastructure(opts *dto.InfrastructureOptions) {
 func (i *InfrastructureClient) List(ctx context.Context, scope dto.Scope, opts *dto.InfrastructureOptions) ([]dto.Infrastructure, int, error) {
 	path := infrastructureListPath
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	// Handle nil options by creating default options
 	if opts == nil {
@@ -83,7 +83,7 @@ func (i *InfrastructureClient) MoveConfigs(ctx context.Context, scope dto.Scope,
 	path := fmt.Sprintf(infrastructureMoveConfigsPath, request.InfraIdentifier)
 	params := make(map[string]string)
 	// Add scope to parameters
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	// Add required parameters
 	params["accountIdentifier"] = request.AccountIdentifier

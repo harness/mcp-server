@@ -32,7 +32,7 @@ type LicenseStatus string
 const LicenseActive LicenseStatus = "ACTIVE"
 
 // getEnabledModules returns a list of enabled modules based on configuration and license information
-func getEnabledModules(configEnabledModules []modules.Module, licenseInfo *LicenseInfo) []modules.Module {
+func getEnabledModules(ctx context.Context, configEnabledModules []modules.Module, licenseInfo *LicenseInfo) []modules.Module {
 
 	// Filter modules based on license entitlements
 	var licensedModules []modules.Module
@@ -59,9 +59,9 @@ func getEnabledModules(configEnabledModules []modules.Module, licenseInfo *Licen
 		moduleID := module.ID()
 		if isLicensed, exists := licenseInfo.ModuleLicenses[moduleID]; exists && isLicensed {
 			licensedModules = append(licensedModules, module)
-			slog.Info("Module enabled by license", "moduleID", moduleID)
+			slog.InfoContext(ctx, "Module enabled by license", "moduleID", moduleID)
 		} else {
-			slog.Warn("Module disabled due to missing or invalid license", "moduleID", moduleID)
+			slog.WarnContext(ctx, "Module disabled due to missing or invalid license", "moduleID", moduleID)
 		}
 	}
 
@@ -84,7 +84,7 @@ func initLicenseValidation(ctx context.Context, config *config.Config) (*License
 		return licenseInfo, fmt.Errorf("failed to create license client, error: %w", err)
 	}
 
-	slog.Info("Successfully created license client")
+	slog.InfoContext(ctx, "Successfully created license client")
 
 	// Call GetAccountLicensesWithResponse to get account licenses
 	// Make the API call
@@ -96,16 +96,16 @@ func initLicenseValidation(ctx context.Context, config *config.Config) (*License
 
 	// Check accountLicense status
 	if rawHttpResponse.StatusCode != http.StatusOK {
-		slog.Error("Unexpected accountLicense status", "status", rawHttpResponse.Status)
+		slog.ErrorContext(ctx, "Unexpected accountLicense status", "status", rawHttpResponse.Status)
 		return licenseInfo, fmt.Errorf("unexpected accountLicense status: %s", rawHttpResponse.Status)
 	} else {
 		// Print license information
-		slog.Info("Successfully retrieved account licenses",
+		slog.InfoContext(ctx, "Successfully retrieved account licenses",
 			"status", rawHttpResponse.Status,
 			"accountId", config.AccountID)
 
 		// If accountLicense has JSON data, process it
-		slog.Info("License accountLicense data",
+		slog.InfoContext(ctx, "License accountLicense data",
 			"hasData", accountLicense.Data != nil,
 			"status", accountLicense.Status)
 
@@ -134,7 +134,7 @@ func initLicenseValidation(ctx context.Context, config *config.Config) (*License
 			}
 
 			// Log summary
-			slog.Info("Account license details",
+			slog.InfoContext(ctx, "Account license details",
 				"accountId", accountLicense.Data.AccountId,
 				"licenseCount", len(licenseInfo.ModuleLicenses))
 		}
@@ -161,24 +161,24 @@ func InitToolsets(ctx context.Context, config *config.Config) (*toolsets.Toolset
 	}
 
 	// Register all toolsets with the main tracker for tool-to-toolset mapping
-	registerAllToolsetsWithTracker(tsg)
+	registerAllToolsetsWithTracker(ctx, tsg)
 
 	return tsg, nil
 }
 
 // registerAllToolsetsWithTracker registers all toolsets in the group with the main tracker
 // This ensures that findToolGroup() can find which toolset a tool belongs to
-func registerAllToolsetsWithTracker(group *toolsets.ToolsetGroup) {
+func registerAllToolsetsWithTracker(ctx context.Context, group *toolsets.ToolsetGroup) {
 	tracker := toolsets.GetMainToolTracker()
 
 	// Register each toolset with the tracker
 	for _, toolset := range group.Toolsets {
 		if err := tracker.RegisterToolGroup(toolset); err != nil {
-			slog.Warn("Failed to register toolset with tracker", "toolset", toolset.Name, "error", err)
+			slog.WarnContext(ctx, "Failed to register toolset with tracker", "toolset", toolset.Name, "error", err)
 		}
 	}
 
-	slog.Info("Registered toolsets with tracker", "count", len(group.Toolsets))
+	slog.InfoContext(ctx, "Registered toolsets with tracker", "count", len(group.Toolsets))
 }
 
 // New function that handles the module-based initialization
@@ -186,18 +186,18 @@ func initModuleBasedToolsets(ctx context.Context, config *config.Config, tsg *to
 	// Get license info
 	licenseInfo, err := initLicenseValidation(ctx, config)
 	if err != nil {
-		slog.Warn("License validation failed", "error", err)
+		slog.WarnContext(ctx, "License validation failed", "error", err)
 		return fmt.Errorf("failed to fetch license details, error: %w", err)
 	}
 
 	// Create module registry and get enabled modules
 	registry := modules.NewModuleRegistry(config, tsg)
 	configEnabledModules := registry.GetEnabledModules()
-	enabledModules := getEnabledModules(configEnabledModules, licenseInfo)
+	enabledModules := getEnabledModules(ctx, configEnabledModules, licenseInfo)
 
 	// Register and enable toolsets for each module
 	for _, module := range enabledModules {
-		slog.Info("registering toolsets for", "modules", module.ID())
+		slog.InfoContext(ctx, "registering toolsets for", "modules", module.ID())
 		if err := module.RegisterToolsets(); err != nil {
 			return fmt.Errorf("failed to register toolsets for module %s: %w", module.ID(), err)
 		}
