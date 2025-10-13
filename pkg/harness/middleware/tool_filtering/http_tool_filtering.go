@@ -298,7 +298,7 @@ func (m *HTTPToolFilteringMiddleware) filterToolsByToolsets(ctx context.Context,
 				"toolset", toolset)
 		} else {
 			deniedTools = append(deniedTools, tool.Name)
-			logger.DebugContext(ctx,"Tool denied",
+			logger.DebugContext(ctx, "Tool denied",
 				"tool_name", tool.Name,
 				"toolset", toolset)
 		}

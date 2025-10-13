@@ -5,7 +5,7 @@ import (
 	"log/slog"
 )
 
-type CtxKey string 
+type CtxKey string
 const (
 	ConversationIDKey CtxKey = "conversation_id"
 )
@@ -17,7 +17,7 @@ type LoggingHandler struct {
 
 // NewLoggingHandler creates a new logging handler that includes request context information
 func NewLoggingHandler(handler slog.Handler) *LoggingHandler {
-    return &LoggingHandler{handler: handler}
+	return &LoggingHandler{handler: handler}
 }
 
 // Enabled reports whether the handler handles records at the given level.

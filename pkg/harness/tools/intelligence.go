@@ -269,7 +269,7 @@ func AIDevOpsAgentTool(config *config.Config, client *client.IntelligenceService
 			mcpServer := server.ServerFromContext(ctx)
 			shouldStream = shouldStream && mcpServer != nil
 
-			slog.InfoContext(ctx,"Streaming request", "shouldStream", shouldStream)
+			slog.InfoContext(ctx, "Streaming request", "shouldStream", shouldStream)
 
 			if shouldStream {
 				// Generate progress token if none provided

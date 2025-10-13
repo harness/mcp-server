@@ -121,7 +121,7 @@ func (g *GenaiService) SendIDPWorkflow(ctx context.Context, scope dto.Scope, req
 
 // processStreamingResponse handles Server-Sent Events (SSE) streaming responses
 // and accumulates complete events before forwarding them with appropriate event types
-func (g *GenaiService) processStreamingResponse(ctx context.Context,body io.ReadCloser, finalResponse *dto.ServiceChatResponse, onProgress func(dto.ProgressUpdate) error) error {
+func (g *GenaiService) processStreamingResponse(ctx context.Context, body io.ReadCloser, finalResponse *dto.ServiceChatResponse, onProgress func(dto.ProgressUpdate) error) error {
 	scanner := bufio.NewScanner(body)
 	var allContent, currentEvent strings.Builder
 	inEvent := false

@@ -619,7 +619,7 @@ func runHTTPServer(ctx context.Context, config config.Config) error {
 
 	// Create HTTP server
 	httpServer := server.NewStreamableHTTPServer(harnessServer)
-	
+
 	toolFilter := tool_filtering.NewHTTPToolFilteringMiddleware(ctx, slog.Default(), &config).Wrap(httpServer)
 
 	authHandler := auth.AuthMiddleware(ctx, &config, toolFilter)
