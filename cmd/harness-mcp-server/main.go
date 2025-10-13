@@ -624,7 +624,7 @@ func runHTTPServer(ctx context.Context, config config.Config) error {
 
 	authHandler := auth.AuthMiddleware(ctx, &config, toolFilter)
 
-	loggingHandler := middleware.LoggingMiddleware(authHandler)
+	loggingHandler := middleware.MetadataMiddleware(authHandler)
 
 	mux := http.NewServeMux()
 	// authhandler -> toolFilter -> httpServer
