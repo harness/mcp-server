@@ -162,7 +162,7 @@ func (r *CloudCostManagementService) createTicket(
 		body["ticketType"] = ticketDetails.TicketType
 	}
 
-	slog.Debug("Creating CCM Ticket", "accountId", accountId, "jiraDetails", body, "ticketType", ticketDetails.TicketType)
+	slog.DebugContext(ctx, "Creating CCM Ticket", "accountId", accountId, "jiraDetails", body, "ticketType", ticketDetails.TicketType)
 
 	resp := new(map[string]any)
 
@@ -229,9 +229,9 @@ func (r *CloudCostManagementService) ListJiraIssueTypes(
 	if err != nil {
 		return nil, fmt.Errorf("Failed to list Jira Issue Types: %w", err)
 	}
-	slog.Debug("Jira Issue Types Response", "response", resp)
+	slog.DebugContext(ctx, "Jira Issue Types Response", "response", resp)
 	items := ExtractIssueTypesList(*resp)
-	slog.Debug("Jira Issue Types Response", "items", items)
+	slog.DebugContext(ctx, "Jira Issue Types Response", "items", items)
 	return &items, nil
 }
 
@@ -278,18 +278,18 @@ func (r *CloudCostManagementService) getTicketingToolSettings(
 		return "", fmt.Errorf("Failed to get ticket tool settings in cloud cost management recommendations: %w", err)
 	}
 
-	return ExtractTicketingToolValue(*resp)
+	return ExtractTicketingToolValue(ctx, *resp)
 }
 
-func ExtractTicketingToolValue(resp dto.CCMTicketToolSettingsResponse) (string, error) {
+func ExtractTicketingToolValue(ctx context.Context, resp dto.CCMTicketToolSettingsResponse) (string, error) {
 	for _, d := range resp.Data {
 		if d.Setting.Identifier == "ticketing_tool" {
-			slog.Debug("Current ticketing tool setting", "setting", d.Setting.Value)
+			slog.DebugContext(ctx, "Current ticketing tool setting", "setting", d.Setting.Value)
 			return d.Setting.Value, nil
 		}
 	}
 
-	slog.Debug("Current ticketing tool setting not found")
+	slog.DebugContext(ctx, "Current ticketing tool setting not found")
 	return "", fmt.Errorf("ticketing_tool setting not found")
 }
 

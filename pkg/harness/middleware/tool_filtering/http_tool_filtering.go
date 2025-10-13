@@ -22,7 +22,7 @@ type HTTPToolFilteringMiddleware struct {
 }
 
 // NewHTTPToolFilteringMiddleware creates a new HTTP tool filtering middleware
-func NewHTTPToolFilteringMiddleware(logger *slog.Logger, config *config.Config) *HTTPToolFilteringMiddleware {
+func NewHTTPToolFilteringMiddleware(ctx context.Context, logger *slog.Logger, config *config.Config) *HTTPToolFilteringMiddleware {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -36,29 +36,31 @@ func NewHTTPToolFilteringMiddleware(logger *slog.Logger, config *config.Config) 
 // Wrap wraps an HTTP handler to provide dynamic tool filtering for tools/list requests
 func (m *HTTPToolFilteringMiddleware) Wrap(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
 		requestLogger := m.Logger.With(
 			"method", r.Method,
 			"path", r.URL.Path,
 			"request_id", extractRequestIDFromHTTPRequest(r))
 
-		requestLogger.Debug("Processing HTTP request")
+		requestLogger.DebugContext(ctx, "Processing HTTP request")
 
 		// Check if this is a tools/list request
 		if m.isToolsListRequest(r, requestLogger) {
-			requestLogger.Debug("Detected tools/list request, applying dynamic filtering")
+			requestLogger.DebugContext(ctx, "Detected tools/list request, applying dynamic filtering")
 			m.handleToolsListRequest(w, r, next, requestLogger)
 			return
 		}
 
 		// Check if this is a tools/call request
 		if m.isToolsCallRequest(r, requestLogger) {
-			requestLogger.Debug("Detected tools/call request, applying authorization validation")
+			requestLogger.DebugContext(ctx, "Detected tools/call request, applying authorization validation")
 			m.handleToolsCallRequest(w, r, next, requestLogger)
 			return
 		}
 
 		// For non-tools requests, pass through normally
-		requestLogger.Debug("Non-tools request, passing through")
+		requestLogger.DebugContext(ctx, "Non-tools request, passing through")
 		next.ServeHTTP(w, r)
 	})
 }
@@ -70,10 +72,11 @@ func (m *HTTPToolFilteringMiddleware) isToolsListRequest(r *http.Request, logger
 		return false
 	}
 
+	ctx := r.Context()
 	// Read the request body to check for tools/list method
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		logger.Debug("Failed to read request body", "error", err)
+		logger.DebugContext(ctx, "Failed to read request body", "error", err)
 		return false
 	}
 
@@ -86,12 +89,12 @@ func (m *HTTPToolFilteringMiddleware) isToolsListRequest(r *http.Request, logger
 	}
 
 	if err := json.Unmarshal(body, &jsonRPCRequest); err != nil {
-		logger.Debug("Failed to parse JSON-RPC request", "error", err)
+		logger.DebugContext(ctx, "Failed to parse JSON-RPC request", "error", err)
 		return false
 	}
 
 	isToolsList := jsonRPCRequest.Method == "tools/list"
-	logger.Debug("Checked if tools/list request",
+	logger.DebugContext(ctx, "Checked if tools/list request",
 		"method", jsonRPCRequest.Method,
 		"is_tools_list", isToolsList)
 
@@ -121,20 +124,20 @@ func (m *HTTPToolFilteringMiddleware) handleToolsListRequest(w http.ResponseWrit
 	// Check if we need to filter the response
 	allowedToolsets, hasFiltering := GetAllowedToolsetsFromContext(ctx)
 	if !hasFiltering {
-		logger.Debug("No dynamic filtering context, returning original response")
+		logger.DebugContext(ctx, "No dynamic filtering context, returning original response")
 		// Write the original response
 		w.WriteHeader(recorder.statusCode)
 		w.Write(recorder.body.Bytes())
 		return
 	}
 
-	logger.Debug("Dynamic filtering enabled, processing response",
+	logger.DebugContext(ctx, "Dynamic filtering enabled, processing response",
 		"allowed_toolsets", allowedToolsets)
 
 	// Parse and filter the response
-	filteredResponse, err := m.filterToolsListResponse(recorder.body.Bytes(), allowedToolsets, logger)
+	filteredResponse, err := m.filterToolsListResponse(ctx, recorder.body.Bytes(), allowedToolsets, logger)
 	if err != nil {
-		logger.Error("Failed to filter tools/list response", "error", err)
+		logger.ErrorContext(ctx, "Failed to filter tools/list response", "error", err)
 		// Return original response on error
 		w.WriteHeader(recorder.statusCode)
 		w.Write(recorder.body.Bytes())
@@ -146,13 +149,13 @@ func (m *HTTPToolFilteringMiddleware) handleToolsListRequest(w http.ResponseWrit
 	w.WriteHeader(recorder.statusCode)
 	w.Write(filteredResponse)
 
-	logger.Info("Tools/list response filtered successfully",
+	logger.InfoContext(ctx, "Tools/list response filtered successfully",
 		"allowed_toolsets", allowedToolsets)
 }
 
 // enrichContextWithDynamicFiltering enriches the context with dynamic filtering information
 func (m *HTTPToolFilteringMiddleware) enrichContextWithDynamicFiltering(ctx context.Context, r *http.Request, logger *slog.Logger) context.Context {
-	logger.Debug("Enriching context with dynamic filtering information")
+	logger.DebugContext(ctx, "Enriching context with dynamic filtering information")
 
 	// Extract account ID from existing context or headers
 	accountID := extractAccountIDFromHTTPRequest(r, logger)
@@ -167,18 +170,18 @@ func (m *HTTPToolFilteringMiddleware) enrichContextWithDynamicFiltering(ctx cont
 	// Get licensed modules for the account
 	licensedModules, err := getLicensedModulesForAccount(ctx, accountID, m.Config, logger)
 	if err != nil {
-		logger.Error("Failed to get licensed modules", "error", err, "account_id", accountID)
+		logger.ErrorContext(ctx, "Failed to get licensed modules", "error", err, "account_id", accountID)
 		return ctx
 	}
 
 	// If no requested modules, use all licensed modules
 	if len(requestedModules) == 0 {
-		logger.Debug("No requested modules found in headers, using all licensed modules",
+		logger.DebugContext(ctx, "No requested modules found in headers, using all licensed modules",
 			"licensed_modules", licensedModules)
 		requestedModules = licensedModules
 	}
 
-	logger.Debug("Extracted filtering parameters",
+	logger.DebugContext(ctx, "Extracted filtering parameters",
 		"account_id", accountID,
 		"requested_modules", requestedModules,
 		"licensed_modules", licensedModules)
@@ -191,7 +194,7 @@ func (m *HTTPToolFilteringMiddleware) enrichContextWithDynamicFiltering(ctx cont
 	ctx = context.WithValue(ctx, requestedModulesContextKey, requestedModules)
 	ctx = context.WithValue(ctx, allowedToolsetsContextKey, allowedToolsets)
 
-	logger.Debug("Context enriched with dynamic filtering",
+	logger.DebugContext(ctx, "Context enriched with dynamic filtering",
 		"requested_modules", requestedModules,
 		"allowed_toolsets", allowedToolsets)
 
@@ -199,8 +202,8 @@ func (m *HTTPToolFilteringMiddleware) enrichContextWithDynamicFiltering(ctx cont
 }
 
 // filterToolsListResponse filters the tools/list JSON-RPC response
-func (m *HTTPToolFilteringMiddleware) filterToolsListResponse(responseBody []byte, allowedToolsets []string, logger *slog.Logger) ([]byte, error) {
-	logger.Debug("Filtering tools/list JSON-RPC response",
+func (m *HTTPToolFilteringMiddleware) filterToolsListResponse(ctx context.Context, responseBody []byte, allowedToolsets []string, logger *slog.Logger) ([]byte, error) {
+	logger.DebugContext(ctx, "Filtering tools/list JSON-RPC response",
 		"response_size", len(responseBody),
 		"allowed_toolsets", allowedToolsets)
 
@@ -227,12 +230,12 @@ func (m *HTTPToolFilteringMiddleware) filterToolsListResponse(responseBody []byt
 
 	// If there's an error in the response, return as-is
 	if jsonRPCResponse.Error != nil {
-		logger.Debug("Response contains error, returning as-is")
+		logger.DebugContext(ctx, "Response contains error, returning as-is")
 		return responseBody, nil
 	}
 
 	// Filter the tools
-	filteredTools := m.filterToolsByToolsets(jsonRPCResponse.Result.Tools, allowedToolsets, logger)
+	filteredTools := m.filterToolsByToolsets(ctx, jsonRPCResponse.Result.Tools, allowedToolsets, logger)
 
 	// Create the filtered response with complete JSON-RPC 2.0 structure
 	filteredResponse := struct {
@@ -260,7 +263,7 @@ func (m *HTTPToolFilteringMiddleware) filterToolsListResponse(responseBody []byt
 		return nil, fmt.Errorf("failed to marshal filtered response: %w", err)
 	}
 
-	logger.Info("Tools/list response filtered",
+	logger.InfoContext(ctx, "Tools/list response filtered",
 		"original_count", len(jsonRPCResponse.Result.Tools),
 		"filtered_count", len(filteredTools),
 		"allowed_toolsets", allowedToolsets,
@@ -270,9 +273,9 @@ func (m *HTTPToolFilteringMiddleware) filterToolsListResponse(responseBody []byt
 }
 
 // filterToolsByToolsets filters tools based on allowed toolsets
-func (m *HTTPToolFilteringMiddleware) filterToolsByToolsets(tools []mcp.Tool, allowedToolsets []string, logger *slog.Logger) []mcp.Tool {
+func (m *HTTPToolFilteringMiddleware) filterToolsByToolsets(ctx context.Context, tools []mcp.Tool, allowedToolsets []string, logger *slog.Logger) []mcp.Tool {
 	if len(allowedToolsets) == 0 {
-		logger.Warn("No allowed toolsets, returning empty list")
+		logger.WarnContext(ctx, "No allowed toolsets, returning empty list")
 		return []mcp.Tool{}
 	}
 
@@ -290,18 +293,18 @@ func (m *HTTPToolFilteringMiddleware) filterToolsByToolsets(tools []mcp.Tool, al
 
 		if allowedSet[toolset] {
 			filteredTools = append(filteredTools, tool)
-			logger.Debug("Tool allowed",
+			logger.DebugContext(ctx, "Tool allowed",
 				"tool_name", tool.Name,
 				"toolset", toolset)
 		} else {
 			deniedTools = append(deniedTools, tool.Name)
-			logger.Debug("Tool denied",
+			logger.DebugContext(ctx, "Tool denied",
 				"tool_name", tool.Name,
 				"toolset", toolset)
 		}
 	}
 
-	logger.Debug("Tool filtering completed",
+	logger.DebugContext(ctx, "Tool filtering completed",
 		"input_count", len(tools),
 		"filtered_count", len(filteredTools),
 		"denied_count", len(deniedTools),
@@ -338,21 +341,23 @@ func extractRequestIDFromHTTPRequest(r *http.Request) string {
 
 func extractAccountIDFromHTTPRequest(r *http.Request, logger *slog.Logger) string {
 	// First try to get from scope context
-	scope, _ := common.GetScopeFromContext(r.Context())
+	ctx := r.Context()
+	scope, _ := common.GetScopeFromContext(ctx)
 	if scope.AccountID != "" {
-		logger.Debug("Account ID extracted from scope context", "account_id", scope.AccountID)
+		logger.DebugContext(ctx, "Account ID extracted from scope context", "account_id", scope.AccountID)
 		return scope.AccountID
 	}
 
-	logger.Debug("No account ID found in request headers")
+	logger.DebugContext(ctx, "No account ID found in request headers")
 	return ""
 }
 
 func extractRequestedModulesFromHTTPHeaders(r *http.Request, logger *slog.Logger) []string {
 	// Extract requested modules from X-Harness-Modules header
 	modulesHeader := r.Header.Get("X-Harness-Modules")
+	ctx := r.Context()
 	if modulesHeader == "" {
-		logger.Debug("No X-Harness-Modules header found")
+		logger.DebugContext(ctx, "No X-Harness-Modules header found")
 		return []string{}
 	}
 
@@ -366,7 +371,7 @@ func extractRequestedModulesFromHTTPHeaders(r *http.Request, logger *slog.Logger
 		}
 	}
 
-	logger.Debug("Extracted requested modules from header",
+	logger.DebugContext(ctx, "Extracted requested modules from header",
 		"header_value", modulesHeader,
 		"parsed_modules", cleanModules)
 
@@ -376,7 +381,8 @@ func extractRequestedModulesFromHTTPHeaders(r *http.Request, logger *slog.Logger
 // getLicensedModulesForAccount is implemented in dynamic_tool_filtering.go
 
 func computeAllowedToolsetsFromModules(requestedModules, licensedModules []string, logger *slog.Logger) []string {
-	logger.Debug("Computing allowed toolsets from modules",
+	ctx := context.Background()
+	logger.DebugContext(ctx, "Computing allowed toolsets from modules",
 		"requested_modules", requestedModules,
 		"licensed_modules", licensedModules)
 
@@ -415,7 +421,7 @@ func computeAllowedToolsetsFromModules(requestedModules, licensedModules []strin
 		allowedToolsets = append(allowedToolsets, toolsets...)
 	}
 
-	logger.Debug("Computed allowed toolsets",
+	logger.DebugContext(ctx, "Computed allowed toolsets",
 		"allowed_modules", allowedModules,
 		"allowed_toolsets", allowedToolsets)
 
@@ -429,10 +435,11 @@ func (m *HTTPToolFilteringMiddleware) isToolsCallRequest(r *http.Request, logger
 		return false
 	}
 
+	ctx := r.Context()
 	// Read the request body to check for tools/call method
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		logger.Debug("Failed to read request body", "error", err)
+		logger.DebugContext(ctx, "Failed to read request body", "error", err)
 		return false
 	}
 
@@ -445,12 +452,12 @@ func (m *HTTPToolFilteringMiddleware) isToolsCallRequest(r *http.Request, logger
 	}
 
 	if err := json.Unmarshal(body, &jsonRPCRequest); err != nil {
-		logger.Debug("Failed to parse JSON-RPC request", "error", err)
+		logger.DebugContext(ctx, "Failed to parse JSON-RPC request", "error", err)
 		return false
 	}
 
 	isToolsCall := jsonRPCRequest.Method == "tools/call"
-	logger.Debug("Checked if tools/call request",
+	logger.DebugContext(ctx, "Checked if tools/call request",
 		"method", jsonRPCRequest.Method,
 		"is_tools_call", isToolsCall)
 

@@ -648,7 +648,7 @@ func createOrUpdatePerspectiveHandler(
 	}
 
 	if len(viewRules) > 0 {
-		slog.Debug("viewRules", "viewRules", viewRules)
+		slog.DebugContext(ctx, "viewRules", "viewRules", viewRules)
 		rules, err := ccmcommons.AdaptViewRulesMap(viewRules)
 		if err != nil {
 			return mcp.NewToolResultError("Error processing view rules from request. Check JSON format: " + err.Error()), nil
@@ -663,7 +663,7 @@ func createOrUpdatePerspectiveHandler(
 		return mcp.NewToolResultError("Error extracting visualization options from request. Check JSON format: " + err.Error()), nil
 	}
 	if len(viewVisualization) > 0 {
-		slog.Debug("viewVisualization", "viewVisualization", viewVisualization)
+		slog.DebugContext(ctx, "viewVisualization", "viewVisualization", viewVisualization)
 		viewVisual, err := ccmcommons.AdaptViewVisualization(viewVisualization)
 		if err != nil {
 			return mcp.NewToolResultError("Error processing visualization options from request. Check JSON format: " + err.Error()), nil

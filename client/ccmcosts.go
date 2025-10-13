@@ -30,7 +30,7 @@ type CloudCostManagementService struct {
 func (c *CloudCostManagementService) GetOverview(ctx context.Context, accID string, startTime int64, endTime int64, groupBy string) (*dto.CEView, error) {
 	path := fmt.Sprintf(ccmGetOverviewPath, accID, startTime, endTime, groupBy)
 
-	slog.Debug("GetOverView", "Path", path)
+	slog.DebugContext(ctx, "GetOverView", "Path", path)
 	params := make(map[string]string)
 
 	ccmOverview := new(dto.CEView)
@@ -45,7 +45,7 @@ func (c *CloudCostManagementService) GetOverview(ctx context.Context, accID stri
 func (r *CloudCostManagementService) ListCostCategories(ctx context.Context, scope dto.Scope, opts *dto.CCMListCostCategoriesOptions) (*dto.CCMCostCategoryList, error) {
 	path := ccmCostCategoryListPath
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	// Handle nil options by creating default options
 	if opts == nil {
@@ -143,7 +143,7 @@ func setCCMPaginationDefault(opts *dto.CCMPaginationOptions) {
 func (r *CloudCostManagementService) GetComputeCoverage(ctx context.Context, scope dto.Scope, opts *dto.CCMCommitmentOptions) (*dto.CCMCommitmentBaseResponse, error) {
 	path := fmt.Sprintf(ccmCommitmentCoverageDetailsPath, scope.AccountID, scope.AccountID)
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	// Handle nil options by creating default options
 	if opts == nil {
@@ -194,7 +194,7 @@ func (r *CloudCostManagementService) GetComputeCoverage(ctx context.Context, sco
 func (r *CloudCostManagementService) GetCommitmentSavings(ctx context.Context, scope dto.Scope, opts *dto.CCMCommitmentOptions) (*dto.CCMCommitmentBaseResponse, error) {
 	path := fmt.Sprintf(ccmCommitmentSavingsDetailsPath, scope.AccountID, scope.AccountID)
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	// Handle nil options by creating default options
 	if opts == nil {
@@ -245,7 +245,7 @@ func (r *CloudCostManagementService) GetCommitmentSavings(ctx context.Context, s
 func (r *CloudCostManagementService) GetCommitmentUtilisation(ctx context.Context, scope dto.Scope, opts *dto.CCMCommitmentOptions) (*dto.CCMCommitmentBaseResponse, error) {
 	path := fmt.Sprintf(ccmCommitmentUtilisationDetailsPath, scope.AccountID, scope.AccountID)
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	// Handle nil options by creating default options
 	if opts == nil {

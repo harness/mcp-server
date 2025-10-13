@@ -29,7 +29,7 @@ func (d *DashboardService) ListDashboards(ctx context.Context, scope dto.Scope, 
 	params := make(map[string]string)
 
 	// Add scope parameters
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	params["page"] = fmt.Sprintf("%d", page)
 	params["pageSize"] = fmt.Sprintf("%d", pageSize)
@@ -63,7 +63,7 @@ func (d *DashboardService) GetDashboardData(ctx context.Context, scope dto.Scope
 	if scope.AccountID == "" {
 		return nil, fmt.Errorf("accountIdentifier cannot be null")
 	}
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	// Set default reporting timeframe if not provided
 	if reportingTimeframe <= 0 {

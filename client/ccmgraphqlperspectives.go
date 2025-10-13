@@ -35,7 +35,7 @@ func (r *CloudCostManagementService) PerspectiveGrid(ctx context.Context, scope 
 		"variables":     variables,
 	}
 
-	ccmcommons.DebugPayload("PerspectiveGrid", payload)
+	ccmcommons.DebugPayload(ctx, "PerspectiveGrid", payload)
 	result := new(dto.CCMPerspectiveGridResponse)
 	err := r.Client.Post(ctx, path, nil, payload, map[string]string{}, &result)
 	if err != nil {
@@ -74,7 +74,7 @@ func (r *CloudCostManagementService) PerspectiveTimeSeries(ctx context.Context, 
 		"variables":     variables,
 	}
 
-	slog.Debug("PerspectiveTimeSeries", "Payload", payload)
+	slog.DebugContext(ctx, "PerspectiveTimeSeries", "Payload", payload)
 	result := new(dto.CCMPerspectiveTimeSeriesResponse)
 	err := r.Client.Post(ctx, path, nil, payload, map[string]string{}, &result)
 	if err != nil {
@@ -104,7 +104,7 @@ func (r *CloudCostManagementService) PerspectiveSummaryWithBudget(ctx context.Co
 		"variables":     variables,
 	}
 
-	ccmcommons.DebugPayload("PerspectiveSummaryWithBudget", payload)
+	ccmcommons.DebugPayload(ctx, "PerspectiveSummaryWithBudget", payload)
 	result := new(dto.CCMPerspectiveSummaryWithBudgetResponse)
 	err := r.Client.Post(ctx, path, nil, payload, map[string]string{}, &result)
 	if err != nil {
@@ -127,7 +127,7 @@ func (r *CloudCostManagementService) PerspectiveBudget(ctx context.Context, scop
 		"variables":     variables,
 	}
 
-	ccmcommons.DebugPayload("PerspectiveBudget", payload)
+	ccmcommons.DebugPayload(ctx, "PerspectiveBudget", payload)
 	result := new(dto.CCMPerspectiveBudgetResponse)
 	err := r.Client.Post(ctx, path, nil, payload, map[string]string{}, &result)
 	if err != nil {
@@ -148,7 +148,7 @@ func (r *CloudCostManagementService) GetCcmMetadata(ctx context.Context, scope d
 		"variables":     variables,
 	}
 
-	ccmcommons.DebugPayload("FetchCcmMetadata", payload)
+	ccmcommons.DebugPayload(ctx, "FetchCcmMetadata", payload)
 	result := new(dto.CCMMetadataResponse)
 	err := r.Client.Post(ctx, path, nil, payload, map[string]string{}, &result)
 	if err != nil {
@@ -178,7 +178,7 @@ func (r *CloudCostManagementService) PerspectiveRecommendations(ctx context.Cont
 		"variables":     variables,
 	}
 
-	ccmcommons.DebugPayload("PerspectiveRecommendations", payload)
+	ccmcommons.DebugPayload(ctx, "PerspectiveRecommendations", payload)
 	result := new(dto.CCMPerspectiveRecommendationsResponse)
 	err := r.Client.Post(ctx, path, nil, payload, map[string]string{}, &result)
 	if err != nil {
@@ -211,7 +211,7 @@ func (r *CloudCostManagementService) PerspectiveFilterValues(ctx context.Context
 		"variables":     variables,
 	}
 
-	ccmcommons.DebugPayload("FetchPerspectiveFilterValues", payload)
+	ccmcommons.DebugPayload(ctx, "FetchPerspectiveFilterValues", payload)
 	result := new(dto.CCMPerspectiveFilterValuesResponse)
 	err := r.Client.Post(ctx, path, nil, payload, map[string]string{}, &result)
 	if err != nil {

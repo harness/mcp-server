@@ -233,8 +233,8 @@ func (c *Client) PostRaw(
 
 		resp, err := c.Do(req)
 
-		slog.Debug("Response", "url", req.URL.String())
-		slog.Debug("Response", "value", resp)
+		slog.DebugContext(ctx, "Response", "url", req.URL.String())
+		slog.DebugContext(ctx, "Response", "value", resp)
 
 		if resp != nil && resp.Body != nil {
 			defer resp.Body.Close()
@@ -263,7 +263,7 @@ func (c *Client) PostRaw(
 
 	notify := func(err error, next time.Duration) {
 		retryCount++
-		slog.Warn("Retrying request due to error",
+		slog.WarnContext(ctx, "Retrying request due to error",
 			"retry_count", retryCount,
 			"next_retry_in", next,
 			"error", err)
@@ -369,7 +369,7 @@ func (c *Client) PostRawStream(
 
 		resp, err = c.Do(req)
 
-		slog.Debug("Response", "url", req.URL.String())
+		slog.DebugContext(ctx, "Response", "url", req.URL.String())
 
 		if err != nil || resp == nil {
 			return fmt.Errorf("request failed: %w", err)
@@ -394,7 +394,7 @@ func (c *Client) PostRawStream(
 
 	notify := func(err error, next time.Duration) {
 		retryCount++
-		slog.Warn("Retrying request due to error",
+		slog.WarnContext(ctx, "Retrying request due to error",
 			"retry_count", retryCount,
 			"next_retry_in", next,
 			"error", err)
@@ -450,8 +450,8 @@ func (c *Client) RequestRaw(
 
 		resp, err := c.Do(req)
 
-		slog.Debug("Response", "url", req.URL.String())
-		slog.Debug("Response", "value", resp)
+		slog.DebugContext(ctx, "Response", "url", req.URL.String())
+		slog.DebugContext(ctx, "Response", "value", resp)
 
 		if resp != nil && resp.Body != nil {
 			defer resp.Body.Close()
@@ -479,7 +479,7 @@ func (c *Client) RequestRaw(
 	}
 	notify := func(err error, next time.Duration) {
 		retryCount++
-		slog.Warn("Retrying request due to error",
+		slog.WarnContext(ctx, "Retrying request due to error",
 			"retry_count", retryCount,
 			"next_retry_in", next,
 			"error", err)
@@ -500,7 +500,7 @@ func (c *Client) RequestRaw(
 
 // Do is a wrapper of http.Client.Do that injects the auth header in the request.
 func (c *Client) Do(r *http.Request) (*http.Response, error) {
-	slog.Debug("Request", "method", r.Method, "url", r.URL.String())
+	slog.DebugContext(r.Context(), "Request", "method", r.Method, "url", r.URL.String())
 
 	// set the auth header
 	ctx := r.Context()
@@ -515,7 +515,7 @@ func (c *Client) Do(r *http.Request) (*http.Response, error) {
 	// Check for scope in context and add account ID to headers if present
 	if scope, err := common.GetScopeFromContext(ctx); err == nil {
 		if scope.AccountID != "" {
-			slog.Debug("Adding account ID header from scope in context", "accountID", scope.AccountID)
+			slog.DebugContext(ctx, "Adding account ID header from scope in context", "accountID", scope.AccountID)
 			r.Header.Set("Harness-Account", scope.AccountID)
 		}
 	}
@@ -625,9 +625,9 @@ func addQueryParamsWithoutSplittingValuesOnComma(req *http.Request, params map[s
 	req.URL.RawQuery = q.Encode()
 }
 
-func addScope(scope dto.Scope, params map[string]string) {
+func addScope(ctx context.Context, scope dto.Scope, params map[string]string) {
 	if scope.AccountID == "" {
-		slog.Error("Account ID is empty in scope")
+		slog.ErrorContext(ctx, "Account ID is empty in scope")
 	} else {
 		params["accountIdentifier"] = scope.AccountID
 		params["accountId"] = scope.AccountID

@@ -24,11 +24,11 @@ const (
 	maxSize = 1000
 )
 
-func convertDateToMilliseconds(timestamp string) int64 {
-	slog.Info("Converting date to milliseconds", "timestamp", timestamp)
+func convertDateToMilliseconds(ctx context.Context, timestamp string) int64 {
+	slog.InfoContext(ctx, "Converting date to milliseconds", "timestamp", timestamp)
 	t, err := time.Parse(time.RFC3339, timestamp)
 	if err != nil {
-		slog.Error("Failed to parse timestamp", "error", err, "timestamp", timestamp)
+		slog.ErrorContext(ctx, "Failed to parse timestamp", "error", err, "timestamp", timestamp)
 		panic(err)
 	}
 
@@ -69,7 +69,7 @@ func GetAuditYamlTool(config *config.Config, auditClient *client.AuditService) (
 			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			slog.Info("Handling get_audit_yaml request", "request", request.GetArguments())
+			slog.InfoContext(ctx, "Handling get_audit_yaml request", "request", request.GetArguments())
 
 			auditID, err := RequiredParam[string](request, "audit_id")
 			if err != nil {
@@ -81,7 +81,7 @@ func GetAuditYamlTool(config *config.Config, auditClient *client.AuditService) (
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			slog.Info("Calling GetAuditYaml API", "audit_id", auditID)
+			slog.InfoContext(ctx, "Calling GetAuditYaml API", "audit_id", auditID)
 
 			data, err := auditClient.GetAuditYaml(ctx, scope, auditID)
 			if err != nil {
@@ -156,7 +156,7 @@ func ListUserAuditTrailTool(config *config.Config, auditClient *client.AuditServ
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			slog.Info("Handling list_user_audits request", "request", request.GetArguments())
+			slog.InfoContext(ctx, "Handling list_user_audits request", "request", request.GetArguments())
 
 			userIDList, err := OptionalParam[string](request, "user_id_list")
 			if err != nil {
@@ -193,11 +193,11 @@ func ListUserAuditTrailTool(config *config.Config, auditClient *client.AuditServ
 
 			startTime, _ := OptionalParam[string](request, "start_time")
 			endTime, _ := OptionalParam[string](request, "end_time")
-			slog.Info("Time range parameters", "start_time", startTime, "end_time", endTime)
+			slog.InfoContext(ctx, "Time range parameters", "start_time", startTime, "end_time", endTime)
 
-			startTimeMilliseconds := convertDateToMilliseconds(startTime)
-			endTimeMilliseconds := convertDateToMilliseconds(endTime)
-			slog.Info("Converted time range", "start_time_ms", startTimeMilliseconds, "end_time_ms", endTimeMilliseconds)
+			startTimeMilliseconds := convertDateToMilliseconds(ctx, startTime)
+			endTimeMilliseconds := convertDateToMilliseconds(ctx, endTime)
+			slog.InfoContext(ctx, "Converted time range", "start_time_ms", startTimeMilliseconds, "end_time_ms", endTimeMilliseconds)
 
 			// Create filter options
 			opts := &dto.ListAuditEventsFilter{}
@@ -211,10 +211,10 @@ func ListUserAuditTrailTool(config *config.Config, auditClient *client.AuditServ
 					Type:       resourceType,
 					Identifier: resourceIdentifier,
 				}}
-				slog.Info("Adding resource filter", "resource_type", resourceType, "resource_identifier", resourceIdentifier)
+				slog.InfoContext(ctx, "Adding resource filter", "resource_type", resourceType, "resource_identifier", resourceIdentifier)
 			}
 
-			slog.Info("Calling ListUserAuditTrail API",
+			slog.InfoContext(ctx, "Calling ListUserAuditTrail API",
 				"user_id_list", userIDList,
 				"actions", actionsList,
 				"resource_type", resourceType,

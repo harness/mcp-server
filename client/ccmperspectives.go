@@ -21,7 +21,7 @@ const (
 func (r *CloudCostManagementService) ListPerspectivesDetail(ctx context.Context, scope dto.Scope, opts *dto.CCMListPerspectivesDetailOptions) (*dto.CCMPerspectivesDetailList, error) {
 	path := ccmPerspetiveDetailListPath
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	// Handle nil options by creating default options
 	if opts == nil {
@@ -202,13 +202,13 @@ func (r *CloudCostManagementService) CreateOrUpdatePerspective(ctx context.Conte
 
 	item := new(dto.CCMCreatePerspectiveResponse)
 	if !update {
-		slog.Debug("Creating perspective", "body", body)
+		slog.DebugContext(ctx, "Creating perspective", "body", body)
 		err := r.Client.Post(ctx, path, params, body, map[string]string{}, &item)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to create cloud cost management perspective: %w", err)
 		}
 	} else {
-		slog.Debug("Updating perspective", "body", body)
+		slog.DebugContext(ctx, "Updating perspective", "body", body)
 		err := r.Client.Put(ctx, path, params, body, &item)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to update cloud cost management perspective: %w", err)
@@ -221,7 +221,7 @@ func (r *CloudCostManagementService) CreateOrUpdatePerspective(ctx context.Conte
 func (r *CloudCostManagementService) DeletePerspective(ctx context.Context, scope dto.Scope, accountId string, perspectiveId string) (*dto.CCMBaseResponse, error) {
 	path := ccmDeletePerspectivePath
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	params["accountId"] = accountId
 	params["perspectiveId"] = perspectiveId

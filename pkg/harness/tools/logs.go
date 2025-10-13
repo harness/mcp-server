@@ -34,7 +34,7 @@ type LogFileInfo struct {
 
 // extractAndAnalyzeLogs extracts log files from the ZIP file path, finds the most recent ones,
 // and returns the last N lines across those files
-func extractAndAnalyzeLogs(internalMode bool, zipFilePath string, numLines int) (string, error) {
+func extractAndAnalyzeLogs(ctx context.Context, internalMode bool, zipFilePath string, numLines int) (string, error) {
 	// If numLines is not specified, default to 10 (approx. 1KB of data)
 	if numLines <= 0 {
 		numLines = 100
@@ -42,12 +42,12 @@ func extractAndAnalyzeLogs(internalMode bool, zipFilePath string, numLines int) 
 
 	// Cap numLines at a maximum of 100
 	if numLines > 100 && internalMode {
-		slog.Info("Limiting requested lines to maximum allowed", "requested", numLines, "max_allowed", 100)
+		slog.InfoContext(ctx, "Limiting requested lines to maximum allowed", "requested", numLines, "max_allowed", 100)
 		numLines = 100
 	}
 
 	// Extract log files from the ZIP archive
-	logFiles, err := extractLogFilesFromZipPath(zipFilePath)
+	logFiles, err := extractLogFilesFromZipPath(ctx, zipFilePath)
 	if err != nil {
 		return "", err
 	}
@@ -61,7 +61,7 @@ func extractAndAnalyzeLogs(internalMode bool, zipFilePath string, numLines int) 
 	sortLogFilesByTimestamp(logFiles)
 
 	// Extract the required number of lines from the files
-	formattedLines := extractLinesFromFiles(logFiles, numLines)
+	formattedLines := extractLinesFromFiles(ctx, logFiles, numLines)
 
 	// Format the log output for better readability
 	result := formatJSONLines(formattedLines)
@@ -69,7 +69,7 @@ func extractAndAnalyzeLogs(internalMode bool, zipFilePath string, numLines int) 
 }
 
 // extractLogFilesFromZipPath extracts all log files from a ZIP file path
-func extractLogFilesFromZipPath(zipFilePath string) ([]LogFileInfo, error) {
+func extractLogFilesFromZipPath(ctx context.Context, zipFilePath string) ([]LogFileInfo, error) {
 	// Open the ZIP file
 	zipFile, err := os.Open(zipFilePath)
 	if err != nil {
@@ -94,24 +94,24 @@ func extractLogFilesFromZipPath(zipFilePath string) ([]LogFileInfo, error) {
 	for _, file := range zipr.File {
 		fileList += fmt.Sprintf("- %s (size: %d bytes)\n", file.Name, file.UncompressedSize64)
 	}
-	slog.Info("ZIP archive contents", "files", fileList)
+	slog.InfoContext(ctx, "ZIP archive contents", "files", fileList)
 
 	// Find all files with content in the ZIP
 	var logFiles []LogFileInfo
 	for _, file := range zipr.File {
 		// Debug: Check each file
-		slog.Info("Examining file in ZIP", "name", file.Name, "size", file.UncompressedSize64)
+		slog.InfoContext(ctx, "Examining file in ZIP", "name", file.Name, "size", file.UncompressedSize64)
 
 		// Skip directories and empty files
 		if file.FileInfo().IsDir() || file.UncompressedSize64 == 0 {
-			slog.Info("Skipping directory or empty file", "name", file.Name)
+			slog.InfoContext(ctx, "Skipping directory or empty file", "name", file.Name)
 			continue
 		}
 
 		// Open the file
 		rc, err := file.Open()
 		if err != nil {
-			slog.Error("Failed to open file", "file", file.Name, "error", err)
+			slog.ErrorContext(ctx, "Failed to open file", "file", file.Name, "error", err)
 			continue
 		}
 		defer rc.Close()
@@ -129,7 +129,7 @@ func extractLogFilesFromZipPath(zipFilePath string) ([]LogFileInfo, error) {
 
 				// If the file is getting too large, stop reading and just use what we have
 				if len(content) > 10*1024*1024 { // 10MB limit
-					slog.Warn("File too large, truncating", "file", file.Name, "size_read", len(content))
+					slog.WarnContext(ctx, "File too large, truncating", "file", file.Name, "size_read", len(content))
 					break
 				}
 			}
@@ -137,7 +137,7 @@ func extractLogFilesFromZipPath(zipFilePath string) ([]LogFileInfo, error) {
 				break
 			}
 			if err != nil {
-				slog.Error("Failed to read file", "file", file.Name, "error", err)
+				slog.ErrorContext(ctx, "Failed to read file", "file", file.Name, "error", err)
 				break
 			}
 		}
@@ -155,13 +155,13 @@ func extractLogFilesFromZipPath(zipFilePath string) ([]LogFileInfo, error) {
 
 				timestampStr = extractTimestamp(lines[i])
 				if timestampStr != "" {
-					slog.Info("Found timestamp in line", "line_index", i, "total_lines", len(lines))
+					slog.InfoContext(ctx, "Found timestamp in line", "line_index", i, "total_lines", len(lines))
 					break
 				}
 			}
 
 			if timestampStr == "" {
-				slog.Info("No timestamp found in any line", "file", file.Name)
+				slog.InfoContext(ctx, "No timestamp found in any line", "file", file.Name)
 			}
 		}
 
@@ -191,9 +191,9 @@ func extractLogFilesFromZipPath(zipFilePath string) ([]LogFileInfo, error) {
 
 			// Log the timestamp parsing result for debugging
 			if timestamp.IsZero() {
-				slog.Info("Failed to parse timestamp", "raw", timestampStr)
+				slog.InfoContext(ctx, "Failed to parse timestamp", "raw", timestampStr)
 			} else {
-				slog.Info("Parsed timestamp", "raw", timestampStr, "parsed", timestamp.Format(time.RFC3339))
+				slog.InfoContext(ctx, "Parsed timestamp", "raw", timestampStr, "parsed", timestamp.Format(time.RFC3339))
 			}
 		}
 
@@ -216,12 +216,12 @@ func sortLogFilesByTimestamp(logFiles []LogFileInfo) {
 }
 
 // extractLinesFromFiles extracts the required number of lines from multiple log files
-func extractLinesFromFiles(logFiles []LogFileInfo, numLines int) []string {
+func extractLinesFromFiles(ctx context.Context, logFiles []LogFileInfo, numLines int) []string {
 	var formattedLines []string
 
 	// Process files in order of recency (most recent first) until we have enough lines
 	for fileIndex, logFile := range logFiles {
-		slog.Info("Processing file",
+		slog.InfoContext(ctx, "Processing file",
 			"file", logFile.Name,
 			"timestamp", logFile.Timestamp,
 			"index", fileIndex,
@@ -394,7 +394,7 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 						logsDirectoryName = "pipeline-logs"
 					}
 					logsDirectory = filepath.Join(config.OutputDir, logsDirectoryName)
-					slog.Info("Redirecting logs from %s to %s to ensure access", oldLogsDirectory, logsDirectory)
+					slog.InfoContext(ctx, "Redirecting logs from %s to %s to ensure access", oldLogsDirectory, logsDirectory)
 				}
 			}
 
@@ -434,7 +434,7 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 			defer outputFile.Close()
 
 			// Log information about the response
-			slog.Info("Response received",
+			slog.InfoContext(ctx, "Response received",
 				"content_type", resp.Header.Get("Content-Type"),
 				"content_length", resp.ContentLength)
 
@@ -447,7 +447,7 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 
 			// Check if it's a ZIP file (PK signature)
 			isZip := headerBuf[0] == 'P' && headerBuf[1] == 'K'
-			slog.Info("File type check", "is_zip", isZip)
+			slog.InfoContext(ctx, "File type check", "is_zip", isZip)
 
 			// Write the header bytes we've already read
 			_, err = outputFile.Write(headerBuf)
@@ -463,7 +463,7 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 
 			// Log the total bytes written
 			totalWritten := written + 2 // Add the 2 bytes we wrote separately
-			slog.Info("File download completed", "bytes_written", totalWritten)
+			slog.InfoContext(ctx, "File download completed", "bytes_written", totalWritten)
 
 			numLines, err := OptionalParam[float64](request, "num_lines")
 			if err != nil {
@@ -472,12 +472,12 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 			// For internal mode, we need to close the file first to ensure all data is flushed
 			outputFile.Close()
 			// Now extract and analyze the logs from the ZIP file path
-			logContent, err := extractAndAnalyzeLogs(config.Internal, logsZipPath, int(numLines))
+			logContent, err := extractAndAnalyzeLogs(ctx, config.Internal, logsZipPath, int(numLines))
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to extract and analyze logs: %v", err)), nil
 			}
 
-			slog.Info("File analysis completed", "content", logContent)
+			slog.InfoContext(ctx, "File analysis completed", "content", logContent)
 
 			return mcp.NewToolResultText(logContent), nil
 		}
