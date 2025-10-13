@@ -36,7 +36,6 @@ func WithHarnessScope(config *config.Config) server.ToolHandlerMiddleware {
 	}
 }
 
-
 // MetadataMiddleware extracts the conversation ID from the request header
 // and adds it to the request context for logging
 func MetadataMiddleware(next http.Handler) http.Handler {
