@@ -67,13 +67,13 @@ func AppSecTool(config *config.Config, client *client.AppSecService) server.Tool
 			var result string
 			if len(responseItems) > 0 {
 				result = "AppSec AI Response:\n\n"
-				
+
 				// Process each response item in the array
 				for i, item := range responseItems {
 					if i > 0 {
 						result += "\n---\n"
 					}
-					
+
 					// Combine all agent responses from this item
 					if len(item.Data.LLMChat.Results) > 0 {
 						for j, res := range item.Data.LLMChat.Results {

@@ -13,7 +13,7 @@ import (
 
 // AppSecService handles communication with the AppSec GraphQL API
 type AppSecService struct {
-	Client *HarnessClient
+	Client *Client
 }
 
 // GraphQLRequest represents a GraphQL request payload
@@ -26,7 +26,7 @@ type GraphQLRequest struct {
 type GraphQLResponse struct {
 	Data   interface{} `json:"data"`
 	Errors []struct {
-		Message string `json:"message"`
+		Message string        `json:"message"`
 		Path    []interface{} `json:"path,omitempty"`
 	} `json:"errors,omitempty"`
 }
@@ -95,7 +95,7 @@ func (s *AppSecService) LLMChatQuery(ctx context.Context, query string) ([]dto.A
 	}
 
 	// Execute request
-	resp, err := s.Client.HTTPClient.Do(req)
+	resp, err := s.Client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute request: %w", err)
 	}
