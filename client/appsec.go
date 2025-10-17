@@ -71,7 +71,7 @@ func (s *AppSecService) LLMChatQuery(ctx context.Context, query string) ([]dto.A
 	}
 
 	// Create HTTP request
-	req, err := http.NewRequestWithContext(ctx, "POST", s.Client.BaseURL, bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(ctx, "POST", s.Client.BaseURL.String(), bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
