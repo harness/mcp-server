@@ -69,4 +69,6 @@ type Config struct {
 	DBOpsSvcSecret          string
 	RBACSvcBaseURL          string
 	RBACSvcSecret           string
+	AppSecBaseURL           string // Added for AppSec toolset
+	AppSecSecret            string // Added for AppSec toolset
 }

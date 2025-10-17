@@ -283,6 +283,9 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 			if err := modules.RegisterPromptTools(config, tsg); err != nil {
 				return err
 			}
+			if err := modules.RegisterAppSec(config, tsg); err != nil {
+				return err
+			}
 		} else {
 			// Register specified toolsets
 			for _, toolset := range config.Toolsets {
@@ -393,6 +396,10 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 					}
 				case "prompts":
 					if err := modules.RegisterPromptTools(config, tsg); err != nil {
+						return err
+					}
+				case "appsec":
+					if err := modules.RegisterAppSec(config, tsg); err != nil {
 						return err
 					}
 				}
