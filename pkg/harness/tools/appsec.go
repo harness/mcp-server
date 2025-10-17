@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/harness/harness-mcp/client"
-	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness/auth"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -14,53 +13,31 @@ import (
 )
 
 // AppSecTool creates a tool for querying the AppSec llmChat API
-func AppSecTool(config *config.Config, client *client.AppSecService) server.Tool {
-	return server.NewTool(
-		"appsec_tool",
-		"Query the Harness Application Security AI assistant using natural language",
-		mcp.NewToolInputSchema(map[string]interface{}{
-			"type": "object",
-			"properties": map[string]interface{}{
-				"query": map[string]interface{}{
-					"type":        "string",
-					"description": "Natural language query to send to the AppSec AI assistant",
-				},
-			},
-			"required": []string{"query"},
-		}),
+func AppSecTool(config *config.Config, client *client.AppSecService) (mcp.Tool, server.ToolHandlerFunc) {
+	return mcp.NewTool("appsec_tool",
+			mcp.WithDescription("Query the Harness Application Security AI assistant using natural language"),
+			mcp.WithString("query",
+				mcp.Required(),
+				mcp.Description("Natural language query to send to the AppSec AI assistant"),
+			),
+		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			// Extract query parameter
-			var params struct {
-				Query string `json:"query"`
-			}
-
-			if err := json.Unmarshal(request.Params.Arguments, &params); err != nil {
-				return mcp.NewToolResult(
-					mcp.NewTextContent(fmt.Sprintf("Error parsing parameters: %v", err)),
-				), nil
-			}
-
-			// Validate required parameters
-			if params.Query == "" {
-				return mcp.NewToolResult(
-					mcp.NewTextContent("Error: query parameter is required"),
-				), nil
+			query, err := RequiredParam[string](request, "query")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			// Get authentication session from context
 			session, ok := auth.AuthSessionFrom(ctx)
 			if !ok {
-				return mcp.NewToolResult(
-					mcp.NewTextContent("Error: authentication session not found"),
-				), nil
+				return mcp.NewToolResultError("Error: authentication session not found"), nil
 			}
 
 			// Execute the AppSec llmChat query
-			responseItems, err := client.LLMChatQuery(ctx, params.Query)
+			responseItems, err := client.LLMChatQuery(ctx, query)
 			if err != nil {
-				return mcp.NewToolResult(
-					mcp.NewTextContent(fmt.Sprintf("Error querying AppSec API: %v", err)),
-				), nil
+				return mcp.NewToolResultError(fmt.Sprintf("Error querying AppSec API: %v", err)), nil
 			}
 
 			// Parse the response data
@@ -94,9 +71,6 @@ func AppSecTool(config *config.Config, client *client.AppSecService) server.Tool
 			contextInfo := fmt.Sprintf("\n\n---\nQuery executed for Account: %s\nOrigin: mcp-server",
 				session.Principal.AccountID)
 
-			return mcp.NewToolResult(
-				mcp.NewTextContent(result + contextInfo),
-			), nil
-		},
-	)
+			return mcp.NewToolResultText(result + contextInfo), nil
+		}
 }
