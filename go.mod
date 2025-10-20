@@ -16,6 +16,12 @@ require (
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.18.2
 	github.com/stretchr/testify v1.10.0
+	go.opentelemetry.io/otel v1.24.0
+	go.opentelemetry.io/otel/attribute v1.24.0
+	go.opentelemetry.io/otel/codes v1.24.0
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.24.0
+	go.opentelemetry.io/otel/propagation v1.24.0
+	go.opentelemetry.io/otel/sdk v1.24.0
 	golang.org/x/tools v0.24.0
 	gopkg.in/yaml.v3 v3.0.1
 )
