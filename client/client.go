@@ -16,6 +16,8 @@ import (
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/pkg/harness/auth"
 	"github.com/harness/harness-mcp/pkg/harness/common"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 const (
@@ -361,11 +363,22 @@ func (c *Client) PostRawStream(
 		}
 
 		req.Header.Set("Content-Type", "application/json")
-		// Add custom headers from the headers map
+
+		// First add custom headers from the headers map
 		for key, value := range headers {
 			req.Header.Set(key, value)
 		}
+
 		addQueryParams(req, params)
+
+		// Inject OpenTelemetry trace context AFTER all other headers
+		// This ensures trace context headers won't be overwritten
+		otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
+
+		// Log the trace context for debugging
+		slog.Debug("Outgoing trace context",
+			"traceparent", req.Header.Get("traceparent"),
+			"tracestate", req.Header.Get("tracestate"))
 
 		resp, err = c.Do(req)
 

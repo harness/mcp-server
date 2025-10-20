@@ -14,6 +14,7 @@ import (
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness"
 	"github.com/harness/harness-mcp/pkg/harness/auth"
+	"github.com/harness/harness-mcp/pkg/harness/middleware"
 	"github.com/harness/harness-mcp/pkg/harness/middleware/tool_filtering"
 	"github.com/harness/harness-mcp/pkg/harness/prompts"
 	"github.com/harness/harness-mcp/pkg/modules"
@@ -22,6 +23,13 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
 var version = "0.1.0"
@@ -541,6 +549,46 @@ func initConfig() {
 	viper.AutomaticEnv()
 }
 
+func initTracing() *sdktrace.TracerProvider {
+	ctx := context.Background()
+
+	// Get the headers from environment variable
+	headersEnv := os.Getenv("OTEL_EXPORTER_OTLP_HEADERS")
+	headers := make(map[string]string)
+
+	// Only extract Authorization if the header exists and has the correct format
+	if strings.HasPrefix(headersEnv, "Authorization=") {
+		authValue := headersEnv[len("Authorization="):]
+		headers["Authorization"] = authValue
+	}
+
+	exporter, err := otlptracehttp.New(ctx,
+		otlptracehttp.WithEndpoint(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")),
+		otlptracehttp.WithHeaders(headers),
+	)
+	if err != nil {
+		slog.Error("Failed to create trace exporter", "error", err)
+	}
+
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(exporter),
+		sdktrace.WithResource(resource.NewWithAttributes(
+			"",
+			attribute.String("service.name", "mcp-server"),
+		)),
+	)
+
+	otel.SetTracerProvider(tp)
+
+	// Explicitly set the text map propagator to use W3C Trace Context
+	// This is critical for proper trace context propagation between services
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+
+	slog.Info("OpenTelemetry tracing initialized with W3C Trace Context propagator")
+
+	return tp
+}
+
 func initLogger(config config.Config) error {
 	debug := config.Debug
 	logFormat := config.LogFormat
@@ -576,6 +624,9 @@ func initLogger(config config.Config) error {
 
 // runHTTPServer starts the MCP server with http transport
 func runHTTPServer(ctx context.Context, config config.Config) error {
+	// Initialize tracing
+	tp := initTracing()
+	defer tp.Shutdown(context.Background())
 	err := initLogger(config)
 	if err != nil {
 		return fmt.Errorf("failed to initialize logger: %w", err)
@@ -623,9 +674,11 @@ func runHTTPServer(ctx context.Context, config config.Config) error {
 
 	authHandler := auth.AuthMiddleware(&config, toolFilter)
 
+	tracingHandler := middleware.TracingMiddleware(&config, authHandler)
+
 	mux := http.NewServeMux()
 	// authhandler -> toolFilter -> httpServer
-	mux.Handle(config.HTTP.Path, authHandler)
+	mux.Handle(config.HTTP.Path, tracingHandler)
 
 	address := fmt.Sprintf(":%d", config.HTTP.Port)
 	slog.Info("Harness MCP Server running on HTTP",

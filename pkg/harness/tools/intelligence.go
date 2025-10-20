@@ -14,6 +14,9 @@ import (
 	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
 )
 
 // FindSimilarTemplates creates a tool that allows finding similar templates based on provided description.
@@ -147,14 +150,23 @@ func AIDevOpsAgentTool(config *config.Config, client *client.IntelligenceService
 			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			// Start a new span for this tool execution
+			tracer := otel.Tracer("mcp-server")
+			ctx, span := tracer.Start(ctx, "tool.ask_ai_devops_agent")
+			defer span.End()
+
 			// Get required parameters
 			prompt, err := RequiredParam[string](request, "prompt")
 			if err != nil {
+				span.RecordError(err)
+				span.SetStatus(codes.Error, err.Error())
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			action, err := RequiredParam[string](request, "action")
 			if err != nil {
+				span.RecordError(err)
+				span.SetStatus(codes.Error, err.Error())
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
@@ -168,32 +180,44 @@ func AIDevOpsAgentTool(config *config.Config, client *client.IntelligenceService
 
 			conversationID, err := OptionalParam[string](request, "conversation_id")
 			if err != nil {
+				span.RecordError(err)
+				span.SetStatus(codes.Error, err.Error())
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			interactionID, err := OptionalParam[string](request, "interaction_id")
 			if err != nil {
+				span.RecordError(err)
+				span.SetStatus(codes.Error, err.Error())
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			contextRaw, err := OptionalParam[[]any](request, "context")
 			if err != nil {
+				span.RecordError(err)
+				span.SetStatus(codes.Error, err.Error())
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			conversationRaw, err := OptionalParam[[]any](request, "conversation_raw")
 			if err != nil {
+				span.RecordError(err)
+				span.SetStatus(codes.Error, err.Error())
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			harnessContextRaw, err := OptionalParam[map[string]interface{}](request, "harness_context")
 			if err != nil {
+				span.RecordError(err)
+				span.SetStatus(codes.Error, err.Error())
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			// Try to fetch scope parameters (account_id, org_id, project_id) if provided
 			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
+				span.RecordError(err)
+				span.SetStatus(codes.Error, err.Error())
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
@@ -272,6 +296,10 @@ func AIDevOpsAgentTool(config *config.Config, client *client.IntelligenceService
 			slog.Info("Streaming request", "shouldStream", shouldStream)
 
 			if shouldStream {
+				// Create a child span for streaming
+				ctx, streamSpan := tracer.Start(ctx, "tool.ask_ai_devops_agent.stream")
+				defer streamSpan.End()
+
 				// Generate progress token if none provided
 				if progressToken == nil {
 					tokenID := uuid.New().String()
@@ -298,42 +326,76 @@ func AIDevOpsAgentTool(config *config.Config, client *client.IntelligenceService
 				// Call the AI DevOps service with streaming
 				response, err := client.SendAIDevOpsChat(ctx, scope, aiRequest, onProgress)
 				if err != nil {
+					streamSpan.RecordError(err)
+					streamSpan.SetStatus(codes.Error, err.Error())
+					span.RecordError(err)
+					span.SetStatus(codes.Error, err.Error())
 					return nil, fmt.Errorf("failed to send streaming request to AI DevOps service: %w", err)
 				}
 
 				if response == nil {
-					return nil, fmt.Errorf("got nil response from AI DevOps service")
+					err := fmt.Errorf("got nil response from AI DevOps service")
+					streamSpan.RecordError(err)
+					streamSpan.SetStatus(codes.Error, err.Error())
+					span.RecordError(err)
+					span.SetStatus(codes.Error, err.Error())
+					return nil, err
 				}
 
 				if response.Error != "" {
+					streamSpan.SetStatus(codes.Error, response.Error)
+					span.SetStatus(codes.Error, response.Error)
 					return mcp.NewToolResultError(response.Error), nil
 				}
 
 				rawResponse, err := json.Marshal(response)
 				if err != nil {
+					streamSpan.RecordError(err)
+					streamSpan.SetStatus(codes.Error, err.Error())
+					span.RecordError(err)
+					span.SetStatus(codes.Error, err.Error())
 					return nil, fmt.Errorf("failed to marshal response: %w", err)
 				}
 
 				return mcp.NewToolResultText(string(rawResponse)), nil
 			}
 
+			// Create a child span for non-streaming request
+			ctx, nonStreamSpan := tracer.Start(ctx, "tool.ask_ai_devops_agent.non_stream")
+			defer nonStreamSpan.End()
+
 			// Call the AI DevOps service without streaming
 			response, err := client.SendAIDevOpsChat(ctx, scope, aiRequest, nil)
 			if err != nil {
+				nonStreamSpan.RecordError(err)
+				nonStreamSpan.SetStatus(codes.Error, err.Error())
+				span.RecordError(err)
+				span.SetStatus(codes.Error, err.Error())
 				return nil, fmt.Errorf("failed to send request to AI DevOps service: %w", err)
 			}
 
 			if response == nil {
-				return nil, fmt.Errorf("got nil response from AI DevOps service")
+				err := fmt.Errorf("got nil response from AI DevOps service")
+				nonStreamSpan.RecordError(err)
+				nonStreamSpan.SetStatus(codes.Error, err.Error())
+				span.RecordError(err)
+				span.SetStatus(codes.Error, err.Error())
+				return nil, err
 			}
 
 			if response.Error != "" {
+				nonStreamSpan.SetStatus(codes.Error, response.Error)
+				span.SetStatus(codes.Error, response.Error)
 				return mcp.NewToolResultError(response.Error), nil
 			}
 			slog.Info("Non-streaming request completed", "response", response)
 
 			rawResponse, err := json.Marshal(response)
 			if err != nil {
+				nonStreamSpan.RecordError(err)
+				nonStreamSpan.SetStatus(codes.Error, err.Error())
+				span.RecordError(err)
+				span.SetStatus(codes.Error, err.Error())
 				return nil, fmt.Errorf("failed to marshal response: %w", err)
 			}
 
