@@ -1,0 +1,81 @@
+# Rust Makefile for Harness MCP Server
+
+.PHONY: help build test clean fmt lint run dev install check release
+
+# Default target
+help: ## Show this help message
+	@echo "Available targets:"
+	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+
+##@ Development
+
+build: ## Build the project
+	cargo build
+
+dev: ## Build in development mode with debug info
+	cargo build
+
+release: ## Build optimized release version
+	cargo build --release
+
+test: ## Run tests
+	cargo test
+
+check: ## Check code without building
+	cargo check
+
+fmt: ## Format code
+	cargo fmt
+
+lint: ## Run clippy lints
+	cargo clippy -- -D warnings
+
+clean: ## Clean build artifacts
+	cargo clean
+
+##@ Running
+
+run: ## Run the server (stdio mode)
+	cargo run -- stdio --api-key "${HARNESS_API_KEY}"
+
+run-http: ## Run the HTTP server
+	cargo run -- http-server --mcp-svc-secret "${HARNESS_MCP_SVC_SECRET}"
+
+##@ Installation
+
+install: ## Install the binary
+	cargo install --path harness-mcp-server
+
+##@ CI/CD
+
+ci-test: ## Run tests in CI mode
+	cargo test --verbose
+
+ci-build: ## Build in CI mode
+	cargo build --release --verbose
+
+ci-lint: ## Run all lints in CI mode
+	cargo fmt --check
+	cargo clippy -- -D warnings
+
+##@ Docker
+
+docker-build: ## Build Docker image
+	docker build -t harness-mcp-server .
+
+docker-run: ## Run Docker container
+	docker run -it --rm harness-mcp-server
+
+##@ Utilities
+
+deps: ## Update dependencies
+	cargo update
+
+audit: ## Security audit
+	cargo audit
+
+doc: ## Generate documentation
+	cargo doc --open
+
+bench: ## Run benchmarks
+	cargo bench

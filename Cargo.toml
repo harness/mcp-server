@@ -1,0 +1,49 @@
+[workspace]
+members = ["harness-mcp-server"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Harness Inc."]
+license = "Apache-2.0"
+repository = "https://github.com/harness/harness-mcp"
+homepage = "https://harness.io"
+
+[workspace.dependencies]
+# Async runtime and HTTP server
+tokio = { version = "1.40", features = ["full"] }
+axum = "0.7"
+hyper = { version = "1.0", features = ["full"] }
+tower = { version = "0.4", features = ["full"] }
+tower-http = { version = "0.5", features = ["cors", "trace", "timeout"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# CLI and configuration
+clap = { version = "4.4", features = ["derive", "env"] }
+dotenvy = "0.15"
+
+# HTTP client
+reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false }
+
+# Utilities
+uuid = { version = "1.6", features = ["v4", "serde"] }
+time = { version = "0.3", features = ["serde", "parsing", "formatting", "macros"] }
+parking_lot = "0.12"
+futures = "0.3"
+tokio-util = { version = "0.7", features = ["full"] }
+bytes = "1.5"
+
+# MCP protocol (placeholder - will need to find Rust equivalent or implement)
+# mcp-protocol = "0.1"  # This would need to be implemented or found
