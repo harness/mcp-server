@@ -1,0 +1,16 @@
+msrv = "1.70"
+cognitive-complexity-threshold = 30
+too-many-arguments-threshold = 8
+type-complexity-threshold = 250
+single-char-binding-names-threshold = 4
+trivial-copy-size-limit = 64
+pass-by-value-size-limit = 256
+too-many-lines-threshold = 100
+large-type-threshold = 200
+vec-box-size-threshold = 4096
+max-trait-bounds = 3
+max-struct-bools = 3
+max-fn-params-bools = 3
+warn-on-all-wildcard-imports = false
+disallowed-names = ["foo", "baz", "quux"]
+avoid-breaking-exported-api = true

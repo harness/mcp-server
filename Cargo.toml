@@ -1,0 +1,88 @@
+[package]
+name = "harness-mcp-server"
+version = "0.1.0"
+edition = "2021"
+authors = ["Harness Inc."]
+description = "Harness MCP Server - A Model Context Protocol server for Harness APIs"
+license = "Apache-2.0"
+repository = "https://github.com/harness/mcp-server"
+homepage = "https://harness.io"
+keywords = ["mcp", "harness", "api", "server", "automation"]
+categories = ["command-line-utilities", "web-programming::http-server"]
+
+[[bin]]
+name = "harness-mcp-server"
+path = "src/main.rs"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1.0", features = ["full"] }
+
+# HTTP server
+axum = { version = "0.7", features = ["json", "headers", "tower-log"] }
+tower = { version = "0.4", features = ["full"] }
+tower-http = { version = "0.5", features = ["cors", "trace", "timeout", "limit"] }
+hyper = { version = "1.0", features = ["full"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+toml = "0.8"
+
+# Error handling
+thiserror = "1.0"
+anyhow = "2.0"
+
+# Logging and tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+tracing-appender = "0.2"
+
+# CLI
+clap = { version = "4.0", features = ["derive", "env"] }
+
+# Configuration
+config = "0.14"
+dotenvy = "0.15"
+
+# HTTP client
+reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false }
+
+# Utilities
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+url = "2.0"
+base64 = "0.22"
+
+# JSON-RPC and MCP
+jsonrpc-core = "18.0"
+jsonrpc-derive = "18.0"
+
+# Async utilities
+futures = "0.3"
+async-trait = "0.1"
+
+# Security
+jsonwebtoken = "9.0"
+
+# URL encoding
+urlencoding = "2.1"
+
+[dev-dependencies]
+tokio-test = "0.4"
+tempfile = "3.0"
+wiremock = "0.6"
+
+[features]
+default = ["json-logs"]
+json-logs = []
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.dev]
+debug = true
