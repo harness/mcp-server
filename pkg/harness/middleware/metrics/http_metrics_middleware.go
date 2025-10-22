@@ -122,12 +122,12 @@ func (r *responseRecorder) WriteHeader(statusCode int) {
 func extractRequestID(r *http.Request) string {
 	// Check headers in order of precedence
 	headers := []string{"X-Request-ID", "X-Correlation-ID", "Request-ID"}
-	
+
 	for _, header := range headers {
 		if value := r.Header.Get(header); value != "" {
 			return value
 		}
 	}
-	
+
 	return ""
 }
