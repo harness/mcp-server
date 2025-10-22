@@ -42,13 +42,13 @@ func NewMetricsServer(port int, logger *slog.Logger) *MetricsServer {
 // Start starts the metrics server in a goroutine
 func (ms *MetricsServer) Start() error {
 	ms.logger.Info("Starting Prometheus metrics server", "addr", ms.server.Addr)
-	
+
 	go func() {
 		if err := ms.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			ms.logger.Error("Metrics server failed", "error", err)
 		}
 	}()
-	
+
 	return nil
 }
 

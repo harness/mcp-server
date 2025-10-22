@@ -38,7 +38,7 @@ func (m *HTTPMetricsMiddleware) Wrap(next http.Handler) http.Handler {
 		requestLogger := m.Logger.With(
 			"method", r.Method,
 			"path", r.URL.Path,
-			"request_id", extractRequestID(r))
+		)
 
 		requestLogger.Debug("Processing HTTP request for metrics collection")
 
@@ -115,19 +115,4 @@ type responseRecorder struct {
 func (r *responseRecorder) WriteHeader(statusCode int) {
 	r.statusCode = statusCode
 	r.ResponseWriter.WriteHeader(statusCode)
-}
-
-// extractRequestID extracts request ID from common headers
-func extractRequestID(r *http.Request) string {
-	// Try various common request ID headers
-	if requestID := r.Header.Get("X-Request-ID"); requestID != "" {
-		return requestID
-	}
-	if requestID := r.Header.Get("X-Correlation-ID"); requestID != "" {
-		return requestID
-	}
-	if requestID := r.Header.Get("Request-ID"); requestID != "" {
-		return requestID
-	}
-	return ""
 }
