@@ -27,6 +27,11 @@ type Config struct {
 		Path string `envconfig:"MCP_HTTP_PATH" default:"/mcp"`
 	}
 
+	// Metrics configuration
+	Metrics struct {
+		Port int `envconfig:"MCP_METRICS_PORT" default:"8181"`
+	}
+
 	Internal bool
 
 	// Only used for external mode

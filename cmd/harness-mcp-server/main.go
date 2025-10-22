@@ -21,13 +21,22 @@ import (
 	"github.com/harness/harness-mcp/pkg/types/enum"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
 var version = "0.1.0"
 var commit = "dev"
+
+// startMetricsServer starts a separate Prometheus metrics server
+func startMetricsServer(config *config.Config) (*metrics.MetricsServer, error) {
+	metricsServer := metrics.NewMetricsServer(config.Metrics.Port, slog.Default())
+	if err := metricsServer.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start metrics server: %w", err)
+	}
+	return metricsServer, nil
+}
+
 var date = "unknown"
 
 // extractAccountIDFromAPIKey extracts the account ID from a Harness API key
@@ -94,6 +103,11 @@ var (
 				}{
 					Port: viper.GetInt("http_port"),
 					Path: viper.GetString("http_path"),
+				},
+				Metrics: struct {
+					Port int `envconfig:"MCP_METRICS_PORT" default:"8181"`
+				}{
+					Port: viper.GetInt("metrics_port"),
 				},
 				Internal:                true,
 				Toolsets:                []string{"all"},
@@ -618,6 +632,17 @@ func runHTTPServer(ctx context.Context, config config.Config) error {
 	// Set the guidelines prompts
 	prompts.RegisterPrompts(harnessServer)
 
+	// Start metrics server
+	metricsServer, err := startMetricsServer(&config)
+	if err != nil {
+		return fmt.Errorf("failed to start metrics server: %w", err)
+	}
+	defer func() {
+		if err := metricsServer.Stop(ctx); err != nil {
+			slog.Error("error stopping metrics server", "error", err)
+		}
+	}()
+
 	// Create HTTP server
 	httpServer := server.NewStreamableHTTPServer(harnessServer)
 
@@ -627,16 +652,14 @@ func runHTTPServer(ctx context.Context, config config.Config) error {
 	authHandler := auth.AuthMiddleware(&config, metricsMiddleware)
 
 	mux := http.NewServeMux()
-	// Middleware chain: authHandler -> metricsMiddleware -> toolFilter -> httpServer
 	mux.Handle(config.HTTP.Path, authHandler)
-	// Add Prometheus metrics endpoint
-	mux.Handle("/metrics", promhttp.Handler())
 
 	address := fmt.Sprintf(":%d", config.HTTP.Port)
 	slog.Info("Harness MCP Server running on HTTP",
 		"version", version,
 		"address", address,
 		"path", config.HTTP.Path,
+		"metrics_port", config.Metrics.Port,
 	)
 
 	srv := &http.Server{

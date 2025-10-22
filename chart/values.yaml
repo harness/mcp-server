@@ -67,8 +67,9 @@ global:
       gateways:
       hosts:
   monitoring:
-    enabled: false
-    managedPlatform: ""
+    enabled: true
+    port: 8181
+    path: /metrics
   serviceUpStream:
     enabled: false
 
@@ -324,4 +325,5 @@ config:
   HARNESS_NG_MANAGER_BASE_URL: "http://ng-manager:7090"
   HARNESS_TEMPLATE_SVC_BASE_URL: "http://template-service:15002"
   HARNESS_LOG_FORMAT: "json"
-  
+  HARNESS_METRICS_PORT: "8181"
+ 
