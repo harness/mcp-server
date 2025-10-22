@@ -116,3 +116,18 @@ func (r *responseRecorder) WriteHeader(statusCode int) {
 	r.statusCode = statusCode
 	r.ResponseWriter.WriteHeader(statusCode)
 }
+
+// extractRequestID extracts request ID from HTTP request headers
+// It checks headers in order of precedence: X-Request-ID, X-Correlation-ID, Request-ID
+func extractRequestID(r *http.Request) string {
+	// Check headers in order of precedence
+	headers := []string{"X-Request-ID", "X-Correlation-ID", "Request-ID"}
+	
+	for _, header := range headers {
+		if value := r.Header.Get(header); value != "" {
+			return value
+		}
+	}
+	
+	return ""
+}
