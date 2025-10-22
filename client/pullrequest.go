@@ -23,7 +23,7 @@ type PullRequestService struct {
 func (p *PullRequestService) Get(ctx context.Context, scope dto.Scope, repoID string, prNumber int) (*dto.PullRequest, error) {
 	path := fmt.Sprintf(pullRequestGetPath, repoID, prNumber)
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	pr := new(dto.PullRequest)
 	err := p.Client.Get(ctx, path, params, nil, pr)
@@ -55,7 +55,7 @@ func setDefaultPaginationForPR(opts *dto.PullRequestOptions) {
 func (p *PullRequestService) List(ctx context.Context, scope dto.Scope, repoID string, opts *dto.PullRequestOptions) ([]*dto.PullRequest, error) {
 	path := fmt.Sprintf(pullRequestListPath, repoID)
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	// Handle nil options by creating default options
 	if opts == nil {
@@ -127,7 +127,7 @@ func (p *PullRequestService) List(ctx context.Context, scope dto.Scope, repoID s
 func (p *PullRequestService) Create(ctx context.Context, scope dto.Scope, repoID string, createPR *dto.CreatePullRequest) (*dto.PullRequest, error) {
 	path := fmt.Sprintf(pullRequestCreatePath, repoID)
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	if createPR == nil {
 		createPR = &dto.CreatePullRequest{}
@@ -146,7 +146,7 @@ func (p *PullRequestService) Create(ctx context.Context, scope dto.Scope, repoID
 func (p *PullRequestService) GetChecks(ctx context.Context, scope dto.Scope, repoID string, prNumber int) (*dto.PullRequestChecksResponse, error) {
 	path := fmt.Sprintf(pullRequestChecksPath, repoID, prNumber)
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	checks := new(dto.PullRequestChecksResponse)
 	err := p.Client.Get(ctx, path, params, nil, checks)
@@ -177,7 +177,7 @@ func setDefaultPaginationForPRActivities(opts *dto.PullRequestActivityOptions) {
 func (p *PullRequestService) GetActivities(ctx context.Context, scope dto.Scope, repoID string, prNumber int, opts *dto.PullRequestActivityOptions) (dto.PullRequestActivitiesResponse, error) {
 	path := fmt.Sprintf(pullRequestActivitiesPath, repoID, prNumber)
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	// Handle nil options by creating default options
 	if opts == nil {

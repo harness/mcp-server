@@ -14,6 +14,8 @@ import (
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness"
 	"github.com/harness/harness-mcp/pkg/harness/auth"
+	"github.com/harness/harness-mcp/pkg/harness/logging"
+	"github.com/harness/harness-mcp/pkg/harness/middleware"
 	"github.com/harness/harness-mcp/pkg/harness/middleware/metrics"
 	"github.com/harness/harness-mcp/pkg/harness/middleware/tool_filtering"
 	"github.com/harness/harness-mcp/pkg/harness/prompts"
@@ -583,10 +585,9 @@ func initLogger(config config.Config) error {
 		handler = slog.NewTextHandler(writer, handlerOpts)
 	}
 
-	// Set the default logger
-	logger := slog.New(handler)
-	slog.SetDefault(logger)
-
+	// Always wrap with our conversation ID logger, regardless of transport mode
+	handler = logging.NewLoggingHandler(handler)
+	slog.SetDefault(slog.New(handler))
 	return nil
 }
 
@@ -647,12 +648,13 @@ func runHTTPServer(ctx context.Context, config config.Config) error {
 	httpServer := server.NewStreamableHTTPServer(harnessServer)
 
 	// Create middleware chain: Auth -> Metrics -> ToolFiltering -> MCP Server
-	toolFilter := tool_filtering.NewHTTPToolFilteringMiddleware(slog.Default(), &config).Wrap(httpServer)
+	toolFilter := tool_filtering.NewHTTPToolFilteringMiddleware(ctx, slog.Default(), &config).Wrap(httpServer)
 	metricsMiddleware := metrics.NewHTTPMetricsMiddleware(slog.Default(), &config).Wrap(toolFilter)
-	authHandler := auth.AuthMiddleware(&config, metricsMiddleware)
+	authHandler := auth.AuthMiddleware(ctx, &config, metricsMiddleware)
+	loggingHandler := middleware.MetadataMiddleware(authHandler)
 
 	mux := http.NewServeMux()
-	mux.Handle(config.HTTP.Path, authHandler)
+	mux.Handle(config.HTTP.Path, loggingHandler)
 
 	// Add health endpoint for Kubernetes probes
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {

@@ -160,11 +160,11 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 			}
 			resp, err := client.FrontendAllIssuesListWithResponse(ctx, params)
 			if err != nil {
-				slog.Error("Failed to get STO issues", "error", err)
+				slog.ErrorContext(ctx, "Failed to get STO issues", "error", err)
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			if resp.StatusCode() < 200 || resp.StatusCode() >= 300 {
-				slog.Error("Failed to get STO issues", "status code", resp.StatusCode())
+				slog.ErrorContext(ctx, "Failed to get STO issues", "status code", resp.StatusCode())
 				return nil, fmt.Errorf("non-2xx status: %d", resp.StatusCode())
 			}
 			if resp.JSON200 == nil {
@@ -233,7 +233,7 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 
 				tableResource, err := tableEvent.CreateEmbeddedResource()
 				if err != nil {
-					slog.Error("Failed to create table resource", "error", err)
+					slog.ErrorContext(ctx, "Failed to create table resource", "error", err)
 				} else {
 					responseContents = append(responseContents, tableResource)
 				}
@@ -248,7 +248,7 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 					promptEvent := types.NewActionEvent(prompts)
 					promptResource, err := promptEvent.CreateEmbeddedResource()
 					if err != nil {
-						slog.Error("Failed to create prompt resource", "error", err)
+						slog.ErrorContext(ctx, "Failed to create prompt resource", "error", err)
 					} else {
 						responseContents = append(responseContents, promptResource)
 					}
@@ -487,7 +487,7 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 				tableEvent := types.NewTableEvent(tableData)
 				tableResource, err := tableEvent.CreateEmbeddedResource()
 				if err != nil {
-					slog.Error("Failed to create table resource", "error", err)
+					slog.ErrorContext(ctx, "Failed to create table resource", "error", err)
 				} else {
 					responseContents = append(responseContents, tableResource)
 				}
@@ -497,7 +497,7 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 					promptEvent := types.NewActionEvent(suggestions)
 					promptResource, err := promptEvent.CreateEmbeddedResource()
 					if err != nil {
-						slog.Error("Failed to create prompt resource", "error", err)
+						slog.ErrorContext(ctx, "Failed to create prompt resource", "error", err)
 					} else {
 						responseContents = append(responseContents, promptResource)
 					}
@@ -689,7 +689,7 @@ func getCurrentUserUUID(ctx context.Context, config *config.Config, principalCli
 	}
 	resp, err := principalClient.GetCurrentUser(ctx, scope)
 	if err != nil {
-		slog.Error("getCurrentUserUUIDFromAPIClient error", "error", err)
+		slog.ErrorContext(ctx, "getCurrentUserUUIDFromAPIClient error", "error", err)
 		return ""
 	}
 	return resp.Data.UUID

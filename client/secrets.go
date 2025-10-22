@@ -26,7 +26,7 @@ func (c *SecretsClient) GetSecret(ctx context.Context, scope dto.Scope, secretId
 
 	path := fmt.Sprintf("%s/%s", secretsBasePath, secretIdentifier)
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	var response dto.SecretResponse
 	err := c.Get(ctx, path, params, nil, &response)
@@ -44,7 +44,7 @@ func (c *SecretsClient) ListSecrets(ctx context.Context, scope dto.Scope, pageIn
 	}
 
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	// Add pagination parameters
 	params["pageIndex"] = fmt.Sprintf("%d", pageIndex)
@@ -56,7 +56,7 @@ func (c *SecretsClient) ListSecrets(ctx context.Context, scope dto.Scope, pageIn
 		filters.FilterType = "Secret"
 	}
 	reqBody := filters
-	slog.Info("Request body", "body", reqBody)
+	slog.InfoContext(ctx, "Request body", "body", reqBody)
 	var response dto.ListSecretsResponse
 	headers := make(map[string]string)
 	err := c.Post(ctx, listSecretsPath, params, reqBody, headers, &response)

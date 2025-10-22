@@ -73,7 +73,7 @@ func (c *ConnectorService) GetConnector(ctx context.Context, scope dto.Scope, co
 	if scope.AccountID == "" {
 		return nil, fmt.Errorf("accountIdentifier cannot be null")
 	}
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	// Define a struct to match the actual API response structure
 	type connectorResponse struct {
@@ -100,7 +100,7 @@ func (c *ConnectorService) ListConnectors(ctx context.Context, scope dto.Scope, 
 	}
 
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	// Create request body with specified fields
 	requestBody := pkgDTO.ConnectorListRequestBody{

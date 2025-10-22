@@ -55,12 +55,12 @@ func CcmPerspectiveGridTool(config *config.Config, client *client.CloudCostManag
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			filters, err := buildFilters(ccmcommons.CCMFilterFields, request)
+			filters, err := buildFilters(ctx, ccmcommons.CCMFilterFields, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			keyValueFilters, err := buildKeyValueFilters(ccmcommons.CCMKeyValueFilterFields, request)
+			keyValueFilters, err := buildKeyValueFilters(ctx, ccmcommons.CCMKeyValueFilterFields, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -128,12 +128,12 @@ func CcmPerspectiveTimeSeriesTool(config *config.Config, client *client.CloudCos
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			filters, err := buildFilters(ccmcommons.CCMFilterFields, request)
+			filters, err := buildFilters(ctx, ccmcommons.CCMFilterFields, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			keyValueFilters, err := buildKeyValueFilters(ccmcommons.CCMKeyValueFilterFields, request)
+			keyValueFilters, err := buildKeyValueFilters(ctx, ccmcommons.CCMKeyValueFilterFields, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -197,12 +197,12 @@ func CcmPerspectiveSummaryWithBudgetTool(config *config.Config, client *client.C
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			filters, err := buildFilters(ccmcommons.CCMFilterFields, request)
+			filters, err := buildFilters(ctx, ccmcommons.CCMFilterFields, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			keyValueFilters, err := buildKeyValueFilters(ccmcommons.CCMKeyValueFilterFields, request)
+			keyValueFilters, err := buildKeyValueFilters(ctx, ccmcommons.CCMKeyValueFilterFields, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -330,12 +330,12 @@ func CcmPerspectiveRecommendationsTool(config *config.Config, client *client.Clo
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			filters, err := buildFilters(ccmcommons.CCMFilterFields, request)
+			filters, err := buildFilters(ctx, ccmcommons.CCMFilterFields, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			keyValueFilters, err := buildKeyValueFilters(ccmcommons.CCMKeyValueFilterFields, request)
+			keyValueFilters, err := buildKeyValueFilters(ctx, ccmcommons.CCMKeyValueFilterFields, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -534,7 +534,7 @@ func CcmPerspectiveFilterValuesToolEvent(config *config.Config) (tool mcp.Tool, 
 		}
 }
 
-func buildFilters(filterFields []map[string]string, request mcp.CallToolRequest) (map[string][]string, error) {
+func buildFilters(ctx context.Context, filterFields []map[string]string, request mcp.CallToolRequest) (map[string][]string, error) {
 
 	filters := make(map[string][]string)
 	for _, field := range filterFields {
@@ -548,11 +548,11 @@ func buildFilters(filterFields []map[string]string, request mcp.CallToolRequest)
 		}
 	}
 
-	slog.Debug("buildFilters", "filters", filters)
+	slog.DebugContext(ctx, "buildFilters", "filters", filters)
 	return filters, nil
 }
 
-func buildKeyValueFilters(keyValueFilterFields []map[string]string, request mcp.CallToolRequest) (map[string]map[string]any, error) {
+func buildKeyValueFilters(ctx context.Context, keyValueFilterFields []map[string]string, request mcp.CallToolRequest) (map[string]map[string]any, error) {
 
 	keyValueFilters := make(map[string]map[string]any)
 	for _, field := range keyValueFilterFields {
@@ -565,7 +565,7 @@ func buildKeyValueFilters(keyValueFilterFields []map[string]string, request mcp.
 			keyValueFilters[name] = val
 		}
 	}
-	slog.Debug("buildKeyValueFilters", "keyValueFilters", keyValueFilters)
+	slog.DebugContext(ctx, "buildKeyValueFilters", "keyValueFilters", keyValueFilters)
 	return keyValueFilters, nil
 }
 

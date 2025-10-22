@@ -50,7 +50,7 @@ func (r *CloudCostManagementService) getAnomalies(
 
 	items := new(map[string]any)
 
-	slog.Debug("Fetching anomalies", "body", options)
+	slog.DebugContext(ctx, "Fetching anomalies", "body", options)
 	err := r.Client.Post(ctx, path, params, options, emptyMap, &items)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to list cloud cost management anomalies: %w", err)
@@ -70,7 +70,7 @@ func (r *CloudCostManagementService) getFilterValuesAnomalies(
 
 	items := new(map[string]any)
 
-	slog.Debug("Fetching anomalies", "body", options)
+	slog.DebugContext(ctx, "Fetching anomalies", "body", options)
 	err := r.Client.Post(ctx, path, params, options, emptyMap, &items)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to list cloud cost management anomalies: %w", err)
@@ -91,7 +91,7 @@ func (r *CloudCostManagementService) GetAnomaliesForPerspective(
 
 	items := new(map[string]any)
 
-	slog.Debug("Fetching anomalies by perspective", "body", options)
+	slog.DebugContext(ctx, "Fetching anomalies by perspective", "body", options)
 	err := r.Client.Post(ctx, path, params, options, emptyMap, &items)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to list cloud cost management anomalies by perspective: %w", err)

@@ -61,7 +61,7 @@ func (r *CloudCostManagementService) GetEstimatedSavings(ctx context.Context, sc
 func (r *CloudCostManagementService) getEstimatedSavingsResponse(ctx context.Context, scope dto.Scope, cloudAccountID string, service *string, targetCoverage *float64) (*dto.EstimatedSavingsRemoteResponse, error) {
 	path := fmt.Sprintf(ccmCommitmentEstimatedSavingsPath, scope.AccountID, cloudAccountID, scope.AccountID)
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	type reqPayload struct {
 		Service        string  `json:"service"`
@@ -107,7 +107,7 @@ func (r *CloudCostManagementService) GetCommitmentSpends(ctx context.Context, sc
 
 	path := fmt.Sprintf(ccmCommitmentSpendDetailsPath, scope.AccountID, scope.AccountID)
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	// Handle nil options by creating default options
 	if opts == nil {
@@ -158,7 +158,7 @@ func (r *CloudCostManagementService) GetCommitmentSpends(ctx context.Context, sc
 func (r *CloudCostManagementService) GetCommitmentMasterAccounts(ctx context.Context, scope dto.Scope) (*dto.CCMMasterAccountsListResponse, error) {
 	path := fmt.Sprintf(ccmCommitmentMasterAccountsPath, scope.AccountID, scope.AccountID)
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	listMasterAccountsResponse := new(dto.CCMCommitmentBaseResponse)
 

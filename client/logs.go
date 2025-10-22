@@ -26,10 +26,10 @@ func (l *LogService) GetDownloadLogsURL(ctx context.Context, scope dto.Scope, pl
 	var finalLogKey string
 	var err error
 	if logKey != "" {
-		slog.Info("Using custom log key for log download", "logKey", logKey)
+		slog.InfoContext(ctx, "Using custom log key for log download", "logKey", logKey)
 		finalLogKey = logKey
 	} else {
-		slog.Info("Building log key for log download from execution details")
+		slog.InfoContext(ctx, "Building log key for log download from execution details")
 		// First, get the pipeline execution details to determine the prefix format
 		pipelineService := &PipelineService{Client: l.PipelineClient} // TODO: needs to be changed for internal case, we should move this above
 		execution, err := pipelineService.GetExecutionWithLogKeys(ctx, scope, planExecutionID, "", "")

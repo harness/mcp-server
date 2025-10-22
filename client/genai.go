@@ -74,7 +74,7 @@ func (g *GenaiService) sendGenAIRequest(ctx context.Context, path string, scope 
 	// Execute the streaming request
 	resp, err := g.Client.PostStream(ctx, path, params, request)
 	if err != nil {
-		slog.Warn("Failed to execute streaming request", "error", err.Error())
+		slog.WarnContext(ctx, "Failed to execute streaming request", "error", err.Error())
 		return nil, fmt.Errorf("failed to execute streaming request: %w", err)
 	}
 	defer resp.Body.Close()
@@ -91,9 +91,9 @@ func (g *GenaiService) sendGenAIRequest(ctx context.Context, path string, scope 
 	}
 
 	// Process the streaming response
-	err = g.processStreamingResponse(resp.Body, finalResponse, progressCB)
+	err = g.processStreamingResponse(ctx, resp.Body, finalResponse, progressCB)
 	if err != nil {
-		slog.Warn("Error processing streaming response", "error", err.Error())
+		slog.WarnContext(ctx, "Error processing streaming response", "error", err.Error())
 		return finalResponse, fmt.Errorf("error processing streaming response: %w", err)
 	}
 
@@ -121,7 +121,7 @@ func (g *GenaiService) SendIDPWorkflow(ctx context.Context, scope dto.Scope, req
 
 // processStreamingResponse handles Server-Sent Events (SSE) streaming responses
 // and accumulates complete events before forwarding them with appropriate event types
-func (g *GenaiService) processStreamingResponse(body io.ReadCloser, finalResponse *dto.ServiceChatResponse, onProgress func(dto.ProgressUpdate) error) error {
+func (g *GenaiService) processStreamingResponse(ctx context.Context, body io.ReadCloser, finalResponse *dto.ServiceChatResponse, onProgress func(dto.ProgressUpdate) error) error {
 	scanner := bufio.NewScanner(body)
 	var allContent, currentEvent strings.Builder
 	inEvent := false
@@ -156,14 +156,14 @@ func (g *GenaiService) processStreamingResponse(body io.ReadCloser, finalRespons
 				// Convert to JSON string
 				jsonPayload, err := json.Marshal(eventPayload)
 				if err != nil {
-					slog.Warn("Error creating JSON payload", "error", err.Error())
+					slog.WarnContext(ctx, "Error creating JSON payload", "error", err.Error())
 				} else {
 					progress := dto.ProgressUpdate{
 						Message: string(jsonPayload),
 					}
 
 					if err := onProgress(progress); err != nil {
-						slog.Warn("Error forwarding event", "type", eventType, "error", err.Error())
+						slog.WarnContext(ctx, "Error forwarding event", "type", eventType, "error", err.Error())
 					}
 				}
 
@@ -187,7 +187,7 @@ func (g *GenaiService) processStreamingResponse(body io.ReadCloser, finalRespons
 	finalResponse.Response = instructionNote + allContent.String()
 
 	if err := scanner.Err(); err != nil {
-		slog.Warn("Error in scanner", "error", err.Error())
+		slog.WarnContext(ctx, "Error in scanner", "error", err.Error())
 		return fmt.Errorf("error reading response stream: %w", err)
 	}
 

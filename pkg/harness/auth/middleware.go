@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -13,14 +14,14 @@ import (
 // AuthMiddleware creates an HTTP middleware that extracts bearer tokens from
 // Authorization headers and authenticates the session using the provided secret.
 // The authenticated session is added to the request context.
-func AuthMiddleware(config *config.Config, next http.Handler) http.Handler {
+func AuthMiddleware(ctx context.Context, config *config.Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Extract the Authorization header
 		authHeader := r.Header.Get("Authorization")
 		parts := strings.Split(authHeader, " ")
 
 		if len(parts) != 2 || parts[0] != "Bearer" {
-			slog.Error("invalid authorization header")
+			slog.ErrorContext(ctx, "invalid authorization header")
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
@@ -28,7 +29,7 @@ func AuthMiddleware(config *config.Config, next http.Handler) http.Handler {
 		token := parts[1]
 		session, err := AuthenticateSession(token, config.McpSvcSecret)
 		if err != nil {
-			slog.Error("failed to authenticate session", "error", err)
+			slog.ErrorContext(ctx, "failed to authenticate session", "error", err)
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
