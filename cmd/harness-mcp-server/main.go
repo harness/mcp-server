@@ -105,7 +105,7 @@ var (
 					Path: viper.GetString("http_path"),
 				},
 				Metrics: struct {
-					Port int `envconfig:"MCP_METRICS_PORT" default:"8181"`
+					Port int `envconfig:"MCP_METRICS_PORT" default:"8889"`
 				}{
 					Port: viper.GetInt("metrics_port"),
 				},

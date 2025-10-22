@@ -29,7 +29,7 @@ type Config struct {
 
 	// Metrics configuration
 	Metrics struct {
-		Port int `envconfig:"MCP_METRICS_PORT" default:"8181"`
+		Port int `envconfig:"MCP_METRICS_PORT" default:"8889"`
 	}
 
 	Internal bool
