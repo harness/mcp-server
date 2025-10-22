@@ -14,12 +14,14 @@ import (
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness"
 	"github.com/harness/harness-mcp/pkg/harness/auth"
+	"github.com/harness/harness-mcp/pkg/harness/middleware/metrics"
 	"github.com/harness/harness-mcp/pkg/harness/middleware/tool_filtering"
 	"github.com/harness/harness-mcp/pkg/harness/prompts"
 	"github.com/harness/harness-mcp/pkg/modules"
 	"github.com/harness/harness-mcp/pkg/types/enum"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -619,13 +621,16 @@ func runHTTPServer(ctx context.Context, config config.Config) error {
 	// Create HTTP server
 	httpServer := server.NewStreamableHTTPServer(harnessServer)
 
+	// Create middleware chain: Auth -> Metrics -> ToolFiltering -> MCP Server
 	toolFilter := tool_filtering.NewHTTPToolFilteringMiddleware(slog.Default(), &config).Wrap(httpServer)
-
-	authHandler := auth.AuthMiddleware(&config, toolFilter)
+	metricsMiddleware := metrics.NewHTTPMetricsMiddleware(slog.Default(), &config).Wrap(toolFilter)
+	authHandler := auth.AuthMiddleware(&config, metricsMiddleware)
 
 	mux := http.NewServeMux()
-	// authhandler -> toolFilter -> httpServer
+	// Middleware chain: authHandler -> metricsMiddleware -> toolFilter -> httpServer
 	mux.Handle(config.HTTP.Path, authHandler)
+	// Add Prometheus metrics endpoint
+	mux.Handle("/metrics", promhttp.Handler())
 
 	address := fmt.Sprintf(":%d", config.HTTP.Port)
 	slog.Info("Harness MCP Server running on HTTP",
