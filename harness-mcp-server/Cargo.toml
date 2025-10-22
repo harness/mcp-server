@@ -1,0 +1,71 @@
+[package]
+name = "harness-mcp-server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Harness MCP Server - Model Context Protocol server for Harness APIs"
+
+[[bin]]
+name = "harness-mcp-server"
+path = "src/main.rs"
+
+[dependencies]
+# Workspace crates
+harness-mcp-proto = { path = "../harness-mcp-proto" }
+harness-mcp-client = { path = "../harness-mcp-client" }
+
+# Async runtime
+tokio = { workspace = true }
+
+# HTTP framework
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+hyper = { workspace = true }
+http = { workspace = true }
+
+# CLI
+clap = { workspace = true }
+
+# Configuration
+figment = { workspace = true }
+dotenvy = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Logging and tracing
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tracing-error = { workspace = true }
+
+# Utilities
+uuid = { workspace = true }
+url = { workspace = true }
+base64 = { workspace = true }
+jsonwebtoken = { workspace = true }
+
+# Metrics
+prometheus = { workspace = true }
+
+# Time
+chrono = { workspace = true }
+
+# JSON Schema
+schemars = { workspace = true }
+
+[dev-dependencies]
+tokio-test = "0.4"
+proptest = { workspace = true }
+insta = { workspace = true }
+axum-test = "15.0"

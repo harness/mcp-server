@@ -1,0 +1,84 @@
+[workspace]
+members = [
+    "harness-mcp-server",
+    "harness-mcp-client", 
+    "harness-mcp-proto",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.79"
+authors = ["Harness Inc."]
+license = "Apache-2.0"
+repository = "https://github.com/harness/harness-mcp"
+homepage = "https://harness.io"
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1.0", features = ["full"] }
+
+# HTTP framework and client
+axum = { version = "0.7", features = ["macros", "tracing"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+hyper = { version = "1.0", features = ["full"] }
+tower = { version = "0.4", features = ["full"] }
+tower-http = { version = "0.5", features = ["full"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+
+# Configuration
+figment = { version = "0.10", features = ["yaml", "env"] }
+dotenvy = "0.15"
+
+# CLI
+clap = { version = "4.0", features = ["derive", "env"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Logging and tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-error = "0.2"
+
+# Utilities
+uuid = { version = "1.0", features = ["v4", "serde"] }
+jsonwebtoken = "9.0"
+backoff = "0.4"
+
+# Metrics
+prometheus = { version = "0.13", features = ["process"] }
+
+# Testing
+proptest = "1.0"
+insta = "1.0"
+
+# JSON Schema
+schemars = { version = "0.8", features = ["uuid1"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# URL handling
+url = { version = "2.0", features = ["serde"] }
+
+# Base64 encoding
+base64 = "0.22"
+
+# HTTP status codes
+http = "1.0"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.dev]
+debug = true
