@@ -154,6 +154,11 @@ podAnnotations: {}
 # For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
 podLabels: {}
 
+
+monitoring:
+  port: 8889
+  path: /metrics
+
 podSecurityContext: {}
   # fsGroup: 2000
 
@@ -324,4 +329,5 @@ config:
   HARNESS_NG_MANAGER_BASE_URL: "http://ng-manager:7090"
   HARNESS_TEMPLATE_SVC_BASE_URL: "http://template-service:15002"
   HARNESS_LOG_FORMAT: "json"
-  
+  HARNESS_METRICS_PORT: "8889"
+ 

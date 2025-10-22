@@ -14,6 +14,7 @@ import (
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness"
 	"github.com/harness/harness-mcp/pkg/harness/auth"
+	"github.com/harness/harness-mcp/pkg/harness/middleware/metrics"
 	"github.com/harness/harness-mcp/pkg/harness/middleware/tool_filtering"
 	"github.com/harness/harness-mcp/pkg/harness/prompts"
 	"github.com/harness/harness-mcp/pkg/modules"
@@ -26,6 +27,16 @@ import (
 
 var version = "0.1.0"
 var commit = "dev"
+
+// startMetricsServer starts a separate Prometheus metrics server
+func startMetricsServer(config *config.Config) (*metrics.MetricsServer, error) {
+	metricsServer := metrics.NewMetricsServer(config.Metrics.Port, slog.Default())
+	if err := metricsServer.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start metrics server: %w", err)
+	}
+	return metricsServer, nil
+}
+
 var date = "unknown"
 
 // extractAccountIDFromAPIKey extracts the account ID from a Harness API key
@@ -92,6 +103,11 @@ var (
 				}{
 					Port: viper.GetInt("http_port"),
 					Path: viper.GetString("http_path"),
+				},
+				Metrics: struct {
+					Port int `envconfig:"MCP_METRICS_PORT" default:"8889"`
+				}{
+					Port: viper.GetInt("metrics_port"),
 				},
 				Internal:                true,
 				Toolsets:                []string{"all"},
@@ -616,15 +632,26 @@ func runHTTPServer(ctx context.Context, config config.Config) error {
 	// Set the guidelines prompts
 	prompts.RegisterPrompts(harnessServer)
 
+	// Start metrics server
+	metricsServer, err := startMetricsServer(&config)
+	if err != nil {
+		return fmt.Errorf("failed to start metrics server: %w", err)
+	}
+	defer func() {
+		if err := metricsServer.Stop(ctx); err != nil {
+			slog.Error("error stopping metrics server", "error", err)
+		}
+	}()
+
 	// Create HTTP server
 	httpServer := server.NewStreamableHTTPServer(harnessServer)
 
+	// Create middleware chain: Auth -> Metrics -> ToolFiltering -> MCP Server
 	toolFilter := tool_filtering.NewHTTPToolFilteringMiddleware(slog.Default(), &config).Wrap(httpServer)
-
-	authHandler := auth.AuthMiddleware(&config, toolFilter)
+	metricsMiddleware := metrics.NewHTTPMetricsMiddleware(slog.Default(), &config).Wrap(toolFilter)
+	authHandler := auth.AuthMiddleware(&config, metricsMiddleware)
 
 	mux := http.NewServeMux()
-	// authhandler -> toolFilter -> httpServer
 	mux.Handle(config.HTTP.Path, authHandler)
 
 	address := fmt.Sprintf(":%d", config.HTTP.Port)
@@ -632,6 +659,7 @@ func runHTTPServer(ctx context.Context, config config.Config) error {
 		"version", version,
 		"address", address,
 		"path", config.HTTP.Path,
+		"metrics_port", config.Metrics.Port,
 	)
 
 	srv := &http.Server{
