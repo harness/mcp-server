@@ -654,6 +654,13 @@ func runHTTPServer(ctx context.Context, config config.Config) error {
 	mux := http.NewServeMux()
 	mux.Handle(config.HTTP.Path, authHandler)
 
+	// Add health endpoint for Kubernetes probes
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	})
+
 	address := fmt.Sprintf(":%d", config.HTTP.Port)
 	slog.Info("Harness MCP Server running on HTTP",
 		"version", version,

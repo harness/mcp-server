@@ -207,8 +207,10 @@ ingress:
         - path: '{{ .Values.global.ingress.pathPrefix }}/mcp-server(/|$)(.*)'
 
 livenessProbe:
-  tcpSocket:
+  httpGet:
+    path: /health
     port: mcp
+    scheme: HTTP
   initialDelaySeconds: 30
   periodSeconds: 10
   timeoutSeconds: 5
@@ -216,8 +218,10 @@ livenessProbe:
   successThreshold: 1
 
 readinessProbe:
-  tcpSocket:
+  httpGet:
+    path: /health
     port: mcp
+    scheme: HTTP
   initialDelaySeconds: 10
   periodSeconds: 10
   timeoutSeconds: 5
