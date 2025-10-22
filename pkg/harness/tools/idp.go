@@ -565,3 +565,40 @@ func ExecuteWorkflowTool(config *config.Config, client *client.IDPService) (tool
 			return mcp.NewToolResultText(string(r)), nil
 		}
 }
+
+func SearchTechDocsTool(config *config.Config, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("search_tech_docs",
+			mcp.WithDescription(`Searches documentation related to Harness entities in the internal developer portal — including services, APIs, workflows, user groups, and environments — to retrieve information that supports answering or reasoning about those entities. Common examples include debugging issues in a service, understanding an API's configuration, setting up a workflow, managing user groups, or installation steps for a specific environment.
+			Use this tool to answer all generic questions about Harness entities in the internal developer portal.
+			NOTE - The documentation searched is specifically related to Harness entities and their configurations within the IDP.
+			It returns a list of matching documents where each document contains the content and the corresponding entity id.`),
+			mcp.WithString("query",
+				mcp.Description("The query to search for in the documentation."),
+				mcp.Required(),
+			),
+			common.WithScope(config, false),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			query, err := RequiredParam[string](request, "query")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.SearchTechDocs(ctx, scope, query)
+			if err != nil {
+				return nil, fmt.Errorf("failed to search tech docs: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal tech docs search response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+
+}

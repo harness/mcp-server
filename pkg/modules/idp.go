@@ -106,6 +106,7 @@ func RegisterInternalDeveloperPortal(config *config.Config, tsg *toolsets.Toolse
 		toolsets.NewServerTool(tools.ListChecksTool(config, idpClient)),
 		toolsets.NewServerTool(tools.GetCheckStatsTool(config, idpClient)),
 		toolsets.NewServerTool(tools.ExecuteWorkflowTool(config, idpClient)),
+		toolsets.NewServerTool(tools.SearchTechDocsTool(config, idpClient)),
 	}
 
 	// Add GenerateWorflowTool only if genaiClient is available
@@ -113,7 +114,7 @@ func RegisterInternalDeveloperPortal(config *config.Config, tsg *toolsets.Toolse
 		idpTools = append(idpTools, toolsets.NewServerTool(tools.GenerateWorflowTool(config, genaiClient)))
 	}
 
-	idp := toolsets.NewToolset("idp", "Harness Internal Developer Portal catalog related tools for managing catalog Entities which represent the core components of your system").
+	idp := toolsets.NewToolset("idp", "Harness Internal Developer Portal catalog related tools for managing catalog Entities which represent the core components of your system. It also hosts the technical documentation for the entities which can be used to answer questions regarding the installation/setup/configuration/testing or any other information about the entities.").
 		AddReadTools(idpTools...)
 
 	// Add toolset to the group

@@ -22,6 +22,7 @@ const (
 	idpListChecksPath        = "/v1/checks"
 	idpGetCheckStatsPath     = "/v1/checks/%s/stats"
 	idpExecuteWorkflowPath   = "/v2/workflows/execute"
+	idpSearchTechDocsPath    = "/v1/tech-docs/semantic-search"
 
 	// Default values for requests
 	defaultKind                     = "component,api,resource"
@@ -331,6 +332,25 @@ func (i *IDPService) ExecuteWorkflow(ctx context.Context, scope dto.Scope, ident
 	err = i.Client.Post(ctx, path, params, body, headers, response)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to execute workflow", "error", err)
+		return nil, err
+	}
+
+	return response, nil
+}
+
+func (i *IDPService) SearchTechDocs(ctx context.Context, scope dto.Scope, query string) (*dto.SearchTechDocsResponse, error) {
+	path := idpSearchTechDocsPath
+
+	headers := make(map[string]string)
+	addHarnessAccountToHeaders(scope, headers)
+
+	body := new(dto.SearchTechDocsRequest)
+	body.Query = query
+
+	response := new(dto.SearchTechDocsResponse)
+	err := i.Client.Post(ctx, path, map[string]string{}, body, headers, response)
+	if err != nil {
+		slog.Error("Failed to search tech docs", "error", err)
 		return nil, err
 	}
 
