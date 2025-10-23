@@ -342,7 +342,7 @@ func (i *IDPService) SearchTechDocs(ctx context.Context, scope dto.Scope, query 
 	path := idpSearchTechDocsPath
 
 	headers := make(map[string]string)
-	addHarnessAccountToHeaders(scope, headers)
+	addHarnessAccountToHeaders(ctx, scope, headers)
 
 	body := new(dto.SearchTechDocsRequest)
 	body.Query = query
