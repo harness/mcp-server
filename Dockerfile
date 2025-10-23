@@ -1,7 +1,7 @@
 # ---------------------------------------------------------#
 #                   Build Harness image                    #
 # ---------------------------------------------------------#
-FROM harness0.harness.io/oci/docker_artifacts/--platform=$BUILDPLATFORM golang:1.24.3-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.24.3-alpine AS builder
 
 # Setup workig dir
 WORKDIR /app
@@ -24,7 +24,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     go build -o ./cmd/harness-mcp-server/harness-mcp-server ./cmd/harness-mcp-server
 
 ### Pull CA Certs
-FROM harness0.harness.io/oci/docker_artifacts/--platform=$BUILDPLATFORM alpine:latest AS cert-image
+FROM --platform=$BUILDPLATFORM alpine:latest AS cert-image
 
 RUN apk --update add ca-certificates
 
