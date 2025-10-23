@@ -91,7 +91,9 @@ func FindSimilarTemplates(config *config.Config, client *client.IntelligenceServ
 
 func AIDevOpsAgentTool(config *config.Config, client *client.IntelligenceService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("ask_ai_devops_agent",
-			mcp.WithDescription("The AI Devops Agent is an expert in planning and executing requests related to generation/updation of Harness entities like pipeline, stage, step, environment, connector, service, secret."),
+			mcp.WithDescription("The AI Devops Agent is an expert in planning and executing requests "+
+				"related to generation/updation of Harness entities like pipeline, step, environment, connector, service, secret."+
+				"stage generation is not supported, use pipeline actions instead"),
 			mcp.WithString("prompt",
 				mcp.Required(),
 				mcp.Description("The prompt to send to the AI DevOps agent"),
