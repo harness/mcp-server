@@ -28,8 +28,8 @@ Enable users to make informed decisions about their cloud costs by leveraging Ha
 
 Please strictly follow the steps below in sequential order. Your primary goal is to follow these steps precisely.
 
-Step 1: Fetch Available Cost Labels
-- Action: Call the `ccm_perspective_filter_values` tool.
+Step 1: Fetch Available Cost Labels and Cost Categories
+- Action: Call the `ccm_perspective_filter_values` and `list_ccm_cost_categories` tools.
 - Parameters: Use a `time_filter` with the default value of `LAST_30_DAYS`.
 
 Step 2: Analyze Labels and Plan Next Action
