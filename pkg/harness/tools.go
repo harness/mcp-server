@@ -55,8 +55,15 @@ func getEnabledModules(ctx context.Context, configEnabledModules []modules.Modul
 			continue
 		}
 
+		//  For CCM module, use CE as the module ID as name for CCM module license is issued as CE
+		var moduleID string
+		if module.ID() == "CCM" {
+			moduleID = "CE"
+		} else {
+			moduleID = module.ID()
+		}
+
 		// Check if module has a valid license
-		moduleID := module.ID()
 		if isLicensed, exists := licenseInfo.ModuleLicenses[moduleID]; exists && isLicensed {
 			licensedModules = append(licensedModules, module)
 			slog.InfoContext(ctx, "Module enabled by license", "moduleID", moduleID)
