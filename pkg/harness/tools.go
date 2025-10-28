@@ -56,13 +56,7 @@ func getEnabledModules(configEnabledModules []modules.Module, licenseInfo *Licen
 		}
 
 		// Check if module has a valid license
-		var moduleID string
-		if module.ID() == "CCM" {
-			moduleID = "CE"
-		} else {
-			moduleID = module.ID()
-		}
-
+		moduleID := module.ID()
 		if isLicensed, exists := licenseInfo.ModuleLicenses[moduleID]; exists && isLicensed {
 			licensedModules = append(licensedModules, module)
 			slog.Info("Module enabled by license", "moduleID", moduleID)
