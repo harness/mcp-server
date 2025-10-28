@@ -133,7 +133,6 @@ func initLicenseValidation(ctx context.Context, config *config.Config) (*License
 				}
 			}
 
-			slog.Info("Account license details", "accountLicense", accountLicense)
 			// Log summary
 			slog.Info("Account license details",
 				"accountId", accountLicense.Data.AccountId,
@@ -147,17 +146,14 @@ func initLicenseValidation(ctx context.Context, config *config.Config) (*License
 // InitToolsets initializes and returns the toolset groups
 func InitToolsets(ctx context.Context, config *config.Config) (*toolsets.ToolsetGroup, error) {
 	// Create a toolset tsg
-	slog.Info("InitToolsets  readonly", "readonly", config.ReadOnly)
 	tsg := toolsets.NewToolsetGroup(config.ReadOnly)
 
 	// Initialize license validation if enabled
 	if config.EnableLicense {
-		slog.Info("License validation enabled")
 		if err := initModuleBasedToolsets(ctx, config, tsg); err != nil {
 			return nil, err
 		}
 	} else {
-		slog.Info("License validation disabled")
 		// License validation is disabled, use legacy toolset registration
 		if err := initLegacyToolsets(config, tsg); err != nil {
 			return nil, err
@@ -200,7 +196,6 @@ func initModuleBasedToolsets(ctx context.Context, config *config.Config, tsg *to
 	enabledModules := getEnabledModules(configEnabledModules, licenseInfo)
 
 	// Register and enable toolsets for each module
-	slog.Info("initModuleBasedToolsets bhavesh", "enabled_modules", enabledModules)
 	for _, module := range enabledModules {
 		slog.Info("registering toolsets for", "modules", module.ID())
 		if err := module.RegisterToolsets(); err != nil {
@@ -218,7 +213,6 @@ func initModuleBasedToolsets(ctx context.Context, config *config.Config, tsg *to
 // initLegacyToolsets initializes toolsets using the legacy approach (without modules)
 func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Check if specific toolsets are enabled
-	slog.Info("initLegacyToolsets bhavesh", "toolsets", config.Toolsets)
 	if len(config.Toolsets) == 0 {
 		// Only register default toolset
 		if err := RegisterDefault(config, tsg); err != nil {
@@ -227,7 +221,6 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 	} else {
 		// Check if "all" is in the toolsets list
 		allToolsets := slices.Contains(config.Toolsets, "all")
-		slog.Info("allToolsets bhavesh", "all_toolsets", allToolsets)
 		if allToolsets {
 			// Register all available toolsets
 			if err := modules.RegisterPipelines(config, tsg); err != nil {
