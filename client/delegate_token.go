@@ -39,7 +39,7 @@ func setDefaultPaginationForDelegateToken(opts *dto.DelegateTokenOptions) {
 func (d *DelegateTokenClient) ListDelegateTokens(ctx context.Context, scope dto.Scope, opts *dto.DelegateTokenOptions) ([]dto.DelegateToken, error) {
 	path := delegateTokenPath
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	// Handle nil options by creating default options
 	if opts == nil {
@@ -88,7 +88,7 @@ func (d *DelegateTokenClient) GetDelegateToken(ctx context.Context, scope dto.Sc
 	params := make(map[string]string)
 	params["name"] = name
 
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	if status != "" {
 		params["status"] = status
@@ -118,7 +118,7 @@ func (d *DelegateTokenClient) GetDelegateToken(ctx context.Context, scope dto.Sc
 func (d *DelegateTokenClient) CreateDelegateToken(ctx context.Context, scope dto.Scope, tokenName string, revokeAfter *int64) (dto.DelegateToken, error) {
 	path := delegateTokenPath
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 	params["tokenName"] = tokenName
 
 	if revokeAfter != nil {
@@ -145,7 +145,7 @@ func (d *DelegateTokenClient) CreateDelegateToken(ctx context.Context, scope dto
 func (d *DelegateTokenClient) RevokeDelegateToken(ctx context.Context, scope dto.Scope, tokenName string) (dto.DelegateToken, error) {
 	path := delegateTokenPath
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 	params["tokenName"] = tokenName
 
 	var response dto.DelegateTokenResponse
@@ -167,7 +167,7 @@ func (d *DelegateTokenClient) RevokeDelegateToken(ctx context.Context, scope dto
 func (d *DelegateTokenClient) DeleteDelegateToken(ctx context.Context, scope dto.Scope, tokenName string) error {
 	path := delegateTokenPath
 	params := make(map[string]string)
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 	params["tokenName"] = tokenName
 
 	err := d.Client.Delete(ctx, path, params, nil, nil)

@@ -44,7 +44,7 @@ func (a *AuditService) ListUserAuditTrail(ctx context.Context, scope dto.Scope, 
 	params["pageIndex"] = fmt.Sprintf("%d", page)
 	params["pageSize"] = fmt.Sprintf("%d", size)
 
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	opts.FilterType = "Audit"
 	if strings.TrimSpace(userIDList) != "" {

@@ -55,6 +55,10 @@ func GetExperimentsTool(config *config.Config, client *client.ChaosService) (too
 	return mcp.NewTool("chaos_experiment_describe",
 			mcp.WithDescription("Retrieves information about chaos experiment, allowing users to get an overview and detailed insights for each experiment"),
 			common.WithScope(config, false),
+			mcp.WithString("experimentID",
+				mcp.Description("Unique Identifier for an experiment"),
+				mcp.Required(),
+			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -86,6 +90,14 @@ func GetExperimentRunsTool(config *config.Config, client *client.ChaosService) (
 	return mcp.NewTool("chaos_experiment_run_result",
 			mcp.WithDescription("Retrieves run result of chaos experiment runs, helping to describe and summarize the details of each experiment run"),
 			common.WithScope(config, false),
+			mcp.WithString("experimentID",
+				mcp.Description("Unique Identifier for an experiment"),
+				mcp.Required(),
+			),
+			mcp.WithString("experimentRunId",
+				mcp.Description("Unique Identifier for an experiment run"),
+				mcp.Required(),
+			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -122,6 +134,10 @@ func RunExperimentTool(config *config.Config, client *client.ChaosService) (tool
 	return mcp.NewTool("chaos_experiment_run",
 			mcp.WithDescription("Run the chaos experiment"),
 			common.WithScope(config, false),
+			mcp.WithString("experimentID",
+				mcp.Description("Unique Identifier for an experiment"),
+				mcp.Required(),
+			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)

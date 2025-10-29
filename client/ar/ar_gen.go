@@ -3348,7 +3348,7 @@ func (c *Client) GetAllRegistries(ctx context.Context, spaceRef SpaceRefPathPara
 	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
 		return nil, err
 	}
-	slog.Debug("Request URL", "url", req.URL.String())
+	slog.DebugContext(ctx, "Request URL", "url", req.URL.String())
 	return c.Client.Do(req)
 }
 

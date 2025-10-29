@@ -25,7 +25,7 @@ func (s *ServiceClient) Get(ctx context.Context, scope dto.Scope, serviceIdentif
 	if scope.AccountID == "" {
 		return nil, fmt.Errorf("accountIdentifier cannot be null")
 	}
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	var response dto.ServiceResponse
 	err := s.Client.Get(ctx, path, params, nil, &response)
@@ -61,7 +61,7 @@ func (s *ServiceClient) List(ctx context.Context, scope dto.Scope, opts *dto.Ser
 	if scope.AccountID == "" {
 		return nil, 0, fmt.Errorf("accountIdentifier cannot be null")
 	}
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	// Handle nil options by creating default options
 	if opts == nil {

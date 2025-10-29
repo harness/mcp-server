@@ -24,7 +24,7 @@ func (c *SettingsClient) List(ctx context.Context, scope dto.Scope, opts *dto.Se
 	if scope.AccountID == "" {
 		return nil, fmt.Errorf("accountIdentifier cannot be null")
 	}
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	if opts != nil {
 		if opts.Category != "" {

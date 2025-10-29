@@ -175,7 +175,7 @@ func FetchEC2AnalysisTool(config *config.Config, client *client.CloudCostManagem
 			}
 
 			if utilisationData != nil {
-				summary, err := computeCommitmentUtilisationSummary(utilisationData)
+				summary, err := computeCommitmentUtilisationSummary(ctx, utilisationData)
 				if err != nil {
 					return mcp.NewToolResultError(err.Error()), nil
 				}
@@ -270,13 +270,13 @@ func FetchEC2AnalysisTool(config *config.Config, client *client.CloudCostManagem
 // computeCommitmentUtilisationSummary converts the raw utilisation API response into a
 // CommitmentUtilisationSummary, computing running averages for percentage and trend
 // and building a per-key breakdown.
-func computeCommitmentUtilisationSummary(utilisationData *dto.CCMCommitmentBaseResponse) (*dto.CommitmentUtilisationSummary, error) {
+func computeCommitmentUtilisationSummary(ctx context.Context, utilisationData *dto.CCMCommitmentBaseResponse) (*dto.CommitmentUtilisationSummary, error) {
 	r, err := json.Marshal(utilisationData.Response)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal commitment utilisation: %s", err)
 	}
 
-	slog.Info("Utilization in ec2 commitment analysis", "utilisationData", string(r))
+	slog.InfoContext(ctx, "Utilization in ec2 commitment analysis", "utilisationData", string(r))
 
 	utilisationDetails := make(map[string]*dto.CommitmentUtlizationsDetail)
 

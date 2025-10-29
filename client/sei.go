@@ -38,10 +38,10 @@ func (s *SEIService) makePostRequest(ctx context.Context, path string, body inte
 
 	// Add authentication header if secret is provided
 	if s.Secret != "" {
-		slog.Info("SEI - Adding Authorization header with ApiKey")
+		slog.InfoContext(ctx, "SEI - Adding Authorization header with ApiKey")
 		headers["Authorization"] = "ApiKey " + s.Secret
 	} else {
-		slog.Info("SEI - No authentication header added")
+		slog.InfoContext(ctx, "SEI - No authentication header added")
 	}
 
 	// Add any additional headers
@@ -60,7 +60,7 @@ func (s *SEIService) makePostRequest(ctx context.Context, path string, body inte
 	// Use PostRaw to include custom headers
 	err = s.Client.PostRaw(ctx, path, queryParams, bytes.NewBuffer(bodyBytes), headers, &response)
 	if err != nil {
-		slog.Error("SEI - Post Request failed", "error", err)
+		slog.ErrorContext(ctx, "SEI - Post Request failed", "error", err)
 		return nil, fmt.Errorf("POST request failed: %w", err)
 	}
 
@@ -440,10 +440,10 @@ func (s *SEIService) makeGetRequest(ctx context.Context, path string, queryParam
 
 	// Add authentication header if secret is provided
 	if s.Secret != "" {
-		slog.Info("SEI - Adding Authorization header with ApiKey")
+		slog.InfoContext(ctx, "SEI - Adding Authorization header with ApiKey")
 		headers["Authorization"] = "ApiKey " + s.Secret
 	} else {
-		slog.Info("SEI - No authentication header added")
+		slog.InfoContext(ctx, "SEI - No authentication header added")
 	}
 
 	// Add any additional headers
@@ -453,12 +453,12 @@ func (s *SEIService) makeGetRequest(ctx context.Context, path string, queryParam
 		}
 	}
 
-	slog.Info("SEI - Get Request details", "path", path, "queryParams", queryParams, "headers", headers)
+	slog.InfoContext(ctx, "SEI - Get Request details", "path", path, "queryParams", queryParams, "headers", headers)
 
 	// Use Get method to make the request
 	err := s.Client.Get(ctx, path, queryParams, headers, &response)
 	if err != nil {
-		slog.Error("SEI - Get Request failed", "error", err)
+		slog.ErrorContext(ctx, "SEI - Get Request failed", "error", err)
 		return nil, fmt.Errorf("GET request failed: %w", err)
 	}
 

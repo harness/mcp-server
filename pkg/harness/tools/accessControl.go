@@ -316,27 +316,27 @@ func ListRoleAssignmentsTool(config *config.Config, roleAssignmentsClient *clien
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			slog.Info("resourceGroupNameList: {}", "resourceGroupNameList", resourceGroupNamesList)
+			slog.InfoContext(ctx, "resourceGroupNameList: {}", "resourceGroupNameList", resourceGroupNamesList)
 			resourceGroupNames := strings.Split(resourceGroupNamesList, ",")
 
 			roleNamesList, err := OptionalParam[string](request, "role_names")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			slog.Info("roleNamesList: {}", "roleNamesList", roleNamesList)
+			slog.InfoContext(ctx, "roleNamesList: {}", "roleNamesList", roleNamesList)
 			roleNames := strings.Split(roleNamesList, ",")
 
 			principalTypesList, err := OptionalParam[string](request, "principal_type")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			slog.Info("principalTypesList: {}", "principalTypesList", principalTypesList)
+			slog.InfoContext(ctx, "principalTypesList: {}", "principalTypesList", principalTypesList)
 
 			principalScopeLevelFilterList, err := OptionalParam[string](request, "principal_scope_level_filter")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			slog.Info("principalScopeLevelFilterList: {}", "principalScopeLevelFilterList", principalScopeLevelFilterList)
+			slog.InfoContext(ctx, "principalScopeLevelFilterList: {}", "principalScopeLevelFilterList", principalScopeLevelFilterList)
 
 			var principalFilter []dto.RoleAssignmentPrincipalFilter
 			if filterParam, exists := request.GetArguments()["principal_filter"]; exists {
@@ -485,9 +485,9 @@ func CreateRoleAssignmentTool(config *config.Config, roleAssignmentsClient *clie
 			// Print the request body as JSON for debugging
 			requestBodyJSON, err := json.MarshalIndent(requestBody, "", "  ")
 			if err != nil {
-				slog.Error("Failed to marshal request body for logging", "error", err)
+				slog.ErrorContext(ctx, "Failed to marshal request body for logging", "error", err)
 			} else {
-				slog.Error("CreateRoleAssignment request body", "requestBody", string(requestBodyJSON))
+				slog.ErrorContext(ctx, "CreateRoleAssignment request body", "requestBody", string(requestBodyJSON))
 			}
 
 			data, err := roleAssignmentsClient.CreateRoleAssignment(ctx, scope, requestBody)

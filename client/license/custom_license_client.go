@@ -129,9 +129,9 @@ func (c *CustomAPIClient) prepareRequest(
 }
 
 // callAPI do the request.
-func (c *CustomAPIClient) callAPI(request *http.Request) (*http.Response, error) {
+func (c *CustomAPIClient) callAPI(ctx context.Context, request *http.Request) (*http.Response, error) {
 	// Log request details
-	slog.Info("Request", "method", request.Method, "url", request.URL)
+	slog.InfoContext(ctx, "Request", "method", request.Method, "url", request.URL)
 
 	response, err := c.httpClient.Do(request)
 	if err != nil {
@@ -139,7 +139,7 @@ func (c *CustomAPIClient) callAPI(request *http.Request) (*http.Response, error)
 	}
 
 	// Log response details
-	slog.Info("Response", "status", response.Status)
+	slog.InfoContext(ctx, "Response", "status", response.Status)
 	return response, err
 }
 
@@ -248,7 +248,7 @@ func (a *CustomLicensesApiService) GetAccountLicenses(ctx context.Context, accou
 		return localVarReturnValue, nil, err
 	}
 
-	localVarHttpResponse, err := a.client.callAPI(r)
+	localVarHttpResponse, err := a.client.callAPI(ctx, r)
 	if err != nil || localVarHttpResponse == nil {
 		return localVarReturnValue, localVarHttpResponse, err
 	}
@@ -306,7 +306,7 @@ func CreateCustomLicenseClientWithContext(ctx context.Context, config *config.Co
 		jwtProvider := auth.NewJWTProvider(secret, serviceIdentity, &defaultJWTLifetime)
 		headerName, headerValue, err := jwtProvider.GetHeader(ctx)
 		if err != nil {
-			slog.Error("Failed to get JWT token", "error", err)
+			slog.ErrorContext(ctx, "Failed to get JWT token", "error", err)
 			return nil, fmt.Errorf("failed to get JWT token: %w", err)
 		}
 		cfg.DefaultHeader = map[string]string{headerName: headerValue}

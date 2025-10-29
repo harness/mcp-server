@@ -348,3 +348,16 @@ type ExecuteWorkflowRequest struct {
 type ExecuteWorkflowResponse struct {
 	ExecutionID string `json:"id"`
 }
+
+type SearchTechDocsRequest struct {
+	Query string `json:"query"`
+}
+type MatchingDoc struct {
+	Content  string `json:"content"`
+	EntityID string `json:"entity_id"`
+	Kind     string `json:"kind"`
+	Scope    string `json:"scope"`
+	DocPath  string `json:"doc_path"`
+}
+
+type SearchTechDocsResponse []MatchingDoc

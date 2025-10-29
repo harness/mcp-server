@@ -16,6 +16,7 @@ import (
 	"github.com/harness/harness-mcp/pkg/harness/auth"
 	"github.com/harness/harness-mcp/pkg/harness/logging"
 	"github.com/harness/harness-mcp/pkg/harness/middleware"
+	"github.com/harness/harness-mcp/pkg/harness/middleware/metrics"
 	"github.com/harness/harness-mcp/pkg/harness/middleware/tool_filtering"
 	"github.com/harness/harness-mcp/pkg/harness/prompts"
 	"github.com/harness/harness-mcp/pkg/modules"
@@ -35,6 +36,16 @@ import (
 
 var version = "0.1.0"
 var commit = "dev"
+
+// startMetricsServer starts a separate Prometheus metrics server
+func startMetricsServer(config *config.Config) (*metrics.MetricsServer, error) {
+	metricsServer := metrics.NewMetricsServer(config.Metrics.Port, slog.Default())
+	if err := metricsServer.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start metrics server: %w", err)
+	}
+	return metricsServer, nil
+}
+
 var date = "unknown"
 
 // extractAccountIDFromAPIKey extracts the account ID from a Harness API key
@@ -101,6 +112,11 @@ var (
 				}{
 					Port: viper.GetInt("http_port"),
 					Path: viper.GetString("http_path"),
+				},
+				Metrics: struct {
+					Port int `envconfig:"MCP_METRICS_PORT" default:"8889"`
+				}{
+					Port: viper.GetInt("metrics_port"),
 				},
 				Internal:                true,
 				Toolsets:                []string{"all"},
@@ -616,10 +632,9 @@ func initLogger(config config.Config) error {
 		handler = slog.NewTextHandler(writer, handlerOpts)
 	}
 
-	// Set the default logger
-	logger := slog.New(handler)
-	slog.SetDefault(logger)
-
+	// Always wrap with our conversation ID logger, regardless of transport mode
+	handler = logging.NewLoggingHandler(handler)
+	slog.SetDefault(slog.New(handler))
 	return nil
 }
 
@@ -668,6 +683,17 @@ func runHTTPServer(ctx context.Context, config config.Config) error {
 	// Set the guidelines prompts
 	prompts.RegisterPrompts(harnessServer)
 
+	// Start metrics server
+	metricsServer, err := startMetricsServer(&config)
+	if err != nil {
+		return fmt.Errorf("failed to start metrics server: %w", err)
+	}
+	defer func() {
+		if err := metricsServer.Stop(ctx); err != nil {
+			slog.Error("error stopping metrics server", "error", err)
+		}
+	}()
+
 	// Create HTTP server
 	httpServer := server.NewStreamableHTTPServer(harnessServer)
 
@@ -682,11 +708,19 @@ func runHTTPServer(ctx context.Context, config config.Config) error {
 	// tracingHandler -> loggingHandler -> authHandler -> metrics -> toolFilter -> httpServer
 	mux.Handle(config.HTTP.Path, tracingHandler)
 
+	// Add health endpoint for Kubernetes probes
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	})
+
 	address := fmt.Sprintf(":%d", config.HTTP.Port)
 	slog.Info("Harness MCP Server running on HTTP",
 		"version", version,
 		"address", address,
 		"path", config.HTTP.Path,
+		"metrics_port", config.Metrics.Port,
 	)
 
 	srv := &http.Server{

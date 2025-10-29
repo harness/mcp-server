@@ -167,21 +167,21 @@ func GetPromptTool(config *config.Config) (tool mcp.Tool, handler server.ToolHan
 
 			// Check for error
 			if errResp, isErr := getResponse.(mcp.JSONRPCError); isErr {
-				slog.Error("error getting prompt", "error", errResp.Error.Message)
+				slog.ErrorContext(ctx, "error getting prompt", "error", errResp.Error.Message)
 				return mcp.NewToolResultText(string("")), nil
 			}
 
 			// Parse response
 			jsonResp, ok := getResponse.(mcp.JSONRPCResponse)
 			if !ok {
-				slog.Error("unexpected response type from get prompt")
+				slog.ErrorContext(ctx, "unexpected response type from get prompt")
 				return mcp.NewToolResultText(string("")), nil
 			}
 
 			// Return the result as JSON string
 			r, err := json.Marshal(jsonResp.Result)
 			if err != nil {
-				slog.Error("failed to marshal result", "error", err.Error())
+				slog.ErrorContext(ctx, "failed to marshal result", "error", err.Error())
 				return mcp.NewToolResultText(string("")), nil
 			}
 

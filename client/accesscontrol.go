@@ -52,7 +52,7 @@ func (u *PrincipalService) GetAllUsers(ctx context.Context, scope dto.Scope, sea
 	params["pageSize"] = fmt.Sprintf("%d", size)
 	params["searchTerm"] = searchTerm
 
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	resp := &dto.AccessControlOutput[dto.UsersOutput]{}
 	err := u.Client.Post(ctx, getUsersPath, params, opts, map[string]string{}, resp)
@@ -68,7 +68,7 @@ func (u *ACLService) GetRoleInfo(ctx context.Context, scope dto.Scope, roleID st
 
 	path := fmt.Sprintf(getRolePath+"/%s", roleID)
 
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 	resp := &dto.AccessControlOutput[dto.RoleInfoOutputData]{}
 	err := u.Client.Get(ctx, path, params, map[string]string{}, resp)
 	if err != nil {
@@ -89,7 +89,7 @@ func (r *ACLService) ListAvailableRoles(ctx context.Context, scope dto.Scope, pa
 	params["pageIndex"] = fmt.Sprintf("%d", page)
 	params["pageSize"] = fmt.Sprintf("%d", size)
 
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	resp := &dto.AccessControlOutput[dto.RolesOutputData]{}
 	err := r.Client.Get(ctx, getRolePath, params, map[string]string{}, resp)
@@ -116,7 +116,7 @@ func (p *ACLService) ListAvailablePermissions(ctx context.Context, scope dto.Sco
 	params["pageIndex"] = fmt.Sprintf("%d", page)
 	params["pageSize"] = fmt.Sprintf("%d", size)
 
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	resp := &dto.AccessControlOutput[[]dto.PermissionsOutputData]{}
 	err := p.Client.Get(ctx, listPermissionsPath, params, map[string]string{}, resp)
@@ -134,7 +134,7 @@ func (ra *ACLService) ListRoleAssignmentsTool(ctx context.Context, scope dto.Sco
 
 	params := make(map[string]string)
 
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	if resourceGroupNames != nil && len(resourceGroupNames) > 0 {
 		opts.ResourceGroupFilter = resourceGroupNames
@@ -200,7 +200,7 @@ func (uInfo *PrincipalService) GetUserInfo(ctx context.Context, scope dto.Scope,
 	params := make(map[string]string)
 	path := fmt.Sprintf(getUsersPath+"/%s", userID)
 
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	resp := &dto.AccessControlOutput[dto.UserInfoData]{}
 	err := uInfo.Client.Get(ctx, path, params, map[string]string{}, resp)
@@ -216,7 +216,7 @@ func (uGroupInfo *PrincipalService) GetUserGroupInfo(ctx context.Context, scope 
 	params := make(map[string]string)
 	path := fmt.Sprintf(getUserGroupPath+"/%s", userGroupID)
 
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	resp := &dto.AccessControlOutput[dto.UserGroupInfoData]{}
 	err := uGroupInfo.Client.Get(ctx, path, params, map[string]string{}, resp)
@@ -232,7 +232,7 @@ func (sAccount *PrincipalService) GetServiceAccount(ctx context.Context, scope d
 	params := make(map[string]string)
 	path := fmt.Sprintf(getServiceAccountPath+"/%s", serviceAccountID)
 
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	resp := &dto.AccessControlOutput[dto.ServiceAccountData]{}
 
@@ -253,7 +253,7 @@ func (currentUserInfo *PrincipalService) GetCurrentUser(ctx context.Context, sco
 	params := make(map[string]string)
 	path := fmt.Sprintf(getCurrentUserPath)
 
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	resp := &dto.AccessControlOutput[dto.CurrentUserData]{}
 	err := currentUserInfo.Client.Get(ctx, path, params, map[string]string{}, resp)
@@ -276,7 +276,7 @@ func (rAssignment *ACLService) CreateRoleAssignment(ctx context.Context, scope d
 
 	params := make(map[string]string)
 
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	resp := &dto.AccessControlOutput[dto.CreateRoleAssignmentOutputData]{}
 	err := rAssignment.Client.Post(ctx, createRoleAssignmentPath, params, opts, map[string]string{}, resp)
@@ -298,7 +298,7 @@ func (cResourceGroup *ResourceGroupService) CreateResourceGroup(ctx context.Cont
 
 	params := make(map[string]string)
 
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	opts.ResourceGroup = resourceGroup
 
@@ -323,7 +323,7 @@ func (cRole *ACLService) CreateRole(ctx context.Context, scope dto.Scope, opts *
 
 	params := make(map[string]string)
 
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	resp := &dto.AccessControlOutput[dto.CreateRoleOutputData]{}
 	err := cRole.Client.Post(ctx, createRolePath, params, opts, map[string]string{}, resp)
@@ -341,7 +341,7 @@ func (cUserGroup *PrincipalService) CreateUserGroup(ctx context.Context, scope d
 
 	params := make(map[string]string)
 
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	resp := &dto.AccessControlOutput[dto.CreateUserGroupOutputData]{}
 	err := cUserGroup.Client.Post(ctx, createUserGroupPath, params, opts, map[string]string{}, resp)
@@ -359,7 +359,7 @@ func (cServiceAccount *PrincipalService) CreateServiceAccount(ctx context.Contex
 
 	params := make(map[string]string)
 
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	resp := &dto.AccessControlOutput[dto.ServiceAccountInfo]{}
 	err := cServiceAccount.Client.Post(ctx, createServiceAccountPath, params, opts, map[string]string{}, resp)
@@ -377,7 +377,7 @@ func (iUser *PrincipalService) InviteUsers(ctx context.Context, scope dto.Scope,
 
 	params := make(map[string]string)
 
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	opts.Emails = emails
 	opts.UserGroups = userGroups
@@ -397,7 +397,7 @@ func (dUserGroup *PrincipalService) DeleteUserGroup(ctx context.Context, scope d
 
 	params := make(map[string]string)
 
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	path := fmt.Sprintf(deleteUserGroupPath+"/%s", userGroupIdentifier)
 
@@ -414,7 +414,7 @@ func (dServiceAccount *PrincipalService) DeleteServiceAccount(ctx context.Contex
 
 	params := make(map[string]string)
 
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	path := fmt.Sprintf(deleteServiceAccountPath+"/%s", serviceAccountIdentifier)
 
@@ -431,7 +431,7 @@ func (dRole *ACLService) DeleteRole(ctx context.Context, scope dto.Scope, roleId
 
 	params := make(map[string]string)
 
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	path := fmt.Sprintf(deleteRolePath+"/%s", roleIdentifier)
 
@@ -448,7 +448,7 @@ func (dResourceGroup *ResourceGroupService) DeleteResourceGroup(ctx context.Cont
 
 	params := make(map[string]string)
 
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	path := fmt.Sprintf(deleteResourceGroupPath+"/%s", resourceGroupIdentifier)
 
@@ -465,7 +465,7 @@ func (dRoleAssignment *ACLService) DeleteRoleAssignment(ctx context.Context, sco
 
 	params := make(map[string]string)
 
-	addScope(scope, params)
+	addScope(ctx, scope, params)
 
 	path := fmt.Sprintf(deleteRoleAssignmentPath+"/%s", roleAssignmentIdentifier)
 
