@@ -14,6 +14,7 @@ import (
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness"
 	"github.com/harness/harness-mcp/pkg/harness/auth"
+	"github.com/harness/harness-mcp/pkg/harness/logging"
 	"github.com/harness/harness-mcp/pkg/harness/middleware"
 	"github.com/harness/harness-mcp/pkg/harness/middleware/tool_filtering"
 	"github.com/harness/harness-mcp/pkg/harness/prompts"
@@ -626,7 +627,7 @@ func initLogger(config config.Config) error {
 func runHTTPServer(ctx context.Context, config config.Config) error {
 	// Initialize tracing
 	tp := initTracing()
-	defer tp.Shutdown(context.Background())
+	defer tp.Shutdown(ctx)
 	err := initLogger(config)
 	if err != nil {
 		return fmt.Errorf("failed to initialize logger: %w", err)
@@ -670,14 +671,15 @@ func runHTTPServer(ctx context.Context, config config.Config) error {
 	// Create HTTP server
 	httpServer := server.NewStreamableHTTPServer(harnessServer)
 
-	toolFilter := tool_filtering.NewHTTPToolFilteringMiddleware(slog.Default(), &config).Wrap(httpServer)
-
-	authHandler := auth.AuthMiddleware(&config, toolFilter)
-
-	tracingHandler := middleware.TracingMiddleware(&config, authHandler)
+	// Create middleware chain: Auth -> Metrics -> ToolFiltering -> MCP Server
+	toolFilter := tool_filtering.NewHTTPToolFilteringMiddleware(ctx, slog.Default(), &config).Wrap(httpServer)
+	metricsMiddleware := metrics.NewHTTPMetricsMiddleware(slog.Default(), &config).Wrap(toolFilter)
+	authHandler := auth.AuthMiddleware(ctx, &config, metricsMiddleware)
+	loggingHandler := middleware.MetadataMiddleware(authHandler)
+	tracingHandler := middleware.TracingMiddleware(&config, loggingHandler)
 
 	mux := http.NewServeMux()
-	// authhandler -> toolFilter -> httpServer
+	// tracingHandler -> loggingHandler -> authHandler -> metrics -> toolFilter -> httpServer
 	mux.Handle(config.HTTP.Path, tracingHandler)
 
 	address := fmt.Sprintf(":%d", config.HTTP.Port)

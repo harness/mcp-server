@@ -16,7 +16,6 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/codes"
 )
 
 // FindSimilarTemplates creates a tool that allows finding similar templates based on provided description.
@@ -94,7 +93,9 @@ func FindSimilarTemplates(config *config.Config, client *client.IntelligenceServ
 
 func AIDevOpsAgentTool(config *config.Config, client *client.IntelligenceService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("ask_ai_devops_agent",
-			mcp.WithDescription("The AI Devops Agent is an expert in planning and executing requests related to generation/updation of Harness entities like pipeline, stage, step, environment, connector, service, secret."),
+			mcp.WithDescription("The AI Devops Agent is an expert in planning and executing requests "+
+				"related to generation/updation of Harness entities like pipeline, step, environment, connector, service, secret."+
+				"stage generation is not supported, use pipeline actions instead"),
 			mcp.WithString("prompt",
 				mcp.Required(),
 				mcp.Description("The prompt to send to the AI DevOps agent"),
@@ -158,15 +159,11 @@ func AIDevOpsAgentTool(config *config.Config, client *client.IntelligenceService
 			// Get required parameters
 			prompt, err := RequiredParam[string](request, "prompt")
 			if err != nil {
-				span.RecordError(err)
-				span.SetStatus(codes.Error, err.Error())
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			action, err := RequiredParam[string](request, "action")
 			if err != nil {
-				span.RecordError(err)
-				span.SetStatus(codes.Error, err.Error())
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
@@ -180,44 +177,32 @@ func AIDevOpsAgentTool(config *config.Config, client *client.IntelligenceService
 
 			conversationID, err := OptionalParam[string](request, "conversation_id")
 			if err != nil {
-				span.RecordError(err)
-				span.SetStatus(codes.Error, err.Error())
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			interactionID, err := OptionalParam[string](request, "interaction_id")
 			if err != nil {
-				span.RecordError(err)
-				span.SetStatus(codes.Error, err.Error())
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			contextRaw, err := OptionalParam[[]any](request, "context")
 			if err != nil {
-				span.RecordError(err)
-				span.SetStatus(codes.Error, err.Error())
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			conversationRaw, err := OptionalParam[[]any](request, "conversation_raw")
 			if err != nil {
-				span.RecordError(err)
-				span.SetStatus(codes.Error, err.Error())
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			harnessContextRaw, err := OptionalParam[map[string]interface{}](request, "harness_context")
 			if err != nil {
-				span.RecordError(err)
-				span.SetStatus(codes.Error, err.Error())
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			// Try to fetch scope parameters (account_id, org_id, project_id) if provided
 			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
-				span.RecordError(err)
-				span.SetStatus(codes.Error, err.Error())
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
@@ -293,7 +278,7 @@ func AIDevOpsAgentTool(config *config.Config, client *client.IntelligenceService
 			mcpServer := server.ServerFromContext(ctx)
 			shouldStream = shouldStream && mcpServer != nil
 
-			slog.Info("Streaming request", "shouldStream", shouldStream)
+			slog.InfoContext(ctx, "Streaming request", "shouldStream", shouldStream)
 
 			if shouldStream {
 				// Create a child span for streaming
@@ -326,34 +311,20 @@ func AIDevOpsAgentTool(config *config.Config, client *client.IntelligenceService
 				// Call the AI DevOps service with streaming
 				response, err := client.SendAIDevOpsChat(ctx, scope, aiRequest, onProgress)
 				if err != nil {
-					streamSpan.RecordError(err)
-					streamSpan.SetStatus(codes.Error, err.Error())
-					span.RecordError(err)
-					span.SetStatus(codes.Error, err.Error())
 					return nil, fmt.Errorf("failed to send streaming request to AI DevOps service: %w", err)
 				}
 
 				if response == nil {
 					err := fmt.Errorf("got nil response from AI DevOps service")
-					streamSpan.RecordError(err)
-					streamSpan.SetStatus(codes.Error, err.Error())
-					span.RecordError(err)
-					span.SetStatus(codes.Error, err.Error())
 					return nil, err
 				}
 
 				if response.Error != "" {
-					streamSpan.SetStatus(codes.Error, response.Error)
-					span.SetStatus(codes.Error, response.Error)
 					return mcp.NewToolResultError(response.Error), nil
 				}
 
 				rawResponse, err := json.Marshal(response)
 				if err != nil {
-					streamSpan.RecordError(err)
-					streamSpan.SetStatus(codes.Error, err.Error())
-					span.RecordError(err)
-					span.SetStatus(codes.Error, err.Error())
 					return nil, fmt.Errorf("failed to marshal response: %w", err)
 				}
 
@@ -367,35 +338,21 @@ func AIDevOpsAgentTool(config *config.Config, client *client.IntelligenceService
 			// Call the AI DevOps service without streaming
 			response, err := client.SendAIDevOpsChat(ctx, scope, aiRequest, nil)
 			if err != nil {
-				nonStreamSpan.RecordError(err)
-				nonStreamSpan.SetStatus(codes.Error, err.Error())
-				span.RecordError(err)
-				span.SetStatus(codes.Error, err.Error())
 				return nil, fmt.Errorf("failed to send request to AI DevOps service: %w", err)
 			}
 
 			if response == nil {
 				err := fmt.Errorf("got nil response from AI DevOps service")
-				nonStreamSpan.RecordError(err)
-				nonStreamSpan.SetStatus(codes.Error, err.Error())
-				span.RecordError(err)
-				span.SetStatus(codes.Error, err.Error())
 				return nil, err
 			}
 
 			if response.Error != "" {
-				nonStreamSpan.SetStatus(codes.Error, response.Error)
-				span.SetStatus(codes.Error, response.Error)
 				return mcp.NewToolResultError(response.Error), nil
 			}
-			slog.Info("Non-streaming request completed", "response", response)
+			slog.InfoContext(ctx, "Non-streaming request completed", "response", response)
 
 			rawResponse, err := json.Marshal(response)
 			if err != nil {
-				nonStreamSpan.RecordError(err)
-				nonStreamSpan.SetStatus(codes.Error, err.Error())
-				span.RecordError(err)
-				span.SetStatus(codes.Error, err.Error())
 				return nil, fmt.Errorf("failed to marshal response: %w", err)
 			}
 

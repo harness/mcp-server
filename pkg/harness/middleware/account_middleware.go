@@ -7,12 +7,16 @@ import (
 	
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness/common"
+	"github.com/harness/harness-mcp/pkg/harness/logging"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 )
+
+// ConversationIDHeader is the header name for the conversation ID
+const ConversationIDHeader = "X-Conversation-Id"
 
 // WithHarnessScope creates a middleware that extracts the scope from the request
 // and adds it to the context for all tool handlers
@@ -34,6 +38,24 @@ func WithHarnessScope(config *config.Config) server.ToolHandlerMiddleware {
 			return next(ctx, request)
 		}
 	}
+}
+
+// MetadataMiddleware extracts the conversation ID from the request header
+// and adds it to the request context for logging
+func MetadataMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Extract conversation ID from header
+		conversationID := r.Header.Get(ConversationIDHeader)
+		// If conversation ID exists, add it to context
+		if conversationID != "" {
+			// Add to request context
+			ctx := logging.AppendCtx(r.Context(), conversationID)
+			// Update request with new context
+			r = r.WithContext(ctx)
+		}
+		// Pass the request to the next handler
+		next.ServeHTTP(w, r)
+	})
 }
 
 func TracingMiddleware(config *config.Config, next http.Handler) http.Handler {
