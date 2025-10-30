@@ -86,6 +86,8 @@ func RegisterChaos(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 			toolsets.NewServerTool(tools.GetExperimentsTool(config, chaosClient)),
 			toolsets.NewServerTool(tools.GetExperimentRunsTool(config, chaosClient)),
 			toolsets.NewServerTool(tools.RunExperimentTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.ListProbesTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.GetProbeTool(config, chaosClient)),
 		)
 
 	// Add toolset to the group

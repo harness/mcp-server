@@ -9,10 +9,12 @@ import (
 
 const (
 	// Base API paths
-	chaosListExperimentsPath  = "rest/v2/experiment"
-	chaosGetExperimentPath    = "rest/v2/experiments/%s"
-	chaosGetExperimentRunPath = "rest/v2/experiments/%s/run"
-	chaosExperimentRunPath    = "rest/v2/experiments/%s/run"
+	chaosListExperimentsPath          = "rest/v2/experiment"
+	chaosGetExperimentPath            = "rest/v2/experiments/%s"
+	chaosGetExperimentRunPipelinePath = "rest/v2/chaos-pipeline/%s"
+	chaosExperimentRunPath            = "rest/v2/experiments/%s/run"
+	chaosListProbesPath               = "rest/v2/probes"
+	chaosGetProbePath                 = "rest/v2/probes/%s"
 )
 
 type ChaosService struct {
@@ -61,9 +63,9 @@ func (c *ChaosService) GetExperiment(ctx context.Context, scope dto.Scope, exper
 	return getExperiment, nil
 }
 
-func (c *ChaosService) GetExperimentRun(ctx context.Context, scope dto.Scope, experimentID, experimentRunID string) (*dto.ChaosExperimentRun, error) {
+func (c *ChaosService) GetExperimentRun(ctx context.Context, scope dto.Scope, experimentID, experimentRunID string) (*dto.ChaosExecutionResponse, error) {
 	var (
-		path   = fmt.Sprintf(chaosGetExperimentRunPath, experimentID)
+		path   = fmt.Sprintf(chaosGetExperimentRunPipelinePath, experimentID)
 		params = make(map[string]string)
 	)
 
@@ -71,7 +73,7 @@ func (c *ChaosService) GetExperimentRun(ctx context.Context, scope dto.Scope, ex
 	// Add scope parameters
 	params = addIdentifierParams(params, scope)
 
-	getExperimentRun := new(dto.ChaosExperimentRun)
+	getExperimentRun := new(dto.ChaosExecutionResponse)
 	err := c.Client.Get(ctx, path, params, nil, getExperimentRun)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get experiment run: %w", err)
@@ -97,6 +99,48 @@ func (c *ChaosService) RunExperiment(ctx context.Context, scope dto.Scope, exper
 	}
 
 	return experimentRun, nil
+}
+
+func (c *ChaosService) ListProbes(ctx context.Context, scope dto.Scope, pagination *dto.PaginationOptions) (*dto.ListProbeResponse, error) {
+	var (
+		path   = chaosListProbesPath
+		params = make(map[string]string)
+	)
+
+	// Set default pagination
+	setDefaultPagination(pagination)
+
+	// Add pagination parameters
+	params["page"] = fmt.Sprintf("%d", pagination.Page)
+	params["limit"] = fmt.Sprintf("%d", pagination.Size)
+	// Add scope parameters
+	params = addIdentifierParams(params, scope)
+
+	listExperiments := new(dto.ListProbeResponse)
+	err := c.Client.Get(ctx, path, params, nil, listExperiments)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list probes: %w", err)
+	}
+
+	return listExperiments, nil
+}
+
+func (c *ChaosService) GetProbe(ctx context.Context, scope dto.Scope, probeID string) (*dto.GetProbeResponse, error) {
+	var (
+		path   = fmt.Sprintf(chaosGetProbePath, probeID)
+		params = make(map[string]string)
+	)
+
+	// Add scope parameters
+	params = addIdentifierParams(params, scope)
+
+	getProbe := new(dto.GetProbeResponse)
+	err := c.Client.Get(ctx, path, params, nil, getProbe)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get probe: %w", err)
+	}
+
+	return getProbe, nil
 }
 
 func addIdentifierParams(params map[string]string, scope dto.Scope) map[string]string {
