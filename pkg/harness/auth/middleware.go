@@ -16,10 +16,9 @@ import (
 // The authenticated session is added to the request context.
 func AuthMiddleware(ctx context.Context, config *config.Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		if config.SkipAuthForLocal {
-			account_id := r.Header.Get("harness-account")
-			if account_id == "" {
+			accountID := r.Header.Get("harness-account")
+			if accountID == "" {
 				slog.ErrorContext(ctx, "account id not provided")
 				w.WriteHeader(http.StatusUnauthorized)
 				return
@@ -33,7 +32,7 @@ func AuthMiddleware(ctx context.Context, config *config.Config, next http.Handle
 					Email:       "local-dev@harness.io",
 					Type:        "USER",
 					DisplayName: "Local Dev User",
-					AccountID:   account_id,
+					AccountID:   accountID,
 				},
 			}
 
@@ -42,7 +41,7 @@ func AuthMiddleware(ctx context.Context, config *config.Config, next http.Handle
 
 			// Also add scope to context
 			newCtx = common.WithScopeContext(newCtx, dto.Scope{
-				AccountID: account_id,
+				AccountID: accountID,
 			})
 
 			// Update request with new context
