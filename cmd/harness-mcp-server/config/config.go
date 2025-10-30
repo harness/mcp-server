@@ -32,7 +32,7 @@ type Config struct {
 		Port int `envconfig:"MCP_METRICS_PORT" default:"8889"`
 	}
 
-	Internal bool
+	Internal         bool
 	SkipAuthForLocal bool
 
 	// Only used for external mode
