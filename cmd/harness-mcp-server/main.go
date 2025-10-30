@@ -155,6 +155,7 @@ var (
 				ACLSvcBaseURL:           viper.GetString("acl_svc_base_url"),
 				ACLSvcSecret:            viper.GetString("acl_svc_secret"),
 				OutputDir:               viper.GetString("output_dir"),
+				SkipAuthForLocal:        viper.GetBool("skip_auth_for_local"),
 			}
 
 			return runHTTPServer(ctx, cfg)
@@ -390,6 +391,7 @@ func init() {
 	httpServerCmd.Flags().String("dbops-svc-secret", "", "Secret for dbops service")
 	httpServerCmd.Flags().String("acl-svc-base-url", "", "Base URL for ACL service")
 	httpServerCmd.Flags().String("acl-svc-secret", "", "Secret for ACL service")
+	httpServerCmd.Flags().Bool("skip-auth-for-local", false, "Skip authentication for local development")
 
 	// Add stdio-specific flags
 	stdioCmd.Flags().String("base-url", "https://app.harness.io", "Base URL for Harness")
@@ -496,6 +498,7 @@ func init() {
 	_ = viper.BindPFlag("dbops_svc_secret", httpServerCmd.Flags().Lookup("dbops-svc-secret"))
 	_ = viper.BindPFlag("acl_svc_base_url", httpServerCmd.Flags().Lookup("acl-svc-base-url"))
 	_ = viper.BindPFlag("acl_svc_secret", httpServerCmd.Flags().Lookup("acl-svc-secret"))
+	_ = viper.BindPFlag("skip_auth_for_local", httpServerCmd.Flags().Lookup("skip-auth-for-local"))
 
 	// Bind stdio-specific flags to viper
 	_ = viper.BindPFlag("base_url", stdioCmd.Flags().Lookup("base-url"))

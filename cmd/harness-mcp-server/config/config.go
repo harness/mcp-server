@@ -33,6 +33,7 @@ type Config struct {
 	}
 
 	Internal bool
+	SkipAuthForLocal bool
 
 	// Only used for external mode
 	BaseURL          string
