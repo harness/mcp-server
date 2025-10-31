@@ -25,6 +25,12 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
 var version = "0.1.0"
@@ -155,6 +161,7 @@ var (
 				ACLSvcBaseURL:           viper.GetString("acl_svc_base_url"),
 				ACLSvcSecret:            viper.GetString("acl_svc_secret"),
 				OutputDir:               viper.GetString("output_dir"),
+				SkipAuthForLocal:        viper.GetBool("skip_auth_for_local"),
 			}
 
 			return runHTTPServer(ctx, cfg)
@@ -390,6 +397,7 @@ func init() {
 	httpServerCmd.Flags().String("dbops-svc-secret", "", "Secret for dbops service")
 	httpServerCmd.Flags().String("acl-svc-base-url", "", "Base URL for ACL service")
 	httpServerCmd.Flags().String("acl-svc-secret", "", "Secret for ACL service")
+	httpServerCmd.Flags().Bool("skip-auth-for-local", false, "Skip authentication for local development")
 
 	// Add stdio-specific flags
 	stdioCmd.Flags().String("base-url", "https://app.harness.io", "Base URL for Harness")
@@ -496,6 +504,7 @@ func init() {
 	_ = viper.BindPFlag("dbops_svc_secret", httpServerCmd.Flags().Lookup("dbops-svc-secret"))
 	_ = viper.BindPFlag("acl_svc_base_url", httpServerCmd.Flags().Lookup("acl-svc-base-url"))
 	_ = viper.BindPFlag("acl_svc_secret", httpServerCmd.Flags().Lookup("acl-svc-secret"))
+	_ = viper.BindPFlag("skip_auth_for_local", httpServerCmd.Flags().Lookup("skip-auth-for-local"))
 
 	// Bind stdio-specific flags to viper
 	_ = viper.BindPFlag("base_url", stdioCmd.Flags().Lookup("base-url"))
@@ -559,6 +568,46 @@ func initConfig() {
 	viper.AutomaticEnv()
 }
 
+func initTracing() *sdktrace.TracerProvider {
+	ctx := context.Background()
+
+	// Get the headers from environment variable
+	headersEnv := os.Getenv("OTEL_EXPORTER_OTLP_HEADERS")
+	headers := make(map[string]string)
+
+	// Only extract Authorization if the header exists and has the correct format
+	if strings.HasPrefix(headersEnv, "Authorization=") {
+		authValue := headersEnv[len("Authorization="):]
+		headers["Authorization"] = authValue
+	}
+
+	exporter, err := otlptracehttp.New(ctx,
+		otlptracehttp.WithEndpoint(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")),
+		otlptracehttp.WithHeaders(headers),
+	)
+	if err != nil {
+		slog.Error("Failed to create trace exporter", "error", err)
+	}
+
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(exporter),
+		sdktrace.WithResource(resource.NewWithAttributes(
+			"",
+			attribute.String("service.name", "mcp-server"),
+		)),
+	)
+
+	otel.SetTracerProvider(tp)
+
+	// Explicitly set the text map propagator to use W3C Trace Context
+	// This is critical for proper trace context propagation between services
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+
+	slog.Info("OpenTelemetry tracing initialized with W3C Trace Context propagator")
+
+	return tp
+}
+
 func initLogger(config config.Config) error {
 	debug := config.Debug
 	logFormat := config.LogFormat
@@ -593,6 +642,9 @@ func initLogger(config config.Config) error {
 
 // runHTTPServer starts the MCP server with http transport
 func runHTTPServer(ctx context.Context, config config.Config) error {
+	// Initialize tracing
+	tp := initTracing()
+	defer tp.Shutdown(ctx)
 	err := initLogger(config)
 	if err != nil {
 		return fmt.Errorf("failed to initialize logger: %w", err)
@@ -652,9 +704,11 @@ func runHTTPServer(ctx context.Context, config config.Config) error {
 	metricsMiddleware := metrics.NewHTTPMetricsMiddleware(slog.Default(), &config).Wrap(toolFilter)
 	authHandler := auth.AuthMiddleware(ctx, &config, metricsMiddleware)
 	loggingHandler := middleware.MetadataMiddleware(authHandler)
+	tracingHandler := middleware.TracingMiddleware(&config, loggingHandler)
 
 	mux := http.NewServeMux()
-	mux.Handle(config.HTTP.Path, loggingHandler)
+	// tracingHandler -> loggingHandler -> authHandler -> metrics -> toolFilter -> httpServer
+	mux.Handle(config.HTTP.Path, tracingHandler)
 
 	// Add health endpoint for Kubernetes probes
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
