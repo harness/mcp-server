@@ -14,6 +14,7 @@ import (
 	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"go.opentelemetry.io/otel"
 )
 
 // FindSimilarTemplates creates a tool that allows finding similar templates based on provided description.
@@ -149,6 +150,11 @@ func AIDevOpsAgentTool(config *config.Config, client *client.IntelligenceService
 			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			// Start a new span for this tool execution
+			tracer := otel.Tracer("mcp-server")
+			ctx, span := tracer.Start(ctx, "tool.ask_ai_devops_agent")
+			defer span.End()
+
 			// Get required parameters
 			prompt, err := RequiredParam[string](request, "prompt")
 			if err != nil {
@@ -274,6 +280,10 @@ func AIDevOpsAgentTool(config *config.Config, client *client.IntelligenceService
 			slog.InfoContext(ctx, "Streaming request", "shouldStream", shouldStream)
 
 			if shouldStream {
+				// Create a child span for streaming
+				ctx, streamSpan := tracer.Start(ctx, "tool.ask_ai_devops_agent.stream")
+				defer streamSpan.End()
+
 				// Generate progress token if none provided
 				if progressToken == nil {
 					tokenID := uuid.New().String()
@@ -304,7 +314,8 @@ func AIDevOpsAgentTool(config *config.Config, client *client.IntelligenceService
 				}
 
 				if response == nil {
-					return nil, fmt.Errorf("got nil response from AI DevOps service")
+					err := fmt.Errorf("got nil response from AI DevOps service")
+					return nil, err
 				}
 
 				if response.Error != "" {
@@ -319,6 +330,10 @@ func AIDevOpsAgentTool(config *config.Config, client *client.IntelligenceService
 				return mcp.NewToolResultText(string(rawResponse)), nil
 			}
 
+			// Create a child span for non-streaming request
+			ctx, nonStreamSpan := tracer.Start(ctx, "tool.ask_ai_devops_agent.non_stream")
+			defer nonStreamSpan.End()
+
 			// Call the AI DevOps service without streaming
 			response, err := client.SendAIDevOpsChat(ctx, scope, aiRequest, nil)
 			if err != nil {
@@ -326,7 +341,8 @@ func AIDevOpsAgentTool(config *config.Config, client *client.IntelligenceService
 			}
 
 			if response == nil {
-				return nil, fmt.Errorf("got nil response from AI DevOps service")
+				err := fmt.Errorf("got nil response from AI DevOps service")
+				return nil, err
 			}
 
 			if response.Error != "" {

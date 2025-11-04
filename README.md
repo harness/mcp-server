@@ -209,7 +209,7 @@ Toolset Name: `scs`
 
 Toolset Name: `sto`
 
-- `frontend_all_issues_list`: List and filter security issues in Harness STO by target, pipeline, tool, severity, exemption status, and type.
+- `get_all_security_issues`: List and filter security issues in Harness STO by target, pipeline, tool, severity, exemption status, and type.
 - `global_exemptions`: List all global exemptions in Harness STO.
 - `promote_exemption`: Promote a specific exemption to a global exemption.
 - `approve_exemption`: Approve a specific exemption.
