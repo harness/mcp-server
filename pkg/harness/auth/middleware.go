@@ -17,40 +17,15 @@ import (
 func AuthMiddleware(ctx context.Context, config *config.Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		if config.SkipAuthForLocal {
-			account_id := r.Header.Get("harness-account")
-			if account_id == "" {
-				slog.ErrorContext(ctx, "account id not provided")
-				w.WriteHeader(http.StatusUnauthorized)
-				return
-			}
-
-			// Create a mock session for local development
-			session := &Session{
-				Principal: Principal{
-					ID:          1,
-					UID:         "local-dev-user",
-					Email:       "local-dev@harness.io",
-					Type:        "USER",
-					DisplayName: "Local Dev User",
-					AccountID:   account_id,
-				},
-			}
-
-			// Add session to context
-			newCtx := WithAuthSession(r.Context(), session)
-
-			// Also add scope to context
-			newCtx = common.WithScopeContext(newCtx, dto.Scope{
-				AccountID: account_id,
+		if config.AuthWithApiKey {
+			newCtx := common.WithScopeContext(r.Context(), dto.Scope{
+				AccountID: config.AccountID,
 			})
-
-			// Update request with new context
 			r = r.WithContext(newCtx)
-			// Pass the request to the next handler
 			next.ServeHTTP(w, r)
 			return
 		}
+
 		// Extract the Authorization header
 		authHeader := r.Header.Get("Authorization")
 		parts := strings.Split(authHeader, " ")
