@@ -111,8 +111,16 @@ type ExecutionSummaryInfo struct {
 	NumOfErrors         []int  `json:"numOfErrors,omitempty"`
 	Deployments         []int  `json:"deployments,omitempty"`
 	LastExecutionTs     int64  `json:"lastExecutionTs,omitempty"`
+	LastExecutionTsTime string `json:"lastExecutionTsTime,omitempty"`
 	LastExecutionStatus string `json:"lastExecutionStatus,omitempty"`
 	LastExecutionId     string `json:"lastExecutionId,omitempty"`
+}
+
+// FormatTimestamps formats the Unix timestamps into human-readable format
+func (e *ExecutionSummaryInfo) FormatTimestamps() {
+	if e.LastExecutionTs > 0 {
+		e.LastExecutionTsTime = FormatUnixMillisToRFC3339(e.LastExecutionTs)
+	}
 }
 
 // SortInfo represents sorting information
@@ -175,8 +183,11 @@ type PipelineExecution struct {
 	Status                     string               `json:"status,omitempty"`
 	FailureInfo                ExecutionFailureInfo `json:"failureInfo,omitempty"`
 	StartTs                    int64                `json:"startTs,omitempty"`
+	StartTsTime                string               `json:"startTsTime,omitempty"`
 	EndTs                      int64                `json:"endTs,omitempty"`
+	EndTsTime                  string               `json:"endTsTime,omitempty"`
 	CreatedAt                  int64                `json:"createdAt,omitempty"`
+	CreatedAtTime              string               `json:"createdAtTime,omitempty"`
 	ConnectorRef               string               `json:"connectorRef,omitempty"`
 	SuccessfulStagesCount      int                  `json:"successfulStagesCount,omitempty"`
 	FailedStagesCount          int                  `json:"failedStagesCount,omitempty"`
@@ -187,6 +198,19 @@ type PipelineExecution struct {
 	QueuedType                 string               `json:"queuedType,omitempty"`
 	RunSequence                int32                `json:"runSequence,omitempty"`
 	ShouldUseSimplifiedBaseKey bool                 `json:"shouldUseSimplifiedKey,omitempty"`
+}
+
+// FormatTimestamps formats the Unix timestamps into human-readable format
+func (p *PipelineExecution) FormatTimestamps() {
+	if p.StartTs > 0 {
+		p.StartTsTime = FormatUnixMillisToRFC3339(p.StartTs)
+	}
+	if p.EndTs > 0 {
+		p.EndTsTime = FormatUnixMillisToRFC3339(p.EndTs)
+	}
+	if p.CreatedAt > 0 {
+		p.CreatedAtTime = FormatUnixMillisToRFC3339(p.CreatedAt)
+	}
 }
 
 // ExecutionFailureInfo represents the failure information of a pipeline execution

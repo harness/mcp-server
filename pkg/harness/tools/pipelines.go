@@ -86,6 +86,11 @@ func ListPipelinesTool(config *config.Config, client *client.PipelineService) (t
 				return nil, fmt.Errorf("failed to list pipelines: %w", err)
 			}
 
+			// Format timestamps for execution summary info in each pipeline
+			for i := range data.Data.Content {
+				data.Data.Content[i].ExecutionSummaryInfo.FormatTimestamps()
+			}
+
 			r, err := json.Marshal(data)
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal pipeline list: %w", err)
@@ -171,6 +176,9 @@ func GetExecutionTool(config *config.Config, client *client.PipelineService) (to
 				return nil, fmt.Errorf("failed to get execution details: %w", err)
 			}
 
+			// Format timestamps for the execution
+			data.Data.Execution.FormatTimestamps()
+
 			r, err := json.Marshal(data.Data)
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal execution details: %w", err)
@@ -252,6 +260,11 @@ func ListExecutionsTool(config *config.Config, client *client.PipelineService) (
 			data, err := client.ListExecutions(ctx, scope, opts)
 			if err != nil {
 				return nil, fmt.Errorf("failed to list pipeline executions: %w", err)
+			}
+
+			// Format timestamps for each execution
+			for i := range data.Data.Content {
+				data.Data.Content[i].FormatTimestamps()
 			}
 
 			r, err := json.Marshal(data)
