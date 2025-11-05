@@ -110,7 +110,7 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			params := &generated.FrontendAllIssuesListParams{
-				AccountId: config.AccountID,
+				AccountId: scope.AccountID,
 				OrgId:     scope.OrgID,
 				ProjectId: scope.ProjectID,
 			}
@@ -312,7 +312,7 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			params := &generated.FrontendGlobalExemptionsParams{
-				AccountId: config.AccountID,
+				AccountId: scope.AccountID,
 				OrgId:     &scope.OrgID,
 				ProjectId: &scope.ProjectID,
 			}
@@ -552,8 +552,12 @@ func ExemptionsPromoteExemptionTool(config *config.Config, client *generated.Cli
 			mcp.WithString("targetId", mcp.Description("Optional target ID to associate with the exemption")),
 			common.WithScope(config, true),
 		), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, true)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 			params := &generated.ExemptionsPromoteExemptionParams{
-				AccountId: config.AccountID,
+				AccountId: scope.AccountID,
 			}
 			approverId := getCurrentUserUUID(ctx, config, principalClient)
 			defaultComment := "This is done by Harness Agent"
@@ -637,8 +641,12 @@ func ExemptionsApproveExemptionTool(config *config.Config, client *generated.Cli
 			mcp.WithString("comment", mcp.Description("Optional comment for the approval or rejection")),
 			common.WithScope(config, true),
 		), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, true)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 			params := &generated.ExemptionsApproveExemptionParams{
-				AccountId: config.AccountID,
+				AccountId: scope.AccountID,
 			}
 			if v, _ := OptionalParam[string](request, "orgId"); v != "" {
 				params.OrgId = &v
