@@ -618,7 +618,7 @@ func ExemptionsApproveExemptionTool(config *config.Config, client *generated.Cli
 
 			**When to Use:**
 			- To approve or reject an exemption at the current/requested scope.
-			- To reject an exemption at any scope.
+			- To reject an exemption in any scope: Pending, Approved, Rejected, Expired
 
 			**Parameters:**
 			- id: Exemption ID to approve or reject (required)
