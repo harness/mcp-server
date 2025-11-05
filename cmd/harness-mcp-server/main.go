@@ -679,6 +679,12 @@ func runHTTPServer(ctx context.Context, config config.Config) error {
 	// Set the global registry for use by middleware
 	modules.SetGlobalRegistry(moduleRegistry)
 
+	// Register prompts from all enabled modules
+	err = moduleRegistry.RegisterPrompts(harnessServer)
+	if err != nil {
+		return fmt.Errorf("failed to register module prompts: %w", err)
+	}
+
 	// Register the tools with the server
 	toolsets.RegisterTools(harnessServer)
 
