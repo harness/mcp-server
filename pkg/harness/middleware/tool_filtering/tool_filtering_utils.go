@@ -121,7 +121,12 @@ func getLicensedModulesForAccount(ctx context.Context, accountID string, config 
 					"account_id", accountID)
 
 				if isValid {
-					licensedModules = append(licensedModules, moduleType)
+					// For CCM module, license is issued as CE but we register AI entities module ID as CCM
+					if moduleType == "CE" {
+						licensedModules = append(licensedModules, "CCM")
+					} else {
+						licensedModules = append(licensedModules, moduleType)
+					}
 				}
 			}
 		}

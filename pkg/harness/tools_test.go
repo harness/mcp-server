@@ -116,6 +116,25 @@ func TestGetEnabledModules(t *testing.T) {
 			expectedModules: 3,
 			expectedIDs:     []string{"module1", "module2", "module3"}, // module1 (licensed) and module3 (default)
 		},
+		{
+			name: "CCM module enabled with CE license",
+			config: &config.Config{
+				EnableLicense: true,
+			},
+			licenseInfo: &LicenseInfo{
+				IsValid: true,
+				ModuleLicenses: map[string]bool{
+					"CE": true, // License for CE
+				},
+			},
+			modules: []modules.Module{
+				&MockModule{id: "CCM", isDefault: false},     // This should be enabled
+				&MockModule{id: "module2", isDefault: false}, // This should NOT be enabled
+				&MockModule{id: "default", isDefault: true},  // This should always be enabled
+			},
+			expectedModules: 2,
+			expectedIDs:     []string{"CCM", "default"},
+		},
 	}
 
 	// Run test cases
