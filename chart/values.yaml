@@ -312,6 +312,9 @@ secrets:
           HARNESS_MCP_SVC_SECRET:
             name: ""
             property: ""
+          HARNESS_RELEASE_MANAGER_SECRET:
+            name: ""
+            property: ""
     
 config:
   HARNESS_INTELLIGENCE_SVC_BASE_URL: "http://harness-intelligence:80"
@@ -332,6 +335,7 @@ config:
   HARNESS_DBOPS_SVC_BASE_URL: "http://db-devops-service:5001/"
   HARNESS_NG_MANAGER_BASE_URL: "http://ng-manager:7090"
   HARNESS_TEMPLATE_SVC_BASE_URL: "http://template-service:15002"
+  HARNESS_RELEASE_MANAGER_BASE_URL: "http://release-management:5001"
   HARNESS_LOG_FORMAT: "json"
   HARNESS_METRICS_PORT: "8889"
  

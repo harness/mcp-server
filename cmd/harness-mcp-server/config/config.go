@@ -85,6 +85,8 @@ type Config struct {
 	DBOpsSvcSecret          string
 	ACLSvcBaseURL           string
 	ACLSvcSecret            string
+	ReleaseManagerBaseURL   string // Added for Release Management toolset
+	ReleaseManagerSecret    string // Added for Release Management toolset
 
 	LicenseCacheTTL           time.Duration
 	LicenseCacheCleanInterval time.Duration
