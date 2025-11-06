@@ -48,26 +48,26 @@ type ReleaseSummaryRequest struct {
 
 // ReleaseDTO represents a release entity
 type ReleaseDTO struct {
-	ID               string        `json:"id"`
-	Name             string        `json:"name"`
-	Identifier       string        `json:"identifier"`
-	ExpectedStartTs  int64         `json:"expectedStartTs"`
-	ExpectedEndTs    int64         `json:"expectedEndTs"`
-	ActualStartTs    int64         `json:"actualStartTs"`
-	ActualEndTs      int64         `json:"actualEndTs"`
-	Status           ReleaseStatus `json:"status"`
-	Version          string        `json:"version"`
-	Color            string        `json:"color"`
-	ReleaseGroupId   string        `json:"releaseGroupId"`
-	HasConflict      bool          `json:"hasConflict"`
-	ProcessIdentifier *string      `json:"processIdentifier,omitempty"`
+	ID                string        `json:"id"`
+	Name              string        `json:"name"`
+	Identifier        string        `json:"identifier"`
+	ExpectedStartTs   int64         `json:"expectedStartTs"`
+	ExpectedEndTs     int64         `json:"expectedEndTs"`
+	ActualStartTs     int64         `json:"actualStartTs"`
+	ActualEndTs       int64         `json:"actualEndTs"`
+	Status            ReleaseStatus `json:"status"`
+	Version           string        `json:"version"`
+	Color             string        `json:"color"`
+	ReleaseGroupId    string        `json:"releaseGroupId"`
+	HasConflict       bool          `json:"hasConflict"`
+	ProcessIdentifier *string       `json:"processIdentifier,omitempty"`
 }
 
 // ReleaseSummaryResponse represents the response for release summary
 type ReleaseSummaryResponse struct {
-	Releases    []ReleaseDTO     `json:"releases"`
-	NextRequest []TimeRangeDTO   `json:"nextRequest"`
-	Last        bool             `json:"last"`
+	Releases    []ReleaseDTO   `json:"releases"`
+	NextRequest []TimeRangeDTO `json:"nextRequest"`
+	Last        bool           `json:"last"`
 }
 
 // ApprovalInfoDTO represents approval information
@@ -93,12 +93,12 @@ type ReleaseApprovalsResponse struct {
 
 // PhaseExecutionDTO represents a phase execution
 type PhaseExecutionDTO struct {
-	Identifier         string `json:"identifier"`
-	Name               string `json:"name"`
-	Description        string `json:"description"`
-	Status             string `json:"status"`
-	CompletedActivities int   `json:"completed_activities"`
-	TotalActivities     int   `json:"total_activities"`
+	Identifier          string `json:"identifier"`
+	Name                string `json:"name"`
+	Description         string `json:"description"`
+	Status              string `json:"status"`
+	CompletedActivities int    `json:"completed_activities"`
+	TotalActivities     int    `json:"total_activities"`
 }
 
 // ActivityExecutionDTO represents an activity execution
@@ -116,8 +116,8 @@ type ExecutionTaskDTO struct {
 	Name             string              `json:"name"`
 	Description      string              `json:"description"`
 	Status           ExecutionTaskStatus `json:"status"`
-	Required         interface{}         `json:"required"` // Can be string or bool
-	Users            interface{}         `json:"users"`    // Can be string or []string
+	Required         interface{}         `json:"required"`   // Can be string or bool
+	Users            interface{}         `json:"users"`      // Can be string or []string
 	UserGroups       interface{}         `json:"userGroups"` // Can be string or []string
 	ExpectedDuration string              `json:"expectedDuration"`
 }
@@ -159,6 +159,6 @@ type PhasesExecutionResponse struct {
 
 // ActivitiesExecutionResponse represents response for activities
 type ActivitiesExecutionResponse struct {
-	Activities           []ActivityExecutionDTO `json:"activities"`
-	TotalRunningActivities int                   `json:"total_running_activities"`
+	Activities             []ActivityExecutionDTO `json:"activities"`
+	TotalRunningActivities int                    `json:"total_running_activities"`
 }
