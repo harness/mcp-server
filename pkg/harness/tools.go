@@ -55,8 +55,13 @@ func getEnabledModules(ctx context.Context, configEnabledModules []modules.Modul
 			continue
 		}
 
-		// Check if module has a valid license
+		// For CCM module, license is issued as CE but we register AI entities using module ID as CCM
 		moduleID := module.ID()
+		if module.ID() == "CCM" {
+			moduleID = "CE"
+		}
+
+		// Check if module has a valid license
 		if isLicensed, exists := licenseInfo.ModuleLicenses[moduleID]; exists && isLicensed {
 			licensedModules = append(licensedModules, module)
 			slog.InfoContext(ctx, "Module enabled by license", "moduleID", moduleID)
