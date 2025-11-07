@@ -17,6 +17,8 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+var identityRegex = regexp.MustCompile(`[^a-z0-9-]+`)
+
 // ListExperimentsTool creates a tool for listing the experiments
 func ListExperimentsTool(config *config.Config, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("chaos_experiments_list",
@@ -42,12 +44,12 @@ func ListExperimentsTool(config *config.Config, client *client.ChaosService) (to
 
 			data, err := client.ListExperiments(ctx, scope, pagination)
 			if err != nil {
-				return nil, fmt.Errorf("failed to list experiments: %w", err)
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			r, err := json.Marshal(data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal list experiment response: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal list chaos experiment response: %v", err)), nil
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
@@ -76,17 +78,19 @@ func GetExperimentsTool(config *config.Config, client *client.ChaosService) (too
 			}
 
 			if !isValidUUID(experimentID) {
-				return nil, fmt.Errorf("invalid experiment ID %s, expected a valid UUID", experimentID)
+				if err != nil {
+					return mcp.NewToolResultError(fmt.Sprintf("invalid experiment ID %s, expected a valid UUID", experimentID)), nil
+				}
 			}
 
 			data, err := client.GetExperiment(ctx, scope, experimentID)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get experiment: %w", err)
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			r, err := json.Marshal(data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal get experiment response: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal get chaos experiment response: %v", err)), nil
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
@@ -102,7 +106,7 @@ func GetExperimentRunsTool(config *config.Config, client *client.ChaosService) (
 				mcp.Description("Unique Identifier for an experiment"),
 				mcp.Required(),
 			),
-			mcp.WithString("experimentRunId",
+			mcp.WithString("experimentRunID",
 				mcp.Description("Unique Identifier for an experiment run"),
 				mcp.Required(),
 			),
@@ -119,26 +123,30 @@ func GetExperimentRunsTool(config *config.Config, client *client.ChaosService) (
 			}
 
 			if !isValidUUID(experimentID) {
-				return nil, fmt.Errorf("invalid experiment ID %s, expected a valid UUID", experimentID)
+				if err != nil {
+					return mcp.NewToolResultError(fmt.Sprintf("invalid experimentID %s, expected a valid UUID", experimentID)), nil
+				}
 			}
 
-			experimentRunID, err := RequiredParam[string](request, "experimentRunId")
+			experimentRunID, err := RequiredParam[string](request, "experimentRunID")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			if !isValidUUID(experimentRunID) {
-				return nil, fmt.Errorf("invalid experimentRunID %s, expected a valid UUID", experimentRunID)
+				if err != nil {
+					return mcp.NewToolResultError(fmt.Sprintf("invalid experimentRunID %s, expected a valid UUID", experimentRunID)), nil
+				}
 			}
 
 			data, err := client.GetExperimentRun(ctx, scope, experimentID, experimentRunID)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get experiment run: %w", err)
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			r, err := json.Marshal(data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal get experiment run response: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal get chaos experiment run response: %v", err)), nil
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
@@ -196,7 +204,9 @@ func RunExperimentTool(config *config.Config, client *client.ChaosService) (tool
 			}
 
 			if !isValidUUID(experimentID) {
-				return nil, fmt.Errorf("invalid experiment ID %s, expected a valid UUID", experimentID)
+				if err != nil {
+					return mcp.NewToolResultError(fmt.Sprintf("invalid experimentID %s, expected a valid UUID", experimentID)), nil
+				}
 			}
 
 			inputsetIdentity, err := OptionalParam[string](request, "inputsetIdentity")
@@ -217,17 +227,17 @@ func RunExperimentTool(config *config.Config, client *client.ChaosService) (tool
 			experimentRunRequest := getRuntimeVariables(inputsetIdentity, experimentVariablesRaw, taskVariablesRaw)
 
 			if err := validateVariables(ctx, scope, experimentID, client, experimentRunRequest); err != nil {
-				return nil, err
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			data, err := client.RunExperiment(ctx, scope, experimentID, experimentRunRequest)
 			if err != nil {
-				return nil, fmt.Errorf("failed to run experiment: %w", err)
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			r, err := json.Marshal(data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal run experiment response: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal run chaos experiment response: %v", err)), nil
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
@@ -259,12 +269,12 @@ func ListProbesTool(config *config.Config, client *client.ChaosService) (tool mc
 
 			data, err := client.ListProbes(ctx, scope, pagination)
 			if err != nil {
-				return nil, fmt.Errorf("failed to list probes: %w", err)
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			r, err := json.Marshal(data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal list probes response: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal list chaos probes response: %v", err)), nil
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
@@ -294,12 +304,12 @@ func GetProbeTool(config *config.Config, client *client.ChaosService) (tool mcp.
 
 			data, err := client.GetProbe(ctx, scope, probeID)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get probe: %w", err)
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			r, err := json.Marshal(data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal get probe response: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal get chaos probe response: %v", err)), nil
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
@@ -309,7 +319,7 @@ func GetProbeTool(config *config.Config, client *client.ChaosService) (tool mcp.
 // CreateExperimentFromTemplateTool creates a tool to create the experiment from template
 func CreateExperimentFromTemplateTool(config *config.Config, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("chaos_create_experiment_from_template",
-			mcp.WithDescription("Create the experiment from template"),
+			mcp.WithDescription("Create the chaos experiment from template"),
 			common.WithScope(config, false),
 			mcp.WithString("templateId",
 				mcp.Description("Unique Identifier for a experiment template"),
@@ -395,12 +405,12 @@ func CreateExperimentFromTemplateTool(config *config.Config, client *client.Chao
 
 			data, err := client.CreateExperimentFromTemplateRequest(ctx, scope, templateID, hubIdentity, requestPayload)
 			if err != nil {
-				return nil, fmt.Errorf("failed to create experiment from template: %w", err)
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			r, err := json.Marshal(data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal create experiment from template response: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal create chaos experiment from template response: %v", err)), nil
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
@@ -449,12 +459,12 @@ func ListExperimentTemplatesTool(config *config.Config, client *client.ChaosServ
 
 			data, err := client.ListExperimentTemplates(ctx, scope, pagination, hubIdentity, infrastructureType)
 			if err != nil {
-				return nil, fmt.Errorf("failed to list experiment templates: %w", err)
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			r, err := json.Marshal(data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal list experiment templates response: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal list chaos experiment templates response: %v", err)), nil
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
@@ -488,12 +498,12 @@ func ListExperimentVariablesTool(config *config.Config, client *client.ChaosServ
 
 			data, err := client.ListExperimentVariables(ctx, scope, experimentID)
 			if err != nil {
-				return nil, fmt.Errorf("failed to list experiment variables: %w", err)
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			r, err := json.Marshal(data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal list experiment variables response: %w", err)
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal list chaos experiment variables response: %v", err)), nil
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
@@ -516,8 +526,7 @@ func generateIdentity(name string) string {
 	identity = strings.ReplaceAll(identity, "_", "-")
 
 	// Remove all invalid characters (anything not a-z, 0-9, or hyphen)
-	re := regexp.MustCompile(`[^a-z0-9-]+`)
-	identity = re.ReplaceAllString(identity, "")
+	identity = identityRegex.ReplaceAllString(identity, "")
 
 	// Remove leading or trailing hyphens
 	identity = strings.Trim(identity, "-")
@@ -527,7 +536,7 @@ func generateIdentity(name string) string {
 
 func validateVariables(ctx context.Context, scope dto.Scope, experimentID string, client *client.ChaosService, experimentRunRequest *dto.ExperimentRunRequest) error {
 	var (
-		errMsg = "experiment variables are required. Trying running the experiment by providing experiment and tasks variables"
+		errMsg = "experiment variables are required. Try running the experiment by providing experiment and tasks variables"
 	)
 
 	// validate the inputs
@@ -546,7 +555,7 @@ func validateVariables(ctx context.Context, scope dto.Scope, experimentID string
 
 	for _, exp := range variables.Experiment {
 		if experimentRunRequest == nil || experimentRunRequest.RuntimeInputs == nil {
-			return fmt.Errorf("%s", errMsg)
+			return fmt.Errorf(errMsg)
 		}
 		found := false
 		for _, x := range experimentRunRequest.RuntimeInputs.Experiment {
@@ -556,7 +565,7 @@ func validateVariables(ctx context.Context, scope dto.Scope, experimentID string
 			}
 		}
 		if !found {
-			return fmt.Errorf("%s", errMsg)
+			return fmt.Errorf(errMsg)
 		}
 	}
 
@@ -565,11 +574,11 @@ func validateVariables(ctx context.Context, scope dto.Scope, experimentID string
 			continue
 		}
 		if experimentRunRequest == nil || experimentRunRequest.RuntimeInputs == nil {
-			return fmt.Errorf("%s", errMsg)
+			return fmt.Errorf(errMsg)
 		}
 		actualTasksVars, ok := experimentRunRequest.RuntimeInputs.Tasks[key]
 		if !ok {
-			return fmt.Errorf("%s", errMsg)
+			return fmt.Errorf(errMsg)
 		}
 		for _, task := range tasks {
 			found := false
@@ -580,7 +589,7 @@ func validateVariables(ctx context.Context, scope dto.Scope, experimentID string
 				}
 			}
 			if !found {
-				return fmt.Errorf("%s", errMsg)
+				return fmt.Errorf(errMsg)
 			}
 		}
 	}
@@ -596,10 +605,13 @@ func getRuntimeVariables(inputsetIdentity string, experimentVariablesRaw []inter
 
 	for _, item := range experimentVariablesRaw {
 		if itemMap, ok := item.(map[string]interface{}); ok {
-			nameStr, _ := itemMap["name"].(string)
+			name, ok := itemMap["name"].(string)
+			if !ok {
+				continue
+			}
 			value, _ := itemMap["value"]
 			experimentVariables = append(experimentVariables, dto.VariableMinimum{
-				Name:  nameStr,
+				Name:  name,
 				Value: value,
 			})
 		}
