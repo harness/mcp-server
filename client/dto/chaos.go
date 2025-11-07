@@ -1,7 +1,8 @@
 package dto
 
 type ListExperimentResponse struct {
-	Data []ExperimentV2 `json:"data"`
+	Data       []ExperimentV2 `json:"data"`
+	Pagination Pagination     `json:"pagination"`
 }
 
 type GetExperimentResponse struct {
@@ -193,4 +194,95 @@ type ProbeTemplateRunProperties struct {
 	StopOnFailure        bool         `json:"stopOnFailure,omitempty"`
 	Verbosity            *string      `json:"verbosity,omitempty"`
 	Retry                *interface{} `json:"retry,omitempty"`
+}
+
+type ListExperimentTemplateResponse struct {
+	Data       []ChaosExperimentTemplate `json:"data"`
+	Pagination Pagination                `json:"pagination"`
+}
+
+type ChaosExperimentTemplate struct {
+	Identity     string     `json:"identity"`
+	HubIdentity  string     `json:"hubIdentity"`
+	Template     string     `json:"template"`
+	Variables    []Variable `json:"variables"`
+	Revision     string     `json:"revision"`
+	IsDefault    bool       `json:"isDefault"`
+	IsEnterprise bool       `json:"isEnterprise"`
+	InfraType    string     `json:"infraType"`
+	Infras       []string   `json:"infras"`
+}
+
+type Variable struct {
+	VariableMinimum `json:",inline"`
+	Path            string        `json:"path"`
+	Category        string        `json:"category"`
+	Description     string        `json:"description"`
+	TooltipID       string        `json:"tooltipId"`
+	Type            string        `json:"type"`
+	Stringify       bool          `json:"stringify"`
+	Required        bool          `json:"required"`
+	AllowedValues   []interface{} `json:"allowedValues"`
+	Default         interface{}   `json:"default"`
+	Tags            []string      `json:"tags"`
+	Validator       string        `json:"validator"`
+}
+
+type VariableMinimum struct {
+	Name  string      `json:"name"`
+	Value interface{} `json:"value"`
+}
+
+type CreateExperimentFromTemplateRequest struct {
+	IdentifiersQuery `json:",inline"`
+	Name             string `json:"name"`
+	Identity         string `json:"identity"`
+	InfraRef         string `json:"infraRef"`
+}
+
+type IdentifiersQuery struct {
+	AccountIdentifier      string `json:"accountIdentifier" validate:"required"`
+	OrganizationIdentifier string `json:"organizationIdentifier"`
+	ProjectIdentifier      string `json:"projectIdentifier"`
+}
+
+type Pagination struct {
+	Index      int64 `json:"index"`
+	Limit      int64 `json:"limit"`
+	TotalPages int64 `json:"totalPages"`
+	TotalItems int64 `json:"totalItems"`
+}
+
+type ListExperimentVariables struct {
+	Experiment []Variable            `json:"experiment" yaml:"experiment"`
+	Tasks      map[string][]Variable `json:"tasks" yaml:"tasks"`
+}
+
+type ExperimentRunRequest struct {
+	InputsetIdentity string                       `json:"inputsetIdentity"`
+	RuntimeInputs    *ChaosExperimentInputsetSpec `json:"runtimeInputs"`
+}
+
+type ChaosExperimentInputsetSpec struct {
+	Experiment []VariableMinimum            `json:"experiment" yaml:"experiment"`
+	Tasks      map[string][]VariableMinimum `json:"tasks" yaml:"tasks"`
+}
+
+type ExperimentCreationResponse struct {
+	Data ExperimentCreationRequest `json:"data"`
+}
+
+type ExperimentCreationRequest struct {
+	InfraType              string   `json:"infraType"`
+	ExperimentID           string   `json:"id"`
+	Identity               string   `json:"identity"`
+	ExperimentName         string   `json:"name"`
+	ExperimentDescription  string   `json:"description"`
+	Manifest               string   `json:"manifest"`
+	InfraID                string   `json:"infraId"`
+	CronSyntax             *string  `json:"cronSyntax"`
+	IsSingleRunCronEnabled *bool    `json:"isSingleRunCronEnabled"`
+	Tags                   []string `json:"tags"`
+	ValidateManifest       bool     `json:"validateManifest"`
+	ExperimentType         string   `json:"experimentType"`
 }
