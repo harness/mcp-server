@@ -555,7 +555,7 @@ func validateVariables(ctx context.Context, scope dto.Scope, experimentID string
 
 	for _, exp := range variables.Experiment {
 		if experimentRunRequest == nil || experimentRunRequest.RuntimeInputs == nil {
-			return fmt.Errorf(errMsg)
+			return fmt.Errorf("%s", errMsg)
 		}
 		found := false
 		for _, x := range experimentRunRequest.RuntimeInputs.Experiment {
@@ -565,7 +565,7 @@ func validateVariables(ctx context.Context, scope dto.Scope, experimentID string
 			}
 		}
 		if !found {
-			return fmt.Errorf(errMsg)
+			return fmt.Errorf("%s", errMsg)
 		}
 	}
 
@@ -574,11 +574,11 @@ func validateVariables(ctx context.Context, scope dto.Scope, experimentID string
 			continue
 		}
 		if experimentRunRequest == nil || experimentRunRequest.RuntimeInputs == nil {
-			return fmt.Errorf(errMsg)
+			return fmt.Errorf("%s", errMsg)
 		}
 		actualTasksVars, ok := experimentRunRequest.RuntimeInputs.Tasks[key]
 		if !ok {
-			return fmt.Errorf(errMsg)
+			return fmt.Errorf("%s", errMsg)
 		}
 		for _, task := range tasks {
 			found := false
@@ -589,7 +589,7 @@ func validateVariables(ctx context.Context, scope dto.Scope, experimentID string
 				}
 			}
 			if !found {
-				return fmt.Errorf(errMsg)
+				return fmt.Errorf("%s", errMsg)
 			}
 		}
 	}
