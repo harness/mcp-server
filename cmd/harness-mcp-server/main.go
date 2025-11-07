@@ -75,21 +75,14 @@ var (
 
 			transportType := enum.TransportHTTP
 
-			authWithApiKey := viper.GetBool("auth_with_api_key")
 			accountID := ""
-			apiKey := ""
+			apiKey := viper.GetString("api_key")
 			internal := true
 			var err error
-			if authWithApiKey {
-				apiKey = viper.GetString("api_key")
-				if apiKey == "" {
-					slog.Error("API key not provided")
-				}
-				if apiKey != "" {
-					accountID, err = extractAccountIDFromAPIKey(apiKey)
-					if err != nil {
-						slog.Error("failed to extract account ID from API key", "error", err)
-					}
+			if apiKey != "" {
+				accountID, err = extractAccountIDFromAPIKey(apiKey)
+				if err != nil {
+					slog.Error("failed to extract account ID from API key", "error", err)
 				}
 				internal = false
 			}
@@ -180,7 +173,6 @@ var (
 				ACLSvcBaseURL:           viper.GetString("acl_svc_base_url"),
 				ACLSvcSecret:            viper.GetString("acl_svc_secret"),
 				OutputDir:               viper.GetString("output_dir"),
-				AuthWithApiKey:          viper.GetBool("auth_with_api_key"),
 				AccountID:               accountID,
 				APIKey:                  apiKey,
 				BaseURL:                 viper.GetString("base_url"),
@@ -376,7 +368,7 @@ func init() {
 	rootCmd.PersistentFlags().String("output-dir", "", "Directory where the tool writes output files (e.g., pipeline logs)")
 	rootCmd.PersistentFlags().String("log-format", "text", "Log format (text or json)")
 	rootCmd.PersistentFlags().String("api-key", "", "API key for authentication")
-	rootCmd.PersistentFlags().String("base-url", "", "Base URL for Harness")
+	rootCmd.PersistentFlags().String("base-url", "https://app.harness.io", "Base URL for Harness")
 
 	httpServerCmd.PersistentFlags().Int("http-port", 8080, "HTTP server port (when transport is 'http')")
 	httpServerCmd.PersistentFlags().String("http-path", "/mcp", "HTTP server path (when transport is 'http')")
@@ -421,7 +413,6 @@ func init() {
 	httpServerCmd.Flags().String("dbops-svc-secret", "", "Secret for dbops service")
 	httpServerCmd.Flags().String("acl-svc-base-url", "", "Base URL for ACL service")
 	httpServerCmd.Flags().String("acl-svc-secret", "", "Secret for ACL service")
-	httpServerCmd.Flags().Bool("auth-with-api-key", false, "Authenticate using API key")
 
 	// Add stdio-specific flags
 	stdioCmd.Flags().String("default-org-id", "",
@@ -528,7 +519,6 @@ func init() {
 	_ = viper.BindPFlag("dbops_svc_secret", httpServerCmd.Flags().Lookup("dbops-svc-secret"))
 	_ = viper.BindPFlag("acl_svc_base_url", httpServerCmd.Flags().Lookup("acl-svc-base-url"))
 	_ = viper.BindPFlag("acl_svc_secret", httpServerCmd.Flags().Lookup("acl-svc-secret"))
-	_ = viper.BindPFlag("auth_with_api_key", httpServerCmd.Flags().Lookup("auth-with-api-key"))
 
 	// Bind stdio-specific flags to viper
 	_ = viper.BindPFlag("default_org_id", stdioCmd.Flags().Lookup("default-org-id"))

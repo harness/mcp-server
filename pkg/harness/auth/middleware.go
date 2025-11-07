@@ -17,7 +17,7 @@ import (
 func AuthMiddleware(ctx context.Context, config *config.Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		if config.AuthWithApiKey {
+		if config.APIKey != "" {
 			newCtx := common.WithScopeContext(r.Context(), dto.Scope{
 				AccountID: config.AccountID,
 			})
