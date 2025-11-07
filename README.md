@@ -188,10 +188,15 @@ Toolset Name: `dbops`
 
 Toolset Name: `chaos`
 
-- `chaos_experiments_list`: List all the chaos experiments for a specific account.
+- `chaos_experiments_list`: List all the chaos experiments based on matching scope and filters.
 - `chaos_experiment_describe`: Get details of a specific chaos experiment.
 - `chaos_experiment_run`:  Run a specific chaos experiment.
 - `chaos_experiment_run_result`:  Get the result of a specific chaos experiment run.
+- `chaos_probes_list`: List all the chaos probes based on matching scope and filters.
+- `chaos_probe_describe`: Get details of a specific chaos probe.
+- `chaos_create_experiment_from_template`: Create a new chaos experiment from a template.
+- `chaos_experiment_template_list`: List all the chaos experiment templates based on matching scope and filters.
+- `chaos_experiment_variables_list`: List all the variables for a specific chaos experiment
 
 #### Supply Chain Security (SCS) Toolset
 

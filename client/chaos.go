@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/harness/harness-mcp/client/dto"
 )
 
@@ -15,6 +16,9 @@ const (
 	chaosExperimentRunPath            = "rest/v2/experiments/%s/run"
 	chaosListProbesPath               = "rest/v2/probes"
 	chaosGetProbePath                 = "rest/v2/probes/%s"
+	chaosCreateExperimentFromTemplate = "rest/experimenttemplates/%s/launch"
+	chaosListExperimentTemplates      = "rest/experimenttemplates"
+	chaosListExperimentVariables      = "rest/v2/experiments/%s/variables"
 )
 
 type ChaosService struct {
@@ -82,7 +86,7 @@ func (c *ChaosService) GetExperimentRun(ctx context.Context, scope dto.Scope, ex
 	return getExperimentRun, nil
 }
 
-func (c *ChaosService) RunExperiment(ctx context.Context, scope dto.Scope, experimentID string) (*dto.RunChaosExperimentResponse, error) {
+func (c *ChaosService) RunExperiment(ctx context.Context, scope dto.Scope, experimentID string, request *dto.ExperimentRunRequest) (*dto.RunChaosExperimentResponse, error) {
 	var (
 		path   = fmt.Sprintf(chaosExperimentRunPath, experimentID)
 		params = make(map[string]string)
@@ -93,7 +97,7 @@ func (c *ChaosService) RunExperiment(ctx context.Context, scope dto.Scope, exper
 	params = addIdentifierParams(params, scope)
 
 	experimentRun := new(dto.RunChaosExperimentResponse)
-	err := c.Client.Post(ctx, path, params, nil, map[string]string{}, experimentRun)
+	err := c.Client.Post(ctx, path, params, request, nil, experimentRun)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run experiment: %w", err)
 	}
@@ -141,6 +145,77 @@ func (c *ChaosService) GetProbe(ctx context.Context, scope dto.Scope, probeID st
 	}
 
 	return getProbe, nil
+}
+
+func (c *ChaosService) ListExperimentTemplates(ctx context.Context, scope dto.Scope, pagination *dto.PaginationOptions, hubIdentity string, infrastructureType string) (*dto.ListExperimentTemplateResponse, error) {
+	var (
+		path   = chaosListExperimentTemplates
+		params = make(map[string]string)
+	)
+
+	// Set default pagination
+	setDefaultPagination(pagination)
+
+	// Add pagination parameters
+	params["page"] = fmt.Sprintf("%d", pagination.Page)
+	params["limit"] = fmt.Sprintf("%d", pagination.Size)
+	params["hubIdentity"] = hubIdentity
+	params["correlationID"] = uuid.New().String()
+
+	if infrastructureType != "" {
+		params["infrastructureType"] = infrastructureType
+	}
+	// Add scope parameters
+	params = addIdentifierParams(params, scope)
+
+	listExperimentTemplates := new(dto.ListExperimentTemplateResponse)
+	err := c.Client.Get(ctx, path, params, nil, listExperimentTemplates)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list experiment templates: %w", err)
+	}
+
+	return listExperimentTemplates, nil
+}
+
+func (c *ChaosService) CreateExperimentFromTemplateRequest(ctx context.Context, scope dto.Scope, templateID, hubIdentity string, request dto.CreateExperimentFromTemplateRequest) (*dto.ExperimentCreationResponse, error) {
+	var (
+		path   = fmt.Sprintf(chaosCreateExperimentFromTemplate, templateID)
+		params = make(map[string]string)
+	)
+
+	// Add scope parameters
+	params = addIdentifierParams(params, scope)
+
+	// Add hub parameters
+	params["hubIdentity"] = hubIdentity
+
+	var createExperimentFromTemplates = new(dto.ExperimentCreationResponse)
+
+	err := c.Client.Post(ctx, path, params, request, nil, createExperimentFromTemplates)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create experiment from template: %w", err)
+	}
+
+	return createExperimentFromTemplates, nil
+}
+
+func (c *ChaosService) ListExperimentVariables(ctx context.Context, scope dto.Scope, experimentID string) (*dto.ListExperimentVariables, error) {
+	var (
+		path   = fmt.Sprintf(chaosListExperimentVariables, experimentID)
+		params = make(map[string]string)
+	)
+
+	// Add scope parameters
+	params["isIdentity"] = "false"
+	params = addIdentifierParams(params, scope)
+
+	listExperimentVariables := new(dto.ListExperimentVariables)
+	err := c.Client.Get(ctx, path, params, nil, listExperimentVariables)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list experiment variables: %w", err)
+	}
+
+	return listExperimentVariables, nil
 }
 
 func addIdentifierParams(params map[string]string, scope dto.Scope) map[string]string {
