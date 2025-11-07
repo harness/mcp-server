@@ -310,6 +310,51 @@ docker run -i --rm \
   harness/mcp-server stdio
 ```
 
+## Running MCP Server as http server
+
+To run the MCP server as a http server locally, the following environment variables must be set:
+
+1. HARNESS_BASE_URL
+2. HARNESS_API_KEY
+
+Build a docker image using:
+
+```bash
+docker build -t harness-mcp-server .
+```
+
+Run the docker image:
+
+```bash
+docker run -p 8080:8080 -e HARNESS_BASE_URL=https://app.harness.io -e HARNESS_API_KEY=<PAT> harness-mcp-server http-server
+```
+
+OR you can also add the environment variables to the launch.json file of the go extension for vscode:
+
+Add the server config to your launch.json file:
+
+```json
+{
+    "name": "HTTP Server",
+    "type": "go",
+    "request": "launch",
+    "mode": "auto",
+    "program": "${workspaceFolder}/cmd/harness-mcp-server",
+    "args": ["http-server"],
+    "env": {
+        "HARNESS_BASE_URL": "https://app.harness.io",
+        "HARNESS_API_KEY": "<PAT>"
+    }
+}
+```
+
+JWT based authentication is also supported. The following environment variables must be set:
+
+1. HARNESS_BASE_URL
+2. HARNESS_MCP_SVC_SECRET
+
+- Requires `Authorization: Bearer <token>` header in each request.
+
 ## Integration with AI Assistants
 
 ### Usage with Gemini CLI
