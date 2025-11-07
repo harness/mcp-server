@@ -321,6 +321,7 @@ func CreateExperimentFromTemplateTool(config *config.Config, client *client.Chao
 			),
 			mcp.WithString("environmentId",
 				mcp.Description("Unique Identifier for a environment"),
+				mcp.Required(),
 			),
 			mcp.WithString("hubIdentity",
 				mcp.Description("Unique Identifier for a chaos hub"),
