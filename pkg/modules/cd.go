@@ -124,6 +124,9 @@ func RegisterServices(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 		AddReadTools(
 			toolsets.NewServerTool(tools.GetServiceTool(config, serviceClient)),
 			toolsets.NewServerTool(tools.ListServicesTool(config, serviceClient)),
+		).
+		AddWriteTools(
+			toolsets.NewServerTool(tools.CreateServiceTool(config, serviceClient)),
 		)
 
 	// Add toolset to the group

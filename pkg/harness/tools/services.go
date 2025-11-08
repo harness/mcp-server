@@ -134,3 +134,72 @@ func ListServicesTool(config *config.Config, client *client.ServiceClient) (tool
 			return mcp.NewToolResultText(string(r)), nil
 		}
 }
+
+// CreateServiceTool creates a tool for creating a new service
+// https://apidocs.harness.io/tag/Services#operation/createServicesV2
+func CreateServiceTool(config *config.Config, client *client.ServiceClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("create_service",
+			mcp.WithDescription("Create a new service in Harness."),
+			mcp.WithString("name",
+				mcp.Required(),
+				mcp.Description("The name of the service"),
+			),
+			mcp.WithString("identifier",
+				mcp.Required(),
+				mcp.Description("The unique identifier for the service"),
+			),
+			mcp.WithString("description",
+				mcp.Description("The description of the service"),
+			),
+			mcp.WithString("service_yaml",
+				mcp.Required(),
+				mcp.Description("The YAML definition of the service"),
+			),
+			common.WithScope(config, false),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			name, err := RequiredParam[string](request, "name")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			identifier, err := RequiredParam[string](request, "identifier")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			description, err := OptionalParam[string](request, "description")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			serviceYaml, err := RequiredParam[string](request, "service_yaml")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			createRequest := &dto.CreateServiceRequest{
+				Name:        name,
+				Identifier:  identifier,
+				Description: description,
+				YAML:        serviceYaml,
+			}
+
+			data, err := client.Create(ctx, scope, createRequest)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create service: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal service response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}

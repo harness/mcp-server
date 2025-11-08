@@ -39,3 +39,18 @@ type ServiceOptions struct {
 	Order string `json:"order,omitempty"`
 	// Additional filtering options can be added as needed
 }
+
+// CreateServiceRequest defines the structure for creating a service
+type CreateServiceRequest struct {
+	Name        string            `json:"name"`
+	Identifier  string            `json:"identifier"`
+	Description string            `json:"description,omitempty"`
+	Tags        map[string]string `json:"tags,omitempty"`
+	YAML        string            `json:"yaml,omitempty"`
+}
+
+// CreateServiceResponse defines the response from service creation
+type CreateServiceResponse struct {
+	Status string  `json:"status,omitempty"`
+	Data   Service `json:"data,omitempty"`
+}

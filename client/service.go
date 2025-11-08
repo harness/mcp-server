@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	serviceListPath = "/services"
-	serviceGetPath  = "/services/%s"
+	serviceListPath   = "/services"
+	serviceGetPath    = "/services/%s"
+	serviceCreatePath = "/services"
 )
 
 type ServiceClient struct {
@@ -34,6 +35,31 @@ func (s *ServiceClient) Get(ctx context.Context, scope dto.Scope, serviceIdentif
 	}
 
 	return &response.Data, nil
+}
+
+// Create creates a new service
+// https://apidocs.harness.io/tag/Services#operation/createServicesV2
+func (s *ServiceClient) Create(ctx context.Context, scope dto.Scope, createReq *dto.CreateServiceRequest) (*dto.CreateServiceResponse, error) {
+	path := serviceCreatePath
+	params := make(map[string]string)
+
+	// Ensure accountIdentifier is always set
+	if scope.AccountID == "" {
+		return nil, fmt.Errorf("accountIdentifier cannot be null")
+	}
+	addScope(ctx, scope, params)
+
+	if createReq == nil {
+		return nil, fmt.Errorf("create request cannot be nil")
+	}
+
+	response := &dto.CreateServiceResponse{}
+	err := s.Client.Post(ctx, path, params, createReq, map[string]string{}, response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create service: %w", err)
+	}
+
+	return response, nil
 }
 
 // setDefaultPaginationForService sets default pagination values for ServiceOptions

@@ -13,6 +13,7 @@ import (
 const (
 	pipelinePath                 = "/api/pipelines/%s"
 	pipelineListPath             = "/api/pipelines/list"
+	pipelineCreatePath           = "/api/pipelines"
 	pipelineExecutionPath        = "/api/pipelines/execution/url"
 	pipelineExecutionGetPath     = "/api/pipelines/execution/v2/%s"
 	pipelineExecutionSummaryPath = "/api/pipelines/execution/summary"
@@ -43,6 +44,25 @@ func (p *PipelineService) Get(ctx context.Context, scope dto.Scope, pipelineID s
 	err := p.Client.Get(ctx, path, params, map[string]string{}, response)
 	if err != nil {
 		return nil, err
+	}
+
+	return response, nil
+}
+
+// Create creates a new pipeline
+func (p *PipelineService) Create(ctx context.Context, scope dto.Scope, createReq *dto.CreatePipelineRequest) (*dto.CreatePipelineResponse, error) {
+	path := pipelineCreatePath
+	params := make(map[string]string)
+	addScope(ctx, scope, params)
+
+	if createReq == nil {
+		return nil, fmt.Errorf("create request cannot be nil")
+	}
+
+	response := &dto.CreatePipelineResponse{}
+	err := p.Client.Post(ctx, path, params, createReq, map[string]string{}, response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create pipeline: %w", err)
 	}
 
 	return response, nil

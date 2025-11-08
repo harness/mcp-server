@@ -417,3 +417,18 @@ type TriggerListItem struct {
 	TargetIdentifier   string `json:"targetIdentifier,omitempty"`
 	PipelineIdentifier string `json:"pipelineIdentifier,omitempty"`
 }
+
+// CreatePipelineRequest defines the structure for creating a pipeline
+type CreatePipelineRequest struct {
+	Name        string            `json:"name"`
+	Identifier  string            `json:"identifier"`
+	Description string            `json:"description,omitempty"`
+	Tags        map[string]string `json:"tags,omitempty"`
+	YAML        string            `json:"yaml,omitempty"`
+}
+
+// CreatePipelineResponse defines the response from pipeline creation
+type CreatePipelineResponse struct {
+	Status string       `json:"status,omitempty"`
+	Data   PipelineData `json:"data,omitempty"`
+}

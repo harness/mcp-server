@@ -544,3 +544,71 @@ func ListTriggersTool(config *config.Config, client *client.PipelineService) (to
 			return mcp.NewToolResultText(string(r)), nil
 		}
 }
+
+// CreatePipelineTool creates a tool for creating a new pipeline
+func CreatePipelineTool(config *config.Config, client *client.PipelineService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("create_pipeline",
+			mcp.WithDescription("Create a new pipeline in Harness."),
+			mcp.WithString("name",
+				mcp.Required(),
+				mcp.Description("The name of the pipeline"),
+			),
+			mcp.WithString("identifier",
+				mcp.Required(),
+				mcp.Description("The unique identifier for the pipeline"),
+			),
+			mcp.WithString("description",
+				mcp.Description("The description of the pipeline"),
+			),
+			mcp.WithString("pipeline_yaml",
+				mcp.Required(),
+				mcp.Description("The YAML definition of the pipeline"),
+			),
+			common.WithScope(config, true),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			name, err := RequiredParam[string](request, "name")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			identifier, err := RequiredParam[string](request, "identifier")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			description, err := OptionalParam[string](request, "description")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			pipelineYaml, err := RequiredParam[string](request, "pipeline_yaml")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			scope, err := common.FetchScope(ctx, config, request, true)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			createRequest := &dto.CreatePipelineRequest{
+				Name:        name,
+				Identifier:  identifier,
+				Description: description,
+				YAML:        pipelineYaml,
+			}
+
+			data, err := client.Create(ctx, scope, createRequest)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create pipeline: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal pipeline response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
