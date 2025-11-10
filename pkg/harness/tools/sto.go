@@ -516,8 +516,12 @@ func ExemptionsPromoteExemptionTool(config *config.Config, client *generated.Cli
 			mcp.WithDescription(`
 				Promote (approve) an exemption request at its current scope or at a higher scope (Project, Org, or Account).
 
+			**Scope Hierarchy (lowest → highest):**
+			- Target → Pipeline → Project → Org → Account
+
 			**Usage Guidance:**
 			- Use this endpoint to approve an exemption at the requested scope, or to promote (escalate) it to a higher scope.
+			- You must provide the exemption id to promote.
 			- Do NOT use this endpoint to reject an exemption (see exemptions_reject_and_approve).
 			- The required identifiers depend on the scope you are promoting to:
 				- **Account-level Promotion:** Provide only accountId.
@@ -525,7 +529,6 @@ func ExemptionsPromoteExemptionTool(config *config.Config, client *generated.Cli
 				- **Project-level Promotion:** Provide accountId, orgId, and projectId.
 				- **Pipeline-level Approval:** Provide accountId, orgId, projectId, and pipelineId.
 				- **Target-level Approval:** Provide accountId, orgId, projectId, and targetId.
-			- You must provide the exemption id to promote.
 			- Optionally, you may provide a comment, pipelineId, or targetId.
 
 			**When to Use:**
