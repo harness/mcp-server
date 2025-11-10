@@ -278,7 +278,7 @@ func GetPendingTasksTool(config *config.Config, client *client.ReleaseManagement
 
 // GetExecutionOutputsTool creates a tool for getting outputs from phase or activity executions
 func GetExecutionOutputsTool(config *config.Config, client *client.ReleaseManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("get_execution_outputs",
+	return mcp.NewTool("get_release_outputs",
 			mcp.WithDescription("Get outputs from phase or activity executions. Can fetch outputs at phase level or activity level."),
 			mcp.WithString("release_id",
 				mcp.Required(),

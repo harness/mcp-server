@@ -12,7 +12,6 @@ const (
 	// Release Management API paths
 	releaseSummaryPath                 = "/api/release/summary"
 	releaseTasksPath                   = "/api/release/%s/tasks"
-	releaseApprovalsPath               = "/api/release/%s/approvals"
 	releaseExecutionPhasesPath         = "/api/orchestration/execution/%s/phases"
 	releaseExecutionPhaseOutputPath    = "/api/orchestration/execution/release/%s/phase/%s/output"
 	releaseExecutionActivityOutputPath = "/api/orchestration/execution/release/%s/phase/%s/activity/%s/output"
@@ -92,48 +91,6 @@ func (r *ReleaseManagementService) GetReleaseTasks(ctx context.Context, scope dt
 	err := r.Client.Get(ctx, path, params, headers, result)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get release tasks: %w", err)
-	}
-
-	return result, nil
-}
-
-// GetReleaseApprovals fetches pending approvals for a specific release
-func (r *ReleaseManagementService) GetReleaseApprovals(ctx context.Context, scope dto.Scope, releaseId string, searchTerm string, status []string, page int, size int, sort string) (*dto.ReleaseApprovalsResponse, error) {
-	path := fmt.Sprintf(releaseApprovalsPath, releaseId)
-
-	// Set up query parameters (release management API uses header for account, not query params)
-	params := make(map[string]string)
-	if scope.OrgID != "" {
-		params["orgIdentifier"] = scope.OrgID
-	}
-	if scope.ProjectID != "" {
-		params["projectIdentifier"] = scope.ProjectID
-	}
-
-	if searchTerm != "" {
-		params["searchTerm"] = searchTerm
-	}
-	if len(status) > 0 {
-		params["status"] = strings.Join(status, ",")
-	}
-	if page > 0 {
-		params["page"] = fmt.Sprintf("%d", page)
-	}
-	if size > 0 {
-		params["size"] = fmt.Sprintf("%d", size)
-	}
-	if sort != "" {
-		params["sort"] = sort
-	}
-
-	headers := make(map[string]string)
-	addHarnessAccountToHeaders(ctx, scope, headers)
-
-	// Make the request
-	result := new(dto.ReleaseApprovalsResponse)
-	err := r.Client.Get(ctx, path, params, headers, result)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get release approvals: %w", err)
 	}
 
 	return result, nil
