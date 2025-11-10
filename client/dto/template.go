@@ -120,3 +120,32 @@ func ToTemplateResponse(data *TemplateMetaDataList) *TemplateListOutput {
 
 	return result
 }
+
+// TemplateWithSpec represents the actual template data with full specification
+type TemplateWithSpec struct {
+	Account        string            `json:"accountId,omitempty"`
+	Org            string            `json:"orgIdentifier,omitempty"`
+	Project        string            `json:"projectIdentifier,omitempty"`
+	Identifier     string            `json:"identifier,omitempty"`
+	Name           string            `json:"name,omitempty"`
+	Description    string            `json:"description,omitempty"`
+	Tags           map[string]string `json:"tags,omitempty"`
+	VersionLabel   string            `json:"versionLabel,omitempty"`
+	EntityType     string            `json:"templateEntityType,omitempty"`
+	ChildType      string            `json:"childType,omitempty"`
+	Scope          string            `json:"templateScope,omitempty"`
+	Version        int64             `json:"version,omitempty"`
+	GitDetails     *EntityGitDetails `json:"gitDetails,omitempty"`
+	Updated        int64             `json:"lastUpdatedAt,omitempty"`
+	StoreType      string            `json:"storeType,omitempty"`
+	ConnectorRef   string            `json:"connectorRef,omitempty"`
+	StableTemplate bool              `json:"stableTemplate,omitempty"`
+	Yaml           string            `json:"yaml,omitempty"`
+	Icon           string            `json:"icon,omitempty"`
+}
+
+// TemplateGetResponse represents the API response wrapper for getting a single template
+type TemplateGetResponse struct {
+	Template TemplateWithSpec `json:"template"`
+	Inputs   any              `json:"inputs"`
+}

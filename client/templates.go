@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strconv"
 
 	"github.com/harness/harness-mcp/client/dto"
@@ -110,4 +111,76 @@ func (ts *TemplateService) ListProject(ctx context.Context, scope dto.Scope, opt
 	}
 
 	return &result, nil
+}
+
+// GetAccount gets a template in the account scope
+func (ts *TemplateService) GetAccount(ctx context.Context, scope dto.Scope, templateIdentifier string, versionLabel string) (*dto.TemplateGetResponse, error) {
+	endpoint := ts.buildPath(fmt.Sprintf("%s/%s", templateAccountPath, templateIdentifier))
+	slog.InfoContext(ctx, "Getting template at account scope", "endpoint", endpoint, "identifier", templateIdentifier)
+
+	params := make(map[string]string)
+	params["accountId"] = scope.AccountID
+	if versionLabel != "" {
+		params["versionLabel"] = versionLabel
+	}
+	params["getDefaultFromOtherRepo"] = "true"
+	slog.InfoContext(ctx, "Calling template API", "params", params)
+
+	var response dto.TemplateGetResponse
+	err := ts.Client.Get(ctx, endpoint, params, map[string]string{}, &response)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to get account template", "error", err)
+		return nil, fmt.Errorf("failed to get account template: %w", err)
+	}
+	slog.InfoContext(ctx, "Got template response", "hasData", response.Template.Identifier != "", "identifier", response.Template.Identifier, "name", response.Template.Name)
+	return &response, nil
+}
+
+// GetOrg gets a template in the organization scope
+func (ts *TemplateService) GetOrg(ctx context.Context, scope dto.Scope, templateIdentifier string, versionLabel string) (*dto.TemplateGetResponse, error) {
+	endpoint := ts.buildPath(fmt.Sprintf("%s/%s", fmt.Sprintf(templateOrgPath, scope.OrgID), templateIdentifier))
+	slog.InfoContext(ctx, "Getting template at org scope", "endpoint", endpoint, "org", scope.OrgID, "identifier", templateIdentifier)
+
+	params := make(map[string]string)
+	params["accountId"] = scope.AccountID
+	params["orgId"] = scope.OrgID
+	if versionLabel != "" {
+		params["versionLabel"] = versionLabel
+	}
+	params["getDefaultFromOtherRepo"] = "true"
+	slog.InfoContext(ctx, "Calling template API", "params", params)
+
+	var response dto.TemplateGetResponse
+	err := ts.Client.Get(ctx, endpoint, params, map[string]string{}, &response)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to get org template", "error", err)
+		return nil, fmt.Errorf("failed to get org template: %w", err)
+	}
+	slog.InfoContext(ctx, "Got template response", "hasData", response.Template.Identifier != "", "identifier", response.Template.Identifier, "name", response.Template.Name)
+	return &response, nil
+}
+
+// GetProject gets a template in the project scope
+func (ts *TemplateService) GetProject(ctx context.Context, scope dto.Scope, templateIdentifier string, versionLabel string) (*dto.TemplateGetResponse, error) {
+	endpoint := ts.buildPath(fmt.Sprintf("%s/%s", fmt.Sprintf(templateProjectPath, scope.OrgID, scope.ProjectID), templateIdentifier))
+	slog.InfoContext(ctx, "Getting template at project scope", "endpoint", endpoint, "org", scope.OrgID, "project", scope.ProjectID, "identifier", templateIdentifier)
+
+	params := make(map[string]string)
+	params["accountId"] = scope.AccountID
+	params["orgId"] = scope.OrgID
+	params["projectId"] = scope.ProjectID
+	if versionLabel != "" {
+		params["versionLabel"] = versionLabel
+	}
+	params["getDefaultFromOtherRepo"] = "true"
+	slog.InfoContext(ctx, "Calling template API", "params", params)
+
+	var response dto.TemplateGetResponse
+	err := ts.Client.Get(ctx, endpoint, params, map[string]string{}, &response)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to get project template", "error", err)
+		return nil, fmt.Errorf("failed to get project template: %w", err)
+	}
+	slog.InfoContext(ctx, "Got template response", "hasData", response.Template.Identifier != "", "identifier", response.Template.Identifier, "name", response.Template.Name)
+	return &response, nil
 }

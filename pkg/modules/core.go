@@ -360,6 +360,7 @@ func RegisterTemplates(config *config.Config, tsg *toolsets.ToolsetGroup) error 
 	templates := toolsets.NewToolset("templates", "Harness Template related tools").
 		AddReadTools(
 			toolsets.NewServerTool(tools.ListTemplates(config, templateClient)),
+			toolsets.NewServerTool(tools.GetTemplateTool(config, templateClient)),
 		)
 
 	// Add toolset to the group
