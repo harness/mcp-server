@@ -47,19 +47,14 @@ type ReleaseDTO struct {
 
 // ReleaseSummaryResponse represents the response for release summary
 type ReleaseSummaryResponse struct {
-	Releases    []ReleaseDTO   `json:"releases"`
-	NextRequest []TimeRangeDTO `json:"nextRequest"`
-	Last        bool           `json:"last"`
+	Releases []ReleaseDTO `json:"releases"`
 }
 
 // PhaseExecutionDTO represents a phase execution
 type PhaseExecutionDTO struct {
-	Identifier          string `json:"identifier"`
-	Name                string `json:"name"`
-	Description         string `json:"description"`
-	Status              string `json:"status"`
-	CompletedActivities int    `json:"completed_activities"`
-	TotalActivities     int    `json:"total_activities"`
+	Identifier string `json:"identifier"`
+	Name       string `json:"name"`
+	Status     string `json:"status"`
 }
 
 // ExecutionTaskDTO represents an execution task
