@@ -649,6 +649,13 @@ func ExemptionsPromoteExemptionTool(config *config.Config, client *generated.Cli
 			- You must provide the exemption id to promote.
 			- Optionally, you may provide a comment, pipelineId, or targetId.
 
+			**IMPORTANT:** Do NOT provide parameters for scopes higher than your target scope. The scope is determined by which parameters you provide.
+
+			**Scope Logic:**
+			- projectId present = project-level approval
+			- orgId present but no projectId = org-level approval  
+			- only accountId = account-level approval
+			
 			**When to Use:**
 			- To approve an exemption at the same or a higher scope than requested.
 			- To escalate an exemption from Target/Pipeline/Project to Org or Account.
@@ -656,8 +663,8 @@ func ExemptionsPromoteExemptionTool(config *config.Config, client *generated.Cli
 			**Parameters:**
 			- id: Exemption ID to promote (required)
 			- accountId: Harness Account ID (required)
-			- orgId: Harness Organization ID (required for org/project promotion)
-			- projectId: Harness Project ID (required for project promotion)
+			- orgId: Harness Organization ID (provide for org-level OR project-level promotions)
+			- projectId: Harness Project ID (provide ONLY for project-level promotions, omit for org/account-level)
 			- comment: Optional comment for the approval
 			- pipelineId: Optional pipeline ID if relevant
 			- targetId: Optional target ID if relevant
@@ -666,8 +673,8 @@ func ExemptionsPromoteExemptionTool(config *config.Config, client *generated.Cli
 `),
 			mcp.WithString("id", mcp.Required(), mcp.Description("Exemption ID to promote, generally present in id field of exemption")),
 			mcp.WithString("accountId", mcp.Required(), mcp.Description("Harness Account ID")),
-			mcp.WithString("orgId", mcp.Required(), mcp.Description("Harness Organization ID")),
-			mcp.WithString("projectId", mcp.Required(), mcp.Description("Harness Project ID")),
+			mcp.WithString("orgId", mcp.Description("Harness Organization ID")),
+			mcp.WithString("projectId", mcp.Description("Harness Project ID")),
 			mcp.WithString("comment", mcp.Description("Optional comment for the approval or rejection")),
 			mcp.WithString("pipelineId", mcp.Description("Optional pipeline ID to associate with the exemption")),
 			mcp.WithString("targetId", mcp.Description("Optional target ID to associate with the exemption")),
