@@ -312,7 +312,10 @@ secrets:
           HARNESS_MCP_SVC_SECRET:
             name: ""
             property: ""
-    
+          HARNESS_GITOPS_SVC_SECRET:
+            name: ""
+            property: ""
+
 config:
   HARNESS_INTELLIGENCE_SVC_BASE_URL: "http://harness-intelligence:80"
   HARNESS_CHATBOT_BASE_URL: "http://chatbot-service:8000"
@@ -332,6 +335,7 @@ config:
   HARNESS_DBOPS_SVC_BASE_URL: "http://db-devops-service:5001/"
   HARNESS_NG_MANAGER_BASE_URL: "http://ng-manager:7090"
   HARNESS_TEMPLATE_SVC_BASE_URL: "http://template-service:15002"
+  HARNESS_GITOPS_SVC_BASE_URL: "http://gitops:7908"
   HARNESS_LOG_FORMAT: "json"
   HARNESS_METRICS_PORT: "8889"
  

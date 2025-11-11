@@ -298,6 +298,9 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 			if err := modules.RegisterReleaseManagementTools(config, tsg); err != nil {
 				return err
 			}
+			if err := modules.RegisterGitOps(config, tsg); err != nil {
+				return err
+			}
 			if err := modules.RegisterACM(config, tsg); err != nil {
 				return err
 			}
@@ -414,6 +417,10 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 					}
 				case "release_management":
 					if err := modules.RegisterReleaseManagementTools(config, tsg); err != nil {
+						return err
+					}
+				case "gitops":
+					if err := modules.RegisterGitOps(config, tsg); err != nil {
 						return err
 					}
 				case "acm":

@@ -39,6 +39,7 @@ func (m *CDModule) Toolsets() []string {
 		"environments",
 		"infrastructure",
 		"release_management",
+		"gitops",
 	}
 }
 
@@ -60,6 +61,10 @@ func (m *CDModule) RegisterToolsets() error {
 			}
 		case "release_management":
 			if err := RegisterReleaseManagementTools(m.config, m.tsg); err != nil {
+				return err
+			}
+		case "gitops":
+			if err := RegisterGitOps(m.config, m.tsg); err != nil {
 				return err
 			}
 		}
@@ -181,5 +186,31 @@ func RegisterReleaseManagementTools(config *config.Config, tsg *toolsets.Toolset
 
 	// Add toolset to the group
 	tsg.AddToolset(askReleaseAgent)
+	return nil
+}
+
+// RegisterGitOps registers the GitOps toolset
+func RegisterGitOps(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	// Determine the base URL and secret for GitOps service
+	// GitOps API is available at /gitops/api/v1/applications
+	baseURL := utils.BuildServiceURL(config, config.GitOpsSvcBaseURL, config.BaseURL, "gitops")
+	secret := config.GitOpsSvcSecret
+
+	// Create base client for GitOps
+	c, err := utils.CreateClient(baseURL, config, secret)
+	if err != nil {
+		return err
+	}
+
+	gitopsClient := &client.GitOpsService{Client: c}
+
+	// Create the GitOps toolset
+	gitops := toolsets.NewToolset("gitops", "Harness GitOps related tools for managing GitOps applications").
+		AddReadTools(
+			toolsets.NewServerTool(tools.ListGitOpsApplicationsTool(config, gitopsClient)),
+		)
+
+	// Add toolset to the group
+	tsg.AddToolset(gitops)
 	return nil
 }

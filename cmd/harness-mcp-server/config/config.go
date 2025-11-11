@@ -85,6 +85,8 @@ type Config struct {
 	DBOpsSvcSecret          string
 	ACLSvcBaseURL           string
 	ACLSvcSecret            string
+	GitOpsSvcBaseURL        string // Added for GitOps toolset
+	GitOpsSvcSecret         string // Added for GitOps toolset
 
 	LicenseCacheTTL           time.Duration
 	LicenseCacheCleanInterval time.Duration
