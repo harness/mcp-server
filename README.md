@@ -316,7 +316,6 @@ Optional environment variables:
 2. HARNESS_DEFAULT_PROJECT_ID
 
 #### Http mode
-
 To run the MCP server as a http server locally, the following environment variables must be set:
 
 1. HARNESS_BASE_URL
@@ -335,7 +334,6 @@ docker run -p 8080:8080 -e HARNESS_BASE_URL=https://app.harness.io -e HARNESS_AP
 ```
 
 ### To run MCP server on local Kubernetes cluster: 
-
 Override the values in helm chart using a values-local.yaml file:
 
 ```yaml
@@ -352,10 +350,6 @@ global:
 
 # Run only 1 replica for local development
 replicaCount: 1
-
-# Disable autoscaling for local
-autoscaling:
-  enabled: false
 
 # Use NodePort for easy local access
 service:
