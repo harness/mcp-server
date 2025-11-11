@@ -208,6 +208,7 @@ func RegisterGitOps(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	gitops := toolsets.NewToolset("gitops", "Harness GitOps related tools for managing GitOps applications").
 		AddReadTools(
 			toolsets.NewServerTool(tools.ListGitOpsApplicationsTool(config, gitopsClient)),
+			toolsets.NewServerTool(tools.GetGitOpsApplicationTool(config, gitopsClient)),
 		)
 
 	// Add toolset to the group

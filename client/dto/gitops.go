@@ -158,3 +158,14 @@ type GitOpsApplicationQueryRequest struct {
 	MetadataOnly      bool                   `json:"metadataOnly,omitempty"`
 	Fields            []string               `json:"fields,omitempty"`
 }
+
+// GitOpsGetApplicationOptions represents the options for getting a specific GitOps application
+type GitOpsGetApplicationOptions struct {
+	Refresh          string   `json:"refresh,omitempty"`          // "normal" or "hard" refresh mode
+	Project          []string `json:"project,omitempty"`          // Project names to restrict returned applications
+	ResourceVersion  string   `json:"resourceVersion,omitempty"`  // Resource version for watch calls
+	Selector         string   `json:"selector,omitempty"`         // Label selector to filter applications
+	Repo             string   `json:"repo,omitempty"`             // Repository URL to filter applications
+	AppNamespace     string   `json:"appNamespace,omitempty"`     // Application namespace
+	FetchFromHarness bool     `json:"fetchFromHarness,omitempty"` // Fetch directly from Harness DB instead of agent
+}

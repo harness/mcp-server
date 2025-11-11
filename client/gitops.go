@@ -9,6 +9,7 @@ import (
 
 const (
 	gitopsListApplicationsPath = "/api/v1/applications"
+	gitopsGetApplicationPath   = "/api/v1/agents/%s/applications/%s"
 )
 
 // GitOpsService handles GitOps application operations
@@ -68,6 +69,65 @@ func (g *GitOpsService) ListApplications(ctx context.Context, scope dto.Scope, o
 	err := g.Client.Post(ctx, path, nil, requestBody, nil, &response)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list GitOps applications: %w", err)
+	}
+
+	return &response, nil
+}
+
+// GetApplication retrieves a specific GitOps application by name
+// https://apidocs.harness.io/tag/Application#operation/AgentApplicationService_Get
+func (g *GitOpsService) GetApplication(ctx context.Context, scope dto.Scope, agentIdentifier string, applicationName string, opts *dto.GitOpsGetApplicationOptions) (*dto.GitOpsApplication, error) {
+	path := fmt.Sprintf(gitopsGetApplicationPath, agentIdentifier, applicationName)
+	params := make(map[string]string)
+
+	// Ensure accountIdentifier is always set
+	if scope.AccountID == "" {
+		return nil, fmt.Errorf("accountIdentifier cannot be null")
+	}
+
+	// Add scope parameters
+	addScope(ctx, scope, params)
+
+	// Handle nil options
+	if opts == nil {
+		opts = &dto.GitOpsGetApplicationOptions{}
+	}
+
+	// Add optional query parameters
+	if opts.Refresh != "" {
+		params["query.refresh"] = opts.Refresh
+	}
+
+	if len(opts.Project) > 0 {
+		for _, project := range opts.Project {
+			params["query.project"] = project // Note: Multiple values might need special handling
+		}
+	}
+
+	if opts.ResourceVersion != "" {
+		params["query.resourceVersion"] = opts.ResourceVersion
+	}
+
+	if opts.Selector != "" {
+		params["query.selector"] = opts.Selector
+	}
+
+	if opts.Repo != "" {
+		params["query.repo"] = opts.Repo
+	}
+
+	if opts.AppNamespace != "" {
+		params["query.appNamespace"] = opts.AppNamespace
+	}
+
+	if opts.FetchFromHarness {
+		params["fetchFromHarness"] = "true"
+	}
+
+	var response dto.GitOpsApplication
+	err := g.Client.Get(ctx, path, params, nil, &response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get GitOps application: %w", err)
 	}
 
 	return &response, nil

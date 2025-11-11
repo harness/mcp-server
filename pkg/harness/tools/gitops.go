@@ -142,3 +142,141 @@ func ListGitOpsApplicationsTool(config *config.Config, client *client.GitOpsServ
 			return mcp.NewToolResultText(string(r)), nil
 		}
 }
+
+// GetGitOpsApplicationTool creates a tool for getting a specific GitOps application
+// https://apidocs.harness.io/tag/Application#operation/AgentApplicationService_Get
+func GetGitOpsApplicationTool(config *config.Config, client *client.GitOpsService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("get_gitops_application",
+			mcp.WithDescription("Get details of a specific GitOps application by name. Returns the application's complete configuration, sync status, health status, and resource details."),
+			mcp.WithString("agent_identifier",
+				mcp.Required(),
+				mcp.Description("The identifier of the GitOps agent managing the application"),
+			),
+			mcp.WithString("application_name",
+				mcp.Required(),
+				mcp.Description("The name of the GitOps application to retrieve"),
+			),
+			mcp.WithString("refresh",
+				mcp.Description("Optional refresh mode: 'normal' to refresh only if source changed, 'hard' to force regeneration of all manifests"),
+			),
+			mcp.WithString("project",
+				mcp.Description("Optional comma-separated list of project names to restrict returned applications"),
+			),
+			mcp.WithString("resource_version",
+				mcp.Description("Optional resource version - when specified with a watch call, shows changes that occur after that particular version"),
+			),
+			mcp.WithString("selector",
+				mcp.Description("Optional label selector to restrict returned applications to those with matched labels"),
+			),
+			mcp.WithString("repo",
+				mcp.Description("Optional repository URL to restrict returned applications"),
+			),
+			mcp.WithString("app_namespace",
+				mcp.Description("Optional application namespace"),
+			),
+			mcp.WithBoolean("fetch_from_harness",
+				mcp.Description("Optional flag to fetch application directly from Harness database instead of from agent (may not return latest state)"),
+			),
+			common.WithScope(config, true),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, true)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// Get required parameters
+			agentIdentifier, err := RequiredParam[string](request, "agent_identifier")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			applicationName, err := RequiredParam[string](request, "application_name")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// Build options from optional parameters
+			opts := &dto.GitOpsGetApplicationOptions{}
+
+			// Get optional refresh parameter
+			refresh, err := OptionalParam[string](request, "refresh")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// Validate refresh parameter if provided
+			if refresh != "" {
+				if refresh != "normal" && refresh != "hard" {
+					return mcp.NewToolResultError("refresh parameter must be 'normal' or 'hard'"), nil
+				}
+				opts.Refresh = refresh
+			}
+
+			// Get optional project parameter (comma-separated string)
+			project, err := OptionalParam[string](request, "project")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if project != "" {
+				opts.Project = []string{project}
+			}
+
+			// Get optional resource_version parameter
+			resourceVersion, err := OptionalParam[string](request, "resource_version")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if resourceVersion != "" {
+				opts.ResourceVersion = resourceVersion
+			}
+
+			// Get optional selector parameter
+			selector, err := OptionalParam[string](request, "selector")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if selector != "" {
+				opts.Selector = selector
+			}
+
+			// Get optional repo parameter
+			repo, err := OptionalParam[string](request, "repo")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if repo != "" {
+				opts.Repo = repo
+			}
+
+			// Get optional app_namespace parameter
+			appNamespace, err := OptionalParam[string](request, "app_namespace")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if appNamespace != "" {
+				opts.AppNamespace = appNamespace
+			}
+
+			// Get optional fetch_from_harness parameter
+			fetchFromHarness, err := OptionalParam[bool](request, "fetch_from_harness")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			opts.FetchFromHarness = fetchFromHarness
+
+			// Call the GitOps service to get the application
+			response, err := client.GetApplication(ctx, scope, agentIdentifier, applicationName, opts)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get GitOps application: %w", err)
+			}
+
+			// Marshal the response
+			r, err := json.Marshal(response)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal GitOps application: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
