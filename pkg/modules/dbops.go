@@ -101,7 +101,7 @@ func RegisterDbops(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	}
 
 	// Create connector client for JDBC connector operations
-	connectorClient, err := utils.CreateServiceClient(config, config.NgManagerBaseURL, config.BaseURL, "ng/api", config.NgManagerSecret)
+	connectorClient, err := utils.CreateServiceClient(config, config.NgManagerBaseURL, config.BaseURL, "ng/api", config.NgManagerSecret, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("failed to create client for connectors: %w", err)
 	}

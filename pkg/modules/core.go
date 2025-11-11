@@ -208,7 +208,7 @@ func RegisterPipelines(config *config.Config, tsg *toolsets.ToolsetGroup) error 
 
 // RegisterConnectors registers the connectors toolset
 func RegisterConnectors(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-	connectorClient, err := utils.CreateServiceClient(config, config.NgManagerBaseURL, config.BaseURL, "ng/api", config.NgManagerSecret)
+	connectorClient, err := utils.CreateServiceClient(config, config.NgManagerBaseURL, config.BaseURL, "ng/api", config.NgManagerSecret, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("failed to create client for connectors: %w", err)
 	}
@@ -228,7 +228,7 @@ func RegisterConnectors(config *config.Config, tsg *toolsets.ToolsetGroup) error
 
 // RegisterDelegateTokens registers the DelegateTokens toolset
 func RegisterDelegateTokens(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-	delegateTokenClient, err := utils.CreateServiceClient(config, config.NgManagerBaseURL, config.BaseURL, "ng/api", config.NgManagerSecret)
+	delegateTokenClient, err := utils.CreateServiceClient(config, config.NgManagerBaseURL, config.BaseURL, "ng/api", config.NgManagerSecret, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("failed to create client for DelegateTokens: %w", err)
 	}
