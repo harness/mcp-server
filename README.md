@@ -328,6 +328,52 @@ Run the docker image:
 ```bash
 docker run -p 8080:8080 -e HARNESS_BASE_URL=https://app.harness.io -e HARNESS_API_KEY=<PAT> harness-mcp-server http-server
 ```
+To run MCP server on local Kubernetes cluster: 
+
+Override the values in helm chart using a values-local.yaml file:
+
+```yaml
+# Local development overrides
+image:
+  repository: harness-mcp-server
+  tag: local
+  pullPolicy: Never
+
+# Override global settings
+global:
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 1
+
+# Run only 1 replica for local development
+replicaCount: 1
+
+# Disable autoscaling for local
+autoscaling:
+  enabled: false
+
+# Use NodePort for easy local access
+service:
+  type: NodePort
+  port: 8080
+  nodePort: 30080
+
+localMode: True
+
+# Local environment configuration
+config:
+  HARNESS_BASE_URL: "https://app.harness.io"
+  HARNESS_API_KEY: "<PAT>"
+  HARNESS_LOG_FORMAT: "text"
+  HARNESS_DEBUG: "true"                                                               
+```
+
+And then run the helm chart with the values-local.yaml file:
+
+```bash
+helm install harness-mcp-server ./harness-mcp-server -f values-local.yaml
+```
 
 OR you can also add the environment variables to the launch.json file of the go extension for vscode:
 
