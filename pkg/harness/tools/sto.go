@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/harness/harness-mcp/client"
@@ -16,6 +17,105 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
+
+// convertTargetNamesToIds converts comma-separated target names to comma-separated target IDs
+func convertTargetNamesToIds(ctx context.Context, targetNamesStr string, filters *generated.FrontendAllIssuesFiltersResponseBody) string {
+	if targetNamesStr == "" || filters == nil || len(filters.LatestBaselineScans) == 0 {
+		return ""
+	}
+
+	targetNames := strings.Split(targetNamesStr, ",")
+	var targetIds []string
+	targetIdMap := make(map[string]bool)
+
+	for _, targetName := range targetNames {
+		targetName = strings.TrimSpace(targetName)
+		for _, scan := range filters.LatestBaselineScans {
+			if strings.EqualFold(scan.TargetName, targetName) {
+				if !targetIdMap[scan.TargetId] {
+					targetIds = append(targetIds, scan.TargetId)
+					targetIdMap[scan.TargetId] = true
+				}
+			}
+		}
+	}
+
+	if len(targetIds) > 0 {
+		targetIdsStr := strings.Join(targetIds, ",")
+		slog.InfoContext(ctx, "Converted target names to IDs",
+			"target_names", targetNamesStr,
+			"target_ids", targetIdsStr)
+		return targetIdsStr
+	}
+
+	slog.WarnContext(ctx, "No matching target IDs found for provided names",
+		"target_names", targetNamesStr)
+	return ""
+}
+
+// convertScannerNamesToIds converts comma-separated scanner names to comma-separated scanner tool IDs
+func convertScannerNamesToIds(ctx context.Context, scannerNamesStr string, filters *generated.FrontendAllIssuesFiltersResponseBody) string {
+	if scannerNamesStr == "" || filters == nil || len(filters.LatestBaselineScans) == 0 {
+		return ""
+	}
+
+	scannerNames := strings.Split(scannerNamesStr, ",")
+	var scanToolIds []string
+	scanToolIdMap := make(map[string]bool)
+
+	for _, scannerName := range scannerNames {
+		scannerName = strings.TrimSpace(scannerName)
+		for _, scan := range filters.LatestBaselineScans {
+			if strings.EqualFold(scan.ScanToolName, scannerName) {
+				if !scanToolIdMap[scan.ScanTool] {
+					scanToolIds = append(scanToolIds, scan.ScanTool)
+					scanToolIdMap[scan.ScanTool] = true
+				}
+			}
+		}
+	}
+
+	if len(scanToolIds) > 0 {
+		scanToolIdsStr := strings.Join(scanToolIds, ",")
+		slog.InfoContext(ctx, "Converted scanner names to IDs",
+			"scanner_names", scannerNamesStr,
+			"scan_tool_ids", scanToolIdsStr)
+		return scanToolIdsStr
+	}
+
+	slog.WarnContext(ctx, "No matching scanner IDs found for provided names",
+		"scanner_names", scannerNamesStr)
+	return ""
+}
+
+func fetchFilters(ctx context.Context, scope dto.Scope, client *generated.ClientWithResponses) (*generated.FrontendAllIssuesFiltersResponseBody, error) {
+	params := &generated.FrontendAllIssuesFiltersParams{
+		AccountId: scope.AccountID,
+		OrgId:     scope.OrgID,
+		ProjectId: scope.ProjectID,
+	}
+
+	resp, err := client.FrontendAllIssuesFiltersWithResponse(ctx, params)
+	if err != nil {
+		slog.ErrorContext(ctx, "FrontendFilters API request failed",
+			"error", err,
+			"accountId", params.AccountId,
+			"orgId", params.OrgId,
+			"projectId", params.ProjectId)
+		return nil, fmt.Errorf("failed to fetch filters: %w", err)
+	}
+
+	if resp.StatusCode() != 200 {
+		return nil, fmt.Errorf("failed to fetch filters: status %d", resp.StatusCode())
+	}
+
+	if resp.JSON200 == nil {
+		slog.ErrorContext(ctx, "FrontendFilters API returned 200 but JSON200 is nil")
+		return nil, fmt.Errorf("failed to fetch filters: JSON200 is nil")
+	}
+
+	return resp.JSON200, nil
+}
 
 // StoAllIssuesListTool returns a tool for listing all issues from the STO Frontend.
 func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
@@ -64,17 +164,18 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 				mcp.Max(20),
 				mcp.Required(),
 			),
-			mcp.WithString("targetIds",
-				mcp.Description("Comma-separated target IDs to filter")),
+			mcp.WithString("targetNames",
+				mcp.Description("Comma-separated targetNames to filter. can be reffeed as target in the request. The target name is the name of the target in the STO and will be converted to targetIds before making the API call.")),
 			mcp.WithString("targetTypes", mcp.Description(`Optional. Filter issues by target type.
                                                     - Accepts a comma-separated list of target types.
                                                     - Allowed values: configuration, container, instance, repository
                                                     - Example: "configuration,container"
                                                     - If not provided, all target types are included.
                                                 `)),
-			mcp.WithString("pipelineIds", mcp.Description("Comma-separated pipeline IDs to filter")),
+			mcp.WithString("pipelineIds", mcp.Description("Comma-separated pipeline IDs to filter. Use list_pipelines (if available) first to verify and the correct pipeline_id if you're unsure of the exact ID.")),
 			mcp.WithString("scanTools", mcp.Description(`Optional. Filter issues by scan tool.
                                                     - Accepts a comma-separated list of scan tools.
+													- Can be referred as scanner or scanner name in the request.
                                                     - Allowed values: aqua-trivy, aws-ecr, blackduckhub, brakeman, burp, checkmarx, checkmarx-one, checkov, coverity, custom, fortify, gitleaks, grype, nexusiq, nikto, osv-scanner, owasp, semgrep, snyk, sonarqube, sysdig, traceable, twistlock, veracode, whitesource, wiz, zap, aqua-security
                                                     - Example: "aqua-trivy,semgrep"
                                                     - If not provided, all scan tools are included.
@@ -102,6 +203,9 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
                                                 - Allowed values: SAST,DAST,SCA,IAC,SECRET,MISCONFIG,BUG_SMELLS,CODE_SMELLS,CODE_COVERAGE,EXTERNAL_POLICY
                                                 - Example: "SCA,SAST"
                                                 - If not provided (field omitted), all issue types are included (default behavior, as in: ?issueTypes= omitted in the request).
+												- Convert the values to uppercase and replace space with underscore.
+												- Example: "External Policy" -> "EXTERNAL_POLICY"
+												- Example: "Bug Smells" -> "BUG_SMELLS"
                                             `)),
 			common.WithScope(config, true),
 		), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -109,6 +213,15 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+			filters, err := fetchFilters(ctx, scope, client)
+			if err != nil {
+				slog.ErrorContext(ctx, "Failed to fetch filters API call",
+					"error", err,
+					"accountId", scope.AccountID,
+					"orgId", scope.OrgID,
+					"projectId", scope.ProjectID)
+			}
+
 			params := &generated.FrontendAllIssuesListParams{
 				AccountId: scope.AccountID,
 				OrgId:     scope.OrgID,
@@ -134,8 +247,11 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 			} else {
 				params.PageSize = &size
 			}
-			if v, _ := OptionalParam[string](request, "targetIds"); v != "" {
-				params.TargetIds = &v
+			// Convert target names to target IDs
+			if targetNamesStr, _ := OptionalParam[string](request, "targetNames"); targetNamesStr != "" {
+				if targetIdsStr := convertTargetNamesToIds(ctx, targetNamesStr, filters); targetIdsStr != "" {
+					params.TargetIds = &targetIdsStr
+				}
 			}
 			if v, _ := OptionalParam[string](request, "targetTypes"); v != "" {
 				params.TargetTypes = &v
@@ -143,8 +259,13 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 			if v, _ := OptionalParam[string](request, "pipelineIds"); v != "" {
 				params.PipelineIds = &v
 			}
-			if v, _ := OptionalParam[string](request, "scanTools"); v != "" {
-				params.ScanTools = &v
+			// Convert scanner names to scanner tool IDs
+			if scannerNamesStr, _ := OptionalParam[string](request, "scanTools"); scannerNamesStr != "" {
+				combinedScanTools := scannerNamesStr
+				if scanToolIdsStr := convertScannerNamesToIds(ctx, scannerNamesStr, filters); scanToolIdsStr != "" {
+					combinedScanTools = combinedScanTools + "," + scannerNamesStr
+				}
+				params.ScanTools = &combinedScanTools
 			}
 			if v, _ := OptionalParam[string](request, "severityCodes"); v != "" {
 				params.SeverityCodes = &v

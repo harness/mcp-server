@@ -31,6 +31,12 @@ const (
 	AllIssueSummarySeverityCodeUnassigned AllIssueSummarySeverityCode = "Unassigned"
 )
 
+// Defines values for AllIssueSummaryStatus.
+const (
+	AllIssueSummaryStatusActive   AllIssueSummaryStatus = "Active"
+	AllIssueSummaryStatusExempted AllIssueSummaryStatus = "Exempted"
+)
+
 // Defines values for ExemptionCanApproveFor.
 const (
 	ExemptionCanApproveForACCOUNT  ExemptionCanApproveFor = "ACCOUNT"
@@ -68,12 +74,12 @@ const (
 
 // Defines values for ExemptionType.
 const (
-	ExemptionTypeAcceptableRisk       ExemptionType = "Acceptable Risk"
-	ExemptionTypeAcceptableUse        ExemptionType = "Acceptable Use"
-	ExemptionTypeCompensatingControls ExemptionType = "Compensating Controls"
-	ExemptionTypeFalsePositive        ExemptionType = "False Positive"
-	ExemptionTypeFixUnavailable       ExemptionType = "Fix Unavailable"
-	ExemptionTypeOther                ExemptionType = "Other"
+	AcceptableRisk       ExemptionType = "Acceptable Risk"
+	AcceptableUse        ExemptionType = "Acceptable Use"
+	CompensatingControls ExemptionType = "Compensating Controls"
+	FalsePositive        ExemptionType = "False Positive"
+	FixUnavailable       ExemptionType = "Fix Unavailable"
+	Other                ExemptionType = "Other"
 )
 
 // Defines values for FrontendExemptionCanApproveFor.
@@ -145,6 +151,14 @@ const (
 	SECRET         IssueSummaryType = "SECRET"
 )
 
+// Defines values for LatestBaselineScanInfoTargetType.
+const (
+	Configuration LatestBaselineScanInfoTargetType = "configuration"
+	Container     LatestBaselineScanInfoTargetType = "container"
+	Instance      LatestBaselineScanInfoTargetType = "instance"
+	Repository    LatestBaselineScanInfoTargetType = "repository"
+)
+
 // Defines values for ExemptionsApproveExemptionParamsAction.
 const (
 	Approve ExemptionsApproveExemptionParamsAction = "approve"
@@ -160,7 +174,7 @@ const (
 	Rejected FrontendGlobalExemptionsParamsStatus = "Rejected"
 )
 
-// AllIssueSummary All issue summary
+// AllIssueSummary All issue list summary
 type AllIssueSummary struct {
 	// ExemptionExpiration Unix timestamp at which this Exemption will expire
 	ExemptionExpiration *int64 `json:"exemptionExpiration,omitempty"`
@@ -192,12 +206,23 @@ type AllIssueSummary struct {
 	// SeverityCode Severity code
 	SeverityCode AllIssueSummarySeverityCode `json:"severityCode"`
 
+	// Status Issue Status
+	Status *AllIssueSummaryStatus `json:"status,omitempty"`
+
 	// Title Title of the Security Issue
 	Title string `json:"title"`
 }
 
 // AllIssueSummarySeverityCode Severity code
 type AllIssueSummarySeverityCode string
+
+// AllIssueSummaryStatus Issue Status
+type AllIssueSummaryStatus string
+
+// AllIssuesFiltersResult defines model for AllIssuesFiltersResult.
+type AllIssuesFiltersResult struct {
+	LatestBaselineScans []LatestBaselineScanInfo `json:"latestBaselineScans"`
+}
 
 // AllIssuesListResult defines model for AllIssuesListResult.
 type AllIssuesListResult struct {
@@ -217,8 +242,14 @@ type ApproveExemptionRequestBody struct {
 
 // Exemption Information about an Exemption
 type Exemption struct {
+	// ApproverEmail Email of the user who approved this Exemption
+	ApproverEmail *string `json:"approverEmail,omitempty"`
+
 	// ApproverId User ID the user who approved or rejected this exemptions
 	ApproverId *string `json:"approverId,omitempty"`
+
+	// ApproverName Name of the user who approved this Exemption
+	ApproverName *string `json:"approverName,omitempty"`
 
 	// CanApproveFor Consists of RBAC scopes for an user associated with this Exemption
 	CanApproveFor *[]ExemptionCanApproveFor `json:"canApproveFor,omitempty"`
@@ -287,8 +318,14 @@ type Exemption struct {
 	// Reason Text describing why this Exemption is necessary
 	Reason string `json:"reason"`
 
-	// RequesterId User ID of user who requested this exemptions
+	// RequesterEmail Email of the user who requested this Exemption
+	RequesterEmail *string `json:"requesterEmail,omitempty"`
+
+	// RequesterId User ID of the user who requested this Exemption
 	RequesterId string `json:"requesterId"`
+
+	// RequesterName Name of the user who requested this Exemption
+	RequesterName *string `json:"requesterName,omitempty"`
 
 	// ScanId ID of the Harness Scan to determine all the occurrences for the scan-issue. You must also specify "projectId", "orgId" and "targetId". Cannot be specified alongside "pipelineId".
 	ScanId *string `json:"scanId,omitempty"`
@@ -324,13 +361,22 @@ type ExemptionStatus string
 // ExemptionType Type of Exemption (Compensating Controls / Acceptable Use / Acceptable Risk / False Positive / Fix Unavailable / Other)
 type ExemptionType string
 
+// FrontendAllIssuesFiltersResponseBody defines model for FrontendAllIssuesFiltersResponseBody.
+type FrontendAllIssuesFiltersResponseBody = AllIssuesFiltersResult
+
 // FrontendAllIssuesListResponseBody defines model for FrontendAllIssuesListResponseBody.
 type FrontendAllIssuesListResponseBody = AllIssuesListResult
 
 // FrontendExemption Exemption summary for frontend use
 type FrontendExemption struct {
+	// ApproverEmail Email of the user who approved this Exemption
+	ApproverEmail *string `json:"approverEmail,omitempty"`
+
 	// ApproverId User ID of the user who approved this Exemption
 	ApproverId *string `json:"approverId,omitempty"`
+
+	// ApproverName Name of the user who approved this Exemption
+	ApproverName *string `json:"approverName,omitempty"`
 
 	// CanApproveFor Scopes that the user has permission to approve for this Exemption
 	CanApproveFor *[]FrontendExemptionCanApproveFor `json:"canApproveFor,omitempty"`
@@ -387,8 +433,14 @@ type FrontendExemption struct {
 	// Reason Reason for Exemption
 	Reason string `json:"reason"`
 
+	// RequesterEmail Email of the user who requested this Exemption
+	RequesterEmail *string `json:"requesterEmail,omitempty"`
+
 	// RequesterId User ID of the user who requested this Exemption
 	RequesterId string `json:"requesterId"`
+
+	// RequesterName Name of the user who requested this Exemption
+	RequesterName *string `json:"requesterName,omitempty"`
 
 	// Scope The scope of the exemption
 	Scope *FrontendExemptionScope `json:"scope,omitempty"`
@@ -444,7 +496,7 @@ type IssueSummary struct {
 	// ExemptionCoverage Indicates if the Security Issue was found to be Exempted, Partially Exempted.
 	ExemptionCoverage *string `json:"exemptionCoverage,omitempty"`
 
-	// ExemptionId ID of the associated Exemption
+	// ExemptionId ID of Security Test Exemption
 	ExemptionId *string `json:"exemptionId,omitempty"`
 
 	// ExemptionStatusAtScan Exemption's status at the Security Scan created time
@@ -504,6 +556,28 @@ type IssueSummaryStatus string
 
 // IssueSummaryType The type of vulnerability or quality issue for this Issue
 type IssueSummaryType string
+
+// LatestBaselineScanInfo Information about a the latest scan of a targets baseline variant
+type LatestBaselineScanInfo struct {
+	// PipelineId ID of the Harness pipeline to which this Exemption applies
+	PipelineId string `json:"pipelineId"`
+
+	// ScanTool Product name of the scan tool used in this step
+	ScanTool string `json:"scanTool"`
+
+	// ScanToolName Human readable name of the scan tool used in this step
+	ScanToolName string `json:"scanToolName"`
+
+	// TargetId Associated Target ID
+	TargetId string `json:"targetId"`
+
+	// TargetName The name of the target of the pipeline step's scan
+	TargetName string                           `json:"targetName"`
+	TargetType LatestBaselineScanInfoTargetType `json:"targetType"`
+}
+
+// LatestBaselineScanInfoTargetType defines model for LatestBaselineScanInfo.TargetType.
+type LatestBaselineScanInfoTargetType string
 
 // NotFound defines model for NotFound.
 type NotFound struct {
@@ -592,6 +666,18 @@ type ExemptionsApproveExemptionParams struct {
 // ExemptionsApproveExemptionParamsAction defines parameters for ExemptionsApproveExemption.
 type ExemptionsApproveExemptionParamsAction string
 
+// FrontendAllIssuesFiltersParams defines parameters for FrontendAllIssuesFilters.
+type FrontendAllIssuesFiltersParams struct {
+	// AccountId Harness Account ID
+	AccountId string `form:"accountId" json:"accountId"`
+
+	// OrgId Harness Organization ID
+	OrgId string `form:"orgId" json:"orgId"`
+
+	// ProjectId Harness Project ID
+	ProjectId string `form:"projectId" json:"projectId"`
+}
+
 // FrontendAllIssuesListParams defines parameters for FrontendAllIssuesList.
 type FrontendAllIssuesListParams struct {
 	// AccountId Harness Account ID
@@ -616,6 +702,7 @@ type FrontendAllIssuesListParams struct {
 	ExemptionStatuses *string `form:"exemptionStatuses,omitempty" json:"exemptionStatuses,omitempty"`
 	Search            *string `form:"search,omitempty" json:"search,omitempty"`
 	IssueTypes        *string `form:"issueTypes,omitempty" json:"issueTypes,omitempty"`
+	Statuses          *string `form:"statuses,omitempty" json:"statuses,omitempty"`
 }
 
 // FrontendGlobalExemptionsParams defines parameters for FrontendGlobalExemptions.
@@ -738,6 +825,9 @@ type ClientInterface interface {
 
 	ExemptionsApproveExemption(ctx context.Context, id string, action ExemptionsApproveExemptionParamsAction, params *ExemptionsApproveExemptionParams, body ExemptionsApproveExemptionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// FrontendAllIssuesFilters request
+	FrontendAllIssuesFilters(ctx context.Context, params *FrontendAllIssuesFiltersParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// FrontendAllIssuesList request
 	FrontendAllIssuesList(ctx context.Context, params *FrontendAllIssuesListParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -785,6 +875,18 @@ func (c *Client) ExemptionsApproveExemptionWithBody(ctx context.Context, id stri
 
 func (c *Client) ExemptionsApproveExemption(ctx context.Context, id string, action ExemptionsApproveExemptionParamsAction, params *ExemptionsApproveExemptionParams, body ExemptionsApproveExemptionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewExemptionsApproveExemptionRequest(c.Server, id, action, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) FrontendAllIssuesFilters(ctx context.Context, params *FrontendAllIssuesFiltersParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewFrontendAllIssuesFiltersRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1062,6 +1164,75 @@ func NewExemptionsApproveExemptionRequestWithBody(server string, id string, acti
 	return req, nil
 }
 
+// NewFrontendAllIssuesFiltersRequest generates requests for FrontendAllIssuesFilters
+func NewFrontendAllIssuesFiltersRequest(server string, params *FrontendAllIssuesFiltersParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v2/frontend/all-issues/filters")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "accountId", runtime.ParamLocationQuery, params.AccountId); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "orgId", runtime.ParamLocationQuery, params.OrgId); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "projectId", runtime.ParamLocationQuery, params.ProjectId); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewFrontendAllIssuesListRequest generates requests for FrontendAllIssuesList
 func NewFrontendAllIssuesListRequest(server string, params *FrontendAllIssuesListParams) (*http.Request, error) {
 	var err error
@@ -1267,6 +1438,22 @@ func NewFrontendAllIssuesListRequest(server string, params *FrontendAllIssuesLis
 		if params.IssueTypes != nil {
 
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "issueTypes", runtime.ParamLocationQuery, *params.IssueTypes); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Statuses != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "statuses", runtime.ParamLocationQuery, *params.Statuses); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
 				return nil, err
@@ -1509,6 +1696,9 @@ type ClientWithResponsesInterface interface {
 
 	ExemptionsApproveExemptionWithResponse(ctx context.Context, id string, action ExemptionsApproveExemptionParamsAction, params *ExemptionsApproveExemptionParams, body ExemptionsApproveExemptionJSONRequestBody, reqEditors ...RequestEditorFn) (*ExemptionsApproveExemptionResponse, error)
 
+	// FrontendAllIssuesFiltersWithResponse request
+	FrontendAllIssuesFiltersWithResponse(ctx context.Context, params *FrontendAllIssuesFiltersParams, reqEditors ...RequestEditorFn) (*FrontendAllIssuesFiltersResponse, error)
+
 	// FrontendAllIssuesListWithResponse request
 	FrontendAllIssuesListWithResponse(ctx context.Context, params *FrontendAllIssuesListParams, reqEditors ...RequestEditorFn) (*FrontendAllIssuesListResponse, error)
 
@@ -1568,6 +1758,34 @@ func (r ExemptionsApproveExemptionResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r ExemptionsApproveExemptionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type FrontendAllIssuesFiltersResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *FrontendAllIssuesFiltersResponseBody
+	JSON400      *NotFound
+	JSON401      *NotFound
+	JSON403      *NotFound
+	JSON404      *NotFound
+	JSON429      *NotFound
+	JSON500      *NotFound
+}
+
+// Status returns HTTPResponse.Status
+func (r FrontendAllIssuesFiltersResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r FrontendAllIssuesFiltersResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -1661,6 +1879,15 @@ func (c *ClientWithResponses) ExemptionsApproveExemptionWithResponse(ctx context
 		return nil, err
 	}
 	return ParseExemptionsApproveExemptionResponse(rsp)
+}
+
+// FrontendAllIssuesFiltersWithResponse request returning *FrontendAllIssuesFiltersResponse
+func (c *ClientWithResponses) FrontendAllIssuesFiltersWithResponse(ctx context.Context, params *FrontendAllIssuesFiltersParams, reqEditors ...RequestEditorFn) (*FrontendAllIssuesFiltersResponse, error) {
+	rsp, err := c.FrontendAllIssuesFilters(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseFrontendAllIssuesFiltersResponse(rsp)
 }
 
 // FrontendAllIssuesListWithResponse request returning *FrontendAllIssuesListResponse
@@ -1773,6 +2000,74 @@ func ParseExemptionsApproveExemptionResponse(rsp *http.Response) (*ExemptionsApp
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest Exemption
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseFrontendAllIssuesFiltersResponse parses an HTTP response from a FrontendAllIssuesFiltersWithResponse call
+func ParseFrontendAllIssuesFiltersResponse(rsp *http.Response) (*FrontendAllIssuesFiltersResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &FrontendAllIssuesFiltersResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest FrontendAllIssuesFiltersResponseBody
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
