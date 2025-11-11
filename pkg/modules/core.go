@@ -280,7 +280,8 @@ func RegisterAudit(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	baseURL := utils.BuildServiceURL(config, config.AuditSvcBaseURL, config.BaseURL, "audit")
 	secret := config.AuditSvcSecret
 
-	c, err := utils.CreateClient(baseURL, config, secret)
+	customTimeout := 120 * time.Second
+	c, err := utils.CreateClient(baseURL, config, secret, customTimeout)
 	if err != nil {
 		return err
 	}
