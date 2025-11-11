@@ -280,3 +280,138 @@ func GetGitOpsApplicationTool(config *config.Config, client *client.GitOpsServic
 			return mcp.NewToolResultText(string(r)), nil
 		}
 }
+
+// GetGitOpsApplicationResourceTreeTool creates a tool for getting the resource tree of a GitOps application
+// https://apidocs.harness.io/tag/Application#operation/AgentApplicationService_ResourceTree
+func GetGitOpsApplicationResourceTreeTool(config *config.Config, client *client.GitOpsService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("get_gitops_application_resource_tree",
+			mcp.WithDescription("Get the resource tree for a GitOps application. Returns a hierarchical view of all Kubernetes resources managed by the application, including nodes, orphaned resources, and host information."),
+			mcp.WithString("agent_identifier",
+				mcp.Required(),
+				mcp.Description("The identifier of the GitOps agent managing the application"),
+			),
+			mcp.WithString("application_name",
+				mcp.Required(),
+				mcp.Description("The name of the GitOps application"),
+			),
+			mcp.WithString("namespace",
+				mcp.Description("Optional resource namespace to filter"),
+			),
+			mcp.WithString("name",
+				mcp.Description("Optional resource name to filter"),
+			),
+			mcp.WithString("version",
+				mcp.Description("Optional resource version to filter"),
+			),
+			mcp.WithString("group",
+				mcp.Description("Optional resource group to filter"),
+			),
+			mcp.WithString("kind",
+				mcp.Description("Optional resource kind to filter (e.g., Deployment, Service, Pod)"),
+			),
+			mcp.WithString("app_namespace",
+				mcp.Description("Optional application namespace"),
+			),
+			mcp.WithString("project",
+				mcp.Description("Optional project name"),
+			),
+			common.WithScope(config, true),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, true)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// Get required parameters
+			agentIdentifier, err := RequiredParam[string](request, "agent_identifier")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			applicationName, err := RequiredParam[string](request, "application_name")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// Build options from optional parameters
+			opts := &dto.GitOpsGetResourceTreeOptions{}
+
+			// Get optional namespace parameter
+			namespace, err := OptionalParam[string](request, "namespace")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if namespace != "" {
+				opts.Namespace = namespace
+			}
+
+			// Get optional name parameter
+			name, err := OptionalParam[string](request, "name")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if name != "" {
+				opts.Name = name
+			}
+
+			// Get optional version parameter
+			version, err := OptionalParam[string](request, "version")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if version != "" {
+				opts.Version = version
+			}
+
+			// Get optional group parameter
+			group, err := OptionalParam[string](request, "group")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if group != "" {
+				opts.Group = group
+			}
+
+			// Get optional kind parameter
+			kind, err := OptionalParam[string](request, "kind")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if kind != "" {
+				opts.Kind = kind
+			}
+
+			// Get optional app_namespace parameter
+			appNamespace, err := OptionalParam[string](request, "app_namespace")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if appNamespace != "" {
+				opts.AppNamespace = appNamespace
+			}
+
+			// Get optional project parameter
+			project, err := OptionalParam[string](request, "project")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if project != "" {
+				opts.Project = project
+			}
+
+			// Call the GitOps service to get the application resource tree
+			response, err := client.GetApplicationResourceTree(ctx, scope, agentIdentifier, applicationName, opts)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get GitOps application resource tree: %w", err)
+			}
+
+			// Marshal the response
+			r, err := json.Marshal(response)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal GitOps application resource tree: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}

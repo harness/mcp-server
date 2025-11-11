@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	gitopsListApplicationsPath = "/api/v1/applications"
-	gitopsGetApplicationPath   = "/api/v1/agents/%s/applications/%s"
+	gitopsListApplicationsPath        = "/api/v1/applications"
+	gitopsGetApplicationPath          = "/api/v1/agents/%s/applications/%s"
+	gitopsGetApplicationResourceTree  = "/api/v1/agents/%s/applications/%s/resource-tree"
 )
 
 // GitOpsService handles GitOps application operations
@@ -128,6 +129,63 @@ func (g *GitOpsService) GetApplication(ctx context.Context, scope dto.Scope, age
 	err := g.Client.Get(ctx, path, params, nil, &response)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get GitOps application: %w", err)
+	}
+
+	return &response, nil
+}
+
+// GetApplicationResourceTree retrieves the resource tree for a specific GitOps application
+// https://apidocs.harness.io/tag/Application#operation/AgentApplicationService_ResourceTree
+func (g *GitOpsService) GetApplicationResourceTree(ctx context.Context, scope dto.Scope, agentIdentifier string, applicationName string, opts *dto.GitOpsGetResourceTreeOptions) (*dto.GitOpsApplicationResourceTree, error) {
+	path := fmt.Sprintf(gitopsGetApplicationResourceTree, agentIdentifier, applicationName)
+	params := make(map[string]string)
+
+	// Ensure accountIdentifier is always set
+	if scope.AccountID == "" {
+		return nil, fmt.Errorf("accountIdentifier cannot be null")
+	}
+
+	// Add scope parameters
+	addScope(ctx, scope, params)
+
+	// Handle nil options
+	if opts == nil {
+		opts = &dto.GitOpsGetResourceTreeOptions{}
+	}
+
+	// Add optional query parameters
+	if opts.Namespace != "" {
+		params["query.namespace"] = opts.Namespace
+	}
+
+	if opts.Name != "" {
+		params["query.name"] = opts.Name
+	}
+
+	if opts.Version != "" {
+		params["query.version"] = opts.Version
+	}
+
+	if opts.Group != "" {
+		params["query.group"] = opts.Group
+	}
+
+	if opts.Kind != "" {
+		params["query.kind"] = opts.Kind
+	}
+
+	if opts.AppNamespace != "" {
+		params["query.appNamespace"] = opts.AppNamespace
+	}
+
+	if opts.Project != "" {
+		params["query.project"] = opts.Project
+	}
+
+	var response dto.GitOpsApplicationResourceTree
+	err := g.Client.Get(ctx, path, params, nil, &response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get GitOps application resource tree: %w", err)
 	}
 
 	return &response, nil

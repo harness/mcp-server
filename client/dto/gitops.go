@@ -169,3 +169,93 @@ type GitOpsGetApplicationOptions struct {
 	AppNamespace     string   `json:"appNamespace,omitempty"`     // Application namespace
 	FetchFromHarness bool     `json:"fetchFromHarness,omitempty"` // Fetch directly from Harness DB instead of agent
 }
+
+// GitOpsApplicationResourceTree holds nodes which belong to the application
+type GitOpsApplicationResourceTree struct {
+	Nodes         []ResourceNode `json:"nodes,omitempty"`         // List of nodes directly managed by the application and their children
+	OrphanedNodes []ResourceNode `json:"orphanedNodes,omitempty"` // Orphaned nodes not managed by the app but in the same namespace
+	Hosts         []HostInfo     `json:"hosts,omitempty"`         // Kubernetes nodes that run application related pods
+}
+
+// ResourceNode contains information about live resource and its children
+type ResourceNode struct {
+	ResourceRef     *ResourceRef              `json:"resourceRef,omitempty"`
+	ParentRefs      []ResourceRef             `json:"parentRefs,omitempty"`
+	Info            []InfoItem                `json:"info,omitempty"`
+	NetworkingInfo  *ResourceNetworkingInfo   `json:"networkingInfo,omitempty"`
+	ResourceVersion string                    `json:"resourceVersion,omitempty"`
+	Images          []string                  `json:"images,omitempty"`
+	Health          *HealthStatus             `json:"health,omitempty"`
+	CreatedAt       string                    `json:"createdAt,omitempty"`
+}
+
+// ResourceRef includes fields which uniquely identify a resource
+type ResourceRef struct {
+	Group     string `json:"group,omitempty"`
+	Version   string `json:"version,omitempty"`
+	Kind      string `json:"kind,omitempty"`
+	Namespace string `json:"namespace,omitempty"`
+	Name      string `json:"name,omitempty"`
+	UID       string `json:"uid,omitempty"`
+}
+
+// InfoItem represents an info item about a resource
+type InfoItem struct {
+	Name  string `json:"name,omitempty"`
+	Value string `json:"value,omitempty"`
+}
+
+// ResourceNetworkingInfo holds networking resource related information
+type ResourceNetworkingInfo struct {
+	TargetLabels map[string]string  `json:"targetLabels,omitempty"`
+	TargetRefs   []ResourceRef      `json:"targetRefs,omitempty"`
+	Labels       map[string]string  `json:"labels,omitempty"`
+	Ingress      []IngressInfo      `json:"ingress,omitempty"`
+	ExternalURLs []string           `json:"externalURLs,omitempty"`
+}
+
+// IngressInfo represents ingress information
+type IngressInfo struct {
+	Hostname string `json:"hostname,omitempty"`
+	Path     string `json:"path,omitempty"`
+}
+
+// HostInfo holds host name and resources metrics
+type HostInfo struct {
+	Name          string             `json:"name,omitempty"`
+	ResourcesInfo []HostResourceInfo `json:"resourcesInfo,omitempty"`
+	SystemInfo    *NodeSystemInfo    `json:"systemInfo,omitempty"`
+}
+
+// HostResourceInfo represents resource information for a host
+type HostResourceInfo struct {
+	ResourceName         string `json:"resourceName,omitempty"`
+	RequestedByApp       string `json:"requestedByApp,omitempty"`
+	RequestedByNeighbors string `json:"requestedByNeighbors,omitempty"`
+	Capacity             string `json:"capacity,omitempty"`
+}
+
+// NodeSystemInfo represents node system information
+type NodeSystemInfo struct {
+	MachineID               string `json:"machineID,omitempty"`
+	SystemUUID              string `json:"systemUUID,omitempty"`
+	BootID                  string `json:"bootID,omitempty"`
+	KernelVersion           string `json:"kernelVersion,omitempty"`
+	OSImage                 string `json:"osImage,omitempty"`
+	ContainerRuntimeVersion string `json:"containerRuntimeVersion,omitempty"`
+	KubeletVersion          string `json:"kubeletVersion,omitempty"`
+	KubeProxyVersion        string `json:"kubeProxyVersion,omitempty"`
+	OperatingSystem         string `json:"operatingSystem,omitempty"`
+	Architecture            string `json:"architecture,omitempty"`
+}
+
+// GitOpsGetResourceTreeOptions represents the options for getting application resource tree
+type GitOpsGetResourceTreeOptions struct {
+	Namespace    string `json:"namespace,omitempty"`    // Resource namespace
+	Name         string `json:"name,omitempty"`         // Resource name
+	Version      string `json:"version,omitempty"`      // Resource version
+	Group        string `json:"group,omitempty"`        // Resource group
+	Kind         string `json:"kind,omitempty"`         // Resource kind
+	AppNamespace string `json:"appNamespace,omitempty"` // Application namespace
+	Project      string `json:"project,omitempty"`      // Project name
+}

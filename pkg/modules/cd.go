@@ -209,6 +209,7 @@ func RegisterGitOps(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 		AddReadTools(
 			toolsets.NewServerTool(tools.ListGitOpsApplicationsTool(config, gitopsClient)),
 			toolsets.NewServerTool(tools.GetGitOpsApplicationTool(config, gitopsClient)),
+			toolsets.NewServerTool(tools.GetGitOpsApplicationResourceTreeTool(config, gitopsClient)),
 		)
 
 	// Add toolset to the group
