@@ -228,7 +228,7 @@ func RegisterConnectors(config *config.Config, tsg *toolsets.ToolsetGroup) error
 
 // RegisterDelegateTokens registers the DelegateTokens toolset
 func RegisterDelegateTokens(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-	customTimeout := 30 * time.Second
+	customTimeout := 120 * time.Second
 	delegateTokenClient, err := utils.CreateServiceClient(config, config.NgManagerBaseURL, config.BaseURL, "ng/api", config.NgManagerSecret, customTimeout)
 	if err != nil {
 		return fmt.Errorf("failed to create client for DelegateTokens: %w", err)
