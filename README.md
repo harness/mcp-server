@@ -18,6 +18,7 @@ The Harness MCP Server is a [Model Context Protocol (MCP)](https://modelcontextp
 - [Makefile Usage](#makefile-usage)
 - [Build from Source](#build-from-source)
 - [Use Docker Image](#use-docker-image)
+- [Run on local Kubernetes cluster](#run-on-local-kubernetes-cluster)
 - [Integration with AI Assistants](#integration-with-ai-assistants)
   - [Usage with Gemini CLI](#usage-with-gemini-cli)
   - [Claude Desktop Configuration](#claude-desktop-configuration)
@@ -299,18 +300,22 @@ HARNESS_API_KEY=your_api_key HARNESS_DEFAULT_ORG_ID=your_org_id HARNESS_DEFAULT_
 
 ### Use Docker Image
 
+#### Stdio mode
 Alternatively, you can use the pre-built Docker image:
 
 ```bash
 docker run -i --rm \
   -e HARNESS_API_KEY=your_api_key \
-  -e HARNESS_DEFAULT_ORG_ID=your_org_id \
-  -e HARNESS_DEFAULT_PROJECT_ID=your_project_id \
   -e HARNESS_BASE_URL=your_base_url \
   harness/mcp-server stdio
 ```
 
-## Running MCP Server as http server
+Optional environment variables:
+
+1. HARNESS_DEFAULT_ORG_ID
+2. HARNESS_DEFAULT_PROJECT_ID
+
+#### Http mode
 
 To run the MCP server as a http server locally, the following environment variables must be set:
 
@@ -328,7 +333,8 @@ Run the docker image:
 ```bash
 docker run -p 8080:8080 -e HARNESS_BASE_URL=https://app.harness.io -e HARNESS_API_KEY=<PAT> harness-mcp-server http-server
 ```
-To run MCP server on local Kubernetes cluster: 
+
+### To run MCP server on local Kubernetes cluster: 
 
 Override the values in helm chart using a values-local.yaml file:
 
@@ -343,8 +349,6 @@ image:
 global:
   autoscaling:
     enabled: false
-    minReplicas: 1
-    maxReplicas: 1
 
 # Run only 1 replica for local development
 replicaCount: 1
@@ -364,9 +368,7 @@ localMode: True
 # Local environment configuration
 config:
   HARNESS_BASE_URL: "https://app.harness.io"
-  HARNESS_API_KEY: "<PAT>"
-  HARNESS_LOG_FORMAT: "text"
-  HARNESS_DEBUG: "true"                                                               
+  HARNESS_API_KEY: "<PAT>"                                                              
 ```
 
 And then run the helm chart with the values-local.yaml file:
@@ -374,32 +376,6 @@ And then run the helm chart with the values-local.yaml file:
 ```bash
 helm install harness-mcp-server ./harness-mcp-server -f values-local.yaml
 ```
-
-OR you can also add the environment variables to the launch.json file of the go extension for vscode:
-
-Add the server config to your launch.json file:
-
-```json
-{
-    "name": "HTTP Server",
-    "type": "go",
-    "request": "launch",
-    "mode": "auto",
-    "program": "${workspaceFolder}/cmd/harness-mcp-server",
-    "args": ["http-server"],
-    "env": {
-        "HARNESS_BASE_URL": "https://app.harness.io",
-        "HARNESS_API_KEY": "<PAT>"
-    }
-}
-```
-
-JWT based authentication is also supported. The following environment variables must be set:
-
-1. HARNESS_BASE_URL
-2. HARNESS_MCP_SVC_SECRET
-
-- Requires `Authorization: Bearer <token>` header in each request.
 
 ## Integration with AI Assistants
 
@@ -514,6 +490,25 @@ To use the Harness MCP Server with Windsurf:
       }
     }
   }
+}
+```
+
+### In Http server mode
+
+Add the server config to your launch.json file:
+
+```json
+{
+    "name": "HTTP Server",
+    "type": "go",
+    "request": "launch",
+    "mode": "auto",
+    "program": "${workspaceFolder}/cmd/harness-mcp-server",
+    "args": ["http-server"],
+    "env": {
+        "HARNESS_BASE_URL": "https://app.harness.io",
+        "HARNESS_API_KEY": "<PAT>"
+    }
 }
 ```
 
