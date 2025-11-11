@@ -147,10 +147,10 @@ func TestListPipelines(t *testing.T) {
 	}
 
 	getPipelineResponse, err := mcpClient.CallTool(ctx, getPipelineRequest)
+	require.NoError(t, err, "expected to call 'list_pipelines' tool successfully")
 	if getPipelineResponse.IsError {
 		t.Logf("Error response: %v", getPipelineResponse.Content)
 	}
-	require.NoError(t, err, "expected to call 'list_pipelines' tool successfully")
 	require.False(t, getPipelineResponse.IsError, "expected result not to be an error")
 
 	// Verify response content
@@ -176,10 +176,10 @@ func TestListExecutions(t *testing.T) {
 	}
 
 	response, err := mcpClient.CallTool(ctx, request)
+	require.NoError(t, err, "expected to call 'list_executions' tool successfully")
 	if response.IsError {
 		t.Logf("Error response: %v", response.Content)
 	}
-	require.NoError(t, err, "expected to call 'list_executions' tool successfully")
 	require.False(t, response.IsError, "expected result not to be an error")
 
 	// Verify response content
@@ -216,10 +216,10 @@ func TestListExecutions(t *testing.T) {
 	}
 
 	getExecutionResponse, err := mcpClient.CallTool(ctx, getExecutionRequest)
+	require.NoError(t, err, "expected to call 'get_execution' tool successfully")
 	if getExecutionResponse.IsError {
 		t.Logf("Error response: %v", getExecutionResponse.Content)
 	}
-	require.NoError(t, err, "expected to call 'get_execution' tool successfully")
 	require.False(t, getExecutionResponse.IsError, "expected result not to be an error")
 
 	// Verify response content
@@ -245,10 +245,10 @@ func TestPipelineWorkflow(t *testing.T) {
 	}
 
 	listResponse, err := mcpClient.CallTool(ctx, listRequest)
+	require.NoError(t, err, "expected to call 'list_pipelines' tool successfully")
 	if listResponse.IsError {
 		t.Logf("Error response: %v", listResponse.Content)
 	}
-	require.NoError(t, err, "expected to call 'list_pipelines' tool successfully")
 	require.False(t, listResponse.IsError, "expected result not to be an error")
 
 	// Check if Content is empty before accessing elements
@@ -291,10 +291,10 @@ func TestPipelineWorkflow(t *testing.T) {
 	}
 
 	executionsResponse, err := mcpClient.CallTool(ctx, executionsRequest)
+	require.NoError(t, err, "expected to call 'list_executions' tool successfully")
 	if executionsResponse.IsError {
 		t.Logf("Error response: %v", executionsResponse.Content)
 	}
-	require.NoError(t, err, "expected to call 'list_executions' tool successfully")
 	require.False(t, executionsResponse.IsError, "expected result not to be an error")
 }
 

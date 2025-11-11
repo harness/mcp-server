@@ -70,10 +70,10 @@ func TestListConnectorsAndGetDetails(t *testing.T) {
 	}
 
 	listResp, err := mcpClient.CallTool(ctx, listReq)
+	require.NoError(t, err, "expected to call 'list_connectors' tool successfully")
 	if listResp.IsError {
 		t.Logf("Error response: %v", listResp.Content)
 	}
-	require.NoError(t, err, "expected to call 'list_connectors' tool successfully")
 	require.False(t, listResp.IsError, "expected result not to be an error")
 	require.NotEmpty(t, listResp.Content, "expected content to not be empty")
 
@@ -107,10 +107,10 @@ func TestListConnectorsAndGetDetails(t *testing.T) {
 	}
 
 	getResp, err := mcpClient.CallTool(ctx, getReq)
+	require.NoError(t, err, "expected to call 'get_connector_details' tool successfully")
 	if getResp.IsError {
 		t.Logf("Error response: %v", getResp.Content)
 	}
-	require.NoError(t, err, "expected to call 'get_connector_details' tool successfully")
 	require.False(t, getResp.IsError, "expected result not to be an error")
 	require.NotEmpty(t, getResp.Content, "expected content to not be empty")
 
@@ -139,10 +139,10 @@ func TestListConnectorCatalogue(t *testing.T) {
 	}
 
 	resp, err := mcpClient.CallTool(ctx, req)
+	require.NoError(t, err, "expected to call 'list_connector_catalogue' tool successfully")
 	if resp.IsError {
 		t.Logf("Error response: %v", resp.Content)
 	}
-	require.NoError(t, err, "expected to call 'list_connector_catalogue' tool successfully")
 	require.False(t, resp.IsError, "expected result not to be an error")
 	require.NotEmpty(t, resp.Content, "expected content to not be empty")
 

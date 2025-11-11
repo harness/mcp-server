@@ -133,10 +133,10 @@ func TestCreateWorkflow(t *testing.T) {
 	}
 
 	generateIDPWorkflowResponse, err := mcpClient.CallTool(ctx, generateIDPWorkflowRequest)
+	require.NoError(t, err, "expected to call 'generate_idp_workflow' tool successfully")
 	if generateIDPWorkflowResponse.IsError {
 		t.Logf("Error response: %v", generateIDPWorkflowResponse.Content)
 	}
-	require.NoError(t, err, "expected to call 'generate_idp_workflow' tool successfully")
 	require.False(t, generateIDPWorkflowResponse.IsError, "expected result not to be an error")
 
 	// Verify response content
@@ -210,10 +210,10 @@ func TestExecuteWorkflow(t *testing.T) {
 	}
 
 	executeWorkflowResponse, err := mcpClient.CallTool(ctx, executeWorkflowRequest)
+	require.NoError(t, err, "expected to call 'execute_workflow' tool successfully")
 	if executeWorkflowResponse.IsError {
 		t.Logf("Error response: %v", executeWorkflowResponse.Content)
 	}
-	require.NoError(t, err, "expected to call 'execute_workflow' tool successfully")
 	require.False(t, executeWorkflowResponse.IsError, "expected result not to be an error")
 
 	// Verify response content
