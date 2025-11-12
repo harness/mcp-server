@@ -32,15 +32,14 @@ type Config struct {
 		Port int `envconfig:"MCP_METRICS_PORT" default:"8889"`
 	}
 
-	Internal         bool
-	SkipAuthForLocal bool
+	Internal  bool
+	APIKey    string
+	BaseURL   string
+	AccountID string
 
 	// Only used for external mode
-	BaseURL          string
-	AccountID        string
 	DefaultOrgID     string
 	DefaultProjectID string
-	APIKey           string
 
 	// Only used for internal mode
 	BearerToken             string

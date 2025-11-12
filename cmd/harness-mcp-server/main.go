@@ -75,8 +75,20 @@ var (
 
 			transportType := enum.TransportHTTP
 
+			accountID := ""
+			apiKey := viper.GetString("api_key")
+			internal := true
+			var err error
+			if apiKey != "" {
+				accountID, err = extractAccountIDFromAPIKey(apiKey)
+				if err != nil {
+					slog.Error("failed to extract account ID from API key", "error", err)
+				}
+				internal = false
+			}
+
 			var toolsets []string
-			err := viper.UnmarshalKey("toolsets", &toolsets)
+			err = viper.UnmarshalKey("toolsets", &toolsets)
 			if err != nil {
 				return fmt.Errorf("failed to unmarshal toolsets: %w", err)
 			}
@@ -117,7 +129,7 @@ var (
 				}{
 					Port: viper.GetInt("metrics_port"),
 				},
-				Internal:                true,
+				Internal:                internal,
 				Toolsets:                []string{"all"},
 				EnableModules:           []string{"all"},
 				LogFormat:               logFormat,
@@ -161,7 +173,9 @@ var (
 				ACLSvcBaseURL:           viper.GetString("acl_svc_base_url"),
 				ACLSvcSecret:            viper.GetString("acl_svc_secret"),
 				OutputDir:               viper.GetString("output_dir"),
-				SkipAuthForLocal:        viper.GetBool("skip_auth_for_local"),
+				AccountID:               accountID,
+				APIKey:                  apiKey,
+				BaseURL:                 viper.GetString("base_url"),
 			}
 
 			return runHTTPServer(ctx, cfg)
@@ -353,6 +367,8 @@ func init() {
 	rootCmd.PersistentFlags().Bool("debug", false, "Enable debug logging")
 	rootCmd.PersistentFlags().String("output-dir", "", "Directory where the tool writes output files (e.g., pipeline logs)")
 	rootCmd.PersistentFlags().String("log-format", "text", "Log format (text or json)")
+	rootCmd.PersistentFlags().String("api-key", "", "API key for authentication")
+	rootCmd.PersistentFlags().String("base-url", "https://app.harness.io", "Base URL for Harness")
 
 	httpServerCmd.PersistentFlags().Int("http-port", 8080, "HTTP server port (when transport is 'http')")
 	httpServerCmd.PersistentFlags().String("http-path", "/mcp", "HTTP server path (when transport is 'http')")
@@ -397,11 +413,8 @@ func init() {
 	httpServerCmd.Flags().String("dbops-svc-secret", "", "Secret for dbops service")
 	httpServerCmd.Flags().String("acl-svc-base-url", "", "Base URL for ACL service")
 	httpServerCmd.Flags().String("acl-svc-secret", "", "Secret for ACL service")
-	httpServerCmd.Flags().Bool("skip-auth-for-local", false, "Skip authentication for local development")
 
 	// Add stdio-specific flags
-	stdioCmd.Flags().String("base-url", "https://app.harness.io", "Base URL for Harness")
-	stdioCmd.Flags().String("api-key", "", "API key for authentication")
 	stdioCmd.Flags().String("default-org-id", "",
 		"Default org ID to use. If not specified, it would need to be passed in the query (if required)")
 	stdioCmd.Flags().String("default-project-id", "",
@@ -460,6 +473,8 @@ func init() {
 	_ = viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
 	_ = viper.BindPFlag("output_dir", rootCmd.PersistentFlags().Lookup("output-dir"))
 	_ = viper.BindPFlag("log_format", rootCmd.PersistentFlags().Lookup("log-format"))
+	_ = viper.BindPFlag("api_key", rootCmd.PersistentFlags().Lookup("api-key"))
+	_ = viper.BindPFlag("base_url", rootCmd.PersistentFlags().Lookup("base-url"))
 	// Bind transport configuration flags to viper
 	_ = viper.BindPFlag("http_port", httpServerCmd.PersistentFlags().Lookup("http-port"))
 	_ = viper.BindPFlag("http_path", httpServerCmd.PersistentFlags().Lookup("http-path"))
@@ -504,11 +519,8 @@ func init() {
 	_ = viper.BindPFlag("dbops_svc_secret", httpServerCmd.Flags().Lookup("dbops-svc-secret"))
 	_ = viper.BindPFlag("acl_svc_base_url", httpServerCmd.Flags().Lookup("acl-svc-base-url"))
 	_ = viper.BindPFlag("acl_svc_secret", httpServerCmd.Flags().Lookup("acl-svc-secret"))
-	_ = viper.BindPFlag("skip_auth_for_local", httpServerCmd.Flags().Lookup("skip-auth-for-local"))
 
 	// Bind stdio-specific flags to viper
-	_ = viper.BindPFlag("base_url", stdioCmd.Flags().Lookup("base-url"))
-	_ = viper.BindPFlag("api_key", stdioCmd.Flags().Lookup("api-key"))
 	_ = viper.BindPFlag("default_org_id", stdioCmd.Flags().Lookup("default-org-id"))
 	_ = viper.BindPFlag("default_project_id", stdioCmd.Flags().Lookup("default-project-id"))
 

@@ -73,8 +73,10 @@ spec:
         {{- if .Values.args }}
         args: {{ toYaml .Values.args | nindent 10 }}
         {{- end }}
+        {{if not .Values.localMode}}
         env: 
           {{- include "harnesscommon.renderSecretsAsEnvironmentVariables" (dict "ctx" $) | indent 10 }}
+        {{end}}
         envFrom: 
           - configMapRef:
               name: {{ include "mcp-server.fullname" . }}
