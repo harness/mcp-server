@@ -333,7 +333,7 @@ Run the docker image:
 docker run -p 8080:8080 -e HARNESS_BASE_URL=https://app.harness.io -e HARNESS_API_KEY=<PAT> harness-mcp-server http-server
 ```
 
-### To run MCP server on local Kubernetes cluster: 
+### Run On Local Kubernetes cluster: 
 Override the values in helm chart using a values-local.yaml file:
 
 ```yaml
