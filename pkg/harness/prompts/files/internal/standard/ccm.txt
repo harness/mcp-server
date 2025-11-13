@@ -173,10 +173,21 @@ Use the **ccm_perspective_summary_with_budget** MCP tool:
   - Perspective: The identified perspective from Step 1 (must have viewType="DEFAULT" and viewState="COMPLETED")
 
 #### Step 4: Fetch Monthly Breakdown
-- **Purpose**: Retrieve cost data broken down by month
+- **Purpose**: Retrieve cost data broken down by month or day
 - **Configuration**:
-  - Group By: `Month` (to get monthly granularity)
-  - Time Period: Same start and end dates as Step 3
+  - time_group_by:
+    - "MONTH" for monthly granularity (calendar months)
+    - "DAY" for daily granularity
+    - "WEEK" for weekly granularity (if requested)
+    - group_by: {"field": "none"} (to get overall totals per time period)
+  - time_filter: Use appropriate filter based on user request:
+    -"last 7 days" → "LAST_7"
+    -"last 30 days" → "LAST_30_DAYS"
+    -"last 3 months" → "LAST_3_MONTHS"
+    -"last 6 months" → "LAST_6_MONTHS"
+    -"last 12 months" → "LAST_12_MONTHS"
+    -"this month" → "THIS_MONTH"
+    -"last month" → "LAST_MONTH"
   - Perspective: Same perspective from Step 1 (must have viewType="DEFAULT" and viewState="COMPLETED")
 
 ### Response Format
