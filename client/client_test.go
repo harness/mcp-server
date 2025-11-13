@@ -6,11 +6,13 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/pkg/harness/common"
+	"github.com/stretchr/testify/assert"
 )
 
 // TestUnmarshalResponse_StringPointer tests the string pointer handling in unmarshalResponse function
@@ -315,3 +317,286 @@ func TestClientDo_DoesNotAddHarnessAccountHeader_WhenNoScope(t *testing.T) {
 		t.Fatalf("expected no Harness-Account header, got %q", rt.sawAccount)
 	}
 }
+
+func TestAddQueryParams(t *testing.T) {
+	tests := []struct {
+		name           string
+		baseURL        string
+		params         map[string]string
+		expectedQuery  string
+		description    string
+	}{
+		{
+			name:          "Empty params - no query string added",
+			baseURL:       "https://api.example.com/endpoint",
+			params:        map[string]string{},
+			expectedQuery: "",
+			description:   "Should not modify URL when params are empty",
+		},
+		{
+			name:    "Single param without special characters",
+			baseURL: "https://api.example.com/endpoint",
+			params: map[string]string{
+				"key": "value",
+			},
+			expectedQuery: "key=value",
+			description:   "Should add simple key-value pair",
+		},
+		{
+			name:    "Param with space - should encode as %20",
+			baseURL: "https://api.example.com/endpoint",
+			params: map[string]string{
+				"searchKey": "Team/Department Cost",
+			},
+			expectedQuery: "searchKey=Team%2FDepartment%20Cost",
+			description:   "Spaces should be encoded as %20 for Java backend compatibility",
+		},
+		{
+			name:    "Param with comma - should split into multiple values",
+			baseURL: "https://api.example.com/endpoint",
+			params: map[string]string{
+				"ids": "id1,id2,id3",
+			},
+			expectedQuery: "ids=id1&ids=id2&ids=id3",
+			description:   "Comma-separated values should be split into multiple params",
+		},
+		{
+			name:    "Multiple params",
+			baseURL: "https://api.example.com/endpoint",
+			params: map[string]string{
+				"accountId": "abc123",
+				"pageSize":  "10",
+				"sortOrder": "ASCENDING",
+			},
+			expectedQuery: "accountId=abc123&pageSize=10&sortOrder=ASCENDING",
+			description:   "Should handle multiple parameters",
+		},
+		{
+			name:    "Param with special characters",
+			baseURL: "https://api.example.com/endpoint",
+			params: map[string]string{
+				"filter": "name=test&status=active",
+			},
+			expectedQuery: "filter=name%3Dtest%26status%3Dactive",
+			description:   "Special characters should be properly encoded",
+		},
+		{
+			name:    "Param with plus sign - should be encoded as %2B",
+			baseURL: "https://api.example.com/endpoint",
+			params: map[string]string{
+				"expression": "a+b",
+			},
+			expectedQuery: "expression=a%2Bb",
+			description:   "Plus signs should be encoded to avoid confusion with space encoding",
+		},
+		{
+			name:    "Complex scenario - spaces, commas, and special chars",
+			baseURL: "https://api.example.com/endpoint",
+			params: map[string]string{
+				"searchKey": "Cost Analysis Report",
+				"accounts":  "acc1,acc2",
+				"filter":    "type=AWS",
+			},
+			expectedQuery: "accounts=acc1&accounts=acc2&filter=type%3DAWS&searchKey=Cost%20Analysis%20Report",
+			description:   "Should handle complex combination of encodings",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a request with the base URL
+			req, err := http.NewRequest("GET", tt.baseURL, nil)
+			if err != nil {
+				t.Fatalf("Failed to create request: %v", err)
+			}
+
+			// Call the function
+			addQueryParams(req, tt.params)
+
+			// Check the result
+			if tt.expectedQuery == "" {
+				assert.Empty(t, req.URL.RawQuery, tt.description)
+			} else {
+				// Parse both query strings to compare them regardless of parameter order
+				expectedValues, err := url.ParseQuery(tt.expectedQuery)
+				if err != nil {
+					t.Fatalf("Failed to parse expected query: %v", err)
+				}
+				actualValues, err := url.ParseQuery(req.URL.RawQuery)
+				if err != nil {
+					t.Fatalf("Failed to parse actual query: %v", err)
+				}
+
+				assert.Equal(t, expectedValues, actualValues,
+					"%s\nExpected query: %s\nActual query: %s",
+					tt.description, tt.expectedQuery, req.URL.RawQuery)
+			}
+
+			// Verify that spaces are encoded as %20, not +
+			if strings.Contains(tt.expectedQuery, "%20") {
+				assert.NotContains(t, req.URL.RawQuery, "+",
+					"Spaces should be encoded as %%20, not + (for Java backend compatibility)")
+			}
+		})
+	}
+}
+
+func TestAddQueryParamsWithoutSplittingValuesOnComma(t *testing.T) {
+	tests := []struct {
+		name           string
+		baseURL        string
+		params         map[string]string
+		expectedQuery  string
+		description    string
+	}{
+		{
+			name:          "Empty params - no query string added",
+			baseURL:       "https://api.example.com/endpoint",
+			params:        map[string]string{},
+			expectedQuery: "",
+			description:   "Should not modify URL when params are empty",
+		},
+		{
+			name:    "Single param without special characters",
+			baseURL: "https://api.example.com/endpoint",
+			params: map[string]string{
+				"key": "value",
+			},
+			expectedQuery: "key=value",
+			description:   "Should add simple key-value pair",
+		},
+		{
+			name:    "Param with space - should encode as %20",
+			baseURL: "https://api.example.com/endpoint",
+			params: map[string]string{
+				"searchKey": "Team/Department Cost",
+			},
+			expectedQuery: "searchKey=Team%2FDepartment%20Cost",
+			description:   "Spaces should be encoded as %20 for Java backend compatibility",
+		},
+		{
+			name:    "Param with comma - should NOT split (key difference from addQueryParams)",
+			baseURL: "https://api.example.com/endpoint",
+			params: map[string]string{
+				"ids": "id1,id2,id3",
+			},
+			expectedQuery: "ids=id1%2Cid2%2Cid3",
+			description:   "Comma should be preserved as part of the value, not split",
+		},
+		{
+			name:    "Multiple params with commas",
+			baseURL: "https://api.example.com/endpoint",
+			params: map[string]string{
+				"accountId": "abc123",
+				"tags":      "env:prod,team:backend,region:us-east",
+			},
+			expectedQuery: "accountId=abc123&tags=env%3Aprod%2Cteam%3Abackend%2Cregion%3Aus-east",
+			description:   "Commas in values should be preserved and encoded",
+		},
+		{
+			name:    "Param with spaces and commas together",
+			baseURL: "https://api.example.com/endpoint",
+			params: map[string]string{
+				"filter": "name=Test Project, status=active",
+			},
+			expectedQuery: "filter=name%3DTest%20Project%2C%20status%3Dactive",
+			description:   "Both spaces and commas should be properly encoded without splitting",
+		},
+		{
+			name:    "Complex JSON-like value",
+			baseURL: "https://api.example.com/endpoint",
+			params: map[string]string{
+				"config": `{"key1":"value1","key2":"value2"}`,
+			},
+			expectedQuery: "config=%7B%22key1%22%3A%22value1%22%2C%22key2%22%3A%22value2%22%7D",
+			description:   "JSON-like strings should be fully encoded without splitting on commas",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a request with the base URL
+			req, err := http.NewRequest("GET", tt.baseURL, nil)
+			if err != nil {
+				t.Fatalf("Failed to create request: %v", err)
+			}
+
+			// Call the function
+			addQueryParamsWithoutSplittingValuesOnComma(req, tt.params)
+
+			// Check the result
+			if tt.expectedQuery == "" {
+				assert.Empty(t, req.URL.RawQuery, tt.description)
+			} else {
+				// Parse both query strings to compare them regardless of parameter order
+				expectedValues, err := url.ParseQuery(tt.expectedQuery)
+				if err != nil {
+					t.Fatalf("Failed to parse expected query: %v", err)
+				}
+				actualValues, err := url.ParseQuery(req.URL.RawQuery)
+				if err != nil {
+					t.Fatalf("Failed to parse actual query: %v", err)
+				}
+
+				assert.Equal(t, expectedValues, actualValues,
+					"%s\nExpected query: %s\nActual query: %s",
+					tt.description, tt.expectedQuery, req.URL.RawQuery)
+			}
+
+			// Verify that spaces are encoded as %20, not +
+			if strings.Contains(tt.expectedQuery, "%20") {
+				assert.NotContains(t, req.URL.RawQuery, "+",
+					"Spaces should be encoded as %%20, not + (for Java backend compatibility)")
+			}
+		})
+	}
+}
+
+// TestAddQueryParams_SpaceEncodingCompatibility specifically tests the space encoding fix
+func TestAddQueryParams_SpaceEncodingCompatibility(t *testing.T) {
+	req, _ := http.NewRequest("GET", "https://api.example.com/perspectives", nil)
+	
+	params := map[string]string{
+		"searchKey": "Team/Department Cost Perspective",
+		"accountId": "Z60xsRGoTeqOoAFRCsmlBQ",
+	}
+	
+	addQueryParams(req, params)
+	
+	// The critical assertion: spaces must be encoded as %20, not +
+	assert.Contains(t, req.URL.RawQuery, "Team%2FDepartment%20Cost%20Perspective",
+		"Spaces in searchKey should be encoded as %%20")
+	assert.NotContains(t, req.URL.RawQuery, "+",
+		"Query string should not contain + for space encoding (Java backend compatibility)")
+	
+	// Verify the full query can be parsed correctly
+	parsedQuery := req.URL.Query()
+	assert.Equal(t, "Team/Department Cost Perspective", parsedQuery.Get("searchKey"),
+		"Parsed searchKey should have spaces decoded correctly")
+}
+
+// TestAddQueryParams_CommaHandlingDifference demonstrates the difference between the two functions
+func TestAddQueryParams_CommaHandlingDifference(t *testing.T) {
+	t.Run("addQueryParams splits on comma", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "https://api.example.com/test", nil)
+		params := map[string]string{"ids": "id1,id2,id3"}
+		
+		addQueryParams(req, params)
+		
+		parsedQuery := req.URL.Query()
+		assert.Equal(t, []string{"id1", "id2", "id3"}, parsedQuery["ids"],
+			"addQueryParams should split comma-separated values into multiple params")
+	})
+	
+	t.Run("addQueryParamsWithoutSplittingValuesOnComma preserves comma", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "https://api.example.com/test", nil)
+		params := map[string]string{"ids": "id1,id2,id3"}
+		
+		addQueryParamsWithoutSplittingValuesOnComma(req, params)
+		
+		parsedQuery := req.URL.Query()
+		assert.Equal(t, []string{"id1,id2,id3"}, parsedQuery["ids"],
+			"addQueryParamsWithoutSplittingValuesOnComma should preserve comma as part of value")
+	})
+}
+
