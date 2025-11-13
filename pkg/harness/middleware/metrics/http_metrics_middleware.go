@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
-	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"log/slog"
 )
 
 // HTTPMetricsMiddleware wraps HTTP handlers to collect Prometheus metrics

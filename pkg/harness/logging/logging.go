@@ -2,6 +2,7 @@ package logging
 
 import (
 	"context"
+
 	"log/slog"
 )
 

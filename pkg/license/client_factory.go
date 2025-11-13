@@ -2,11 +2,11 @@ package license
 
 import (
 	"context"
-	"log/slog"
 	"sync"
 
 	"github.com/harness/harness-mcp/client/license"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"log/slog"
 )
 
 // ClientFactory provides a centralized way to create license clients

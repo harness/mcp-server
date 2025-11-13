@@ -1,12 +1,12 @@
 package middleware
 
 import (
-	"log/slog"
 	"net/http"
 
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
+	"log/slog"
 )
 
 func TracingMiddleware(config *config.Config, next http.Handler) http.Handler {

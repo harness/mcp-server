@@ -6,11 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"strings"
 
 	"github.com/harness/harness-mcp/client/dto"
+	"log/slog"
 )
 
 const (

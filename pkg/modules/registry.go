@@ -3,7 +3,6 @@ package modules
 import (
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"strings"
 
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
@@ -11,6 +10,7 @@ import (
 	p "github.com/harness/harness-mcp/pkg/prompts"
 	"github.com/harness/harness-mcp/pkg/toolsets"
 	"github.com/mark3labs/mcp-go/server"
+	"log/slog"
 )
 
 // ModuleRegistry holds all available modules

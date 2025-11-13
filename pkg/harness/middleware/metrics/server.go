@@ -3,11 +3,11 @@ package metrics
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"log/slog"
 )
 
 // MetricsServer represents a Prometheus metrics HTTP server

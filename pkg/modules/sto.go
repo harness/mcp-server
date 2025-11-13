@@ -2,7 +2,6 @@ package modules
 
 import (
 	"context"
-	"log/slog"
 	"net/http"
 	"time"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/harness/harness-mcp/pkg/harness/tools"
 	"github.com/harness/harness-mcp/pkg/modules/utils"
 	"github.com/harness/harness-mcp/pkg/toolsets"
+	"log/slog"
 )
 
 // STOModule implements the Module interface for Security Test Orchestration

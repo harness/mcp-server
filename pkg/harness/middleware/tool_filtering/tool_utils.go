@@ -1,9 +1,8 @@
 package tool_filtering
 
 import (
-	"log/slog"
-
 	"github.com/harness/harness-mcp/pkg/toolsets"
+	"log/slog"
 )
 
 // findToolGroup finds the toolset associated with a given tool name

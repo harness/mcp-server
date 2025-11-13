@@ -45,7 +45,7 @@ func TestGetTimeRangeFromFilter(t *testing.T) {
 			name:          "THIS_QUARTER - Current quarter from 1st to last day",
 			filter:        dto.TimeFilterThisQuarter,
 			referenceTime: referenceTime,
-			wantStart:     time.Date(2025, 10, 1, 0, 0, 0, 0, time.UTC), // Q4 starts Oct 1
+			wantStart:     time.Date(2025, 10, 1, 0, 0, 0, 0, time.UTC),             // Q4 starts Oct 1
 			wantEnd:       time.Date(2025, 11, 13, 23, 59, 59, 999999999, time.UTC), // Q4 ends Dec 31
 		},
 		{

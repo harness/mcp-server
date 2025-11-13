@@ -2,13 +2,13 @@ package license
 
 import (
 	"context"
-	"log/slog"
 	"os"
 	"testing"
 
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"log/slog"
 )
 
 func TestNewClientFactory(t *testing.T) {

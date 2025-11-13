@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -18,6 +17,7 @@ import (
 	"github.com/harness/harness-mcp/pkg/harness/common"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
+	"log/slog"
 )
 
 const (
@@ -620,7 +620,7 @@ func addQueryParams(req *http.Request, params map[string]string) {
 			q.Add(key, value)
 		}
 	}
-	
+
 	// Replace '+' with '%20' for space encoding to ensure Java backend compatibility
 	// The Java backend (or proxy in front) doesn't properly decode '+' as space
 	req.URL.RawQuery = strings.ReplaceAll(q.Encode(), "+", "%20")

@@ -320,11 +320,11 @@ func TestClientDo_DoesNotAddHarnessAccountHeader_WhenNoScope(t *testing.T) {
 
 func TestAddQueryParams(t *testing.T) {
 	tests := []struct {
-		name           string
-		baseURL        string
-		params         map[string]string
-		expectedQuery  string
-		description    string
+		name          string
+		baseURL       string
+		params        map[string]string
+		expectedQuery string
+		description   string
 	}{
 		{
 			name:          "Empty params - no query string added",
@@ -443,11 +443,11 @@ func TestAddQueryParams(t *testing.T) {
 
 func TestAddQueryParamsWithoutSplittingValuesOnComma(t *testing.T) {
 	tests := []struct {
-		name           string
-		baseURL        string
-		params         map[string]string
-		expectedQuery  string
-		description    string
+		name          string
+		baseURL       string
+		params        map[string]string
+		expectedQuery string
+		description   string
 	}{
 		{
 			name:          "Empty params - no query string added",
@@ -555,20 +555,20 @@ func TestAddQueryParamsWithoutSplittingValuesOnComma(t *testing.T) {
 // TestAddQueryParams_SpaceEncodingCompatibility specifically tests the space encoding fix
 func TestAddQueryParams_SpaceEncodingCompatibility(t *testing.T) {
 	req, _ := http.NewRequest("GET", "https://api.example.com/perspectives", nil)
-	
+
 	params := map[string]string{
 		"searchKey": "Team/Department Cost Perspective",
 		"accountId": "Z60xsRGoTeqOoAFRCsmlBQ",
 	}
-	
+
 	addQueryParams(req, params)
-	
+
 	// The critical assertion: spaces must be encoded as %20, not +
 	assert.Contains(t, req.URL.RawQuery, "Team%2FDepartment%20Cost%20Perspective",
 		"Spaces in searchKey should be encoded as %%20")
 	assert.NotContains(t, req.URL.RawQuery, "+",
 		"Query string should not contain + for space encoding (Java backend compatibility)")
-	
+
 	// Verify the full query can be parsed correctly
 	parsedQuery := req.URL.Query()
 	assert.Equal(t, "Team/Department Cost Perspective", parsedQuery.Get("searchKey"),
@@ -580,23 +580,22 @@ func TestAddQueryParams_CommaHandlingDifference(t *testing.T) {
 	t.Run("addQueryParams splits on comma", func(t *testing.T) {
 		req, _ := http.NewRequest("GET", "https://api.example.com/test", nil)
 		params := map[string]string{"ids": "id1,id2,id3"}
-		
+
 		addQueryParams(req, params)
-		
+
 		parsedQuery := req.URL.Query()
 		assert.Equal(t, []string{"id1", "id2", "id3"}, parsedQuery["ids"],
 			"addQueryParams should split comma-separated values into multiple params")
 	})
-	
+
 	t.Run("addQueryParamsWithoutSplittingValuesOnComma preserves comma", func(t *testing.T) {
 		req, _ := http.NewRequest("GET", "https://api.example.com/test", nil)
 		params := map[string]string{"ids": "id1,id2,id3"}
-		
+
 		addQueryParamsWithoutSplittingValuesOnComma(req, params)
-		
+
 		parsedQuery := req.URL.Query()
 		assert.Equal(t, []string{"id1,id2,id3"}, parsedQuery["ids"],
 			"addQueryParamsWithoutSplittingValuesOnComma should preserve comma as part of value")
 	})
 }
-

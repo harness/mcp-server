@@ -1,10 +1,11 @@
 package tool_filtering
 
 import (
-	"log/slog"
 	"os"
 	"reflect"
 	"testing"
+
+	"log/slog"
 )
 
 // testComputeAllowedToolsetsFromModules is a test-specific version of computeAllowedToolsetsFromModules
