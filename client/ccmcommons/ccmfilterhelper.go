@@ -137,20 +137,25 @@ func BuildPreferences() map[string]any {
 
 func GetTimeRangeFromFilter(filter string, now time.Time) (start, end time.Time) {
 	end = now
+	todaysEndDate := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 999999999, time.UTC)
 	switch filter {
 	case dto.TimeFilterLast7:
-		start = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, -7)
-		end = time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 999999999, time.UTC)
+		start = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, -6) // This is to make it consistent with the UI
+		end = todaysEndDate
 	case dto.TimeFilterThisMonth:
 		start = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+		firstOfNextMonth := start.AddDate(0, 1, 0)
+		end = firstOfNextMonth.Add(-time.Nanosecond)
 	case dto.TimeFilterLast30Days:
-		start = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, -30)
-		end = time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 999999999, time.UTC)
+		start = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, -30) // This is to make it consistent with the UI
+		end = todaysEndDate
 	case dto.TimeFilterThisQuarter:
 		month := ((int(now.Month())-1)/3)*3 + 1
 		start = time.Date(now.Year(), time.Month(month), 1, 0, 0, 0, 0, time.UTC)
+		end = todaysEndDate
 	case dto.TimeFilterThisYear:
 		start = time.Date(now.Year(), 1, 1, 0, 0, 0, 0, time.UTC)
+		end = todaysEndDate
 	case dto.TimeFilterLastMonth:
 		firstOfThisMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
 		lastMonth := firstOfThisMonth.AddDate(0, -1, 0)
@@ -166,14 +171,14 @@ func GetTimeRangeFromFilter(filter string, now time.Time) (start, end time.Time)
 		start = time.Date(now.Year()-1, 1, 1, 0, 0, 0, 0, time.UTC)
 		end = time.Date(now.Year(), 1, 1, 0, 0, 0, 0, time.UTC).Add(-time.Nanosecond)
 	case dto.TimeFilterLast3Months:
-		start = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, -3, 0)
-		end = time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 999999999, time.UTC)
+		start = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, -3, 0)
+		end = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).Add(-time.Nanosecond)
 	case dto.TimeFilterLast6Months:
-		start = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, -6, 0)
-		end = time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 999999999, time.UTC)
+		start = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, -6, 0)
+		end = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).Add(-time.Nanosecond)
 	case dto.TimeFilterLast12Months:
-		start = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, -12, 0)
-		end = time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 999999999, time.UTC)
+		start = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, -12, 0)
+		end = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).Add(-time.Nanosecond)
 	default:
 		start = now
 	}
