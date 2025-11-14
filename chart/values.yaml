@@ -123,10 +123,10 @@ pdb:
 # --image.pullPolicy Image pull policy
 # --image.imagePullSecrets Specify docker-registry secret names as an array
 image:
-  registry: us.gcr.io/platform-205701
+  registry: registry-1.docker.io
   repository: harness/mcp-server
   pullPolicy: IfNotPresent
-  tag: "0.0.9"
+  tag: "1.0.0-beta.16"
   digest: ""
   imagePullSecrets: []
 # This is for the secrets for pulling an image from a private repository more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
