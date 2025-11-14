@@ -123,7 +123,7 @@ pdb:
 # --image.pullPolicy Image pull policy
 # --image.imagePullSecrets Specify docker-registry secret names as an array
 image:
-  registry: us.gcr.io/platform-205701
+  registry: registry-1.docker.io
   repository: harness/mcp-server
   pullPolicy: IfNotPresent
   tag: "0.0.9"
