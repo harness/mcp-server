@@ -390,7 +390,13 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
         **Important Guidance:**
         - Always provide the status filter (Pending, Approved, Rejected, or Expired)
         - Use the search parameter to find specific issues or exemptions by title or content
-
+		- List only 5 exemptions by default when user doesn't specify any number
+		- CRITICAL PAGINATION: Track total items shown and calculate correct page number
+		  * First request: page=0, size=5 (shows items 1-5)
+		  * "list more": page=1, size=5 (shows items 6-10)  
+		  * "list 10 more": page=2, size=10 (shows items 11-20, NOT items 1-10!)
+		- Maximum limit is 50 exemptions per request. If user asks for more than 50, inform them that the maximum limit is 50 and show 50 exemptions.
+		
         **Filters:**
         - Status (required): Pending, Approved, Rejected, Expired
         - Project: Comma-separated org:project pairs (e.g., "default:STO,default:CCM")
@@ -412,7 +418,7 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 			mcp.WithString("orgId", mcp.Required(), mcp.Description("Harness Organization ID")),
 			mcp.WithString("projectId", mcp.Required(), mcp.Description("Harness Project ID")),
 			mcp.WithNumber("page", mcp.Description("Page number to fetch (starting from 0)"), mcp.Min(0), mcp.DefaultNumber(0)),
-			mcp.WithNumber("pageSize", mcp.Description("Number of results per page"), mcp.DefaultNumber(5)),
+			mcp.WithNumber("size", mcp.Description("Number of results per page"), mcp.DefaultNumber(5), mcp.Max(50)),
 
 			mcp.WithString("status", mcp.Description("Required. Exemption status: Pending, Approved, Rejected, Expired. You must provide exactly one status.")),
 			mcp.WithString("search", mcp.Description(`Free-text search that matches both issue titles and exemption titles.
@@ -426,32 +432,32 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 		Note: For exact vulnerability IDs, use the complete ID without modifications.`)),
 			common.WithScope(config, true),
 		), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			page := int64(0)
-			size := int64(5)
 			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			// Use standard pagination utility
+			page, size, err := FetchPagination(request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			pageInt64 := int64(page)
+			sizeInt64 := int64(size)
+
 			params := &generated.FrontendGlobalExemptionsParams{
 				AccountId: scope.AccountID,
 				OrgId:     &scope.OrgID,
 				ProjectId: &scope.ProjectID,
+				Page:      &pageInt64,
+				PageSize:  &sizeInt64,
 			}
 			if v, _ := OptionalParam[string](request, "orgId"); v != "" {
 				params.OrgId = &v
 			}
 			if v, _ := OptionalParam[string](request, "projectId"); v != "" {
 				params.ProjectId = &v
-			}
-			if v, _ := OptionalParam[int64](request, "page"); v != 0 {
-				params.Page = &v
-			} else {
-				params.Page = &page
-			}
-			if v, _ := OptionalParam[int64](request, "pageSize"); v != 0 {
-				params.PageSize = &v
-			} else {
-				params.PageSize = &size
 			}
 
 			if v, _ := OptionalParam[string](request, "status"); v != "" {
@@ -491,11 +497,11 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 			userNameMap := make(map[string]string)
 			for userID := range userIDs {
 				name := ""
-				scope := dto.Scope{
-					AccountID: config.AccountID,
+				userScope := dto.Scope{
+					AccountID: scope.AccountID,
 				}
-				// PrincipalService: GetUserInfo(ctx, scope, userID, page, size)
-				userInfo, err := principalClient.GetUserInfo(ctx, scope, userID, 0, 1)
+				// PrincipalService: GetUserInfo(ctx, userScope, userID, page, size)
+				userInfo, err := principalClient.GetUserInfo(ctx, userScope, userID, 0, 1)
 				if err == nil && userInfo != nil {
 					if userInfo.Data.User.Name != "" {
 						name = userInfo.Data.User.Name
