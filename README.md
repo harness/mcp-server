@@ -373,7 +373,10 @@ config:
 And then run the helm chart with the values-local.yaml file:
 
 ```bash
-helm install harness-mcp-server ./harness-mcp-server -f values-local.yaml
+git clone https://github.com/harness/mcp-server.git
+cd mcp-server/chart
+helm dependency build
+helm install harness-mcp-server ./ -f values-local.yaml
 ```
 
 ## Integration with AI Assistants
