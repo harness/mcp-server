@@ -79,7 +79,7 @@ spec:
         {{end}}
         envFrom: 
           - configMapRef:
-              name: {{ include "mcp-server.fullname" . }}
+              name: {{ include "mcp-server.name" . }}
         ports:
           - name: mcp
             containerPort: {{ .Values.service.port }}
