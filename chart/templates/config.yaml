@@ -11,4 +11,8 @@ metadata:
   annotations: {{- include "harnesscommon.tplvalues.render" ( dict "value" .Values.global.commonAnnotations "context" $ ) | nindent 4 }}
   {{- end }}
 data:
+  {{- if .Values.localMode }}
+  {{- include "harnesscommon.tplvalues.render" ( dict "value" .Values.configLocal "context" $) | nindent 2}}
+  {{- else }}
   {{- include "harnesscommon.tplvalues.render" ( dict "value" .Values.config "context" $) | nindent 2}}
+  {{- end }}

@@ -339,42 +339,26 @@ docker run -p 8080:8080 -e HARNESS_BASE_URL=https://app.harness.io -e HARNESS_AP
 ```
 
 ### Run On Local Kubernetes cluster: 
-Override the values in helm chart using a values-local.yaml file:
+
+A sample `values-local.yaml` file is provided at `chart/values-local.yaml` for local development. To use it:
+
+1. Update the `HARNESS_API_KEY` field under `secrets.default` with your Personal Access Token (PAT):
 
 ```yaml
-# Local development overrides
-image:
-  repository: harness-mcp-server
-  tag: local
-  pullPolicy: Never
-
-# Override global settings
-global:
-  autoscaling:
-    enabled: false
-
-# Run only 1 replica for local development
-replicaCount: 1
-
-# Use NodePort for easy local access
-service:
-  type: NodePort
-  port: 8080
-  nodePort: 30080
-
-localMode: True
-
-# Local environment configuration
-config:
-  HARNESS_BASE_URL: "https://app.harness.io"
-  HARNESS_API_KEY: "<PAT>"                                                              
+secrets:
+  default:
+    HARNESS_API_KEY: "<YOUR_PAT>"  # Replace with your actual PAT
 ```
 
-And then run the helm chart with the values-local.yaml file:
+2. Run the helm chart from the repository root directory:
 
 ```bash
-helm install harness-mcp-server ./harness-mcp-server -f values-local.yaml
+helm install harness-mcp-server ./chart -f chart/values-local.yaml
 ```
+
+3. Access the server at `http://localhost:30080` once the deployment is complete.
+
+You can customize other settings in the values file as needed for your environment.
 
 ## Integration with AI Assistants
 
