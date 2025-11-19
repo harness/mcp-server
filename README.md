@@ -6,32 +6,61 @@ The Harness MCP Server is a [Model Context Protocol (MCP)](https://modelcontextp
 
 - [Components](#components)
   - [Tools](#tools)
+    - [Default Toolset](#default-toolset)
     - [Pipelines Toolset](#pipelines-toolset)
     - [Pull Requests Toolset](#pull-requests-toolset)
+    - [Services Toolset](#services-toolset)
+    - [Environments Toolset](#environments-toolset)
+    - [Infrastructure Toolset](#infrastructure-toolset)
+    - [Connectors Toolset](#connectors-toolset)
     - [Repositories Toolset](#repositories-toolset)
     - [Registries Toolset](#registries-toolset)
     - [Dashboards Toolset](#dashboards-toolset)
     - [Cloud Cost Management Toolset](#cloud-cost-management-toolset)
+    - [Database Operations Toolset](#database-operations-toolset)
+    - [Chaos Engineering Toolset](#chaos-engineering-toolset)
+    - [Supply Chain Security (SCS) Toolset](#supply-chain-security-scs-toolset)
+    - [Security Test Orchestration (STO) Toolset](#security-test-orchestration-sto-toolset)
     - [Logs Toolset](#logs-toolset)
+    - [Templates Toolset](#templates-toolset)
+    - [Internal Developer Portal Toolset](#internal-developer-portal-toolset)
+    - [Audit Trail Toolset](#audit-trail-toolset)
+    - [Feature Management and Experimentation (FME) Toolset](#feature-management-and-experimentation-fme-toolset)
 - [Prerequisites](#prerequisites)
 - [Quickstart](#quickstart)
 - [Makefile Usage](#makefile-usage)
 - [Build from Source](#build-from-source)
 - [Use Docker Image](#use-docker-image)
+  - [Stdio mode](#stdio-mode)
+  - [Http mode](#http-mode)
 - [Run on local Kubernetes cluster](#run-on-local-kubernetes-cluster)
 - [Integration with AI Assistants](#integration-with-ai-assistants)
   - [Usage with Gemini CLI](#usage-with-gemini-cli)
+  - [Usage with Gemini CLI Extensions](#usage-with-gemini-cli-extensions)
   - [Claude Desktop Configuration](#claude-desktop-configuration)
   - [Usage with Claude Code](#usage-with-claude-code)
   - [Usage with Windsurf](#usage-with-windsurf)
+    - [Using Local Binary](#using-local-binary)
+    - [In Http server mode](#in-http-server-mode)
+    - [Using Docker Image](#using-docker-image)
   - [Usage with Amazon Q Developer CLI](#usage-with-amazon-q-developer-cli)
+    - [Using Local Binary](#using-local-binary-1)
   - [Cursor Configuration](#cursor-configuration)
   - [VS Code Configuration](#vs-code-configuration)
+- [Tool Usage Guide](#tool-usage-guide)
+  - [Download Execution Logs](#download-execution-logs)
+    - [Using Docker](#using-docker)
+    - [Using Local Binary](#using-local-binary-2)
 - [Development](#development)
   - [Command Line Arguments](#command-line-arguments)
   - [Environment Variables](#environment-variables)
   - [Authentication](#authentication)
+  - [Using the create_follow_up_prompt Tool](#using-the-create_follow_up_prompt-tool-to-generate-actionable-prompt-events)
+- [Notes for Local Testing](#notes-for-local-testing)
+  - [Example](#example)
 - [Debugging](#debugging)
+- [Testing](#testing)
+  - [Running E2E Tests](#running-e2e-tests)
 
 ## Components
 
@@ -312,6 +341,7 @@ Alternatively, you can use the pre-built Docker image:
 docker run -i --rm \
   -e HARNESS_API_KEY=your_api_key \
   -e HARNESS_BASE_URL=your_base_url \
+  -e HARNESS_LOG_FILE=harness-mcp.log \
   harness/mcp-server stdio
 ```
 
@@ -319,6 +349,7 @@ Optional environment variables:
 
 1. HARNESS_DEFAULT_ORG_ID
 2. HARNESS_DEFAULT_PROJECT_ID
+3. HARNESS_LOG_FILE (default: harness-mcp.log)
 
 #### Http mode
 To run the MCP server as a http server locally, the following environment variables must be set:
@@ -335,7 +366,7 @@ docker build -t harness-mcp-server .
 Run the docker image:
 
 ```bash
-docker run -p 8080:8080 -e HARNESS_BASE_URL=https://app.harness.io -e HARNESS_API_KEY=<PAT> harness-mcp-server http-server
+docker run -p 8080:8080 -e HARNESS_BASE_URL=https://app.harness.io -e HARNESS_API_KEY=<PAT> -e HARNESS_LOG_FILE=harness-mcp.log harness-mcp-server http-server
 ```
 
 ### Run On Local Kubernetes cluster: 
@@ -411,7 +442,7 @@ On MacOS: `~/Library/Application\ Support/Claude/claude_desktop_config.json`
 On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
 
 <details>
-  <summary>Server Configuration</summary>
+  <summary>Server Configuration (Local Binary)</summary>
   
   ```json
   {
@@ -422,7 +453,51 @@ On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
         "env": {
           "HARNESS_API_KEY": "<YOUR_API_KEY>",
           "HARNESS_DEFAULT_ORG_ID": "<YOUR_ORG_ID>",
-          "HARNESS_DEFAULT_PROJECT_ID": "<YOUR_PROJECT_ID>"
+          "HARNESS_DEFAULT_PROJECT_ID": "<YOUR_PROJECT_ID>",
+          "HARNESS_BASE_URL": "https://app.harness.io",
+          "HARNESS_LOG_FILE": "harness-mcp.log"
+        }
+      }
+    }
+  }
+  ```
+</details>
+
+<details>
+  <summary>Server Configuration (Docker Image)</summary>
+  
+  ```json
+  {
+    "mcpServers": {
+      "harness": {
+        "args": [
+          "run",
+          "-i",
+          "--rm",
+          "-e",
+          "HARNESS_LOG_FILE",
+          "-e",
+          "HARNESS_API_KEY",
+          "-e",
+          "HARNESS_DEFAULT_ORG_ID",
+          "-e",
+          "HARNESS_DEFAULT_PROJECT_ID",
+          "-e",
+          "HARNESS_TOOLSETS",
+          "-e",
+          "HARNESS_BASE_URL",
+          "docker.io/harness/mcp-server:1.0.0-beta.17",
+          "stdio"
+        ],
+        "command": "docker",
+        "disabledTools": [],
+        "env": {
+          "HARNESS_API_KEY": "<YOUR_API_KEY>",
+          "HARNESS_BASE_URL": "https://app.harness.io",
+          "HARNESS_DEFAULT_ORG_ID": "<YOUR_ORG_ID>",
+          "HARNESS_DEFAULT_PROJECT_ID": "<YOUR_PROJECT_ID>",
+          "HARNESS_TOOLSETS": "all",
+          "HARNESS_LOG_FILE": "harness-mcp.log"
         }
       }
     }
@@ -444,7 +519,7 @@ Add the server configuration to your Claude config file at: `~/.claude.json`
         "HARNESS_API_KEY": "<YOUR_API_KEY>",
         "HARNESS_DEFAULT_ORG_ID": "<YOUR_ORG_ID>",
         "HARNESS_DEFAULT_PROJECT_ID": "<YOUR_PROJECT_ID>",
-        "HARNESS_BASE_URL": "<YOUR_BASE_URL>"
+        "HARNESS_BASE_URL": "https://app.harness.io"
       }
     }
   }
@@ -469,7 +544,7 @@ To use the Harness MCP Server with Windsurf:
         "HARNESS_API_KEY": "<YOUR_API_KEY>",
         "HARNESS_DEFAULT_ORG_ID": "<YOUR_ORG_ID>",
         "HARNESS_DEFAULT_PROJECT_ID": "<YOUR_PROJECT_ID>",
-        "HARNESS_BASE_URL": "<YOUR_BASE_URL>"
+        "HARNESS_BASE_URL": "https://app.harness.io"
       }
     }
   }
@@ -497,6 +572,8 @@ Add the server config to your launch.json file:
 
 ### Using Docker Image
 
+> **Note:** The same Docker-based configuration used for Claude Desktop should work for Windsurf as well. You can use either the generic Docker image or a specific versioned image.
+
 ```json
 {
   "mcpServers": {
@@ -507,21 +584,27 @@ Add the server config to your launch.json file:
         "-i",
         "--rm",
         "-e",
+        "HARNESS_LOG_FILE",
+        "-e",
         "HARNESS_API_KEY",
         "-e",
         "HARNESS_DEFAULT_ORG_ID",
         "-e",
         "HARNESS_DEFAULT_PROJECT_ID",
         "-e",
+        "HARNESS_TOOLSETS",
+        "-e",
         "HARNESS_BASE_URL",
-        "harness/mcp-server",
+        "docker.io/harness/mcp-server:1.0.0-beta.17",
         "stdio"
       ],
       "env": {
         "HARNESS_API_KEY": "<YOUR_API_KEY>",
         "HARNESS_DEFAULT_ORG_ID": "<YOUR_ORG_ID>",
         "HARNESS_DEFAULT_PROJECT_ID": "<YOUR_PROJECT_ID>",
-        "HARNESS_BASE_URL": "<YOUR_BASE_URL>"
+        "HARNESS_BASE_URL": "https://app.harness.io",
+        "HARNESS_TOOLSETS": "all",
+        "HARNESS_LOG_FILE": "harness-mcp.log"
       }
     }
   }
@@ -545,7 +628,7 @@ To use the Harness MCP Server with Amazon Q Developer CLI:
         "HARNESS_API_KEY": "<YOUR_API_KEY>",
         "HARNESS_DEFAULT_ORG_ID": "<YOUR_ORG_ID>",
         "HARNESS_DEFAULT_PROJECT_ID": "<YOUR_PROJECT_ID>",
-        "HARNESS_BASE_URL": "<YOUR_BASE_URL>"
+        "HARNESS_BASE_URL": "https://app.harness.io"
       }
     }
   }
@@ -602,7 +685,7 @@ To use the Harness MCP Server with Amazon Q Developer CLI:
           "HARNESS_API_KEY": "<YOUR_API_KEY>",
           "HARNESS_DEFAULT_ORG_ID": "<YOUR_ORG_ID>",
           "HARNESS_DEFAULT_PROJECT_ID": "<YOUR_PROJECT_ID>",
-          "HARNESS_BASE_URL": "<YOUR_BASE_URL>"
+          "HARNESS_BASE_URL": "https://app.harness.io"
         }
       }
     }
@@ -722,7 +805,7 @@ The Harness MCP Server supports the following command line arguments:
 - `--enable-license`: Enable license validation and module-based toolset management (default is false, i.e OSS version). When set to true, toolsets are managed through modules.
 - `--enable-modules`: Comma-separated list of modules to enable (only used when `--enable-license` is true). Use `--enable-modules=all` to enable all available modules, or specify individual modules like `--enable-modules=CORE,CI,CD`.
 - `--read-only`: Run the server in read-only mode
-- `--log-file`: Path to log file for debugging
+- `--log-file`: Path to log file for debugging (default: "harness-mcp.log")
 - `--log-level`: Set the logging level (debug, info, warn, error)
 - `--version`: Show version information
 - `--help`: Show help message
@@ -739,7 +822,7 @@ Environment variables are prefixed with `HARNESS_`:
 - `HARNESS_DEFAULT_PROJECT_ID`: Default Harness project ID (optional, if not specified it would need to be passed in the request if it's required for that operation)
 - `HARNESS_TOOLSETS`: Comma-separated list of toolsets to enable (default: "all")
 - `HARNESS_READ_ONLY`: Set to "true" to run in read-only mode
-- `HARNESS_LOG_FILE`: Path to log file
+- `HARNESS_LOG_FILE`: Path to log file (default: "harness-mcp.log")
 - `HARNESS_LOG_LEVEL`: Set the logging level (debug, info, warn, error)
 - `HARNESS_BASE_URL`: Base URL for Harness (default: "https://app.harness.io")
 
