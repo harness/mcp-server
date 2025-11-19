@@ -172,6 +172,8 @@ var (
 				DBOpsSvcSecret:          viper.GetString("dbops_svc_secret"),
 				ACLSvcBaseURL:           viper.GetString("acl_svc_base_url"),
 				ACLSvcSecret:            viper.GetString("acl_svc_secret"),
+				ReleaseManagerBaseURL:   viper.GetString("release_manager_base_url"),
+				ReleaseManagerSecret:    viper.GetString("release_manager_secret"),
 				OutputDir:               viper.GetString("output_dir"),
 				AccountID:               accountID,
 				APIKey:                  apiKey,
@@ -342,6 +344,8 @@ var (
 				DBOpsSvcSecret:          viper.GetString("dbops_svc_secret"),
 				ACLSvcBaseURL:           viper.GetString("acl_svc_base_url"),
 				ACLSvcSecret:            viper.GetString("acl_svc_secret"),
+				ReleaseManagerBaseURL:   viper.GetString("release_manager_base_url"),
+				ReleaseManagerSecret:    viper.GetString("release_manager_secret"),
 			}
 
 			if err := runStdioServer(ctx, cfg); err != nil {

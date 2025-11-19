@@ -1,6 +1,8 @@
 package modules
 
 import (
+	"log/slog"
+
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness/tools"
@@ -167,19 +169,44 @@ func RegisterReleaseManagementTools(config *config.Config, tsg *toolsets.Toolset
 		return nil
 	}
 
-	// Get the GenAI client
+	// Get the GenAI client for the ask release agent tool
 	genaiClient, err := GetGenAIClient(config)
 	if err != nil {
 		return err
 	}
 
-	// Create the Ask Release Agent toolset
-	askReleaseAgent := toolsets.NewToolset("release_management", "Release Management tools").
-		AddReadTools(
-			toolsets.NewServerTool(tools.AskReleaseAgentTool(config, genaiClient)),
-		)
+	// Create release management client
+	baseURL := utils.BuildServiceURL(config, config.ReleaseManagerBaseURL, config.BaseURL, "")
+	secret := config.ReleaseManagerSecret
 
-	// Add toolset to the group
-	tsg.AddToolset(askReleaseAgent)
+	// Create the Release Management toolset
+	releaseManagement := toolsets.NewToolset("release_management", "Harness Release Management tools")
+
+	// Always add the AI agent tool (uses GenAI client, not RM client)
+	releaseManagement.AddReadTools(
+		toolsets.NewServerTool(tools.AskReleaseAgentTool(config, genaiClient)),
+	)
+
+	// Only add release management service tools if base URL is configured
+	if baseURL != "" {
+		c, err := utils.CreateClient(baseURL, config, secret)
+		// If error occurs then silently ignore the error and continue
+		if err == nil {
+			releaseManagementClient := &client.ReleaseManagementService{Client: c}
+
+			// Add release management service tools
+			releaseManagement.AddReadTools(
+				toolsets.NewServerTool(tools.SearchReleasesTool(config, releaseManagementClient)),
+				toolsets.NewServerTool(tools.GetReleaseStatusTool(config, releaseManagementClient)),
+				toolsets.NewServerTool(tools.GetPendingTasksTool(config, releaseManagementClient)),
+				toolsets.NewServerTool(tools.GetExecutionOutputsTool(config, releaseManagementClient)),
+			)
+		} else {
+			slog.Info("Failed to create release management client", "error", err)
+		}
+	}
+
+	// Add toolset to the group (even if empty)
+	tsg.AddToolset(releaseManagement)
 	return nil
 }
