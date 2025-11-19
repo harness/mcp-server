@@ -297,10 +297,7 @@ func RegisterAudit(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 // RegisterLogs registers the logs toolset
 func RegisterLogs(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-	// Skip registration for internal mode for now
-	if config.Internal {
-		return nil
-	}
+
 	// Determine the base URL and secret for logs
 	logServiceBaseURL := ""
 	// To handle unique ingress for log-service
