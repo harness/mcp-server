@@ -291,26 +291,26 @@ Toolset Name: `fme`
 
 ## Prerequisites
 
-1. You will need to have Go 1.23 or later installed on your system.
+1. You will need to have Rust 1.70 or later installed on your system.
 2. A Harness API key for authentication.
 
 ## Quickstart
 
-## Makefile Usage
+## Cargo Usage
 
-This project provides a `Makefile` to simplify common development tasks. The main targets are:
+This project uses Cargo, Rust's package manager and build system. The main commands are:
 
-- `make build` – Build the mcp-server binary with version information embedded.
-- `make init` – Set up git hooks and submodules for pre-commit checks.
-- `make dep` – Download Go module dependencies.
-- `make tools` – Install tools required for the build (if any are specified).
-- `make format` – Format Go code using goimports and gci.
+- `cargo build` – Build the mcp-server binary.
+- `cargo build --release` – Build the optimized release binary.
+- `cargo test` – Run tests.
+- `cargo fmt` – Format Rust code.
+- `cargo clippy` – Run the Rust linter.
 
 You can run any of these commands from the project root. For example:
 
 ```sh
-make build
-make format
+cargo build --release
+cargo fmt
 ```
 
 
@@ -324,12 +324,12 @@ cd mcp-server
 
 2. Build the binary:
 ```bash
-go build -o cmd/harness-mcp-server/harness-mcp-server ./cmd/harness-mcp-server
+cargo build --release
 ```
 
 3. Run the server:
 ```bash
-HARNESS_API_KEY=your_api_key HARNESS_DEFAULT_ORG_ID=your_org_id HARNESS_DEFAULT_PROJECT_ID=your_project_id ./cmd/harness-mcp-server/harness-mcp-server stdio
+HARNESS_API_KEY=your_api_key HARNESS_DEFAULT_ORG_ID=your_org_id HARNESS_DEFAULT_PROJECT_ID=your_project_id ./target/release/harness-mcp-server stdio
 ```
 
 ### Use Docker Image
@@ -936,13 +936,13 @@ export HARNESS_MCP_SERVER_E2E_BASE_URL=<base_url>
 2. Run the E2E tests using the Go test command with the e2e build tag:
 
 ```bash
-go test -tags=e2e ./test/e2e/... -v
+cargo test --features e2e
 ```
 
-3. To run specific E2E tests, use the `-run` flag:
+3. To run specific E2E tests, use test filtering:
 
 ```bash
-go test -tags=e2e ./test/e2e/... -v -run TestPipelineWorkflow
+cargo test --features e2e pipeline_workflow
 ```
 
 4. In VS Code, you can run the E2E tests directly using the launch.json configuration. Simply open the Run and Debug view, select the E2E test configuration from the dropdown menu, and click the Run button.

@@ -1,26 +1,18 @@
-ifndef GOPATH
-	GOPATH := $(shell go env GOPATH)
-endif
-ifndef GOBIN # derive value from gopath (default to first entry, similar to 'go get')
-	GOBIN := $(shell go env GOPATH | sed 's/:.*//')/bin
-endif
-
-tools = $(addprefix $(GOBIN)/, goimports gci)
-
-LDFLAGS = "-X github.com/harness/gitness/version.GitCommit=${GIT_COMMIT} -X github.com/harness/gitness/version.major=${GITNESS_VERSION_MAJOR} -X github.com/harness/gitness/version.minor=${GITNESS_VERSION_MINOR} -X github.com/harness/gitness/version.patch=${GITNESS_VERSION_PATCH}"
+# Rust-based Makefile for harness-mcp-server
 
 ###############################################################################
 #
 # Build rules
 #
 ###############################################################################
-tools: $(tools) ## Install tools required for the build
-	@echo "Installed tools"
 
-build:  
+build: ## Build the mcp-server binary
 	@echo "Building mcp-server"
-	go build -ldflags=${LDFLAGS} -o cmd/harness-mcp-server/harness-mcp-server ./cmd/harness-mcp-server
+	cargo build --release
 
+build-dev: ## Build the mcp-server binary in debug mode
+	@echo "Building mcp-server (debug)"
+	cargo build
 
 ###############################################################################
 #
@@ -28,11 +20,20 @@ build:
 #
 ###############################################################################
 
-format: tools # Format go code and error if any changes are made
-	@echo "Formating ..."
-	@goimports -w .
-	@gci write --custom-order -s standard -s "prefix(github.com/harness/gitness)" -s default -s blank -s dot .
+format: ## Format Rust code
+	@echo "Formatting ..."
+	@cargo fmt
 	@echo "Formatting complete"
+
+lint: ## Run clippy linter
+	@echo "Running clippy ..."
+	@cargo clippy -- -D warnings
+	@echo "Linting complete"
+
+check: ## Check code without building
+	@echo "Checking code ..."
+	@cargo check
+	@echo "Check complete"
 
 ###############################################################################
 #
@@ -40,20 +41,40 @@ format: tools # Format go code and error if any changes are made
 #
 ###############################################################################
 
-test: ## Run the go tests
+test: ## Run the Rust tests
 	@echo "Running tests"
-	@go test ./... -coverprofile=coverage.out
-	@go tool cover -html=coverage.out
+	@cargo test
 
-.PHONY: help format tools test build
+test-e2e: ## Run end-to-end tests
+	@echo "Running E2E tests"
+	@cargo test --features e2e
 
-$(GOBIN)/gci:
-	go install github.com/daixiang0/gci@v0.13.1
-	
-# Install goimports to format code
-$(GOBIN)/goimports:
-	@echo "🔘 Installing goimports ... (`date '+%H:%M:%S'`)"
-	@go install golang.org/x/tools/cmd/goimports
+###############################################################################
+#
+# Docker
+#
+###############################################################################
+
+docker-build: ## Build Docker image
+	@echo "Building Docker image"
+	@docker build -t harness-mcp-server .
+
+docker-run: ## Run Docker container
+	@echo "Running Docker container"
+	@docker run -it --rm harness-mcp-server
+
+###############################################################################
+#
+# Cleanup
+#
+###############################################################################
+
+clean: ## Clean build artifacts
+	@echo "Cleaning ..."
+	@cargo clean
+	@echo "Clean complete"
+
+.PHONY: help format lint check test test-e2e build build-dev docker-build docker-run clean
 
 help: ## show help message
-	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m\033[0m\n"} /^[$$()% 0-9a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*##"; printf "\\nUsage:\\n  make \\033[36m\\033[0m\\n"} /^[$$()% 0-9a-zA-Z_-]+:.*?##/ { printf "  \\033[36m%-15s\\033[0m %s\\n", $$1, $$2 } /^##@/ { printf "\\n\\033[1m%s\\033[0m\\n", substr($$0, 5) } ' $(MAKEFILE_LIST)

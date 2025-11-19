@@ -1,0 +1,76 @@
+[package]
+name = "harness-mcp-server"
+version = "0.1.0"
+edition = "2021"
+authors = ["Harness Inc."]
+description = "A Harness MCP server that handles various tools and resources"
+license = "Apache-2.0"
+repository = "https://github.com/harness/mcp-server"
+readme = "README.md"
+
+[[bin]]
+name = "harness-mcp-server"
+path = "src/main.rs"
+
+[dependencies]
+# CLI and Configuration
+clap = { version = "4.4", features = ["derive", "env"] }
+config = "0.13"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+
+# Async Runtime
+tokio = { version = "1.0", features = ["full"] }
+tokio-retry = "0.3"
+async-trait = "0.1"
+
+# HTTP Client and Server
+reqwest = { version = "0.11", features = ["json", "stream"] }
+axum = { version = "0.7", features = ["json", "query"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+hyper = { version = "1.0", features = ["full"] }
+
+# Authentication and Security
+jsonwebtoken = "9.0"
+
+# Observability and Metrics
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+prometheus = "0.13"
+opentelemetry = "0.20"
+opentelemetry-otlp = "0.13"
+
+# Utilities
+uuid = { version = "1.0", features = ["v4", "serde"] }
+backoff = "0.4"
+url = "2.4"
+base64 = "0.21"
+
+# Error Handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# JSON-RPC for MCP Protocol
+jsonrpc-core = "18.0"
+jsonrpc-http-server = "18.0"
+jsonrpc-stdio-server = "18.0"
+
+# Time handling
+chrono = { version = "0.4", features = ["serde"] }
+
+[dev-dependencies]
+tokio-test = "0.4"
+assert_matches = "1.5"
+pretty_assertions = "1.4"
+tempfile = "3.8"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.dev]
+debug = true

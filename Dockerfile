@@ -1,27 +1,31 @@
 # ---------------------------------------------------------#
 #                   Build Harness image                    #
 # ---------------------------------------------------------#
-FROM --platform=$BUILDPLATFORM golang:1.24.3-alpine AS builder
+FROM --platform=$BUILDPLATFORM rust:1.70-alpine AS builder
 
-# Setup workig dir
+# Setup working dir
 WORKDIR /app
 
 ARG TARGETOS
 ARG TARGETARCH
 
-# Get dependencies - will also be cached if we won't change mod/sum
-COPY go.mod .
-COPY go.sum .
+# Install build dependencies
+RUN apk add --no-cache musl-dev pkgconfig openssl-dev
+
+# Copy dependency files first for better caching
+COPY Cargo.toml Cargo.lock ./
+
+# Create a dummy main.rs to build dependencies
+RUN mkdir src && echo "fn main() {}" > src/main.rs
+
+# Build dependencies
+RUN cargo build --release && rm -rf src
 
 # COPY the source code as the last step
-COPY . .
+COPY src ./src
 
-# set required build flags
-RUN --mount=type=cache,target=/root/.cache/go-build \
-    --mount=type=cache,target=/go/pkg \
-    CGO_ENABLED=0 \
-    GOOS=$TARGETOS GOARCH=$TARGETARCH \
-    go build -o ./cmd/harness-mcp-server/harness-mcp-server ./cmd/harness-mcp-server
+# Build the application
+RUN cargo build --release
 
 ### Pull CA Certs
 FROM --platform=$BUILDPLATFORM alpine:latest AS cert-image
@@ -39,7 +43,7 @@ VOLUME /data
 
 ENV XDG_CACHE_HOME=/data
 
-COPY --from=builder /app/cmd/harness-mcp-server/harness-mcp-server /app/harness-mcp-server
+COPY --from=builder /app/target/release/harness-mcp-server /app/harness-mcp-server
 COPY --from=cert-image /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 ENTRYPOINT [ "/app/harness-mcp-server"]

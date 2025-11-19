@@ -1,17 +1,17 @@
 .idea
-cmd/harness-mcp-server/harness-mcp-server
 
 # VSCode
 .vscode/*
 !.vscode/launch.json
 
+# Rust
+/target/
+Cargo.lock
+**/*.rs.bk
 
 # Added by goreleaser init:
 dist/
 __debug_bin*
-
-# Go
-vendor
 
 **/.DS_Store
 coverage.out
