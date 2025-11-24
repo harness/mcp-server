@@ -301,7 +301,7 @@ func RegisterLogs(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for logs
 	logServiceBaseURL := ""
 	// To handle unique ingress for log-service
-	if strings.Contains(config.BaseURL, "/gateway") {
+	if strings.Contains(config.BaseURL, "/gateway") || config.Internal {
 		logServiceBaseURL = utils.BuildServiceURL(config, config.LogSvcBaseURL, config.BaseURL, "log-service")
 	} else {
 		logServiceBaseURL = utils.BuildServiceURL(config, config.LogSvcBaseURL, config.BaseURL, "gateway/log-service")
