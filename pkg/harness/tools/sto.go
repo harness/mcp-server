@@ -690,10 +690,10 @@ func ExemptionsPromoteExemptionTool(config *config.Config, client *generated.Cli
 			approverId := getCurrentUserUUID(ctx, scope, principalClient)
 			defaultComment := "This is done by Harness Agent"
 			orgIdFromScope := ""
-			if v, _ := OptionalParam[string](request, "scope"); v !="" {
+			if v, _ := OptionalParam[string](request, "scope"); v != "" {
 				orgIdFromScope = v
 			}
-			if v, _ := OptionalParam[string](request, "orgId"); v != "" && orgIdFromScope =="ORGANISATION" {
+			if v, _ := OptionalParam[string](request, "orgId"); v != "" && orgIdFromScope == "ORGANISATION" {
 				params.OrgId = &v
 			}
 			body := generated.PromoteExemptionRequestBody{
@@ -764,8 +764,8 @@ func ExemptionsApproveExemptionTool(config *config.Config, client *generated.Cli
 			mcp.WithString("id", mcp.Required(), mcp.Description("Exemption ID to approve or reject, generally present in id field of exemption")),
 			mcp.WithString("action", mcp.Required(), mcp.Description("Action to take: approve or reject")),
 			mcp.WithString("accountId", mcp.Required(), mcp.Description("Harness Account ID")),
-			mcp.WithString("orgId",mcp.Required(), mcp.Description("Harness Organization ID")),
-			mcp.WithString("projectId",mcp.Required(), mcp.Description("Harness Project ID")),
+			mcp.WithString("orgId", mcp.Required(), mcp.Description("Harness Organization ID")),
+			mcp.WithString("projectId", mcp.Required(), mcp.Description("Harness Project ID")),
 			mcp.WithString("comment", mcp.Description("Optional comment for the approval or rejection")),
 			common.WithScope(config, true),
 		), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
