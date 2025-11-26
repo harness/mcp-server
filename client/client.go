@@ -236,9 +236,13 @@ func (c *Client) PostRaw(
 		resp, err := c.Do(req)
 
 		slog.DebugContext(ctx, "Response", "url", req.URL.String())
-		slog.DebugContext(ctx, "Response", "value", resp)
 
 		if resp != nil && resp.Body != nil {
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return fmt.Errorf("failed to read response body: %w", err)
+			}
+			slog.DebugContext(ctx, "Response", "body", string(body))
 			defer resp.Body.Close()
 		}
 
