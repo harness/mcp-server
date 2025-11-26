@@ -39,6 +39,7 @@ func NewModuleRegistry(config *config.Config, tsg *toolsets.ToolsetGroup) *Modul
 			NewHARModule(config, tsg),
 			NewDbOpsModule(config, tsg),
 			NewACMModule(config, tsg),
+			NewIacmModule(config, tsg),
 		},
 		config:           config,
 		tsg:              tsg,

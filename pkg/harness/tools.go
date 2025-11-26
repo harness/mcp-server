@@ -316,6 +316,15 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 			if err := modules.RegisterFeatureManagementAndExperimentation(config, tsg); err != nil {
 				return err
 			}
+			if err := modules.RegisterWorkspaceTools(config, tsg); err != nil {
+				return err
+			}
+			if err := modules.RegisterResourceTools(config, tsg); err != nil {
+				return err
+			}
+			if err := modules.RegisterModuleRegistryTools(config, tsg); err != nil {
+				return err
+			}
 		} else {
 			// Register specified toolsets
 			for _, toolset := range config.Toolsets {
@@ -438,6 +447,18 @@ func initLegacyToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error
 					}
 				case "fme":
 					if err := modules.RegisterFeatureManagementAndExperimentation(config, tsg); err != nil {
+						return err
+					}
+				case "workspace_tools":
+					if err := modules.RegisterWorkspaceTools(config, tsg); err != nil {
+						return err
+					}
+				case "resource_tools":
+					if err := modules.RegisterResourceTools(config, tsg); err != nil {
+						return err
+					}
+				case "module_registry_tools":
+					if err := modules.RegisterModuleRegistryTools(config, tsg); err != nil {
 						return err
 					}
 				}
