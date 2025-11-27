@@ -120,7 +120,6 @@ func (l *LogService) GetLogToken(ctx context.Context, accountID string) (string,
 	params := make(map[string]string)
 	params["accountID"] = accountID
 
-	// The response is a raw token string, not JSON
 	var token string
 
 	// Make the GET request
