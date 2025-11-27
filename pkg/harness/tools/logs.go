@@ -407,7 +407,7 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 			}
 
 			// Get the log token for authentication
-			token, err := client.GetLogToken(ctx, scope.AccountID)
+			token, err := client.GetLogToken(ctx, scope.AccountID, config.LogSvcSecret)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to fetch log token: %v", err)), nil
 			}

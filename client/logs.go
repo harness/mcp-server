@@ -111,7 +111,7 @@ func (l *LogService) GetDownloadLogsURL(ctx context.Context, scope dto.Scope, pl
 }
 
 // GetLogToken fetches a log service token for the given account ID
-func (l *LogService) GetLogToken(ctx context.Context, accountID string) (string, error) {
+func (l *LogService) GetLogToken(ctx context.Context, accountID string, logSvcSecret string) (string, error) {
 	if accountID == "" {
 		return "", fmt.Errorf("accountID cannot be empty")
 	}
@@ -119,11 +119,13 @@ func (l *LogService) GetLogToken(ctx context.Context, accountID string) (string,
 	// Prepare query parameters
 	params := make(map[string]string)
 	params["accountID"] = accountID
+	headers := make(map[string]string)
+	headers["X-Harness-Token"] = logSvcSecret
 
 	var token string
 
 	// Make the GET request
-	err := l.LogServiceClient.Get(ctx, logTokenPath, params, map[string]string{}, &token)
+	err := l.LogServiceClient.Get(ctx, logTokenPath, params, headers, &token)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch log token: %w", err)
 	}
