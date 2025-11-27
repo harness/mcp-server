@@ -524,7 +524,7 @@ func (c *Client) RequestRaw(
 				*strPtr = string(responseBody)
 				return nil
 			}
-			
+
 			// Otherwise try to unmarshal as JSON
 			if err := json.Unmarshal(responseBody, out); err != nil {
 				return fmt.Errorf("unmarshal error: error deserializing response body : %w - original response: %s", err, string(responseBody))
