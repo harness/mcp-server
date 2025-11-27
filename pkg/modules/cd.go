@@ -198,7 +198,8 @@ func RegisterReleaseManagementTools(config *config.Config, tsg *toolsets.Toolset
 			releaseManagement.AddReadTools(
 				toolsets.NewServerTool(tools.SearchReleasesTool(config, releaseManagementClient)),
 				toolsets.NewServerTool(tools.GetReleaseStatusTool(config, releaseManagementClient)),
-				toolsets.NewServerTool(tools.GetPendingTasksTool(config, releaseManagementClient)),
+				toolsets.NewServerTool(tools.GetActivitiesSummaryTool(config, releaseManagementClient)),
+				toolsets.NewServerTool(tools.GetTasksForReleaseTool(config, releaseManagementClient)),
 				toolsets.NewServerTool(tools.GetExecutionOutputsTool(config, releaseManagementClient)),
 			)
 		} else {

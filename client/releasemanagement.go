@@ -11,10 +11,12 @@ import (
 const (
 	// Release Management API paths
 	releaseSummaryPath                 = "/api/release/summary"
+	releasePath                        = "/api/release/%s"
 	releaseTasksPath                   = "/api/release/%s/tasks"
 	releaseExecutionPhasesPath         = "/api/orchestration/execution/%s/phases"
 	releaseExecutionPhaseOutputPath    = "/api/orchestration/execution/release/%s/phase/%s/output"
 	releaseExecutionActivityOutputPath = "/api/orchestration/execution/release/%s/phase/%s/activity/%s/output"
+	releaseExecutionActivitiesPath     = "/api/orchestration/execution/%s/phase/%s/activities"
 )
 
 // ReleaseManagementService provides methods to interact with Release Management API
@@ -54,6 +56,31 @@ func (r *ReleaseManagementService) GetReleaseSummary(ctx context.Context, scope 
 	err := r.Client.Post(ctx, releaseSummaryPath, params, request, headers, result)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get release summary: %w", err)
+	}
+
+	return result, nil
+}
+
+// GetRelease fetches a single release by releaseId
+func (r *ReleaseManagementService) GetRelease(ctx context.Context, scope dto.Scope, releaseId string) (*dto.ReleaseDetailsResponse, error) {
+	path := fmt.Sprintf(releasePath, releaseId)
+
+	params := make(map[string]string)
+	if scope.OrgID != "" {
+		params["orgIdentifier"] = scope.OrgID
+	}
+	if scope.ProjectID != "" {
+		params["projectIdentifier"] = scope.ProjectID
+	}
+
+	headers := make(map[string]string)
+	addHarnessAccountToHeaders(ctx, scope, headers)
+
+	// Make the request
+	result := new(dto.ReleaseDetailsResponse)
+	err := r.Client.Get(ctx, path, params, headers, result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get release: %w", err)
 	}
 
 	return result, nil
@@ -147,6 +174,40 @@ func (r *ReleaseManagementService) GetPhaseOutputs(ctx context.Context, scope dt
 	err := r.Client.Get(ctx, path, params, headers, result)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get phase outputs: %w", err)
+	}
+
+	return result, nil
+}
+
+// GetReleaseActivities fetches all activities for a specific release phase
+func (r *ReleaseManagementService) GetReleaseActivities(ctx context.Context, scope dto.Scope, releaseId string, phaseIdentifier string, phaseExecutionId string, status []string) (*dto.ActivitiesExecutionResponse, error) {
+	path := fmt.Sprintf(releaseExecutionActivitiesPath, releaseId, phaseIdentifier)
+
+	// Set up query parameters (release management API uses header for account, not query params)
+	params := make(map[string]string)
+	if scope.OrgID != "" {
+		params["orgIdentifier"] = scope.OrgID
+	}
+	if scope.ProjectID != "" {
+		params["projectIdentifier"] = scope.ProjectID
+	}
+
+	if phaseExecutionId != "" {
+		params["phaseExecutionId"] = phaseExecutionId
+	}
+
+	if len(status) > 0 {
+		params["status"] = strings.Join(status, ",")
+	}
+
+	headers := make(map[string]string)
+	addHarnessAccountToHeaders(ctx, scope, headers)
+
+	// Make the request
+	result := new(dto.ActivitiesExecutionResponse)
+	err := r.Client.Get(ctx, path, params, headers, result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get release activities: %w", err)
 	}
 
 	return result, nil
