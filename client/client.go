@@ -153,19 +153,20 @@ func (c *Client) doRequest(
 		if err != nil {
 			return fmt.Errorf("failed to read response body: %w", err)
 		}
-		slog.DebugContext(ctx, "Response", "body", string(responseBody))
 	}
 
 	// Check for status code errors
 	if statusErr := mapStatusCodeToError(resp.StatusCode); statusErr != nil {
 		if len(responseBody) > 0 {
+			slog.ErrorContext(ctx, "Error response", "status", resp.StatusCode, "body", string(responseBody))
 			return fmt.Errorf("status code %d: %w - response: %s", resp.StatusCode, statusErr, string(responseBody))
 		}
 		return fmt.Errorf("status code %d: %w", resp.StatusCode, statusErr)
 	}
 
 	if response == nil || len(responseBody) == 0 {
-		return fmt.Errorf("response is nil or empty")
+		slog.WarnContext(ctx, "Empty response")
+		return nil
 	}
 
 	// Special handling for string responses
@@ -258,7 +259,6 @@ func (c *Client) PostRaw(
 			if err != nil {
 				return fmt.Errorf("failed to read response body: %w", err)
 			}
-			slog.DebugContext(ctx, "Response", "body", string(responseBody))
 		}
 
 		if isRetryable(resp.StatusCode) {
@@ -267,6 +267,7 @@ func (c *Client) PostRaw(
 
 		if statusErr := mapStatusCodeToError(resp.StatusCode); statusErr != nil {
 			if len(responseBody) > 0 {
+				slog.ErrorContext(ctx, "Error response", "status", resp.StatusCode, "body", string(responseBody))
 				return backoff.Permanent(fmt.Errorf("status code %d: %w - response: %s", resp.StatusCode, statusErr, string(responseBody)))
 			}
 			return backoff.Permanent(fmt.Errorf("status code %d: %w", resp.StatusCode, statusErr))
@@ -502,7 +503,6 @@ func (c *Client) RequestRaw(
 			if err != nil {
 				return fmt.Errorf("failed to read response body: %w", err)
 			}
-			slog.DebugContext(ctx, "Response", "body", string(responseBody))
 		}
 
 		if isRetryable(resp.StatusCode) {
@@ -511,6 +511,7 @@ func (c *Client) RequestRaw(
 
 		if statusErr := mapStatusCodeToError(resp.StatusCode); statusErr != nil {
 			if len(responseBody) > 0 {
+				slog.ErrorContext(ctx, "Error response", "status", resp.StatusCode, "body", string(responseBody))
 				return backoff.Permanent(fmt.Errorf("status code %d: %w - response: %s", resp.StatusCode, statusErr, string(responseBody)))
 			}
 			return backoff.Permanent(fmt.Errorf("status code %d: %w", resp.StatusCode, statusErr))
