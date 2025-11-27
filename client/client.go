@@ -517,9 +517,17 @@ func (c *Client) RequestRaw(
 			return backoff.Permanent(fmt.Errorf("status code %d: %w", resp.StatusCode, statusErr))
 		}
 
-		if out != nil && resp.Body != nil {
-			if err := unmarshalResponse(resp, out); err != nil {
-				return fmt.Errorf("unmarshal error: %w", err)
+		// Only unmarshal if we have both output pointer and non-empty response body
+		if out != nil && len(responseBody) > 0 {
+			// Special handling for string responses
+			if strPtr, ok := out.(*string); ok {
+				*strPtr = string(responseBody)
+				return nil
+			}
+			
+			// Otherwise try to unmarshal as JSON
+			if err := json.Unmarshal(responseBody, out); err != nil {
+				return fmt.Errorf("unmarshal error: error deserializing response body : %w - original response: %s", err, string(responseBody))
 			}
 		}
 
