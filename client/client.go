@@ -169,18 +169,7 @@ func (c *Client) doRequest(
 		return nil
 	}
 
-	// Special handling for string responses
-	if strPtr, ok := response.(*string); ok {
-		*strPtr = string(responseBody)
-		return nil
-	}
-
-	// Try to unmarshal as JSON
-	if err := json.Unmarshal(responseBody, response); err != nil {
-		return fmt.Errorf("error deserializing response body: %w - original response: %s", err, string(responseBody))
-	}
-
-	return nil
+	return unmarshalResponseBody(responseBody, response)
 }
 
 func (c *Client) Put(
@@ -273,20 +262,7 @@ func (c *Client) PostRaw(
 			return backoff.Permanent(fmt.Errorf("status code %d: %w", resp.StatusCode, statusErr))
 		}
 
-		if out != nil && len(responseBody) > 0 {
-			// Special handling for string responses
-			if strPtr, ok := out.(*string); ok {
-				*strPtr = string(responseBody)
-				return nil
-			}
-
-			// Try to unmarshal as JSON
-			if err := json.Unmarshal(responseBody, out); err != nil {
-				return fmt.Errorf("error deserializing response body: %w - original response: %s", err, string(responseBody))
-			}
-		}
-
-		return nil
+		return unmarshalResponseBody(responseBody, out)
 	}
 
 	notify := func(err error, next time.Duration) {
@@ -517,21 +493,7 @@ func (c *Client) RequestRaw(
 			return backoff.Permanent(fmt.Errorf("status code %d: %w", resp.StatusCode, statusErr))
 		}
 
-		// Only unmarshal if we have both output pointer and non-empty response body
-		if out != nil && len(responseBody) > 0 {
-			// Special handling for string responses
-			if strPtr, ok := out.(*string); ok {
-				*strPtr = string(responseBody)
-				return nil
-			}
-
-			// Otherwise try to unmarshal as JSON
-			if err := json.Unmarshal(responseBody, out); err != nil {
-				return fmt.Errorf("unmarshal error: error deserializing response body : %w - original response: %s", err, string(responseBody))
-			}
-		}
-
-		return nil
+		return unmarshalResponseBody(responseBody, out)
 	}
 	notify := func(err error, next time.Duration) {
 		retryCount++
@@ -619,6 +581,27 @@ func unmarshalResponse(resp *http.Response, data interface{}) error {
 	err = json.Unmarshal(body, data)
 	if err != nil {
 		return fmt.Errorf("error deserializing response body : %w - original response: %s", err, string(body))
+	}
+
+	return nil
+}
+
+// unmarshalResponseBody unmarshals the response body into the output parameter.
+// It handles special cases like string pointers and only unmarshals if the body is non-empty.
+func unmarshalResponseBody(responseBody []byte, out interface{}) error {
+	if out == nil || len(responseBody) == 0 {
+		return nil
+	}
+
+	// Special handling for string responses
+	if strPtr, ok := out.(*string); ok {
+		*strPtr = string(responseBody)
+		return nil
+	}
+
+	// Otherwise try to unmarshal as JSON
+	if err := json.Unmarshal(responseBody, out); err != nil {
+		return fmt.Errorf("error deserializing response body: %w - original response: %s", err, string(responseBody))
 	}
 
 	return nil
