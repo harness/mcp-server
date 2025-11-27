@@ -406,8 +406,14 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 				return mcp.NewToolResultError(fmt.Sprintf("failed to create logs directory: %v", err)), nil
 			}
 
+			// Get the log token for authentication
+			token, err := client.GetLogToken(ctx, scope.AccountID)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to fetch log token: %v", err)), nil
+			}
+
 			// Get the download URL
-			logDownloadURL, err := client.GetDownloadLogsURL(ctx, scope, planExecutionID, logKey)
+			logDownloadURL, err := client.GetDownloadLogsURL(ctx, scope, planExecutionID, logKey, token)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to fetch log download URL: %v", err)), nil
 			}
@@ -422,8 +428,6 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 			if resp.StatusCode != http.StatusOK {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to download logs: unexpected status code %d", resp.StatusCode)), nil
 			}
-
-			// Create the logs.zip file path
 			logsZipPath := filepath.Join(logsFolderPath, "logs.zip")
 
 			// Create the output file

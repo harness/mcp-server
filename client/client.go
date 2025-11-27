@@ -131,45 +131,55 @@ func (c *Client) doRequest(
 	headers map[string]string,
 	response interface{},
 ) error {
+	ctx := httpReq.Context()
+
 	for key, value := range headers {
 		httpReq.Header.Add(key, value)
 	}
+
+	slog.DebugContext(ctx, "Request", "url", httpReq.URL.String())
+
 	// Execute the request
 	resp, err := c.Do(httpReq)
-
-	// ensure the body is closed after we read (independent of status code or error)
-	if resp != nil && resp.Body != nil {
-		// Use function to satisfy the linter which complains about unhandled errors otherwise
-		defer func() { _ = resp.Body.Close() }()
-	}
-
 	if err != nil {
 		return fmt.Errorf("request execution failed: %w", err)
 	}
 
-	// map the error from the status code
-	err = mapStatusCodeToError(resp.StatusCode)
-
-	// response output is optional
-	if response == nil || resp == nil || resp.Body == nil {
-		return err
-	}
-
-	// Try to unmarshal the response
-	if err := unmarshalResponse(resp, response); err != nil {
-		// If we already have a status code error, wrap it with the unmarshal error
-		if statusErr := mapStatusCodeToError(resp.StatusCode); statusErr != nil {
-			return fmt.Errorf("%w: %v", statusErr, err)
+	// Read response body once and reuse it
+	var responseBody []byte
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
+		responseBody, err = io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("failed to read response body: %w", err)
 		}
-		return err
+		slog.DebugContext(ctx, "Response", "body", string(responseBody))
 	}
 
-	// Return any status code error if present
-	if err != nil {
-		return err
+	// Check for status code errors
+	if statusErr := mapStatusCodeToError(resp.StatusCode); statusErr != nil {
+		if len(responseBody) > 0 {
+			return fmt.Errorf("status code %d: %w - response: %s", resp.StatusCode, statusErr, string(responseBody))
+		}
+		return fmt.Errorf("status code %d: %w", resp.StatusCode, statusErr)
 	}
 
-	return err
+	if response == nil || len(responseBody) == 0 {
+		return fmt.Errorf("response is nil or empty")
+	}
+
+	// Special handling for string responses
+	if strPtr, ok := response.(*string); ok {
+		*strPtr = string(responseBody)
+		return nil
+	}
+
+	// Try to unmarshal as JSON
+	if err := json.Unmarshal(responseBody, response); err != nil {
+		return fmt.Errorf("error deserializing response body: %w - original response: %s", err, string(responseBody))
+	}
+
+	return nil
 }
 
 func (c *Client) Put(
@@ -233,17 +243,22 @@ func (c *Client) PostRaw(
 		}
 		addQueryParams(req, params)
 
+		slog.DebugContext(ctx, "Request", "url", req.URL.String())
+
 		resp, err := c.Do(req)
-
-		slog.DebugContext(ctx, "Response", "url", req.URL.String())
-		slog.DebugContext(ctx, "Response", "value", resp)
-
-		if resp != nil && resp.Body != nil {
-			defer resp.Body.Close()
-		}
-
 		if err != nil || resp == nil {
 			return fmt.Errorf("request failed: %w", err)
+		}
+
+		// Read response body
+		var responseBody []byte
+		if resp.Body != nil {
+			defer resp.Body.Close()
+			responseBody, err = io.ReadAll(resp.Body)
+			if err != nil {
+				return fmt.Errorf("failed to read response body: %w", err)
+			}
+			slog.DebugContext(ctx, "Response", "body", string(responseBody))
 		}
 
 		if isRetryable(resp.StatusCode) {
@@ -251,12 +266,22 @@ func (c *Client) PostRaw(
 		}
 
 		if statusErr := mapStatusCodeToError(resp.StatusCode); statusErr != nil {
-			return backoff.Permanent(statusErr)
+			if len(responseBody) > 0 {
+				return backoff.Permanent(fmt.Errorf("status code %d: %w - response: %s", resp.StatusCode, statusErr, string(responseBody)))
+			}
+			return backoff.Permanent(fmt.Errorf("status code %d: %w", resp.StatusCode, statusErr))
 		}
 
-		if out != nil && resp.Body != nil {
-			if err := unmarshalResponse(resp, out); err != nil {
-				return fmt.Errorf("unmarshal error: %w", err)
+		if out != nil && len(responseBody) > 0 {
+			// Special handling for string responses
+			if strPtr, ok := out.(*string); ok {
+				*strPtr = string(responseBody)
+				return nil
+			}
+
+			// Try to unmarshal as JSON
+			if err := json.Unmarshal(responseBody, out); err != nil {
+				return fmt.Errorf("error deserializing response body: %w - original response: %s", err, string(responseBody))
 			}
 		}
 
@@ -463,15 +488,21 @@ func (c *Client) RequestRaw(
 
 		resp, err := c.Do(req)
 
-		slog.DebugContext(ctx, "Response", "url", req.URL.String())
-		slog.DebugContext(ctx, "Response", "value", resp)
-
-		if resp != nil && resp.Body != nil {
-			defer resp.Body.Close()
-		}
+		slog.DebugContext(ctx, "Request", "url", req.URL.String())
 
 		if err != nil || resp == nil {
 			return fmt.Errorf("request failed: %w", err)
+		}
+
+		// Read response body once and reuse it
+		var responseBody []byte
+		if resp.Body != nil {
+			defer resp.Body.Close()
+			responseBody, err = io.ReadAll(resp.Body)
+			if err != nil {
+				return fmt.Errorf("failed to read response body: %w", err)
+			}
+			slog.DebugContext(ctx, "Response", "body", string(responseBody))
 		}
 
 		if isRetryable(resp.StatusCode) {
@@ -479,7 +510,10 @@ func (c *Client) RequestRaw(
 		}
 
 		if statusErr := mapStatusCodeToError(resp.StatusCode); statusErr != nil {
-			return backoff.Permanent(statusErr)
+			if len(responseBody) > 0 {
+				return backoff.Permanent(fmt.Errorf("status code %d: %w - response: %s", resp.StatusCode, statusErr, string(responseBody)))
+			}
+			return backoff.Permanent(fmt.Errorf("status code %d: %w", resp.StatusCode, statusErr))
 		}
 
 		if out != nil && resp.Body != nil {
