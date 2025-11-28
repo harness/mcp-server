@@ -641,99 +641,127 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 func ExemptionsPromoteExemptionTool(config *config.Config, client *generated.ClientWithResponses, principalClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("sto_exemptions_promote_and_approve",
 			mcp.WithDescription(`
-				Promote (approve) an exemption request at its current scope or at a higher scope (Project, Org, or Account).
-
-			**Scope Hierarchy (lowest → highest):**
-			- Target → Pipeline → Project → Org → Account	
+			Promote (approve) an exemption request at higher scope (Org or Account).
+			This tool could be used only for Approving an exemption either to Organization(Org) level or to Account level
 
 			**Usage Guidance:**
-			- Use this endpoint to approve an exemption at the requested scope, or to promote (escalate) it to a higher scope.
-			- You must provide the exemption id to promote.
-			- Do NOT use this endpoint to reject an exemption (see exemptions_reject_and_approve).
-			- The required identifiers depend on the scope you are promoting to:
-				- **Account-level Promotion:** Provide only accountId.
-				- **Org-level Promotion:** Provide accountId and orgId.
-				- **Project-level Promotion:** Provide accountId, orgId, and projectId.
-				- **Pipeline-level Approval:** Provide accountId, orgId, projectId, and pipelineId.
-				- **Target-level Approval:** Provide accountId, orgId, projectId, and targetId.
-			- Optionally, you may provide a comment, pipelineId, or targetId.
+			- Use this endpoint to promote an exemption to a higher scope (ORGANIZATION or ACCOUNT).
+			- The tool automatically determines the exemption's current scope and required identifiers.
+			- Simply specify the target scope and the tool handles the rest.
 
-			**IMPORTANT:** Do NOT provide parameters for scopes higher than your target scope. The scope is determined by which parameters you provide.
-
-			**Scope Logic:**
-			- projectId present = project-level approval
-			- orgId present but no projectId = org-level approval  
-			- only accountId = account-level approval
-			
 			**When to Use:**
-			- To approve an exemption at the same or a higher scope than requested.
-			- To escalate an exemption from Target/Pipeline/Project to Org or Account.
+			- To APPROVE/PROMOTE an exemption from Project/Pipeline/Target to Organization or Account level.
+			- To escalate exemptions that need higher-level approval.
 
 			**Parameters:**
 			- id: Exemption ID to promote (required)
-			- accountId: Harness Account ID (required)
-			- orgId: Harness Organization ID (provide for org-level OR project-level promotions)
-			- projectId: Harness Project ID (provide ONLY for project-level promotions, omit for org/account-level)
+			- scope: where to approve the exemption at, accepted values:- "ORGANIZATION" or "ACCOUNT" (required)
 			- comment: Optional comment for the approval
 			- pipelineId: Optional pipeline ID if relevant
 			- targetId: Optional target ID if relevant
 
+
 			**Do NOT use this endpoint for rejection.**
 `),
 			mcp.WithString("id", mcp.Required(), mcp.Description("Exemption ID to promote, generally present in id field of exemption")),
-			mcp.WithString("accountId", mcp.Required(), mcp.Description("Harness Account ID")),
-			mcp.WithString("orgId", mcp.Description("Harness Organization ID")),
-			mcp.WithString("projectId", mcp.Description("Harness Project ID")),
+			mcp.WithString("scope", mcp.Required(), mcp.Description("Scope requested to promote/approve the exemption to, allowed values are ORGANIZATION and ACCOUNT")),
 			mcp.WithString("comment", mcp.Description("Optional comment for the approval or rejection")),
 			mcp.WithString("pipelineId", mcp.Description("Optional pipeline ID to associate with the exemption")),
 			mcp.WithString("targetId", mcp.Description("Optional target ID to associate with the exemption")),
 			common.WithScope(config, true),
 		), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+
 			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
+			id, err := RequiredParam[string](request, "id")
+			if err != nil {
+				return mcp.NewToolResultError("id is required"), nil
+			}
+
+			targetScope, err := RequiredParam[string](request, "scope")
+			if err != nil {
+				return mcp.NewToolResultError("scope is required"), nil
+			}
+
+			// First, fetch the exemption details to get the correct scope information
+			findParams := &generated.ExemptionsFindExemptionByIdParams{
+				AccountId:   scope.AccountID,
+				IgnoreScope: &[]bool{true}[0],
+			}
+
+			findResp, err := client.ExemptionsFindExemptionByIdWithResponse(ctx, id, findParams)
+			if err != nil {
+				return mcp.NewToolResultError("Failed to fetch exemption details: " + err.Error()), nil
+			}
+
+			if findResp.JSON200 == nil {
+				if findResp.Body != nil {
+					return mcp.NewToolResultText("Failed to fetch exemption details: " + string(findResp.Body)), nil
+				}
+				return mcp.NewToolResultError("Failed to fetch exemption details: No data returned"), nil
+			}
+
+			exemption := findResp.JSON200
+			targetScope = strings.ToUpper(strings.TrimSpace(targetScope))
+
+			// Validate scope value FIRST
+			if targetScope != "ORGANIZATION" && targetScope != "ACCOUNT" {
+				return mcp.NewToolResultError("scope must be either ORGANIZATION or ACCOUNT"), nil
+			}
+
 			params := &generated.ExemptionsPromoteExemptionParams{
 				AccountId: scope.AccountID,
 			}
-			approverId := getCurrentUserUUID(ctx, config, principalClient)
+
+			if targetScope == "ORGANIZATION" {
+				if exemption.OrgId != nil && *exemption.OrgId != "" {
+					params.OrgId = exemption.OrgId
+				} else {
+					return mcp.NewToolResultError("Cannot promote to ORGANIZATION scope: exemption has no org ID"), nil
+				}
+			}
+			approverId := getCurrentUserUUID(ctx, scope, principalClient)
+
 			defaultComment := "This is done by Harness Agent"
-			if v, _ := OptionalParam[string](request, "orgId"); v != "" {
-				params.OrgId = &v
-			}
-			if v, _ := OptionalParam[string](request, "projectId"); v != "" {
-				params.ProjectId = &v
-			}
+
 			body := generated.PromoteExemptionRequestBody{
 				ApproverId: approverId,
 			}
+
 			if v, _ := OptionalParam[string](request, "comment"); v != "" {
 				body.Comment = &v
 			} else {
 				body.Comment = &defaultComment
 			}
+
 			if v, _ := OptionalParam[string](request, "pipelineId"); v != "" {
 				body.PipelineId = &v
 			}
+
 			if v, _ := OptionalParam[string](request, "targetId"); v != "" {
 				body.TargetId = &v
 			}
-			id, _ := RequiredParam[string](request, "id")
 
 			resp, err := client.ExemptionsPromoteExemptionWithResponse(ctx, id, params, body)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+
 			if resp.JSON200 == nil {
 				if resp.Body != nil {
 					return mcp.NewToolResultText(string(resp.Body)), nil
 				}
 				return mcp.NewToolResultError("No data returned from STO service"), nil
 			}
+
 			data, err := json.Marshal(resp.JSON200)
 			if err != nil {
 				return mcp.NewToolResultError("Failed to marshal response: " + err.Error()), nil
 			}
+
 			return mcp.NewToolResultText(string(data)), nil
 		}
 }
@@ -767,15 +795,15 @@ func ExemptionsApproveExemptionTool(config *config.Config, client *generated.Cli
 			- targetId: Exemption's target Id (required for target scope)
 			- comment: Optional comment for the approval or rejection
 
+
 			**Do NOT use this endpoint to promote to a higher scope.**
 `),
 			mcp.WithString("id", mcp.Required(), mcp.Description("Exemption ID to approve or reject, generally present in id field of exemption")),
 			mcp.WithString("action", mcp.Required(), mcp.Description("Action to take: approve or reject")),
 			mcp.WithString("accountId", mcp.Required(), mcp.Description("Harness Account ID")),
-			mcp.WithString("orgId", mcp.Description("Harness Organization ID")),
-			mcp.WithString("projectId", mcp.Description("Harness Project ID")),
+			mcp.WithString("orgId", mcp.Required(), mcp.Description("Harness Organization ID")),
+			mcp.WithString("projectId", mcp.Required(), mcp.Description("Harness Project ID")),
 			mcp.WithString("userId", mcp.Description("User ID of the approver. Get the current userID from context")),
-			mcp.WithString("comment", mcp.Description("Optional comment for the approval or rejection")),
 			common.WithScope(config, true),
 		), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, true)
@@ -785,19 +813,14 @@ func ExemptionsApproveExemptionTool(config *config.Config, client *generated.Cli
 			params := &generated.ExemptionsApproveExemptionParams{
 				AccountId: scope.AccountID,
 			}
-			if v, _ := OptionalParam[string](request, "orgId"); v != "" {
+			if v, _ := RequiredParam[string](request, "orgId"); v != "" {
 				params.OrgId = &v
 			}
-			if v, _ := OptionalParam[string](request, "projectId"); v != "" {
+			if v, _ := RequiredParam[string](request, "projectId"); v != "" {
 				params.ProjectId = &v
 			}
-			approverId := ""
-			if v, _ := OptionalParam[string](request, "userId"); v != "" {
-				approverId = v
-			}
-			if approverId == "" {
-				approverId = getCurrentUserUUID(ctx, config, principalClient)
-			}
+
+			approverId := getCurrentUserUUID(ctx, scope, principalClient)
 			defaultComment := "This is done by Harness Agent"
 			body := generated.ApproveExemptionRequestBody{
 				ApproverId: approverId,
@@ -828,11 +851,11 @@ func ExemptionsApproveExemptionTool(config *config.Config, client *generated.Cli
 		}
 }
 
-func getCurrentUserUUID(ctx context.Context, config *config.Config, principalClient *client.PrincipalService) string {
-	scope := dto.Scope{
-		AccountID: config.AccountID,
+func getCurrentUserUUID(ctx context.Context, scope dto.Scope, principalClient *client.PrincipalService) string {
+	accountScope := dto.Scope{
+		AccountID: scope.AccountID,
 	}
-	resp, err := principalClient.GetCurrentUser(ctx, scope)
+	resp, err := principalClient.GetCurrentUser(ctx, accountScope)
 	if err != nil {
 		slog.ErrorContext(ctx, "getCurrentUserUUIDFromAPIClient error", "error", err)
 		return ""
