@@ -14,7 +14,7 @@ import (
 
 func AskChatbotTool(config *config.Config, client *client.ChatbotService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("ask_chatbot",
-			mcp.WithDescription("Ask a question about Harness products and documentation to the Harness Documentation Bot. The bot uses AI to retrieve and summarize relevant information from Harness documentation."),
+			mcp.WithDescription("Ask a question about Harness products and documentation to the Harness Documentation Bot. The bot uses AI to retrieve and summarize relevant information from Harness documentation. All source links from Harness documentation (https://developer.harness.io/docs) must be included in the response."),
 			mcp.WithString("question",
 				mcp.Required(),
 				mcp.Description("The question to ask the chatbot"),
