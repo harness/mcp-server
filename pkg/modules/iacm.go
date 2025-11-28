@@ -80,8 +80,7 @@ func RegisterWorkspaceTools(config *config.Config, tsg *toolsets.ToolsetGroup) e
 	}
 
 	iacmClient := &client.IacmService{
-		Client:     c,
-		UseV1Paths: config.IacmUseV1Paths,
+		Client: c,
 	}
 
 	// Create toolset with read-only tools (no mutations in Phase 1)
@@ -105,8 +104,7 @@ func RegisterResourceTools(config *config.Config, tsg *toolsets.ToolsetGroup) er
 	}
 
 	iacmClient := &client.IacmService{
-		Client:     c,
-		UseV1Paths: config.IacmUseV1Paths,
+		Client: c,
 	}
 
 	resourceTools := toolsets.NewToolset("resource_tools", "IaCM Resource management tools").
@@ -128,8 +126,7 @@ func RegisterModuleRegistryTools(config *config.Config, tsg *toolsets.ToolsetGro
 	}
 
 	iacmClient := &client.IacmService{
-		Client:     c,
-		UseV1Paths: config.IacmUseV1Paths,
+		Client: c,
 	}
 
 	moduleTools := toolsets.NewToolset("module_registry_tools", "IaCM Module Registry tools").

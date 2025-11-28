@@ -9,25 +9,16 @@ import (
 
 const (
 	// Production API paths (org and project in URL path)
-	iacmWorkspacesPathProd   = "/iacm/api/orgs/%s/projects/%s/workspaces"
-	iacmWorkspaceGetPathProd = "/iacm/api/orgs/%s/projects/%s/workspaces/%s"
-	iacmResourcesPathProd    = "/iacm/api/orgs/%s/projects/%s/workspaces/%s/resources"
-	iacmResourceGetPathProd  = "/iacm/api/orgs/%s/projects/%s/workspaces/%s/resources/%s"
-	iacmModulesPathProd      = "/iacm/api/modules"
-	iacmModuleGetPathProd    = "/iacm/api/modules/%s"
-
-	// V1 Spec API paths (org and project as query params)
-	iacmWorkspacesPathV1   = "/iacm/api/v1/workspaces"
-	iacmWorkspaceGetPathV1 = "/iacm/api/v1/workspaces/%s"
-	iacmResourcesPathV1    = "/iacm/api/v1/workspaces/%s/resources"
-	iacmResourceGetPathV1  = "/iacm/api/v1/workspaces/%s/resources/%s"
-	iacmModulesPathV1      = "/iacm/api/v1/modules"
-	iacmModuleGetPathV1    = "/iacm/api/v1/modules/%s"
+	iacmWorkspacesPath   = "/iacm/api/orgs/%s/projects/%s/workspaces"
+	iacmWorkspaceGetPath = "/iacm/api/orgs/%s/projects/%s/workspaces/%s"
+	iacmResourcesPath    = "/iacm/api/orgs/%s/projects/%s/workspaces/%s/resources"
+	iacmResourceGetPath  = "/iacm/api/orgs/%s/projects/%s/workspaces/%s/resources/%s"
+	iacmModulesPath      = "/iacm/api/modules"
+	iacmModuleGetPath    = "/iacm/api/modules/%s"
 )
 
 type IacmService struct {
-	Client     *Client
-	UseV1Paths bool // If true, use v1 spec paths; if false, use production paths
+	Client *Client
 }
 
 // ListWorkspaces lists all workspaces with optional filtering and pagination
@@ -36,24 +27,12 @@ func (i *IacmService) ListWorkspaces(
 	scope dto.Scope,
 	opts *dto.WorkspaceListOptions,
 ) (*dto.ListOutput[dto.Workspace], error) {
-	var path string
-	if i.UseV1Paths {
-		// V1 spec path: /iacm/api/v1/workspaces
-		path = iacmWorkspacesPathV1
-	} else {
-		// Production path: /iacm/api/orgs/{org}/projects/{project}/workspaces
-		path = fmt.Sprintf(iacmWorkspacesPathProd, scope.OrgID, scope.ProjectID)
-	}
+	// Production path: /iacm/api/orgs/{org}/projects/{project}/workspaces
+	path := fmt.Sprintf(iacmWorkspacesPath, scope.OrgID, scope.ProjectID)
 
 	// Prepare query parameters
 	params := make(map[string]string)
 	params["accountIdentifier"] = scope.AccountID
-
-	// For V1 paths, add org and project as query params
-	if i.UseV1Paths {
-		params["orgIdentifier"] = scope.OrgID
-		params["projectIdentifier"] = scope.ProjectID
-	}
 
 	// Handle nil options by creating default options
 	if opts == nil {
@@ -62,8 +41,8 @@ func (i *IacmService) ListWorkspaces(
 
 	// Set default pagination
 	setDefaultPagination(&opts.PaginationOptions)
-	// Production uses 1-based pagination, V1 spec uses 0-based
-	if !i.UseV1Paths && opts.Page == 0 {
+	// Production uses 1-based pagination
+	if opts.Page == 0 {
 		opts.Page = 1
 	}
 
@@ -103,24 +82,12 @@ func (i *IacmService) GetWorkspace(
 	scope dto.Scope,
 	workspaceID string,
 ) (*dto.Entity[dto.Workspace], error) {
-	var path string
-	if i.UseV1Paths {
-		// V1 spec path: /iacm/api/v1/workspaces/{id}
-		path = fmt.Sprintf(iacmWorkspaceGetPathV1, workspaceID)
-	} else {
-		// Production path: /iacm/api/orgs/{org}/projects/{project}/workspaces/{identifier}
-		path = fmt.Sprintf(iacmWorkspaceGetPathProd, scope.OrgID, scope.ProjectID, workspaceID)
-	}
+	// Production path: /iacm/api/orgs/{org}/projects/{project}/workspaces/{identifier}
+	path := fmt.Sprintf(iacmWorkspaceGetPath, scope.OrgID, scope.ProjectID, workspaceID)
 
 	// Prepare query parameters
 	params := make(map[string]string)
 	params["accountIdentifier"] = scope.AccountID
-
-	// For V1 paths, add org and project as query params
-	if i.UseV1Paths {
-		params["orgIdentifier"] = scope.OrgID
-		params["projectIdentifier"] = scope.ProjectID
-	}
 
 	// Initialize the response object (IaCM returns workspace directly)
 	var workspace dto.Workspace
@@ -147,24 +114,12 @@ func (i *IacmService) ListResources(
 	workspaceID string,
 	opts *dto.ResourceListOptions,
 ) (*dto.ListOutput[dto.Resource], error) {
-	var path string
-	if i.UseV1Paths {
-		// V1 spec path: /iacm/api/v1/workspaces/{id}/resources
-		path = fmt.Sprintf(iacmResourcesPathV1, workspaceID)
-	} else {
-		// Production path: /iacm/api/orgs/{org}/projects/{project}/workspaces/{identifier}/resources
-		path = fmt.Sprintf(iacmResourcesPathProd, scope.OrgID, scope.ProjectID, workspaceID)
-	}
+	// Production path: /iacm/api/orgs/{org}/projects/{project}/workspaces/{identifier}/resources
+	path := fmt.Sprintf(iacmResourcesPath, scope.OrgID, scope.ProjectID, workspaceID)
 
 	// Prepare query parameters
 	params := make(map[string]string)
 	params["accountIdentifier"] = scope.AccountID
-
-	// For V1 paths, add org and project as query params
-	if i.UseV1Paths {
-		params["orgIdentifier"] = scope.OrgID
-		params["projectIdentifier"] = scope.ProjectID
-	}
 
 	// Handle nil options
 	if opts == nil {
@@ -173,8 +128,8 @@ func (i *IacmService) ListResources(
 
 	// Set default pagination
 	setDefaultPagination(&opts.PaginationOptions)
-	// Production uses 1-based pagination, V1 spec uses 0-based
-	if !i.UseV1Paths && opts.Page == 0 {
+	// Production uses 1-based pagination
+	if opts.Page == 0 {
 		opts.Page = 1
 	}
 
@@ -221,24 +176,12 @@ func (i *IacmService) GetResource(
 	workspaceID string,
 	resourceID string,
 ) (*dto.Entity[dto.Resource], error) {
-	var path string
-	if i.UseV1Paths {
-		// V1 spec path: /iacm/api/v1/workspaces/{id}/resources/{resourceId}
-		path = fmt.Sprintf(iacmResourceGetPathV1, workspaceID, resourceID)
-	} else {
-		// Production path: /iacm/api/orgs/{org}/projects/{project}/workspaces/{identifier}/resources/{resourceId}
-		path = fmt.Sprintf(iacmResourceGetPathProd, scope.OrgID, scope.ProjectID, workspaceID, resourceID)
-	}
+	// Production path: /iacm/api/orgs/{org}/projects/{project}/workspaces/{identifier}/resources/{resourceId}
+	path := fmt.Sprintf(iacmResourceGetPath, scope.OrgID, scope.ProjectID, workspaceID, resourceID)
 
 	// Prepare query parameters
 	params := make(map[string]string)
 	params["accountIdentifier"] = scope.AccountID
-
-	// For V1 paths, add org and project as query params
-	if i.UseV1Paths {
-		params["orgIdentifier"] = scope.OrgID
-		params["projectIdentifier"] = scope.ProjectID
-	}
 
 	// Initialize the response object (IaCM returns resource directly)
 	var resource dto.Resource
@@ -264,14 +207,8 @@ func (i *IacmService) ListModules(
 	scope dto.Scope,
 	opts *dto.ModuleListOptions,
 ) (*dto.ListOutput[dto.Module], error) {
-	var path string
-	if i.UseV1Paths {
-		// V1 spec path: /iacm/api/v1/modules
-		path = iacmModulesPathV1
-	} else {
-		// Production path: /iacm/api/modules
-		path = iacmModulesPathProd
-	}
+	// Production path: /iacm/api/modules
+	path := iacmModulesPath
 
 	// Prepare query parameters
 	params := make(map[string]string)
@@ -284,8 +221,8 @@ func (i *IacmService) ListModules(
 
 	// Set default pagination
 	setDefaultPagination(&opts.PaginationOptions)
-	// Production uses 1-based pagination, V1 spec uses 0-based
-	if !i.UseV1Paths && opts.Page == 0 {
+	// Production uses 1-based pagination
+	if opts.Page == 0 {
 		opts.Page = 1
 	}
 
@@ -331,14 +268,8 @@ func (i *IacmService) GetModule(
 	scope dto.Scope,
 	moduleID string,
 ) (*dto.Entity[dto.Module], error) {
-	var path string
-	if i.UseV1Paths {
-		// V1 spec path: /iacm/api/v1/modules/{id}
-		path = fmt.Sprintf(iacmModuleGetPathV1, moduleID)
-	} else {
-		// Production path: /iacm/api/modules/{id}
-		path = fmt.Sprintf(iacmModuleGetPathProd, moduleID)
-	}
+	// Production path: /iacm/api/modules/{id}
+	path := fmt.Sprintf(iacmModuleGetPath, moduleID)
 
 	// Prepare query parameters
 	params := make(map[string]string)
