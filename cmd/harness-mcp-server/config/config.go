@@ -88,7 +88,6 @@ type Config struct {
 	ReleaseManagerSecret    string // Added for Release Management toolset
 	IacmSvcBaseURL          string // Added for IaCM toolset
 	IacmSvcSecret           string // Added for IaCM toolset
-	IacmUseV1Paths          bool   // Use v1 spec paths (/iacm/api/v1/*) instead of production paths
 
 	LicenseCacheTTL           time.Duration
 	LicenseCacheCleanInterval time.Duration

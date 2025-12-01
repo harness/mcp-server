@@ -2,14 +2,14 @@ package dto
 
 // Workspace represents an IaCM workspace
 type Workspace struct {
-	ID          string                 `json:"id"`
-	Name        string                 `json:"name"`
-	Status      string                 `json:"status"`
-	LastRun     string                 `json:"last_run,omitempty"`
-	Variables   map[string]interface{} `json:"variables,omitempty"`
-	CostSummary *CostSummary           `json:"cost_summary,omitempty"`
-	ProjectID   string                 `json:"project_id"`
-	OrdId       string                 `json:"ord_id"`
+	ID          string            `json:"id"`
+	Name        string            `json:"name"`
+	Status      string            `json:"status"`
+	LastRun     string            `json:"last_run,omitempty"`
+	Variables   map[string]string `json:"variables,omitempty"`
+	CostSummary *CostSummary      `json:"cost_summary,omitempty"`
+	ProjectID   string            `json:"project_id"`
+	OrdId       string            `json:"ord_id"`
 }
 
 type CostSummary struct {
@@ -26,14 +26,14 @@ type WorkspaceListOptions struct {
 }
 
 type Resource struct {
-	ID          string                 `json:"id"`
-	Name        string                 `json:"name"`
-	Type        string                 `json:"type"`
-	Provider    string                 `json:"provider"`
-	Module      string                 `json:"module,omitempty"`
-	DriftStatus string                 `json:"drift_status,omitempty"`
-	CostData    *ResourceCost          `json:"cost_data,omitempty"`
-	Attributes  map[string]interface{} `json:"attributes,omitempty"`
+	ID          string            `json:"id"`
+	Name        string            `json:"name"`
+	Type        string            `json:"type"`
+	Provider    string            `json:"provider"`
+	Module      string            `json:"module,omitempty"`
+	DriftStatus string            `json:"drift_status,omitempty"`
+	CostData    *ResourceCost     `json:"cost_data,omitempty"`
+	Attributes  map[string]string `json:"attributes,omitempty"`
 }
 
 type ResourceCost struct {

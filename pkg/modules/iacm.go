@@ -44,21 +44,29 @@ func (m *IacmModule) Toolsets() []string {
 }
 
 func (m *IacmModule) RegisterToolsets() error {
+	// Track successfully registered toolsets for rollback on failure
+	var registeredToolsets []string
+
 	for _, toolsetName := range m.Toolsets() {
+		var err error
 		switch toolsetName {
 		case "workspace_tools":
-			if err := RegisterWorkspaceTools(m.config, m.tsg); err != nil {
-				return err
-			}
+			err = RegisterWorkspaceTools(m.config, m.tsg)
 		case "resource_tools":
-			if err := RegisterResourceTools(m.config, m.tsg); err != nil {
-				return err
-			}
+			err = RegisterResourceTools(m.config, m.tsg)
 		case "module_registry_tools":
-			if err := RegisterModuleRegistryTools(m.config, m.tsg); err != nil {
-				return err
-			}
+			err = RegisterModuleRegistryTools(m.config, m.tsg)
 		}
+
+		if err != nil {
+			// Rollback: remove previously registered toolsets
+			for _, registeredName := range registeredToolsets {
+				m.tsg.RemoveToolset(registeredName)
+			}
+			return err
+		}
+
+		registeredToolsets = append(registeredToolsets, toolsetName)
 	}
 	return nil
 }
@@ -68,19 +76,28 @@ func (m *IacmModule) EnableToolsets(tsg *toolsets.ToolsetGroup) error {
 	return ModuleEnableToolsets(m, tsg)
 }
 
-// RegisterWorkspaceTools creates and registers the workspace_tools toolset
-func RegisterWorkspaceTools(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+// createIacmClient is a helper function to build service URL and create IaCM client
+// This reduces code duplication across toolset registration functions
+func createIacmClient(config *config.Config) (*client.IacmService, error) {
 	// Build IaCM service URL (e.g., https://app.harness.io/gateway/iacm)
 	baseURL := utils.BuildServiceURL(config, config.IacmSvcBaseURL, config.BaseURL, "gateway")
 
 	// Create HTTP client with auth headers
 	c, err := utils.CreateClient(baseURL, config, "")
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	iacmClient := &client.IacmService{
+	return &client.IacmService{
 		Client: c,
+	}, nil
+}
+
+// RegisterWorkspaceTools creates and registers the workspace_tools toolset
+func RegisterWorkspaceTools(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+	iacmClient, err := createIacmClient(config)
+	if err != nil {
+		return err
 	}
 
 	// Create toolset with read-only tools (no mutations in Phase 1)
@@ -97,14 +114,9 @@ func RegisterWorkspaceTools(config *config.Config, tsg *toolsets.ToolsetGroup) e
 
 // RegisterResourceTools creates and registers the resource_tools toolset
 func RegisterResourceTools(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-	baseURL := utils.BuildServiceURL(config, config.IacmSvcBaseURL, config.BaseURL, "gateway")
-	c, err := utils.CreateClient(baseURL, config, "")
+	iacmClient, err := createIacmClient(config)
 	if err != nil {
 		return err
-	}
-
-	iacmClient := &client.IacmService{
-		Client: c,
 	}
 
 	resourceTools := toolsets.NewToolset("resource_tools", "IaCM Resource management tools").
@@ -119,14 +131,9 @@ func RegisterResourceTools(config *config.Config, tsg *toolsets.ToolsetGroup) er
 
 // RegisterModuleRegistryTools creates and registers the module_registry_tools toolset
 func RegisterModuleRegistryTools(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-	baseURL := utils.BuildServiceURL(config, config.IacmSvcBaseURL, config.BaseURL, "gateway")
-	c, err := utils.CreateClient(baseURL, config, "")
+	iacmClient, err := createIacmClient(config)
 	if err != nil {
 		return err
-	}
-
-	iacmClient := &client.IacmService{
-		Client: c,
 	}
 
 	moduleTools := toolsets.NewToolset("module_registry_tools", "IaCM Module Registry tools").
