@@ -406,12 +406,19 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 				return mcp.NewToolResultError(fmt.Sprintf("failed to create logs directory: %v", err)), nil
 			}
 
+			// Get the log token for authentication
+			token, err := client.GetLogToken(ctx, scope.AccountID, config.LogSvcSecret)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to fetch log token: %v", err)), nil
+			}
+
 			// Get the download URL
-			logDownloadURL, err := client.GetDownloadLogsURL(ctx, scope, planExecutionID, logKey)
+			logDownloadURL, err := client.GetDownloadLogsURL(ctx, scope, planExecutionID, logKey, token)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to fetch log download URL: %v", err)), nil
 			}
 
+			slog.DebugContext(ctx, "Downloading logs from URL", "url", logDownloadURL)
 			// Download the logs into outputPath
 			resp, err := http.Get(logDownloadURL)
 			if err != nil {
@@ -420,10 +427,14 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 			defer resp.Body.Close()
 
 			if resp.StatusCode != http.StatusOK {
-				return mcp.NewToolResultError(fmt.Sprintf("failed to download logs: unexpected status code %d", resp.StatusCode)), nil
+				// Read the response body for error details
+				bodyBytes, readErr := io.ReadAll(resp.Body)
+				bodyStr := ""
+				if readErr == nil {
+					bodyStr = string(bodyBytes)
+				}
+				return mcp.NewToolResultError(fmt.Sprintf("failed to download logs: unexpected status code %d - response: %s", resp.StatusCode, bodyStr)), nil
 			}
-
-			// Create the logs.zip file path
 			logsZipPath := filepath.Join(logsFolderPath, "logs.zip")
 
 			// Create the output file
@@ -437,7 +448,6 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 			slog.InfoContext(ctx, "Response received",
 				"content_type", resp.Header.Get("Content-Type"),
 				"content_length", resp.ContentLength)
-
 			// Create a temporary buffer to check if the file is a ZIP
 			headerBuf := make([]byte, 2)
 			_, err = io.ReadFull(resp.Body, headerBuf)
