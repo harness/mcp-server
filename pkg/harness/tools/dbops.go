@@ -51,7 +51,7 @@ func GetDatabaseInfoTool(config *config.Config, dbopsClient *dbops.Client) (tool
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			// Call the GetDatabaseInfo method
-			dbInfo, err := dbopsClient.GetDatabaseInfo(ctx, config.AccountID, orgID, projectID, dbSchemaIdentifier)
+			dbInfo, err := dbopsClient.GetDatabaseInfo(ctx, scope.AccountID, orgID, projectID, dbSchemaIdentifier)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to get database information: %v", err)), nil
 			}
