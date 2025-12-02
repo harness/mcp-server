@@ -100,11 +100,6 @@ func (tg *ToolsetGroup) AddToolset(ts *Toolset) {
 	tg.Toolsets[ts.Name] = ts
 }
 
-// RemoveToolset removes a toolset from the group by name
-func (tg *ToolsetGroup) RemoveToolset(name string) {
-	delete(tg.Toolsets, name)
-}
-
 // NewToolset creates a new toolset with the given name and description
 func NewToolset(name string, description string) *Toolset {
 	return &Toolset{

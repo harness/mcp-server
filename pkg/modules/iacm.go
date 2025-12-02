@@ -1,6 +1,8 @@
 package modules
 
 import (
+	"log/slog"
+
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness/tools"
@@ -44,9 +46,8 @@ func (m *IacmModule) Toolsets() []string {
 }
 
 func (m *IacmModule) RegisterToolsets() error {
-	// Track successfully registered toolsets for rollback on failure
-	var registeredToolsets []string
-
+	// Register each toolset independently, logging warnings for failures
+	// but continuing to register remaining toolsets
 	for _, toolsetName := range m.Toolsets() {
 		var err error
 		switch toolsetName {
@@ -59,14 +60,10 @@ func (m *IacmModule) RegisterToolsets() error {
 		}
 
 		if err != nil {
-			// Rollback: remove previously registered toolsets
-			for _, registeredName := range registeredToolsets {
-				m.tsg.RemoveToolset(registeredName)
-			}
-			return err
+			slog.Warn("Failed to register IaCM toolset, continuing with remaining toolsets",
+				"toolset", toolsetName,
+				"error", err)
 		}
-
-		registeredToolsets = append(registeredToolsets, toolsetName)
 	}
 	return nil
 }
@@ -81,9 +78,10 @@ func (m *IacmModule) EnableToolsets(tsg *toolsets.ToolsetGroup) error {
 func createIacmClient(config *config.Config) (*client.IacmService, error) {
 	// Build IaCM service URL (e.g., https://app.harness.io/gateway/iacm)
 	baseURL := utils.BuildServiceURL(config, config.IacmSvcBaseURL, config.BaseURL, "gateway")
+	secret := config.IacmSvcSecret
 
 	// Create HTTP client with auth headers
-	c, err := utils.CreateClient(baseURL, config, "")
+	c, err := utils.CreateClient(baseURL, config, secret)
 	if err != nil {
 		return nil, err
 	}
