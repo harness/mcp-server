@@ -30,14 +30,13 @@
             "program": "${workspaceFolder}/cmd/harness-mcp-server",
             "args": ["http-server"],
             "env": {
-                "NG_MANAGER_BASE_URL": "<NG_MANAGER_BASE_URL>",
-                "NG_MANAGER_SECRET": "<NG_MANAGER_SECRET>",
-                "HARNESS_MCP_MODE": "<HARNESS_MCP_MODE>",
+                "HARNESS_MCP_MODE": "internal",
+                "HARNESS_MCP_SVC_SECRET": "NhEp0bNIc1xel8pvc0XWFYlCh3yLyXLUzzNtR2G9LOeFdU00EUo9ht2scNFUagr4Nl8jbgnUsD5TxbZB",
+                "HARNESS_BASE_URL": "https://qa.harness.io",
+                "HARNESS_INTELLIGENCE_SVC_BASE_URL": "http://localhost:8090",
+                "HARNESS_INTELLIGENCE_SVC_SECRET": "NhEp0bNIc1xel8pvc0XWFYlCh3yLyXLUzzNtR2G9LOeFdU00EUo9ht2scNFUagr4Nl8jbgnUsD5TxbZB",
+                "HARNESS_HTTP_PORT": "8081",
                 "HARNESS_API_KEY": "<HARNESS_API_KEY>",
-                "HARNESS_MCP_SVC_SECRET": "<HARNESS_MCP_SVC_SECRET>",
-                "HARNESS_DEFAULT_ORG_ID": "<HARNESS_DEFAULT_ORG_ID>",
-                "HARNESS_DEFAULT_PROJECT_ID": "<HARNESS_DEFAULT_PROJECT_ID>",
-                "HARNESS_BASE_URL": "<HARNESS_BASE_URL>",
             }
         },
         {
