@@ -77,7 +77,7 @@ func (m *IacmModule) EnableToolsets(tsg *toolsets.ToolsetGroup) error {
 // This reduces code duplication across toolset registration functions
 func createIacmClient(config *config.Config) (*client.IacmService, error) {
 	// Build IaCM service URL (e.g., https://app.harness.io/gateway/iacm)
-	baseURL := utils.BuildServiceURL(config, config.IacmSvcBaseURL, config.BaseURL, "gateway")
+	baseURL := utils.BuildServiceURL(config, config.IacmSvcBaseURL, config.BaseURL, "gateway/iacm")
 	secret := config.IacmSvcSecret
 
 	// Create HTTP client with auth headers
