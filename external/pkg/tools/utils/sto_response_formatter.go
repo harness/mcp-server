@@ -3,7 +3,6 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
-	"time"
 
 	stogenerated "github.com/harness/mcp-server/common/client/sto/generated"
 	"github.com/harness/mcp-server/common/pkg/event/types"
@@ -37,7 +36,7 @@ func (f *TextStoResponseFormatter) FormatStoIssuesResponse(response *stogenerate
 	// Build rows from issues
 	rows := []map[string]interface{}{}
 	for _, issue := range response.Issues {
-		row := buildIssueRow(issue)
+		row := commonUtils.BuildIssueRow(issue)
 		rows = append(rows, row)
 	}
 
@@ -102,7 +101,7 @@ func (f *TextStoResponseFormatter) FormatStoExemptionsResponse(response *stogene
 	// Build rows from exemptions
 	rows := []map[string]interface{}{}
 	for _, exemption := range response.Exemptions {
-		row := buildExemptionRow(exemption, userNameMap)
+		row := commonUtils.BuildExemptionRow(exemption, userNameMap)
 		rows = append(rows, row)
 	}
 
@@ -125,58 +124,6 @@ func (f *TextStoResponseFormatter) FormatStoExemptionsResponse(response *stogene
 	contents = append(contents, mcp.NewTextContent(string(rawJSON)))
 
 	return contents, nil
-}
-
-// buildIssueRow creates a table row from an STO issue
-func buildIssueRow(issue stogenerated.AllIssueSummary) map[string]interface{} {
-	var formattedDate interface{} = issue.LastDetected
-	if tsInt, ok := formattedDate.(int64); ok {
-		t := time.Unix(tsInt, 0)
-		formattedDate = t.Format("02/01/2006 15:04")
-	}
-	row := map[string]interface{}{
-		"SEVERITY":         issue.SeverityCode,
-		"ISSUE_TYPE":       issue.IssueType,
-		"TITLE":            issue.Title,
-		"TARGETS_IMPACTED": issue.NumTargetsImpacted,
-		"OCCURRENCES":      issue.NumOccurrences,
-		"LAST_DETECTED":    formattedDate,
-		"EXEMPTION_STATUS": issue.ExemptionStatus,
-	}
-
-	return row
-}
-
-// buildExemptionRow creates a table row from an STO exemption
-func buildExemptionRow(e stogenerated.FrontendExemption, userNameMap map[string]string) map[string]interface{} {
-	duration := ""
-	if e.Expiration != nil {
-		seconds := *e.Expiration - e.Created
-		days := seconds / 86400
-		duration = fmt.Sprintf("%dd", days)
-	} else if e.PendingChanges.DurationDays != nil {
-		duration = fmt.Sprintf("%dd", *e.PendingChanges.DurationDays)
-	}
-
-	row := map[string]interface{}{
-		"ExemptionId":        e.Id,
-		"SEVERITY":           e.IssueSummary.SeverityCode,
-		"ISSUE":              e.IssueSummary.Title,
-		"SCOPE":              e.Scope,
-		"REASON":             e.Reason,
-		"EXEMPTION_DURATION": duration,
-		"OrgId":              e.OrgId,
-		"ProjectId":          e.ProjectId,
-		"PipelineId":         e.PipelineId,
-		"TargetId":           e.TargetId,
-		"STATUS":             e.Status,
-	}
-	row["REQUESTED_BY"] = userNameMap[e.RequesterId]
-	if e.ApproverId != nil && *e.ApproverId != "" {
-		row["APPROVED_BY"] = userNameMap[*e.ApproverId]
-	}
-
-	return row
 }
 
 // init registers the external STO response formatter
