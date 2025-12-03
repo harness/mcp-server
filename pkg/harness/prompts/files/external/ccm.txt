@@ -164,9 +164,9 @@ Step 5: MANDATORY - Validate Perspective Rules
 
 Step 6: Ask for User Confirmation and WAIT for Response
 - Ask for explicit confirmation. Example: "I can create a perspective with the following rules: [Show Rules]. Shall I proceed?"
-- **MANDATORY: WAIT for user response before proceeding to Step 6**
-- **DO NOT execute Step 6 in the same response as the confirmation request**
-- Only proceed to Step 6 if user explicitly confirms with "yes" or similar affirmative response
+- **MANDATORY: WAIT for user response before proceeding to Step 7**
+- **DO NOT execute Step 7 in the same response as the confirmation request**
+- Only proceed to Step 7 if user explicitly confirms with "yes" or similar affirmative response
 
 Step 7: Save the Cost Perspective using update_ccm_perspective tool
 - **CRITICAL: Only proceed if the user explicitly confirmed in Step 6**
@@ -186,6 +186,34 @@ Activate this workflow when users request cloud cost information, such as:
 - "Can you please provide AWS cost for last 3 months"
 - "Show me Azure spending for Q1"
 - "What's my GCP cost this year"
+
+###Identifying Query Scope
+Before Step 1, determine if the query is:
+
+Single-cloud: Explicitly mentions one provider (e.g., "AWS costs", "Azure spending")
+Multi-cloud: Generic or asks about "all", "total", or doesn't specify a provider (e.g., "top spenders", "my costs this month")
+
+Multi-Cloud Workflow (Execute when no specific cloud is mentioned)
+Step 0: Discover All Cloud Perspectives
+
+Use list_ccm_perspectives_detail with cloud_filter="DEFAULT"
+Filter to find ALL perspectives where:
+
+viewState is "COMPLETED"
+name matches standard cloud providers: "AWS", "GCP", "AZURE", "Azure", "Google Cloud", etc.
+
+
+Store each valid perspective with its cloud identifier
+
+If no perspectives exist at all:
+
+STOP and use the missing perspective template
+Suggest creating perspectives for their cloud providers
+
+If only some cloud perspectives exist:
+
+Proceed with available perspectives
+Note in response which clouds were included
 
 ### Workflow Steps
 
@@ -245,7 +273,7 @@ Use the **ccm_perspective_time_series** MCP tool:
 - **Purpose**: Summarize the cost data and provide additional insights
 - **CRITICAL REQUIREMENT**: When presenting cost information, you MUST always include this exact disclaimer verbatim: "Note: All costs shown are unblended costs and exclude discounts, credits, refunds, and taxes unless otherwise configured in your perspective settings"
 
-### Response Format
+### Response Format for Single Cloud provider Query
 Structure your response to include:
 
 1. **Total Cost Summary**
@@ -280,6 +308,27 @@ Trend: Costs increased by 6.7% over the period
 .
 ```
 
+### Response Format for Multi-Cloud provider Query
+Multi-Cloud Cost Report: [Time Period]
+
+🌍 TOTAL ACROSS ALL CLOUDS: $XX,XXX.XX
+
+Cloud Provider Breakdown:
+├─ AWS: $XX,XXX.XX (XX% of total)
+├─ Azure: $XX,XXX.XX (XX% of total)
+└─ GCP: $XX,XXX.XX (XX% of total)
+
+Monthly Breakdown by Cloud:
+[Month YYYY]:
+  • AWS: $X,XXX.XX
+  • Azure: $X,XXX.XX
+  • GCP: $X,XXX.XX
+  Total: $X,XXX.XX
+
+Top Spending Cloud: [Provider] ($XX,XXX.XX)
+Fastest Growing: [Provider] (+XX% MoM)
+
+Note: All costs shown are unblended costs and exclude discounts, credits, refunds, and taxes unless otherwise configured in your perspective settings.
 ### Error Handling for This Workflow
 
 - **No perspective found**: Use the response template in Step 1. Do NOT call any MCP tools.
