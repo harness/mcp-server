@@ -165,6 +165,10 @@ func TestExecuteWorkflow(t *testing.T) {
 	}
 
 	response, err := mcpClient.CallTool(ctx, request)
+	if err != nil && strings.Contains(err.Error(), "status code 503") {
+		t.Skip("Skipping test due to service unavailability (503)")
+		return
+	}
 	require.NoError(t, err, "expected to call 'list_entities' tool successfully")
 	if response.IsError {
 		t.Logf("Error response: %v", response.Content)
@@ -238,6 +242,10 @@ func TestScorecardTools(t *testing.T) {
 	}
 
 	response, err := mcpClient.CallTool(ctx, request)
+	if err != nil && strings.Contains(err.Error(), "status code 503") {
+		t.Skip("Skipping test due to service unavailability (503)")
+		return
+	}
 	require.NoError(t, err, "expected to call 'list_scorecards' tool successfully")
 	if response.IsError {
 		t.Logf("Error response: %v", response.Content)
@@ -335,6 +343,10 @@ func TestScorecardCheckTools(t *testing.T) {
 	}
 
 	response, err := mcpClient.CallTool(ctx, request)
+	if err != nil && strings.Contains(err.Error(), "status code 503") {
+		t.Skip("Skipping test due to service unavailability (503)")
+		return
+	}
 	require.NoError(t, err, "expected to call 'list_scorecard_checks' tool successfully")
 	if response.IsError {
 		t.Logf("Error response: %v", response.Content)
