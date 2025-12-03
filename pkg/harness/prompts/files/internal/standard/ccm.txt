@@ -164,9 +164,9 @@ Step 5: MANDATORY - Validate Perspective Rules
 
 Step 6: Ask for User Confirmation and WAIT for Response
 - Ask for explicit confirmation. Example: "I can create a perspective with the following rules: [Show Rules]. Shall I proceed?"
-- **MANDATORY: WAIT for user response before proceeding to Step 6**
-- **DO NOT execute Step 6 in the same response as the confirmation request**
-- Only proceed to Step 6 if user explicitly confirms with "yes" or similar affirmative response
+- **MANDATORY: WAIT for user response before proceeding to Step 7**
+- **DO NOT execute Step 7 in the same response as the confirmation request**
+- Only proceed to Step 7 if user explicitly confirms with "yes" or similar affirmative response
 
 Step 7: Save the Cost Perspective using update_ccm_perspective tool
 - **CRITICAL: Only proceed if the user explicitly confirmed in Step 6**
