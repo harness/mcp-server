@@ -9,12 +9,12 @@ import (
 
 const (
 	// Production API paths (org and project in URL path)
-	iacmWorkspacesPath   = "/iacm/api/orgs/%s/projects/%s/workspaces"
-	iacmWorkspaceGetPath = "/iacm/api/orgs/%s/projects/%s/workspaces/%s"
-	iacmResourcesPath    = "/iacm/api/orgs/%s/projects/%s/workspaces/%s/resources"
-	iacmResourceGetPath  = "/iacm/api/orgs/%s/projects/%s/workspaces/%s/resources/%s"
-	iacmModulesPath      = "/iacm/api/modules"
-	iacmModuleGetPath    = "/iacm/api/modules/%s"
+	iacmWorkspacesPath   = "/api/orgs/%s/projects/%s/workspaces"
+	iacmWorkspaceGetPath = "/api/orgs/%s/projects/%s/workspaces/%s"
+	iacmResourcesPath    = "/api/orgs/%s/projects/%s/workspaces/%s/resources"
+	iacmResourceGetPath  = "/api/orgs/%s/projects/%s/workspaces/%s/resources/%s"
+	iacmModulesPath      = "/api/modules"
+	iacmModuleGetPath    = "/api/modules/%s"
 )
 
 type IacmService struct {
