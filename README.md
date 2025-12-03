@@ -14,6 +14,7 @@ The Harness MCP Server is a [Model Context Protocol (MCP)](https://modelcontextp
     - [Infrastructure Toolset](#infrastructure-toolset)
     - [Connectors Toolset](#connectors-toolset)
     - [Secrets Toolset](#secrets-toolset)
+    - [Delegate Tokens Toolset](#delegate-tokens-toolset)
     - [Repositories Toolset](#repositories-toolset)
     - [Registries Toolset](#registries-toolset)
     - [Dashboards Toolset](#dashboards-toolset)
@@ -129,6 +130,16 @@ Toolset Name: `secrets`
 
 - `list_secrets`: List secrets from Harness with filtering and pagination options.
 - `get_secret`: Get a secret by identifier from Harness
+
+#### Delegate Tokens Toolset
+
+Toolset Name: `delegatetokens`
+
+- `list_delegate_tokens`: List delegate tokens in Harness with filtering and pagination options.
+- `get_delegate_token`: Get a delegate token by name from Harness
+- `create_delegate_token`: Creates a new delegate token in Harness
+- `revoke_delegate_token`: Revokes a delegate token in Harness
+- `delete_delegate_token`: Deletes a revoked delegate token from Harness
 
 #### Repositories Toolset
 

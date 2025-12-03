@@ -272,11 +272,6 @@ func (a *CustomLicensesApiService) GetAccountLicenses(ctx context.Context, accou
 	return localVarReturnValue, localVarHttpResponse, nil
 }
 
-// // CreateCustomLicenseClient creates a custom license client using the registered provider
-// func CreateCustomLicenseClient(config *config.Config, licenseBaseURL, baseURL, path, secret string) (*CustomLicensesApiService, error) {
-//     return CreateCustomLicenseClientWithContext(context.Background(), config, licenseBaseURL, baseURL, path, secret)
-// }
-
 // CreateCustomLicenseClientWithContext creates a custom license client using the registered provider
 func CreateCustomLicenseClientWithContext(ctx context.Context, config *config.Config, licenseBaseURL, baseURL, path, secret string) (*CustomLicensesApiService, error) {
 	if DefaultProvider == nil {
@@ -285,7 +280,3 @@ func CreateCustomLicenseClientWithContext(ctx context.Context, config *config.Co
 	return DefaultProvider.CreateClient(ctx, config, licenseBaseURL, baseURL, path, secret)
 }
 
-// // Default JWT token lifetime
-// var defaultJWTLifetime = 1 * 60 * 60 * time.Second // 1 hour
-
-// var serviceIdentity = "genaiservice"
