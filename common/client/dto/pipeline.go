@@ -111,8 +111,16 @@ type ExecutionSummaryInfo struct {
 	NumOfErrors         []int  `json:"numOfErrors,omitempty"`
 	Deployments         []int  `json:"deployments,omitempty"`
 	LastExecutionTs     int64  `json:"lastExecutionTs,omitempty"`
+	LastExecutionTsTime string `json:"lastExecutionTsTime,omitempty"`
 	LastExecutionStatus string `json:"lastExecutionStatus,omitempty"`
 	LastExecutionId     string `json:"lastExecutionId,omitempty"`
+}
+
+// FormatTimestamps formats the Unix timestamps into human-readable format
+func (e *ExecutionSummaryInfo) FormatTimestamps() {
+	if e.LastExecutionTs > 0 {
+		e.LastExecutionTsTime = FormatUnixMillisToRFC3339(e.LastExecutionTs)
+	}
 }
 
 // SortInfo represents sorting information
@@ -167,26 +175,43 @@ type FinalLogKeys struct {
 
 // PipelineExecution represents a pipeline execution
 type PipelineExecution struct {
-	PipelineIdentifier         string               `json:"pipelineIdentifier,omitempty"`
-	ProjectIdentifier          string               `json:"projectIdentifier,omitempty"`
-	OrgIdentifier              string               `json:"orgIdentifier,omitempty"`
-	PlanExecutionId            string               `json:"planExecutionId,omitempty"`
-	Name                       string               `json:"name,omitempty"`
-	Status                     string               `json:"status,omitempty"`
-	FailureInfo                ExecutionFailureInfo `json:"failureInfo,omitempty"`
-	StartTs                    int64                `json:"startTs,omitempty"`
-	EndTs                      int64                `json:"endTs,omitempty"`
-	CreatedAt                  int64                `json:"createdAt,omitempty"`
-	ConnectorRef               string               `json:"connectorRef,omitempty"`
-	SuccessfulStagesCount      int                  `json:"successfulStagesCount,omitempty"`
-	FailedStagesCount          int                  `json:"failedStagesCount,omitempty"`
-	RunningStagesCount         int                  `json:"runningStagesCount,omitempty"`
-	TotalStagesRunningCount    int                  `json:"totalStagesRunningCount,omitempty"`
-	StagesExecuted             []string             `json:"stagesExecuted,omitempty"`
-	AbortedBy                  User                 `json:"abortedBy,omitempty"`
-	QueuedType                 string               `json:"queuedType,omitempty"`
-	RunSequence                int32                `json:"runSequence,omitempty"`
-	ShouldUseSimplifiedBaseKey bool                 `json:"shouldUseSimplifiedKey,omitempty"`
+	PipelineIdentifier         string                `json:"pipelineIdentifier,omitempty"`
+	ProjectIdentifier          string                `json:"projectIdentifier,omitempty"`
+	OrgIdentifier              string                `json:"orgIdentifier,omitempty"`
+	PlanExecutionId            string                `json:"planExecutionId,omitempty"`
+	Name                       string                `json:"name,omitempty"`
+	Status                     string                `json:"status,omitempty"`
+	FailureInfo                ExecutionFailureInfo  `json:"failureInfo,omitempty"`
+	StartTs                    int64                 `json:"startTs,omitempty"`
+	StartTsTime                string                `json:"startTsTime,omitempty"`
+	EndTs                      int64                 `json:"endTs,omitempty"`
+	EndTsTime                  string                `json:"endTsTime,omitempty"`
+	CreatedAt                  int64                 `json:"createdAt,omitempty"`
+	CreatedAtTime              string                `json:"createdAtTime,omitempty"`
+	ConnectorRef               string                `json:"connectorRef,omitempty"`
+	SuccessfulStagesCount      int                   `json:"successfulStagesCount,omitempty"`
+	FailedStagesCount          int                   `json:"failedStagesCount,omitempty"`
+	RunningStagesCount         int                   `json:"runningStagesCount,omitempty"`
+	TotalStagesRunningCount    int                   `json:"totalStagesRunningCount,omitempty"`
+	StagesExecuted             []string              `json:"stagesExecuted,omitempty"`
+	AbortedBy                  User                  `json:"abortedBy,omitempty"`
+	QueuedType                 string                `json:"queuedType,omitempty"`
+	RunSequence                int32                 `json:"runSequence,omitempty"`
+	ShouldUseSimplifiedBaseKey bool                  `json:"shouldUseSimplifiedKey,omitempty"`
+	ExecutionTriggerInfo       *ExecutionTriggerInfo `json:"executionTriggerInfo,omitempty"`
+}
+
+// FormatTimestamps formats the Unix timestamps into human-readable format
+func (p *PipelineExecution) FormatTimestamps() {
+	if p.StartTs > 0 {
+		p.StartTsTime = FormatUnixMillisToRFC3339(p.StartTs)
+	}
+	if p.EndTs > 0 {
+		p.EndTsTime = FormatUnixMillisToRFC3339(p.EndTs)
+	}
+	if p.CreatedAt > 0 {
+		p.CreatedAtTime = FormatUnixMillisToRFC3339(p.CreatedAt)
+	}
 }
 
 // ExecutionFailureInfo represents the failure information of a pipeline execution
@@ -235,6 +260,26 @@ type User struct {
 	Email     string `json:"email,omitempty"`
 	UserName  string `json:"userName,omitempty"`
 	CreatedAt int64  `json:"createdAt,omitempty"`
+}
+
+// ExecutionTriggerInfo represents the trigger information for a pipeline execution
+type ExecutionTriggerInfo struct {
+	TriggerType string               `json:"triggerType,omitempty"`
+	TriggeredBy *PipelineTriggeredBy `json:"triggeredBy,omitempty"`
+	IsRerun     bool                 `json:"isRerun,omitempty"`
+}
+
+// PipelineTriggeredBy represents the user or entity that triggered the pipeline execution
+type PipelineTriggeredBy struct {
+	UUID       string            `json:"uuid,omitempty"`
+	Identifier string            `json:"identifier,omitempty"`
+	ExtraInfo  *TriggerExtraInfo `json:"extraInfo,omitempty"`
+}
+
+// TriggerExtraInfo represents additional information about the trigger
+type TriggerExtraInfo struct {
+	Email    string `json:"email,omitempty"`
+	UniqueID string `json:"uniqueId,omitempty"`
 }
 
 // InputSetListOptions represents the options for listing input sets

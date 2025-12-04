@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"log/slog"
 
-	config "github.com/harness/mcp-server/common"
 	"github.com/harness/mcp-server/common/client"
 	"github.com/harness/mcp-server/common/client/dto"
+	"github.com/harness/mcp-server/common"
 	"github.com/harness/mcp-server/common/pkg/common"
+	"github.com/harness/mcp-server/common/pkg/tools/utils"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -237,13 +238,14 @@ func FetchEC2AnalysisTool(config *config.Config, client *client.CloudCostManagem
 			// Calculate ESR = (Estimated Annualized Savings / (Estimated Annualized Savings + Estimated Annualized Spend)) * 100
 			response.ESRYearly = (totalEstimatedAnnualizedSavings / (totalEstimatedAnnualizedSavings + (totalMonthlyCommitmentSpend * 12))) * 100
 
-			// Response to be handled by the client for external calls
-			externalResponse, err := json.Marshal(response)
+			responseContents, err := utils.DefaultCCMResponseFormatter.FormatEC2AnalysisResponse(&response)
 			if err != nil {
-				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal commitment ec2 analysis: %s", err)), nil
+				return mcp.NewToolResultError(fmt.Sprintf("failed to format commitment ec2 analysis response: %s", err)), nil
 			}
 
-			return mcp.NewToolResultText(string(externalResponse)), nil
+			return &mcp.CallToolResult{
+				Content: responseContents,
+			}, nil
 		}
 }
 

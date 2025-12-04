@@ -7,7 +7,7 @@ import (
 
 // ResponseFormatter defines the interface for formatting tool responses
 // Different implementations can be used for external (text) vs internal (table events) modes
-type ResponseFormatter interface {
+type ScsResponseFormatter interface {
 	// FormatArtifactSourcesResponse formats the artifact sources response
 	// Receives raw artifact data and returns formatted MCP content
 	// Internal mode can create custom rows/columns, external mode returns JSON
@@ -18,9 +18,9 @@ type ResponseFormatter interface {
 
 // DefaultResponseFormatter holds the active response formatter implementation
 // This should be set during initialization based on deployment mode
-var DefaultResponseFormatter ResponseFormatter
+var DefaultScsResponseFormatter ScsResponseFormatter
 
 // SetResponseFormatter sets the global response formatter
-func SetResponseFormatter(formatter ResponseFormatter) {
-	DefaultResponseFormatter = formatter
+func SetScsResponseFormatter(formatter ScsResponseFormatter) {
+	DefaultScsResponseFormatter = formatter
 }

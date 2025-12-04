@@ -202,7 +202,7 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 				}
 			}
 
-			responseContents, err := utils.DefaultResponseFormatter.FormatArtifactSourcesResponse(enrichedArtifacts, body.LicenseFilterList)
+			responseContents, err := utils.DefaultScsResponseFormatter.FormatArtifactSourcesResponse(enrichedArtifacts, body.LicenseFilterList)
 			if err != nil {
 				return nil, fmt.Errorf("failed to format response: %w", err)
 			}
@@ -952,7 +952,7 @@ func ListSCSCodeReposTool(config *config.Config, client *generated.ClientWithRes
 				return nil, fmt.Errorf("non-2xx status: %d", resp.StatusCode())
 			}
 
-			responseContents, err := utils.DefaultResponseFormatter.FormatCodeRepositoriesResponse(*resp.JSON200)
+			responseContents, err := utils.DefaultScsResponseFormatter.FormatCodeRepositoriesResponse(*resp.JSON200)
 			if err != nil {
 				return nil, fmt.Errorf("failed to format response: %w", err)
 			}
