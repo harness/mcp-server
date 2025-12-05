@@ -122,12 +122,16 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 	return mcp.NewTool("get_all_security_issues",
 			mcp.WithDescription(`
                 List all issues or vulnerabilities from the STO. Show in data table format unless otherwise specified.
-
-				Output Format:
-				Show output in the following format, other than this format don't show any other section:
 				
-				## Summary
-				-[Provide a 2-3 sentence summary. Don't highlight the issue details]
+				NOTE:Don't show any table format for the results . Just summarize the final results in the Output Format section.
+
+				**CRITICAL: Output Format Requirements**
+				Don't show any table format for the results . Just summarize the final results in the Output Format section.
+				
+				Output Format:
+				### Summary
+				[Provide a 2-3 sentence summary. Don't highlight the issue details. Don't show any table format for the results.]
+
 				
                 Usage Guidance:
                 - Use this tool to retrieve a list of issues or vulnerabilities in your project.
@@ -386,6 +390,15 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 	return mcp.NewTool("sto_global_exemptions",
 			mcp.WithDescription(`
 		List global exemptions. **You must always provide exactly one status filter**
+
+		NOTE: Don't show any table format for the results . Just summarize the final results in the Output Format section.
+		
+		**CRITICAL: Output Format Requirements**
+		Don't show any table format for the results . Just summarize the final results in the following format:
+		
+		Output Format:
+		### Summary
+		[Provide a 2-3 sentence summary. Don't show any table format for the results.]
 
         **Important Guidance:**
         - Always provide the status filter (Pending, Approved, Rejected, or Expired)
