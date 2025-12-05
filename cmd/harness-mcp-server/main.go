@@ -79,13 +79,13 @@ var (
 			apiKey := viper.GetString("api_key")
 			internal := true
 			var err error
-			if apiKey != "" {
-				accountID, err = extractAccountIDFromAPIKey(apiKey)
-				if err != nil {
-					slog.Error("failed to extract account ID from API key", "error", err)
-				}
-				internal = false
-			}
+			// if apiKey != "" {
+			// 	accountID, err = extractAccountIDFromAPIKey(apiKey)
+			// 	if err != nil {
+			// 		slog.Error("failed to extract account ID from API key", "error", err)
+			// 	}
+			// 	internal = false
+			// }
 
 			var toolsets []string
 			err = viper.UnmarshalKey("toolsets", &toolsets)
@@ -263,6 +263,8 @@ var (
 			if mcpSecret == "" {
 				return fmt.Errorf("MCP service secret not provided")
 			}
+
+			// bearerToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWUsImlhdCI6MTUxNjIzOTAyMiwidHlwZSI6IlVTRVIifQ.9k6uKnVUl4hAJY_-9TjdhPZqNF_EMNOTL5fpWxOwPos"
 
 			// Move this out to middleware once we move to streamable HTTP
 			session, err := auth.AuthenticateSession(bearerToken, mcpSecret)

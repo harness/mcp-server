@@ -19,7 +19,7 @@ func AuthMiddleware(ctx context.Context, config *config.Config, next http.Handle
 
 		if config.APIKey != "" {
 			newCtx := common.WithScopeContext(r.Context(), dto.Scope{
-				AccountID: config.AccountID,
+				AccountID: "kmpy",
 			})
 			r = r.WithContext(newCtx)
 			next.ServeHTTP(w, r)
