@@ -383,7 +383,6 @@ func RegisterIntelligence(config *config.Config, tsg *toolsets.ToolsetGroup) err
 	// Create the intelligence toolset
 	intelligence := toolsets.NewToolset("intelligence", "Harness Intelligence related tools").
 		AddReadTools(
-			toolsets.NewServerTool(tools.FindSimilarTemplates(config, intelligenceClient)),
 			toolsets.NewServerTool(tools.AIDevOpsAgentTool(config, intelligenceClient)),
 		)
 
