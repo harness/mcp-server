@@ -10,7 +10,7 @@ import (
 	"github.com/harness/mcp-server/common/client/dto"
 	"github.com/harness/mcp-server/common"
 	"github.com/harness/mcp-server/common/pkg/common"
-	"github.com/harness/mcp-server/common/pkg/tools/utils"
+	utils "github.com/harness/mcp-server/common/pkg/tools/utils"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
