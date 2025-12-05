@@ -27,7 +27,7 @@ func (s *ACMService) CreateTask(ctx context.Context, scope dto.Scope, params *dt
 	queryParams := make(map[string]string)
 
 	headers := make(map[string]string)
-	addHarnessAccountToHeaders(ctx, scope, headers)
+	AddHarnessAccountToHeaders(ctx, scope, headers)
 
 	// Make the request
 	result := new(dto.ACMTaskResponse)
@@ -48,7 +48,7 @@ func (s *ACMService) ListTaskExecutions(ctx context.Context, scope dto.Scope, pa
 	queryParams := make(map[string]string)
 
 	headers := make(map[string]string)
-	addHarnessAccountToHeaders(ctx, scope, headers)
+	AddHarnessAccountToHeaders(ctx, scope, headers)
 
 	// Add specific query parameters for this endpoint
 	queryParams["task_id"] = params.TaskID
@@ -74,7 +74,7 @@ func (s *ACMService) TriggerTaskExecution(ctx context.Context, scope dto.Scope, 
 	queryParams := make(map[string]string)
 
 	headers := make(map[string]string)
-	addHarnessAccountToHeaders(ctx, scope, headers)
+	AddHarnessAccountToHeaders(ctx, scope, headers)
 
 	slog.InfoContext(ctx, "triggering ACM task execution", "task_id", params.TaskID, "repository_id", params.RepositoryID, "source_branch", params.SourceBranch)
 
