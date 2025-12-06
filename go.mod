@@ -1,9 +1,10 @@
 module github.com/harness/mcp-server
 
-go 1.23.0
+go 1.23
 
 require (
 	github.com/cenkalti/backoff/v4 v4.3.0
+	github.com/daixiang0/gci v0.13.1
 	github.com/google/uuid v1.6.0
 	github.com/harness/harness-go-sdk v0.6.1
 	github.com/hashicorp/go-retryablehttp v0.7.1
@@ -12,6 +13,7 @@ require (
 	github.com/spf13/cobra v1.10.1
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
+	golang.org/x/tools v0.35.0
 )
 
 require (
