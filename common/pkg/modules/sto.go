@@ -74,7 +74,7 @@ func RegisterSTO(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 		return err
 	}
 
-	cPrincipal, err := DefaultClientProvider.CreateClient(config, "ngMan", 30*time.Second)
+	cPrincipal, err := DefaultClientProvider.CreateClient(config, "ng/api", 30*time.Second)
 	if err != nil {
 		slog.Warn("Failed to create principal client for STO toolset", "error", err)
 		return nil

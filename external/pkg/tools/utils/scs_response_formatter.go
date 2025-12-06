@@ -13,7 +13,7 @@ import (
 type TextResponseFormatter struct{}
 
 // NewTextResponseFormatter creates a new text-based response formatter
-func NewTextResponseFormatter() commonUtils.ResponseFormatter {
+func NewTextResponseFormatter() commonUtils.ScsResponseFormatter {
 	return &TextResponseFormatter{}
 }
 
@@ -45,5 +45,5 @@ func (f *TextResponseFormatter) FormatCodeRepositoriesResponse(repositories []ge
 
 // init registers the external SCS response formatter
 func init() {
-	commonUtils.SetResponseFormatter(NewTextResponseFormatter())
+	commonUtils.SetScsResponseFormatter(NewTextResponseFormatter())
 }

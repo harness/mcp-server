@@ -153,7 +153,7 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 			params := &generated.ListArtifactSourcesParams{
 				Page:           (*generated.Page)(&page),
 				Limit:          (*generated.Limit)(&size),
-				HarnessAccount: generated.AccountHeader(config.AccountID),
+				HarnessAccount: generated.AccountHeader(scope.AccountID),
 				Order:          (*generated.ListArtifactSourcesParamsOrder)(&order),
 				Sort:           &sortVal,
 			}
@@ -161,7 +161,7 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 			artifactParams := &generated.ArtifactListV2Params{
 				Page:           (*generated.Page)(&page),
 				Limit:          (*generated.Limit)(&size),
-				HarnessAccount: generated.AccountHeader(config.AccountID),
+				HarnessAccount: generated.AccountHeader(scope.AccountID),
 				Order:          (*generated.ArtifactListV2ParamsOrder)(&order),
 				Sort:           &sortVal,
 			}
@@ -202,7 +202,7 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 				}
 			}
 
-			responseContents, err := utils.DefaultResponseFormatter.FormatArtifactSourcesResponse(enrichedArtifacts, body.LicenseFilterList)
+			responseContents, err := utils.DefaultScsResponseFormatter.FormatArtifactSourcesResponse(enrichedArtifacts, body.LicenseFilterList)
 			if err != nil {
 				return nil, fmt.Errorf("failed to format response: %w", err)
 			}
@@ -329,7 +329,7 @@ func ArtifactListV2Tool(config *config.Config, client *generated.ClientWithRespo
 			params := &generated.ArtifactListV2Params{
 				Page:           (*generated.Page)(&page),
 				Limit:          (*generated.Limit)(&size),
-				HarnessAccount: generated.AccountHeader(config.AccountID),
+				HarnessAccount: generated.AccountHeader(scope.AccountID),
 				Order:          (*generated.ArtifactListV2ParamsOrder)(&order),
 				Sort:           &sortVal,
 			}
@@ -401,7 +401,7 @@ func GetArtifactV2OverviewTool(config *config.Config, client *generated.ClientWi
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			params := &generated.GetArtifactV2OverviewParams{
-				HarnessAccount: generated.AccountHeader(config.AccountID),
+				HarnessAccount: generated.AccountHeader(scope.AccountID),
 			}
 			resp, err := client.GetArtifactV2OverviewWithResponse(ctx, orgID, projectID, source, artifact, params)
 			if err != nil {
@@ -462,7 +462,7 @@ func GetArtifactChainOfCustodyV2Tool(config *config.Config, client *generated.Cl
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			params := &generated.GetArtifactChainOfCustodyV2Params{
-				HarnessAccount: generated.AccountHeader(config.AccountID),
+				HarnessAccount: generated.AccountHeader(scope.AccountID),
 			}
 			resp, err := client.GetArtifactChainOfCustodyV2WithResponse(ctx, orgID, projectID, artifact, params)
 			if err != nil {
@@ -565,7 +565,7 @@ func FetchComplianceResultsByArtifactTool(config *config.Config, client *generat
 				Limit:          (*generated.Limit)(&size),
 				Order:          (*generated.FetchComplianceResultsByArtifactParamsOrder)(&order),
 				Sort:           (*generated.FetchComplianceResultsByArtifactParamsSort)(&sort),
-				HarnessAccount: generated.AccountHeader(config.AccountID),
+				HarnessAccount: generated.AccountHeader(scope.AccountID),
 			}
 			body, err := BuildComplianceResultByArtifactFilter(request)
 			if err != nil {
@@ -632,7 +632,7 @@ func GetCodeRepositoryOverviewTool(config *config.Config, client *generated.Clie
 			}
 
 			params := &generated.GetCodeRepositoryOverviewParams{
-				HarnessAccount: generated.AccountHeader(config.AccountID),
+				HarnessAccount: generated.AccountHeader(scope.AccountID),
 			}
 			resp, err := client.GetCodeRepositoryOverviewWithResponse(ctx, orgID, projectID, repoIdentifier, params)
 			if err != nil {
@@ -785,7 +785,7 @@ func DownloadSbomTool(config *config.Config, client *generated.ClientWithRespons
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			params := &generated.DownloadSbomParams{
-				HarnessAccount: generated.AccountHeader(config.AccountID),
+				HarnessAccount: generated.AccountHeader(scope.AccountID),
 			}
 			resp, err := client.DownloadSbomWithResponse(ctx, orgID, projectID, orchestrationID, params)
 			if err != nil {
@@ -937,7 +937,7 @@ func ListSCSCodeReposTool(config *config.Config, client *generated.ClientWithRes
 				Page:           (*generated.Page)(&page),
 				Sort:           (*generated.CodeRepositoriesListParamsSort)(&sort),
 				Order:          (*generated.CodeRepositoriesListParamsOrder)(&order),
-				HarnessAccount: generated.AccountHeader(config.AccountID),
+				HarnessAccount: generated.AccountHeader(scope.AccountID),
 			}
 			body, err := buildCodeRepositoryListingBody(request)
 			if err != nil {
@@ -952,7 +952,7 @@ func ListSCSCodeReposTool(config *config.Config, client *generated.ClientWithRes
 				return nil, fmt.Errorf("non-2xx status: %d", resp.StatusCode())
 			}
 
-			responseContents, err := utils.DefaultResponseFormatter.FormatCodeRepositoriesResponse(*resp.JSON200)
+			responseContents, err := utils.DefaultScsResponseFormatter.FormatCodeRepositoriesResponse(*resp.JSON200)
 			if err != nil {
 				return nil, fmt.Errorf("failed to format response: %w", err)
 			}

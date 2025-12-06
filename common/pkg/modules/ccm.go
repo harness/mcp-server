@@ -64,13 +64,13 @@ func (m *CCMModule) IsDefault() bool {
 func RegisterCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 	// Create base client for CCM
-	nextGenCli, err := DefaultClientProvider.CreateClient(config, "nextgen")
+	nextGenCli, err := DefaultClientProvider.CreateClient(config, "")
 	if err != nil {
 		return err
 	}
 
 	// Create base client for CCM
-	ngManCli, err := DefaultClientProvider.CreateClient(config, "ngMan")
+	ngManCli, err := DefaultClientProvider.CreateClient(config, "ng/api")
 	if err != nil {
 		return err
 	}
@@ -81,7 +81,7 @@ func RegisterCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGro
 	}
 
 	// Create base client for CCM
-	commOrchClient, err := DefaultClientProvider.CreateClient(config, "commOrch")
+	commOrchClient, err := DefaultClientProvider.CreateClient(config, "lw/co/api")
 	if err != nil {
 		return err
 	}

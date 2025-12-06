@@ -81,7 +81,7 @@ func RegisterSoftwareEngineeringInsights(config *config.Config, tsg *toolsets.To
 	}
 
 	// Create the SEI toolset
-	sei := toolsets.NewToolset("sei", "Harness Software Engineering Insights related tools")
+	sei := toolsets.NewToolset("gateway/sei/api/", "Harness Software Engineering Insights related tools")
 
 	// Get productivity tools and handlers
 	productivityFeatureMetricsTool, productivityFeatureMetricsHandler := tools.GetProductivityFeatureMetricsTool(config, seiClient)
