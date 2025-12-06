@@ -15,10 +15,10 @@ import (
 	"github.com/harness/mcp-server/common/pkg"
 	"github.com/harness/mcp-server/common/pkg/prompts"
 	"github.com/harness/mcp-server/common/pkg/types/enum"
-	_ "github.com/harness/mcp-server/external/client"
-	"github.com/harness/mcp-server/external/pkg/middleware"
-	_ "github.com/harness/mcp-server/external/pkg/modules"
-	"github.com/harness/mcp-server/external/pkg/tools"
+	_ "github.com/harness/mcp-server/client"
+	"github.com/harness/mcp-server/pkg/middleware"
+	_ "github.com/harness/mcp-server/pkg/modules"
+	"github.com/harness/mcp-server/pkg/tools"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/spf13/cobra"
@@ -81,7 +81,6 @@ var (
 				Version:       version,
 				ReadOnly:      viper.GetBool("read_only"),
 				Debug:         viper.GetBool("debug"),
-				EnableLicense: false,
 				Transport:     transportType,
 				HTTP: struct {
 					Port int    `envconfig:"MCP_HTTP_PORT" default:"8080"`
@@ -146,7 +145,6 @@ var (
 				Toolsets:         toolsets,
 				LogFilePath:      viper.GetString("log_file"),
 				Debug:            viper.GetBool("debug"),
-				EnableLicense:    viper.GetBool("enable_license"),
 				OutputDir:        viper.GetString("output_dir"),
 				LogFormat:        logFormat,
 			}
@@ -171,7 +169,6 @@ func init() {
 	rootCmd.SetVersionTemplate("{{.Short}}\n{{.Version}}\n")
 
 	rootCmd.PersistentFlags().StringSlice("toolsets", []string{}, "An optional comma separated list of groups of tools to allow, defaults to enabling all")
-	rootCmd.PersistentFlags().Bool("enable-license", false, "Enable license validation")
 	rootCmd.PersistentFlags().Bool("read-only", false, "Restrict the server to read-only operations")
 	rootCmd.PersistentFlags().String("log-file", "", "Path to log file")
 	rootCmd.PersistentFlags().Bool("debug", false, "Enable debug logging")
@@ -185,7 +182,6 @@ func init() {
 	httpServerCmd.PersistentFlags().String("http-path", "/mcp", "HTTP server path (when transport is 'http')")
 
 	_ = viper.BindPFlag("toolsets", rootCmd.PersistentFlags().Lookup("toolsets"))
-	_ = viper.BindPFlag("enable_license", rootCmd.PersistentFlags().Lookup("enable-license"))
 	_ = viper.BindPFlag("read_only", rootCmd.PersistentFlags().Lookup("read-only"))
 	_ = viper.BindPFlag("log_file", rootCmd.PersistentFlags().Lookup("log-file"))
 	_ = viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
@@ -275,7 +271,6 @@ func runHTTPServer(ctx context.Context, config config.Config) error {
 	authMiddleware := middleware.AuthMiddleware(ctx, &config, httpServer)
 
 	mux := http.NewServeMux()
-	// tracingHandler -> loggingHandler -> authHandler -> metrics -> toolFilter -> httpServer
 	mux.Handle(config.HTTP.Path, authMiddleware)
 
 	// Add health endpoint for Kubernetes probes

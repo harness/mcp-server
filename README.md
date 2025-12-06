@@ -356,14 +356,14 @@ cd mcp-server
 
 2. Build the binary:
 ```bash
-go build -o external/cmd/harness-mcp-server/harness-mcp-server ./external/cmd/harness-mcp-server
+go build -o cmd/harness-mcp-server/harness-mcp-server ./cmd/harness-mcp-server
 ```
 
 3. Run the server:
 
 To run in stdio mode:
 ```bash
-HARNESS_API_KEY="<PAT>" HARNESS_BASE_URL="https://app.harness.io" ./external/cmd/harness-mcp-server/harness-mcp-server stdio
+HARNESS_API_KEY="<PAT>" HARNESS_BASE_URL="https://app.harness.io" ./cmd/harness-mcp-server/harness-mcp-server stdio
 ```
 
 Optional environment variables:
@@ -373,7 +373,7 @@ Optional environment variables:
 
 To run in http mode:
 ```bash
-HARNESS_API_KEY="<PAT>" HARNESS_BASE_URL="https://app.harness.io" ./external/cmd/harness-mcp-server/harness-mcp-server http-server
+HARNESS_API_KEY="<PAT>" HARNESS_BASE_URL="https://app.harness.io" ./cmd/harness-mcp-server/harness-mcp-server http-server
 ```
 
 Optional environment variables:
@@ -423,7 +423,7 @@ Add the server configuration to your Gemini config file at: `~/.gemini/settings.
   "selectedAuthType": "oauth-personal",
   "mcpServers": {
     "Harness": {
-      "command": "/path/to/harness-mcp-server",  // ${workspaceFolder}/external/cmd/harness-mcp-server
+      "command": "/path/to/harness-mcp-server",  // ${workspaceFolder}/cmd/harness-mcp-server
       "args": ["stdio"],  // or ["http-server]
       "env": {
         "HARNESS_API_KEY": "<YOUR_API_KEY>",
@@ -468,7 +468,7 @@ On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
   {
     "mcpServers": {
       "harness": {
-        "command": "/path/to/harness-mcp-server",  // ${workspaceFolder}/external/cmd/harness-mcp-server
+        "command": "/path/to/harness-mcp-server",  // ${workspaceFolder}/cmd/harness-mcp-server
         "args": ["stdio"],  // or ["http-server"]
         "env": {
           "HARNESS_API_KEY": "<YOUR_API_KEY>",
@@ -489,7 +489,7 @@ Add the server configuration to your Claude config file at: `~/.claude.json`
 {
   "mcpServers": {
     "Harness": {
-      "command": "/path/to/harness-mcp-server",  // ${workspaceFolder}/external/cmd/harness-mcp-server
+      "command": "/path/to/harness-mcp-server",  // ${workspaceFolder}/cmd/harness-mcp-server
       "args": ["stdio"],  // or ["http-server"]
       "env": {
         "HARNESS_API_KEY": "<YOUR_API_KEY>",
@@ -514,7 +514,7 @@ To use the Harness MCP Server with Windsurf:
 {
   "mcpServers": {
     "harness": {
-      "command": "/path/to/harness-mcp-server",  // ${workspaceFolder}/external/cmd/harness-mcp-server
+      "command": "/path/to/harness-mcp-server",  // ${workspaceFolder}/cmd/harness-mcp-server
       "args": ["stdio"],  // or ["http-server"]
       "env": {
         "HARNESS_API_KEY": "<YOUR_API_KEY>",
@@ -571,7 +571,7 @@ To use the Harness MCP Server with Amazon Q Developer CLI:
 {
   "mcpServers": {
     "harness": {
-      "command": "/path/to/harness-mcp-server",  // ${workspaceFolder}/external/cmd/harness-mcp-server
+      "command": "/path/to/harness-mcp-server",  // ${workspaceFolder}/cmd/harness-mcp-server
       "args": ["stdio"],  // or ["http-server"]
       "env": {
         "HARNESS_API_KEY": "<YOUR_API_KEY>",
@@ -590,7 +590,7 @@ To use the Harness MCP Server with Amazon Q Developer CLI:
 {
   "mcpServers": {
     "harness": {
-      "command": "/path/to/harness-mcp-server",  // ${workspaceFolder}/external/cmd/harness-mcp-server
+      "command": "/path/to/harness-mcp-server",  // ${workspaceFolder}/cmd/harness-mcp-server
       "args": ["stdio"],  // or ["http-server"]
       "env": {
         "HARNESS_API_KEY": "your_api_key",
@@ -751,7 +751,6 @@ Files downloaded to : /Users/testuser/log-files/logs1/logs-<YOUR_PLAN_EXECUTION_
 The Harness MCP Server supports the following command line arguments:
 
 - `--toolsets`: Comma-separated list of tool groups to enable, if the list is empty or flag is not set, only default toolset is enabled. Use `--toolsets=all` to enable all available toolsets. Note: This flag is only effective when `--enable-license` is false (the default).
-- `--enable-license`: Enable license validation and module-based toolset management (default is false, i.e OSS version). When set to true, toolsets are managed through modules.
 - `--read-only`: Run the server in read-only mode
 - `--log-file`: Path to log file for debugging
 - `--log-level`: Set the logging level (debug, info, warn, error)

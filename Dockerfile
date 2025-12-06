@@ -21,7 +21,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
     CGO_ENABLED=0 \
     GOOS=$TARGETOS GOARCH=$TARGETARCH \
-    go build -o mcp-server ./external/cmd/harness-mcp-server
+    go build -o mcp-server ./cmd/harness-mcp-server
 
 ### Pull CA Certs
 FROM --platform=$BUILDPLATFORM alpine:latest AS cert-image

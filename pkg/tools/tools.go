@@ -9,7 +9,7 @@ import (
 	tool_registration_utils "github.com/harness/mcp-server/common/pkg/utils"
 	"github.com/harness/mcp-server/common/pkg/toolsets"
 	"github.com/harness/mcp-server/common/pkg/modules"
-	_ "github.com/harness/mcp-server/external/pkg/tools/utils"
+	_ "github.com/harness/mcp-server/pkg/tools/utils"
 )
 
 func InitToolsets(ctx context.Context, config *config.Config) (*toolsets.ToolsetGroup, error) {

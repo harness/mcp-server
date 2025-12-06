@@ -19,7 +19,7 @@ tools: $(tools) ## Install tools required for the build
 
 build:  
 	@echo "Building mcp-server"
-	go build -ldflags=${LDFLAGS} -o /external/cmd/harness-mcp-server/harness-mcp-server ./external/cmd/harness-mcp-server
+	go build -ldflags=${LDFLAGS} -o /cmd/harness-mcp-server/harness-mcp-server ./cmd/harness-mcp-server
 
 
 ###############################################################################

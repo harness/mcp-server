@@ -11,7 +11,6 @@ type Config struct {
 	Debug            bool
 	DefaultOrgID     string
 	DefaultProjectID string
-	EnableLicense    bool
 	HTTP             struct {
 		Port int    `envconfig:"MCP_HTTP_PORT" default:"8080"`
 		Path string `envconfig:"MCP_HTTP_PATH" default:"/mcp"`
