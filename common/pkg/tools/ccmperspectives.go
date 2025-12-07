@@ -52,7 +52,7 @@ func ListCcmPerspectivesDetailTool(config *config.Config, client *client.CloudCo
 				mcp.Description("Number of items per page"),
 			),
 			mcp.WithNumber("offset",
-				mcp.DefaultNumber(1),
+				mcp.DefaultNumber(0),
 				mcp.Description("Offset or page number for pagination"),
 			),
 			common.WithScope(config, false),

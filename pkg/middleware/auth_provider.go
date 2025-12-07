@@ -14,9 +14,9 @@ import (
 // It provides simple scope injection without authentication validation
 type ExternalAccountExtractorMiddlewareProvider struct{}
 
-// AccountExtractorMiddleware creates a middleware that injects the account scope into the context
+// CreateAccountExtractorMiddleware creates a middleware that injects the account scope into the context
 // For external mode, authentication is handled via API keys in the HTTP client
-func (p *ExternalAccountExtractorMiddlewareProvider) AccountExtractorMiddleware(ctx context.Context, config *config.Config, next http.Handler) http.Handler {
+func (p *ExternalAccountExtractorMiddlewareProvider) CreateAccountExtractorMiddleware(ctx context.Context, config *config.Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		newCtx := common.WithScopeContext(r.Context(), dto.Scope{
 			AccountID: config.AccountID,

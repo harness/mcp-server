@@ -6,7 +6,7 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "${workspaceFolder}/external/cmd/harness-mcp-server",
+            "program": "${workspaceFolder}/cmd/harness-mcp-server",
             "args": ["http-server"],
             "env": {
                 "HARNESS_LOG_FORMAT": "json",
@@ -23,7 +23,7 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "${workspaceFolder}/external/cmd/harness-mcp-server",
+            "program": "${workspaceFolder}/cmd/harness-mcp-server",
             "args": ["stdio", "--log-file=harness_mcp.log"],
             "env": {
                 "HARNESS_LOG_FORMAT": "json",

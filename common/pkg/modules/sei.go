@@ -68,7 +68,7 @@ func RegisterSoftwareEngineeringInsights(config *config.Config, tsg *toolsets.To
 	// Create base client for SEI with extended timeout for productivity calls
 	// Productivity calls can take longer to process, so we increase timeout to 60 seconds
 	seiTimeout := 60 * time.Second
-	c, err := DefaultClientProvider.CreateClient(config, "sei", seiTimeout)
+	c, err := DefaultClientProvider.CreateClient(config, "gateway/sei/api/", seiTimeout)
 	if err != nil {
 		return err
 	}
@@ -81,7 +81,7 @@ func RegisterSoftwareEngineeringInsights(config *config.Config, tsg *toolsets.To
 	}
 
 	// Create the SEI toolset
-	sei := toolsets.NewToolset("gateway/sei/api/", "Harness Software Engineering Insights related tools")
+	sei := toolsets.NewToolset("sei", "Harness Software Engineering Insights related tools")
 
 	// Get productivity tools and handlers
 	productivityFeatureMetricsTool, productivityFeatureMetricsHandler := tools.GetProductivityFeatureMetricsTool(config, seiClient)
