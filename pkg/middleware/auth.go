@@ -14,5 +14,5 @@ func AuthMiddleware(ctx context.Context, config *config.Config, next http.Handle
     if commonMiddleware.DefaultAccountExtractorMiddlewareProvider == nil {
         panic("AccountExtractorMiddlewareProvider not initialized")
     }
-    return commonMiddleware.DefaultAccountExtractorMiddlewareProvider.AccountExtractorMiddleware(ctx, config, next)
+    return commonMiddleware.DefaultAccountExtractorMiddlewareProvider.CreateAccountExtractorMiddleware(ctx, config, next)
 }
