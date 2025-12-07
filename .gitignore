@@ -1,5 +1,5 @@
 .idea
-external/cmd/harness-mcp-server/harness-mcp-server
+cmd/harness-mcp-server/harness-mcp-server
 
 # VSCode
 .vscode/*

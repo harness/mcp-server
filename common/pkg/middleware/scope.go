@@ -9,8 +9,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-// WithHarnessScope creates a middleware that extracts the scope from the request
-// and adds it to the context for all tool handlers
+// WithHarnessScope creates a middleware that extracts the scope from the request and adds it to the context for all tool handlers
 func WithHarnessScope(config *config.Config) server.ToolHandlerMiddleware {
 	return func(next server.ToolHandlerFunc) server.ToolHandlerFunc {
 		return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
