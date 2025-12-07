@@ -60,7 +60,7 @@ func RegisterACM(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 	slog.Info("Registering ACM toolset")
 
-	acmClient, err := DefaultClientProvider.CreateClient(config, "autoai")
+	acmClient, err := DefaultClientProvider.CreateClient(config, "acm")
 	if err != nil {
 		return err
 	}

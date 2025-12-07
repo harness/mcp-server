@@ -10,7 +10,7 @@ import (
 // ClientProvider defines the interface for creating module clients
 // Different implementations can be provided for internal and external modes
 type ClientProvider interface {
-	CreateClient(config *config.Config, servicePath string, timeout ...time.Duration) (*client.Client, error)
+	CreateClient(config *config.Config, service string, timeout ...time.Duration) (*client.Client, error)
 }
 
 // DefaultClientProvider holds the active client provider implementation

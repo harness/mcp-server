@@ -68,7 +68,7 @@ func (m *HARModule) IsDefault() bool {
 func RegisterRegistries(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for registries
 	// The AR client expects the full base URL including API version path
-	c, err := DefaultClientProvider.CreateClient(config, "har/api/v1")
+	c, err := DefaultClientProvider.CreateClient(config, "ar")
 	if err != nil {
 		return err
 	}

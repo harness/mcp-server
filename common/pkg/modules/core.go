@@ -131,7 +131,7 @@ func (m *CoreModule) IsDefault() bool {
 func RegisterPipelines(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 	// Create base client for pipelines
-	c, err := DefaultClientProvider.CreateClient(config, "pipeline")
+	c, err := DefaultClientProvider.CreateClient(config, "pipelines")
 	if err != nil {
 		return err
 	}
@@ -159,7 +159,7 @@ func RegisterPipelines(config *config.Config, tsg *toolsets.ToolsetGroup) error 
 
 // RegisterConnectors registers the connectors toolset
 func RegisterConnectors(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-	connectorClient, err := DefaultClientProvider.CreateClient(config, "ng/api")
+	connectorClient, err := DefaultClientProvider.CreateClient(config, "ngMan")
 	if err != nil {
 		return fmt.Errorf("failed to create client for connectors: %w", err)
 	}
@@ -179,7 +179,7 @@ func RegisterConnectors(config *config.Config, tsg *toolsets.ToolsetGroup) error
 
 // RegisterDelegateTokens registers the DelegateTokens toolset
 func RegisterDelegateTokens(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-	delegateTokenClient, err := DefaultClientProvider.CreateClient(config, "ng/api")
+	delegateTokenClient, err := DefaultClientProvider.CreateClient(config, "ngMan")
 	if err != nil {
 		return fmt.Errorf("failed to create client for DelegateTokens: %w", err)
 	}
@@ -257,7 +257,7 @@ func RegisterLogs(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	}
 
 	// Create base client for pipelines
-	pipelineClient, err := DefaultClientProvider.CreateClient(config, "pipeline")
+	pipelineClient, err := DefaultClientProvider.CreateClient(config, "pipelines")
 	if err != nil {
 		return err
 	}
@@ -278,7 +278,7 @@ func RegisterLogs(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 // RegisterTemplates registers the templates toolset
 func RegisterTemplates(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Create base client for templates
-	c, err := DefaultClientProvider.CreateClient(config, "template")
+	c, err := DefaultClientProvider.CreateClient(config, "templates")
 	if err != nil {
 		return err
 	}
@@ -300,12 +300,12 @@ func RegisterTemplates(config *config.Config, tsg *toolsets.ToolsetGroup) error 
 
 func RegisterAccessControl(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
-	c, err := DefaultClientProvider.CreateClient(config, "authz")
+	c, err := DefaultClientProvider.CreateClient(config, "acl")
 	if err != nil {
 		return err
 	}
 
-	principalC, err := DefaultClientProvider.CreateClient(config, "ng/api")
+	principalC, err := DefaultClientProvider.CreateClient(config, "ngMan")
 	if err != nil {
 		return err
 	}
@@ -348,7 +348,7 @@ func RegisterAccessControl(config *config.Config, tsg *toolsets.ToolsetGroup) er
 
 func RegisterSettings(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Create base client for settings
-	c, err := DefaultClientProvider.CreateClient(config, "ng/api")
+	c, err := DefaultClientProvider.CreateClient(config, "ngMan")
 	if err != nil {
 		return err
 	}
@@ -368,7 +368,7 @@ func RegisterSettings(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 func RegisterSecrets(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Create base client for secrets
-	c, err := DefaultClientProvider.CreateClient(config, "ng/api")
+	c, err := DefaultClientProvider.CreateClient(config, "ngMan")
 	if err != nil {
 		return err
 	}

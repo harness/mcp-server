@@ -69,7 +69,7 @@ func (m *SSCAModule) IsDefault() bool {
 // RegisterSCS registers the Supply Chain Security toolset
 func RegisterSCS(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Create base client for SCS
-	c, err := DefaultClientProvider.CreateClient(config, "ssca-manager", 30*time.Second)
+	c, err := DefaultClientProvider.CreateClient(config, "scs", 30*time.Second)
 	if err != nil {
 		return err
 	}

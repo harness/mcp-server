@@ -64,7 +64,7 @@ func (m *IDPModule) IsDefault() bool {
 }
 
 func RegisterInternalDeveloperPortal(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-	c, err := DefaultClientProvider.CreateClient(config, "")
+	c, err := DefaultClientProvider.CreateClient(config, "idp")
 	if err != nil {
 		return err
 	}
