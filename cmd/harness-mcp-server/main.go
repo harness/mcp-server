@@ -18,7 +18,7 @@ import (
 	_ "github.com/harness/mcp-server/client"
 	"github.com/harness/mcp-server/pkg/middleware"
 	_ "github.com/harness/mcp-server/pkg/modules"
-	"github.com/harness/mcp-server/pkg/tools"
+	tools "github.com/harness/mcp-server/pkg"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/spf13/cobra"

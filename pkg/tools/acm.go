@@ -6,9 +6,11 @@ import (
 	"fmt"
 
 	config "github.com/harness/mcp-server/common"
-	"github.com/harness/mcp-server/common/client"
-	"github.com/harness/mcp-server/common/client/dto"
-	"github.com/harness/mcp-server/common/pkg/common"
+	commonScopeUtils "github.com/harness/mcp-server/common/pkg/common"
+	commonTools "github.com/harness/mcp-server/common/pkg/tools"
+
+	client "github.com/harness/mcp-server/client"
+	"github.com/harness/mcp-server/client/dto"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -31,28 +33,28 @@ Once a task is created, you need to trigger it for a repository and branch to ex
 			mcp.Required(),
 			mcp.Description("The instructions for the task"),
 		),
-		common.WithScope(config, false),
+		commonScopeUtils.WithScope(config, false),
 	)
 
 	handler = func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		// Extract required parameters
-		name, err := RequiredParam[string](request, "name")
+		name, err := commonTools.RequiredParam[string](request, "name")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		identifier, err := RequiredParam[string](request, "identifier")
+		identifier, err := commonTools.RequiredParam[string](request, "identifier")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		instructions, err := RequiredParam[string](request, "instructions")
+		instructions, err := commonTools.RequiredParam[string](request, "instructions")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		// Get scope
-		scope, err := common.FetchScope(ctx, config, request, false)
+		scope, err := commonScopeUtils.FetchScope(ctx, config, request, false)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -115,28 +117,28 @@ func TriggerAutonomousCodeMaintenanceTaskTool(config *config.Config, client *cli
 			mcp.Required(),
 			mcp.Description("The source branch to run the task against"),
 		),
-		common.WithScope(config, false),
+		commonScopeUtils.WithScope(config, false),
 	)
 
 	handler = func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		// Extract required parameters
-		taskID, err := RequiredParam[string](request, "task_id")
+		taskID, err := commonTools.RequiredParam[string](request, "task_id")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		repoID, err := RequiredParam[string](request, "repository_path")
+		repoID, err := commonTools.RequiredParam[string](request, "repository_path")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		sourceBranch, err := RequiredParam[string](request, "source_branch")
+		sourceBranch, err := commonTools.RequiredParam[string](request, "source_branch")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		// Get scope
-		scope, err := common.FetchScope(ctx, config, request, false)
+		scope, err := commonScopeUtils.FetchScope(ctx, config, request, false)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -195,12 +197,12 @@ func GetAutonomousCodeMaintenanceTaskExecutionsTool(config *config.Config, clien
 			mcp.Description("Number of results per page"),
 			mcp.DefaultNumber(10),
 		),
-		common.WithScope(config, false),
+		commonScopeUtils.WithScope(config, false),
 	)
 
 	handler = func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		// Extract required parameters
-		taskID, err := RequiredParam[string](request, "task_id")
+		taskID, err := commonTools.RequiredParam[string](request, "task_id")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -217,7 +219,7 @@ func GetAutonomousCodeMaintenanceTaskExecutionsTool(config *config.Config, clien
 		}
 
 		// Get scope
-		scope, err := common.FetchScope(ctx, config, request, false)
+		scope, err := commonScopeUtils.FetchScope(ctx, config, request, false)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

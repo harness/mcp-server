@@ -4,9 +4,10 @@ import (
 	"log/slog"
 
 	config "github.com/harness/mcp-server/common"
-	"github.com/harness/mcp-server/common/client"
-	"github.com/harness/mcp-server/common/pkg/tools"
 	"github.com/harness/mcp-server/common/pkg/toolsets"
+	commonModules "github.com/harness/mcp-server/common/pkg/modules"
+	"github.com/harness/mcp-server/pkg/tools"
+	"github.com/harness/mcp-server/client"
 )
 
 // ACMModule implements the Module interface for Autonomous Code Maintenance
@@ -47,7 +48,7 @@ func (m *ACMModule) RegisterToolsets() error {
 
 // EnableToolsets enables all toolsets in this module
 func (m *ACMModule) EnableToolsets(tsg *toolsets.ToolsetGroup) error {
-	return ModuleEnableToolsets(m, tsg)
+	return commonModules.ModuleEnableToolsets(m, tsg)
 }
 
 // IsDefault indicates if this module should be enabled by default
@@ -60,7 +61,7 @@ func RegisterACM(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 	slog.Info("Registering ACM toolset")
 
-	acmClient, err := DefaultClientProvider.CreateClient(config, "autoai")
+	acmClient, err := commonModules.DefaultClientProvider.CreateClient(config, "autoai")
 	if err != nil {
 		return err
 	}
