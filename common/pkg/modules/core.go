@@ -204,7 +204,7 @@ func RegisterDashboards(config *config.Config, tsg *toolsets.ToolsetGroup) error
 
 	// Create base client for dashboards
 	customTimeout := 30 * time.Second
-	c, err := DefaultClientProvider.CreateClient(config, "dashboard", customTimeout)
+	c, err := DefaultClientProvider.CreateClient(config, "dashboards", customTimeout)
 	if err != nil {
 		return err
 	}
