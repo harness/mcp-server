@@ -27,7 +27,7 @@ var ServiceToPathMap = map[string]string{
 	"resourcegroup":       "resourcegroup",
 	"ar":                  "har/api/v1",
 	"idp":                 "",
-	"sei":                 "gateway/sei/api/",
+	"sei":                 "/gateway/sei/api/",
 	"scs":                 "ssca-manager",
 	"sto":                 "sto",
 }
