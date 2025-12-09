@@ -5,7 +5,6 @@ import (
 
 	config "github.com/harness/mcp-server/common"
 	"github.com/harness/mcp-server/common/pkg/toolsets"
-	"github.com/mark3labs/mcp-go/server"
 )
 
 // ModuleRegistry holds all available modules
@@ -15,11 +14,6 @@ type ModuleRegistry struct {
 	Tsg              *toolsets.ToolsetGroup
 	ModuleToToolsets map[string][]string // Maps module IDs to their toolsets
 	ToolsetToModule  map[string]string   // Maps toolset names to their modules
-	PromptRegistrar  ModulePromptRegistrar // Optional: custom prompt registrar implementation
-}
-
-type ModulePromptRegistrar interface {
-	RegisterModuleBasedPrompts(moduleID string, cfg *config.Config, mcpServer *server.MCPServer) error
 }
 
 // GetAllModules returns all available modules
