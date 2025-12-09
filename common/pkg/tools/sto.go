@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	config "github.com/harness/mcp-server/common"
 	"github.com/harness/mcp-server/common/client"
@@ -16,17 +17,106 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+// convertTargetNamesToIds converts comma-separated target names to comma-separated target IDs
+func convertTargetNamesToIds(ctx context.Context, targetNamesStr string, filters *generated.FrontendAllIssuesFiltersResponseBody) string {
+	if targetNamesStr == "" || filters == nil || len(filters.LatestBaselineScans) == 0 {
+		return ""
+	}
+	targetNames := strings.Split(targetNamesStr, ",")
+	var targetIds []string
+	targetIdMap := make(map[string]bool)
+	for _, targetName := range targetNames {
+		targetName = strings.TrimSpace(targetName)
+		for _, scan := range filters.LatestBaselineScans {
+			if strings.EqualFold(scan.TargetName, targetName) {
+				if !targetIdMap[scan.TargetId] {
+					targetIds = append(targetIds, scan.TargetId)
+					targetIdMap[scan.TargetId] = true
+				}
+			}
+		}
+	}
+	if len(targetIds) > 0 {
+		targetIdsStr := strings.Join(targetIds, ",")
+		slog.InfoContext(ctx, "Converted target names to IDs",
+			"target_names", targetNamesStr,
+			"target_ids", targetIdsStr)
+		return targetIdsStr
+	}
+	slog.WarnContext(ctx, "No matching target IDs found for provided names",
+		"target_names", targetNamesStr)
+	return ""
+}
+// convertScannerNamesToIds converts comma-separated scanner names to comma-separated scanner tool IDs
+func convertScannerNamesToIds(ctx context.Context, scannerNamesStr string, filters *generated.FrontendAllIssuesFiltersResponseBody) string {
+	if scannerNamesStr == "" || filters == nil || len(filters.LatestBaselineScans) == 0 {
+		return ""
+	}
+	scannerNames := strings.Split(scannerNamesStr, ",")
+	var scanToolIds []string
+	scanToolIdMap := make(map[string]bool)
+	for _, scannerName := range scannerNames {
+		scannerName = strings.TrimSpace(scannerName)
+		for _, scan := range filters.LatestBaselineScans {
+			if strings.EqualFold(scan.ScanToolName, scannerName) {
+				if !scanToolIdMap[scan.ScanTool] {
+					scanToolIds = append(scanToolIds, scan.ScanTool)
+					scanToolIdMap[scan.ScanTool] = true
+				}
+			}
+		}
+	}
+	if len(scanToolIds) > 0 {
+		scanToolIdsStr := strings.Join(scanToolIds, ",")
+		slog.InfoContext(ctx, "Converted scanner names to IDs",
+			"scanner_names", scannerNamesStr,
+			"scan_tool_ids", scanToolIdsStr)
+		return scanToolIdsStr
+	}
+	slog.WarnContext(ctx, "No matching scanner IDs found for provided names",
+		"scanner_names", scannerNamesStr)
+	return ""
+}
+func fetchFilters(ctx context.Context, scope dto.Scope, client *generated.ClientWithResponses) (*generated.FrontendAllIssuesFiltersResponseBody, error) {
+	params := &generated.FrontendAllIssuesFiltersParams{
+		AccountId: scope.AccountID,
+		OrgId:     scope.OrgID,
+		ProjectId: scope.ProjectID,
+	}
+	resp, err := client.FrontendAllIssuesFiltersWithResponse(ctx, params)
+	if err != nil {
+		slog.ErrorContext(ctx, "FrontendFilters API request failed",
+			"error", err,
+			"accountId", params.AccountId,
+			"orgId", params.OrgId,
+			"projectId", params.ProjectId)
+		return nil, fmt.Errorf("failed to fetch filters: %w", err)
+	}
+	if resp.StatusCode() != 200 {
+		return nil, fmt.Errorf("failed to fetch filters: status %d", resp.StatusCode())
+	}
+	if resp.JSON200 == nil {
+		slog.ErrorContext(ctx, "FrontendFilters API returned 200 but JSON200 is nil")
+		return nil, fmt.Errorf("failed to fetch filters: JSON200 is nil")
+	}
+	return resp.JSON200, nil
+}
+
+
 // StoAllIssuesListTool returns a tool for listing all issues from the STO Frontend.
 func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_all_security_issues",
 			mcp.WithDescription(`
                 List all issues or vulnerabilities from the STO. Show in data table format unless otherwise specified.
-
-				Output Format:
-				Show output in the following format, other than this format don't show any other section:
 				
-				## Summary
-				-[Provide a 2-3 sentence summary. Don't highlight the issue details]
+				NOTE:Don't show any table format for the results . Just summarize the final results in the Output Format section.
+
+				**CRITICAL: Output Format Requirements**
+				Don't show any table format for the results . Just summarize the final results in the Output Format section.
+				
+				Output Format:
+				### Summary
+				[Provide a 2-3 sentence summary. Don't highlight the issue details. Don't show any table format for the results.]
 				
                 Usage Guidance:
                 - Use this tool to retrieve a list of issues or vulnerabilities in your project.
@@ -63,17 +153,18 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 				mcp.Max(20),
 				mcp.Required(),
 			),
-			mcp.WithString("targetIds",
-				mcp.Description("Comma-separated target IDs to filter")),
+			mcp.WithString("targetNames",
+				mcp.Description("Comma-separated targetNames to filter. can be reffeed as target in the request. The target name is the name of the target in the STO and will be converted to targetIds before making the API call.")),
 			mcp.WithString("targetTypes", mcp.Description(`Optional. Filter issues by target type.
                                                     - Accepts a comma-separated list of target types.
                                                     - Allowed values: configuration, container, instance, repository
                                                     - Example: "configuration,container"
                                                     - If not provided, all target types are included.
                                                 `)),
-			mcp.WithString("pipelineIds", mcp.Description("Comma-separated pipeline IDs to filter")),
+			mcp.WithString("pipelineIds", mcp.Description("Comma-separated pipeline IDs to filter. Use list_pipelines (if available) first to verify and the correct pipeline_id if you're unsure of the exact ID.")),
 			mcp.WithString("scanTools", mcp.Description(`Optional. Filter issues by scan tool.
                                                     - Accepts a comma-separated list of scan tools.
+                                                    - Can be referred as scanner or scanner name in the request.
                                                     - Allowed values: aqua-trivy, aws-ecr, blackduckhub, brakeman, burp, checkmarx, checkmarx-one, checkov, coverity, custom, fortify, gitleaks, grype, nexusiq, nikto, osv-scanner, owasp, semgrep, snyk, sonarqube, sysdig, traceable, twistlock, veracode, whitesource, wiz, zap, aqua-security
                                                     - Example: "aqua-trivy,semgrep"
                                                     - If not provided, all scan tools are included.
@@ -101,6 +192,9 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
                                                 - Allowed values: SAST,DAST,SCA,IAC,SECRET,MISCONFIG,BUG_SMELLS,CODE_SMELLS,CODE_COVERAGE,EXTERNAL_POLICY
                                                 - Example: "SCA,SAST"
                                                 - If not provided (field omitted), all issue types are included (default behavior, as in: ?issueTypes= omitted in the request).
+												- Convert the values to uppercase and replace space with underscore.
+												- Example: "External Policy" -> "EXTERNAL_POLICY"
+												- Example: "Bug Smells" -> "BUG_SMELLS"
                                             `)),
 			common.WithScope(config, true),
 		), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -108,8 +202,16 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+			filters, err := fetchFilters(ctx, scope, client)
+			if err != nil {
+				slog.ErrorContext(ctx, "Failed to fetch filters API call",
+					"error", err,
+					"accountId", scope.AccountID,
+					"orgId", scope.OrgID,
+					"projectId", scope.ProjectID)
+			}
 			params := &generated.FrontendAllIssuesListParams{
-				AccountId: config.AccountID,
+				AccountId: scope.AccountID,
 				OrgId:     scope.OrgID,
 				ProjectId: scope.ProjectID,
 			}
@@ -133,8 +235,11 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 			} else {
 				params.PageSize = &size
 			}
-			if v, _ := OptionalParam[string](request, "targetIds"); v != "" {
-				params.TargetIds = &v
+			// Convert target names to target IDs
+			if targetNamesStr, _ := OptionalParam[string](request, "targetNames"); targetNamesStr != "" {
+				if targetIdsStr := convertTargetNamesToIds(ctx, targetNamesStr, filters); targetIdsStr != "" {
+					params.TargetIds = &targetIdsStr
+				}
 			}
 			if v, _ := OptionalParam[string](request, "targetTypes"); v != "" {
 				params.TargetTypes = &v
@@ -142,8 +247,13 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 			if v, _ := OptionalParam[string](request, "pipelineIds"); v != "" {
 				params.PipelineIds = &v
 			}
-			if v, _ := OptionalParam[string](request, "scanTools"); v != "" {
-				params.ScanTools = &v
+			// Convert scanner names to scanner tool IDs
+			if scannerNamesStr, _ := OptionalParam[string](request, "scanTools"); scannerNamesStr != "" {
+				combinedScanTools := scannerNamesStr
+				if scanToolIdsStr := convertScannerNamesToIds(ctx, scannerNamesStr, filters); scanToolIdsStr != "" {
+					combinedScanTools = combinedScanTools + "," + scannerNamesStr
+				}
+				params.ScanTools = &combinedScanTools
 			}
 			if v, _ := OptionalParam[string](request, "severityCodes"); v != "" {
 				params.SeverityCodes = &v
@@ -175,6 +285,10 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 			}
 
 			responseContents, err := utils.DefaultStoResponseFormatter.FormatStoIssuesResponse(resp.JSON200)
+
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 			return &mcp.CallToolResult{
 				Content: responseContents,
 			}, nil
@@ -186,9 +300,24 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 			mcp.WithDescription(`
 		List global exemptions. **You must always provide exactly one status filter**
 
+		NOTE: Do NOT show any list of exemptions, table of exemptions, or individual exemption details. Only provide a high-level summary and key statistics.. Just summarize the final results in the Output Format section.
+		
+		**CRITICAL: Output Format Requirements**
+		NOTE: Do NOT show any list of exemptions, table of exemptions, or individual exemption details. Only provide a high-level summary and key statistics. Just summarize the final results in the following format:
+		
+		Output Format:
+		### Summary
+		[Provide a 2-3 sentence summary. Do NOT show any list of exemptions, table of exemptions, or individual exemption details. Only provide a high-level summary and key statistics.]
+
         **Important Guidance:**
         - Always provide the status filter (Pending, Approved, Rejected, or Expired)
         - Use the search parameter to find specific issues or exemptions by title or content
+		- List only 5 exemptions by default when user doesn't specify any number
+		- CRITICAL PAGINATION: Track total items shown and calculate correct page number
+		  * First request: page=0, size=5 (shows items 1-5)
+		  * "list more": page=1, size=5 (shows items 6-10)  
+		  * "list 10 more": page=2, size=10 (shows items 11-20, NOT items 1-10!)
+		- Maximum limit is 50 exemptions per request. If user asks for more than 50, inform them that the maximum limit is 50 and show 50 exemptions.
 
         **Filters:**
         - Status (required): Pending, Approved, Rejected, Expired
@@ -211,7 +340,7 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 			mcp.WithString("orgId", mcp.Required(), mcp.Description("Harness Organization ID")),
 			mcp.WithString("projectId", mcp.Required(), mcp.Description("Harness Project ID")),
 			mcp.WithNumber("page", mcp.Description("Page number to fetch (starting from 0)"), mcp.Min(0), mcp.DefaultNumber(0)),
-			mcp.WithNumber("pageSize", mcp.Description("Number of results per page"), mcp.DefaultNumber(5)),
+			mcp.WithNumber("size", mcp.Description("Number of results per page"), mcp.DefaultNumber(5), mcp.Max(50)),
 
 			mcp.WithString("status", mcp.Description("Required. Exemption status: Pending, Approved, Rejected, Expired. You must provide exactly one status.")),
 			mcp.WithString("search", mcp.Description(`Free-text search that matches both issue titles and exemption titles.
@@ -225,16 +354,24 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 		Note: For exact vulnerability IDs, use the complete ID without modifications.`)),
 			common.WithScope(config, true),
 		), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			page := int64(0)
-			size := int64(5)
 			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+			// Use standard pagination utility
+			page, size, err := FetchPagination(request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			pageInt64 := int64(page)
+			sizeInt64 := int64(size)
+
 			params := &generated.FrontendGlobalExemptionsParams{
-				AccountId: config.AccountID,
+				AccountId: scope.AccountID,
 				OrgId:     &scope.OrgID,
 				ProjectId: &scope.ProjectID,
+				Page:      &pageInt64,
+				PageSize:  &sizeInt64,
 			}
 			if v, _ := OptionalParam[string](request, "orgId"); v != "" {
 				params.OrgId = &v
@@ -242,17 +379,6 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 			if v, _ := OptionalParam[string](request, "projectId"); v != "" {
 				params.ProjectId = &v
 			}
-			if v, _ := OptionalParam[int64](request, "page"); v != 0 {
-				params.Page = &v
-			} else {
-				params.Page = &page
-			}
-			if v, _ := OptionalParam[int64](request, "pageSize"); v != 0 {
-				params.PageSize = &v
-			} else {
-				params.PageSize = &size
-			}
-
 			if v, _ := OptionalParam[string](request, "status"); v != "" {
 				params.Status = generated.FrontendGlobalExemptionsParamsStatus(v)
 			}
@@ -289,11 +415,11 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 			userNameMap := make(map[string]string)
 			for userID := range userIDs {
 				name := ""
-				scope := dto.Scope{
-					AccountID: config.AccountID,
+				userScope := dto.Scope{
+					AccountID: scope.AccountID,
 				}
-				// PrincipalService: GetUserInfo(ctx, scope, userID, page, size)
-				userInfo, err := principalClient.GetUserInfo(ctx, scope, userID, 0, 1)
+				// PrincipalService: GetUserInfo(ctx, userScope, userID, page, size)
+				userInfo, err := principalClient.GetUserInfo(ctx, userScope, userID, 0, 1)
 				if err == nil && userInfo != nil {
 					if userInfo.Data.User.Name != "" {
 						name = userInfo.Data.User.Name
@@ -320,55 +446,84 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 func ExemptionsPromoteExemptionTool(config *config.Config, client *generated.ClientWithResponses, principalClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("sto_exemptions_promote_and_approve",
 			mcp.WithDescription(`
-				Promote (approve) an exemption request at its current scope or at a higher scope (Project, Org, or Account).
+				Promote (approve) an exemption request at higher scope (Org or Account).
+			This tool could be used only for Approving an exemption either to Organization(Org) level or to Account level
 
 			**Usage Guidance:**
-			- Use this endpoint to approve an exemption at the requested scope, or to promote (escalate) it to a higher scope.
-			- Do NOT use this endpoint to reject an exemption (see exemptions_reject_and_approve).
-			- The required identifiers depend on the scope you are promoting to:
-				- **Account-level Promotion:** Provide only accountId.
-				- **Org-level Promotion:** Provide accountId and orgId.
-				- **Project-level Promotion:** Provide accountId, orgId, and projectId.
-				- **Pipeline-level Approval:** Provide accountId, orgId, projectId, and pipelineId.
-				- **Target-level Approval:** Provide accountId, orgId, projectId, and targetId.
-			- You must provide the exemption id to promote.
-			- Optionally, you may provide a comment, pipelineId, or targetId.
+			- Use this endpoint to promote an exemption to a higher scope (ORGANIZATION or ACCOUNT).
+			- The tool automatically determines the exemption's current scope and required identifiers.
+			- Simply specify the target scope and the tool handles the rest.
+			**Scope Logic:**
+			- projectId present = project-level approval
+			- orgId present but no projectId = org-level approval  
+			- only accountId = account-level approval
 
 			**When to Use:**
-			- To approve an exemption at the same or a higher scope than requested.
-			- To escalate an exemption from Target/Pipeline/Project to Org or Account.
+			- To APPROVE/PROMOTE an exemption from Project/Pipeline/Target to Organization or Account level.
+			- To escalate exemptions that need higher-level approval.
 
 			**Parameters:**
 			- id: Exemption ID to promote (required)
-			- accountId: Harness Account ID (required)
-			- orgId: Harness Organization ID (required for org/project promotion)
-			- projectId: Harness Project ID (required for project promotion)
+			- scope: where to approve the exemption at, accepted values:- "ORGANIZATION" or "ACCOUNT" (required)
 			- comment: Optional comment for the approval
 			- pipelineId: Optional pipeline ID if relevant
 			- targetId: Optional target ID if relevant
 
+
 			**Do NOT use this endpoint for rejection.**
 `),
 			mcp.WithString("id", mcp.Required(), mcp.Description("Exemption ID to promote, generally present in id field of exemption")),
-			mcp.WithString("accountId", mcp.Required(), mcp.Description("Harness Account ID")),
-			mcp.WithString("orgId", mcp.Required(), mcp.Description("Harness Organization ID")),
-			mcp.WithString("projectId", mcp.Required(), mcp.Description("Harness Project ID")),
+			mcp.WithString("scope", mcp.Required(), mcp.Description("Scope requested to promote/approve the exemption to, allowed values are ORGANIZATION and ACCOUNT")),
 			mcp.WithString("comment", mcp.Description("Optional comment for the approval or rejection")),
 			mcp.WithString("pipelineId", mcp.Description("Optional pipeline ID to associate with the exemption")),
 			mcp.WithString("targetId", mcp.Description("Optional target ID to associate with the exemption")),
 			common.WithScope(config, true),
 		), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, true)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			id, err := RequiredParam[string](request, "id")
+			if err != nil {
+				return mcp.NewToolResultError("id is required"), nil
+			}
+			targetScope, err := RequiredParam[string](request, "scope")
+			if err != nil {
+				return mcp.NewToolResultError("scope is required"), nil
+			}
+			// First, fetch the exemption details to get the correct scope information
+			findParams := &generated.ExemptionsFindExemptionByIdParams{
+				AccountId:   scope.AccountID,
+				IgnoreScope: &[]bool{true}[0],
+			}
+			findResp, err := client.ExemptionsFindExemptionByIdWithResponse(ctx, id, findParams)
+			if err != nil {
+				return mcp.NewToolResultError("Failed to fetch exemption details: " + err.Error()), nil
+			}
+			if findResp.JSON200 == nil {
+				if findResp.Body != nil {
+					return mcp.NewToolResultText("Failed to fetch exemption details: " + string(findResp.Body)), nil
+				}
+				return mcp.NewToolResultError("Failed to fetch exemption details: No data returned"), nil
+			}
+			exemption := findResp.JSON200
+			targetScope = strings.ToUpper(strings.TrimSpace(targetScope))
+			// Validate scope value FIRST
+			if targetScope != "ORGANIZATION" && targetScope != "ACCOUNT" {
+				return mcp.NewToolResultError("scope must be either ORGANIZATION or ACCOUNT"), nil
+			}
 			params := &generated.ExemptionsPromoteExemptionParams{
-				AccountId: config.AccountID,
+				AccountId: scope.AccountID,
 			}
-			approverId := getCurrentUserUUID(ctx, config, principalClient)
+			if targetScope == "ORGANIZATION" {
+				if exemption.OrgId != nil && *exemption.OrgId != "" {
+					params.OrgId = exemption.OrgId
+				} else {
+					return mcp.NewToolResultError("Cannot promote to ORGANIZATION scope: exemption has no org ID"), nil
+				}
+			}
+			approverId := getCurrentUserUUID(ctx, scope, principalClient)
 			defaultComment := "This is done by Harness Agent"
-			if v, _ := OptionalParam[string](request, "orgId"); v != "" {
-				params.OrgId = &v
-			}
-			if v, _ := OptionalParam[string](request, "projectId"); v != "" {
-				params.ProjectId = &v
-			}
 			body := generated.PromoteExemptionRequestBody{
 				ApproverId: approverId,
 			}
@@ -383,7 +538,6 @@ func ExemptionsPromoteExemptionTool(config *config.Config, client *generated.Cli
 			if v, _ := OptionalParam[string](request, "targetId"); v != "" {
 				body.TargetId = &v
 			}
-			id, _ := RequiredParam[string](request, "id")
 
 			resp, err := client.ExemptionsPromoteExemptionWithResponse(ctx, id, params, body)
 			if err != nil {
@@ -437,14 +591,17 @@ func ExemptionsApproveExemptionTool(config *config.Config, client *generated.Cli
 			mcp.WithString("id", mcp.Required(), mcp.Description("Exemption ID to approve or reject, generally present in id field of exemption")),
 			mcp.WithString("action", mcp.Required(), mcp.Description("Action to take: approve or reject")),
 			mcp.WithString("accountId", mcp.Required(), mcp.Description("Harness Account ID")),
-			mcp.WithString("orgId", mcp.Description("Harness Organization ID")),
-			mcp.WithString("projectId", mcp.Description("Harness Project ID")),
+			mcp.WithString("orgId", mcp.Required(), mcp.Description("Harness Organization ID")),
+			mcp.WithString("projectId", mcp.Required(), mcp.Description("Harness Project ID")),
 			mcp.WithString("userId", mcp.Description("User ID of the approver. Get the current userID from context")),
-			mcp.WithString("comment", mcp.Description("Optional comment for the approval or rejection")),
 			common.WithScope(config, true),
 		), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, true)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 			params := &generated.ExemptionsApproveExemptionParams{
-				AccountId: config.AccountID,
+				AccountId: scope.AccountID,
 			}
 			if v, _ := OptionalParam[string](request, "orgId"); v != "" {
 				params.OrgId = &v
@@ -452,13 +609,7 @@ func ExemptionsApproveExemptionTool(config *config.Config, client *generated.Cli
 			if v, _ := OptionalParam[string](request, "projectId"); v != "" {
 				params.ProjectId = &v
 			}
-			approverId := ""
-			if v, _ := OptionalParam[string](request, "userId"); v != "" {
-				approverId = v
-			}
-			if approverId == "" {
-				approverId = getCurrentUserUUID(ctx, config, principalClient)
-			}
+			approverId := getCurrentUserUUID(ctx, scope, principalClient)
 			defaultComment := "This is done by Harness Agent"
 			body := generated.ApproveExemptionRequestBody{
 				ApproverId: approverId,
@@ -489,11 +640,11 @@ func ExemptionsApproveExemptionTool(config *config.Config, client *generated.Cli
 		}
 }
 
-func getCurrentUserUUID(ctx context.Context, config *config.Config, principalClient *client.PrincipalService) string {
-	scope := dto.Scope{
-		AccountID: config.AccountID,
+func getCurrentUserUUID(ctx context.Context, scope dto.Scope, principalClient *client.PrincipalService) string {
+	accountScope := dto.Scope{
+		AccountID: scope.AccountID,
 	}
-	resp, err := principalClient.GetCurrentUser(ctx, scope)
+	resp, err := principalClient.GetCurrentUser(ctx, accountScope)
 	if err != nil {
 		slog.ErrorContext(ctx, "getCurrentUserUUIDFromAPIClient error", "error", err)
 		return ""

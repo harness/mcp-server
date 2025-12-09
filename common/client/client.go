@@ -610,7 +610,9 @@ func addQueryParams(req *http.Request, params map[string]string) {
 		}
 	}
 
-	req.URL.RawQuery = q.Encode()
+	// Replace '+' with '%20' for space encoding to ensure Java backend compatibility
+	// The Java backend (or proxy in front) doesn't properly decode '+' as space
+	req.URL.RawQuery = strings.ReplaceAll(q.Encode(), "+", "%20")
 }
 
 func addQueryParamsWithoutSplittingValuesOnComma(req *http.Request, params map[string]string) {
@@ -624,7 +626,9 @@ func addQueryParamsWithoutSplittingValuesOnComma(req *http.Request, params map[s
 		q.Add(key, value)
 	}
 
-	req.URL.RawQuery = q.Encode()
+	// Replace '+' with '%20' for space encoding to ensure Java backend compatibility
+	// The Java backend (or proxy in front) doesn't properly decode '+' as space
+	req.URL.RawQuery = strings.ReplaceAll(q.Encode(), "+", "%20")
 }
 
 func addScope(ctx context.Context, scope dto.Scope, params map[string]string) {

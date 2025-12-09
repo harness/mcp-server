@@ -170,7 +170,7 @@ func init() {
 
 	rootCmd.PersistentFlags().StringSlice("toolsets", []string{}, "An optional comma separated list of groups of tools to allow, defaults to enabling all")
 	rootCmd.PersistentFlags().Bool("read-only", false, "Restrict the server to read-only operations")
-	rootCmd.PersistentFlags().String("log-file", "", "Path to log file")
+	rootCmd.PersistentFlags().String("log-file", "harness-mcp.log", "Path to log file (default: harness-mcp.log)")
 	rootCmd.PersistentFlags().Bool("debug", false, "Enable debug logging")
 	rootCmd.PersistentFlags().String("output-dir", "", "Directory where the tool writes output files (e.g., pipeline logs)")
 	rootCmd.PersistentFlags().String("log-format", "text", "Log format (text or json)")
