@@ -454,10 +454,6 @@ func ExemptionsPromoteExemptionTool(config *config.Config, client *generated.Cli
 			- Use this endpoint to promote an exemption to a higher scope (ORGANIZATION or ACCOUNT).
 			- The tool automatically determines the exemption's current scope and required identifiers.
 			- Simply specify the target scope and the tool handles the rest.
-			**Scope Logic:**
-			- projectId present = project-level approval
-			- orgId present but no projectId = org-level approval  
-			- only accountId = account-level approval
 
 			**When to Use:**
 			- To APPROVE/PROMOTE an exemption from Project/Pipeline/Target to Organization or Account level.
@@ -575,7 +571,7 @@ func ExemptionsApproveExemptionTool(config *config.Config, client *generated.Cli
 
 			**When to Use:**
 			- To approve or reject an exemption at the current/requested scope.
-			- To reject an exemption at any scope.
+			- To reject an exemption in any scope: Pending, Approved, Rejected, Expired
 
 			**Parameters:**
 			- id: Exemption ID to approve or reject (required)
@@ -604,10 +600,10 @@ func ExemptionsApproveExemptionTool(config *config.Config, client *generated.Cli
 			params := &generated.ExemptionsApproveExemptionParams{
 				AccountId: scope.AccountID,
 			}
-			if v, _ := OptionalParam[string](request, "orgId"); v != "" {
+			if v, _ := RequiredParam[string](request, "orgId"); v != "" {
 				params.OrgId = &v
 			}
-			if v, _ := OptionalParam[string](request, "projectId"); v != "" {
+			if v, _ := RequiredParam[string](request, "projectId"); v != "" {
 				params.ProjectId = &v
 			}
 			approverId := getCurrentUserUUID(ctx, scope, principalClient)
