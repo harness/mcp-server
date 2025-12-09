@@ -117,6 +117,7 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 				Output Format:
 				### Summary
 				[Provide a 2-3 sentence summary. Don't highlight the issue details. Don't show any table format for the results.]
+
 				
                 Usage Guidance:
                 - Use this tool to retrieve a list of issues or vulnerabilities in your project.
@@ -300,10 +301,10 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 			mcp.WithDescription(`
 		List global exemptions. **You must always provide exactly one status filter**
 
-		NOTE: Do NOT show any list of exemptions, table of exemptions, or individual exemption details. Only provide a high-level summary and key statistics.. Just summarize the final results in the Output Format section.
+		NOTE: Do NOT show any list of exemptions, table of exemptions, or individual exemption details. Only provide a high-level summary and key statistics. Just summarize the final results in the Output Format section.
 		
 		**CRITICAL: Output Format Requirements**
-		NOTE: Do NOT show any list of exemptions, table of exemptions, or individual exemption details. Only provide a high-level summary and key statistics. Just summarize the final results in the following format:
+		Do NOT show any list of exemptions, table of exemptions, or individual exemption details. Only provide a high-level summary and key statistics.. Just summarize the final results in the following format:
 		
 		Output Format:
 		### Summary
