@@ -1,0 +1,1 @@
+{{- include "harnesscommon.v1.renderVirtualService" (dict "ctx" $) }}
