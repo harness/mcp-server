@@ -164,9 +164,9 @@ Step 5: MANDATORY - Validate Perspective Rules
 
 Step 6: Ask for User Confirmation and WAIT for Response
 - Ask for explicit confirmation. Example: "I can create a perspective with the following rules: [Show Rules]. Shall I proceed?"
-- **MANDATORY: WAIT for user response before proceeding to Step 6**
-- **DO NOT execute Step 6 in the same response as the confirmation request**
-- Only proceed to Step 6 if user explicitly confirms with "yes" or similar affirmative response
+- **MANDATORY: WAIT for user response before proceeding to Step 7**
+- **DO NOT execute Step 7 in the same response as the confirmation request**
+- Only proceed to Step 7 if user explicitly confirms with "yes" or similar affirmative response
 
 Step 7: Save the Cost Perspective using update_ccm_perspective tool
 - **CRITICAL: Only proceed if the user explicitly confirmed in Step 6**
@@ -183,13 +183,37 @@ Step 8: End of the workflow
 
 ### When to Use This Workflow
 Activate this workflow when users request cloud cost information, such as:
-- "Can you please provide AWS cost for last 3 months"
-- "Show me Azure spending for Q1"
-- "What's my GCP cost this year"
+- "Can you please provide AWS cost for last 3 months" (Single-cloud)
+- "Show me Azure spending for Q1" (Single-cloud)
+- "What are my top spenders this month?" (Multi-cloud)
+- "Show me all cloud costs" (Multi-cloud)
+- "What's my total cloud spend?" (Multi-cloud)
 
 ### Workflow Steps
 
-#### Step 1: Check for Existing Perspective
+## Step 0: Determine Query Scope
+
+Analyze the user's query to determine if it's a single-cloud or multi-cloud request:
+
+### Single-Cloud Query
+**Indicators:**
+- Explicitly mentions a specific cloud provider (AWS, GCP, Azure)
+- Examples: "Show me AWS costs", "What's my Azure spending", "GCP costs for last month"
+
+**Action:** Proceed to **Single-Cloud Workflow**
+
+### Multi-Cloud Query
+**Indicators:**
+- No specific cloud provider mentioned
+- Uses terms like "all clouds", "total cloud", "overall", "across clouds"
+- Asks about "top spenders" or "breakdown by cloud" without specifying provider
+- Examples: "What are my top spenders?", "Show me all cloud costs", "Total cloud spend this quarter"
+
+**Action:** Proceed to **Multi-Cloud Workflow**
+
+## Single-Cloud Workflow
+
+#### Step 1: Check for Cloud Specific Existing Perspective
 - Use the **list_ccm_perspectives_detail** MCP tool with `cloud_filter` parameter set to `"DEFAULT"`
 - **Filter Criteria**: Only consider perspectives where:
   - `viewState` is `"COMPLETED"`
@@ -245,7 +269,7 @@ Use the **ccm_perspective_time_series** MCP tool:
 - **Purpose**: Summarize the cost data and provide additional insights
 - **CRITICAL REQUIREMENT**: When presenting cost information, you MUST always include this exact disclaimer verbatim: "Note: All costs shown are unblended costs and exclude discounts, credits, refunds, and taxes unless otherwise configured in your perspective settings"
 
-### Response Format
+### Response Format for Single-Cloud provider Query
 Structure your response to include:
 
 1. **Total Cost Summary**
@@ -279,6 +303,91 @@ Average Monthly Cost: $5,078.19
 Trend: Costs increased by 6.7% over the period
 .
 ```
+
+
+## Multi-Cloud Workflow
+
+#### Step 1: Discover All Cloud Perspectives
+- Use the **list_ccm_perspectives_detail** MCP tool with `cloud_filter` parameter set to `"DEFAULT"`
+- **Filter Criteria**: Only consider perspectives where:
+  - `viewState` is `"COMPLETED"`
+  - `name` matches the cloud provider (e.g., "AWS", "GCP", "AZURE")
+- **If no valid perspective exists**: 
+  - STOP this workflow immediately
+  - Do NOT proceed to fetch cost data
+  - Respond using the template below and do not call any tools
+
+**Response Template for Missing Perspective:**
+```
+I'm unable to find a perspective configured for [Cloud Provider]. 
+
+To retrieve cost data, you'll need to create a perspective first. A perspective defines how your cloud costs are organized and analyzed.
+
+Would you like help creating a perspective for [Cloud Provider]?
+```
+
+**If only one cloud perspective exists:**
+- Continue with multi-cloud workflow but note in response that only one cloud is configured
+- Suggest adding other cloud providers if relevant
+
+#### Step 2: Extract Time Period (Only if Perspective Exists)
+Parse the user's query to determine:
+- **Start date**: Beginning of the requested period
+- **End date**: End of the requested period (typically current date if "last X months")
+- Convert relative time references (e.g., "last 3 months") to absolute dates
+
+### Step 3: Fetch Cost Data for Each Cloud Provider
+For **each valid perspective** found in Step 1:
+
+**3a: Fetch Total Cost
+Use the **ccm_perspective_summary_with_budget** MCP tool:
+- **Purpose**: Retrieve the total aggregated cost over the specified period
+- **Configuration**: 
+  - Group By: `None` (to get overall total)
+  - Time Period: Use the start and end dates from Step 2
+  - Perspective: The identified perspective from Step 1 (must have viewType="DEFAULT" and viewState="COMPLETED")
+
+#### Step 4: Fetch Monthly Breakdown
+Use the **ccm_perspective_time_series** MCP tool:
+- **Purpose**: Retrieve cost data broken down by month or day
+- **Configuration**:
+  - time_group_by:
+    - "MONTH" for monthly granularity (calendar months)
+    - "DAY" for daily granularity
+    - "WEEK" for weekly granularity (if requested)
+    - group_by: {"field": "none"} (to get overall totals per time period)
+  - time_filter: Use appropriate filter based on user request:
+    -"last 7 days" → "LAST_7"
+    -"last 30 days" → "LAST_30_DAYS"
+    -"last 3 months" → "LAST_3_MONTHS"
+    -"last 6 months" → "LAST_6_MONTHS"
+    -"last 12 months" → "LAST_12_MONTHS"
+    -"this month" → "THIS_MONTH"
+    -"last month" → "LAST_MONTH"
+  - Perspective: Same perspective from Step 1 (must have viewType="DEFAULT" and viewState="COMPLETED")
+
+#### Step 5: Response Summary
+- **Purpose**: Summarize the cost data and provide additional insights
+- **CRITICAL REQUIREMENT**: When presenting cost information, you MUST always include this exact disclaimer verbatim: "Note: All costs shown are unblended costs and exclude discounts, credits, refunds, and taxes unless otherwise configured in your perspective settings"
+
+
+### Response Format for Multi-Cloud provider Query
+Multi-Cloud Cost Report: [Time Period]
+TOTAL ACROSS ALL CLOUDS: $XX,XXX.XX
+Cloud Provider Breakdown:
+├─ AWS: $XX,XXX.XX (XX% of total)
+├─ Azure: $XX,XXX.XX (XX% of total)
+└─ GCP: $XX,XXX.XX (XX% of total)
+Monthly Breakdown by Cloud:
+[Month YYYY]:
+  • AWS: $X,XXX.XX
+  • Azure: $X,XXX.XX
+  • GCP: $X,XXX.XX
+  Total: $X,XXX.XX
+Top Spending Cloud: [Provider] ($XX,XXX.XX)
+Fastest Growing: [Provider] (+XX% MoM)
+Note: All costs shown are unblended costs and exclude discounts, credits, refunds, and taxes unless otherwise configured in your perspective settings.
+
 
 ### Error Handling for This Workflow
 
