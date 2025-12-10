@@ -17,7 +17,6 @@ import (
 
 	config "github.com/harness/mcp-server/common"
 	"github.com/harness/mcp-server/common/client"
-	"github.com/harness/mcp-server/common/client/dto"
 	"github.com/harness/mcp-server/common/pkg/common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -33,34 +32,18 @@ type LogFileInfo struct {
 	Content   []byte
 }
 
-type DownloadLogsConfig struct {
-    MaxLogLines    int  // Enforce max lines (0 = use request parameter)
-    GetDownloadURL func(ctx context.Context, scope dto.Scope, planExecutionID string, logKey string) (string, error)  // Custom URL fetching logic
-}
-
-func DefaultDownloadLogsConfig(logService *client.LogService) *DownloadLogsConfig {
-	return &DownloadLogsConfig{
-		MaxLogLines: 0, // No limit by default
-		GetDownloadURL: func(ctx context.Context , scope dto.Scope, planExecutionID string, logKey string) (string, error) {
-			// Default implementation - no token
-			return logService.GetDownloadLogsURL(ctx, scope, planExecutionID, logKey)
-		},
-	}
-}
-
-
 // extractAndAnalyzeLogs extracts log files from the ZIP file path, finds the most recent ones,
 // and returns the last N lines across those files
-func extractAndAnalyzeLogs(ctx context.Context, zipFilePath string, maxLogLines int, numLines int) (string, error) {
+func extractAndAnalyzeLogs(ctx context.Context, internalMode bool, zipFilePath string, numLines int) (string, error) {
 	// If numLines is not specified, default to 10 (approx. 1KB of data)
 	if numLines <= 0 {
 		numLines = 100
 	}
 
 	// Cap numLines at a maximum of 100
-	if numLines > maxLogLines && maxLogLines > 0 {
-		slog.InfoContext(ctx, "Limiting requested lines to maximum allowed", "requested", numLines, "max_allowed", maxLogLines)
-		numLines = maxLogLines
+	if numLines > 100 && internalMode {
+		slog.InfoContext(ctx, "Limiting requested lines to maximum allowed", "requested", numLines, "max_allowed", 100)
+		numLines = 100
 	}
 
 	// Extract log files from the ZIP archive
@@ -423,9 +406,8 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 				return mcp.NewToolResultError(fmt.Sprintf("failed to create logs directory: %v", err)), nil
 			}
 
-			downloadLogsConfig := DefaultDownloadLogsConfig(client)
 			// Get the download URL
-			logDownloadURL, err := downloadLogsConfig.GetDownloadURL(ctx, scope, planExecutionID, logKey)
+			logDownloadURL, err := client.GetDownloadLogsURL(ctx, scope, planExecutionID, logKey)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to fetch log download URL: %v", err)), nil
 			}
@@ -490,7 +472,7 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 			// For internal mode, we need to close the file first to ensure all data is flushed
 			outputFile.Close()
 			// Now extract and analyze the logs from the ZIP file path
-			logContent, err := extractAndAnalyzeLogs(ctx, logsZipPath, downloadLogsConfig.MaxLogLines, int(numLines))
+			logContent, err := extractAndAnalyzeLogs(ctx, false, logsZipPath, int(numLines))
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to extract and analyze logs: %v", err)), nil
 			}
