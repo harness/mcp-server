@@ -24,7 +24,7 @@ const (
 	FollowUpGroupCommitmentCoverageBySavingsPrompt = "Help me estimate savings opportunities"
 )
 
-func FetchEstimatedSavingsTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func FetchEstimatedSavingsTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_ccm_commitment_estimated_savings",
 			mcp.WithDescription("Get commitment annualized estimated savings opportunities information for provided cloud account(s) in Harness Cloud Cost Management with optionally provided target coverage or else defaults to 90% of target coverage"),
 			mcp.WithString("service",
@@ -98,7 +98,7 @@ func FetchEstimatedSavingsTool(config *config.Config, client *client.CloudCostMa
 		}
 }
 
-func FetchEC2AnalysisTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func FetchEC2AnalysisTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_ccm_commitment_ec2_analysis",
 			mcp.WithDescription("Get AWS EC2 commitment analysis information for the account in Harness Cloud Cost Management that provides analysis on Commitment Spend across AWS Reserved Instances (RI) and Savings Plans (SP) alongside a detaied breakdown of Utilization. It also details savings derived so far along with additional potential for savings"),
 			common.WithScope(config, false),

@@ -15,7 +15,7 @@ import (
 // ===== BA Controller Tools =====
 
 // GetBAAllProfilesTool creates a tool for getting all BA profiles
-func GetBAAllProfilesTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
+func GetBAAllProfilesTool(config *config.McpServerConfig, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_get_ba_all_profiles",
 			mcp.WithDescription("Get all BA profiles"),
 			common.WithScope(config, true),
@@ -59,7 +59,7 @@ func GetBAAllProfilesTool(config *config.Config, client *client.SEIService) (mcp
 }
 
 // GetBAInsightMetricsTool creates a tool for getting BA insight metrics
-func GetBAInsightMetricsTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
+func GetBAInsightMetricsTool(config *config.McpServerConfig, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_get_ba_insight_metrics",
 			mcp.WithDescription("Get BA insight metrics"),
 			common.WithScope(config, true),
@@ -112,7 +112,7 @@ func GetBAInsightMetricsTool(config *config.Config, client *client.SEIService) (
 }
 
 // GetBAInsightSummaryTool creates a tool for getting BA insight summary
-func GetBAInsightSummaryTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
+func GetBAInsightSummaryTool(config *config.McpServerConfig, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_get_ba_insight_summary",
 			mcp.WithDescription("Get BA insight summary"),
 			common.WithScope(config, true),
@@ -165,7 +165,7 @@ func GetBAInsightSummaryTool(config *config.Config, client *client.SEIService) (
 }
 
 // GetBADrilldownDataTool creates a tool for getting BA drilldown data
-func GetBADrilldownDataTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
+func GetBADrilldownDataTool(config *config.McpServerConfig, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_get_ba_drilldown_data",
 			mcp.WithDescription("Get BA drilldown data"),
 			common.WithScope(config, true),

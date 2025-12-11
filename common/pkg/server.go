@@ -7,7 +7,7 @@ import (
 )
 
 // NewServer creates a new Harness MCP server
-func NewServer(version string, config *config.Config, opts ...server.ServerOption) *server.MCPServer {
+func NewServer(version string, config *config.McpServerConfig, opts ...server.ServerOption) *server.MCPServer {
 	// Default options
 	defaultOpts := []server.ServerOption{
 		server.WithToolCapabilities(true),

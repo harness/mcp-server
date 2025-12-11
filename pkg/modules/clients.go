@@ -35,7 +35,7 @@ var ServiceToPathMap = map[string]string{
 // ExternalClientProvider implements ClientProvider for external mode
 type ExternalClientProvider struct{}
 
-func (p *ExternalClientProvider) CreateClient(config *config.Config, service string, timeout ...time.Duration) (*commonClient.Client, error) {
+func (p *ExternalClientProvider) CreateClient(config *config.McpServerConfig, service string, timeout ...time.Duration) (*commonClient.Client, error) {
 	servicePath, ok := ServiceToPathMap[service]
 	if !ok {
 		return nil, fmt.Errorf("unknown service: %s", service)

@@ -7,12 +7,12 @@ import (
 
 // CIModule implements the Module interface for Continuous Integration
 type CIModule struct {
-	config *config.Config
+	config *config.McpServerConfig
 	tsg    *toolsets.ToolsetGroup
 }
 
 // NewCIModule creates a new instance of CIModule
-func NewCIModule(config *config.Config, tsg *toolsets.ToolsetGroup) *CIModule {
+func NewCIModule(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) *CIModule {
 	return &CIModule{
 		config: config,
 		tsg:    tsg,

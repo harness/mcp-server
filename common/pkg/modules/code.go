@@ -9,12 +9,12 @@ import (
 
 // CODEModule implements the Module interface for Code Repository Management
 type CODEModule struct {
-	config *config.Config
+	config *config.McpServerConfig
 	tsg    *toolsets.ToolsetGroup
 }
 
 // NewCODEModule creates a new instance of CODEModule
-func NewCODEModule(config *config.Config, tsg *toolsets.ToolsetGroup) *CODEModule {
+func NewCODEModule(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) *CODEModule {
 	return &CODEModule{
 		config: config,
 		tsg:    tsg,
@@ -67,7 +67,7 @@ func (m *CODEModule) IsDefault() bool {
 }
 
 // RegisterRepositories registers the repositories toolset
-func RegisterRepositories(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+func RegisterRepositories(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 	// Create base client for repositories with code service identity
 	c, err := DefaultClientProvider.CreateClient(config, "code")
 	if err != nil {
@@ -89,7 +89,7 @@ func RegisterRepositories(config *config.Config, tsg *toolsets.ToolsetGroup) err
 }
 
 // RegisterPullRequests registers the pull requests toolset
-func RegisterPullRequests(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+func RegisterPullRequests(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 
 	// Create base client for pull requests with code service identity
 	c, err := DefaultClientProvider.CreateClient(config, "code")

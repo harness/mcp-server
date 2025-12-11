@@ -13,7 +13,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-func GetEntityTool(config *config.Config, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetEntityTool(config *config.McpServerConfig, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_entity",
 			mcp.WithDescription(`Get details of a specific entity(services, APIs, user groups, resources) in the Harness IDP Catalog. Entities can represent services, APIs, user groups, resources, and more. The tool returns metadata for the Harness entities matching the filter criteria, including their identifier, scope, kind, reference type (INLINE/GIT), YAML definition, Git details (branch, path, repo), ownership, tags, lifecycle, scorecards, status, and group. Use the list_entities tool to first to get the id.
 			Note: If the fetched entity is a workflow, it might contain a token field but that is to be IGNORED.`),
@@ -56,7 +56,7 @@ func GetEntityTool(config *config.Config, client *client.IDPService) (tool mcp.T
 		}
 }
 
-func ListEntitiesTool(config *config.Config, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListEntitiesTool(config *config.McpServerConfig, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_entities",
 			mcp.WithDescription(`List entities in the Harness Internal Developer Portal Catalog. Entities can represent services, APIs, user groups, resources, and more. The tool returns metadata for the Harness entities matching the filter criteria, including their identifier, scope, kind, reference type (INLINE/GIT), YAML definition, Git details (branch, path, repo), ownership, tags, lifecycle, scorecards, status, and group.
 			If limit is not provided, use the tool multiple times to fetch all the entities in a paginated manner.
@@ -201,7 +201,7 @@ func ListEntitiesTool(config *config.Config, client *client.IDPService) (tool mc
 		}
 }
 
-func GetScorecardTool(config *config.Config, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetScorecardTool(config *config.McpServerConfig, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_scorecard",
 			mcp.WithDescription("Get details of a specific scorecard in the Harness IDP Catalog. Use this only when the **id** is provided or known."),
 			common.WithScope(config, false),
@@ -234,7 +234,7 @@ func GetScorecardTool(config *config.Config, client *client.IDPService) (tool mc
 		}
 }
 
-func ListScorecardsTool(config *config.Config, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListScorecardsTool(config *config.McpServerConfig, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_scorecards",
 			mcp.WithDescription("List scorecards in the Harness Internal Developer Portal Catalog."),
 			common.WithScope(config, false),
@@ -260,7 +260,7 @@ func ListScorecardsTool(config *config.Config, client *client.IDPService) (tool 
 		}
 }
 
-func GetScoreSummaryTool(config *config.Config, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetScoreSummaryTool(config *config.McpServerConfig, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_score_summary",
 			mcp.WithDescription("Get Score Summary for Scorecards in the Harness Internal Developer Portal Catalog."),
 			mcp.WithString("entity_identifier",
@@ -293,7 +293,7 @@ func GetScoreSummaryTool(config *config.Config, client *client.IDPService) (tool
 		}
 }
 
-func GetScoresTool(config *config.Config, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetScoresTool(config *config.McpServerConfig, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_scores",
 			mcp.WithDescription("Get Scores for Scorecards in the Harness Internal Developer Portal Catalog."),
 			mcp.WithString("entity_identifier",
@@ -326,7 +326,7 @@ func GetScoresTool(config *config.Config, client *client.IDPService) (tool mcp.T
 		}
 }
 
-func GetScorecardStatsTool(config *config.Config, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetScorecardStatsTool(config *config.McpServerConfig, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_scorecard_stats",
 			mcp.WithDescription("Get Stats for Scorecards in the Harness Internal Developer Portal i.e. the scores for all the entities that have this scorecard configured."),
 			mcp.WithString("scorecard_identifier",
@@ -358,7 +358,7 @@ func GetScorecardStatsTool(config *config.Config, client *client.IDPService) (to
 		}
 }
 
-func GetCheckTool(config *config.Config, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetCheckTool(config *config.McpServerConfig, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_scorecard_check",
 			mcp.WithDescription(`Get details of a specific check configured in a scorecard. A check is a query performed against a data point for a software component which results in either Pass or Fail.`),
 			common.WithScope(config, false),
@@ -399,7 +399,7 @@ func GetCheckTool(config *config.Config, client *client.IDPService) (tool mcp.To
 		}
 }
 
-func ListChecksTool(config *config.Config, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListChecksTool(config *config.McpServerConfig, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_scorecard_checks",
 			mcp.WithDescription(`List checks in the Harness Internal Developer Portal Catalog. A check is a query performed against a data point for a software component which results in either Pass or Fail.`),
 			mcp.WithString("search_term",
@@ -467,7 +467,7 @@ func ListChecksTool(config *config.Config, client *client.IDPService) (tool mcp.
 		}
 }
 
-func GetCheckStatsTool(config *config.Config, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetCheckStatsTool(config *config.McpServerConfig, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_scorecard_check_stats",
 			mcp.WithDescription("Get Stats for checks in the Harness Internal Developer Portal i.e. the status (PASS or FAIL) for all the entities that have a scorecard configured which has this check."),
 			mcp.WithString("check_identifier",
@@ -508,7 +508,7 @@ func GetCheckStatsTool(config *config.Config, client *client.IDPService) (tool m
 		}
 }
 
-func ExecuteWorkflowTool(config *config.Config, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ExecuteWorkflowTool(config *config.McpServerConfig, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("execute_workflow",
 			mcp.WithDescription(`Execute a workflow in the Harness Internal Developer Portal Catalog. This tool takes in the entity metadata of the workflow and a set of values to be used for the execution.
 			Usage Guidance:
@@ -566,7 +566,7 @@ func ExecuteWorkflowTool(config *config.Config, client *client.IDPService) (tool
 		}
 }
 
-func SearchTechDocsTool(config *config.Config, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func SearchTechDocsTool(config *config.McpServerConfig, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("search_tech_docs",
 			mcp.WithDescription(`Searches documentation related to Harness entities in the internal developer portal — including services, APIs, workflows, user groups, and environments — to retrieve information that supports answering or reasoning about those entities. Common examples include debugging issues in a service, understanding an API's configuration, setting up a workflow, managing user groups, or installation steps for a specific environment.
 			Use this tool to answer all generic questions about Harness entities in the internal developer portal.

@@ -15,7 +15,7 @@ import (
 
 // GetEnvironmentTool creates a tool for getting details of a specific environment
 // https://apidocs.harness.io/tag/Environments#operation/getEnvironmentV2
-func GetEnvironmentTool(config *config.Config, client *client.EnvironmentClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetEnvironmentTool(config *config.McpServerConfig, client *client.EnvironmentClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_environment",
 			mcp.WithDescription("Get details of a specific environment in Harness."),
 			mcp.WithString("environment_identifier",
@@ -51,7 +51,7 @@ func GetEnvironmentTool(config *config.Config, client *client.EnvironmentClient)
 
 // ListEnvironmentsTool creates a tool for listing environments
 // https://apidocs.harness.io/tag/Environments#operation/getEnvironmentList
-func ListEnvironmentsTool(config *config.Config, client *client.EnvironmentClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListEnvironmentsTool(config *config.McpServerConfig, client *client.EnvironmentClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_environments",
 			mcp.WithDescription("List environments in Harness."),
 			mcp.WithString("sort",
@@ -137,7 +137,7 @@ func ListEnvironmentsTool(config *config.Config, client *client.EnvironmentClien
 
 // MoveEnvironmentConfigsTool creates a tool for moving environment YAML from inline to remote
 // https://apidocs.harness.io/tag/Environments#operation/moveEnvironmentConfigs
-func MoveEnvironmentConfigsTool(config *config.Config, client *client.EnvironmentClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func MoveEnvironmentConfigsTool(config *config.McpServerConfig, client *client.EnvironmentClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("move_environment_configs",
 			mcp.WithDescription("Move environment YAML from inline to remote in Harness. Note: Moving from remote to inline is not supported for environments."),
 			mcp.WithString("environment_identifier",

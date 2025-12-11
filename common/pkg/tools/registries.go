@@ -14,7 +14,7 @@ import (
 )
 
 // GetRegistryTool creates a tool for getting a specific registry
-func GetRegistryTool(config *config.Config, client *ar.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetRegistryTool(config *config.McpServerConfig, client *ar.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_registry",
 			mcp.WithDescription("Get details of a specific registry in Harness artifact registry"),
 			mcp.WithString("registry",
@@ -56,7 +56,7 @@ func GetRegistryTool(config *config.Config, client *ar.ClientWithResponses) (too
 }
 
 // ListRegistriesTool creates a tool for listing registries
-func ListRegistriesTool(config *config.Config, client *ar.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListRegistriesTool(config *config.McpServerConfig, client *ar.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_registries",
 			mcp.WithDescription("List registries in Harness artifact registry"),
 			mcp.WithString("type",

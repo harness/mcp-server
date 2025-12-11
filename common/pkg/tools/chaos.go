@@ -21,7 +21,7 @@ import (
 var identityRegex = regexp.MustCompile(`[^a-z0-9-]+`)
 
 // ListExperimentsTool creates a tool for listing the experiments
-func ListExperimentsTool(config *config.Config, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListExperimentsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("chaos_experiments_list",
 			mcp.WithDescription("List the chaos experiments"),
 			common.WithScope(config, false),
@@ -58,7 +58,7 @@ func ListExperimentsTool(config *config.Config, client *client.ChaosService) (to
 }
 
 // GetExperimentsTool creates a tool to get the experiment details
-func GetExperimentsTool(config *config.Config, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetExperimentsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("chaos_experiment_describe",
 			mcp.WithDescription("Retrieves information about chaos experiment, allowing users to get an overview and detailed insights for each experiment"),
 			common.WithScope(config, false),
@@ -99,7 +99,7 @@ func GetExperimentsTool(config *config.Config, client *client.ChaosService) (too
 }
 
 // GetExperimentRunsTool creates a tool to get the experiment run details
-func GetExperimentRunsTool(config *config.Config, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetExperimentRunsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("chaos_experiment_run_result",
 			mcp.WithDescription("Retrieves run result of chaos experiment runs, helping to describe and summarize the details of each experiment run"),
 			common.WithScope(config, false),
@@ -155,7 +155,7 @@ func GetExperimentRunsTool(config *config.Config, client *client.ChaosService) (
 }
 
 // RunExperimentTool creates a tool to run the experiment
-func RunExperimentTool(config *config.Config, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func RunExperimentTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("chaos_experiment_run",
 			mcp.WithDescription("Run the chaos experiment"),
 			common.WithScope(config, false),
@@ -246,7 +246,7 @@ func RunExperimentTool(config *config.Config, client *client.ChaosService) (tool
 }
 
 // ListProbesTool creates a tool for listing the probes
-func ListProbesTool(config *config.Config, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListProbesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("chaos_probes_list",
 			mcp.WithDescription("List the chaos probes"),
 			common.WithScope(config, false),
@@ -283,7 +283,7 @@ func ListProbesTool(config *config.Config, client *client.ChaosService) (tool mc
 }
 
 // GetProbeTool creates a tool to get the probe details
-func GetProbeTool(config *config.Config, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetProbeTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("chaos_probe_describe",
 			mcp.WithDescription("Retrieves information about chaos probe, allowing users to get an overview and detailed insights for each probe"),
 			common.WithScope(config, false),
@@ -318,7 +318,7 @@ func GetProbeTool(config *config.Config, client *client.ChaosService) (tool mcp.
 }
 
 // CreateExperimentFromTemplateTool creates a tool to create the experiment from template
-func CreateExperimentFromTemplateTool(config *config.Config, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func CreateExperimentFromTemplateTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("chaos_create_experiment_from_template",
 			mcp.WithDescription("Create the chaos experiment from template"),
 			common.WithScope(config, false),
@@ -419,7 +419,7 @@ func CreateExperimentFromTemplateTool(config *config.Config, client *client.Chao
 }
 
 // ListExperimentTemplatesTool creates a tool for listing the experiment templates
-func ListExperimentTemplatesTool(config *config.Config, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListExperimentTemplatesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("chaos_experiment_template_list",
 			mcp.WithDescription("List the chaos experiment templates"),
 			common.WithScope(config, false),
@@ -473,7 +473,7 @@ func ListExperimentTemplatesTool(config *config.Config, client *client.ChaosServ
 }
 
 // ListExperimentVariablesTool creates a tool for listing the experiment variables
-func ListExperimentVariablesTool(config *config.Config, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListExperimentVariablesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("chaos_experiment_variables_list",
 			mcp.WithDescription("List the chaos experiment variables"),
 			common.WithScope(config, false),

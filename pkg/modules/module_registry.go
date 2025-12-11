@@ -7,7 +7,7 @@ import (
 )
 
 // NewModuleRegistry creates a new module registry with all available modules
-func NewModuleRegistry(config *config.Config, tsg *toolsets.ToolsetGroup) *commonModules.ModuleRegistry {
+func NewModuleRegistry(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) *commonModules.ModuleRegistry {
 	registry := &commonModules.ModuleRegistry{
 		Modules: []commonModules.Module{
 			commonModules.NewCoreModule(config, tsg),

@@ -14,7 +14,7 @@ import (
 )
 
 // ListArtifactVersionsTool creates a tool for listing artifact versions in a registry
-func ListArtifactVersionsTool(config *config.Config, client *ar.ClientWithResponses) (
+func ListArtifactVersionsTool(config *config.McpServerConfig, client *ar.ClientWithResponses) (
 	tool mcp.Tool,
 	handler server.ToolHandlerFunc,
 ) {
@@ -92,7 +92,7 @@ func ListArtifactVersionsTool(config *config.Config, client *ar.ClientWithRespon
 }
 
 // ListArtifactFilesTool creates a tool for listing files for a specific artifact version in a registry
-func ListArtifactFilesTool(config *config.Config, client *ar.ClientWithResponses) (
+func ListArtifactFilesTool(config *config.McpServerConfig, client *ar.ClientWithResponses) (
 	tool mcp.Tool,
 	handler server.ToolHandlerFunc,
 ) {

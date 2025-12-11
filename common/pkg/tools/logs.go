@@ -17,8 +17,8 @@ import (
 
 	config "github.com/harness/mcp-server/common"
 	"github.com/harness/mcp-server/common/client"
-	"github.com/harness/mcp-server/common/client/dto"
 	"github.com/harness/mcp-server/common/pkg/common"
+	"github.com/harness/mcp-server/common/client/dto"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -37,7 +37,6 @@ type DownloadLogsConfig struct {
     MaxLogLines    int  // Enforce max lines (0 = use request parameter)
     GetDownloadURL func(ctx context.Context, scope dto.Scope, planExecutionID string, logKey string) (string, error)  // Custom URL fetching logic
 }
-
 func DefaultDownloadLogsConfig(logService *client.LogService) *DownloadLogsConfig {
 	return &DownloadLogsConfig{
 		MaxLogLines: 0, // No limit by default
@@ -47,7 +46,6 @@ func DefaultDownloadLogsConfig(logService *client.LogService) *DownloadLogsConfi
 		},
 	}
 }
-
 
 // extractAndAnalyzeLogs extracts log files from the ZIP file path, finds the most recent ones,
 // and returns the last N lines across those files
@@ -360,7 +358,7 @@ func extractTimestamp(line string) string {
 // The functionality has been incorporated into the extractAndAnalyzeLogs function
 // which now handles multiple files and processes lines with dedicated helper functions.
 
-func DownloadExecutionLogsTool(config *config.Config, client *client.LogService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func DownloadExecutionLogsTool(config *config.McpServerConfig, client *client.LogService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("download_execution_logs",
 			mcp.WithDescription("Downloads logs for a pipeline execution. Returns the last N non-empty lines as human-readable formatted logs with timestamps and ANSI codes removed."),
 			mcp.WithString("plan_execution_id",
@@ -438,7 +436,13 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 			defer resp.Body.Close()
 
 			if resp.StatusCode != http.StatusOK {
-				return mcp.NewToolResultError(fmt.Sprintf("failed to download logs: unexpected status code %d", resp.StatusCode)), nil
+				// Read the response body for error details
+				bodyBytes, readErr := io.ReadAll(resp.Body)
+				bodyStr := ""
+				if readErr == nil {
+					bodyStr = string(bodyBytes)
+				}
+				return mcp.NewToolResultError(fmt.Sprintf("failed to download logs: unexpected status code %d - response: %s", resp.StatusCode, bodyStr)), nil
 			}
 
 			// Create the logs.zip file path

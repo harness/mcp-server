@@ -13,7 +13,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-func GetPipelineTool(config *config.Config, client *client.PipelineService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetPipelineTool(config *config.McpServerConfig, client *client.PipelineService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_pipeline",
 			mcp.WithDescription("Get details of a specific pipeline in a Harness repository. Use list_pipelines (if available) first to find the correct pipeline_id if you're unsure of the exact ID."),
 			mcp.WithString("pipeline_id",
@@ -46,7 +46,7 @@ func GetPipelineTool(config *config.Config, client *client.PipelineService) (too
 		}
 }
 
-func ListPipelinesTool(config *config.Config, client *client.PipelineService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListPipelinesTool(config *config.McpServerConfig, client *client.PipelineService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_pipelines",
 			mcp.WithDescription("List pipelines in a Harness repository."),
 			mcp.WithString("search_term",
@@ -97,7 +97,7 @@ func ListPipelinesTool(config *config.Config, client *client.PipelineService) (t
 		}
 }
 
-func FetchExecutionURLTool(config *config.Config, client *client.PipelineService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func FetchExecutionURLTool(config *config.McpServerConfig, client *client.PipelineService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("fetch_execution_url",
 			mcp.WithDescription("Fetch the execution URL for a pipeline execution in Harness."),
 			mcp.WithString("pipeline_id",
@@ -135,7 +135,7 @@ func FetchExecutionURLTool(config *config.Config, client *client.PipelineService
 		}
 }
 
-func GetExecutionTool(config *config.Config, client *client.PipelineService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetExecutionTool(config *config.McpServerConfig, client *client.PipelineService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_execution",
 			mcp.WithDescription("Get details of a specific pipeline execution in Harness."),
 			mcp.WithString("plan_execution_id",
@@ -185,7 +185,7 @@ func GetExecutionTool(config *config.Config, client *client.PipelineService) (to
 		}
 }
 
-func ListExecutionsTool(config *config.Config, client *client.PipelineService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListExecutionsTool(config *config.McpServerConfig, client *client.PipelineService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_executions",
 			mcp.WithDescription("List pipeline executions in a Harness repository."),
 			mcp.WithString("search_term",
@@ -274,7 +274,7 @@ func ListExecutionsTool(config *config.Config, client *client.PipelineService) (
 		}
 }
 
-func ListInputSetsTool(config *config.Config, client *client.PipelineService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListInputSetsTool(config *config.McpServerConfig, client *client.PipelineService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_input_sets",
 			mcp.WithDescription("List input sets for a pipeline."),
 			mcp.WithString("pipeline_identifier",
@@ -331,7 +331,7 @@ func ListInputSetsTool(config *config.Config, client *client.PipelineService) (t
 		}
 }
 
-func GetInputSetTool(config *config.Config, client *client.PipelineService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetInputSetTool(config *config.McpServerConfig, client *client.PipelineService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_input_set",
 			mcp.WithDescription("Get details of a specific input set for a pipeline in Harness."),
 			mcp.WithString("pipeline_identifier",
@@ -374,7 +374,7 @@ func GetInputSetTool(config *config.Config, client *client.PipelineService) (too
 		}
 }
 
-func GetPipelineSummaryTool(config *config.Config, client *client.PipelineService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetPipelineSummaryTool(config *config.McpServerConfig, client *client.PipelineService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_pipeline_summary",
 			mcp.WithDescription("Provides a concise summary of a pipeline's overall structure and execution info highlighting key aspects rather than detailed pipeline definition such as pipeline yaml, external references, etc."),
 			mcp.WithString("pipeline_id",
@@ -427,7 +427,7 @@ type ActionData struct {
 	} `json:"actions"`
 }
 
-func ListTriggersTool(config *config.Config, client *client.PipelineService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListTriggersTool(config *config.McpServerConfig, client *client.PipelineService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_triggers",
 			mcp.WithDescription("List triggers in a Harness pipeline."),
 			mcp.WithString("target_identifier",

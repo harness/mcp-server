@@ -30,7 +30,7 @@ func parseStringSlice(input string) []string {
 	return result
 }
 
-func ListConnectorCatalogueTool(harnessConfig *config.Config, connectorService *client.ConnectorService) (mcp.Tool, server.ToolHandlerFunc) {
+func ListConnectorCatalogueTool(harnessConfig *config.McpServerConfig, connectorService *client.ConnectorService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("list_connector_catalogue",
 			mcp.WithDescription("List the Harness connector catalogue."),
 			common.WithScope(harnessConfig, false),
@@ -57,7 +57,7 @@ func ListConnectorCatalogueTool(harnessConfig *config.Config, connectorService *
 
 // GetConnectorDetailsTool creates a tool for getting details of a specific connector
 // https://apidocs.harness.io/tag/Connectors#operation/getConnector
-func GetConnectorDetailsTool(config *config.Config, connectorService *client.ConnectorService) (mcp.Tool, server.ToolHandlerFunc) {
+func GetConnectorDetailsTool(config *config.McpServerConfig, connectorService *client.ConnectorService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("get_connector_details",
 			mcp.WithDescription("Get detailed information about a specific connector."),
 			mcp.WithString("connector_identifier",
@@ -107,7 +107,7 @@ func GetConnectorDetailsTool(config *config.Config, connectorService *client.Con
 
 // ListConnectorsTool creates a tool for listing connectors with filtering options
 // https://apidocs.harness.io/tag/Connectors#operation/getConnectorListV2
-func ListConnectorsTool(config *config.Config, connectorService *client.ConnectorService) (mcp.Tool, server.ToolHandlerFunc) {
+func ListConnectorsTool(config *config.McpServerConfig, connectorService *client.ConnectorService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("list_connectors",
 			mcp.WithDescription("List connectors with filtering options."),
 			mcp.WithString("connector_names",

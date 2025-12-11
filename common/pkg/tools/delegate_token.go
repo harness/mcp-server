@@ -15,7 +15,7 @@ import (
 )
 
 // ListDelegateTokensTool creates a tool for listing delegate tokens
-func ListDelegateTokensTool(config *config.Config, client *client.DelegateTokenClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListDelegateTokensTool(config *config.McpServerConfig, client *client.DelegateTokenClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_delegate_tokens",
 			mcp.WithDescription("List delegate tokens in Harness with filtering and pagination."),
 			mcp.WithString("status",
@@ -161,7 +161,7 @@ func ListDelegateTokensTool(config *config.Config, client *client.DelegateTokenC
 }
 
 // GetDelegateTokenTool creates a tool for getting a delegate token by name
-func GetDelegateTokenTool(config *config.Config, client *client.DelegateTokenClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetDelegateTokenTool(config *config.McpServerConfig, client *client.DelegateTokenClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_delegate_token",
 			mcp.WithDescription("Get a delegate token by name in Harness."),
 			mcp.WithString("name",
@@ -252,7 +252,7 @@ func GetDelegateTokenTool(config *config.Config, client *client.DelegateTokenCli
 }
 
 // CreateDelegateTokenTool creates a tool for creating a new delegate token
-func CreateDelegateTokenTool(config *config.Config, client *client.DelegateTokenClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func CreateDelegateTokenTool(config *config.McpServerConfig, client *client.DelegateTokenClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("create_delegate_token",
 			mcp.WithDescription("Creates a new delegate token in Harness."),
 			mcp.WithString("token_name",
@@ -342,7 +342,7 @@ func CreateDelegateTokenTool(config *config.Config, client *client.DelegateToken
 }
 
 // RevokeDelegateTokenTool creates a tool for revoking delegate tokens
-func RevokeDelegateTokenTool(config *config.Config, client *client.DelegateTokenClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func RevokeDelegateTokenTool(config *config.McpServerConfig, client *client.DelegateTokenClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("revoke_delegate_token",
 			mcp.WithDescription("Revokes a delegate token in Harness."),
 			mcp.WithString("token_name",
@@ -424,7 +424,7 @@ func RevokeDelegateTokenTool(config *config.Config, client *client.DelegateToken
 }
 
 // DeleteDelegateTokenTool creates a tool for deleting revoked delegate tokens
-func DeleteDelegateTokenTool(config *config.Config, client *client.DelegateTokenClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func DeleteDelegateTokenTool(config *config.McpServerConfig, client *client.DelegateTokenClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("delete_delegate_token",
 			mcp.WithDescription("Deletes a revoked delegate token in Harness."),
 			mcp.WithString("token_name",

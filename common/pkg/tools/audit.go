@@ -59,7 +59,7 @@ func previousWeek() string {
 }
 
 // GetAuditYamlTool creates a tool for retrieving YAML diff for a specific audit event.
-func GetAuditYamlTool(config *config.Config, auditClient *client.AuditService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetAuditYamlTool(config *config.McpServerConfig, auditClient *client.AuditService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_audit_yaml",
 			mcp.WithDescription("Get YAML diff for a specific audit event."),
 			mcp.WithString("audit_id",
@@ -98,7 +98,7 @@ func GetAuditYamlTool(config *config.Config, auditClient *client.AuditService) (
 }
 
 // ListAuditsOfUser creates a tool for listing the audit trail.
-func ListUserAuditTrailTool(config *config.Config, auditClient *client.AuditService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListUserAuditTrailTool(config *config.McpServerConfig, auditClient *client.AuditService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_user_audits",
 			mcp.WithDescription("List the audit trail."),
 			mcp.WithString("user_id_list",

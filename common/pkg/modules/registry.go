@@ -10,7 +10,7 @@ import (
 // ModuleRegistry holds all available modules
 type ModuleRegistry struct {
 	Modules          []Module
-	Config           *config.Config
+	Config           *config.McpServerConfig
 	Tsg              *toolsets.ToolsetGroup
 	ModuleToToolsets map[string][]string // Maps module IDs to their toolsets
 	ToolsetToModule  map[string]string   // Maps toolset names to their modules

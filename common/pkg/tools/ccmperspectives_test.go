@@ -94,7 +94,7 @@ func TestGetCcmPerspectiveRulesTool(t *testing.T) {
 		},
 	}
 	// Create a config for testing
-	testConfig := &config.Config{}
+	testConfig := &config.McpServerConfig{}
 
 	// Get the tool and handler
 	tool, handler := GetCcmPerspectiveRulesTool(testConfig)

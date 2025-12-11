@@ -13,7 +13,7 @@ import (
 // ExternalProvider implements LicenseClientProvider for external mode
 type ExternalProvider struct{}
 
-func (p *ExternalProvider) BuildServiceURL(config *config.Config, internalBaseURL, externalBaseURL, externalPathPrefix string) string {
+func (p *ExternalProvider) BuildServiceURL(config *config.McpServerConfig, internalBaseURL, externalBaseURL, externalPathPrefix string) string {
 	// External mode: use public API endpoints
 	if externalPathPrefix == "" {
 		return externalBaseURL
@@ -21,7 +21,7 @@ func (p *ExternalProvider) BuildServiceURL(config *config.Config, internalBaseUR
 	return externalBaseURL + "/" + externalPathPrefix
 }
 
-func (p *ExternalProvider) CreateClient(ctx context.Context, config *config.Config, licenseBaseURL, baseURL, path, secret string) (*commonlicense.CustomLicensesApiService, error) {
+func (p *ExternalProvider) CreateClient(ctx context.Context, config *config.McpServerConfig, licenseBaseURL, baseURL, path, secret string) (*commonlicense.CustomLicensesApiService, error) {
 	httpClient := retryablehttp.NewClient()
 	httpClient.RetryMax = 5
 	httpClient.Logger = nil
@@ -43,7 +43,7 @@ func (p *ExternalProvider) CreateClient(ctx context.Context, config *config.Conf
 	return &commonlicense.CustomLicensesApiService{Client: customClient}, nil
 }
 
-func (p *ExternalProvider) ConfigureAuth(ctx context.Context, cfg *nextgen.Configuration, config *config.Config, secret string) error {
+func (p *ExternalProvider) ConfigureAuth(ctx context.Context, cfg *nextgen.Configuration, config *config.McpServerConfig, secret string) error {
 	// External mode: API key authentication only
 	cfg.ApiKey = config.APIKey
 	cfg.DefaultHeader = map[string]string{"x-api-key": config.APIKey}

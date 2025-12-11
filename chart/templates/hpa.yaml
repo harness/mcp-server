@@ -1,1 +1,0 @@
-{{- include "harnesscommon.hpa.renderHPA" (dict "ctx" $ "kind" "deployment") }}

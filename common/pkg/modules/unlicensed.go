@@ -7,12 +7,12 @@ import (
 
 // UnlicensedModule implements the Module interface for "Unlicensed Module"
 type UnlicensedModule struct {
-	config *config.Config
+	config *config.McpServerConfig
 	tsg    *toolsets.ToolsetGroup
 }
 
 // NewUnlicensedModule creates a new instance of UnlicensedModule
-func NewUnlicensedModule(config *config.Config, tsg *toolsets.ToolsetGroup) *UnlicensedModule {
+func NewUnlicensedModule(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) *UnlicensedModule {
 	return &UnlicensedModule{
 		config: config,
 		tsg:    tsg,

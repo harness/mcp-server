@@ -9,12 +9,12 @@ import (
 
 // CCMModule implements the Module interface for Cloud Cost Management
 type CCMModule struct {
-	config *config.Config
+	config *config.McpServerConfig
 	tsg    *toolsets.ToolsetGroup
 }
 
 // NewCCMModule creates a new instance of CCMModule
-func NewCCMModule(config *config.Config, tsg *toolsets.ToolsetGroup) *CCMModule {
+func NewCCMModule(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) *CCMModule {
 	return &CCMModule{
 		config: config,
 		tsg:    tsg,
@@ -61,7 +61,7 @@ func (m *CCMModule) IsDefault() bool {
 	return false
 }
 
-func RegisterCloudCostManagement(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+func RegisterCloudCostManagement(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 
 	// Create base client for CCM
 	nextGenCli, err := DefaultClientProvider.CreateClient(config, "nextgen")

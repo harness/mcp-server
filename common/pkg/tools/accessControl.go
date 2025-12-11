@@ -16,7 +16,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-func GetAllUsersTool(config *config.Config, usersClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetAllUsersTool(config *config.McpServerConfig, usersClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_all_users",
 			mcp.WithDescription("Get details of all the USERS."),
 			mcp.WithString("search_term",
@@ -61,7 +61,7 @@ func GetAllUsersTool(config *config.Config, usersClient *client.PrincipalService
 		}
 }
 
-func GetUserInfoTool(config *config.Config, userInfoClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetUserInfoTool(config *config.McpServerConfig, userInfoClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_user_info",
 			mcp.WithDescription("Get User Info."),
 			mcp.WithString("user_id",
@@ -104,7 +104,7 @@ func GetUserInfoTool(config *config.Config, userInfoClient *client.PrincipalServ
 		}
 }
 
-func GetUserGroupInfoTool(config *config.Config, userGroupInfoClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetUserGroupInfoTool(config *config.McpServerConfig, userGroupInfoClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_user_group_info",
 			mcp.WithDescription("Get User Group Info."),
 			mcp.WithString("user_group_id",
@@ -139,7 +139,7 @@ func GetUserGroupInfoTool(config *config.Config, userGroupInfoClient *client.Pri
 		}
 }
 
-func GetServiceAccountTool(config *config.Config, serviceAccountClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetServiceAccountTool(config *config.McpServerConfig, serviceAccountClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_service_account",
 			mcp.WithDescription("Get Service Account Info."),
 			mcp.WithString("service_account_id",
@@ -174,7 +174,7 @@ func GetServiceAccountTool(config *config.Config, serviceAccountClient *client.P
 		}
 }
 
-func GetRoleInfoTool(config *config.Config, roleInfoClient *client.ACLService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetRoleInfoTool(config *config.McpServerConfig, roleInfoClient *client.ACLService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_role_info",
 			mcp.WithDescription("Get details of a role."),
 			mcp.WithString("role_id",
@@ -208,7 +208,7 @@ func GetRoleInfoTool(config *config.Config, roleInfoClient *client.ACLService) (
 		}
 }
 
-func ListAvailableRolesTool(config *config.Config, rolesClient *client.ACLService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListAvailableRolesTool(config *config.McpServerConfig, rolesClient *client.ACLService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_available_roles",
 			mcp.WithDescription("List the roles available in the account."),
 			common.WithScope(config, false),
@@ -242,7 +242,7 @@ func ListAvailableRolesTool(config *config.Config, rolesClient *client.ACLServic
 		}
 }
 
-func ListAvailablePermissions(config *config.Config, permissionsClient *client.ACLService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListAvailablePermissions(config *config.McpServerConfig, permissionsClient *client.ACLService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_available_permissions",
 			mcp.WithDescription("List The Permissions Available In The Account."),
 			common.WithScope(config, false),
@@ -276,7 +276,7 @@ func ListAvailablePermissions(config *config.Config, permissionsClient *client.A
 		}
 }
 
-func ListRoleAssignmentsTool(config *config.Config, roleAssignmentsClient *client.ACLService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListRoleAssignmentsTool(config *config.McpServerConfig, roleAssignmentsClient *client.ACLService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_role_assignments",
 			mcp.WithDescription("List The Role Assignments."),
 			mcp.WithString("resource_group_names",
@@ -385,7 +385,7 @@ func ListRoleAssignmentsTool(config *config.Config, roleAssignmentsClient *clien
 		}
 }
 
-func CreateRoleAssignmentTool(config *config.Config, roleAssignmentsClient *client.ACLService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func CreateRoleAssignmentTool(config *config.McpServerConfig, roleAssignmentsClient *client.ACLService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("create_role_assignment",
 			mcp.WithDescription("Create a new role assignment."),
 			mcp.WithString("role_assignment_identifier",
@@ -504,7 +504,7 @@ func CreateRoleAssignmentTool(config *config.Config, roleAssignmentsClient *clie
 		}
 }
 
-func CreateResourceGroupTool(config *config.Config, resourceGroupClient *client.ResourceGroupService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func CreateResourceGroupTool(config *config.McpServerConfig, resourceGroupClient *client.ResourceGroupService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("create_resource_group",
 			mcp.WithDescription("Create a new resource group."),
 			mcp.WithString("resource_group_identifier",
@@ -631,7 +631,7 @@ func CreateResourceGroupTool(config *config.Config, resourceGroupClient *client.
 		}
 }
 
-func CreateRoleTool(config *config.Config, rolesClient *client.ACLService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func CreateRoleTool(config *config.McpServerConfig, rolesClient *client.ACLService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("create_role",
 			mcp.WithDescription("Create a new role."),
 			mcp.WithString("role_identifier", mcp.Required(), mcp.Description("The identifier of the role to create.")),
@@ -712,7 +712,7 @@ func CreateRoleTool(config *config.Config, rolesClient *client.ACLService) (tool
 		}
 }
 
-func CreateUserGroupTool(config *config.Config, userGroupClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func CreateUserGroupTool(config *config.McpServerConfig, userGroupClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("create_user_group",
 			mcp.WithDescription("Create a new user group."),
 			mcp.WithString("user_group_identifier", mcp.Required(), mcp.Description("The identifier of the user group to create.")),
@@ -764,7 +764,7 @@ func CreateUserGroupTool(config *config.Config, userGroupClient *client.Principa
 		}
 }
 
-func CreateServiceAccountTool(config *config.Config, serviceAccountClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func CreateServiceAccountTool(config *config.McpServerConfig, serviceAccountClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("create_service_account",
 			mcp.WithDescription("Create a new service account."),
 			mcp.WithString("service_account_identifier", mcp.Required(), mcp.Description("The identifier of the service account to create.")),
@@ -815,7 +815,7 @@ func CreateServiceAccountTool(config *config.Config, serviceAccountClient *clien
 		}
 }
 
-func InviteUsersTool(config *config.Config, usersClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func InviteUsersTool(config *config.McpServerConfig, usersClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("invite_users",
 			mcp.WithDescription("Invite users to Harness with specified role bindings and user groups."),
 			mcp.WithString("email_Ids",
@@ -942,7 +942,7 @@ func InviteUsersTool(config *config.Config, usersClient *client.PrincipalService
 		}
 }
 
-func DeleteUserGroupTool(config *config.Config, userGroupClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func DeleteUserGroupTool(config *config.McpServerConfig, userGroupClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("delete_user_group",
 			mcp.WithDescription("Delete a user group."),
 			mcp.WithString("user_group_identifier",
@@ -976,7 +976,7 @@ func DeleteUserGroupTool(config *config.Config, userGroupClient *client.Principa
 		}
 }
 
-func DeleteServiceAccountTool(config *config.Config, serviceAccountClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func DeleteServiceAccountTool(config *config.McpServerConfig, serviceAccountClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("delete_service_account",
 			mcp.WithDescription("Delete a service account."),
 			mcp.WithString("service_account_identifier",
@@ -1010,7 +1010,7 @@ func DeleteServiceAccountTool(config *config.Config, serviceAccountClient *clien
 		}
 }
 
-func DeleteRoleTool(config *config.Config, roleClient *client.ACLService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func DeleteRoleTool(config *config.McpServerConfig, roleClient *client.ACLService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("delete_role",
 			mcp.WithDescription("Delete a role."),
 			mcp.WithString("role_identifier",
@@ -1044,7 +1044,7 @@ func DeleteRoleTool(config *config.Config, roleClient *client.ACLService) (tool 
 		}
 }
 
-func DeleteResourceGroupTool(config *config.Config, resourceGroupClient *client.ResourceGroupService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func DeleteResourceGroupTool(config *config.McpServerConfig, resourceGroupClient *client.ResourceGroupService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("delete_resource_group",
 			mcp.WithDescription("Delete a resource group."),
 			mcp.WithString("resource_group_identifier",
@@ -1078,7 +1078,7 @@ func DeleteResourceGroupTool(config *config.Config, resourceGroupClient *client.
 		}
 }
 
-func DeleteRoleAssignmentTool(config *config.Config, roleAssignmentClient *client.ACLService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func DeleteRoleAssignmentTool(config *config.McpServerConfig, roleAssignmentClient *client.ACLService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("delete_role_assignment",
 			mcp.WithDescription("Delete a role assignment."),
 			mcp.WithString("role_assignment_identifier",

@@ -23,7 +23,7 @@ type LicenseStatus string
 const LicenseActive LicenseStatus = "ACTIVE"
 
 // initLicenseValidation creates a license client and validates licenses
-func InitLicenseValidation(ctx context.Context, config *config.Config) (*LicenseInfo, error) {
+func InitLicenseValidation(ctx context.Context, config *config.McpServerConfig) (*LicenseInfo, error) {
 	// Initialize license info with default values
 	licenseInfo := &LicenseInfo{
 		AccountID:      config.AccountID,

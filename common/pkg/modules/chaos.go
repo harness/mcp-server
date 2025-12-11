@@ -11,12 +11,12 @@ import (
 
 // CHAOSModule implements the Module interface for Chaos Engineering
 type CHAOSModule struct {
-	config *config.Config
+	config *config.McpServerConfig
 	tsg    *toolsets.ToolsetGroup
 }
 
 // NewCHAOSModule creates a new instance of CHAOSModule
-func NewCHAOSModule(config *config.Config, tsg *toolsets.ToolsetGroup) *CHAOSModule {
+func NewCHAOSModule(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) *CHAOSModule {
 	return &CHAOSModule{
 		config: config,
 		tsg:    tsg,
@@ -64,7 +64,7 @@ func (m *CHAOSModule) IsDefault() bool {
 }
 
 // RegisterChaos registers the chaos toolset
-func RegisterChaos(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+func RegisterChaos(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 	// Create base client for CHAOS
 	customTimeout := 30 * time.Second
 	c, err := DefaultClientProvider.CreateClient(config, "chaos", customTimeout)

@@ -20,7 +20,7 @@ import (
 var defaultLimit int32 = 15
 var defaultOffset int32 = 0
 
-func CcmPerspectiveGridTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func CcmPerspectiveGridTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewToolWithRawSchema("ccm_perspective_grid", ccmcommons.CCMPerspectiveGridDescription,
 			perspectiveGridJsonSchema(),
 		),
@@ -88,7 +88,7 @@ func CcmPerspectiveGridTool(config *config.Config, client *client.CloudCostManag
 		}
 }
 
-func CcmPerspectiveTimeSeriesTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func CcmPerspectiveTimeSeriesTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewToolWithRawSchema("ccm_perspective_time_series", ccmcommons.CCMPerspectiveTimeSeriesDescription,
 			perspectiveTimeSeriesJsonSchema(),
 		),
@@ -162,7 +162,7 @@ func CcmPerspectiveTimeSeriesTool(config *config.Config, client *client.CloudCos
 		}
 }
 
-func CcmPerspectiveSummaryWithBudgetTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func CcmPerspectiveSummaryWithBudgetTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewToolWithRawSchema("ccm_perspective_summary_with_budget", ccmcommons.CCMPerspectiveSummaryWithBudgetDescription,
 			perspectiveGridJsonSchema(),
 		),
@@ -230,7 +230,7 @@ func CcmPerspectiveSummaryWithBudgetTool(config *config.Config, client *client.C
 		}
 }
 
-func CcmPerspectiveBudgetTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func CcmPerspectiveBudgetTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("ccm_perspective_budget",
 			mcp.WithDescription("Get the budget information for a perspective in Harness Cloud Cost Management"),
 			mcp.WithString("perspective_id",
@@ -271,7 +271,7 @@ func CcmPerspectiveBudgetTool(config *config.Config, client *client.CloudCostMan
 		}
 }
 
-func CcmMetadataTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func CcmMetadataTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_ccm_metadata",
 			mcp.WithDescription(ccmcommons.CCMGetCcmMetadataDescription),
 		),
@@ -300,7 +300,7 @@ func CcmMetadataTool(config *config.Config, client *client.CloudCostManagementSe
 		}
 }
 
-func CcmPerspectiveRecommendationsTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func CcmPerspectiveRecommendationsTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewToolWithRawSchema("ccm_perspective_recommendations", ccmcommons.CCMPerspectiveRecommendationsDescription,
 			perspectiveRecommendationsJsonSchema(),
 		),
@@ -364,7 +364,7 @@ func CcmPerspectiveRecommendationsTool(config *config.Config, client *client.Clo
 		}
 }
 
-func CcmPerspectiveFilterValuesTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func CcmPerspectiveFilterValuesTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 
 	return mcp.NewTool("ccm_perspective_filter_values",
 			mcp.WithDescription(ccmcommons.CCMPerspectiveFilterValuesDescription),
@@ -475,7 +475,7 @@ func CcmPerspectiveFilterValuesTool(config *config.Config, client *client.CloudC
 }
 
 // ValidatePerspectiveFilterValuesTool creates a tool for validating filter values for specific field types
-func CcmPerspectiveFilterValuesToolEvent(config *config.Config) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func CcmPerspectiveFilterValuesToolEvent(config *config.McpServerConfig) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("ccm_perspective_filter_values_event",
 			mcp.WithDescription("Do not call this tool unless explicitly asked. Filter values for specified field types in Harness Cloud Cost Management"),
 			mcp.WithString("field_type",

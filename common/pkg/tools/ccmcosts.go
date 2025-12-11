@@ -19,7 +19,7 @@ import (
 )
 
 // GetCcmOverview creates a tool for getting a ccm overview from an account
-func GetCcmOverviewTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetCcmOverviewTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	now := time.Now()
 	defaultStartTime := utils.FormatUnixToMMDDYYYY(now.AddDate(0, 0, -60).Unix())
 	defaultEndTime := utils.CurrentMMDDYYYY()
@@ -79,7 +79,7 @@ func GetCcmOverviewTool(config *config.Config, client *client.CloudCostManagemen
 		}
 }
 
-func ListCcmCostCategoriesTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListCcmCostCategoriesTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_ccm_cost_categories",
 			mcp.WithDescription("List the cost categories for an account in Harness Cloud Cost Management"),
 			mcp.WithString("cost_category",
@@ -136,7 +136,7 @@ func ListCcmCostCategoriesTool(config *config.Config, client *client.CloudCostMa
 		}
 }
 
-func ListCcmCostCategoriesDetailTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListCcmCostCategoriesDetailTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_ccm_cost_categories_detail",
 			mcp.WithDescription("List the cost categories with advanced options in Harness Cloud Cost Management"),
 			mcp.WithString("search_key",
@@ -234,7 +234,7 @@ func ListCcmCostCategoriesDetailTool(config *config.Config, client *client.Cloud
 		}
 }
 
-func GetCcmCostCategoryTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetCcmCostCategoryTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_ccm_cost_category",
 			mcp.WithDescription("Retrieve the details of a cost category by its ID from a specific account in Harness Cloud Cost Management."),
 			mcp.WithString("id",
@@ -278,7 +278,7 @@ func GetCcmCostCategoryTool(config *config.Config, client *client.CloudCostManag
 		}
 }
 
-func getAccountID(ctx context.Context, config *config.Config, request mcp.CallToolRequest) (string, error) {
+func getAccountID(ctx context.Context, config *config.McpServerConfig, request mcp.CallToolRequest) (string, error) {
 	scope, _ := common.FetchScope(ctx, config, request, true)
 	// Error ignored because it can be related to project or org id
 	// which are not required for CCM
@@ -288,7 +288,7 @@ func getAccountID(ctx context.Context, config *config.Config, request mcp.CallTo
 	return "", fmt.Errorf("Account ID is required")
 }
 
-func FetchCommitmentCoverageTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func FetchCommitmentCoverageTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_ccm_commitment_coverage",
 			mcp.WithDescription("Get commitment coverage information for an account in Harness Cloud Cost Management"),
 			mcp.WithString("start_date",
@@ -389,7 +389,7 @@ func FetchCommitmentCoverageTool(config *config.Config, client *client.CloudCost
 		}
 }
 
-func FetchCommitmentSavingsTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func FetchCommitmentSavingsTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_ccm_commitment_savings",
 			mcp.WithDescription("Get current commitment savings generated for an account in Harness Cloud Cost Management"),
 			mcp.WithString("start_date",
@@ -484,7 +484,7 @@ func FetchCommitmentSavingsTool(config *config.Config, client *client.CloudCostM
 		}
 }
 
-func FetchCommitmentUtilisationTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func FetchCommitmentUtilisationTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_ccm_commitment_utilisation",
 			mcp.WithDescription("Get commitment utilisation information for an account in Harness Cloud Cost Management broken down by Reserved Instances and Savings Plans in day wise granularity"),
 			mcp.WithString("start_date",

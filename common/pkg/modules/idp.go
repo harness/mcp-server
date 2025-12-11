@@ -11,12 +11,12 @@ import (
 
 // IDPModule implements the Module interface for Internal Developer Portal
 type IDPModule struct {
-	config *config.Config
+	config *config.McpServerConfig
 	tsg    *toolsets.ToolsetGroup
 }
 
 // NewIDPModule creates a new instance of IDPModule
-func NewIDPModule(config *config.Config, tsg *toolsets.ToolsetGroup) *IDPModule {
+func NewIDPModule(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) *IDPModule {
 	return &IDPModule{
 		config: config,
 		tsg:    tsg,
@@ -63,7 +63,7 @@ func (m *IDPModule) IsDefault() bool {
 	return false
 }
 
-func RegisterInternalDeveloperPortal(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+func RegisterInternalDeveloperPortal(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 	c, err := DefaultClientProvider.CreateClient(config, "idp")
 	if err != nil {
 		return err

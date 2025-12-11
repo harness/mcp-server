@@ -13,7 +13,7 @@ import (
 )
 
 // GetProductivityFeatureMetricsTool creates a tool for getting productivity feature metrics
-func GetProductivityFeatureMetricsTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
+func GetProductivityFeatureMetricsTool(config *config.McpServerConfig, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_productivity_feature_metrics",
 			mcp.WithDescription("Get productivity metrics for a collection"),
 			common.WithScope(config, true),

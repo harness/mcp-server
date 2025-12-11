@@ -273,7 +273,7 @@ func (a *CustomLicensesApiService) GetAccountLicenses(ctx context.Context, accou
 }
 
 // CreateCustomLicenseClientWithContext creates a custom license client using the registered provider
-func CreateCustomLicenseClientWithContext(ctx context.Context, config *config.Config, licenseBaseURL, baseURL, path, secret string) (*CustomLicensesApiService, error) {
+func CreateCustomLicenseClientWithContext(ctx context.Context, config *config.McpServerConfig, licenseBaseURL, baseURL, path, secret string) (*CustomLicensesApiService, error) {
 	if DefaultProvider == nil {
 		return nil, fmt.Errorf("no license client provider registered")
 	}

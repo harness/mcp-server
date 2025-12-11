@@ -22,7 +22,7 @@ type ClientFunctionRecommendationsInterface func(ctx context.Context, accountId 
 type GetRecommendationDetail func(ctx context.Context, options dto.CCMRecommendationDetailOptions) (*map[string]any, error)
 type CreateTicketForRecommendation func(ctx context.Context, accountId string, ticketDetails dto.CCMTicketDetails) (*map[string]any, error)
 
-func ListCcmRecommendationsTool(config *config.Config, client *client.CloudCostManagementService,
+func ListCcmRecommendationsTool(config *config.McpServerConfig, client *client.CloudCostManagementService,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 
 	return mcp.NewToolWithRawSchema("list_ccm_recommendations", ccmcommons.ListRecommendationsDescription,
@@ -33,7 +33,7 @@ func ListCcmRecommendationsTool(config *config.Config, client *client.CloudCostM
 		}
 }
 
-func ListCcmRecommendationsByResourceTypeTool(config *config.Config, client *client.CloudCostManagementService,
+func ListCcmRecommendationsByResourceTypeTool(config *config.McpServerConfig, client *client.CloudCostManagementService,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 
 	return mcp.NewToolWithRawSchema("list_ccm_recommendations_by_resource_type", ccmcommons.ListRecommendationsByResourceTypeDescription,
@@ -44,7 +44,7 @@ func ListCcmRecommendationsByResourceTypeTool(config *config.Config, client *cli
 		}
 }
 
-func GetCcmRecommendationsStatsTool(config *config.Config, client *client.CloudCostManagementService,
+func GetCcmRecommendationsStatsTool(config *config.McpServerConfig, client *client.CloudCostManagementService,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 
 	return mcp.NewToolWithRawSchema("get_ccm_recommendations_stats", ccmcommons.GetRecommendationsStatsDescription,
@@ -55,7 +55,7 @@ func GetCcmRecommendationsStatsTool(config *config.Config, client *client.CloudC
 		}
 }
 
-func UpdateCcmRecommendationStateTool(config *config.Config, client *client.CloudCostManagementService,
+func UpdateCcmRecommendationStateTool(config *config.McpServerConfig, client *client.CloudCostManagementService,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 
 	return mcp.NewTool("update_ccm_recommendation_state",
@@ -107,7 +107,7 @@ func UpdateCcmRecommendationStateTool(config *config.Config, client *client.Clou
 		}
 }
 
-func OverrideCcmRecommendationSavingsTool(config *config.Config, client *client.CloudCostManagementService,
+func OverrideCcmRecommendationSavingsTool(config *config.McpServerConfig, client *client.CloudCostManagementService,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 
 	return mcp.NewTool("override_ccm_recommendation_savings",
@@ -157,7 +157,7 @@ func OverrideCcmRecommendationSavingsTool(config *config.Config, client *client.
 }
 
 func recommendationsHandler(
-	config *config.Config,
+	config *config.McpServerConfig,
 	ctx context.Context,
 	request mcp.CallToolRequest,
 	clientFunction ClientFunctionRecommendationsInterface,
@@ -287,17 +287,17 @@ func recommendationsHandler(
 
 var createJiraToolName = "create_jira_ticket_for_ccm_recommendation"
 
-func CreateCcmJiraTicketTool(config *config.Config, client *client.CloudCostManagementService,
+func CreateCcmJiraTicketTool(config *config.McpServerConfig, client *client.CloudCostManagementService,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return createTicketTool(createJiraToolName, "Creates a Jira ticket for a CCM recommendation", config, client.CreateJiraTicket)
 }
 
-func CreateCcmServiceNowTicketTool(config *config.Config, client *client.CloudCostManagementService,
+func CreateCcmServiceNowTicketTool(config *config.McpServerConfig, client *client.CloudCostManagementService,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return createTicketTool("create_service_now_ticket_for_ccm_recommendation", "Creates a Service Now ticket for a CCM recommendation", config, client.CreateServiceNowTicket)
 }
 
-func createTicketTool(name string, description string, config *config.Config, clientCall CreateTicketForRecommendation,
+func createTicketTool(name string, description string, config *config.McpServerConfig, clientCall CreateTicketForRecommendation,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 
 	options := []mcp.ToolOption{
@@ -431,7 +431,7 @@ const (
 	ToolWorkload       = 5
 )
 
-func GetEc2RecommendationDetailTool(config *config.Config, client *client.CloudCostManagementService,
+func GetEc2RecommendationDetailTool(config *config.McpServerConfig, client *client.CloudCostManagementService,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return createRecommendationDetailTool(
 		"get_ec2_recommendation_detail",
@@ -439,7 +439,7 @@ func GetEc2RecommendationDetailTool(config *config.Config, client *client.CloudC
 		config, client.GetEc2RecommendationDetail, ToolEC2)
 }
 
-func GetAzureVmRecommendationDetailTool(config *config.Config, client *client.CloudCostManagementService,
+func GetAzureVmRecommendationDetailTool(config *config.McpServerConfig, client *client.CloudCostManagementService,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return createRecommendationDetailTool(
 		"get_azure_vm_recommendation_detail",
@@ -447,7 +447,7 @@ func GetAzureVmRecommendationDetailTool(config *config.Config, client *client.Cl
 		config, client.GetAzureVmRecommendationDetail, ToolAzureVm)
 }
 
-func GetEcsServiceRecommendationDetailTool(config *config.Config, client *client.CloudCostManagementService,
+func GetEcsServiceRecommendationDetailTool(config *config.McpServerConfig, client *client.CloudCostManagementService,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return createRecommendationDetailTool(
 		"get_ecs_service_recommendation_detail",
@@ -455,7 +455,7 @@ func GetEcsServiceRecommendationDetailTool(config *config.Config, client *client
 		config, client.GetEcsServiceRecommendationDetail, ToolECSService)
 }
 
-func GetNodePoolRecommendationDetailTool(config *config.Config, client *client.CloudCostManagementService,
+func GetNodePoolRecommendationDetailTool(config *config.McpServerConfig, client *client.CloudCostManagementService,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return createRecommendationDetailTool(
 		"get_node_pool_recommendation_detail",
@@ -463,7 +463,7 @@ func GetNodePoolRecommendationDetailTool(config *config.Config, client *client.C
 		config, client.GetNodePoolRecommendationDetail, ToolNodePool)
 }
 
-func GetWorkloadRecommendationDetailTool(config *config.Config, client *client.CloudCostManagementService,
+func GetWorkloadRecommendationDetailTool(config *config.McpServerConfig, client *client.CloudCostManagementService,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return createRecommendationDetailTool(
 		"get_workload_recommendation_detail",
@@ -474,7 +474,7 @@ func GetWorkloadRecommendationDetailTool(config *config.Config, client *client.C
 func createRecommendationDetailTool(
 	name string,
 	description string,
-	config *config.Config,
+	config *config.McpServerConfig,
 	clientCall GetRecommendationDetail,
 	toolId int,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
@@ -564,7 +564,7 @@ func createRecommendationDetailTool(
 		}
 }
 
-func ListJiraProjectsTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListJiraProjectsTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_jira_projects",
 			mcp.WithDescription("Get a list of Jira project to create a ticket for a Recommendation in Harness Cloud Cost Management"),
 			mcp.WithString("jira_connector_ref",
@@ -597,7 +597,7 @@ func ListJiraProjectsTool(config *config.Config, client *client.CloudCostManagem
 }
 
 func ListJiraIssueTypesTool(
-	config *config.Config,
+	config *config.McpServerConfig,
 	client *client.CloudCostManagementService,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_jira_issue_types",

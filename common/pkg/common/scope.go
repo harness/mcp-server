@@ -17,7 +17,7 @@ func NoopPropertyOption() mcp.PropertyOption {
 
 // WithScope adds org_id and project_id as optional/required parameters, based  on
 // what is set in the env variables.
-func WithScope(config *config.Config, required bool) mcp.ToolOption {
+func WithScope(config *config.McpServerConfig, required bool) mcp.ToolOption {
 	opt := NoopPropertyOption()
 	verbiage := "Optional" // this helps with having the client not pass in bogus parameters
 	if required {
@@ -51,7 +51,7 @@ func WithScope(config *config.Config, required bool) mcp.ToolOption {
 // Otherwise, it looks in the config first and then in the request (if it was defined). The request is given preference
 // so anything passed by the user in the request will override the config.
 // If orgID and projectID are required fields, it will return an error if they are not present.
-func FetchScope(ctx context.Context, config *config.Config, request mcp.CallToolRequest, required bool) (dto.Scope, error) {
+func FetchScope(ctx context.Context, config *config.McpServerConfig, request mcp.CallToolRequest, required bool) (dto.Scope, error) {
 	// If transport type is HTTP, fetch scope from context
 	if config.Transport == enum.TransportHTTP {
 		scope, err := GetScopeFromContext(ctx)

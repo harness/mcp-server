@@ -11,7 +11,7 @@ import (
 // ClientFactory provides a centralized way to create license clients
 // This eliminates DRY violations by providing a single source of truth for license client creation
 type ClientFactory struct {
-	Config *config.Config
+	Config *config.McpServerConfig
 	Logger *slog.Logger
 
 	// Single instance of license client
@@ -21,7 +21,7 @@ type ClientFactory struct {
 }
 
 // NewClientFactory creates a new license client factory
-func NewClientFactory(config *config.Config, logger *slog.Logger) *ClientFactory {
+func NewClientFactory(config *config.McpServerConfig, logger *slog.Logger) *ClientFactory {
 	return &ClientFactory{
 		Config:      config,
 		Logger:      logger,

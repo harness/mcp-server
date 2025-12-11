@@ -11,7 +11,7 @@ import (
 type AccountExtractorMiddlewareProvider interface {
 	// AccountExtractorMiddleware creates an HTTP middleware that injects the account scope into the context
     // For external mode, authentication is handled via API keys in the HTTP client
-    CreateAccountExtractorMiddleware(ctx context.Context, config *config.Config, next http.Handler) http.Handler
+    CreateAccountExtractorMiddleware(ctx context.Context, config *config.McpServerConfig, next http.Handler) http.Handler
 }
 
 // DefaultAccountExtractorMiddlewareProvider holds the active account extractor middleware provider implementation

@@ -15,7 +15,7 @@ import (
 
 // ListInfrastructuresTool creates a tool for listing infrastructures
 // https://apidocs.harness.io/tag/Infrastructures#operation/getInfrastructureList
-func ListInfrastructuresTool(config *config.Config, client *client.InfrastructureClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListInfrastructuresTool(config *config.McpServerConfig, client *client.InfrastructureClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_infrastructures",
 			mcp.WithDescription("List infrastructure definitions in Harness."),
 			mcp.WithString("deploymentType",
@@ -126,7 +126,7 @@ func ListInfrastructuresTool(config *config.Config, client *client.Infrastructur
 
 // MoveInfrastructureConfigsTool creates a tool for moving configurations between infrastructures
 // https://apidocs.harness.io/tag/Infrastructures#operation/moveInfraConfigs
-func MoveInfrastructureConfigsTool(config *config.Config, client *client.InfrastructureClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func MoveInfrastructureConfigsTool(config *config.McpServerConfig, client *client.InfrastructureClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("move_infrastructure_configs",
 			mcp.WithDescription("Move infrastructure YAML from inline to remote or vice versa in Harness."),
 			mcp.WithString("infra_identifier",

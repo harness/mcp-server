@@ -9,12 +9,12 @@ import (
 
 // CDModule implements the Module interface for Continuous Delivery
 type CDModule struct {
-	config *config.Config
+	config *config.McpServerConfig
 	tsg    *toolsets.ToolsetGroup
 }
 
 // NewCDModule creates a new instance of CDModule
-func NewCDModule(config *config.Config, tsg *toolsets.ToolsetGroup) *CDModule {
+func NewCDModule(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) *CDModule {
 	return &CDModule{
 		config: config,
 		tsg:    tsg,
@@ -72,7 +72,7 @@ func (m *CDModule) IsDefault() bool {
 }
 
 // RegisterInfrastructure registers the infrastructure toolset
-func RegisterInfrastructure(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+func RegisterInfrastructure(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 	// Create base client for infrastructure
 	c, err := DefaultClientProvider.CreateClient(config, "ngMan")
 	if err != nil {
@@ -96,7 +96,7 @@ func RegisterInfrastructure(config *config.Config, tsg *toolsets.ToolsetGroup) e
 }
 
 // RegisterServices registers the services toolset
-func RegisterServices(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+func RegisterServices(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 	// Create base client for services
 	c, err := DefaultClientProvider.CreateClient(config, "ngMan")
 	if err != nil {
@@ -118,7 +118,7 @@ func RegisterServices(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 }
 
 // RegisterEnvironments registers the environments toolset
-func RegisterEnvironments(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+func RegisterEnvironments(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 	// Create base client for environments
 	c, err := DefaultClientProvider.CreateClient(config, "ngMan")
 	if err != nil {
