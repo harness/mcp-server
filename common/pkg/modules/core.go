@@ -131,7 +131,7 @@ func (m *CoreModule) IsDefault() bool {
 func RegisterPipelines(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 
 	// Create base client for pipelines
-	c, err := DefaultClientProvider.CreateClient(config, "pipeline")
+	c, err := DefaultClientProvider.CreateClient(config, "pipelines")
 	if err != nil {
 		return err
 	}
@@ -159,7 +159,7 @@ func RegisterPipelines(config *config.McpServerConfig, tsg *toolsets.ToolsetGrou
 
 // RegisterConnectors registers the connectors toolset
 func RegisterConnectors(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
-	connectorClient, err := DefaultClientProvider.CreateClient(config, "ng/api")
+	connectorClient, err := DefaultClientProvider.CreateClient(config, "ngMan")
 	if err != nil {
 		return fmt.Errorf("failed to create client for connectors: %w", err)
 	}
@@ -179,7 +179,7 @@ func RegisterConnectors(config *config.McpServerConfig, tsg *toolsets.ToolsetGro
 
 // RegisterDelegateTokens registers the DelegateTokens toolset
 func RegisterDelegateTokens(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
-	delegateTokenClient, err := DefaultClientProvider.CreateClient(config, "ng/api")
+	delegateTokenClient, err := DefaultClientProvider.CreateClient(config, "ngMan")
 	if err != nil {
 		return fmt.Errorf("failed to create client for DelegateTokens: %w", err)
 	}
@@ -204,7 +204,7 @@ func RegisterDashboards(config *config.McpServerConfig, tsg *toolsets.ToolsetGro
 
 	// Create base client for dashboards
 	customTimeout := 30 * time.Second
-	c, err := DefaultClientProvider.CreateClient(config, "dashboard", customTimeout)
+	c, err := DefaultClientProvider.CreateClient(config, "dashboards", customTimeout)
 	if err != nil {
 		return err
 	}
@@ -257,7 +257,7 @@ func RegisterLogs(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) er
 	}
 
 	// Create base client for pipelines
-	pipelineClient, err := DefaultClientProvider.CreateClient(config, "pipeline")
+	pipelineClient, err := DefaultClientProvider.CreateClient(config, "pipelines")
 	if err != nil {
 		return err
 	}
@@ -278,7 +278,7 @@ func RegisterLogs(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) er
 // RegisterTemplates registers the templates toolset
 func RegisterTemplates(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 	// Create base client for templates
-	c, err := DefaultClientProvider.CreateClient(config, "template")
+	c, err := DefaultClientProvider.CreateClient(config, "templates")
 	if err != nil {
 		return err
 	}
@@ -300,12 +300,12 @@ func RegisterTemplates(config *config.McpServerConfig, tsg *toolsets.ToolsetGrou
 
 func RegisterAccessControl(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 
-	c, err := DefaultClientProvider.CreateClient(config, "authz")
+	c, err := DefaultClientProvider.CreateClient(config, "acl")
 	if err != nil {
 		return err
 	}
 
-	principalC, err := DefaultClientProvider.CreateClient(config, "ng/api")
+	principalC, err := DefaultClientProvider.CreateClient(config, "ngMan")
 	if err != nil {
 		return err
 	}
@@ -348,7 +348,7 @@ func RegisterAccessControl(config *config.McpServerConfig, tsg *toolsets.Toolset
 
 func RegisterSettings(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 	// Create base client for settings
-	c, err := DefaultClientProvider.CreateClient(config, "ng/api")
+	c, err := DefaultClientProvider.CreateClient(config, "ngMan")
 	if err != nil {
 		return err
 	}
@@ -368,7 +368,7 @@ func RegisterSettings(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup
 
 func RegisterSecrets(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 	// Create base client for secrets
-	c, err := DefaultClientProvider.CreateClient(config, "ng/api")
+	c, err := DefaultClientProvider.CreateClient(config, "ngMan")
 	if err != nil {
 		return err
 	}

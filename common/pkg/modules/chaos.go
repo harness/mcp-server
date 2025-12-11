@@ -67,7 +67,7 @@ func (m *CHAOSModule) IsDefault() bool {
 func RegisterChaos(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 	// Create base client for CHAOS
 	customTimeout := 30 * time.Second
-	c, err := DefaultClientProvider.CreateClient(config, "chaos/manager/api", customTimeout)
+	c, err := DefaultClientProvider.CreateClient(config, "chaos", customTimeout)
 	if err != nil {
 		return err
 	}

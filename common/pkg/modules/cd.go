@@ -74,7 +74,7 @@ func (m *CDModule) IsDefault() bool {
 // RegisterInfrastructure registers the infrastructure toolset
 func RegisterInfrastructure(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 	// Create base client for infrastructure
-	c, err := DefaultClientProvider.CreateClient(config, "ng/api")
+	c, err := DefaultClientProvider.CreateClient(config, "ngMan")
 	if err != nil {
 		return err
 	}
@@ -98,7 +98,7 @@ func RegisterInfrastructure(config *config.McpServerConfig, tsg *toolsets.Toolse
 // RegisterServices registers the services toolset
 func RegisterServices(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 	// Create base client for services
-	c, err := DefaultClientProvider.CreateClient(config, "ng/api")
+	c, err := DefaultClientProvider.CreateClient(config, "ngMan")
 	if err != nil {
 		return err
 	}
@@ -120,7 +120,7 @@ func RegisterServices(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup
 // RegisterEnvironments registers the environments toolset
 func RegisterEnvironments(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 	// Create base client for environments
-	c, err := DefaultClientProvider.CreateClient(config, "ng/api")
+	c, err := DefaultClientProvider.CreateClient(config, "ngMan")
 	if err != nil {
 		return err
 	}

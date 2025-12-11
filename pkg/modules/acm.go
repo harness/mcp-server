@@ -61,7 +61,7 @@ func RegisterACM(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) err
 
 	slog.Info("Registering ACM toolset")
 
-	acmClient, err := commonModules.DefaultClientProvider.CreateClient(config, "autoai")
+	acmClient, err := commonModules.DefaultClientProvider.CreateClient(config, "acm")
 	if err != nil {
 		return err
 	}
