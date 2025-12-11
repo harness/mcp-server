@@ -436,7 +436,13 @@ func DownloadExecutionLogsTool(config *config.Config, client *client.LogService)
 			defer resp.Body.Close()
 
 			if resp.StatusCode != http.StatusOK {
-				return mcp.NewToolResultError(fmt.Sprintf("failed to download logs: unexpected status code %d", resp.StatusCode)), nil
+				// Read the response body for error details
+				bodyBytes, readErr := io.ReadAll(resp.Body)
+				bodyStr := ""
+				if readErr == nil {
+					bodyStr = string(bodyBytes)
+				}
+				return mcp.NewToolResultError(fmt.Sprintf("failed to download logs: unexpected status code %d - response: %s", resp.StatusCode, bodyStr)), nil
 			}
 
 			// Create the logs.zip file path
