@@ -13,12 +13,12 @@ import (
 
 // CoreModule implements the Module interface and contains all default toolsets
 type CoreModule struct {
-	config *config.Config
+	config *config.McpServerConfig
 	tsg    *toolsets.ToolsetGroup
 }
 
 // NewCoreModule creates a new instance of CoreModule
-func NewCoreModule(config *config.Config, tsg *toolsets.ToolsetGroup) *CoreModule {
+func NewCoreModule(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) *CoreModule {
 	return &CoreModule{
 		config: config,
 		tsg:    tsg,
@@ -128,7 +128,7 @@ func (m *CoreModule) IsDefault() bool {
 }
 
 // RegisterPipelines registers the pipelines toolset
-func RegisterPipelines(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+func RegisterPipelines(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 
 	// Create base client for pipelines
 	c, err := DefaultClientProvider.CreateClient(config, "pipeline")
@@ -158,7 +158,7 @@ func RegisterPipelines(config *config.Config, tsg *toolsets.ToolsetGroup) error 
 }
 
 // RegisterConnectors registers the connectors toolset
-func RegisterConnectors(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+func RegisterConnectors(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 	connectorClient, err := DefaultClientProvider.CreateClient(config, "ng/api")
 	if err != nil {
 		return fmt.Errorf("failed to create client for connectors: %w", err)
@@ -178,7 +178,7 @@ func RegisterConnectors(config *config.Config, tsg *toolsets.ToolsetGroup) error
 }
 
 // RegisterDelegateTokens registers the DelegateTokens toolset
-func RegisterDelegateTokens(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+func RegisterDelegateTokens(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 	delegateTokenClient, err := DefaultClientProvider.CreateClient(config, "ng/api")
 	if err != nil {
 		return fmt.Errorf("failed to create client for DelegateTokens: %w", err)
@@ -200,7 +200,7 @@ func RegisterDelegateTokens(config *config.Config, tsg *toolsets.ToolsetGroup) e
 }
 
 // RegisterDashboards registers the dashboards toolset
-func RegisterDashboards(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+func RegisterDashboards(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 
 	// Create base client for dashboards
 	customTimeout := 30 * time.Second
@@ -223,7 +223,7 @@ func RegisterDashboards(config *config.Config, tsg *toolsets.ToolsetGroup) error
 	return nil
 }
 
-func RegisterAudit(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+func RegisterAudit(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 
 	c, err := DefaultClientProvider.CreateClient(config, "audit")
 	if err != nil {
@@ -242,7 +242,7 @@ func RegisterAudit(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 }
 
 // RegisterLogs registers the logs toolset
-func RegisterLogs(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+func RegisterLogs(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 	// To handle unique ingress for log-service
 	var logServiceClient *client.Client
 	var err error
@@ -276,7 +276,7 @@ func RegisterLogs(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 }
 
 // RegisterTemplates registers the templates toolset
-func RegisterTemplates(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+func RegisterTemplates(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 	// Create base client for templates
 	c, err := DefaultClientProvider.CreateClient(config, "template")
 	if err != nil {
@@ -298,7 +298,7 @@ func RegisterTemplates(config *config.Config, tsg *toolsets.ToolsetGroup) error 
 	return nil
 }
 
-func RegisterAccessControl(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+func RegisterAccessControl(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 
 	c, err := DefaultClientProvider.CreateClient(config, "authz")
 	if err != nil {
@@ -346,7 +346,7 @@ func RegisterAccessControl(config *config.Config, tsg *toolsets.ToolsetGroup) er
 	return nil
 }
 
-func RegisterSettings(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+func RegisterSettings(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 	// Create base client for settings
 	c, err := DefaultClientProvider.CreateClient(config, "ng/api")
 	if err != nil {
@@ -366,7 +366,7 @@ func RegisterSettings(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	return nil
 }
 
-func RegisterSecrets(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+func RegisterSecrets(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 	// Create base client for secrets
 	c, err := DefaultClientProvider.CreateClient(config, "ng/api")
 	if err != nil {
@@ -387,7 +387,7 @@ func RegisterSecrets(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	return nil
 }
 
-func RegisterPromptTools(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+func RegisterPromptTools(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 	// Create the prompt toolset with both tools
 	prompt := toolsets.NewToolset("prompt", "Harness MCP Prompts tools").
 		AddReadTools(

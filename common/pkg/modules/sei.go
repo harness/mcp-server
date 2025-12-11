@@ -11,12 +11,12 @@ import (
 
 // SEIModule implements the Module interface for Software Engineering Insights
 type SEIModule struct {
-	config *config.Config
+	config *config.McpServerConfig
 	tsg    *toolsets.ToolsetGroup
 }
 
 // NewSEIModule creates a new instance of SEIModule
-func NewSEIModule(config *config.Config, tsg *toolsets.ToolsetGroup) *SEIModule {
+func NewSEIModule(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) *SEIModule {
 	return &SEIModule{
 		config: config,
 		tsg:    tsg,
@@ -64,7 +64,7 @@ func (m *SEIModule) IsDefault() bool {
 }
 
 // RegisterSoftwareEngineeringInsights creates and registers SEI tools
-func RegisterSoftwareEngineeringInsights(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+func RegisterSoftwareEngineeringInsights(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 	// Create base client for SEI with extended timeout for productivity calls
 	// Productivity calls can take longer to process, so we increase timeout to 60 seconds
 	seiTimeout := 60 * time.Second

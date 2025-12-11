@@ -14,7 +14,7 @@ import (
 )
 
 // ListSettingsTool creates a tool for listing settings in Harness
-func ListSettingsTool(config *config.Config, client *client.SettingsClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListSettingsTool(config *config.McpServerConfig, client *client.SettingsClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_settings",
 			mcp.WithDescription("List settings in Harness with filtering options by category and group."),
 			mcp.WithString("category",

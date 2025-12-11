@@ -14,7 +14,7 @@ import (
 )
 
 // GetRepositoryTool creates a tool for getting a specific repository
-func GetRepositoryTool(config *config.Config, client *client.RepositoryService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetRepositoryTool(config *config.McpServerConfig, client *client.RepositoryService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_repository",
 			mcp.WithDescription("Get details of a specific repository in Harness."),
 			mcp.WithString("repo_identifier",
@@ -49,7 +49,7 @@ func GetRepositoryTool(config *config.Config, client *client.RepositoryService) 
 }
 
 // ListRepositoriesTool creates a tool for listing repositories
-func ListRepositoriesTool(config *config.Config, client *client.RepositoryService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListRepositoriesTool(config *config.McpServerConfig, client *client.RepositoryService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_repositories",
 			mcp.WithDescription("List repositories in Harness."),
 			mcp.WithString("query",

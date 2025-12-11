@@ -77,7 +77,7 @@ var (
 				logFormat = enum.LogFormatJSON
 			}
 
-			cfg := config.Config{
+			cfg := config.McpServerConfig{
 				Version:       version,
 				ReadOnly:      viper.GetBool("read_only"),
 				Debug:         viper.GetBool("debug"),
@@ -134,7 +134,7 @@ var (
 				logFormat = enum.LogFormatJSON
 			}
 
-			cfg := config.Config{
+			cfg := config.McpServerConfig{
 				Version:          version,
 				BaseURL:          viper.GetString("base_url"),
 				AccountID:        accountID,
@@ -198,7 +198,7 @@ func init() {
 	rootCmd.AddCommand(stdioCmd)
 }
 
-func initLogging(config config.Config) error {
+func initLogging(config config.McpServerConfig) error {
 	debug := config.Debug
 	logFormat := config.LogFormat
 	outPath := config.LogFilePath
@@ -228,7 +228,7 @@ func initLogging(config config.Config) error {
 	return nil
 }
 
-func runHTTPServer(ctx context.Context, config config.Config) error {
+func runHTTPServer(ctx context.Context, config config.McpServerConfig) error {
 	err := initLogging(config)
 	if err != nil {
 		return fmt.Errorf("failed to initialize logger: %w", err)
@@ -314,7 +314,7 @@ func runHTTPServer(ctx context.Context, config config.Config) error {
 
 }
 
-func runStdioServer(ctx context.Context, config config.Config) error {
+func runStdioServer(ctx context.Context, config config.McpServerConfig) error {
 	err := initLogging(config)
 	if err != nil {
 		return fmt.Errorf("failed to initialize logger: %w", err)

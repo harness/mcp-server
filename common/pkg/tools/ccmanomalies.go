@@ -21,7 +21,7 @@ const (
 	FunctionListIgnoredAnomalies = 2
 )
 
-func GetCcmAnomaliesSummaryTool(config *config.Config, client *client.CloudCostManagementService,
+func GetCcmAnomaliesSummaryTool(config *config.McpServerConfig, client *client.CloudCostManagementService,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 
 	return mcp.NewToolWithRawSchema("get_ccm_anomalies_summary", ccmcommons.GetAnomaliesSummaryDescription,
@@ -32,7 +32,7 @@ func GetCcmAnomaliesSummaryTool(config *config.Config, client *client.CloudCostM
 		}
 }
 
-func ListAllCcmAnomaliesTool(config *config.Config, client *client.CloudCostManagementService,
+func ListAllCcmAnomaliesTool(config *config.McpServerConfig, client *client.CloudCostManagementService,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 
 	return mcp.NewToolWithRawSchema("list_all_ccm_anomalies", ccmcommons.ListAnomaliesDescription,
@@ -43,7 +43,7 @@ func ListAllCcmAnomaliesTool(config *config.Config, client *client.CloudCostMana
 		}
 }
 
-func ListCcmIgnoredAnomaliesTool(config *config.Config, client *client.CloudCostManagementService,
+func ListCcmIgnoredAnomaliesTool(config *config.McpServerConfig, client *client.CloudCostManagementService,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 
 	return mcp.NewToolWithRawSchema("list_ccm_ignored_anomalies", ccmcommons.ListIgnoredAnomaliesDescription,
@@ -54,7 +54,7 @@ func ListCcmIgnoredAnomaliesTool(config *config.Config, client *client.CloudCost
 		}
 }
 
-func ListCcmAnomaliesTool(config *config.Config, client *client.CloudCostManagementService,
+func ListCcmAnomaliesTool(config *config.McpServerConfig, client *client.CloudCostManagementService,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewToolWithRawSchema("list_ccm_anomalies", ccmcommons.ListAnomaliesDescription,
 			anomaliesListDefinition(),
@@ -64,7 +64,7 @@ func ListCcmAnomaliesTool(config *config.Config, client *client.CloudCostManagem
 		}
 }
 
-func GetCcmAnomaliesForPerspectiveTool(config *config.Config, client *client.CloudCostManagementService,
+func GetCcmAnomaliesForPerspectiveTool(config *config.McpServerConfig, client *client.CloudCostManagementService,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewToolWithRawSchema("get_ccm_anomalies_for_perspective", ccmcommons.GetAnomaliesForPerspectiveDescription,
 			anomaliesForPerspectiveDefinition(),
@@ -74,7 +74,7 @@ func GetCcmAnomaliesForPerspectiveTool(config *config.Config, client *client.Clo
 		}
 }
 
-func ReportCcmAnomalyFeedbackTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ReportCcmAnomalyFeedbackTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("report_ccm_anomaly_feedback",
 			mcp.WithDescription("Report anomaly feedback in Harness cloud Cost Management"),
 			mcp.WithString("anomaly_id",
@@ -116,7 +116,7 @@ func ReportCcmAnomalyFeedbackTool(config *config.Config, client *client.CloudCos
 		}
 }
 
-func ListFilterValuesCcmAnomaliesTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListFilterValuesCcmAnomaliesTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_filter_values_ccm_anomalies",
 			mcp.WithDescription("Return the list of distinct values for all the specified anomaly fields in Harness cloud Cost Management"),
 			mcp.WithArray("columns",
@@ -150,7 +150,7 @@ func ListFilterValuesCcmAnomaliesTool(config *config.Config, client *client.Clou
 }
 
 func anomaliesListHandler(
-	config *config.Config,
+	config *config.McpServerConfig,
 	ctx context.Context,
 	request mcp.CallToolRequest,
 	clientFunction ClientFunctionAnomaliesListInterface,
@@ -315,7 +315,7 @@ func anomaliesListHandler(
 }
 
 func anomaliesListDTOHandler(
-	config *config.Config,
+	config *config.McpServerConfig,
 	ctx context.Context,
 	request mcp.CallToolRequest,
 	clientFunction ClientFunctionAnomaliesListInterface,
@@ -359,7 +359,7 @@ func anomaliesListDTOHandler(
 }
 
 func anomaliesForPerspectiveHandler(
-	config *config.Config,
+	config *config.McpServerConfig,
 	ctx context.Context,
 	request mcp.CallToolRequest,
 	client *client.CloudCostManagementService,

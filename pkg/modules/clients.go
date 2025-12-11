@@ -12,7 +12,7 @@ import (
 // ExternalClientProvider implements ClientProvider for external mode
 type ExternalClientProvider struct{}
 
-func (p *ExternalClientProvider) CreateClient(config *config.Config, servicePath string, timeout ...time.Duration) (*commonClient.Client, error) {
+func (p *ExternalClientProvider) CreateClient(config *config.McpServerConfig, servicePath string, timeout ...time.Duration) (*commonClient.Client, error) {
 	var serviceUrl string
 	if servicePath == "" {
 		serviceUrl = config.BaseURL

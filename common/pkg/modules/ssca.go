@@ -14,12 +14,12 @@ import (
 
 // SSCAModule implements the Module interface for Software Supply Chain Assurance
 type SSCAModule struct {
-	config *config.Config
+	config *config.McpServerConfig
 	tsg    *toolsets.ToolsetGroup
 }
 
 // NewSSCAModule creates a new instance of SSCAModule
-func NewSSCAModule(config *config.Config, tsg *toolsets.ToolsetGroup) *SSCAModule {
+func NewSSCAModule(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) *SSCAModule {
 	return &SSCAModule{
 		config: config,
 		tsg:    tsg,
@@ -67,7 +67,7 @@ func (m *SSCAModule) IsDefault() bool {
 }
 
 // RegisterSCS registers the Supply Chain Security toolset
-func RegisterSCS(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+func RegisterSCS(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 	// Create base client for SCS
 	c, err := DefaultClientProvider.CreateClient(config, "ssca-manager", 30*time.Second)
 	if err != nil {

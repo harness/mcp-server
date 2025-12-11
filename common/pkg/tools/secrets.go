@@ -14,7 +14,7 @@ import (
 )
 
 // GetSecretTool creates a tool for retrieving a secret from Harness
-func GetSecretTool(config *config.Config, client *client.SecretsClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetSecretTool(config *config.McpServerConfig, client *client.SecretsClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_secret",
 			mcp.WithDescription("Get a secret by identifier from Harness."),
 			mcp.WithString("secret_identifier",
@@ -66,7 +66,7 @@ const (
 )
 
 // ListSecretsTool creates a tool for listing secrets from Harness
-func ListSecretsTool(config *config.Config, client *client.SecretsClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListSecretsTool(config *config.McpServerConfig, client *client.SecretsClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_secrets",
 			mcp.WithDescription("List secrets from Harness with filtering and pagination options."),
 			mcp.WithArray("secret",

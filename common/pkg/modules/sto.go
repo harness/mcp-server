@@ -15,12 +15,12 @@ import (
 
 // STOModule implements the Module interface for Security Test Orchestration
 type STOModule struct {
-	config *config.Config
+	config *config.McpServerConfig
 	tsg    *toolsets.ToolsetGroup
 }
 
 // NewSTOModule creates a new instance of STOModule
-func NewSTOModule(config *config.Config, tsg *toolsets.ToolsetGroup) *STOModule {
+func NewSTOModule(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) *STOModule {
 	return &STOModule{
 		config: config,
 		tsg:    tsg,
@@ -68,7 +68,7 @@ func (m *STOModule) IsDefault() bool {
 }
 
 // RegisterSTO registers the Security Test Orchestration toolset
-func RegisterSTO(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+func RegisterSTO(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 	c, err := DefaultClientProvider.CreateClient(config, "sto", 30*time.Second)
 	if err != nil {
 		return err

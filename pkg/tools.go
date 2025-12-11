@@ -16,7 +16,7 @@ import (
 	_ "github.com/harness/mcp-server/pkg/tools/utils"
 )
 
-func InitToolsets(ctx context.Context, config *config.Config) (*toolsets.ToolsetGroup, error) {
+func InitToolsets(ctx context.Context, config *config.McpServerConfig) (*toolsets.ToolsetGroup, error) {
 	tsg := toolsets.NewToolsetGroup(config.ReadOnly)
 
 	// Initialize license validation
@@ -65,7 +65,7 @@ func InitToolsets(ctx context.Context, config *config.Config) (*toolsets.Toolset
 	return tsg, nil
 }
 
-func RegisterDefaultToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+func RegisterDefaultToolsets(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 	// Create pipeline service client
 	pipelineClient, err := commonModules.DefaultClientProvider.CreateClient(config, "pipelines", 30*time.Second)
 	if err != nil {
@@ -112,7 +112,7 @@ func RegisterDefaultToolsets(config *config.Config, tsg *toolsets.ToolsetGroup) 
 	return nil
 }
 
-func RegisterAllowedToolsets(ctx context.Context, tsg *toolsets.ToolsetGroup, config *config.Config, toolsets []string) error {
+func RegisterAllowedToolsets(ctx context.Context, tsg *toolsets.ToolsetGroup, config *config.McpServerConfig, toolsets []string) error {
 	for _, toolset := range toolsets {
 		switch toolset {
 		case "acm":

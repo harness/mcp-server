@@ -16,7 +16,7 @@ import (
 )
 
 // CreateAutonomousCodeMaintenanceTaskTool creates a tool for creating autonomous code maintenance tasks
-func CreateAutonomousCodeMaintenanceTaskTool(config *config.Config, client *client.ACMService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func CreateAutonomousCodeMaintenanceTaskTool(config *config.McpServerConfig, client *client.ACMService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	tool = mcp.NewTool("create_autonomous_code_maintenance_task",
 		mcp.WithDescription(`Create a new autonomous code maintenance task that will create a coding task in the cloud.
 Autonomous code maintenance tasks allow you to create and execute coding tasks remotely.
@@ -102,7 +102,7 @@ Once a task is created, you need to trigger it for a repository and branch to ex
 }
 
 // TriggerAutonomousCodeMaintenanceTaskTool creates a tool for triggering execution of autonomous code maintenance tasks
-func TriggerAutonomousCodeMaintenanceTaskTool(config *config.Config, client *client.ACMService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func TriggerAutonomousCodeMaintenanceTaskTool(config *config.McpServerConfig, client *client.ACMService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	tool = mcp.NewTool("trigger_autonomous_code_maintenance_task",
 		mcp.WithDescription("Trigger execution of an autonomous code maintenance task with a specific repository and branch. This requies that an autonomous code maintenance task was already created or already exists."),
 		mcp.WithString("task_id",
@@ -182,7 +182,7 @@ func TriggerAutonomousCodeMaintenanceTaskTool(config *config.Config, client *cli
 }
 
 // GetAutonomousCodeMaintenanceTaskExecutionsTool creates a tool for listing executions of autonomous code maintenance tasks
-func GetAutonomousCodeMaintenanceTaskExecutionsTool(config *config.Config, client *client.ACMService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetAutonomousCodeMaintenanceTaskExecutionsTool(config *config.McpServerConfig, client *client.ACMService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	tool = mcp.NewTool("get_autonomous_code_maintenance_task_executions",
 		mcp.WithDescription("Get executions of an existing autonomous code maintenance task."),
 		mcp.WithString("task_id",

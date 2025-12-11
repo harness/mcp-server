@@ -15,7 +15,7 @@ import (
 
 // GetServiceTool creates a tool for getting details of a specific service
 // https://apidocs.harness.io/tag/Services#operation/getServiceV2
-func GetServiceTool(config *config.Config, client *client.ServiceClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetServiceTool(config *config.McpServerConfig, client *client.ServiceClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_service",
 			mcp.WithDescription("Get details of a specific service in Harness."),
 			mcp.WithString("service_identifier",
@@ -51,7 +51,7 @@ func GetServiceTool(config *config.Config, client *client.ServiceClient) (tool m
 
 // ListServicesTool creates a tool for listing services
 // https://apidocs.harness.io/tag/Services#operation/getServiceList
-func ListServicesTool(config *config.Config, client *client.ServiceClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListServicesTool(config *config.McpServerConfig, client *client.ServiceClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_services",
 			mcp.WithDescription("List services in Harness."),
 			mcp.WithString("sort",

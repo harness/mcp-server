@@ -4,7 +4,7 @@ import (
 	"github.com/harness/mcp-server/common/pkg/types/enum"
 )
 
-type Config struct {
+type McpServerConfig struct {
 	AccountID        string
 	APIKey           string
 	BaseURL          string

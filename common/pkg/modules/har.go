@@ -12,12 +12,12 @@ import (
 
 // HARModule implements the Module interface for Harness Artifact Registry
 type HARModule struct {
-	config *config.Config
+	config *config.McpServerConfig
 	tsg    *toolsets.ToolsetGroup
 }
 
 // NewHARModule creates a new instance of HARModule
-func NewHARModule(config *config.Config, tsg *toolsets.ToolsetGroup) *HARModule {
+func NewHARModule(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) *HARModule {
 	return &HARModule{
 		config: config,
 		tsg:    tsg,
@@ -65,7 +65,7 @@ func (m *HARModule) IsDefault() bool {
 }
 
 // RegisterRegistries registers the HAR registries toolset
-func RegisterRegistries(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+func RegisterRegistries(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for registries
 	// The AR client expects the full base URL including API version path
 	c, err := DefaultClientProvider.CreateClient(config, "har/api/v1")

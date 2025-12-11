@@ -26,7 +26,7 @@ const (
 	CCMPerspectivetCreateOrUpdateRuleEventType = "perspective_created_or_updated_event"
 )
 
-func ListCcmPerspectivesDetailTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListCcmPerspectivesDetailTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_ccm_perspectives_detail",
 			mcp.WithDescription("List the cost perspectives with advanced options in Harness Cloud Cost Management"),
 			mcp.WithString("search_key",
@@ -129,7 +129,7 @@ func ListCcmPerspectivesDetailTool(config *config.Config, client *client.CloudCo
 		}
 }
 
-func GetCcmPerspectiveTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetCcmPerspectiveTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_ccm_perspective",
 			mcp.WithDescription("Get a perspective with advanced options in Harness Cloud Cost Management"),
 			mcp.WithString("perspective_id",
@@ -171,7 +171,7 @@ func GetCcmPerspectiveTool(config *config.Config, client *client.CloudCostManage
 		}
 }
 
-func GetLastPeriodCostCcmPerspectiveTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetLastPeriodCostCcmPerspectiveTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 
 	defaultStartTime := utils.CurrentMMDDYYYY()
 	return mcp.NewTool("get_last_period_cost_ccm_perspective",
@@ -242,7 +242,7 @@ func GetLastPeriodCostCcmPerspectiveTool(config *config.Config, client *client.C
 		}
 }
 
-func GetLastTwelveMonthsCostCcmPerspectiveTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetLastTwelveMonthsCostCcmPerspectiveTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 
 	defaultStartTime := utils.CurrentMMDDYYYY()
 	return mcp.NewTool("get_last_twelve_months_cost_ccm_perspective",
@@ -306,7 +306,7 @@ func GetLastTwelveMonthsCostCcmPerspectiveTool(config *config.Config, client *cl
 }
 
 // Create perspective
-func CreateCcmPerspectiveTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func CreateCcmPerspectiveTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return createOrUpdatePerspectiveTool(false),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			return createOrUpdatePerspectiveHandler(config, client, ctx, request, false)
@@ -314,7 +314,7 @@ func CreateCcmPerspectiveTool(config *config.Config, client *client.CloudCostMan
 }
 
 // Update perspective
-func UpdateCcmPerspectiveTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func UpdateCcmPerspectiveTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return createOrUpdatePerspectiveTool(true),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			return createOrUpdatePerspectiveHandler(config, client, ctx, request, true)
@@ -454,7 +454,7 @@ func createOrUpdatePerspectiveTool(update bool) (tool mcp.Tool) {
 }
 
 func createOrUpdatePerspectiveHandler(
-	config *config.Config,
+	config *config.McpServerConfig,
 	client *client.CloudCostManagementService,
 	ctx context.Context,
 	request mcp.CallToolRequest,
@@ -852,7 +852,7 @@ func createPerspectiveVisualization() mcp.ToolOption {
 	)
 }
 
-func DeleteCcmPerspectiveTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func DeleteCcmPerspectiveTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	description := `
 	<DELETE_TOOL> Permanently deletes a Perspective in Harness Cloud Cost Management (destructive action). 
 	This cannot be undone. Before calling, show the Perspective identifier (and name if available), warn that deletion is irreversible, and proceed ONLY if the user replies "yes".
@@ -893,7 +893,7 @@ func DeleteCcmPerspectiveTool(config *config.Config, client *client.CloudCostMan
 }
 
 // GetCcmPerspectiveRulesTool creates a tool for validating perspective rules JSON format
-func GetCcmPerspectiveRulesTool(config *config.Config) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetCcmPerspectiveRulesTool(config *config.McpServerConfig) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool(CCMPerspectiveRulesToolID,
 			mcp.WithDescription("Validate perspective rules JSON format in Harness Cloud Cost Management and add custom event"),
 			// Using the same rules schema as in createPerspectiveTool for consistency

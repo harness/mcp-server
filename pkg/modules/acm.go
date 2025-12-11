@@ -12,12 +12,12 @@ import (
 
 // ACMModule implements the Module interface for Autonomous Code Maintenance
 type ACMModule struct {
-	config *config.Config
+	config *config.McpServerConfig
 	tsg    *toolsets.ToolsetGroup
 }
 
 // NewACMModule creates a new instance of ACMModule
-func NewACMModule(config *config.Config, tsg *toolsets.ToolsetGroup) *ACMModule {
+func NewACMModule(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) *ACMModule {
 	return &ACMModule{
 		config: config,
 		tsg:    tsg,
@@ -57,7 +57,7 @@ func (m *ACMModule) IsDefault() bool {
 }
 
 // RegisterACM registers the ACM toolset
-func RegisterACM(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+func RegisterACM(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 
 	slog.Info("Registering ACM toolset")
 

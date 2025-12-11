@@ -104,7 +104,7 @@ func fetchFilters(ctx context.Context, scope dto.Scope, client *generated.Client
 
 
 // StoAllIssuesListTool returns a tool for listing all issues from the STO Frontend.
-func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func StoAllIssuesListTool(config *config.McpServerConfig, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_all_security_issues",
 			mcp.WithDescription(`
                 List all issues or vulnerabilities from the STO. Show in data table format unless otherwise specified.
@@ -296,7 +296,7 @@ func StoAllIssuesListTool(config *config.Config, client *generated.ClientWithRes
 		}
 }
 
-func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWithResponses, principalClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func StoGlobalExemptionsTool(config *config.McpServerConfig, client *generated.ClientWithResponses, principalClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("sto_global_exemptions",
 			mcp.WithDescription(`
 		List global exemptions. **You must always provide exactly one status filter**
@@ -444,7 +444,7 @@ func StoGlobalExemptionsTool(config *config.Config, client *generated.ClientWith
 }
 
 // ExemptionsPromoteExemptionTool promotes a pending exemption to approval/rejection.
-func ExemptionsPromoteExemptionTool(config *config.Config, client *generated.ClientWithResponses, principalClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ExemptionsPromoteExemptionTool(config *config.McpServerConfig, client *generated.ClientWithResponses, principalClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("sto_exemptions_promote_and_approve",
 			mcp.WithDescription(`
 				Promote (approve) an exemption request at higher scope (Org or Account).
@@ -555,7 +555,7 @@ func ExemptionsPromoteExemptionTool(config *config.Config, client *generated.Cli
 }
 
 // ExemptionsApproveExemptionTool approves or rejects an exemption request.
-func ExemptionsApproveExemptionTool(config *config.Config, client *generated.ClientWithResponses, principalClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ExemptionsApproveExemptionTool(config *config.McpServerConfig, client *generated.ClientWithResponses, principalClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("exemptions_reject_and_approve",
 			mcp.WithDescription(`
 			Approve or reject an exemption request at its current (requested) scope.

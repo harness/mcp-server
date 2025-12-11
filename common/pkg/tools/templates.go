@@ -15,7 +15,7 @@ import (
 
 // ListTemplates creates a tool that allows querying templates at all scopes (account, org, project)
 // depending on the input parameters.
-func ListTemplates(config *config.Config, client *client.TemplateService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListTemplates(config *config.McpServerConfig, client *client.TemplateService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_templates",
 			mcp.WithDescription("List templates at account, organization, or project scope depending on the provided parameters."),
 			mcp.WithString("search_term",

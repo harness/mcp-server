@@ -13,7 +13,7 @@ import (
 )
 
 // GetEfficiencyLeadTimeTool creates a tool for getting lead time
-func GetEfficiencyLeadTimeTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
+func GetEfficiencyLeadTimeTool(config *config.McpServerConfig, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_efficiency_lead_time",
 			mcp.WithDescription("Get lead time for a project"),
 			common.WithScope(config, true),
@@ -107,7 +107,7 @@ func GetEfficiencyLeadTimeTool(config *config.Config, client *client.SEIService)
 }
 
 // GetDeploymentFrequencyTool creates a tool for getting deployment frequency metrics
-func GetDeploymentFrequencyTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
+func GetDeploymentFrequencyTool(config *config.McpServerConfig, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_deployment_frequency",
 			mcp.WithDescription("Get deployment frequency metrics for a project"),
 			common.WithScope(config, true),
@@ -213,7 +213,7 @@ func GetDeploymentFrequencyTool(config *config.Config, client *client.SEIService
 }
 
 // GetChangeFailureRateTool creates a tool for getting change failure rate metrics
-func GetChangeFailureRateTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
+func GetChangeFailureRateTool(config *config.McpServerConfig, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_change_failure_rate",
 			mcp.WithDescription("Get change failure rate metrics for a project"),
 			common.WithScope(config, true),
@@ -319,7 +319,7 @@ func GetChangeFailureRateTool(config *config.Config, client *client.SEIService) 
 }
 
 // GetMttrTool creates a tool for getting Mean Time to Restore metrics
-func GetMttrTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
+func GetMttrTool(config *config.McpServerConfig, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_mttr",
 			mcp.WithDescription("Get Mean Time to Restore metrics for a project"),
 			common.WithScope(config, true),
@@ -425,7 +425,7 @@ func GetMttrTool(config *config.Config, client *client.SEIService) (mcp.Tool, se
 }
 
 // GetDeploymentFrequencyDrilldownTool creates a tool for getting deployment frequency drilldown data
-func GetDeploymentFrequencyDrilldownTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
+func GetDeploymentFrequencyDrilldownTool(config *config.McpServerConfig, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_deployment_frequency_drilldown",
 			mcp.WithDescription("Get deployment frequency drilldown data for detailed pipeline executions"),
 			common.WithScope(config, true),
@@ -516,7 +516,7 @@ func GetDeploymentFrequencyDrilldownTool(config *config.Config, client *client.S
 }
 
 // GetChangeFailureRateDrilldownTool creates a tool for getting change failure rate drilldown data
-func GetChangeFailureRateDrilldownTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
+func GetChangeFailureRateDrilldownTool(config *config.McpServerConfig, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_change_failure_rate_drilldown",
 			mcp.WithDescription("Get change failure rate drilldown data for detailed deployment records with failure status"),
 			common.WithScope(config, true),

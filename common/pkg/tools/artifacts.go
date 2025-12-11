@@ -14,7 +14,7 @@ import (
 )
 
 // ListArtifactsTool creates a tool for listing artifacts in a registry
-func ListArtifactsTool(config *config.Config, client *ar.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListArtifactsTool(config *config.McpServerConfig, client *ar.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_artifacts",
 			mcp.WithDescription("List artifacts in a Harness artifact registry"),
 			mcp.WithString("registry",

@@ -15,7 +15,7 @@ import (
 // ===== Teams Controller Tools =====
 
 // GetTeamTool creates a tool for getting team information
-func GetTeamTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
+func GetTeamTool(config *config.McpServerConfig, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_get_team",
 			mcp.WithDescription("Get team information by team reference ID"),
 			mcp.WithString("accountId",
@@ -61,7 +61,7 @@ func GetTeamTool(config *config.Config, client *client.SEIService) (mcp.Tool, se
 }
 
 // GetTeamsListTool creates a tool for getting list of teams
-func GetTeamsListTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
+func GetTeamsListTool(config *config.McpServerConfig, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_get_teams_list",
 			mcp.WithDescription("Get list of teams with pagination"),
 			common.WithScope(config, true),
@@ -127,7 +127,7 @@ func GetTeamsListTool(config *config.Config, client *client.SEIService) (mcp.Too
 }
 
 // GetTeamIntegrationsTool creates a tool for getting team integrations
-func GetTeamIntegrationsTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
+func GetTeamIntegrationsTool(config *config.McpServerConfig, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_get_team_integrations",
 			mcp.WithDescription("Get team integrations by team reference ID"),
 			mcp.WithString("accountId",
@@ -173,7 +173,7 @@ func GetTeamIntegrationsTool(config *config.Config, client *client.SEIService) (
 }
 
 // GetTeamDevelopersTool creates a tool for getting team developers
-func GetTeamDevelopersTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
+func GetTeamDevelopersTool(config *config.McpServerConfig, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_get_team_developers",
 			mcp.WithDescription("Get team developers by team reference ID"),
 			mcp.WithString("accountId",
@@ -233,7 +233,7 @@ func GetTeamDevelopersTool(config *config.Config, client *client.SEIService) (mc
 }
 
 // GetTeamIntegrationFiltersTool creates a tool for getting team integration filters
-func GetTeamIntegrationFiltersTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
+func GetTeamIntegrationFiltersTool(config *config.McpServerConfig, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_get_team_integration_filters",
 			mcp.WithDescription("Get team integration filters by team reference ID"),
 			mcp.WithString("accountId",
@@ -289,7 +289,7 @@ func GetTeamIntegrationFiltersTool(config *config.Config, client *client.SEIServ
 // ===== OrgTree Controller Tools =====
 
 // GetOrgTreesTool creates a tool for getting organization trees
-func GetOrgTreesTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
+func GetOrgTreesTool(config *config.McpServerConfig, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_get_org_trees",
 			mcp.WithDescription("Get organization trees with pagination"),
 			common.WithScope(config, true),
@@ -349,7 +349,7 @@ func GetOrgTreesTool(config *config.Config, client *client.SEIService) (mcp.Tool
 }
 
 // GetOrgTreeByIdTool creates a tool for getting a specific organization tree by ID
-func GetOrgTreeByIdTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
+func GetOrgTreeByIdTool(config *config.McpServerConfig, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_get_org_tree_by_id",
 			mcp.WithDescription("Get a specific organization tree by ID"),
 			mcp.WithString("accountId",
@@ -395,7 +395,7 @@ func GetOrgTreeByIdTool(config *config.Config, client *client.SEIService) (mcp.T
 }
 
 // GetOrgTreeEfficiencyProfileTool creates a tool for getting efficiency profile reference ID
-func GetOrgTreeEfficiencyProfileTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
+func GetOrgTreeEfficiencyProfileTool(config *config.McpServerConfig, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_get_org_tree_efficiency_profile",
 			mcp.WithDescription("Get efficiency profile reference ID for an organization tree"),
 			mcp.WithString("accountId",
@@ -441,7 +441,7 @@ func GetOrgTreeEfficiencyProfileTool(config *config.Config, client *client.SEISe
 }
 
 // GetOrgTreeProductivityProfileTool creates a tool for getting productivity profile reference ID
-func GetOrgTreeProductivityProfileTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
+func GetOrgTreeProductivityProfileTool(config *config.McpServerConfig, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_get_org_tree_productivity_profile",
 			mcp.WithDescription("Get productivity profile reference ID for an organization tree"),
 			mcp.WithString("accountId",
@@ -487,7 +487,7 @@ func GetOrgTreeProductivityProfileTool(config *config.Config, client *client.SEI
 }
 
 // GetOrgTreeBusinessAlignmentProfileTool creates a tool for getting business alignment profile reference ID
-func GetOrgTreeBusinessAlignmentProfileTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
+func GetOrgTreeBusinessAlignmentProfileTool(config *config.McpServerConfig, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_get_org_tree_business_alignment_profile",
 			mcp.WithDescription("Get business alignment profile reference ID for an organization tree"),
 			mcp.WithString("accountId",
@@ -533,7 +533,7 @@ func GetOrgTreeBusinessAlignmentProfileTool(config *config.Config, client *clien
 }
 
 // GetOrgTreeIntegrationsTool creates a tool for getting integrations associated with an organization tree
-func GetOrgTreeIntegrationsTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
+func GetOrgTreeIntegrationsTool(config *config.McpServerConfig, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_get_org_tree_integrations",
 			mcp.WithDescription("Get integrations associated with an organization tree"),
 			mcp.WithString("accountId",
@@ -579,7 +579,7 @@ func GetOrgTreeIntegrationsTool(config *config.Config, client *client.SEIService
 }
 
 // GetOrgTreeTeamsTool creates a tool for getting team hierarchy for an organization tree
-func GetOrgTreeTeamsTool(config *config.Config, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
+func GetOrgTreeTeamsTool(config *config.McpServerConfig, client *client.SEIService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("sei_get_org_tree_teams",
 			mcp.WithDescription("Get team hierarchy for an organization tree"),
 			mcp.WithString("accountId",

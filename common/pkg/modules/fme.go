@@ -12,12 +12,12 @@ import (
 
 // FMEModule implements the Module interface for Feature Management and Experimentation
 type FMEModule struct {
-	config *config.Config
+	config *config.McpServerConfig
 	tsg    *toolsets.ToolsetGroup
 }
 
 // NewFMEModule creates a new instance of FMEModule
-func NewFMEModule(config *config.Config, tsg *toolsets.ToolsetGroup) *FMEModule {
+func NewFMEModule(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) *FMEModule {
 	return &FMEModule{
 		config: config,
 		tsg:    tsg,
@@ -65,7 +65,7 @@ func (m *FMEModule) IsDefault() bool {
 }
 
 // RegisterFeatureManagementAndExperimentation registers the FME toolset
-func RegisterFeatureManagementAndExperimentation(config *config.Config, tsg *toolsets.ToolsetGroup) error {
+func RegisterFeatureManagementAndExperimentation(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 	// Create FME client with Split.io base URL
 	splitIOBaseURL := "https://api.split.io"
 

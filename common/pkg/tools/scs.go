@@ -33,7 +33,7 @@ type FileContent struct {
 }
 
 // ListArtifactSourcesTool returns a tool for listing artifact sources.
-func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListArtifactSourcesTool(config *config.McpServerConfig, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_artifacts_scs",
 			mcp.WithDescription(`
 			Lists all artifacts available in Harness SCS.
@@ -214,7 +214,7 @@ func ListArtifactSourcesTool(config *config.Config, client *generated.ClientWith
 }
 
 // ArtifactListV2Tool returns a tool for listing artifacts from a source.
-func ArtifactListV2Tool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ArtifactListV2Tool(config *config.McpServerConfig, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_artifacts_per_source",
 			mcp.WithDescription(`
 			Lists all artifacts from a specified artifact source in Harness SCS.Call this tool with sourceId of the artifact source.
@@ -356,7 +356,7 @@ func ArtifactListV2Tool(config *config.Config, client *generated.ClientWithRespo
 }
 
 // GetArtifactV2OverviewTool returns a tool for getting artifact overview from a source.
-func GetArtifactV2OverviewTool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetArtifactV2OverviewTool(config *config.McpServerConfig, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_artifact_overview",
 			mcp.WithDescription(`
 				Retrieves an overview of a specific artifact from a source in Harness SCS.
@@ -419,7 +419,7 @@ func GetArtifactV2OverviewTool(config *config.Config, client *generated.ClientWi
 }
 
 // GetArtifactChainOfCustodyV2Tool returns a tool for getting chain of custody for an artifact.
-func GetArtifactChainOfCustodyV2Tool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetArtifactChainOfCustodyV2Tool(config *config.McpServerConfig, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_artifact_chain_of_custody",
 			mcp.WithDescription(`
 				Retrieves the full chain of custody for a specific artifact in Harness SCS. Show in data table format unless otherwise specified.
@@ -480,7 +480,7 @@ func GetArtifactChainOfCustodyV2Tool(config *config.Config, client *generated.Cl
 }
 
 // FetchComplianceResultsByArtifactTool returns a tool for fetching compliance results by artifact from Harness SCS.
-func FetchComplianceResultsByArtifactTool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func FetchComplianceResultsByArtifactTool(config *config.McpServerConfig, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("fetch_compliance_results_for_repo_by_id",
 			mcp.WithDescription(`
 				Fetch compliance results for a specific CI/CD build systems or repositories from Harness SCS. Show in data table format unless otherwise specified.
@@ -589,7 +589,7 @@ func FetchComplianceResultsByArtifactTool(config *config.Config, client *generat
 }
 
 // GetCodeRepositoryOverviewTool returns a tool for getting an overview of a code repository from Harness SCS.
-func GetCodeRepositoryOverviewTool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetCodeRepositoryOverviewTool(config *config.McpServerConfig, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_code_repository_overview",
 			mcp.WithDescription(`
 				Retrieves an overview of a specific code repository from Harness SCS, including vulnerabilities, SBOM (Software Bill of Materials), compliance issues, and policy violations.
@@ -651,7 +651,7 @@ func GetCodeRepositoryOverviewTool(config *config.Config, client *generated.Clie
 }
 
 // CreateOPAPolicyTool returns a tool for creating OPA policies based on a list of licenses to deny
-func CreateOPAPolicyTool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func CreateOPAPolicyTool(config *config.McpServerConfig, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("create_opa_policy",
 			mcp.WithDescription(`
 			Creates an OPA policy based on a list of denied licenses.
@@ -744,7 +744,7 @@ func CreateOPAPolicyTool(config *config.Config, client *generated.ClientWithResp
 
 // DownloadSbomTool returns a tool for downloading an SBOM for an artifact orchestration.
 // LINT FIXES: ensure io/fmt imported, use request.GetString, use mcp.NewFile, handle resp.Body as []byte.
-func DownloadSbomTool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func DownloadSbomTool(config *config.McpServerConfig, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("download_sbom",
 			mcp.WithDescription(`
 		Downloads the Software Bill of Materials (SBOM) for a given artifact orchestration in Harness SCS.
@@ -824,7 +824,7 @@ func DownloadSbomTool(config *config.Config, client *generated.ClientWithRespons
 }
 
 // ListSCSCodeReposTool returns a tool for listing code repositories from Harness SCS.
-func ListSCSCodeReposTool(config *config.Config, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListSCSCodeReposTool(config *config.McpServerConfig, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_scs_code_repos",
 			mcp.WithDescription(`
 			Lists all code repositories that have been scanned by Harness SCS (Supply Chain Security).Show in data table format unless otherwise specified.

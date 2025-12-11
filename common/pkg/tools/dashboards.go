@@ -47,7 +47,7 @@ func fetchDashboardPagination(request mcp.CallToolRequest) (page, size int, err 
 }
 
 // ListDashboardsTool creates a tool for listing all dashboards in Harness
-func ListDashboardsTool(config *config.Config, client *client.DashboardService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func ListDashboardsTool(config *config.McpServerConfig, client *client.DashboardService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_dashboards",
 			mcp.WithDescription("Lists all available Harness dashboards"),
 			WithDashboardPagination(),
@@ -162,7 +162,7 @@ func ListDashboardsTool(config *config.Config, client *client.DashboardService) 
 }
 
 // GetDashboardDataTool creates a tool for retrieving data from a specific dashboard
-func GetDashboardDataTool(config *config.Config, client *client.DashboardService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func GetDashboardDataTool(config *config.McpServerConfig, client *client.DashboardService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_dashboard_data",
 			mcp.WithDescription("Retrieves the data from a specific Harness dashboard"),
 			mcp.WithString("dashboard_id",
