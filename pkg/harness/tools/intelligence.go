@@ -292,6 +292,11 @@ func AIDevOpsAgentTool(config *config.Config, client *client.IntelligenceService
 
 				onProgress := func(progress dto.ProgressUpdate) error {
 					if ctx == nil || ctx.Err() != nil {
+						if ctx != nil {
+							slog.WarnContext(ctx, "Context has an error", "error", ctx.Err())
+						} else {
+							slog.Warn("Context is nil")
+						}
 						return nil
 					}
 
