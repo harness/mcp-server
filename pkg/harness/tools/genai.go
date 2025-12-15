@@ -192,8 +192,11 @@ func createGenAIToolHandler(config *config.Config, client *client.GenaiService, 
 					}
 					return nil
 				}
+				if _, isDBChangeset := requestObj.(*dto.DBChangesetParameters); isDBChangeset {
+					slog.DebugContext(ctx, "Sending progress notification", "payload", progress.Message)
+				}
 
-				return mcpServer.SendNotificationToClient(
+				err := mcpServer.SendNotificationToClient(
 					ctx,
 					"notifications/progress",
 					map[string]any{
@@ -203,6 +206,10 @@ func createGenAIToolHandler(config *config.Config, client *client.GenaiService, 
 						"message":       progress.Message,
 					},
 				)
+				if err != nil {
+					slog.ErrorContext(ctx, "Failed to send progress notification", "error", err)
+				}
+				return err
 			}
 		}
 
@@ -215,6 +222,7 @@ func createGenAIToolHandler(config *config.Config, client *client.GenaiService, 
 			req.Stream = shouldStream
 			response, respErr = client.SendAIDevOpsChat(ctx, scope, req, onProgress)
 		case *dto.DBChangesetParameters:
+			slog.DebugContext(ctx, "Processing DBChangesetParameters request", "shouldStream", shouldStream, "progressTokenSet", progressToken != nil)
 			req.Stream = shouldStream
 			response, respErr = client.SendDBChangeset(ctx, scope, req, onProgress)
 		case *dto.IDPWorkflowParameters:
