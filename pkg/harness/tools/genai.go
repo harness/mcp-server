@@ -209,7 +209,7 @@ func createGenAIToolHandler(config *config.Config, client *client.GenaiService, 
 				if err != nil {
 					slog.ErrorContext(ctx, "Failed to send progress notification", "error", err)
 				}
-				return err
+				return nil
 			}
 		}
 
