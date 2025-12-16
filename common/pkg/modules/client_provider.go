@@ -11,6 +11,8 @@ import (
 // Different implementations can be provided for internal and external modes
 type ClientProvider interface {
 	CreateClient(config *config.McpServerConfig, servicePath string, timeout ...time.Duration) (*client.Client, error)
+
+	CreateClientWithIdentity(config *config.McpServerConfig, servicePath string, serviceIdentity string, timeout ...time.Duration) (*client.Client, error)
 }
 
 // DefaultClientProvider holds the active client provider implementation
