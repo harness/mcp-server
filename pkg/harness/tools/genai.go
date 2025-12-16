@@ -193,7 +193,7 @@ func createGenAIToolHandler(config *config.Config, client *client.GenaiService, 
 					return nil
 				}
 				if _, isDBChangeset := requestObj.(*dto.DBChangesetParameters); isDBChangeset {
-					slog.DebugContext(ctx, "Sending progress notification", "payload", progress.Message)
+					slog.InfoContext(ctx, "Sending progress notification", "payload", progress.Message)
 				}
 
 				err := mcpServer.SendNotificationToClient(
