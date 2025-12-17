@@ -381,7 +381,7 @@ func extractTimestamp(line string) string {
 // The functionality has been incorporated into the extractAndAnalyzeLogs function
 // which now handles multiple files and processes lines with dedicated helper functions.
 
-func DownloadExecutionLogsTool(config *config.McpServerConfig, client *ExtendedLogService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func DownloadExecutionLogsTool(config *config.McpServerConfig, client LogServiceProvider) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("download_execution_logs",
 			mcp.WithDescription("Downloads logs for a pipeline execution. Returns the last N non-empty lines as human-readable formatted logs with timestamps and ANSI codes removed."),
 			mcp.WithString("plan_execution_id",
