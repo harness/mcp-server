@@ -2,7 +2,6 @@ package modules
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	config "github.com/harness/mcp-server/common"
@@ -45,7 +44,6 @@ func (m *CoreModule) Toolsets() []string {
 		"dashboards",
 		"access_control",
 		"templates",
-		"logs",
 		"settings",
 		"secrets",
 		"prompts",
@@ -89,11 +87,6 @@ func (m *CoreModule) RegisterToolsets() error {
 			}
 		case "templates":
 			err := RegisterTemplates(m.config, m.tsg)
-			if err != nil {
-				return err
-			}
-		case "logs":
-			err := RegisterLogs(m.config, m.tsg)
 			if err != nil {
 				return err
 			}
@@ -238,40 +231,6 @@ func RegisterAudit(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) e
 
 	// Add toolset to the group
 	tsg.AddToolset(audit)
-	return nil
-}
-
-// RegisterLogs registers the logs toolset
-func RegisterLogs(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
-	// To handle unique ingress for log-service
-	var logServiceClient *client.Client
-	var err error
-	if strings.Contains(config.BaseURL, "/gateway") {
-		logServiceClient, err = DefaultClientProvider.CreateClient(config, "log-service")
-	} else {
-		logServiceClient, err = DefaultClientProvider.CreateClient(config, "gateway/log-service")
-	}
-
-	if err != nil {
-		return err
-	}
-
-	// Create base client for pipelines
-	pipelineClient, err := DefaultClientProvider.CreateClient(config, "pipelines")
-	if err != nil {
-		return err
-	}
-
-	logClient := &client.LogService{LogServiceClient: logServiceClient, PipelineClient: pipelineClient}
-
-	// Create the logs toolset
-	logs := toolsets.NewToolset("logs", "Harness Logs related tools").
-		AddReadTools(
-			toolsets.NewServerTool(tools.DownloadExecutionLogsTool(config, logClient)),
-		)
-
-	// Add toolset to the group
-	tsg.AddToolset(logs)
 	return nil
 }
 

@@ -33,16 +33,31 @@ type LogFileInfo struct {
 	Content   []byte
 }
 
+// ExtendedLogService wraps client.LogService to add custom methods
+type ExtendedLogService struct {
+	*client.LogService
+}
+
+// NewExtendedLogService creates a new ExtendedLogService wrapper
+func NewExtendedLogService(logService *client.LogService) *ExtendedLogService {
+	return &ExtendedLogService{
+		LogService: logService,
+	}
+}
+
 type DownloadLogsConfig struct {
     MaxLogLines    int  // Enforce max lines (0 = use request parameter)
     GetDownloadURL func(ctx context.Context, scope dto.Scope, planExecutionID string, logKey string) (string, error)  // Custom URL fetching logic
 }
-func DefaultDownloadLogsConfig(logService *client.LogService) *DownloadLogsConfig {
+
+// DefaultDownloadLogsConfig returns the default configuration for downloading logs
+func (l *ExtendedLogService) DefaultDownloadLogsConfig() *DownloadLogsConfig {
 	return &DownloadLogsConfig{
 		MaxLogLines: 0, // No limit by default
 		GetDownloadURL: func(ctx context.Context , scope dto.Scope, planExecutionID string, logKey string) (string, error) {
 			// Default implementation - no token
-			return logService.GetDownloadLogsURL(ctx, scope, planExecutionID, logKey)
+			headers := map[string]string{}
+			return l.GetDownloadLogsURL(ctx, scope, planExecutionID, logKey, headers)
 		},
 	}
 }
@@ -358,7 +373,7 @@ func extractTimestamp(line string) string {
 // The functionality has been incorporated into the extractAndAnalyzeLogs function
 // which now handles multiple files and processes lines with dedicated helper functions.
 
-func DownloadExecutionLogsTool(config *config.McpServerConfig, client *client.LogService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func DownloadExecutionLogsTool(config *config.McpServerConfig, client *ExtendedLogService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("download_execution_logs",
 			mcp.WithDescription("Downloads logs for a pipeline execution. Returns the last N non-empty lines as human-readable formatted logs with timestamps and ANSI codes removed."),
 			mcp.WithString("plan_execution_id",
@@ -421,8 +436,8 @@ func DownloadExecutionLogsTool(config *config.McpServerConfig, client *client.Lo
 				return mcp.NewToolResultError(fmt.Sprintf("failed to create logs directory: %v", err)), nil
 			}
 
-			downloadLogsConfig := DefaultDownloadLogsConfig(client)
-			// Get the download URL
+			downloadLogsConfig := client.DefaultDownloadLogsConfig()
+			
 			logDownloadURL, err := downloadLogsConfig.GetDownloadURL(ctx, scope, planExecutionID, logKey)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to fetch log download URL: %v", err)), nil

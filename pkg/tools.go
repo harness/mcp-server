@@ -140,7 +140,7 @@ func RegisterAllowedToolsets(ctx context.Context, tsg *toolsets.ToolsetGroup, co
 				return err
 			}
 		case "logs":
-			if err := commonModules.RegisterLogs(config, tsg); err != nil {
+			if err := modules.RegisterLogs(config, tsg); err != nil {
 				return err
 			}
 		case "ccm":

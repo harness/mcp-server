@@ -21,7 +21,7 @@ type LogService struct {
 
 // GetDownloadLogsURL fetches a download URL for pipeline execution logs
 // If logKey is not empty, it will use that log key to fetch logs instead of building one from execution details
-func (l *LogService) GetDownloadLogsURL(ctx context.Context, scope dto.Scope, planExecutionID string, logKey string) (string, error) {
+func (l *LogService) GetDownloadLogsURL(ctx context.Context, scope dto.Scope, planExecutionID string, logKey string, headers map[string]string) (string, error) {
 	// Use custom log key if provided, otherwise build it from execution details
 	var finalLogKey string
 	var err error
@@ -72,7 +72,7 @@ func (l *LogService) GetDownloadLogsURL(ctx context.Context, scope dto.Scope, pl
 
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		response = &dto.LogDownloadResponse{}
-		err = l.LogServiceClient.Post(ctx, logDownloadPath, params, nil, map[string]string{}, response)
+		err = l.LogServiceClient.Post(ctx, logDownloadPath, params, nil, headers, response)
 		if err != nil {
 			lastErr = fmt.Errorf("failed to fetch log download URL (attempt %d): %w", attempt, err)
 			if attempt == maxAttempts {
