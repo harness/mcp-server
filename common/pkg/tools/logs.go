@@ -33,7 +33,15 @@ type LogFileInfo struct {
 	Content   []byte
 }
 
-// ExtendedLogService wraps client.LogService to add custom methods
+// LogServiceProvider is an interface that defines the contract for log service implementations
+// This allows different implementations (e.g., with custom authentication) to override the behavior
+type LogServiceProvider interface {
+	// DefaultDownloadLogsConfig returns the configuration for downloading logs
+	DefaultDownloadLogsConfig() *DownloadLogsConfig
+	// GetDownloadLogsURL returns the URL for downloading logs
+	GetDownloadLogsURL(ctx context.Context, scope dto.Scope, planExecutionID string, logKey string, headers map[string]string) (string, error)
+}
+
 type ExtendedLogService struct {
 	*client.LogService
 }
@@ -46,15 +54,15 @@ func NewExtendedLogService(logService *client.LogService) *ExtendedLogService {
 }
 
 type DownloadLogsConfig struct {
-    MaxLogLines    int  // Enforce max lines (0 = use request parameter)
-    GetDownloadURL func(ctx context.Context, scope dto.Scope, planExecutionID string, logKey string) (string, error)  // Custom URL fetching logic
+	MaxLogLines    int                                                                                               // Enforce max lines (0 = use request parameter)
+	GetDownloadURL func(ctx context.Context, scope dto.Scope, planExecutionID string, logKey string) (string, error) // Custom URL fetching logic
 }
 
 // DefaultDownloadLogsConfig returns the default configuration for downloading logs
 func (l *ExtendedLogService) DefaultDownloadLogsConfig() *DownloadLogsConfig {
 	return &DownloadLogsConfig{
 		MaxLogLines: 0, // No limit by default
-		GetDownloadURL: func(ctx context.Context , scope dto.Scope, planExecutionID string, logKey string) (string, error) {
+		GetDownloadURL: func(ctx context.Context, scope dto.Scope, planExecutionID string, logKey string) (string, error) {
 			// Default implementation - no token
 			headers := map[string]string{}
 			return l.GetDownloadLogsURL(ctx, scope, planExecutionID, logKey, headers)
@@ -437,7 +445,7 @@ func DownloadExecutionLogsTool(config *config.McpServerConfig, client *ExtendedL
 			}
 
 			downloadLogsConfig := client.DefaultDownloadLogsConfig()
-			
+
 			logDownloadURL, err := downloadLogsConfig.GetDownloadURL(ctx, scope, planExecutionID, logKey)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to fetch log download URL: %v", err)), nil
