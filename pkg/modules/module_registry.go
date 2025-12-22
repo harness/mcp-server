@@ -22,6 +22,7 @@ func NewModuleRegistry(config *config.McpServerConfig, tsg *toolsets.ToolsetGrou
 			commonModules.NewCCMModule(config, tsg),
 			commonModules.NewIDPModule(config, tsg),
 			commonModules.NewHARModule(config, tsg),
+			commonModules.NewFMEModule(config,tsg),
 			NewACMModule(config, tsg),
 		},
 		Config:           config,
