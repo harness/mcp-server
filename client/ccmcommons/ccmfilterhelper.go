@@ -384,3 +384,28 @@ func BuildOutputFieldsMap() map[string]map[string]any {
 	}
 	return result
 }
+
+// BuildLabelsV2KeysFilters builds the filters specifically for fetching labelsV2 keys
+func BuildLabelsV2KeysFilters(options *dto.CCMListLabelsV2KeysOptions) []map[string]any {
+	filters := []map[string]any{}
+
+	// Add time filters (no perspective filter - this is account-wide)
+	filters = append(filters, BuildTimeFilters(options.TimeFilter)...)
+
+	// Add labelsV2 key filter with empty values to get all keys
+	// Based on the cURL request, we use "labels.key" with identifier "LABEL_V2"
+	labelKeyFilter := map[string]any{
+		"idFilter": map[string]any{
+			"field": map[string]any{
+				"fieldId":    "labels.key",
+				"fieldName":  "",
+				"identifier": "LABEL_V2",
+			},
+			"operator": "IN",
+			"values":   []string{}, // Empty array means fetch all keys
+		},
+	}
+	filters = append(filters, labelKeyFilter)
+
+	return filters
+}

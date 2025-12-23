@@ -335,3 +335,20 @@ type CCMPerspectiveFilterValuesResponse struct {
 		PerspectiveFilters CCMPerspectiveFilterValues `json:"perspectiveFilters"`
 	} `json:"data"`
 }
+
+// Options for listing labelsV2 keys
+type CCMListLabelsV2KeysOptions struct {
+	AccountId           string `json:"account_id"`
+	TimeFilter          string `json:"time_filter"`
+	IsClusterHourlyData bool   `json:"is_cluster_hourly_data"`
+	Limit               int32  `json:"limit"`
+	Offset              int32  `json:"offset"`
+}
+
+// Response for listing labelsV2 keys
+type CCMListLabelsV2KeysResponse struct {
+	Errors []CCMGraphQLError `json:"errors"`
+	Data   struct {
+		PerspectiveFilters CCMPerspectiveFilterValues `json:"perspectiveFilters"`
+	} `json:"data"`
+}

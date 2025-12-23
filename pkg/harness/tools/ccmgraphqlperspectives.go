@@ -474,6 +474,85 @@ func CcmPerspectiveFilterValuesTool(config *config.Config, client *client.CloudC
 		}
 }
 
+func CcmListLabelsV2KeysTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("ccm_list_labelsv2_keys",
+			mcp.WithDescription(ccmcommons.CCMListLabelsV2KeysDescription),
+			mcp.WithString("time_filter",
+				mcp.Description("Time filter for the query. Values: "+strings.Join(dto.TimeFilterValues, ", ")+". Default: "+dto.TimeFilterLast30Days),
+				mcp.DefaultString(dto.TimeFilterLast30Days),
+				mcp.Enum(dto.TimeFilterValues...),
+			),
+			mcp.WithBoolean("is_cluster_hourly_data",
+				mcp.Description("Specify if you want to filter results for cluster hourly data."),
+				mcp.DefaultBool(false),
+			),
+			mcp.WithNumber("limit",
+				mcp.DefaultNumber(500),
+				mcp.Max(10000),
+				mcp.Description("Maximum number of label keys to return"),
+			),
+			mcp.WithNumber("offset",
+				mcp.DefaultNumber(0),
+				mcp.Description("Offset for pagination"),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			// Get account ID
+			accountId, err := getAccountID(ctx, config, request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// Get time filter (optional with default)
+			timeFilter, err := OptionalParam[string](request, "time_filter")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if timeFilter == "" {
+				timeFilter = dto.TimeFilterLast30Days
+			}
+
+			// Get is_cluster_hourly_data (optional)
+			isClusterHourlyData, err := OptionalParam[bool](request, "is_cluster_hourly_data")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// Get limit and offset
+			limit := getLimitWithDefault(request, 500)
+			offset := getOffset(request)
+
+			// Get scope
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// Build options
+			params := &dto.CCMListLabelsV2KeysOptions{
+				AccountId:           accountId,
+				TimeFilter:          timeFilter,
+				IsClusterHourlyData: isClusterHourlyData,
+				Limit:               limit,
+				Offset:              offset,
+			}
+
+			// Call client method
+			data, err := client.ListLabelsV2Keys(ctx, scope, params)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// Marshal and return
+			result, err := json.Marshal(data)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			return mcp.NewToolResultText(string(result)), nil
+		}
+}
+
 // ValidatePerspectiveFilterValuesTool creates a tool for validating filter values for specific field types
 func CcmPerspectiveFilterValuesToolEvent(config *config.Config) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("ccm_perspective_filter_values_event",
