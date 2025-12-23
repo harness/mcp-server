@@ -9,6 +9,7 @@ import (
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness/common"
+	"github.com/harness/harness-mcp/pkg/harness/errors"
 )
 
 // AuthMiddleware creates an HTTP middleware that extracts bearer tokens from
@@ -31,7 +32,8 @@ func AuthMiddleware(ctx context.Context, config *config.Config, next http.Handle
 		parts := strings.Split(authHeader, " ")
 
 		if len(parts) != 2 || parts[0] != "Bearer" {
-			slog.ErrorContext(ctx, "invalid authorization header")
+			authErr := errors.NewAuthError(r.Context(), errors.AUTH_ERROR_INVALID_TOKEN, "invalid authorization header")
+			slog.ErrorContext(r.Context(), "invalid authorization header", "error", authErr)
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
@@ -39,7 +41,8 @@ func AuthMiddleware(ctx context.Context, config *config.Config, next http.Handle
 		token := parts[1]
 		session, err := AuthenticateSession(token, config.McpSvcSecret)
 		if err != nil {
-			slog.ErrorContext(ctx, "failed to authenticate session", "error", err)
+			authErr := errors.WrapAuthError(r.Context(), err, errors.AUTH_ERROR_INVALID_TOKEN, "failed to authenticate session")
+			slog.ErrorContext(r.Context(), "failed to authenticate session", "error", authErr)
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}

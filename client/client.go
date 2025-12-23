@@ -16,6 +16,7 @@ import (
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/pkg/harness/auth"
 	"github.com/harness/harness-mcp/pkg/harness/common"
+	"github.com/harness/harness-mcp/pkg/harness/errors"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 )
@@ -156,7 +157,12 @@ func (c *Client) doRequest(
 	}
 
 	// Try to unmarshal the response
-	if err := unmarshalResponse(resp, response); err != nil {
+	// Extract context from request for error context
+	ctx := httpReq.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := unmarshalResponseWithContext(ctx, resp, response); err != nil {
 		// If we already have a status code error, wrap it with the unmarshal error
 		if statusErr := mapStatusCodeToError(resp.StatusCode); statusErr != nil {
 			return fmt.Errorf("%w: %v", statusErr, err)
@@ -547,21 +553,31 @@ func appendPath(uri string, path string) string {
 
 // nolint:godot
 // unmarshalResponse reads the response body and if there are no errors marshall's it into data.
+// This is the legacy version maintained for backward compatibility.
 func unmarshalResponse(resp *http.Response, data interface{}) error {
+	ctx := context.Background()
+	if resp != nil && resp.Request != nil {
+		ctx = resp.Request.Context()
+	}
+	return unmarshalResponseWithContext(ctx, resp, data)
+}
+
+// unmarshalResponseWithContext reads the response body with context-aware error handling
+func unmarshalResponseWithContext(ctx context.Context, resp *http.Response, data interface{}) error {
 	if resp == nil || resp.Body == nil {
-		return fmt.Errorf("http response body is not available")
+		return errors.NewClientError(ctx, errors.CLIENT_ERROR_REQUEST_FAILED, "http response body is not available")
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("error reading response body : %w", err)
+		return errors.WrapClientError(ctx, err, errors.CLIENT_ERROR_REQUEST_FAILED, "error reading response body")
 	}
 
 	// For non-success status codes, try to unmarshal as an error response first
 	if resp.StatusCode >= 400 {
 		var errResp dto.ErrorResponse
 		if jsonErr := json.Unmarshal(body, &errResp); jsonErr == nil && (errResp.Code != "" || errResp.Message != "") {
-			return fmt.Errorf("API error: %s", errResp.Message)
+			return errors.NewClientErrorWithStatus(ctx, errors.CLIENT_ERROR_BAD_REQUEST, fmt.Sprintf("API error: %s", errResp.Message), resp.StatusCode)
 		}
 		// If we couldn't parse it as an error response, continue with normal unmarshaling
 	}
@@ -575,7 +591,7 @@ func unmarshalResponse(resp *http.Response, data interface{}) error {
 	// Otherwise try to unmarshal as JSON
 	err = json.Unmarshal(body, data)
 	if err != nil {
-		return fmt.Errorf("error deserializing response body : %w - original response: %s", err, string(body))
+		return errors.WrapClientError(ctx, err, errors.CLIENT_ERROR_UNMARSHAL, fmt.Sprintf("error deserializing response body - original response: %s", string(body)))
 	}
 
 	return nil
@@ -602,6 +618,33 @@ func mapStatusCodeToError(statusCode int) error {
 		return fmt.Errorf("received further action required status code %d", statusCode)
 	default:
 		// TODO: definitely more things to consider here ...
+		return nil
+	}
+}
+
+// mapStatusCodeToClientError creates a ClientError from a status code with context
+// This is the new context-aware version that should be used going forward
+func mapStatusCodeToClientError(ctx context.Context, statusCode int) error {
+	switch {
+	case statusCode == 500:
+		return errors.NewClientErrorWithStatus(ctx, errors.CLIENT_ERROR_INTERNAL, "Internal server error", statusCode)
+	case statusCode >= 500:
+		return errors.NewClientErrorWithStatus(ctx, errors.CLIENT_ERROR_INTERNAL, fmt.Sprintf("Server error: %d", statusCode), statusCode)
+	case statusCode == 404:
+		return errors.NewClientErrorWithStatus(ctx, errors.CLIENT_ERROR_NOT_FOUND, "Resource not found", statusCode)
+	case statusCode == 400:
+		return errors.NewClientErrorWithStatus(ctx, errors.CLIENT_ERROR_BAD_REQUEST, "Bad request", statusCode)
+	case statusCode == 401:
+		return errors.NewClientErrorWithStatus(ctx, errors.CLIENT_ERROR_UNAUTHORIZED, "Unauthorized", statusCode)
+	case statusCode == 403:
+		return errors.NewClientErrorWithStatus(ctx, errors.CLIENT_ERROR_FORBIDDEN, "Forbidden", statusCode)
+	case statusCode == 504:
+		return errors.NewClientErrorWithStatus(ctx, errors.CLIENT_ERROR_TIMEOUT, "Request timeout", statusCode)
+	case statusCode >= 400:
+		return errors.NewClientErrorWithStatus(ctx, errors.CLIENT_ERROR_BAD_REQUEST, fmt.Sprintf("Client error: %d", statusCode), statusCode)
+	case statusCode >= 300:
+		return errors.NewClientErrorWithStatus(ctx, errors.CLIENT_ERROR_BAD_REQUEST, fmt.Sprintf("Redirect required: %d", statusCode), statusCode)
+	default:
 		return nil
 	}
 }

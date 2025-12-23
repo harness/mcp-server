@@ -1,10 +1,12 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
 
+	"github.com/harness/harness-mcp/pkg/harness/errors"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -185,4 +187,42 @@ func OptionalAnyArrayParam(r mcp.CallToolRequest, p string) ([]any, error) {
 	default:
 		return nil, fmt.Errorf("parameter %s could not be coerced to []any, is %T", p, value)
 	}
+}
+
+// Context-aware parameter validation functions
+// These functions use the new error hierarchy with context
+
+// RequiredParamWithContext is a context-aware version of RequiredParam that returns ValidationError
+func RequiredParamWithContext(ctx context.Context, r mcp.CallToolRequest, p string) (string, error) {
+	val, err := RequiredParam[string](r, p)
+	if err != nil {
+		return "", errors.NewValidationErrorWithParam(ctx, errors.VALIDATION_ERROR_MISSING_PARAM, err.Error(), p)
+	}
+	return val, nil
+}
+
+// RequiredParamWithContextTyped is a generic context-aware version of RequiredParam
+func RequiredParamWithContextTyped[T comparable](ctx context.Context, r mcp.CallToolRequest, p string) (T, error) {
+	var zero T
+	val, err := RequiredParam[T](r, p)
+	if err != nil {
+		// Determine error code based on error message
+		code := errors.VALIDATION_ERROR_MISSING_PARAM
+		if err.Error() == fmt.Sprintf("parameter %s is not of type %T", p, zero) {
+			code = errors.VALIDATION_ERROR_INVALID_TYPE
+		}
+		return zero, errors.NewValidationErrorWithParam(ctx, code, err.Error(), p)
+	}
+	return val, nil
+}
+
+// OptionalParamWithContextTyped is a generic context-aware version of OptionalParam
+func OptionalParamWithContextTyped[T any](ctx context.Context, r mcp.CallToolRequest, p string) (T, error) {
+	var zero T
+	val, err := OptionalParam[T](r, p)
+	if err != nil {
+		code := errors.VALIDATION_ERROR_INVALID_TYPE
+		return zero, errors.NewValidationErrorWithParam(ctx, code, err.Error(), p)
+	}
+	return val, nil
 }

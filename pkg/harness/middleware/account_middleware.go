@@ -6,6 +6,7 @@ import (
 
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness/common"
+	"github.com/harness/harness-mcp/pkg/harness/errors"
 	"github.com/harness/harness-mcp/pkg/harness/logging"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -19,6 +20,11 @@ const ConversationIDHeader = "X-Conversation-Id"
 func WithHarnessScope(config *config.Config) server.ToolHandlerMiddleware {
 	return func(next server.ToolHandlerFunc) server.ToolHandlerFunc {
 		return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			// Extract tool name from request and add to context
+			if toolName := request.GetName(); toolName != "" {
+				ctx = errors.WithToolName(ctx, toolName)
+			}
+			
 			// Extract scope from the request
 			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {

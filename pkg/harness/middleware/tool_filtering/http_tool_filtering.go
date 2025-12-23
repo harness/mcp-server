@@ -12,6 +12,7 @@ import (
 
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
 	"github.com/harness/harness-mcp/pkg/harness/common"
+	"github.com/harness/harness-mcp/pkg/harness/errors"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -468,6 +469,14 @@ func (m *HTTPToolFilteringMiddleware) isToolsCallRequest(r *http.Request, logger
 func (m *HTTPToolFilteringMiddleware) handleToolsCallRequest(w http.ResponseWriter, r *http.Request, next http.Handler, logger *slog.Logger) {
 	logger.Debug("Handling tools/call request with authorization validation")
 
+	// Extract request ID and add to context
+	requestID := extractRequestIDFromHTTPRequest(r)
+	if requestID != "" {
+		ctx := r.Context()
+		ctx = errors.WithRequestID(ctx, requestID)
+		r = r.WithContext(ctx)
+	}
+
 	// Extract dynamic filtering context from HTTP headers
 	ctx := m.enrichContextWithDynamicFiltering(r.Context(), r, logger)
 
@@ -494,6 +503,9 @@ func (m *HTTPToolFilteringMiddleware) handleToolsCallRequest(w http.ResponseWrit
 	}
 
 	logger.Debug("Extracted tool name from request", "tool_name", toolName)
+
+	// Add tool name to context
+	ctx = errors.WithToolName(ctx, toolName)
 
 	// Determine which toolset this tool belongs to
 	toolset := findToolGroup(toolName, logger)

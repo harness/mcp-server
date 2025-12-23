@@ -1,0 +1,274 @@
+# Error Catalog
+# This file documents all error codes used in the Harness MCP Server
+
+errors:
+  # Tool Errors
+  - code: TOOL_ERROR_INVALID_PARAM
+    type: ToolError
+    description: Invalid parameter provided to tool
+    http_status: 400
+    remediation: Check parameter types and values
+    related_codes:
+      - VALIDATION_ERROR_INVALID_TYPE
+      - VALIDATION_ERROR_INVALID_VALUE
+
+  - code: TOOL_ERROR_EXECUTION_FAILED
+    type: ToolError
+    description: Tool execution failed
+    http_status: 500
+    remediation: Check tool logs and configuration
+    related_codes:
+      - CLIENT_ERROR_INTERNAL
+
+  - code: TOOL_ERROR_TIMEOUT
+    type: ToolError
+    description: Tool execution timed out
+    http_status: 504
+    remediation: Increase timeout or optimize tool execution
+    related_codes:
+      - CLIENT_ERROR_TIMEOUT
+
+  - code: TOOL_ERROR_NOT_FOUND
+    type: ToolError
+    description: Tool or resource not found
+    http_status: 404
+    remediation: Verify tool name and resource identifiers
+    related_codes:
+      - CLIENT_ERROR_NOT_FOUND
+
+  - code: TOOL_ERROR_UNAUTHORIZED
+    type: ToolError
+    description: Unauthorized to execute tool
+    http_status: 401
+    remediation: Check authentication and permissions
+    related_codes:
+      - AUTH_ERROR_UNAUTHORIZED
+
+  - code: TOOL_ERROR_INTERNAL
+    type: ToolError
+    description: Internal tool error
+    http_status: 500
+    remediation: Contact support with error details
+    related_codes:
+      - CLIENT_ERROR_INTERNAL
+
+  - code: TOOL_ERROR_UNSUPPORTED_REQUEST
+    type: ToolError
+    description: Unsupported request type
+    http_status: 400
+    remediation: Check request format and supported operations
+    related_codes:
+      - CLIENT_ERROR_BAD_REQUEST
+
+  # Client Errors
+  - code: CLIENT_ERROR_NOT_FOUND
+    type: ClientError
+    description: Resource not found
+    http_status: 404
+    remediation: Verify resource identifier and existence
+    related_codes:
+      - TOOL_ERROR_NOT_FOUND
+
+  - code: CLIENT_ERROR_BAD_REQUEST
+    type: ClientError
+    description: Bad request
+    http_status: 400
+    remediation: Check request parameters and format
+    related_codes:
+      - VALIDATION_ERROR_MISSING_PARAM
+      - VALIDATION_ERROR_INVALID_TYPE
+
+  - code: CLIENT_ERROR_UNAUTHORIZED
+    type: ClientError
+    description: Unauthorized request
+    http_status: 401
+    remediation: Check authentication credentials
+    related_codes:
+      - AUTH_ERROR_UNAUTHORIZED
+      - AUTH_ERROR_INVALID_TOKEN
+
+  - code: CLIENT_ERROR_FORBIDDEN
+    type: ClientError
+    description: Forbidden request
+    http_status: 403
+    remediation: Check permissions and access rights
+    related_codes:
+      - AUTH_ERROR_FORBIDDEN
+
+  - code: CLIENT_ERROR_INTERNAL
+    type: ClientError
+    description: Internal server error
+    http_status: 500
+    remediation: Contact support with error details
+    related_codes:
+      - TOOL_ERROR_INTERNAL
+
+  - code: CLIENT_ERROR_TIMEOUT
+    type: ClientError
+    description: Request timeout
+    http_status: 504
+    remediation: Retry request or increase timeout
+    related_codes:
+      - TOOL_ERROR_TIMEOUT
+
+  - code: CLIENT_ERROR_NETWORK
+    type: ClientError
+    description: Network error
+    http_status: 0
+    remediation: Check network connectivity and retry
+    related_codes:
+      - CLIENT_ERROR_RETRYABLE
+
+  - code: CLIENT_ERROR_RETRYABLE
+    type: ClientError
+    description: Retryable error
+    http_status: 0
+    remediation: Retry the request
+    related_codes:
+      - CLIENT_ERROR_NETWORK
+      - CLIENT_ERROR_TIMEOUT
+
+  - code: CLIENT_ERROR_UNMARSHAL
+    type: ClientError
+    description: Failed to unmarshal response
+    http_status: 500
+    remediation: Check response format and API compatibility
+    related_codes:
+      - CLIENT_ERROR_INTERNAL
+
+  - code: CLIENT_ERROR_REQUEST_FAILED
+    type: ClientError
+    description: Request failed
+    http_status: 0
+    remediation: Check request details and retry
+    related_codes:
+      - CLIENT_ERROR_NETWORK
+      - CLIENT_ERROR_RETRYABLE
+
+  # Validation Errors
+  - code: VALIDATION_ERROR_MISSING_PARAM
+    type: ValidationError
+    description: Missing required parameter
+    http_status: 400
+    remediation: Provide all required parameters
+    related_codes:
+      - VALIDATION_ERROR_MISSING_SCOPE
+
+  - code: VALIDATION_ERROR_INVALID_TYPE
+    type: ValidationError
+    description: Invalid parameter type
+    http_status: 400
+    remediation: Check parameter type matches expected type
+    related_codes:
+      - VALIDATION_ERROR_INVALID_VALUE
+
+  - code: VALIDATION_ERROR_INVALID_VALUE
+    type: ValidationError
+    description: Invalid parameter value
+    http_status: 400
+    remediation: Check parameter value constraints
+    related_codes:
+      - VALIDATION_ERROR_INVALID_TYPE
+      - VALIDATION_ERROR_OUT_OF_RANGE
+
+  - code: VALIDATION_ERROR_INVALID_FORMAT
+    type: ValidationError
+    description: Invalid parameter format
+    http_status: 400
+    remediation: Check parameter format (e.g., date, email, UUID)
+    related_codes:
+      - VALIDATION_ERROR_INVALID_VALUE
+
+  - code: VALIDATION_ERROR_OUT_OF_RANGE
+    type: ValidationError
+    description: Parameter value out of range
+    http_status: 400
+    remediation: Check parameter value is within allowed range
+    related_codes:
+      - VALIDATION_ERROR_INVALID_VALUE
+
+  - code: VALIDATION_ERROR_DUPLICATE_VALUE
+    type: ValidationError
+    description: Duplicate parameter value
+    http_status: 400
+    remediation: Ensure unique values where required
+    related_codes:
+      - VALIDATION_ERROR_INVALID_VALUE
+
+  - code: VALIDATION_ERROR_INVALID_SCOPE
+    type: ValidationError
+    description: Invalid scope
+    http_status: 400
+    remediation: Check scope values (account, org, project)
+    related_codes:
+      - VALIDATION_ERROR_MISSING_SCOPE
+
+  - code: VALIDATION_ERROR_MISSING_SCOPE
+    type: ValidationError
+    description: Missing required scope
+    http_status: 400
+    remediation: Provide required scope information
+    related_codes:
+      - VALIDATION_ERROR_MISSING_PARAM
+      - VALIDATION_ERROR_INVALID_SCOPE
+
+  # Auth Errors
+  - code: AUTH_ERROR_INVALID_TOKEN
+    type: AuthError
+    description: Invalid authentication token
+    http_status: 401
+    remediation: Check token validity and format
+    related_codes:
+      - AUTH_ERROR_TOKEN_EXPIRED
+
+  - code: AUTH_ERROR_UNAUTHORIZED
+    type: AuthError
+    description: Unauthorized access
+    http_status: 401
+    remediation: Check authentication credentials
+    related_codes:
+      - AUTH_ERROR_INVALID_TOKEN
+      - AUTH_ERROR_MISSING_CREDENTIALS
+
+  - code: AUTH_ERROR_TOKEN_EXPIRED
+    type: AuthError
+    description: Authentication token expired
+    http_status: 401
+    remediation: Refresh or obtain new token
+    related_codes:
+      - AUTH_ERROR_INVALID_TOKEN
+      - AUTH_ERROR_SESSION_EXPIRED
+
+  - code: AUTH_ERROR_MISSING_CREDENTIALS
+    type: AuthError
+    description: Missing authentication credentials
+    http_status: 401
+    remediation: Provide authentication credentials
+    related_codes:
+      - AUTH_ERROR_UNAUTHORIZED
+
+  - code: AUTH_ERROR_INVALID_CREDENTIALS
+    type: AuthError
+    description: Invalid authentication credentials
+    http_status: 401
+    remediation: Verify credentials are correct
+    related_codes:
+      - AUTH_ERROR_UNAUTHORIZED
+      - AUTH_ERROR_INVALID_TOKEN
+
+  - code: AUTH_ERROR_FORBIDDEN
+    type: AuthError
+    description: Forbidden access
+    http_status: 403
+    remediation: Check permissions and access rights
+    related_codes:
+      - CLIENT_ERROR_FORBIDDEN
+
+  - code: AUTH_ERROR_SESSION_EXPIRED
+    type: AuthError
+    description: Session expired
+    http_status: 401
+    remediation: Re-authenticate to create new session
+    related_codes:
+      - AUTH_ERROR_TOKEN_EXPIRED
+

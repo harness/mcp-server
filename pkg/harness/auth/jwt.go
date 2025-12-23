@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt"
+	"github.com/harness/harness-mcp/pkg/harness/errors"
 )
 
 var (
@@ -46,11 +47,11 @@ func NewJWTProvider(secret string, serviceIdentity string, lifetime *time.Durati
 func (p *JWTProvider) GetHeader(ctx context.Context) (string, string, error) {
 	session, ok := AuthSessionFrom(ctx)
 	if !ok || session == nil {
-		return "", "", fmt.Errorf("failed to get session")
+		return "", "", errors.NewAuthError(ctx, errors.AUTH_ERROR_SESSION_EXPIRED, "failed to get session")
 	}
 	issuedAt := time.Now()
 	if p.lifetime == nil {
-		return "", "", fmt.Errorf("token lifetime is required")
+		return "", "", errors.NewAuthError(ctx, errors.AUTH_ERROR_INVALID_CREDENTIALS, "token lifetime is required")
 	}
 	expiresAt := issuedAt.Add(*p.lifetime)
 
@@ -69,7 +70,7 @@ func (p *JWTProvider) GetHeader(ctx context.Context) (string, string, error) {
 
 	res, err := jwtToken.SignedString([]byte(p.secret))
 	if err != nil {
-		return "", "", fmt.Errorf("failed to sign token: %w", err)
+		return "", "", errors.WrapAuthError(ctx, err, errors.AUTH_ERROR_INVALID_TOKEN, "failed to sign token")
 	}
 
 	return jwtHeaderName, fmt.Sprintf("%s %s", p.serviceIdentity, res), nil
