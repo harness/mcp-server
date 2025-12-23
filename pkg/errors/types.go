@@ -14,26 +14,26 @@ type ErrorCode string
 // Error categories and codes
 const (
 	// Tool Errors (TOOL_xxx)
-	ErrCodeToolNotFound        ErrorCode = "TOOL_NOT_FOUND"
-	ErrCodeToolExecutionFailed ErrorCode = "TOOL_EXECUTION_FAILED"
-	ErrCodeToolValidationError ErrorCode = "TOOL_VALIDATION_ERROR"
+	ErrCodeToolNotFound         ErrorCode = "TOOL_NOT_FOUND"
+	ErrCodeToolExecutionFailed  ErrorCode = "TOOL_EXECUTION_FAILED"
+	ErrCodeToolValidationError  ErrorCode = "TOOL_VALIDATION_ERROR"
 	ErrCodeToolPermissionDenied ErrorCode = "TOOL_PERMISSION_DENIED"
 
 	// Client Errors (CLIENT_xxx)
-	ErrCodeClientNetworkError     ErrorCode = "CLIENT_NETWORK_ERROR"
-	ErrCodeClientTimeout          ErrorCode = "CLIENT_TIMEOUT"
-	ErrCodeClientBadRequest       ErrorCode = "CLIENT_BAD_REQUEST"
-	ErrCodeClientUnauthorized     ErrorCode = "CLIENT_UNAUTHORIZED"
-	ErrCodeClientForbidden        ErrorCode = "CLIENT_FORBIDDEN"
-	ErrCodeClientNotFound         ErrorCode = "CLIENT_NOT_FOUND"
-	ErrCodeClientRateLimited      ErrorCode = "CLIENT_RATE_LIMITED"
-	ErrCodeClientServerError      ErrorCode = "CLIENT_SERVER_ERROR"
+	ErrCodeClientNetworkError ErrorCode = "CLIENT_NETWORK_ERROR"
+	ErrCodeClientTimeout      ErrorCode = "CLIENT_TIMEOUT"
+	ErrCodeClientBadRequest   ErrorCode = "CLIENT_BAD_REQUEST"
+	ErrCodeClientUnauthorized ErrorCode = "CLIENT_UNAUTHORIZED"
+	ErrCodeClientForbidden    ErrorCode = "CLIENT_FORBIDDEN"
+	ErrCodeClientNotFound     ErrorCode = "CLIENT_NOT_FOUND"
+	ErrCodeClientRateLimited  ErrorCode = "CLIENT_RATE_LIMITED"
+	ErrCodeClientServerError  ErrorCode = "CLIENT_SERVER_ERROR"
 
 	// Validation Errors (VALIDATION_xxx)
-	ErrCodeValidationRequired     ErrorCode = "VALIDATION_REQUIRED"
+	ErrCodeValidationRequired      ErrorCode = "VALIDATION_REQUIRED"
 	ErrCodeValidationInvalidFormat ErrorCode = "VALIDATION_INVALID_FORMAT"
-	ErrCodeValidationOutOfRange   ErrorCode = "VALIDATION_OUT_OF_RANGE"
-	ErrCodeValidationInvalidValue ErrorCode = "VALIDATION_INVALID_VALUE"
+	ErrCodeValidationOutOfRange    ErrorCode = "VALIDATION_OUT_OF_RANGE"
+	ErrCodeValidationInvalidValue  ErrorCode = "VALIDATION_INVALID_VALUE"
 
 	// Authentication/Authorization Errors (AUTH_xxx)
 	ErrCodeAuthInvalidToken       ErrorCode = "AUTH_INVALID_TOKEN"
@@ -43,21 +43,21 @@ const (
 	ErrCodeAuthAccountNotFound    ErrorCode = "AUTH_ACCOUNT_NOT_FOUND"
 
 	// Internal Errors (INTERNAL_xxx)
-	ErrCodeInternalError          ErrorCode = "INTERNAL_ERROR"
-	ErrCodeInternalConfiguration  ErrorCode = "INTERNAL_CONFIGURATION"
-	ErrCodeInternalDatabase       ErrorCode = "INTERNAL_DATABASE"
+	ErrCodeInternalError         ErrorCode = "INTERNAL_ERROR"
+	ErrCodeInternalConfiguration ErrorCode = "INTERNAL_CONFIGURATION"
+	ErrCodeInternalDatabase      ErrorCode = "INTERNAL_DATABASE"
 )
 
 // ErrorContext holds contextual information about an error
 type ErrorContext struct {
-	RequestID   string            `json:"request_id,omitempty"`
-	TraceID     string            `json:"trace_id,omitempty"`
-	ToolName    string            `json:"tool_name,omitempty"`
-	UserID      string            `json:"user_id,omitempty"`
-	AccountID   string            `json:"account_id,omitempty"`
-	Operation   string            `json:"operation,omitempty"`
-	Parameters  map[string]any    `json:"parameters,omitempty"`
-	Metadata    map[string]string `json:"metadata,omitempty"`
+	RequestID  string            `json:"request_id,omitempty"`
+	TraceID    string            `json:"trace_id,omitempty"`
+	ToolName   string            `json:"tool_name,omitempty"`
+	UserID     string            `json:"user_id,omitempty"`
+	AccountID  string            `json:"account_id,omitempty"`
+	Operation  string            `json:"operation,omitempty"`
+	Parameters map[string]any    `json:"parameters,omitempty"`
+	Metadata   map[string]string `json:"metadata,omitempty"`
 }
 
 // BaseError is the common interface for all typed errors

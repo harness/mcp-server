@@ -89,7 +89,6 @@ func ErrorHandlerMiddleware(logger *logging.StructuredLogger) server.ToolHandler
 	}
 }
 
-
 // ErrorRecoveryMiddleware creates middleware that recovers from panics
 func ErrorRecoveryMiddleware(logger *logging.StructuredLogger) server.ToolHandlerMiddleware {
 	return func(next server.ToolHandlerFunc) server.ToolHandlerFunc {
