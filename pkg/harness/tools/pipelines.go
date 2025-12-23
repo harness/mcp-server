@@ -9,6 +9,7 @@ import (
 	"github.com/harness/harness-mcp/client"
 	"github.com/harness/harness-mcp/client/dto"
 	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
+	"github.com/harness/harness-mcp/pkg/errors"
 	"github.com/harness/harness-mcp/pkg/harness/common"
 	"github.com/harness/harness-mcp/pkg/harness/event/types"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -27,21 +28,22 @@ func GetPipelineTool(config *config.Config, client *client.PipelineService) (too
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			pipelineID, err := RequiredParam[string](request, "pipeline_id")
 			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
+				// This will be handled by the error middleware, but we can provide more context
+				return nil, errors.NewValidationRequiredError("pipeline_id")
 			}
 			scope, err := common.FetchScope(ctx, config, request, true)
 			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
+				return nil, errors.WrapError(err, errors.ErrCodeToolValidationError, "Failed to extract scope for pipeline retrieval")
 			}
 
 			data, err := client.Get(ctx, scope, pipelineID)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get pipeline: %w", err)
+				return nil, errors.WrapError(err, errors.ErrCodeToolExecutionFailed, "Failed to retrieve pipeline")
 			}
 
 			r, err := json.Marshal(data.Data)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal pipeline: %w", err)
+				return nil, errors.NewInternalError("Failed to marshal pipeline data", err)
 			}
 
 			return mcp.NewToolResultText(string(r)), nil

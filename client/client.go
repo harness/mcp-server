@@ -14,6 +14,7 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/harness/harness-mcp/client/dto"
+	"github.com/harness/harness-mcp/pkg/errors"
 	"github.com/harness/harness-mcp/pkg/harness/auth"
 	"github.com/harness/harness-mcp/pkg/harness/common"
 	"go.opentelemetry.io/otel"
@@ -34,10 +35,11 @@ var (
 	maxPageSize     = 20
 )
 
+// Legacy error variables - kept for backward compatibility but deprecated
 var (
-	ErrBadRequest = fmt.Errorf("bad request")
-	ErrNotFound   = fmt.Errorf("not found")
-	ErrInternal   = fmt.Errorf("internal error")
+	ErrBadRequest = errors.NewClientBadRequestError("bad request")
+	ErrNotFound   = errors.NewClientNotFoundError("resource not found")
+	ErrInternal   = errors.NewInternalError("internal error", nil)
 )
 
 type Client struct {
@@ -589,19 +591,25 @@ func isRetryable(status int) bool {
 func mapStatusCodeToError(statusCode int) error {
 	switch {
 	case statusCode == 500:
-		return ErrInternal
-	case statusCode >= 500:
-		return fmt.Errorf("received server side error status code %d", statusCode)
+		return errors.NewClientServerError(statusCode, "Internal server error")
+	case statusCode > 500:
+		return errors.NewClientServerError(statusCode, fmt.Sprintf("Server error (status %d)", statusCode))
 	case statusCode == 404:
-		return ErrNotFound
+		return errors.NewClientNotFoundError("Resource not found")
+	case statusCode == 403:
+		return errors.NewClientForbiddenError("Access forbidden")
+	case statusCode == 401:
+		return errors.NewClientUnauthorizedError()
+	case statusCode == 429:
+		return errors.NewClientRateLimitedError()
 	case statusCode == 400:
-		return ErrBadRequest
+		return errors.NewClientBadRequestError("Bad request")
 	case statusCode >= 400:
-		return fmt.Errorf("received client side error status code %d", statusCode)
+		return errors.NewClientBadRequestError(fmt.Sprintf("Client error (status %d)", statusCode))
 	case statusCode >= 300:
-		return fmt.Errorf("received further action required status code %d", statusCode)
+		return errors.NewClientError(errors.ErrCodeClientServerError, fmt.Sprintf("Redirection or further action required (status %d)", statusCode))
 	default:
-		// TODO: definitely more things to consider here ...
+		// Success status codes return nil
 		return nil
 	}
 }
