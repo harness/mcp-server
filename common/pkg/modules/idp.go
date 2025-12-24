@@ -9,6 +9,16 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+// NgManagerAuthProviderFactory is a function type for creating NgManager auth providers
+// This allows different implementations in internal vs external modes
+type NgManagerAuthProviderFactory func(config *config.McpServerConfig) auth.Provider
+
+// DefaultNgManagerAuthProviderFactory is the default implementation for creating NgManager auth providers
+// This can be overridden by consuming repositories to provide custom implementations
+var DefaultNgManagerAuthProviderFactory NgManagerAuthProviderFactory = func(config *config.McpServerConfig) auth.Provider {
+	return auth.NewAPIKeyProvider(config.APIKey)
+}
+
 // IDPModule implements the Module interface for Internal Developer Portal
 type IDPModule struct {
 	config *config.McpServerConfig
@@ -69,7 +79,7 @@ func RegisterInternalDeveloperPortal(config *config.McpServerConfig, tsg *toolse
 		return err
 	}
 
-	ngManagerAuthProvider := auth.NewAPIKeyProvider(config.APIKey)
+	ngManagerAuthProvider := DefaultNgManagerAuthProviderFactory(config)
 
 	idpClient := &client.IDPService{
 		Client:                c,
