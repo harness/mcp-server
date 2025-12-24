@@ -7,6 +7,16 @@ import (
 	"github.com/harness/mcp-server/common/pkg/toolsets"
 )
 
+// RepositoryClientFactory is a function type for creating repository clients
+// This allows different implementations in internal vs external modes
+type RepositoryClientFactory func(config *config.McpServerConfig) (*client.Client, error)
+
+// DefaultRepositoryClientFactory is the default implementation for creating repository clients
+// This can be overridden by consuming repositories to provide custom implementations
+var DefaultRepositoryClientFactory RepositoryClientFactory = func(config *config.McpServerConfig) (*client.Client, error) {
+	return DefaultClientProvider.CreateClient(config, "code")
+}
+
 // CODEModule implements the Module interface for Code Repository Management
 type CODEModule struct {
 	config *config.McpServerConfig
@@ -68,8 +78,8 @@ func (m *CODEModule) IsDefault() bool {
 
 // RegisterRepositories registers the repositories toolset
 func RegisterRepositories(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
-	// Create base client for repositories with code service identity
-	c, err := DefaultClientProvider.CreateClient(config, "code")
+	// Create base client for repositories using the factory
+	c, err := DefaultRepositoryClientFactory(config)
 	if err != nil {
 		return err
 	}
@@ -92,7 +102,7 @@ func RegisterRepositories(config *config.McpServerConfig, tsg *toolsets.ToolsetG
 func RegisterPullRequests(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 
 	// Create base client for pull requests with code service identity
-	c, err := DefaultClientProvider.CreateClient(config, "code")
+	c, err := DefaultRepositoryClientFactory(config)
 	if err != nil {
 		return err
 	}
