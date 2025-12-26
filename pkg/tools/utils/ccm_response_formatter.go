@@ -25,3 +25,7 @@ func (f CCMTextResponseFormatter) FormatEC2AnalysisResponse(response *dto.Commit
 		mcp.NewTextContent(string(rawJSON)),
 	}, nil
 }
+
+func init() {
+	commonUtils.SetCCMResponseFormatter(NewCCMTextResponseFormatter())
+}
