@@ -10,16 +10,16 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-// TextStoResponseFormatter formats STO responses as plain text/JSON (for external mode)
-type TextStoResponseFormatter struct{}
+// StoTextResponseFormatter formats STO responses as plain text/JSON (for external mode)
+type StoTextResponseFormatter struct{}
 
-// NewTextStoResponseFormatter creates a new text-based STO response formatter
-func NewTextStoResponseFormatter() commonUtils.StoResponseFormatter {
-	return &TextStoResponseFormatter{}
+// NewStoTextResponseFormatter creates a new text-based STO response formatter
+func NewStoTextResponseFormatter() commonUtils.StoResponseFormatter {
+	return &StoTextResponseFormatter{}
 }
 
 // FormatStoIssuesResponse formats STO security issues as JSON text
-func (f *TextStoResponseFormatter) FormatStoIssuesResponse(response *stogenerated.FrontendAllIssuesListResponseBody) ([]mcp.Content, error) {
+func (f *StoTextResponseFormatter) FormatStoIssuesResponse(response *stogenerated.FrontendAllIssuesListResponseBody) ([]mcp.Content, error) {
 	contents := []mcp.Content{}
 
 	// Create table columns
@@ -61,7 +61,7 @@ func (f *TextStoResponseFormatter) FormatStoIssuesResponse(response *stogenerate
 }
 
 // FormatStoExemptionsResponse formats STO global exemptions as JSON text
-func (f *TextStoResponseFormatter) FormatStoExemptionsResponse(response *stogenerated.SecurityReviewResult, userNameMap map[string]string) ([]mcp.Content, error) {
+func (f *StoTextResponseFormatter) FormatStoExemptionsResponse(response *stogenerated.SecurityReviewResult, userNameMap map[string]string) ([]mcp.Content, error) {
 	contents := []mcp.Content{}
 
 	// Determine if we're showing approved exemptions (affects columns)
@@ -128,5 +128,5 @@ func (f *TextStoResponseFormatter) FormatStoExemptionsResponse(response *stogene
 
 // init registers the external STO response formatter
 func init() {
-	commonUtils.SetStoResponseFormatter(NewTextStoResponseFormatter())
+	commonUtils.SetStoResponseFormatter(NewStoTextResponseFormatter())
 }
