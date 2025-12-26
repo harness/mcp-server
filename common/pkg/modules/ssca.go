@@ -73,14 +73,8 @@ func RegisterSCS(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) err
 	if err != nil {
 		return err
 	}
-	if c == nil {
-		return fmt.Errorf("client is nil")
-	}
 
 	requestEditorFn := func(ctx context.Context, req *http.Request) error {
-		if c.AuthProvider == nil {
-			return fmt.Errorf("auth provider is nil")
-		}
 		k, v, err := c.AuthProvider.GetHeader(ctx)
 		if err != nil {
 			return err
