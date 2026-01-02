@@ -793,18 +793,22 @@ func getLimit(request mcp.CallToolRequest) int32 {
 }
 
 func getLimitWithDefault(request mcp.CallToolRequest, defaultValue int32) int32 {
-	limit, err := OptionalParam[int32](request, "limit")
-	if err != nil || limit == 0 {
-		limit = defaultValue
+	// Parse as float64 (JSON number type) then convert to int32
+	limitFloat, err := OptionalParam[float64](request, "limit")
+	if err != nil {
+		return defaultValue
 	}
-	return limit
+	if limitFloat == 0 {
+		return defaultValue
+	}
+	return int32(limitFloat)
 }
 
 func getOffset(request mcp.CallToolRequest) int32 {
-	offset, err := OptionalParam[int32](request, "offset")
-
+	// Parse as float64 (JSON number type) then convert to int32
+	offsetFloat, err := OptionalParam[float64](request, "offset")
 	if err != nil {
-		offset = defaultOffset
+		return defaultOffset
 	}
-	return offset
+	return int32(offsetFloat)
 }
