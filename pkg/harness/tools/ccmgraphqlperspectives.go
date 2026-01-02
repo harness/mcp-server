@@ -477,13 +477,8 @@ func CcmPerspectiveFilterValuesTool(config *config.Config, client *client.CloudC
 func CcmListLabelsV2KeysTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("ccm_list_labelsv2_keys",
 			mcp.WithDescription(ccmcommons.CCMListLabelsV2KeysDescription),
-			mcp.WithString("time_filter",
-				mcp.Description("Time filter for the query. Values: "+strings.Join(dto.TimeFilterValues, ", ")+". Default: "+dto.TimeFilterLast30Days),
-				mcp.DefaultString(dto.TimeFilterLast30Days),
-				mcp.Enum(dto.TimeFilterValues...),
-			),
 			mcp.WithNumber("limit",
-				mcp.DefaultNumber(500),
+				mcp.DefaultNumber(1000),
 				mcp.Max(10000),
 				mcp.Description("Maximum number of label keys to return"),
 			),
@@ -499,18 +494,12 @@ func CcmListLabelsV2KeysTool(config *config.Config, client *client.CloudCostMana
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			// Get time filter (optional with default)
-			timeFilter, err := OptionalParam[string](request, "time_filter")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			if timeFilter == "" {
-				timeFilter = dto.TimeFilterLast30Days
-			}
+		// Hardcode time filter to match UI behavior
+		timeFilter := dto.TimeFilterPreviousToCurrentMonth
 
-			// Get limit and offset
-			limit := getLimitWithDefault(request, 500)
-			offset := getOffset(request)
+		// Get limit and offset
+		limit := getLimitWithDefault(request, 1000)
+		offset := getOffset(request)
 
 			// Get scope
 			scope, err := common.FetchScope(ctx, config, request, false)

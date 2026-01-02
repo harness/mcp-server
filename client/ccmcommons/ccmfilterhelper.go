@@ -179,6 +179,13 @@ func GetTimeRangeFromFilter(filter string, now time.Time) (start, end time.Time)
 	case dto.TimeFilterLast12Months:
 		start = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, -12, 0)
 		end = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).Add(-time.Nanosecond)
+	case dto.TimeFilterPreviousToCurrentMonth:
+		// Start: First second of the first day of the previous month
+		firstOfThisMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+		start = firstOfThisMonth.AddDate(0, -1, 0)
+		// End: Last second of the last day of the current month
+		firstOfNextMonth := firstOfThisMonth.AddDate(0, 1, 0)
+		end = firstOfNextMonth.Add(-time.Nanosecond)
 	default:
 		start = now
 	}
