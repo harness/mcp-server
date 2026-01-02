@@ -482,10 +482,6 @@ func CcmListLabelsV2KeysTool(config *config.Config, client *client.CloudCostMana
 				mcp.DefaultString(dto.TimeFilterLast30Days),
 				mcp.Enum(dto.TimeFilterValues...),
 			),
-			mcp.WithBoolean("is_cluster_hourly_data",
-				mcp.Description("Specify if you want to filter results for cluster hourly data."),
-				mcp.DefaultBool(false),
-			),
 			mcp.WithNumber("limit",
 				mcp.DefaultNumber(500),
 				mcp.Max(10000),
@@ -512,12 +508,6 @@ func CcmListLabelsV2KeysTool(config *config.Config, client *client.CloudCostMana
 				timeFilter = dto.TimeFilterLast30Days
 			}
 
-			// Get is_cluster_hourly_data (optional)
-			isClusterHourlyData, err := OptionalParam[bool](request, "is_cluster_hourly_data")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-
 			// Get limit and offset
 			limit := getLimitWithDefault(request, 500)
 			offset := getOffset(request)
@@ -530,11 +520,10 @@ func CcmListLabelsV2KeysTool(config *config.Config, client *client.CloudCostMana
 
 			// Build options
 			params := &dto.CCMListLabelsV2KeysOptions{
-				AccountId:           accountId,
-				TimeFilter:          timeFilter,
-				IsClusterHourlyData: isClusterHourlyData,
-				Limit:               limit,
-				Offset:              offset,
+				AccountId:  accountId,
+				TimeFilter: timeFilter,
+				Limit:      limit,
+				Offset:     offset,
 			}
 
 			// Call client method

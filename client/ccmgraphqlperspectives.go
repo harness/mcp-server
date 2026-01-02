@@ -231,10 +231,9 @@ func (r *CloudCostManagementService) ListLabelsV2Keys(ctx context.Context, scope
 	filters := ccmcommons.BuildLabelsV2KeysFilters(options)
 
 	variables := map[string]any{
-		"filters":             filters,
-		"limit":               options.Limit,
-		"offset":              options.Offset,
-		"isClusterHourlyData": options.IsClusterHourlyData,
+		"filters": filters,
+		"limit":   options.Limit,
+		"offset":  options.Offset,
 		"sortCriteria": []map[string]any{
 			{
 				"sortOrder": "ASCENDING",
