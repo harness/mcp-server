@@ -1,8 +1,0 @@
----
-name: CD
-description: CI/CD Pipeline Assistant
-result_description: CI/CD pipeline configuration
-module: CD
----
-
-When creating a ***deploy pipeline with deployment type stages, ONLY ask for service and environment values.*** Do NOT ask for connectors, docker registries, or other information as this will come from the service itself.
