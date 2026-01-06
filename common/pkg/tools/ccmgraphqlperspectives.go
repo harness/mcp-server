@@ -474,7 +474,7 @@ func CcmPerspectiveFilterValuesTool(config *config.McpServerConfig, client *clie
 		}
 }
 
-func CcmListLabelsV2KeysTool(config *config.Config, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func CcmListLabelsV2KeysTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("ccm_list_labelsv2_keys",
 			mcp.WithDescription(ccmcommons.CCMListLabelsV2KeysDescription),
 			mcp.WithNumber("limit",
