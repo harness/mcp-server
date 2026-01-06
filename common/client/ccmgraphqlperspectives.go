@@ -219,3 +219,40 @@ func (r *CloudCostManagementService) PerspectiveFilterValues(ctx context.Context
 	}
 	return result, nil
 }
+
+// ListLabelsV2Keys fetches the list of valid label keys for labelsV2
+func (r *CloudCostManagementService) ListLabelsV2Keys(ctx context.Context, scope dto.Scope, options *dto.CCMListLabelsV2KeysOptions) (*dto.CCMListLabelsV2KeysResponse, error) {
+	path := fmt.Sprintf(ccmPerspectiveGraphQLPath, options.AccountId, options.AccountId)
+
+	// Use existing GraphQL query
+	gqlQuery := ccmcommons.CCMFetchPerspectiveFiltersValueQuery
+
+	// Build filters specifically for labelsV2 keys
+	filters := ccmcommons.BuildLabelsV2KeysFilters(options)
+
+	variables := map[string]any{
+		"filters": filters,
+		"limit":   options.Limit,
+		"offset":  options.Offset,
+		"sortCriteria": []map[string]any{
+			{
+				"sortOrder": "ASCENDING",
+				"sortType":  "NAME",
+			},
+		},
+	}
+
+	payload := map[string]any{
+		"query":         gqlQuery,
+		"operationName": "FetchPerspectiveFiltersValue",
+		"variables":     variables,
+	}
+
+	ccmcommons.DebugPayload(ctx, "ListLabelsV2Keys", payload)
+	result := new(dto.CCMListLabelsV2KeysResponse)
+	err := r.Client.Post(ctx, path, nil, payload, map[string]string{}, &result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list labelsV2 keys: %w", err)
+	}
+	return result, nil
+}

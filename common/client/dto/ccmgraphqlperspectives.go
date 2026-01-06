@@ -1,17 +1,18 @@
 package dto
 
 const (
-	TimeFilterLast7        = "LAST_7" // It doesn't work using "LAST_7_DAYS"
-	TimeFilterThisMonth    = "THIS_MONTH"
-	TimeFilterLast30Days   = "LAST_30_DAYS"
-	TimeFilterThisQuarter  = "THIS_QUARTER"
-	TimeFilterThisYear     = "THIS_YEAR"
-	TimeFilterLastMonth    = "LAST_MONTH"
-	TimeFilterLastQuarter  = "LAST_QUARTER"
-	TimeFilterLastYear     = "LAST_YEAR"
-	TimeFilterLast3Months  = "LAST_3_MONTHS"
-	TimeFilterLast6Months  = "LAST_6_MONTHS"
-	TimeFilterLast12Months = "LAST_12_MONTHS"
+	TimeFilterLast7                  = "LAST_7" // It doesn't work using "LAST_7_DAYS"
+	TimeFilterThisMonth              = "THIS_MONTH"
+	TimeFilterLast30Days             = "LAST_30_DAYS"
+	TimeFilterThisQuarter            = "THIS_QUARTER"
+	TimeFilterThisYear               = "THIS_YEAR"
+	TimeFilterLastMonth              = "LAST_MONTH"
+	TimeFilterLastQuarter            = "LAST_QUARTER"
+	TimeFilterLastYear               = "LAST_YEAR"
+	TimeFilterLast3Months            = "LAST_3_MONTHS"
+	TimeFilterLast6Months            = "LAST_6_MONTHS"
+	TimeFilterLast12Months           = "LAST_12_MONTHS"
+	TimeFilterPreviousToCurrentMonth = "PREVIOUS_TO_CURRENT_MONTH" // From first day of previous month to last day of current month
 )
 
 const (
@@ -85,6 +86,7 @@ var (
 		TimeFilterLast3Months,
 		TimeFilterLast6Months,
 		TimeFilterLast12Months,
+		TimeFilterPreviousToCurrentMonth,
 	}
 )
 
@@ -330,6 +332,22 @@ type CCMPerspectiveFilterValues struct {
 }
 
 type CCMPerspectiveFilterValuesResponse struct {
+	Errors []CCMGraphQLError `json:"errors"`
+	Data   struct {
+		PerspectiveFilters CCMPerspectiveFilterValues `json:"perspectiveFilters"`
+	} `json:"data"`
+}
+
+// Options for listing labelsV2 keys
+type CCMListLabelsV2KeysOptions struct {
+	AccountId  string `json:"account_id"`
+	TimeFilter string `json:"time_filter"`
+	Limit      int32  `json:"limit"`
+	Offset     int32  `json:"offset"`
+}
+
+// Response for listing labelsV2 keys
+type CCMListLabelsV2KeysResponse struct {
 	Errors []CCMGraphQLError `json:"errors"`
 	Data   struct {
 		PerspectiveFilters CCMPerspectiveFilterValues `json:"perspectiveFilters"`
