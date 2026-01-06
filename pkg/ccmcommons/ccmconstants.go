@@ -256,19 +256,6 @@ Fetch cost anomalies filtered by a specific perspective in Harness Cloud Cost Ma
 
 var CCMListLabelsV2KeysDescription = `
 Retrieves the list of valid label keys available for labelsV2 in Harness Cloud Cost Management.
-This tool helps you discover what label dimensions exist in your account for a given time range.
-
-Label keys represent the dimension names that can be used for:
-- Filtering cost data by specific labels
-- Grouping cost data in perspectives
-- Building dynamic queries based on available label structure
-
-Use this tool before calling 'ccm_perspective_filter_values' with value_type='label_v2' to know which 
-label keys you can query values for.
-
-Example use case:
-1. Call this tool to get available label keys (e.g., "environment", "team", "project")
-2. Use a specific key as 'value_subtype' in 'ccm_perspective_filter_values' to get possible values
-
-Note: This query is account-wide and not limited to a specific perspective.
+This tool helps you discover what label dimensions exist in your account for the time period PREVIOUS_TO_CURRENT_MONTH.
+This query is account-wide and not limited to a specific perspective.
 `
