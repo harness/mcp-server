@@ -494,12 +494,12 @@ func CcmListLabelsV2KeysTool(config *config.Config, client *client.CloudCostMana
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-		// Hardcode time filter to match UI behavior
-		timeFilter := dto.TimeFilterPreviousToCurrentMonth
+			// Hardcode time filter to match UI behavior
+			timeFilter := dto.TimeFilterPreviousToCurrentMonth
 
-		// Get limit and offset
-		limit := getLimitWithDefault(request, 1000)
-		offset := getOffset(request)
+			// Get limit and offset
+			limit := getLimitWithDefault(request, 1000)
+			offset := getOffset(request)
 
 			// Get scope
 			scope, err := common.FetchScope(ctx, config, request, false)
