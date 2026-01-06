@@ -13,11 +13,12 @@ The Harness MCP Server is a [Model Context Protocol (MCP)](https://modelcontextp
     - [Environments Toolset](#environments-toolset)
     - [Infrastructure Toolset](#infrastructure-toolset)
     - [Connectors Toolset](#connectors-toolset)
+    - [Secrets Toolset](#secrets-toolset)
+    - [Delegate Tokens Toolset](#delegate-tokens-toolset)
     - [Repositories Toolset](#repositories-toolset)
     - [Registries Toolset](#registries-toolset)
     - [Dashboards Toolset](#dashboards-toolset)
     - [Cloud Cost Management Toolset](#cloud-cost-management-toolset)
-    - [Database Operations Toolset](#database-operations-toolset)
     - [Chaos Engineering Toolset](#chaos-engineering-toolset)
     - [Supply Chain Security (SCS) Toolset](#supply-chain-security-scs-toolset)
     - [Security Test Orchestration (STO) Toolset](#security-test-orchestration-sto-toolset)
@@ -26,41 +27,25 @@ The Harness MCP Server is a [Model Context Protocol (MCP)](https://modelcontextp
     - [Internal Developer Portal Toolset](#internal-developer-portal-toolset)
     - [Audit Trail Toolset](#audit-trail-toolset)
     - [Feature Management and Experimentation (FME) Toolset](#feature-management-and-experimentation-fme-toolset)
+    - [Sei Toolset](#sei-toolset)
 - [Prerequisites](#prerequisites)
 - [Quickstart](#quickstart)
 - [Makefile Usage](#makefile-usage)
 - [Build from Source](#build-from-source)
 - [Use Docker Image](#use-docker-image)
-  - [Stdio mode](#stdio-mode)
-  - [Http mode](#http-mode)
-- [Run on local Kubernetes cluster](#run-on-local-kubernetes-cluster)
 - [Integration with AI Assistants](#integration-with-ai-assistants)
   - [Usage with Gemini CLI](#usage-with-gemini-cli)
-  - [Usage with Gemini CLI Extensions](#usage-with-gemini-cli-extensions)
   - [Claude Desktop Configuration](#claude-desktop-configuration)
   - [Usage with Claude Code](#usage-with-claude-code)
   - [Usage with Windsurf](#usage-with-windsurf)
-    - [Using Local Binary](#using-local-binary)
-    - [In Http server mode](#in-http-server-mode)
-    - [Using Docker Image](#using-docker-image)
   - [Usage with Amazon Q Developer CLI](#usage-with-amazon-q-developer-cli)
-    - [Using Local Binary](#using-local-binary-1)
   - [Cursor Configuration](#cursor-configuration)
   - [VS Code Configuration](#vs-code-configuration)
-- [Tool Usage Guide](#tool-usage-guide)
-  - [Download Execution Logs](#download-execution-logs)
-    - [Using Docker](#using-docker)
-    - [Using Local Binary](#using-local-binary-2)
 - [Development](#development)
   - [Command Line Arguments](#command-line-arguments)
   - [Environment Variables](#environment-variables)
   - [Authentication](#authentication)
-  - [Using the create_follow_up_prompt Tool](#using-the-create_follow_up_prompt-tool-to-generate-actionable-prompt-events)
-- [Notes for Local Testing](#notes-for-local-testing)
-  - [Example](#example)
 - [Debugging](#debugging)
-- [Testing](#testing)
-  - [Running E2E Tests](#running-e2e-tests)
 
 ## Components
 
@@ -94,6 +79,10 @@ Toolset Name: `pipelines`
 - `get_execution`: Get details of a specific pipeline execution
 - `list_executions`: List pipeline executions
 - `fetch_execution_url`: Fetch the execution URL for a pipeline execution
+- `list_input_sets`: List input sets for a pipeline
+- `get_input_set`: Get details of a specific input set for a pipeline
+- `get_pipeline_summary` : Provides a concise summary of a pipeline's overall structure and execution info highlighting key aspects rather than detailed pipeline definition such as pipeline yaml, external references, etc.
+- `list_triggers`: List triggers in a Harness pipeline
 
 #### Pull Requests Toolset
 
@@ -134,6 +123,23 @@ Toolset Name: `connectors`
 - `list_connector_catalogue`: List the Harness connector catalogue
 - `get_connector_details`: Get details of a specific connector
 - `list_connectors`: List connectors with filtering options
+
+#### Secrets Toolset
+
+Toolset Name: `secrets`
+
+- `list_secrets`: List secrets from Harness with filtering and pagination options.
+- `get_secret`: Get a secret by identifier from Harness
+
+#### Delegate Tokens Toolset
+
+Toolset Name: `delegatetokens`
+
+- `list_delegate_tokens`: List delegate tokens in Harness with filtering and pagination options.
+- `get_delegate_token`: Get a delegate token by name from Harness
+- `create_delegate_token`: Creates a new delegate token in Harness
+- `revoke_delegate_token`: Revokes a delegate token in Harness
+- `delete_delegate_token`: Deletes a revoked delegate token from Harness
 
 #### Repositories Toolset
 
@@ -208,12 +214,6 @@ Toolset Name: `ccm`
 - `get_ccm_estimated_savings`: Get estimated savings information for a cloud account in Harness Cloud Cost Management
 - `get_ccm_commitment_ec2_analysis`: Get AWS EC2 commitment analysis for an account in Harness Cloud Cost Management, including RI/SP commitment spend, utilization breakdown, current savings, estimated annualized savings, and ESR.
 
-#### Database Operations Toolset
-
-Toolset Name: `dbops`
-
-- `get_database_schema_info`: Retrieves metadata about a database schema including its identifier, instance identifier, and database type.
-
 #### Chaos Engineering Toolset
 
 Toolset Name: `chaos`
@@ -260,7 +260,6 @@ Toolset Name: `logs`
 Toolset Name: `templates`
 
 - `list_templates`: List templates at a given scope
-- `intelligent_template_search`: Find the most relevant templates based on a natural language description.
 
 #### Internal Developer Portal Toolset
 
@@ -272,6 +271,12 @@ Toolset Name: `idp`
 - `list_scorecards`: List scorecards in the Harness Internal Developer Portal Catalog
 - `get_score_summary`: Get Score Summary for Scorecards in the Harness Internal Developer Portal Catalog.
 - `get_scores`: Get Scores for Scorecards in the Harness Internal Developer Portal Catalog.
+- `get_scorecard_stats` : Get Stats for Scorecards in the Harness Internal Developer Portal i.e. the scores for all the entities that have this scorecard configured.
+- `get_scorecard_check` : Get details of a specific check configured in a scorecard. A check is a query performed against a data point for a software component which results in either Pass or Fail.
+- `list_scorecard_checks` : List checks in the Harness Internal Developer Portal Catalog. A check is a query performed against a data point for a software component which results in either Pass or Fail.
+- `get_scorecard_check_stats` : Get Stats for checks in the Harness Internal Developer Portal i.e. the status (PASS or FAIL) for all the entities that have a scorecard configured which has this check.
+- `execute_workflow` : Execute a workflow in the Harness Internal Developer Portal Catalog. This tool takes in the entity metadata of the workflow and a set of values to be used for the execution
+- `search_tech_docs` : Searches documentation related to Harness entities in the internal developer portal — including services, APIs, workflows, user groups, and environments — to retrieve information that supports answering or reasoning about those entities. Common examples include debugging issues in a service, understanding an API's configuration, setting up a workflow, managing user groups, or installation steps for a specific environment.
 
 #### Audit Trail Toolset
 
@@ -288,6 +293,33 @@ Toolset Name: `fme`
 - `list_fme_feature_flags`: List feature flags for a specific workspace
 - `get_fme_feature_flag_definition`: Get the definition of a specific feature flag in an environment
 
+#### SEI Toolset
+
+Toolset Name: `sei`
+
+- `sei_productivity_feature_metrics`: Get productivity metrics for a collection
+- `sei_efficiency_lead_time`: Get lead time for a project
+- `sei_deployment_frequency`: Get deployment frequency metrics for a project
+- `sei_change_failure_rate`: Get change failure rate metrics for a project
+- `sei_mttr`: Get Mean Time to Restore metrics for a project
+- `sei_deployment_frequency_drilldown`: Get deployment frequency drilldown data for detailed pipeline executions
+- `sei_change_failure_rate_drilldown`: Get change failure rate drilldown data for detailed deployment records with failure status
+- `sei_get_team`: Get team information by team reference ID
+- `sei_get_teams_list`: Get list of teams with pagination
+- `sei_get_team_integrations`: Get team integrations by team reference ID
+- `sei_get_team_developers`: Get team developers by team reference ID
+- `sei_get_team_integration_filters`: Get team integration filters by team reference ID
+- `sei_get_org_trees`: Get organization trees with pagination
+- `sei_get_org_tree_by_id`: Get a specific organization tree by ID
+- `sei_get_org_tree_efficiency_profile`: Get efficiency profile reference ID for an organization tree
+- `sei_get_org_tree_productivity_profile`: Get productivity profile reference ID for an organization tree
+- `sei_get_org_tree_business_alignment_profile`: Get business alignment profile reference ID for an organization tree
+- `sei_get_org_tree_integrations`: Get integrations associated with an organization tree
+- `sei_get_org_tree_teams`: Get team hierarchy for an organization tree
+- `sei_get_ba_all_profiles`: Get all BA profiles
+- `sei_get_ba_insight_metrics`: Get BA insight metrics
+- `sei_get_ba_insight_summary`: Get BA insight summary
+- `sei_get_ba_drilldown_data`: Get BA drilldown data
 
 ## Prerequisites
 
@@ -328,9 +360,24 @@ go build -o cmd/harness-mcp-server/harness-mcp-server ./cmd/harness-mcp-server
 ```
 
 3. Run the server:
+
+To run in stdio mode:
 ```bash
-HARNESS_API_KEY=your_api_key HARNESS_DEFAULT_ORG_ID=your_org_id HARNESS_DEFAULT_PROJECT_ID=your_project_id ./cmd/harness-mcp-server/harness-mcp-server stdio
+HARNESS_API_KEY="<PAT>" HARNESS_BASE_URL="https://app.harness.io" ./cmd/harness-mcp-server/harness-mcp-server stdio
 ```
+
+Optional environment variables:
+1. HARNESS_DEFAULT_ORG_ID
+2. HARNESS_DEFAULT_PROJECT_ID
+3. HARNESS_TOOLSETS - Comma separated list of toolsets to enable. For e.g. HARNESS_TOOLSETS="pipelines,sei,scs,sto". If not specified, ONLY the default toolset is enabled.
+
+To run in http mode:
+```bash
+HARNESS_API_KEY="<PAT>" HARNESS_BASE_URL="https://app.harness.io" ./cmd/harness-mcp-server/harness-mcp-server http-server
+```
+
+Optional environment variables:
+1. HARNESS_TOOLSETS - Comma separated list of toolsets to enable. For e.g. HARNESS_TOOLSETS="pipelines,sei,scs,sto". If not specified, ONLY the default toolset is enabled.
 
 ### Use Docker Image
 
@@ -339,9 +386,8 @@ Alternatively, you can use the pre-built Docker image:
 
 ```bash
 docker run -i --rm \
-  -e HARNESS_API_KEY=your_api_key \
-  -e HARNESS_BASE_URL=your_base_url \
-  -e HARNESS_LOG_FILE=harness-mcp.log \
+  -e HARNESS_API_KEY="<PAT>" \
+  -e HARNESS_BASE_URL="https://app.harness.io" \
   harness/mcp-server stdio
 ```
 
@@ -349,47 +395,21 @@ Optional environment variables:
 
 1. HARNESS_DEFAULT_ORG_ID
 2. HARNESS_DEFAULT_PROJECT_ID
-3. HARNESS_LOG_FILE (default: harness-mcp.log)
+3. HARNESS_TOOLSETS - Comma separated list of toolsets to enable. For e.g. HARNESS_TOOLSETS="pipelines,sei,scs,sto". If not specified, ONLY the default toolset is enabled.
 
 #### Http mode
-To run the MCP server as a http server locally, the following environment variables must be set:
-
-1. HARNESS_BASE_URL
-2. HARNESS_API_KEY
-
-Build a docker image using:
+Alternatively, you can use the pre-built Docker image and run the server in http-mode locally:
 
 ```bash
-docker build -t harness-mcp-server .
+docker run -i --rm \
+  -e HARNESS_API_KEY="<PAT>" \
+  -e HARNESS_BASE_URL="https://app.harness.io" \
+  harness/mcp-server http-server
 ```
 
-Run the docker image:
+Optional environment variables:
 
-```bash
-docker run -p 8080:8080 -e HARNESS_BASE_URL=https://app.harness.io -e HARNESS_API_KEY=<PAT> -e HARNESS_LOG_FILE=harness-mcp.log harness-mcp-server http-server
-```
-
-### Run On Local Kubernetes cluster: 
-
-A sample `values-local.yaml` file is provided at `chart/values-local.yaml` for local development. To use it:
-
-1. Update the `HARNESS_API_KEY` field under `secrets.default` with your Personal Access Token (PAT):
-
-```yaml
-secrets:
-  default:
-    HARNESS_API_KEY: "<YOUR_PAT>"  # Replace with your actual PAT
-```
-
-2. Run the helm chart from the repository root directory:
-
-```bash
-helm install harness-mcp-server ./chart -f chart/values-local.yaml
-```
-
-3. Access the server at `http://localhost:30080` once the deployment is complete.
-
-You can customize other settings in the values file as needed for your environment.
+1. HARNESS_TOOLSETS - Comma separated list of toolsets to enable. For e.g. HARNESS_TOOLSETS="pipelines,sei,scs,sto". If not specified, ONLY the default toolset is enabled.
 
 ## Integration with AI Assistants
 
@@ -403,8 +423,8 @@ Add the server configuration to your Gemini config file at: `~/.gemini/settings.
   "selectedAuthType": "oauth-personal",
   "mcpServers": {
     "Harness": {
-      "command": "/path/to/harness-mcp-server",
-      "args": ["stdio"],
+      "command": "/path/to/harness-mcp-server",  // ${workspaceFolder}/cmd/harness-mcp-server
+      "args": ["stdio"],  // or ["http-server]
       "env": {
         "HARNESS_API_KEY": "<YOUR_API_KEY>",
         "HARNESS_DEFAULT_ORG_ID": "<YOUR_ORG_ID>",
@@ -442,62 +462,18 @@ On MacOS: `~/Library/Application\ Support/Claude/claude_desktop_config.json`
 On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
 
 <details>
-  <summary>Server Configuration (Local Binary)</summary>
+  <summary>Server Configuration</summary>
   
   ```json
   {
     "mcpServers": {
       "harness": {
-        "command": "/path/to/harness-mcp-server",
-        "args": ["stdio"],
+        "command": "/path/to/harness-mcp-server",  // ${workspaceFolder}/cmd/harness-mcp-server
+        "args": ["stdio"],  // or ["http-server"]
         "env": {
           "HARNESS_API_KEY": "<YOUR_API_KEY>",
           "HARNESS_DEFAULT_ORG_ID": "<YOUR_ORG_ID>",
-          "HARNESS_DEFAULT_PROJECT_ID": "<YOUR_PROJECT_ID>",
-          "HARNESS_BASE_URL": "https://app.harness.io",
-          "HARNESS_LOG_FILE": "harness-mcp.log"
-        }
-      }
-    }
-  }
-  ```
-</details>
-
-<details>
-  <summary>Server Configuration (Docker Image)</summary>
-  
-  ```json
-  {
-    "mcpServers": {
-      "harness": {
-        "args": [
-          "run",
-          "-i",
-          "--rm",
-          "-e",
-          "HARNESS_LOG_FILE",
-          "-e",
-          "HARNESS_API_KEY",
-          "-e",
-          "HARNESS_DEFAULT_ORG_ID",
-          "-e",
-          "HARNESS_DEFAULT_PROJECT_ID",
-          "-e",
-          "HARNESS_TOOLSETS",
-          "-e",
-          "HARNESS_BASE_URL",
-          "docker.io/harness/mcp-server:1.0.0-beta.17",
-          "stdio"
-        ],
-        "command": "docker",
-        "disabledTools": [],
-        "env": {
-          "HARNESS_API_KEY": "<YOUR_API_KEY>",
-          "HARNESS_BASE_URL": "https://app.harness.io",
-          "HARNESS_DEFAULT_ORG_ID": "<YOUR_ORG_ID>",
-          "HARNESS_DEFAULT_PROJECT_ID": "<YOUR_PROJECT_ID>",
-          "HARNESS_TOOLSETS": "all",
-          "HARNESS_LOG_FILE": "harness-mcp.log"
+          "HARNESS_DEFAULT_PROJECT_ID": "<YOUR_PROJECT_ID>"
         }
       }
     }
@@ -513,13 +489,13 @@ Add the server configuration to your Claude config file at: `~/.claude.json`
 {
   "mcpServers": {
     "Harness": {
-      "command": "/path/to/harness-mcp-server",
-      "args": ["stdio"],
+      "command": "/path/to/harness-mcp-server",  // ${workspaceFolder}/cmd/harness-mcp-server
+      "args": ["stdio"],  // or ["http-server"]
       "env": {
         "HARNESS_API_KEY": "<YOUR_API_KEY>",
         "HARNESS_DEFAULT_ORG_ID": "<YOUR_ORG_ID>",
         "HARNESS_DEFAULT_PROJECT_ID": "<YOUR_PROJECT_ID>",
-        "HARNESS_BASE_URL": "https://app.harness.io"
+        "HARNESS_BASE_URL": "<YOUR_BASE_URL>"
       }
     }
   }
@@ -538,41 +514,20 @@ To use the Harness MCP Server with Windsurf:
 {
   "mcpServers": {
     "harness": {
-      "command": "/path/to/harness-mcp-server",
-      "args": ["stdio"],
+      "command": "/path/to/harness-mcp-server",  // ${workspaceFolder}/cmd/harness-mcp-server
+      "args": ["stdio"],  // or ["http-server"]
       "env": {
         "HARNESS_API_KEY": "<YOUR_API_KEY>",
         "HARNESS_DEFAULT_ORG_ID": "<YOUR_ORG_ID>",
         "HARNESS_DEFAULT_PROJECT_ID": "<YOUR_PROJECT_ID>",
-        "HARNESS_BASE_URL": "https://app.harness.io"
+        "HARNESS_BASE_URL": "<YOUR_BASE_URL>"
       }
     }
   }
 }
 ```
 
-### In Http server mode
-
-Add the server config to your launch.json file:
-
-```json
-{
-    "name": "HTTP Server",
-    "type": "go",
-    "request": "launch",
-    "mode": "auto",
-    "program": "${workspaceFolder}/cmd/harness-mcp-server",
-    "args": ["http-server"],
-    "env": {
-        "HARNESS_BASE_URL": "https://app.harness.io",
-        "HARNESS_API_KEY": "<PAT>"
-    }
-}
-```
-
 ### Using Docker Image
-
-> **Note:** The same Docker-based configuration used for Claude Desktop should work for Windsurf as well. You can use either the generic Docker image or a specific versioned image.
 
 ```json
 {
@@ -584,27 +539,21 @@ Add the server config to your launch.json file:
         "-i",
         "--rm",
         "-e",
-        "HARNESS_LOG_FILE",
-        "-e",
         "HARNESS_API_KEY",
         "-e",
         "HARNESS_DEFAULT_ORG_ID",
         "-e",
         "HARNESS_DEFAULT_PROJECT_ID",
         "-e",
-        "HARNESS_TOOLSETS",
-        "-e",
         "HARNESS_BASE_URL",
-        "docker.io/harness/mcp-server:1.0.0-beta.17",
-        "stdio"
+        "harness/mcp-server",
+        "stdio"                    // or "http-server"
       ],
       "env": {
         "HARNESS_API_KEY": "<YOUR_API_KEY>",
         "HARNESS_DEFAULT_ORG_ID": "<YOUR_ORG_ID>",
         "HARNESS_DEFAULT_PROJECT_ID": "<YOUR_PROJECT_ID>",
-        "HARNESS_BASE_URL": "https://app.harness.io",
-        "HARNESS_TOOLSETS": "all",
-        "HARNESS_LOG_FILE": "harness-mcp.log"
+        "HARNESS_BASE_URL": "<YOUR_BASE_URL>"
       }
     }
   }
@@ -622,13 +571,13 @@ To use the Harness MCP Server with Amazon Q Developer CLI:
 {
   "mcpServers": {
     "harness": {
-      "command": "/path/to/harness-mcp-server",
-      "args": ["stdio"],
+      "command": "/path/to/harness-mcp-server",  // ${workspaceFolder}/cmd/harness-mcp-server
+      "args": ["stdio"],  // or ["http-server"]
       "env": {
         "HARNESS_API_KEY": "<YOUR_API_KEY>",
         "HARNESS_DEFAULT_ORG_ID": "<YOUR_ORG_ID>",
         "HARNESS_DEFAULT_PROJECT_ID": "<YOUR_PROJECT_ID>",
-        "HARNESS_BASE_URL": "https://app.harness.io"
+        "HARNESS_BASE_URL": "<YOUR_BASE_URL>"
       }
     }
   }
@@ -641,8 +590,8 @@ To use the Harness MCP Server with Amazon Q Developer CLI:
 {
   "mcpServers": {
     "harness": {
-      "command": "/path/to/harness-mcp-server",
-      "args": ["stdio"],
+      "command": "/path/to/harness-mcp-server",  // ${workspaceFolder}/cmd/harness-mcp-server
+      "args": ["stdio"],  // or ["http-server"]
       "env": {
         "HARNESS_API_KEY": "your_api_key",
         "HARNESS_DEFAULT_ORG_ID": "your_org_id",
@@ -679,13 +628,13 @@ To use the Harness MCP Server with Amazon Q Developer CLI:
           "-e",
           "HARNESS_BASE_URL",
           "harness/mcp-server",
-          "stdio"
+          "stdio"       // or "http-server"
         ],
         "env": {
           "HARNESS_API_KEY": "<YOUR_API_KEY>",
           "HARNESS_DEFAULT_ORG_ID": "<YOUR_ORG_ID>",
           "HARNESS_DEFAULT_PROJECT_ID": "<YOUR_PROJECT_ID>",
-          "HARNESS_BASE_URL": "https://app.harness.io"
+          "HARNESS_BASE_URL": "<YOUR_BASE_URL>"
         }
       }
     }
@@ -802,10 +751,8 @@ Files downloaded to : /Users/testuser/log-files/logs1/logs-<YOUR_PLAN_EXECUTION_
 The Harness MCP Server supports the following command line arguments:
 
 - `--toolsets`: Comma-separated list of tool groups to enable, if the list is empty or flag is not set, only default toolset is enabled. Use `--toolsets=all` to enable all available toolsets. Note: This flag is only effective when `--enable-license` is false (the default).
-- `--enable-license`: Enable license validation and module-based toolset management (default is false, i.e OSS version). When set to true, toolsets are managed through modules.
-- `--enable-modules`: Comma-separated list of modules to enable (only used when `--enable-license` is true). Use `--enable-modules=all` to enable all available modules, or specify individual modules like `--enable-modules=CORE,CI,CD`.
 - `--read-only`: Run the server in read-only mode
-- `--log-file`: Path to log file for debugging (default: "harness-mcp.log")
+- `--log-file`: Path to log file for debugging
 - `--log-level`: Set the logging level (debug, info, warn, error)
 - `--version`: Show version information
 - `--help`: Show help message
@@ -820,38 +767,15 @@ Environment variables are prefixed with `HARNESS_`:
 - `HARNESS_API_KEY`: Harness API key (required) - Account ID is automatically extracted from the API key
 - `HARNESS_DEFAULT_ORG_ID`: Default Harness organization ID (optional, if not specified it would need to be passed in the request if it's required for that operation)
 - `HARNESS_DEFAULT_PROJECT_ID`: Default Harness project ID (optional, if not specified it would need to be passed in the request if it's required for that operation)
-- `HARNESS_TOOLSETS`: Comma-separated list of toolsets to enable (default: "all")
+- `HARNESS_TOOLSETS`: Comma-separated list of toolsets to enable (default: "default")
 - `HARNESS_READ_ONLY`: Set to "true" to run in read-only mode
-- `HARNESS_LOG_FILE`: Path to log file (default: "harness-mcp.log")
+- `HARNESS_LOG_FILE`: Path to log file
 - `HARNESS_LOG_LEVEL`: Set the logging level (debug, info, warn, error)
 - `HARNESS_BASE_URL`: Base URL for Harness (default: "https://app.harness.io")
 
 ### Authentication
 
 The server uses a Harness API key for authentication. This can be set via the `HARNESS_API_KEY` environment variable.
-
-### Using the create_follow_up_prompt Tool to generate actionable prompt events
-
-The `create_follow_up_prompt` tool allows you to generate actionable prompt events that appear as buttons in the UI. These buttons can navigate users to specific pages within the Harness platform.
-
-Here's how to use it:
-
-```json
-{
-  "actions": [
-    {
-      "text": "Button Text",
-      "action": "OPEN_ENTITY_NEW_TAB",
-      "data": {
-        "pageName": "PAGE_NAME",
-        "metadata": {
-          "<KEY>": "<VALUE>"
-        }
-      }
-    }
-  ]
-}
-```
 
 #### Parameters:
 
@@ -874,35 +798,6 @@ If you provide an array of strings instead of the actions object, these strings 
 ```go
 // Add quick prompts to the message box
 quickPrompts := `["Show me pipeline details", "List recent executions", "Analyze performance"]`
-```
-
-## Notes for Local Testing
-
-There might be certain tools that are not added in external mode or vice-versa, for local testing, following changes in `pkg/harness/tools.go` need to be done in mcp-server code to enable that certain tool in both internal and external modes.
-
-```
-baseURL := "https://localhost:8000"
-secret := <SERVICE_SECRET>
-```
-
-### Example
-
-```
-// registerGenai registers the genai toolset
-func registerGenai(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-
-	// Determine the base URL and secret for genai service
-	baseURL := "http://localhost:8000"
-	secret := <GENAI_SECRET>
-
-	// Create base client for genai with the default timeout
-	c, err := CreateClient(baseURL, config, secret, defaultGenaiTimeout)
-	if err != nil {
-		return err
-	}
-  .
-  .
-  .
 ```
 
 ## Debugging
