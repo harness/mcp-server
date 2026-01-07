@@ -47,6 +47,7 @@ func convertTargetNamesToIds(ctx context.Context, targetNamesStr string, filters
 		"target_names", targetNamesStr)
 	return ""
 }
+
 // convertScannerNamesToIds converts comma-separated scanner names to comma-separated scanner tool IDs
 func convertScannerNamesToIds(ctx context.Context, scannerNamesStr string, filters *generated.FrontendAllIssuesFiltersResponseBody) string {
 	if scannerNamesStr == "" || filters == nil || len(filters.LatestBaselineScans) == 0 {
@@ -101,7 +102,6 @@ func fetchFilters(ctx context.Context, scope dto.Scope, client *generated.Client
 	}
 	return resp.JSON200, nil
 }
-
 
 // StoAllIssuesListTool returns a tool for listing all issues from the STO Frontend.
 func StoAllIssuesListTool(config *config.McpServerConfig, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {

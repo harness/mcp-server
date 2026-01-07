@@ -279,4 +279,3 @@ func CreateCustomLicenseClientWithContext(ctx context.Context, config *config.Mc
 	}
 	return DefaultProvider.CreateClient(ctx, config, licenseBaseURL, baseURL, path, secret)
 }
-

@@ -4,10 +4,10 @@ import (
 	"strings"
 
 	config "github.com/harness/mcp-server/common"
-	"github.com/harness/mcp-server/common/pkg/toolsets"
+	"github.com/harness/mcp-server/common/client"
 	commonModules "github.com/harness/mcp-server/common/pkg/modules"
 	"github.com/harness/mcp-server/common/pkg/tools"
-	"github.com/harness/mcp-server/common/client"
+	"github.com/harness/mcp-server/common/pkg/toolsets"
 )
 
 // ExtendedCoreModule extends the common CoreModule with internal-only toolsets

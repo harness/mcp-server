@@ -264,7 +264,6 @@ func ListExecutionsTool(config *config.McpServerConfig, client *client.PipelineS
 				data.Data.Content[i].FormatTimestamps()
 			}
 
-
 			r, err := json.Marshal(data)
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal pipeline executions list: %w", err)

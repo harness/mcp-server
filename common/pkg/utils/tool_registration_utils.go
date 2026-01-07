@@ -8,8 +8,7 @@ import (
 
 	config "github.com/harness/mcp-server/common"
 	licenseFactory "github.com/harness/mcp-server/common/pkg/license"
-	"github.com/harness/mcp-server/common/pkg/toolsets"	
-
+	"github.com/harness/mcp-server/common/pkg/toolsets"
 )
 
 type LicenseInfo struct {

@@ -15,14 +15,15 @@ import (
 	"github.com/harness/mcp-server/common/pkg"
 	"github.com/harness/mcp-server/common/pkg/prompts"
 	"github.com/harness/mcp-server/common/pkg/types/enum"
-	_ "github.com/harness/mcp-server/client"
-	"github.com/harness/mcp-server/pkg/middleware"
-	_ "github.com/harness/mcp-server/pkg/modules"
 	tools "github.com/harness/mcp-server/pkg"
+	"github.com/harness/mcp-server/pkg/middleware"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	_ "github.com/harness/mcp-server/client"
+	_ "github.com/harness/mcp-server/pkg/modules"
 )
 
 var version = "0.1.0"
@@ -78,10 +79,10 @@ var (
 			}
 
 			cfg := config.McpServerConfig{
-				Version:       version,
-				ReadOnly:      viper.GetBool("read_only"),
-				Debug:         viper.GetBool("debug"),
-				Transport:     transportType,
+				Version:   version,
+				ReadOnly:  viper.GetBool("read_only"),
+				Debug:     viper.GetBool("debug"),
+				Transport: transportType,
 				HTTP: struct {
 					Port int    `envconfig:"MCP_HTTP_PORT" default:"8080"`
 					Path string `envconfig:"MCP_HTTP_PATH" default:"/mcp"`
