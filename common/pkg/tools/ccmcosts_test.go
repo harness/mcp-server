@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/harness/harness-mcp/client"
-	"github.com/harness/harness-mcp/client/dto"
-	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
-	"github.com/harness/harness-mcp/pkg/harness/event"
+	config "github.com/harness/mcp-server/common"
+	"github.com/harness/mcp-server/common/client"
+	"github.com/harness/mcp-server/common/client/dto"
+	"github.com/harness/mcp-server/common/pkg/event"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,7 +16,7 @@ import (
 
 func TestTranslateToCostCategoriesCostTargetsTool(t *testing.T) {
 	// Setup
-	cfg := &config.Config{
+	cfg := &config.McpServerConfig{
 		AccountID: "test-account-123",
 	}
 	mockClient := &client.CloudCostManagementService{}
