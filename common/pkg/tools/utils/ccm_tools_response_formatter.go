@@ -17,4 +17,3 @@ var DefaultCCMResponseFormatter CCMResponseFormatter
 func SetCCMResponseFormatter(formatter CCMResponseFormatter) {
 	DefaultCCMResponseFormatter = formatter
 }
-

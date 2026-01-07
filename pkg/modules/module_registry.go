@@ -2,8 +2,8 @@ package modules
 
 import (
 	config "github.com/harness/mcp-server/common"
-	"github.com/harness/mcp-server/common/pkg/toolsets"
 	commonModules "github.com/harness/mcp-server/common/pkg/modules"
+	"github.com/harness/mcp-server/common/pkg/toolsets"
 )
 
 // NewModuleRegistry creates a new module registry with all available modules
@@ -22,7 +22,7 @@ func NewModuleRegistry(config *config.McpServerConfig, tsg *toolsets.ToolsetGrou
 			commonModules.NewCCMModule(config, tsg),
 			commonModules.NewIDPModule(config, tsg),
 			commonModules.NewHARModule(config, tsg),
-			commonModules.NewFMEModule(config,tsg),
+			commonModules.NewFMEModule(config, tsg),
 			NewACMModule(config, tsg),
 		},
 		Config:           config,

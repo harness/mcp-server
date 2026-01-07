@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"log/slog"
 
+	config "github.com/harness/mcp-server/common"
 	"github.com/harness/mcp-server/common/client"
 	"github.com/harness/mcp-server/common/client/dto"
-	"github.com/harness/mcp-server/common"
 	"github.com/harness/mcp-server/common/pkg/common"
 	utils "github.com/harness/mcp-server/common/pkg/tools/utils"
 	"github.com/mark3labs/mcp-go/mcp"

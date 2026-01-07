@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"log/slog"
 
-	commonDto "github.com/harness/mcp-server/common/client/dto"
-	commonClient "github.com/harness/mcp-server/common/client"
 	dto "github.com/harness/mcp-server/client/dto"
+	commonClient "github.com/harness/mcp-server/common/client"
+	commonDto "github.com/harness/mcp-server/common/client/dto"
 )
 
 const (

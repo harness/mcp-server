@@ -11,10 +11,11 @@ import (
 )
 
 type LicenseInfo struct {
-	AccountID string
+	AccountID      string
 	ModuleLicenses map[string]bool
-	IsValid bool
+	IsValid        bool
 }
+
 // Mock tool handler for testing
 func mockToolHandler() server.ToolHandlerFunc {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {

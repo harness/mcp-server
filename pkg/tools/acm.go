@@ -5,12 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 
+	client "github.com/harness/mcp-server/client"
+	"github.com/harness/mcp-server/client/dto"
 	config "github.com/harness/mcp-server/common"
 	commonScopeUtils "github.com/harness/mcp-server/common/pkg/common"
 	commonTools "github.com/harness/mcp-server/common/pkg/tools"
-
-	client "github.com/harness/mcp-server/client"
-	"github.com/harness/mcp-server/client/dto"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
