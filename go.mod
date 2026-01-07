@@ -7,7 +7,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/harness/harness-go-sdk v0.6.1
 	github.com/hashicorp/go-retryablehttp v0.7.1
-	github.com/mark3labs/mcp-go v0.43.0
+	github.com/mark3labs/mcp-go v0.44.0-beta.1
 	github.com/oapi-codegen/runtime v1.1.2
 	github.com/spf13/cobra v1.10.1
 	github.com/spf13/viper v1.21.0
