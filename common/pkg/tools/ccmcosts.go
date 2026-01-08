@@ -686,7 +686,7 @@ func processCoverageFollowUpPrompts(groupBy string) (mcp.Content, error) {
 }
 
 func TranslateToCostCategoriesCostTargetsTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("translate_to_ccm_cost_categories_cost_targets",
+	return mcp.NewTool("ccm_translate_to_cost_categories_cost_targets",
 			mcp.WithDescription("Translate to cost category grouping to system specific cost targets"),
 			mcp.WithObject(
 				"cost_target_groupings",
@@ -702,9 +702,12 @@ func TranslateToCostCategoriesCostTargetsTool(config *config.McpServerConfig, cl
 								"type":        "string",
 								"description": "Display title for the grouping (e.g., 'Production Environments')",
 							},
-							"key": map[string]any{
-								"type":        "string",
-								"description": "Unique identifier key for the grouping (e.g., 'production')",
+							"keys": map[string]any{
+								"type":        "array",
+								"description": "List of unique identifier key for the grouping (e.g., 'production')",
+								"items": map[string]any{
+									"type": "string",
+								},
 							},
 							"values": map[string]any{
 								"type":        "array",
@@ -714,7 +717,7 @@ func TranslateToCostCategoriesCostTargetsTool(config *config.McpServerConfig, cl
 								},
 							},
 						},
-						"required": []string{"title", "key", "values"},
+						"required": []string{"title", "keys", "values"},
 					},
 				}),
 			),
