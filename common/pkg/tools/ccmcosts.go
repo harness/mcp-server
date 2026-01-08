@@ -687,7 +687,7 @@ func processCoverageFollowUpPrompts(groupBy string) (mcp.Content, error) {
 
 func TranslateToCostCategoriesCostTargetsTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("ccm_translate_to_cost_categories_cost_targets",
-			mcp.WithDescription("Translate to cost category grouping to system specific cost targets"),
+			mcp.WithDescription("Translate cost category grouping to system specific cost targets"),
 			mcp.WithObject(
 				"cost_target_groupings",
 				mcp.Required(),
