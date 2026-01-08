@@ -18,6 +18,10 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+const (
+	CCMCostCategoryCostTargetsEventType = "cost_category_cost_targets"
+)
+
 // GetCcmOverview creates a tool for getting a ccm overview from an account
 func GetCcmOverviewTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	now := time.Now()
@@ -679,4 +683,105 @@ func processCoverageFollowUpPrompts(groupBy string) (mcp.Content, error) {
 	}
 
 	return promptResource, nil
+}
+
+func TranslateToCostCategoriesCostTargetsTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("ccm_translate_to_cost_categories_cost_targets",
+			mcp.WithDescription("Translate cost category grouping to system specific cost targets"),
+			mcp.WithObject(
+				"cost_target_groupings",
+				mcp.Required(),
+				mcp.Description("Array of cost target groupings for cost category creation"),
+				mcp.Properties(map[string]any{
+					"type":        "array",
+					"description": "List of environment groupings with their associated values",
+					"items": map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"title": map[string]any{
+								"type":        "string",
+								"description": "Display title for the grouping (e.g., 'Production Environments')",
+							},
+							"keys": map[string]any{
+								"type":        "array",
+								"description": "List of unique identifier key for the grouping (e.g., 'production')",
+								"items": map[string]any{
+									"type": "string",
+								},
+							},
+							"values": map[string]any{
+								"type":        "array",
+								"description": "List of environment names that belong to this grouping",
+								"items": map[string]any{
+									"type": "string",
+								},
+							},
+						},
+						"required": []string{"title", "keys", "values"},
+					},
+				}),
+			),
+			common.WithScope(config, false),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			costTargetGroupingsInput, ok := request.GetArguments()["cost_target_groupings"]
+			if !ok {
+				return mcp.NewToolResultError("Error extracting cost target groupings from request. Check JSON format"), nil
+			}
+			var response []dto.CCMCostTarget
+			if costTargetGroupingsMap, ok := costTargetGroupingsInput.(map[string]interface{}); ok {
+				costTargetGroupings, ok := costTargetGroupingsMap["cost_target_groupings"].([]interface{})
+				if !ok {
+				}
+				for _, costTargetGrouping := range costTargetGroupings {
+					if costTargetGroupingMap, ok := costTargetGrouping.(map[string]interface{}); ok {
+						title, ok := costTargetGroupingMap["title"].(string)
+						if !ok {
+							return mcp.NewToolResultError("Error extracting title from cost target grouping"), nil
+						}
+						keys, ok := costTargetGroupingMap["keys"].([]string)
+						if !ok {
+							return mcp.NewToolResultError("Error extracting key from cost target grouping"), nil
+						}
+						values, ok := costTargetGroupingMap["values"].([]string)
+						if !ok {
+							return mcp.NewToolResultError("Error extracting values from cost target grouping"), nil
+						}
+						var rules []dto.CCMRule
+						for _, key := range keys {
+							rules = append(rules, dto.CCMRule{
+								ViewConditions: []interface{}{
+									map[string]interface{}{
+										"viewField": map[string]interface{}{
+											"fieldId":        "labels.value",
+											"fieldName":      key,
+											"identifier":     "LABEL_V2", // Labels v2 support ONLY.
+											"identifierName": "Label V2",
+										},
+										"viewOperator": "IN", // Extend support for other operators.
+										"values":       values,
+									},
+								},
+							})
+						}
+						response = append(response, dto.CCMCostTarget{
+							Name:  title,
+							Rules: rules,
+						})
+					}
+				}
+			}
+			costCategoryCostTargetsEvent := event.NewCustomEvent(CCMCostCategoryCostTargetsEventType, response, event.WithContinue(true))
+			responseContents := []mcp.Content{}
+			// Create embedded resources for the event
+			eventResource, err := costCategoryCostTargetsEvent.CreateEmbeddedResource()
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			} else {
+				responseContents = append(responseContents, eventResource)
+			}
+			return &mcp.CallToolResult{
+				Content: responseContents,
+			}, nil
+		}
 }
