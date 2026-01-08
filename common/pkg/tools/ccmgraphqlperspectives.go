@@ -474,6 +474,80 @@ func CcmPerspectiveFilterValuesTool(config *config.McpServerConfig, client *clie
 		}
 }
 
+func CcmListLabelsV2KeysTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("ccm_list_labelsv2_keys",
+			mcp.WithDescription(ccmcommons.CCMListLabelsV2KeysDescription),
+			mcp.WithNumber("limit",
+				mcp.DefaultNumber(1000),
+				mcp.Max(10000),
+				mcp.Description("Maximum number of label keys to return"),
+			),
+			mcp.WithNumber("offset",
+				mcp.DefaultNumber(0),
+				mcp.Description("Offset for pagination"),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			// Get account ID
+			accountId, err := getAccountID(ctx, config, request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// Hardcode time filter to match UI behavior
+			timeFilter := dto.TimeFilterPreviousToCurrentMonth
+
+			// Get limit and offset
+			limit := getLimitWithDefault(request, 1000)
+			offset := getOffset(request)
+
+			// Get scope
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// Build options
+			params := &dto.CCMListLabelsV2KeysOptions{
+				AccountId:  accountId,
+				TimeFilter: timeFilter,
+				Limit:      limit,
+				Offset:     offset,
+			}
+
+			// Call client method
+			data, err := client.ListLabelsV2Keys(ctx, scope, params)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// Extract keys from the response
+			keys := []string{}
+			if data != nil && data.Data.PerspectiveFilters.Values != nil {
+				keys = data.Data.PerspectiveFilters.Values
+			}
+
+			responseContents := []mcp.Content{}
+
+			// Create custom event with the list of keys
+			labelsKeysEvent := event.NewCustomEvent("ccm_cost_category_key_values_event", map[string]any{
+				"keys": keys,
+			}, event.WithContinue(true))
+
+			// Create embedded resource for the event
+			eventResource, err := labelsKeysEvent.CreateEmbeddedResource()
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			} else {
+				responseContents = append(responseContents, eventResource)
+			}
+
+			return &mcp.CallToolResult{
+				Content: responseContents,
+			}, nil
+		}
+}
+
 // ValidatePerspectiveFilterValuesTool creates a tool for validating filter values for specific field types
 func CcmPerspectiveFilterValuesToolEvent(config *config.McpServerConfig) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("ccm_perspective_filter_values_event",
@@ -736,18 +810,22 @@ func getLimit(request mcp.CallToolRequest) int32 {
 }
 
 func getLimitWithDefault(request mcp.CallToolRequest, defaultValue int32) int32 {
-	limit, err := OptionalParam[int32](request, "limit")
-	if err != nil || limit == 0 {
-		limit = defaultValue
+	// Parse as float64 (JSON number type) then convert to int32
+	limitFloat, err := OptionalParam[float64](request, "limit")
+	if err != nil {
+		return defaultValue
 	}
-	return limit
+	if limitFloat == 0 {
+		return defaultValue
+	}
+	return int32(limitFloat)
 }
 
 func getOffset(request mcp.CallToolRequest) int32 {
-	offset, err := OptionalParam[int32](request, "offset")
-
+	// Parse as float64 (JSON number type) then convert to int32
+	offsetFloat, err := OptionalParam[float64](request, "offset")
 	if err != nil {
-		offset = defaultOffset
+		return defaultOffset
 	}
-	return offset
+	return int32(offsetFloat)
 }

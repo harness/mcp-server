@@ -1,6 +1,8 @@
 package modules
 
 import (
+	"time"
+
 	config "github.com/harness/mcp-server/common"
 	"github.com/harness/mcp-server/common/client"
 	"github.com/harness/mcp-server/common/pkg/tools"
@@ -63,14 +65,16 @@ func (m *CCMModule) IsDefault() bool {
 
 func RegisterCloudCostManagement(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 
-	// Create base client for CCM
-	nextGenCli, err := DefaultClientProvider.CreateClient(config, "nextgen")
+	// CCM operations (especially perspective grid queries) can take longer to process,
+	// so we increase timeout to 30 seconds to match other modules
+	customTimeout := 30 * time.Second
+	nextGenCli, err := DefaultClientProvider.CreateClient(config, "nextgen", customTimeout)
 	if err != nil {
 		return err
 	}
 
 	// Create base client for CCM
-	ngManCli, err := DefaultClientProvider.CreateClient(config, "ngMan")
+	ngManCli, err := DefaultClientProvider.CreateClient(config, "ngMan", customTimeout)
 	if err != nil {
 		return err
 	}
@@ -81,7 +85,7 @@ func RegisterCloudCostManagement(config *config.McpServerConfig, tsg *toolsets.T
 	}
 
 	// Create base client for CCM
-	commOrchClient, err := DefaultClientProvider.CreateClient(config, "commOrch")
+	commOrchClient, err := DefaultClientProvider.CreateClient(config, "commOrch", customTimeout)
 	if err != nil {
 		return err
 	}
@@ -112,6 +116,7 @@ func RegisterCloudCostManagement(config *config.McpServerConfig, tsg *toolsets.T
 			toolsets.NewServerTool(tools.CcmMetadataTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.CcmPerspectiveRecommendationsTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.CcmPerspectiveFilterValuesTool(config, ccmClient)),
+			toolsets.NewServerTool(tools.CcmListLabelsV2KeysTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.CcmPerspectiveFilterValuesToolEvent(config)),
 			toolsets.NewServerTool(tools.ListCcmRecommendationsTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.ListCcmRecommendationsByResourceTypeTool(config, ccmClient)),

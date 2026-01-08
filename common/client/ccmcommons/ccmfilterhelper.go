@@ -179,6 +179,13 @@ func GetTimeRangeFromFilter(filter string, now time.Time) (start, end time.Time)
 	case dto.TimeFilterLast12Months:
 		start = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, -12, 0)
 		end = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).Add(-time.Nanosecond)
+	case dto.TimeFilterPreviousToCurrentMonth:
+		// Start: First second of the first day of the previous month
+		firstOfThisMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+		start = firstOfThisMonth.AddDate(0, -1, 0)
+		// End: Last second of the last day of the current month
+		firstOfNextMonth := firstOfThisMonth.AddDate(0, 1, 0)
+		end = firstOfNextMonth.Add(-time.Nanosecond)
 	default:
 		start = now
 	}
@@ -383,4 +390,29 @@ func BuildOutputFieldsMap() map[string]map[string]any {
 		}
 	}
 	return result
+}
+
+// BuildLabelsV2KeysFilters builds the filters specifically for fetching labelsV2 keys
+func BuildLabelsV2KeysFilters(options *dto.CCMListLabelsV2KeysOptions) []map[string]any {
+	filters := []map[string]any{}
+
+	// Add time filters (no perspective filter - this is account-wide)
+	filters = append(filters, BuildTimeFilters(options.TimeFilter)...)
+
+	// Add labelsV2 key filter with empty values to get all keys
+	// Based on the cURL request, we use "labels.key" with identifier "LABEL_V2"
+	labelKeyFilter := map[string]any{
+		"idFilter": map[string]any{
+			"field": map[string]any{
+				"fieldId":    "labels.key",
+				"fieldName":  "",
+				"identifier": "LABEL_V2",
+			},
+			"operator": "IN",
+			"values":   []string{}, // Empty array means fetch all keys
+		},
+	}
+	filters = append(filters, labelKeyFilter)
+
+	return filters
 }
