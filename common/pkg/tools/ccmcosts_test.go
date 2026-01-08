@@ -25,13 +25,13 @@ func TestTranslateToCostCategoriesCostTargetsTool(t *testing.T) {
 	t.Run("Tool Creation", func(t *testing.T) {
 		assert.NotNil(t, tool, "Tool should not be nil")
 		assert.NotNil(t, handler, "Handler should not be nil")
-		assert.Equal(t, "translate_to_ccm_cost_categories_cost_targets", tool.Name, "Tool name should match")
+		assert.Equal(t, "ccm_translate_to_cost_categories_cost_targets", tool.Name, "Tool name should match")
 		assert.NotEmpty(t, tool.Description, "Tool should have a description")
 	})
 	t.Run("Valid Cost Target Groupings - Single Group", func(t *testing.T) {
 		ctx := context.Background()
 		request := mcp.CallToolRequest{}
-		request.Params.Name = "translate_to_ccm_cost_categories_cost_targets"
+		request.Params.Name = "ccm_translate_to_cost_categories_cost_targets"
 		request.Params.Arguments = map[string]interface{}{
 			"cost_target_groupings": map[string]interface{}{
 				"cost_target_groupings": []interface{}{
@@ -74,7 +74,7 @@ func TestTranslateToCostCategoriesCostTargetsTool(t *testing.T) {
 	t.Run("Valid Cost Target Groupings - Multiple Groups", func(t *testing.T) {
 		ctx := context.Background()
 		request := mcp.CallToolRequest{}
-		request.Params.Name = "translate_to_ccm_cost_categories_cost_targets"
+		request.Params.Name = "ccm_translate_to_cost_categories_cost_targets"
 		request.Params.Arguments = map[string]interface{}{
 			"cost_target_groupings": map[string]interface{}{
 				"cost_target_groupings": []interface{}{
@@ -111,7 +111,7 @@ func TestTranslateToCostCategoriesCostTargetsTool(t *testing.T) {
 	t.Run("Valid Cost Target Groupings - Multiple Keys", func(t *testing.T) {
 		ctx := context.Background()
 		request := mcp.CallToolRequest{}
-		request.Params.Name = "translate_to_ccm_cost_categories_cost_targets"
+		request.Params.Name = "ccm_translate_to_cost_categories_cost_targets"
 		request.Params.Arguments = map[string]interface{}{
 			"cost_target_groupings": map[string]interface{}{
 				"cost_target_groupings": []interface{}{
@@ -153,7 +153,7 @@ func TestTranslateToCostCategoriesCostTargetsTool(t *testing.T) {
 	t.Run("Missing cost_target_groupings Parameter", func(t *testing.T) {
 		ctx := context.Background()
 		request := mcp.CallToolRequest{}
-		request.Params.Name = "translate_to_ccm_cost_categories_cost_targets"
+		request.Params.Name = "ccm_translate_to_cost_categories_cost_targets"
 		request.Params.Arguments = map[string]interface{}{}
 		result, err := handler(ctx, request)
 		require.NoError(t, err, "Handler should not return error")
@@ -166,7 +166,7 @@ func TestTranslateToCostCategoriesCostTargetsTool(t *testing.T) {
 	t.Run("Invalid Type for cost_target_groupings", func(t *testing.T) {
 		ctx := context.Background()
 		request := mcp.CallToolRequest{}
-		request.Params.Name = "translate_to_ccm_cost_categories_cost_targets"
+		request.Params.Name = "ccm_translate_to_cost_categories_cost_targets"
 		request.Params.Arguments = map[string]interface{}{
 			"cost_target_groupings": "invalid-string",
 		}
@@ -178,7 +178,7 @@ func TestTranslateToCostCategoriesCostTargetsTool(t *testing.T) {
 	t.Run("Missing Title in Grouping", func(t *testing.T) {
 		ctx := context.Background()
 		request := mcp.CallToolRequest{}
-		request.Params.Name = "translate_to_ccm_cost_categories_cost_targets"
+		request.Params.Name = "ccm_translate_to_cost_categories_cost_targets"
 		request.Params.Arguments = map[string]interface{}{
 			"cost_target_groupings": map[string]interface{}{
 				"cost_target_groupings": []interface{}{
@@ -201,7 +201,7 @@ func TestTranslateToCostCategoriesCostTargetsTool(t *testing.T) {
 	t.Run("Missing Keys in Grouping", func(t *testing.T) {
 		ctx := context.Background()
 		request := mcp.CallToolRequest{}
-		request.Params.Name = "translate_to_ccm_cost_categories_cost_targets"
+		request.Params.Name = "ccm_translate_to_cost_categories_cost_targets"
 		request.Params.Arguments = map[string]interface{}{
 			"cost_target_groupings": map[string]interface{}{
 				"cost_target_groupings": []interface{}{
@@ -224,7 +224,7 @@ func TestTranslateToCostCategoriesCostTargetsTool(t *testing.T) {
 	t.Run("Missing Values in Grouping", func(t *testing.T) {
 		ctx := context.Background()
 		request := mcp.CallToolRequest{}
-		request.Params.Name = "translate_to_ccm_cost_categories_cost_targets"
+		request.Params.Name = "ccm_translate_to_cost_categories_cost_targets"
 		request.Params.Arguments = map[string]interface{}{
 			"cost_target_groupings": map[string]interface{}{
 				"cost_target_groupings": []interface{}{
@@ -247,7 +247,7 @@ func TestTranslateToCostCategoriesCostTargetsTool(t *testing.T) {
 	t.Run("Empty cost_target_groupings Array", func(t *testing.T) {
 		ctx := context.Background()
 		request := mcp.CallToolRequest{}
-		request.Params.Name = "translate_to_ccm_cost_categories_cost_targets"
+		request.Params.Name = "ccm_translate_to_cost_categories_cost_targets"
 		request.Params.Arguments = map[string]interface{}{
 			"cost_target_groupings": map[string]interface{}{
 				"cost_target_groupings": []interface{}{},
@@ -271,7 +271,7 @@ func TestTranslateToCostCategoriesCostTargetsTool(t *testing.T) {
 	t.Run("Rule Structure Validation", func(t *testing.T) {
 		ctx := context.Background()
 		request := mcp.CallToolRequest{}
-		request.Params.Name = "translate_to_ccm_cost_categories_cost_targets"
+		request.Params.Name = "ccm_translate_to_cost_categories_cost_targets"
 		request.Params.Arguments = map[string]interface{}{
 			"cost_target_groupings": map[string]interface{}{
 				"cost_target_groupings": []interface{}{
@@ -316,7 +316,7 @@ func TestTranslateToCostCategoriesCostTargetsTool(t *testing.T) {
 	t.Run("Event Properties Validation", func(t *testing.T) {
 		ctx := context.Background()
 		request := mcp.CallToolRequest{}
-		request.Params.Name = "translate_to_ccm_cost_categories_cost_targets"
+		request.Params.Name = "ccm_translate_to_cost_categories_cost_targets"
 		request.Params.Arguments = map[string]interface{}{
 			"cost_target_groupings": map[string]interface{}{
 				"cost_target_groupings": []interface{}{
