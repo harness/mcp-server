@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -483,13 +482,10 @@ func (c *Client) V1GetSnapshotObjectNames(ctx context.Context, org OrgParam, pro
 		return nil, err
 	}
 	req = req.WithContext(ctx)
-	slog.Info("GetSnapshotObjectNames called", req)
 	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
 		return nil, err
 	}
 	t, err := c.Client.Do(req)
-	slog.Info("GetSnapshotObjectNames Response", t)
-	slog.Info("GetSnapshotObjectNames error", err)
 	return t, err
 }
 
