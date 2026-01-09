@@ -213,6 +213,9 @@ Toolset Name: `ccm`
 Toolset Name: `dbops`
 
 - `get_database_schema_info`: Retrieves metadata about a database schema including its identifier, instance identifier, and database type.
+- `get_snapshot_object_names`: Retrieves the list of object names (e.g., tables) from a database snapshot for a specific object type.
+- `get_snapshot_object_values`: Retrieves the complete JSON metadata of specified objects (columns, constraints, indexes, etc.) from a database snapshot.
+- `generate_db_changeset`: Generates database changesets (Liquibase format) based on prompt and database type, with optional table metadata context.
 
 #### Chaos Engineering Toolset
 
