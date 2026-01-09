@@ -142,9 +142,6 @@ func initLicenseValidation(ctx context.Context, config *config.Config) (*License
 			slog.InfoContext(ctx, "Account license details",
 				"accountId", accountLicense.Data.AccountId,
 				"licenseCount", len(licenseInfo.ModuleLicenses))
-			slog.InfoContext(ctx, "Account license details",
-				"accountId", accountLicense.Data.AccountId,
-				"licenseInfo", licenseInfo)
 		}
 	}
 
