@@ -483,13 +483,13 @@ func (c *Client) V1GetSnapshotObjectNames(ctx context.Context, org OrgParam, pro
 		return nil, err
 	}
 	req = req.WithContext(ctx)
-	slog.Info("GetSnapshotObjectNames called", req)
+	slog.Info("GetSnapshotObjectNames called", "req", req)
 	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
 		return nil, err
 	}
 	t, err := c.Client.Do(req)
-	slog.Info("GetSnapshotObjectNames Response", t)
-	slog.Info("GetSnapshotObjectNames error", err)
+	slog.Info("GetSnapshotObjectNames Response", "response", t)
+	slog.Info("GetSnapshotObjectNames error", "err", err)
 	return t, err
 }
 
