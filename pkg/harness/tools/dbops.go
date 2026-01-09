@@ -141,20 +141,10 @@ func GetSnapshotObjectNamesTool(config *config.Config, dbopsClient *dbops.Client
 			// Call the GetSnapshotObjectNames method with fixed page=1 and limit=200
 			page := int64(0)
 			limit := int64(100)
-			_ = page
-			_ = limit
-			_ = orgID
-			_ = projectID
-			_ = dbSchemaIdentifier
-			_ = dbInstanceIdentifier
-			_ = dbopsClient
-			_ = objectType
-			// TODO: Remove this hardcoded test data
-			objectNames := []string{"batman"}
-			// objectNames, err := dbopsClient.GetSnapshotObjectNames(ctx, scope.AccountID, orgID, projectID, dbSchemaIdentifier, dbInstanceIdentifier, objectType, &page, &limit)
-			// if err != nil {
-			// 	return mcp.NewToolResultError(fmt.Sprintf("failed to get snapshot object names: %v", err)), nil
-			// }
+			objectNames, err := dbopsClient.GetSnapshotObjectNames(ctx, scope.AccountID, orgID, projectID, dbSchemaIdentifier, dbInstanceIdentifier, objectType, &page, &limit)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to get snapshot object names: %v", err)), nil
+			}
 
 			// Marshal the result to JSON
 			out, err := json.Marshal(objectNames)

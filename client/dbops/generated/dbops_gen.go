@@ -593,8 +593,6 @@ func NewV1GetProjDbSchemaRequest(server string, org OrgParam, project ProjectPar
 		return nil, err
 	}
 
-	slog.Info("ARCHIT - queryURL -", queryURL)
-
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
@@ -661,8 +659,6 @@ func NewV1GetSnapshotObjectNamesRequest(server string, org OrgParam, project Pro
 	}
 
 	queryURL, err := serverURL.Parse(operationPath)
-
-	slog.Info("ARCHIT - queryURL -", queryURL)
 
 	if err != nil {
 		return nil, err
