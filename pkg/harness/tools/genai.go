@@ -254,6 +254,12 @@ func DBChangesetTool(config *config.Config, client *client.GenaiService) (tool m
 				- Use the get_database_schema_info tool to retrieve the database type for a specific database schema.
 				`),
 		),
+		mcp.WithArray("table_metadata",
+			mcp.Description("Optional list of table metadata/DDL to provide context for changeset generation. Use get_snapshot_object_values tool to retrieve this."),
+			mcp.Items(map[string]any{
+				"type": "string",
+			}),
+		),
 		mcp.WithString("old_changeset",
 			mcp.Description("Optional existing changeset YAML for updates"),
 		),
@@ -286,6 +292,11 @@ func DBChangesetTool(config *config.Config, client *client.GenaiService) (tool m
 			return nil, fmt.Errorf("database_type must be a string")
 		}
 
+		tableMetadata, err := OptionalStringArrayParam(request, "table_metadata")
+		if err != nil {
+			return nil, fmt.Errorf("error parsing table_metadata: %v", err)
+		}
+
 		oldChangesetArg, ok := request.GetArguments()["old_changeset"]
 		var oldChangeset string
 		if ok && oldChangesetArg != nil {
@@ -306,6 +317,7 @@ func DBChangesetTool(config *config.Config, client *client.GenaiService) (tool m
 		return &dto.DBChangesetParameters{
 			BaseRequestParameters: *baseParams,
 			DatabaseType:          dto.DatabaseType(strings.ToUpper(databaseType)),
+			TableMetadata:         tableMetadata,
 			OldChangeset:          oldChangeset,
 			ErrorContext:          errorContext,
 		}, nil

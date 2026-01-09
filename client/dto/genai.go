@@ -48,9 +48,10 @@ type DatabaseType string
 // DBChangesetParameters extends BaseRequestParameters for database changeset generation
 type DBChangesetParameters struct {
 	BaseRequestParameters
-	DatabaseType DatabaseType `json:"database_type"`
-	OldChangeset string       `json:"oldchangeset,omitempty"`
-	ErrorContext string       `json:"error_context,omitempty"`
+	DatabaseType  DatabaseType `json:"database_type"`
+	OldChangeset  string       `json:"oldchangeset,omitempty"`
+	ErrorContext  string       `json:"error_context,omitempty"`
+	TableMetadata []string     `json:"table_metadata,omitempty"`
 }
 
 // GetBaseParameters returns the base parameters

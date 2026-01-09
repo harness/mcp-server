@@ -3,6 +3,7 @@ package modules
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/harness/harness-mcp/client"
@@ -74,6 +75,7 @@ func (m *DbOpsModule) IsDefault() bool {
 func RegisterDbops(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Determine the base URL and secret for dbops service
 	baseURL := utils.BuildServiceURL(config, config.DBOpsSvcBaseURL, config.BaseURL, "dbops")
+	slog.Info("ARCHIT - baseUrl" + baseURL)
 	secret := config.DBOpsSvcSecret
 
 	// Create base client for dbops
@@ -119,6 +121,8 @@ func RegisterDbops(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 	// Create the dbops toolset with appropriate tools
 	dbopsTools := []server.ServerTool{
 		toolsets.NewServerTool(tools.GetDatabaseInfoTool(config, dbopsClient)),
+		toolsets.NewServerTool(tools.GetSnapshotObjectNamesTool(config, dbopsClient)),
+		toolsets.NewServerTool(tools.GetSnapshotObjectValuesTool(config, dbopsClient)),
 	}
 
 	// Add DBChangesetTool only if genaiClient is available

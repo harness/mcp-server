@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -33,6 +34,12 @@ const (
 const (
 	Repository DBSchemaType = "Repository"
 	Script     DBSchemaType = "Script"
+)
+
+// Defines values for MigrationType.
+const (
+	Flyway    MigrationType = "Flyway"
+	Liquibase MigrationType = "Liquibase"
 )
 
 // Defines values for Order.
@@ -74,6 +81,9 @@ type ChangeLogScript struct {
 
 	// Shell shell type
 	Shell string `json:"shell"`
+
+	// Toml config file for Flyway migration type
+	Toml *string `json:"toml,omitempty"`
 }
 
 // Changelog if schemaType is Repository location of the changelog file containing schema changes in a git repository
@@ -89,6 +99,9 @@ type Changelog struct {
 
 	// Repo repo name of the git based connector when ConnectionType is Account
 	Repo *string `json:"repo,omitempty"`
+
+	// Toml config file for Flyway migration type
+	Toml *string `json:"toml,omitempty"`
 }
 
 // DBInstanceFilterIn DB Instance Filter Request
@@ -126,13 +139,13 @@ type DBInstanceOut struct {
 	// LastDeployedChangeSetTag Tag on last deployed changeSet
 	LastDeployedChangeSetTag string `json:"lastDeployedChangeSetTag"`
 
-	// LiquibaseSubstituteProperties properties to substitute in liquibase changelog
-	LiquibaseSubstituteProperties *map[string]string `json:"liquibaseSubstituteProperties,omitempty"`
-
 	// Name name of the database instance
 	Name             string  `json:"name"`
 	SchemaId         *string `json:"schemaId,omitempty"`
 	SchemaIdentifier *string `json:"schemaIdentifier,omitempty"`
+
+	// SubstituteProperties Placeholder replacement in migration scripts.
+	SubstituteProperties *map[string]string `json:"substituteProperties,omitempty"`
 
 	// Tags tags attached to the database instance
 	Tags      map[string]string `json:"tags,omitempty"`
@@ -158,6 +171,9 @@ type DBSchemaOut struct {
 
 	// InstanceCount number of database instances corresponding to database schema
 	InstanceCount int64 `json:"instanceCount"`
+
+	// MigrationType DB Migration tool type
+	MigrationType MigrationType `json:"migrationType"`
 
 	// Name name of the database schema
 	Name string `json:"name"`
@@ -194,10 +210,43 @@ type Error struct {
 	Message string `json:"message"`
 }
 
+// MigrationType DB Migration tool type
+type MigrationType string
+
 // NGTag ng tag with key and value
 type NGTag struct {
 	Key   string  `json:"key"`
 	Value *string `json:"value"`
+}
+
+// SnapshotObjectNamesOutput Response containing list of object names from snapshot metadata
+type SnapshotObjectNamesOutput struct {
+	// Data List of object names for the given snapshot and object type
+	Data []string `json:"data"`
+}
+
+// SnapshotObjectValue Object value from snapshot metadata
+type SnapshotObjectValue struct {
+	// ObjectName Name of the database object
+	ObjectName string `json:"objectName"`
+
+	// ObjectValue Value of the database object
+	ObjectValue string `json:"objectValue"`
+}
+
+// SnapshotObjectValuesInput Request containing object type and list of object names
+type SnapshotObjectValuesInput struct {
+	// ObjectNames List of object names to retrieve values for
+	ObjectNames []string `json:"objectNames"`
+
+	// ObjectType Type of database object (e.g., Table, etc)
+	ObjectType string `json:"objectType"`
+}
+
+// SnapshotObjectValuesOutput Response containing list of object values from snapshot metadata
+type SnapshotObjectValuesOutput struct {
+	// Data List of object values for the given snapshot and object type
+	Data []SnapshotObjectValue `json:"data"`
 }
 
 // AccountHeader defines model for AccountHeader.
@@ -224,6 +273,9 @@ type OrgParam = string
 // PageIndex defines model for PageIndex.
 type PageIndex = int64
 
+// PipelineIdentifier defines model for PipelineIdentifier.
+type PipelineIdentifier = string
+
 // ProjectParam defines model for ProjectParam.
 type ProjectParam = string
 
@@ -245,11 +297,38 @@ type DBSchemaResponse = DBSchemaOut
 // ErrorResponse Error Response
 type ErrorResponse = Error
 
+// SnapshotObjectNamesResponse Response containing list of object names from snapshot metadata
+type SnapshotObjectNamesResponse = SnapshotObjectNamesOutput
+
+// SnapshotObjectValuesResponse Response containing list of object values from snapshot metadata
+type SnapshotObjectValuesResponse = SnapshotObjectValuesOutput
+
 // DBInstanceFilterRequest DB Instance Filter Request
 type DBInstanceFilterRequest = DBInstanceFilterIn
 
 // V1GetProjDbSchemaParams defines parameters for V1GetProjDbSchema.
 type V1GetProjDbSchemaParams struct {
+	// HarnessAccount Identifier field of the account the resource is scoped to. This is required for Authorization methods other than the x-api-key header. If you are using the x-api-key header, this can be skipped.
+	HarnessAccount *AccountHeader `json:"Harness-Account,omitempty"`
+}
+
+// V1GetSnapshotObjectNamesParams defines parameters for V1GetSnapshotObjectNames.
+type V1GetSnapshotObjectNamesParams struct {
+	// Page Pagination page number strategy: Specify the page number within the paginated collection related to the number of items on each page.
+	Page *PageIndex `form:"page,omitempty" json:"page,omitempty"`
+
+	// Limit Pagination: Number of items to return.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// ObjectType Type of database object (e.g., Table, etc)
+	ObjectType string `form:"objectType" json:"objectType"`
+
+	// HarnessAccount Identifier field of the account the resource is scoped to. This is required for Authorization methods other than the x-api-key header. If you are using the x-api-key header, this can be skipped.
+	HarnessAccount *AccountHeader `json:"Harness-Account,omitempty"`
+}
+
+// V1GetSnapshotObjectValuesParams defines parameters for V1GetSnapshotObjectValues.
+type V1GetSnapshotObjectValuesParams struct {
 	// HarnessAccount Identifier field of the account the resource is scoped to. This is required for Authorization methods other than the x-api-key header. If you are using the x-api-key header, this can be skipped.
 	HarnessAccount *AccountHeader `json:"Harness-Account,omitempty"`
 }
@@ -286,6 +365,9 @@ type V1ListProjDbSchemaInstanceParamsSort string
 
 // V1ListProjDbSchemaInstanceParamsOrder defines parameters for V1ListProjDbSchemaInstance.
 type V1ListProjDbSchemaInstanceParamsOrder string
+
+// V1GetSnapshotObjectValuesJSONRequestBody defines body for V1GetSnapshotObjectValues for application/json ContentType.
+type V1GetSnapshotObjectValuesJSONRequestBody = SnapshotObjectValuesInput
 
 // V1ListProjDbSchemaInstanceJSONRequestBody defines body for V1ListProjDbSchemaInstance for application/json ContentType.
 type V1ListProjDbSchemaInstanceJSONRequestBody = DBInstanceFilterIn
@@ -366,6 +448,14 @@ type ClientInterface interface {
 	// V1GetProjDbSchema request
 	V1GetProjDbSchema(ctx context.Context, org OrgParam, project ProjectParam, dbschema DBSchemaParam, params *V1GetProjDbSchemaParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// V1GetSnapshotObjectNames request
+	V1GetSnapshotObjectNames(ctx context.Context, org OrgParam, project ProjectParam, dbschema DBSchemaParam, dbinstance DBInstanceParam, params *V1GetSnapshotObjectNamesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// V1GetSnapshotObjectValuesWithBody request with any body
+	V1GetSnapshotObjectValuesWithBody(ctx context.Context, org OrgParam, project ProjectParam, dbschema DBSchemaParam, dbinstance DBInstanceParam, params *V1GetSnapshotObjectValuesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	V1GetSnapshotObjectValues(ctx context.Context, org OrgParam, project ProjectParam, dbschema DBSchemaParam, dbinstance DBInstanceParam, params *V1GetSnapshotObjectValuesParams, body V1GetSnapshotObjectValuesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// V1GetProjDbSchemaInstance request
 	V1GetProjDbSchemaInstance(ctx context.Context, org OrgParam, project ProjectParam, dbschema DBSchemaParam, dbinstance DBInstanceParam, params *V1GetProjDbSchemaInstanceParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -377,6 +467,46 @@ type ClientInterface interface {
 
 func (c *Client) V1GetProjDbSchema(ctx context.Context, org OrgParam, project ProjectParam, dbschema DBSchemaParam, params *V1GetProjDbSchemaParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewV1GetProjDbSchemaRequest(c.Server, org, project, dbschema, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) V1GetSnapshotObjectNames(ctx context.Context, org OrgParam, project ProjectParam, dbschema DBSchemaParam, dbinstance DBInstanceParam, params *V1GetSnapshotObjectNamesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewV1GetSnapshotObjectNamesRequest(c.Server, org, project, dbschema, dbinstance, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	slog.Info("GetSnapshotObjectNames called", req)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	t, err := c.Client.Do(req)
+	slog.Info("GetSnapshotObjectNames Response", t)
+	slog.Info("GetSnapshotObjectNames error", err)
+	return t, err
+}
+
+func (c *Client) V1GetSnapshotObjectValuesWithBody(ctx context.Context, org OrgParam, project ProjectParam, dbschema DBSchemaParam, dbinstance DBInstanceParam, params *V1GetSnapshotObjectValuesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewV1GetSnapshotObjectValuesRequestWithBody(c.Server, org, project, dbschema, dbinstance, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) V1GetSnapshotObjectValues(ctx context.Context, org OrgParam, project ProjectParam, dbschema DBSchemaParam, dbinstance DBInstanceParam, params *V1GetSnapshotObjectValuesParams, body V1GetSnapshotObjectValuesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewV1GetSnapshotObjectValuesRequest(c.Server, org, project, dbschema, dbinstance, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -463,10 +593,218 @@ func NewV1GetProjDbSchemaRequest(server string, org OrgParam, project ProjectPar
 		return nil, err
 	}
 
+	slog.Info("ARCHIT - queryURL -", queryURL)
+
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
+
+	if params != nil {
+
+		if params.HarnessAccount != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "Harness-Account", runtime.ParamLocationHeader, *params.HarnessAccount)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Harness-Account", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewV1GetSnapshotObjectNamesRequest generates requests for V1GetSnapshotObjectNames
+func NewV1GetSnapshotObjectNamesRequest(server string, org OrgParam, project ProjectParam, dbschema DBSchemaParam, dbinstance DBInstanceParam, params *V1GetSnapshotObjectNamesParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "org", runtime.ParamLocationPath, org)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "project", runtime.ParamLocationPath, project)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithLocation("simple", false, "dbschema", runtime.ParamLocationPath, dbschema)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam3 string
+
+	pathParam3, err = runtime.StyleParamWithLocation("simple", false, "dbinstance", runtime.ParamLocationPath, dbinstance)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/orgs/%s/projects/%s/dbschema/%s/dbinstance/%s/snapshot-object-names", pathParam0, pathParam1, pathParam2, pathParam3)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+
+	slog.Info("ARCHIT - queryURL -", queryURL)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Page != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "page", runtime.ParamLocationQuery, *params.Page); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "objectType", runtime.ParamLocationQuery, params.ObjectType); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.HarnessAccount != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "Harness-Account", runtime.ParamLocationHeader, *params.HarnessAccount)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Harness-Account", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewV1GetSnapshotObjectValuesRequest calls the generic V1GetSnapshotObjectValues builder with application/json body
+func NewV1GetSnapshotObjectValuesRequest(server string, org OrgParam, project ProjectParam, dbschema DBSchemaParam, dbinstance DBInstanceParam, params *V1GetSnapshotObjectValuesParams, body V1GetSnapshotObjectValuesJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewV1GetSnapshotObjectValuesRequestWithBody(server, org, project, dbschema, dbinstance, params, "application/json", bodyReader)
+}
+
+// NewV1GetSnapshotObjectValuesRequestWithBody generates requests for V1GetSnapshotObjectValues with any type of body
+func NewV1GetSnapshotObjectValuesRequestWithBody(server string, org OrgParam, project ProjectParam, dbschema DBSchemaParam, dbinstance DBInstanceParam, params *V1GetSnapshotObjectValuesParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "org", runtime.ParamLocationPath, org)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "project", runtime.ParamLocationPath, project)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithLocation("simple", false, "dbschema", runtime.ParamLocationPath, dbschema)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam3 string
+
+	pathParam3, err = runtime.StyleParamWithLocation("simple", false, "dbinstance", runtime.ParamLocationPath, dbinstance)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/orgs/%s/projects/%s/dbschema/%s/dbinstance/%s/snapshot-object-values", pathParam0, pathParam1, pathParam2, pathParam3)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	if params != nil {
 
@@ -764,6 +1102,14 @@ type ClientWithResponsesInterface interface {
 	// V1GetProjDbSchemaWithResponse request
 	V1GetProjDbSchemaWithResponse(ctx context.Context, org OrgParam, project ProjectParam, dbschema DBSchemaParam, params *V1GetProjDbSchemaParams, reqEditors ...RequestEditorFn) (*V1GetProjDbSchemaResponse, error)
 
+	// V1GetSnapshotObjectNamesWithResponse request
+	V1GetSnapshotObjectNamesWithResponse(ctx context.Context, org OrgParam, project ProjectParam, dbschema DBSchemaParam, dbinstance DBInstanceParam, params *V1GetSnapshotObjectNamesParams, reqEditors ...RequestEditorFn) (*V1GetSnapshotObjectNamesResponse, error)
+
+	// V1GetSnapshotObjectValuesWithBodyWithResponse request with any body
+	V1GetSnapshotObjectValuesWithBodyWithResponse(ctx context.Context, org OrgParam, project ProjectParam, dbschema DBSchemaParam, dbinstance DBInstanceParam, params *V1GetSnapshotObjectValuesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*V1GetSnapshotObjectValuesResponse, error)
+
+	V1GetSnapshotObjectValuesWithResponse(ctx context.Context, org OrgParam, project ProjectParam, dbschema DBSchemaParam, dbinstance DBInstanceParam, params *V1GetSnapshotObjectValuesParams, body V1GetSnapshotObjectValuesJSONRequestBody, reqEditors ...RequestEditorFn) (*V1GetSnapshotObjectValuesResponse, error)
+
 	// V1GetProjDbSchemaInstanceWithResponse request
 	V1GetProjDbSchemaInstanceWithResponse(ctx context.Context, org OrgParam, project ProjectParam, dbschema DBSchemaParam, dbinstance DBInstanceParam, params *V1GetProjDbSchemaInstanceParams, reqEditors ...RequestEditorFn) (*V1GetProjDbSchemaInstanceResponse, error)
 
@@ -793,6 +1139,58 @@ func (r V1GetProjDbSchemaResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r V1GetProjDbSchemaResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type V1GetSnapshotObjectNamesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *SnapshotObjectNamesResponse
+	JSON400      *ErrorResponse
+	JSON403      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r V1GetSnapshotObjectNamesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r V1GetSnapshotObjectNamesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type V1GetSnapshotObjectValuesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *SnapshotObjectValuesResponse
+	JSON400      *ErrorResponse
+	JSON403      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r V1GetSnapshotObjectValuesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r V1GetSnapshotObjectValuesResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -860,6 +1258,32 @@ func (c *ClientWithResponses) V1GetProjDbSchemaWithResponse(ctx context.Context,
 	return ParseV1GetProjDbSchemaResponse(rsp)
 }
 
+// V1GetSnapshotObjectNamesWithResponse request returning *V1GetSnapshotObjectNamesResponse
+func (c *ClientWithResponses) V1GetSnapshotObjectNamesWithResponse(ctx context.Context, org OrgParam, project ProjectParam, dbschema DBSchemaParam, dbinstance DBInstanceParam, params *V1GetSnapshotObjectNamesParams, reqEditors ...RequestEditorFn) (*V1GetSnapshotObjectNamesResponse, error) {
+	rsp, err := c.V1GetSnapshotObjectNames(ctx, org, project, dbschema, dbinstance, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseV1GetSnapshotObjectNamesResponse(rsp)
+}
+
+// V1GetSnapshotObjectValuesWithBodyWithResponse request with arbitrary body returning *V1GetSnapshotObjectValuesResponse
+func (c *ClientWithResponses) V1GetSnapshotObjectValuesWithBodyWithResponse(ctx context.Context, org OrgParam, project ProjectParam, dbschema DBSchemaParam, dbinstance DBInstanceParam, params *V1GetSnapshotObjectValuesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*V1GetSnapshotObjectValuesResponse, error) {
+	rsp, err := c.V1GetSnapshotObjectValuesWithBody(ctx, org, project, dbschema, dbinstance, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseV1GetSnapshotObjectValuesResponse(rsp)
+}
+
+func (c *ClientWithResponses) V1GetSnapshotObjectValuesWithResponse(ctx context.Context, org OrgParam, project ProjectParam, dbschema DBSchemaParam, dbinstance DBInstanceParam, params *V1GetSnapshotObjectValuesParams, body V1GetSnapshotObjectValuesJSONRequestBody, reqEditors ...RequestEditorFn) (*V1GetSnapshotObjectValuesResponse, error) {
+	rsp, err := c.V1GetSnapshotObjectValues(ctx, org, project, dbschema, dbinstance, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseV1GetSnapshotObjectValuesResponse(rsp)
+}
+
 // V1GetProjDbSchemaInstanceWithResponse request returning *V1GetProjDbSchemaInstanceResponse
 func (c *ClientWithResponses) V1GetProjDbSchemaInstanceWithResponse(ctx context.Context, org OrgParam, project ProjectParam, dbschema DBSchemaParam, dbinstance DBInstanceParam, params *V1GetProjDbSchemaInstanceParams, reqEditors ...RequestEditorFn) (*V1GetProjDbSchemaInstanceResponse, error) {
 	rsp, err := c.V1GetProjDbSchemaInstance(ctx, org, project, dbschema, dbinstance, params, reqEditors...)
@@ -902,6 +1326,114 @@ func ParseV1GetProjDbSchemaResponse(rsp *http.Response) (*V1GetProjDbSchemaRespo
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest DBSchemaResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseV1GetSnapshotObjectNamesResponse parses an HTTP response from a V1GetSnapshotObjectNamesWithResponse call
+func ParseV1GetSnapshotObjectNamesResponse(rsp *http.Response) (*V1GetSnapshotObjectNamesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &V1GetSnapshotObjectNamesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SnapshotObjectNamesResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseV1GetSnapshotObjectValuesResponse parses an HTTP response from a V1GetSnapshotObjectValuesWithResponse call
+func ParseV1GetSnapshotObjectValuesResponse(rsp *http.Response) (*V1GetSnapshotObjectValuesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &V1GetSnapshotObjectValuesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SnapshotObjectValuesResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

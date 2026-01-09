@@ -117,6 +117,7 @@ func (r *ModuleRegistry) RegisterPrompts(mcpServer *server.MCPServer) error {
 
 	// Register prompts for each enabled module
 	for _, module := range enabledModules {
+		slog.Info("ARCHIT - module" + module.ID())
 		if err := registerPrompts(module.ID(), r.config, mcpServer); err != nil {
 			return err
 		}
