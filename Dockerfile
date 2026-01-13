@@ -1,9 +1,9 @@
 # ---------------------------------------------------------#
 #                   Build Harness image                    #
 # ---------------------------------------------------------#
-FROM --platform=$BUILDPLATFORM golang:1.24.3-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.25.1-alpine AS builder
 
-# Setup workig dir
+# Setup working dir
 WORKDIR /app
 
 ARG TARGETOS
@@ -21,7 +21,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
     CGO_ENABLED=0 \
     GOOS=$TARGETOS GOARCH=$TARGETARCH \
-    go build -o ./cmd/harness-mcp-server/harness-mcp-server ./cmd/harness-mcp-server
+    go build -o mcp-server ./cmd/harness-mcp-server
 
 ### Pull CA Certs
 FROM --platform=$BUILDPLATFORM alpine:latest AS cert-image
@@ -39,8 +39,8 @@ VOLUME /data
 
 ENV XDG_CACHE_HOME=/data
 
-COPY --from=builder /app/cmd/harness-mcp-server/harness-mcp-server /app/harness-mcp-server
+COPY --from=builder /app/mcp-server /app/mcp-server
 COPY --from=cert-image /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
-ENTRYPOINT [ "/app/harness-mcp-server"]
+ENTRYPOINT ["/app/mcp-server"]
 CMD ["stdio"]

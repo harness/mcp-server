@@ -3,21 +3,21 @@ package modules
 import (
 	"log/slog"
 
-	"github.com/harness/harness-mcp/client"
-	"github.com/harness/harness-mcp/cmd/harness-mcp-server/config"
-	"github.com/harness/harness-mcp/pkg/harness/tools"
-	"github.com/harness/harness-mcp/pkg/modules/utils"
-	"github.com/harness/harness-mcp/pkg/toolsets"
+	"github.com/harness/mcp-server/client"
+	config "github.com/harness/mcp-server/common"
+	commonModules "github.com/harness/mcp-server/common/pkg/modules"
+	"github.com/harness/mcp-server/common/pkg/toolsets"
+	"github.com/harness/mcp-server/pkg/tools"
 )
 
 // ACMModule implements the Module interface for Autonomous Code Maintenance
 type ACMModule struct {
-	config *config.Config
+	config *config.McpServerConfig
 	tsg    *toolsets.ToolsetGroup
 }
 
 // NewACMModule creates a new instance of ACMModule
-func NewACMModule(config *config.Config, tsg *toolsets.ToolsetGroup) *ACMModule {
+func NewACMModule(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) *ACMModule {
 	return &ACMModule{
 		config: config,
 		tsg:    tsg,
@@ -48,7 +48,7 @@ func (m *ACMModule) RegisterToolsets() error {
 
 // EnableToolsets enables all toolsets in this module
 func (m *ACMModule) EnableToolsets(tsg *toolsets.ToolsetGroup) error {
-	return ModuleEnableToolsets(m, tsg)
+	return commonModules.ModuleEnableToolsets(m, tsg)
 }
 
 // IsDefault indicates if this module should be enabled by default
@@ -57,16 +57,11 @@ func (m *ACMModule) IsDefault() bool {
 }
 
 // RegisterACM registers the ACM toolset
-func RegisterACM(config *config.Config, tsg *toolsets.ToolsetGroup) error {
-	// Only register in external mode
-	if config.Internal {
-		return nil
-	}
+func RegisterACM(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
 
 	slog.Info("Registering ACM toolset")
 
-	// Create ACM service client
-	acmClient, err := utils.CreateServiceClient(config, config.BaseURL, config.BaseURL, "autoai", config.APIKey)
+	acmClient, err := commonModules.DefaultClientProvider.CreateClient(config, "acm")
 	if err != nil {
 		return err
 	}

@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/harness/harness-mcp/client/dto"
+	dto "github.com/harness/mcp-server/client/dto"
+	commonClient "github.com/harness/mcp-server/common/client"
+	commonDto "github.com/harness/mcp-server/common/client/dto"
 )
 
 const (
@@ -15,11 +17,11 @@ const (
 
 // ACMService provides methods to interact with the Autonomous Code Maintenance API
 type ACMService struct {
-	Client *Client
+	Client *commonClient.Client
 }
 
 // CreateTask creates a new autonomous code maintenance task
-func (s *ACMService) CreateTask(ctx context.Context, scope dto.Scope, params *dto.CreateACMTaskRequest) (*dto.ACMTaskResponse, error) {
+func (s *ACMService) CreateTask(ctx context.Context, scope commonDto.Scope, params *dto.CreateACMTaskRequest) (*dto.ACMTaskResponse, error) {
 	// Build the path
 	path := fmt.Sprintf(acmCreateTaskPath, scope.AccountID)
 
@@ -27,7 +29,7 @@ func (s *ACMService) CreateTask(ctx context.Context, scope dto.Scope, params *dt
 	queryParams := make(map[string]string)
 
 	headers := make(map[string]string)
-	addHarnessAccountToHeaders(ctx, scope, headers)
+	commonClient.AddHarnessAccountToHeaders(ctx, scope, headers)
 
 	// Make the request
 	result := new(dto.ACMTaskResponse)
@@ -40,7 +42,7 @@ func (s *ACMService) CreateTask(ctx context.Context, scope dto.Scope, params *dt
 }
 
 // ListTaskExecutions lists executions of an autonomous code maintenance task
-func (s *ACMService) ListTaskExecutions(ctx context.Context, scope dto.Scope, params *dto.GetACMExecutionsRequest) (*dto.ACMExecutionsListResponse, error) {
+func (s *ACMService) ListTaskExecutions(ctx context.Context, scope commonDto.Scope, params *dto.GetACMExecutionsRequest) (*dto.ACMExecutionsListResponse, error) {
 	// Build the path
 	path := fmt.Sprintf(acmRunTaskPath, scope.AccountID)
 
@@ -48,7 +50,7 @@ func (s *ACMService) ListTaskExecutions(ctx context.Context, scope dto.Scope, pa
 	queryParams := make(map[string]string)
 
 	headers := make(map[string]string)
-	addHarnessAccountToHeaders(ctx, scope, headers)
+	commonClient.AddHarnessAccountToHeaders(ctx, scope, headers)
 
 	// Add specific query parameters for this endpoint
 	queryParams["task_id"] = params.TaskID
@@ -66,7 +68,7 @@ func (s *ACMService) ListTaskExecutions(ctx context.Context, scope dto.Scope, pa
 }
 
 // TriggerTaskExecution triggers execution of an autonomous code maintenance task
-func (s *ACMService) TriggerTaskExecution(ctx context.Context, scope dto.Scope, params *dto.TriggerACMTaskExecutionRequest) (*dto.ACMExecution, error) {
+func (s *ACMService) TriggerTaskExecution(ctx context.Context, scope commonDto.Scope, params *dto.TriggerACMTaskExecutionRequest) (*dto.ACMExecution, error) {
 	// Build the path
 	path := fmt.Sprintf(acmRunTaskPath, scope.AccountID)
 
@@ -74,7 +76,7 @@ func (s *ACMService) TriggerTaskExecution(ctx context.Context, scope dto.Scope, 
 	queryParams := make(map[string]string)
 
 	headers := make(map[string]string)
-	addHarnessAccountToHeaders(ctx, scope, headers)
+	commonClient.AddHarnessAccountToHeaders(ctx, scope, headers)
 
 	slog.InfoContext(ctx, "triggering ACM task execution", "task_id", params.TaskID, "repository_id", params.RepositoryID, "source_branch", params.SourceBranch)
 
