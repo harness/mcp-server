@@ -246,3 +246,48 @@ time=2026-01-14T16:16:59.947+05:30 level=INFO msg="Tool enabled" toolset=chaos t
 time=2026-01-14T16:16:59.947+05:30 level=INFO msg="Registered toolsets with tracker" count=1
 time=2026-01-14T16:16:59.947+05:30 level=INFO msg="Harness MCP Server running on stdio" version=0.1.0
 time=2026-01-14T16:16:59.947+05:30 level=INFO msg="Client connected" name=cursor-vscode version=1.0.0
+time=2026-01-14T16:44:18.118+05:30 level=INFO msg="shutting down server..."
+time=2026-01-14T16:44:19.594+05:30 level=INFO msg="Starting server (runStdioServer)" transport=""
+time=2026-01-14T16:44:19.594+05:30 level=INFO msg="Using config (runStdioServer)" config="{AccountID:5In1mbBgQgelFifcg8GLYg APIKey:pat.5In1mbBgQgelFifcg8GLYg.6967740f9c97581a18389270.qy0SGp2HEYZRZ2pejmL2 BaseURL:https://utkarsh.pr2.harness.io Debug:false DefaultOrgID:default DefaultProjectID:jameson_llp HTTP:{Port:0 Path:} LogFilePath:/Users/utkarsh/code/mcp-server/harness-mcp.log LogFormat:text OutputDir: ReadOnly:false Toolsets:[chaos] Transport: Version:0.1.0}"
+time=2026-01-14T16:44:19.594+05:30 level=INFO msg="Successfully created license client"
+time=2026-01-14T16:44:19.595+05:30 level=INFO msg=Request method=GET url="https://utkarsh.pr2.harness.io/ng/api/licenses/account?accountIdentifier=5In1mbBgQgelFifcg8GLYg"
+time=2026-01-14T16:44:20.627+05:30 level=INFO msg=Response status="200 OK"
+time=2026-01-14T16:44:20.627+05:30 level=INFO msg="Successfully retrieved account licenses" status="200 OK" accountId=5In1mbBgQgelFifcg8GLYg
+time=2026-01-14T16:44:20.627+05:30 level=INFO msg="License accountLicense data" hasData=true status=SUCCESS
+time=2026-01-14T16:44:20.627+05:30 level=INFO msg="Account license details" accountId=5In1mbBgQgelFifcg8GLYg licenseCount=14
+time=2026-01-14T16:44:20.627+05:30 level=INFO msg="Tool enabled" toolset=chaos tool=chaos_experiments_list
+time=2026-01-14T16:44:20.627+05:30 level=INFO msg="Tool enabled" toolset=chaos tool=chaos_experiment_describe
+time=2026-01-14T16:44:20.627+05:30 level=INFO msg="Tool enabled" toolset=chaos tool=chaos_experiment_run_result
+time=2026-01-14T16:44:20.627+05:30 level=INFO msg="Tool enabled" toolset=chaos tool=chaos_experiment_run
+time=2026-01-14T16:44:20.627+05:30 level=INFO msg="Tool enabled" toolset=chaos tool=chaos_probes_list
+time=2026-01-14T16:44:20.627+05:30 level=INFO msg="Tool enabled" toolset=chaos tool=chaos_probe_describe
+time=2026-01-14T16:44:20.627+05:30 level=INFO msg="Tool enabled" toolset=chaos tool=chaos_experiment_template_list
+time=2026-01-14T16:44:20.627+05:30 level=INFO msg="Tool enabled" toolset=chaos tool=chaos_create_experiment_from_template
+time=2026-01-14T16:44:20.627+05:30 level=INFO msg="Tool enabled" toolset=chaos tool=chaos_experiment_variables_list
+time=2026-01-14T16:44:20.627+05:30 level=INFO msg="Toolsets validated" allowed=1 denied=0
+time=2026-01-14T16:44:20.627+05:30 level=INFO msg="Registered toolsets with tracker" count=1
+time=2026-01-14T16:44:20.627+05:30 level=INFO msg="Harness MCP Server running on stdio" version=0.1.0
+time=2026-01-14T16:44:20.627+05:30 level=INFO msg="Client connected" name=cursor-vscode version=1.0.0
+time=2026-01-14T16:48:41.157+05:30 level=INFO msg="shutting down server..."
+time=2026-01-14T16:48:42.660+05:30 level=INFO msg="Starting server (runStdioServer)" transport=""
+time=2026-01-14T16:48:42.661+05:30 level=INFO msg="Using config (runStdioServer)" config="{AccountID:5In1mbBgQgelFifcg8GLYg APIKey:pat.5In1mbBgQgelFifcg8GLYg.6967740f9c97581a18389270.qy0SGp2HEYZRZ2pejmL2 BaseURL:https://utkarsh.pr2.harness.io Debug:false DefaultOrgID:default DefaultProjectID:jameson_llp HTTP:{Port:0 Path:} LogFilePath:/Users/utkarsh/code/mcp-server/harness-mcp.log LogFormat:text OutputDir: ReadOnly:false Toolsets:[chaos] Transport: Version:0.1.0}"
+time=2026-01-14T16:48:42.661+05:30 level=INFO msg="Successfully created license client"
+time=2026-01-14T16:48:42.661+05:30 level=INFO msg=Request method=GET url="https://utkarsh.pr2.harness.io/ng/api/licenses/account?accountIdentifier=5In1mbBgQgelFifcg8GLYg"
+time=2026-01-14T16:48:43.529+05:30 level=INFO msg=Response status="200 OK"
+time=2026-01-14T16:48:43.529+05:30 level=INFO msg="Successfully retrieved account licenses" status="200 OK" accountId=5In1mbBgQgelFifcg8GLYg
+time=2026-01-14T16:48:43.529+05:30 level=INFO msg="License accountLicense data" hasData=true status=SUCCESS
+time=2026-01-14T16:48:43.529+05:30 level=INFO msg="Account license details" accountId=5In1mbBgQgelFifcg8GLYg licenseCount=14
+time=2026-01-14T16:48:43.530+05:30 level=INFO msg="Tool enabled" toolset=chaos tool=chaos_experiments_list
+time=2026-01-14T16:48:43.530+05:30 level=INFO msg="Tool enabled" toolset=chaos tool=chaos_experiment_describe
+time=2026-01-14T16:48:43.530+05:30 level=INFO msg="Tool enabled" toolset=chaos tool=chaos_experiment_run_result
+time=2026-01-14T16:48:43.530+05:30 level=INFO msg="Tool enabled" toolset=chaos tool=chaos_experiment_run
+time=2026-01-14T16:48:43.530+05:30 level=INFO msg="Tool enabled" toolset=chaos tool=chaos_probes_list
+time=2026-01-14T16:48:43.530+05:30 level=INFO msg="Tool enabled" toolset=chaos tool=chaos_probe_describe
+time=2026-01-14T16:48:43.530+05:30 level=INFO msg="Tool enabled" toolset=chaos tool=chaos_experiment_template_list
+time=2026-01-14T16:48:43.530+05:30 level=INFO msg="Tool enabled" toolset=chaos tool=chaos_create_experiment_from_template
+time=2026-01-14T16:48:43.530+05:30 level=INFO msg="Tool enabled" toolset=chaos tool=chaos_experiment_variables_list
+time=2026-01-14T16:48:43.530+05:30 level=INFO msg="Tool enabled" toolset=chaos tool=loadtest_list
+time=2026-01-14T16:48:43.530+05:30 level=INFO msg="Toolsets validated" allowed=1 denied=0
+time=2026-01-14T16:48:43.530+05:30 level=INFO msg="Registered toolsets with tracker" count=1
+time=2026-01-14T16:48:43.530+05:30 level=INFO msg="Harness MCP Server running on stdio" version=0.1.0
+time=2026-01-14T16:48:43.531+05:30 level=INFO msg="Client connected" name=cursor-vscode version=1.0.0
