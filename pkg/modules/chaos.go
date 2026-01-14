@@ -79,6 +79,13 @@ func RegisterChaos(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 
 	chaosClient := &client.ChaosService{Client: c}
 
+	// Create load test client
+	loadTestClient, err := DefaultClientProvider.CreateClient(config, "loadtest", customTimeout)
+	if err != nil {
+		return err
+	}
+	loadTestService := &client.LoadTestService{Client: loadTestClient}
+
 	// Create the CHAOS toolset
 	chaos := toolsets.NewToolset("chaos", "Harness Chaos Engineering related tools").
 		AddReadTools(
@@ -91,6 +98,7 @@ func RegisterChaos(config *config.Config, tsg *toolsets.ToolsetGroup) error {
 			toolsets.NewServerTool(tools.ListExperimentTemplatesTool(config, chaosClient)),
 			toolsets.NewServerTool(tools.CreateExperimentFromTemplateTool(config, chaosClient)),
 			toolsets.NewServerTool(tools.ListExperimentVariablesTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.ListLoadTestsTool(config, loadTestService)),
 		)
 
 	// Add toolset to the group
