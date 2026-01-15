@@ -65,6 +65,11 @@ func CcmPerspectiveGridTool(config *config.McpServerConfig, client *client.Cloud
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
+			sendTotal, err := OptionalParam[bool](request, "send_total")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
 			params := new(dto.CCMPerspectiveGridOptions)
 			params.AccountId = accountId
 			params.ViewId = viewId
@@ -77,6 +82,17 @@ func CcmPerspectiveGridTool(config *config.McpServerConfig, client *client.Cloud
 			data, err := client.PerspectiveGrid(ctx, scope, params)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// If send_total is true, include totalCost in the response
+			if sendTotal {
+				groupByValue := ""
+				if groupBy != nil {
+					if val, ok := groupBy["value"].(string); ok {
+						groupByValue = val
+					}
+				}
+				return buildPerspectiveGridResponseWithTotal(data, groupByValue)
 			}
 
 			r, err := json.Marshal(data)
@@ -521,30 +537,13 @@ func CcmListLabelsV2KeysTool(config *config.McpServerConfig, client *client.Clou
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			// Extract keys from the response
-			keys := []string{}
-			if data != nil && data.Data.PerspectiveFilters.Values != nil {
-				keys = data.Data.PerspectiveFilters.Values
-			}
-
-			responseContents := []mcp.Content{}
-
-			// Create custom event with the list of keys
-			labelsKeysEvent := event.NewCustomEvent("ccm_cost_category_key_values_event", map[string]any{
-				"keys": keys,
-			}, event.WithContinue(true))
-
-			// Create embedded resource for the event
-			eventResource, err := labelsKeysEvent.CreateEmbeddedResource()
+			// Marshal and return
+			result, err := json.Marshal(data)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
-			} else {
-				responseContents = append(responseContents, eventResource)
 			}
 
-			return &mcp.CallToolResult{
-				Content: responseContents,
-			}, nil
+			return mcp.NewToolResultText(string(result)), nil
 		}
 }
 
@@ -608,6 +607,43 @@ func CcmPerspectiveFilterValuesToolEvent(config *config.McpServerConfig) (tool m
 		}
 }
 
+// buildPerspectiveGridResponseWithTotal calculates the total cost for tagged resources
+// and includes it in the response. The entry matching "No <groupByValue>" (untagged resources)
+// is excluded from the total.
+func buildPerspectiveGridResponseWithTotal(data *dto.CCMPerspectiveGridResponse, groupByValue string) (*mcp.CallToolResult, error) {
+	var totalCost float64 = 0
+
+	// Build the untagged entry name to exclude (e.g., "No env" when groupByValue is "env")
+	untaggedEntryName := "No " + groupByValue
+
+	// Calculate total cost, excluding the untagged resources entry
+	for _, dataPoint := range data.Data.PerspectiveGrid.Data {
+		if dataPoint.Name != untaggedEntryName {
+			totalCost += dataPoint.Cost
+		}
+	}
+
+	// Build response with totalCost included
+	response := map[string]any{
+		"errors": data.Errors,
+		"data": map[string]any{
+			"perspectiveGrid": map[string]any{
+				"data":       data.Data.PerspectiveGrid.Data,
+				"totalCost":  totalCost,
+				"__typename": data.Data.PerspectiveGrid.Typename,
+			},
+			"perspectiveTotalCount": data.Data.PerspectiveTotalCount,
+		},
+	}
+
+	r, err := json.Marshal(response)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultText(string(r)), nil
+}
+
 func buildFilters(ctx context.Context, filterFields []map[string]string, request mcp.CallToolRequest) (map[string][]string, error) {
 
 	filters := make(map[string][]string)
@@ -644,7 +680,14 @@ func buildKeyValueFilters(ctx context.Context, keyValueFilterFields []map[string
 }
 
 func perspectiveGridJsonSchema() json.RawMessage {
-	return commonGraphQLJSONSchema(nil, nil)
+	sendTotal := map[string]any{
+		"send_total": map[string]any{
+			"type":        "boolean",
+			"default":     false,
+			"description": "When true, includes totalCost in response (sum of costs excluding the 'No <group_by_value>' untagged entry)",
+		},
+	}
+	return commonGraphQLJSONSchema(sendTotal, nil)
 }
 
 func perspectiveFilterValuesJsonSchema() json.RawMessage {
