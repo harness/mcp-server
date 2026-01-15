@@ -20,7 +20,136 @@ import (
 
 const (
 	CCMCostCategoryCostTargetsEventType = "cost_category_cost_targets"
+
+	// CCM Cost Category Key Values Event Tool
+	CCMCostCategoryKeyValuesToolID = "ccm_cost_category_key_values_event"
+
+	// Event name constants for ccm_cost_category_key_values_event
+	CCMEventNamePresentCheckbox = "present_checkbox"
+	CCMEventNameDropDownList    = "drop_down_list"
 )
+
+// CheckboxItem represents a single item in the present_checkbox event data
+type CheckboxItem struct {
+	Key       string  `json:"key"`
+	TotalCost float64 `json:"total_cost"`
+}
+
+// DropdownValue represents a value within a cost category dropdown
+type DropdownValue struct {
+	Value     string  `json:"value"`
+	TotalCost float64 `json:"total_cost"`
+}
+
+// DropdownGroup represents a grouped cost category with its values
+type DropdownGroup struct {
+	CostCategoryName string          `json:"cost_category_name"`
+	ValueList        []DropdownValue `json:"value_list"`
+}
+
+// JSON Schema definitions for documentation and validation
+var (
+	checkboxSchemaExample = `[
+  {"key": "label_key_1", "total_cost": 100.50},
+  {"key": "label_key_2", "total_cost": 200.75}
+]`
+
+	dropdownSchemaExample = `[
+  {
+    "cost_category_name": "Environment",
+    "value_list": [
+      {"value": "production", "total_cost": 1000.00},
+      {"value": "staging", "total_cost": 500.00}
+    ]
+  }
+]`
+
+	costCategoryKeyValuesToolDescription = fmt.Sprintf(`Sends cost category key/value data to UI for user interaction.
+
+Event Types and Behavior:
+- 'present_checkbox': Displays checkboxes for user selection. Agent WAITS for user response before continuing.
+- 'drop_down_list': Displays semantically grouped dropdown menus. Agent continues without waiting.
+
+JSON Schema for 'present_checkbox':
+%s
+
+JSON Schema for 'drop_down_list':
+%s`, checkboxSchemaExample, dropdownSchemaExample)
+)
+
+// validateCheckboxData validates data for present_checkbox event
+func validateCheckboxData(data []any) ([]CheckboxItem, error) {
+	if len(data) == 0 {
+		return nil, fmt.Errorf("data array cannot be empty")
+	}
+
+	jsonBytes, err := json.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal data: %w", err)
+	}
+
+	var items []CheckboxItem
+	if err := json.Unmarshal(jsonBytes, &items); err != nil {
+		return nil, fmt.Errorf("invalid checkbox data format: %w. Expected: %s", err, checkboxSchemaExample)
+	}
+
+	// Validate required fields
+	for i, item := range items {
+		if item.Key == "" {
+			return nil, fmt.Errorf("item[%d]: 'key' field is required and cannot be empty", i)
+		}
+	}
+
+	return items, nil
+}
+
+// validateDropdownData validates data for drop_down_list event
+func validateDropdownData(data []any) ([]DropdownGroup, error) {
+	if len(data) == 0 {
+		return nil, fmt.Errorf("data array cannot be empty")
+	}
+
+	jsonBytes, err := json.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal data: %w", err)
+	}
+
+	var groups []DropdownGroup
+	if err := json.Unmarshal(jsonBytes, &groups); err != nil {
+		return nil, fmt.Errorf("invalid dropdown data format: %w. Expected: %s", err, dropdownSchemaExample)
+	}
+
+	// Validate required fields
+	for i, group := range groups {
+		if group.CostCategoryName == "" {
+			return nil, fmt.Errorf("item[%d]: 'cost_category_name' field is required and cannot be empty", i)
+		}
+		if len(group.ValueList) == 0 {
+			return nil, fmt.Errorf("item[%d]: 'value_list' must contain at least one value", i)
+		}
+		for j, val := range group.ValueList {
+			if val.Value == "" {
+				return nil, fmt.Errorf("item[%d].value_list[%d]: 'value' field is required and cannot be empty", i, j)
+			}
+		}
+	}
+
+	return groups, nil
+}
+
+// validateCostCategoryKeyValuesData validates data based on event name
+func validateCostCategoryKeyValuesData(eventName string, data []any) error {
+	switch eventName {
+	case CCMEventNamePresentCheckbox:
+		_, err := validateCheckboxData(data)
+		return err
+	case CCMEventNameDropDownList:
+		_, err := validateDropdownData(data)
+		return err
+	default:
+		return fmt.Errorf("unknown event name: %s", eventName)
+	}
+}
 
 // GetCcmOverview creates a tool for getting a ccm overview from an account
 func GetCcmOverviewTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
@@ -782,6 +911,63 @@ func TranslateToCostCategoriesCostTargetsTool(config *config.McpServerConfig, cl
 			}
 			return &mcp.CallToolResult{
 				Content: responseContents,
+			}, nil
+		}
+}
+
+// CcmCostCategoryKeyValuesEventTool creates a tool for sending cost category key/value data to UI
+// as checkbox or dropdown events. The ccm_event_name determines the UI presentation and whether
+// the agent waits for user response.
+func CcmCostCategoryKeyValuesEventTool(config *config.McpServerConfig) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool(CCMCostCategoryKeyValuesToolID,
+			mcp.WithDescription(costCategoryKeyValuesToolDescription),
+			mcp.WithString("ccm_event_name",
+				mcp.Required(),
+				mcp.Description("Event type determining UI presentation and response behavior. "+
+					"'present_checkbox' waits for user selection, 'drop_down_list' displays data and continues."),
+				mcp.Enum(CCMEventNamePresentCheckbox, CCMEventNameDropDownList),
+			),
+			mcp.WithArray("data",
+				mcp.Required(),
+				mcp.Description("Event payload array - MUST match the JSON schema for the specified ccm_event_name. "+
+					"See tool description for exact schema format."),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			eventName, err := RequiredParamOK[string](request, "ccm_event_name")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// Get data from the array parameter
+			data, err := OptionalAnyArrayParam(request, "data")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// Validate data against the schema for the specified event name
+			if err := validateCostCategoryKeyValuesData(eventName, data); err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("schema validation failed: %s", err.Error())), nil
+			}
+
+			// Determine continue flag based on event name
+			// present_checkbox: wait for user response (continue = false)
+			// drop_down_list: display and continue (continue = true)
+			shouldContinue := eventName == CCMEventNameDropDownList
+
+			// Create event with appropriate continue behavior
+			ccmEvent := event.NewCustomEvent(CCMCostCategoryKeyValuesToolID, map[string]any{
+				"ccm_event_name": eventName,
+				"data":           data,
+			}, event.WithContinue(shouldContinue), event.WithDisplayOrder(100))
+
+			eventResource, err := ccmEvent.CreateEmbeddedResource()
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{eventResource},
 			}, nil
 		}
 }
