@@ -5,9 +5,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/golang-jwt/jwt/v5"
 	config "github.com/harness/mcp-server/common"
 	"github.com/harness/mcp-server/common/pkg/auth"
-	"github.com/golang-jwt/jwt/v5"
 )
 
 func TestMiddleware_JWTAuthentication_Success(t *testing.T) {
@@ -132,4 +132,3 @@ func TestMiddleware_InvalidJWT_Returns401(t *testing.T) {
 		t.Errorf("Expected status 401, got %d", w.Code)
 	}
 }
-

@@ -3,7 +3,6 @@ package middleware
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"strings"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/harness/mcp-server/common/pkg/auth"
 	"github.com/harness/mcp-server/common/pkg/common"
 	commonMiddleware "github.com/harness/mcp-server/common/pkg/middleware"
+	"log/slog"
 )
 
 // ExternalAccountExtractorMiddlewareProvider implements AccountExtractorMiddlewareProvider for external mode

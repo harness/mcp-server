@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/harness/harness-go-sdk/harness/nextgen"
 	config "github.com/harness/mcp-server/common"
+	"log/slog"
 )
 
 // CustomLicensesApiService is a custom implementation of the LicensesApiService

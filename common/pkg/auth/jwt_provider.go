@@ -74,11 +74,10 @@ func ParseAuthorizationHeader(authHeader string) (string, error) {
 	if len(parts) != 2 {
 		return "", fmt.Errorf("invalid authorization header format")
 	}
-	
+
 	if parts[0] != jwtPrefix {
 		return "", fmt.Errorf("invalid authorization scheme, expected %s", jwtPrefix)
 	}
-	
+
 	return parts[1], nil
 }
-

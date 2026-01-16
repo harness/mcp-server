@@ -9,7 +9,7 @@ import (
 
 func TestInitToolsets_WithoutLicenseValidation(t *testing.T) {
 	cfg := &config.McpServerConfig{
-		BaseURL: "https://app.harness.io",
+		BaseURL:  "https://app.harness.io",
 		ReadOnly: false,
 		Toolsets: []string{"all"},
 	}
@@ -36,7 +36,7 @@ func TestInitToolsets_WithoutLicenseValidation(t *testing.T) {
 
 func TestInitToolsets_RegistersAllModules(t *testing.T) {
 	cfg := &config.McpServerConfig{
-		BaseURL: "https://app.harness.io",
+		BaseURL:  "https://app.harness.io",
 		ReadOnly: false,
 	}
 
@@ -52,4 +52,3 @@ func TestInitToolsets_RegistersAllModules(t *testing.T) {
 		t.Errorf("Expected at least 10 toolsets, got %d", len(tsg.Toolsets))
 	}
 }
-

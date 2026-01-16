@@ -45,4 +45,3 @@ func TestCreateClient_InvalidService(t *testing.T) {
 		t.Error("Expected error for invalid service")
 	}
 }
-

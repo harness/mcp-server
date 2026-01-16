@@ -3,12 +3,12 @@ package utils
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"net/http"
 
 	config "github.com/harness/mcp-server/common"
 	licenseFactory "github.com/harness/mcp-server/common/pkg/license"
 	"github.com/harness/mcp-server/common/pkg/toolsets"
+	"log/slog"
 )
 
 type LicenseInfo struct {

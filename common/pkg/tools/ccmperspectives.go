@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"strings"
 
 	config "github.com/harness/mcp-server/common"
@@ -17,6 +16,7 @@ import (
 	"github.com/harness/mcp-server/common/pkg/utils"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"log/slog"
 )
 
 const (

@@ -2,10 +2,10 @@ package toolsets
 
 import (
 	"fmt"
-	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"log/slog"
 )
 
 // NewServerTool creates a new server tool with the given tool and handler

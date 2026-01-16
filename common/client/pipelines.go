@@ -3,11 +3,11 @@ package client
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"strconv"
 	"strings"
 
 	"github.com/harness/mcp-server/common/client/dto"
+	"log/slog"
 )
 
 const (

@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"time"
 
 	config "github.com/harness/mcp-server/common"
@@ -13,6 +12,7 @@ import (
 	"github.com/harness/mcp-server/common/pkg/toolsets"
 	tool_registration_utils "github.com/harness/mcp-server/common/pkg/utils"
 	"github.com/harness/mcp-server/pkg/modules"
+	"log/slog"
 
 	_ "github.com/harness/mcp-server/pkg/tools/utils"
 )

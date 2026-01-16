@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"strings"
 
 	config "github.com/harness/mcp-server/common"
@@ -15,6 +14,7 @@ import (
 	utils "github.com/harness/mcp-server/common/pkg/tools/utils"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"log/slog"
 )
 
 type OPAContent struct {

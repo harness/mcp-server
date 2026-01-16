@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 
 	commonConfig "github.com/harness/mcp-server/common"
@@ -16,6 +15,7 @@ import (
 	"github.com/harness/mcp-server/common/pkg/toolsets"
 	"github.com/harness/mcp-server/pkg/modules"
 	"github.com/mark3labs/mcp-go/mcp"
+	"log/slog"
 )
 
 type HTTPToolFilteringMiddleware struct {
