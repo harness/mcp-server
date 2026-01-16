@@ -27,7 +27,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 #                   Create final image                     #
 # ---------------------------------------------------------#
 # Using Red Hat UBI for FIPS 140-2 compliance (Federal/DoD)
-FROM registry.access.redhat.com/ubi9/ubi-minimal:latest AS final
+FROM registry.access.redhat.com/ubi9/ubi-minimal:9.5 AS final
 
 RUN microdnf install -y ca-certificates && microdnf clean all
 
