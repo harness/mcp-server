@@ -118,6 +118,7 @@ func RegisterCloudCostManagement(config *config.McpServerConfig, tsg *toolsets.T
 			toolsets.NewServerTool(tools.CcmPerspectiveFilterValuesTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.CcmListLabelsV2KeysTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.CcmPerspectiveFilterValuesToolEvent(config)),
+			toolsets.NewServerTool(tools.TranslateToCostCategoriesCostTargetsTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.CcmCostCategoryKeyValuesEventTool(config)),
 			toolsets.NewServerTool(tools.ListCcmRecommendationsTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.ListCcmRecommendationsByResourceTypeTool(config, ccmClient)),
