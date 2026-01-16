@@ -772,6 +772,7 @@ Environment variables are prefixed with `HARNESS_`:
 - `HARNESS_LOG_FILE`: Path to log file
 - `HARNESS_LOG_LEVEL`: Set the logging level (debug, info, warn, error)
 - `HARNESS_BASE_URL`: Base URL for Harness (default: "https://app.harness.io")
+- `GODEBUG`: Set to `fips140=only` to enable FIPS compliance
 
 ### Authentication
 

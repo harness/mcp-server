@@ -36,7 +36,6 @@ WORKDIR /app
 VOLUME /data
 
 ENV XDG_CACHE_HOME=/data
-ENV GODEBUG="fips140=only"
 
 COPY --from=builder /app/mcp-server /app/mcp-server
 
