@@ -20,6 +20,20 @@ import (
 func InitToolsets(ctx context.Context, config *config.McpServerConfig) (*toolsets.ToolsetGroup, error) {
 	tsg := toolsets.NewToolsetGroup(config.ReadOnly)
 
+	// If API key is configured, do license validation at startup (STDIO mode)
+	if config.APIKey != "" {
+		return initToolsetsWithLicenseValidation(ctx, config, tsg)
+	}
+
+	// If NO API key, register all tools (HTTP mode with middleware filtering)
+	return initToolsetsWithoutLicenseValidation(ctx, config, tsg)
+}
+
+// initToolsetsWithLicenseValidation performs license validation at startup
+// and only registers licensed tools (used in STDIO mode)
+func initToolsetsWithLicenseValidation(ctx context.Context, config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) (*toolsets.ToolsetGroup, error) {
+	slog.InfoContext(ctx, "API key configured, performing license validation at startup")
+
 	// Initialize license validation
 	licenseInfo, err := tool_registration_utils.InitLicenseValidation(ctx, config)
 	if err != nil {
@@ -29,6 +43,7 @@ func InitToolsets(ctx context.Context, config *config.McpServerConfig) (*toolset
 	// Create module registry
 	registry := modules.NewModuleRegistry(config, tsg)
 
+	// If license is invalid OR no specific toolsets requested, use default toolset only
 	if !licenseInfo.IsValid || len(config.Toolsets) == 0 {
 		RegisterDefaultToolsets(config, tsg)
 
@@ -46,6 +61,7 @@ func InitToolsets(ctx context.Context, config *config.McpServerConfig) (*toolset
 	)
 
 	RegisterAllowedToolsets(ctx, tsg, config, allowedToolsets)
+
 	// Log denied toolsets
 	for toolset, reason := range deniedToolsets {
 		slog.WarnContext(ctx, "Toolset denied",
@@ -64,6 +80,99 @@ func InitToolsets(ctx context.Context, config *config.McpServerConfig) (*toolset
 
 	tool_registration_utils.RegisterAllToolsetsWithTracker(ctx, tsg)
 	return tsg, nil
+}
+
+// initToolsetsWithoutLicenseValidation registers all tools without license validation
+// License filtering is deferred to middleware (used in HTTP mode)
+func initToolsetsWithoutLicenseValidation(ctx context.Context, config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) (*toolsets.ToolsetGroup, error) {
+	slog.InfoContext(ctx, "No API key configured, registering all toolsets (license validation deferred to middleware)")
+
+	// Register all available toolsets
+	if err := registerAllModules(config, tsg); err != nil {
+		return nil, err
+	}
+
+	// Enable all toolsets
+	if err := tsg.EnableToolsets([]string{"all"}); err != nil {
+		return nil, err
+	}
+
+	tool_registration_utils.RegisterAllToolsetsWithTracker(ctx, tsg)
+	return tsg, nil
+}
+
+// registerAllModules registers all available modules
+func registerAllModules(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
+	if err := commonModules.RegisterPipelines(config, tsg); err != nil {
+		return err
+	}
+	if err := commonModules.RegisterPullRequests(config, tsg); err != nil {
+		return err
+	}
+	if err := commonModules.RegisterRepositories(config, tsg); err != nil {
+		return err
+	}
+	if err := commonModules.RegisterRegistries(config, tsg); err != nil {
+		return err
+	}
+	if err := commonModules.RegisterCloudCostManagement(config, tsg); err != nil {
+		return err
+	}
+	if err := commonModules.RegisterServices(config, tsg); err != nil {
+		return err
+	}
+	if err := commonModules.RegisterConnectors(config, tsg); err != nil {
+		return err
+	}
+	if err := commonModules.RegisterDelegateTokens(config, tsg); err != nil {
+		return err
+	}
+	if err := commonModules.RegisterDashboards(config, tsg); err != nil {
+		return err
+	}
+	if err := commonModules.RegisterAudit(config, tsg); err != nil {
+		return err
+	}
+	if err := commonModules.RegisterTemplates(config, tsg); err != nil {
+		return err
+	}
+	if err := commonModules.RegisterAccessControl(config, tsg); err != nil {
+		return err
+	}
+	if err := commonModules.RegisterSCS(config, tsg); err != nil {
+		return err
+	}
+	if err := commonModules.RegisterSTO(config, tsg); err != nil {
+		return err
+	}
+	if err := commonModules.RegisterInternalDeveloperPortal(config, tsg); err != nil {
+		return err
+	}
+	if err := commonModules.RegisterChaos(config, tsg); err != nil {
+		return err
+	}
+	if err := commonModules.RegisterEnvironments(config, tsg); err != nil {
+		return err
+	}
+	if err := commonModules.RegisterInfrastructure(config, tsg); err != nil {
+		return err
+	}
+	if err := commonModules.RegisterSettings(config, tsg); err != nil {
+		return err
+	}
+	if err := commonModules.RegisterSecrets(config, tsg); err != nil {
+		return err
+	}
+	if err := commonModules.RegisterPromptTools(config, tsg); err != nil {
+		return err
+	}
+	if err := commonModules.RegisterSoftwareEngineeringInsights(config, tsg); err != nil {
+		return err
+	}
+	if err := commonModules.RegisterFeatureManagementAndExperimentation(config, tsg); err != nil {
+		return err
+	}
+	return nil
 }
 
 func RegisterDefaultToolsets(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {

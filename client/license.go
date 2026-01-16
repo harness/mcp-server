@@ -6,6 +6,7 @@ import (
 	"github.com/harness/harness-go-sdk/harness/nextgen"
 	config "github.com/harness/mcp-server/common"
 	commonlicense "github.com/harness/mcp-server/common/client/license"
+	commonAuth "github.com/harness/mcp-server/common/pkg/auth"
 	clientfactory "github.com/harness/mcp-server/common/pkg/license"
 	"github.com/hashicorp/go-retryablehttp"
 )
@@ -44,9 +45,26 @@ func (p *ExternalProvider) CreateClient(ctx context.Context, config *config.McpS
 }
 
 func (p *ExternalProvider) ConfigureAuth(ctx context.Context, cfg *nextgen.Configuration, config *config.McpServerConfig, secret string) error {
-	// External mode: API key authentication only
-	cfg.ApiKey = config.APIKey
-	cfg.DefaultHeader = map[string]string{"x-api-key": config.APIKey}
+	// First, try to get auth from context (from incoming request headers)
+	authKey, authValue, hasContextAuth := commonAuth.GetAuthFromContext(ctx)
+
+	if hasContextAuth {
+		// Use authentication from request context
+		if authKey == "Authorization" {
+			// JWT token - set as Authorization header
+			cfg.DefaultHeader = map[string]string{"Authorization": authValue}
+		} else if authKey == "x-api-key" {
+			// API key - set as x-api-key header
+			cfg.ApiKey = authValue
+			cfg.DefaultHeader = map[string]string{"x-api-key": authValue}
+		}
+	} else if config.APIKey != "" {
+		// Fallback to configured API key (for stdio mode or when API key is in config)
+		cfg.ApiKey = config.APIKey
+		cfg.DefaultHeader = map[string]string{"x-api-key": config.APIKey}
+	}
+	// If neither context auth nor config API key, authentication will fail (401)
+
 	return nil
 }
 

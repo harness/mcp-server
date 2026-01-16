@@ -17,6 +17,7 @@ import (
 	"github.com/harness/mcp-server/common/pkg/types/enum"
 	tools "github.com/harness/mcp-server/pkg"
 	"github.com/harness/mcp-server/pkg/middleware"
+	"github.com/harness/mcp-server/pkg/middleware/tool_filtering"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/spf13/cobra"
@@ -58,13 +59,23 @@ var (
 
 			transportType := enum.TransportHTTP
 
+			// API key is now optional for HTTP server mode
+			// When not provided, auth will come from incoming HTTP request headers
 			apiKey := viper.GetString("api_key")
-			if apiKey == "" {
-				return fmt.Errorf("API key not provided")
-			}
-			accountID, err := extractAccountIDFromAPIKey(apiKey)
-			if err != nil {
-				return fmt.Errorf("failed to extract account ID from API key: %w", err)
+			var accountID string
+			var err error
+
+			if apiKey != "" {
+				// If API key is provided via config, extract account ID
+				accountID, err = extractAccountIDFromAPIKey(apiKey)
+				if err != nil {
+					return fmt.Errorf("failed to extract account ID from API key: %w", err)
+				}
+				slog.Info("Using API key from configuration")
+			} else {
+				slog.Info("No API key provided in config - will use authentication from incoming request headers")
+				// Account ID will be extracted from incoming request headers
+				// by the middleware (from JWT claims or API key header)
 			}
 
 			var toolsets []string
@@ -268,11 +279,21 @@ func runHTTPServer(ctx context.Context, config config.McpServerConfig) error {
 	// Create HTTP server
 	httpServer := server.NewStreamableHTTPServer(harnessServer)
 
-	// Add middleware
-	authMiddleware := middleware.AuthMiddleware(ctx, &config, httpServer)
+	var handler http.Handler
+
+	if config.APIKey == "" {
+		// No API key in config → Enable dynamic license-based filtering per request
+		slog.Info("API key not configured, enabling dynamic license-based tool filtering")
+		toolFilter := tool_filtering.NewHTTPToolFilteringMiddleware(ctx, slog.Default(), &config)
+		handler = middleware.AuthMiddleware(ctx, &config, toolFilter.Wrap(httpServer))
+	} else {
+		// API key in config → License validated at startup, no per-request filtering needed
+		slog.Info("API key configured, tools already filtered at startup based on license")
+		handler = middleware.AuthMiddleware(ctx, &config, httpServer)
+	}
 
 	mux := http.NewServeMux()
-	mux.Handle(config.HTTP.Path, authMiddleware)
+	mux.Handle(config.HTTP.Path, handler)
 
 	// Add health endpoint for Kubernetes probes
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {

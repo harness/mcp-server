@@ -2,6 +2,7 @@ package modules
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	config "github.com/harness/mcp-server/common"
@@ -44,9 +45,23 @@ func (p *ExternalClientProvider) CreateClient(config *config.McpServerConfig, se
 	if servicePath == "" {
 		serviceUrl = config.BaseURL
 	} else {
+		//if does have api key, we remove the gateway prefix
+		if config.APIKey == "" {
+			servicePath = strings.ReplaceAll(servicePath, "gateway/", "")
+		}
 		serviceUrl = config.BaseURL + "/" + servicePath
 	}
-	var authProvider commonAuth.Provider = commonAuth.NewAPIKeyProvider(config.APIKey)
+	// Create auth provider that reads from context (HTTP request headers)
+	// with fallback to config for CLI/stdio mode
+	var fallbackProvider commonAuth.Provider
+	if config.APIKey != "" {
+		fallbackProvider = commonAuth.NewAPIKeyProvider(config.APIKey)
+	}
+	// ContextProvider will:
+	// 1. First try to read auth from context (populated by HTTP middleware)
+	// 2. Fall back to config.APIKey if no auth in context (CLI/stdio mode)
+	authProvider := commonAuth.NewContextProvider(fallbackProvider)
+
 	client, err := commonClient.NewWithAuthProvider(serviceUrl, authProvider, config.Version, timeout...)
 	if err != nil {
 		return nil, err

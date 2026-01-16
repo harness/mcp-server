@@ -1,0 +1,3 @@
+DOCKER_FILE_PATH: mcp-server/Dockerfile
+CONTEXT_PATH: mcp-server
+HELM_CHART_SOURCE_DIRECTORY: mcp-server/chart
