@@ -411,6 +411,20 @@ Optional environment variables:
 
 1. HARNESS_TOOLSETS - Comma separated list of toolsets to enable. For e.g. HARNESS_TOOLSETS="pipelines,sei,scs,sto". If not specified, ONLY the default toolset is enabled.
 
+#### FIPS Compliance
+
+To build with a FIPS-validated base image (Red Hat UBI):
+
+```bash
+docker build --build-arg BASE_IMAGE=registry.access.redhat.com/ubi9/ubi-minimal:9.5 -t mcp-server .
+```
+
+To enable FIPS-compliant cryptography at runtime:
+
+```bash
+docker run -e GODEBUG=fips140=only ... mcp-server stdio
+```
+
 ## Integration with AI Assistants
 
 ### Usage with Gemini CLI
@@ -772,7 +786,6 @@ Environment variables are prefixed with `HARNESS_`:
 - `HARNESS_LOG_FILE`: Path to log file
 - `HARNESS_LOG_LEVEL`: Set the logging level (debug, info, warn, error)
 - `HARNESS_BASE_URL`: Base URL for Harness (default: "https://app.harness.io")
-- `GODEBUG`: Set to `fips140=only` to enable FIPS compliance
 
 ### Authentication
 
