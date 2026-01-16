@@ -39,7 +39,7 @@ func (p *ExternalAccountExtractorMiddlewareProvider) CreateAccountExtractorMiddl
 			// JWT token authentication
 			slog.InfoContext(newCtx, "Received JWT authentication, extracting account ID from claims")
 
-			// Extract the token from the header
+			// Check if the token is present in the header
 			_, err := auth.ParseAuthorizationHeader(authHeader)
 			if err != nil {
 				slog.ErrorContext(newCtx, "Failed to parse Authorization header", "error", err)
@@ -47,10 +47,10 @@ func (p *ExternalAccountExtractorMiddlewareProvider) CreateAccountExtractorMiddl
 				return
 			}
 
-			// Extract account ID from JWT claims
+			// Using the Harness-Account header as the account ID
 			accountID = accountIdHeader
 
-			slog.InfoContext(newCtx, "Successfully extracted account ID from JWT", "accountID", accountID)
+			slog.InfoContext(newCtx, "Successfully extracted account ID from Harness-Account header", "accountID", accountID)
 
 			// Store the full auth header for pass-through to downstream services
 			newCtx = auth.WithAuthInContext(newCtx, "Authorization", authHeader)
