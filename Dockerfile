@@ -1,7 +1,7 @@
 # ---------------------------------------------------------#
 #                   Build Harness image                    #
 # ---------------------------------------------------------#
-FROM --platform=$BUILDPLATFORM golang:1.25.1-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.25.1 AS builder
 
 # Setup working dir
 WORKDIR /app
@@ -23,24 +23,22 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     GOOS=$TARGETOS GOARCH=$TARGETARCH \
     go build -o mcp-server ./cmd/harness-mcp-server
 
-### Pull CA Certs
-FROM --platform=$BUILDPLATFORM alpine:latest AS cert-image
-
-RUN apk --update add ca-certificates
-
 # ---------------------------------------------------------#
 #                   Create final image                     #
 # ---------------------------------------------------------#
-FROM alpine:3.21 AS final
+# Using Red Hat UBI for FIPS 140-2 compliance (Federal/DoD)
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest AS final
+
+RUN microdnf install -y ca-certificates && microdnf clean all
 
 # setup app dir and its content
 WORKDIR /app
 VOLUME /data
 
 ENV XDG_CACHE_HOME=/data
+ENV GODEBUG="fips140=only"
 
 COPY --from=builder /app/mcp-server /app/mcp-server
-COPY --from=cert-image /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 ENTRYPOINT ["/app/mcp-server"]
 CMD ["stdio"]
