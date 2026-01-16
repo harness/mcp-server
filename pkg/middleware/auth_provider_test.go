@@ -5,9 +5,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/golang-jwt/jwt/v5"
 	config "github.com/harness/mcp-server/common"
 	"github.com/harness/mcp-server/common/pkg/auth"
-	"github.com/golang-jwt/jwt/v5"
 )
 
 func TestMiddleware_JWTAuthentication_Success(t *testing.T) {
@@ -37,6 +37,7 @@ func TestMiddleware_JWTAuthentication_Success(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/test", nil)
 	req.Header.Set("Authorization", "IdentityService "+tokenString)
+	req.Header.Set("Harness-Account", "test-account-123")
 	w := httptest.NewRecorder()
 
 	handler.ServeHTTP(w, req)
@@ -114,7 +115,7 @@ func TestMiddleware_NoAuthNoFallback_Returns401(t *testing.T) {
 	}
 }
 
-func TestMiddleware_InvalidJWT_Returns401(t *testing.T) {
+func TestMiddleware_InvalidAuthorizationHeader_Returns401(t *testing.T) {
 	cfg := &config.McpServerConfig{}
 	provider := &ExternalAccountExtractorMiddlewareProvider{}
 
@@ -123,7 +124,9 @@ func TestMiddleware_InvalidJWT_Returns401(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("Authorization", "IdentityService invalid.jwt.token")
+	// Invalid format - missing token after "IdentityService "
+	req.Header.Set("Authorization", "IdentityService ")
+	req.Header.Set("Harness-Account", "test-account")
 	w := httptest.NewRecorder()
 
 	handler.ServeHTTP(w, req)
@@ -133,3 +136,28 @@ func TestMiddleware_InvalidJWT_Returns401(t *testing.T) {
 	}
 }
 
+func TestMiddleware_JWTWithoutHarnessAccountHeader_Returns401(t *testing.T) {
+	// Create valid JWT but don't provide Harness-Account header
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"accountId": "test-account-123",
+	})
+	tokenString, _ := token.SignedString([]byte("secret"))
+
+	cfg := &config.McpServerConfig{}
+	provider := &ExternalAccountExtractorMiddlewareProvider{}
+
+	handler := provider.CreateAccountExtractorMiddleware(nil, cfg, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("Handler should not be called when Harness-Account header is missing")
+	}))
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Authorization", "IdentityService "+tokenString)
+	// Intentionally NOT setting Harness-Account header
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("Expected status 401, got %d", w.Code)
+	}
+}

@@ -151,4 +151,3 @@ func TestParseAuthorizationHeader(t *testing.T) {
 		})
 	}
 }
-

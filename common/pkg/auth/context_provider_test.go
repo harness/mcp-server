@@ -78,4 +78,3 @@ func TestGetAuthFromContext_Missing(t *testing.T) {
 		t.Error("Expected auth not to be in context")
 	}
 }
-
