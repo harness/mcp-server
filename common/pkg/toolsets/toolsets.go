@@ -189,23 +189,3 @@ func (tg *ToolsetGroup) RegisterTools(s *server.MCPServer) {
 		}
 	}
 }
-
-// GetAllTools returns all tool definitions from all toolsets.
-// This returns tools regardless of whether toolsets are enabled or not.
-// Useful for linting and validation purposes.
-func (tg *ToolsetGroup) GetAllTools() []mcp.Tool {
-	if tg == nil || len(tg.Toolsets) == 0 {
-		return nil
-	}
-
-	var tools []mcp.Tool
-	for _, toolset := range tg.Toolsets {
-		if toolset == nil {
-			continue
-		}
-		for _, st := range toolset.GetAvailableTools() {
-			tools = append(tools, st.Tool)
-		}
-	}
-	return tools
-}

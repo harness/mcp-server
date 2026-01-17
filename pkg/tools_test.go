@@ -129,7 +129,14 @@ func getAllTools(t *testing.T) []mcp.Tool {
 		}
 	}
 
-	return tsg.GetAllTools()
+	// Extract tools from all toolsets
+	var tools []mcp.Tool
+	for _, toolset := range tsg.Toolsets {
+		for _, st := range toolset.GetAvailableTools() {
+			tools = append(tools, st.Tool)
+		}
+	}
+	return tools
 }
 
 // TestToolNameValidation validates that all tool names follow naming conventions.
