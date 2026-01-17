@@ -133,7 +133,7 @@ func getAllTools(t *testing.T) []mcp.Tool {
 }
 
 // TestToolNameValidation validates that all tool names follow naming conventions.
-// Allowlisted tools are skipped; new tools must comply.
+// Legacy tools are skipped; new tools must comply.
 func TestToolNameValidation(t *testing.T) {
 	tools := getAllTools(t)
 	if len(tools) == 0 {
