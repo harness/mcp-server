@@ -45,7 +45,11 @@ test: ## Run the go tests
 	@go test ./... -coverprofile=coverage.out
 	@go tool cover -html=coverage.out
 
-.PHONY: help format tools test build
+lint-tools: ## Validate MCP tool names follow naming conventions
+	@echo "Validating MCP tool names..."
+	@go test -v -run TestToolNameValidation ./pkg/...
+
+.PHONY: help format tools test build lint-tools
 
 $(GOBIN)/gci:
 	go install github.com/daixiang0/gci@v0.13.1
