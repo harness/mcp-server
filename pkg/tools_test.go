@@ -1,23 +1,14 @@
 package tools_test
 
 import (
-	"context"
-	"net/url"
 	"testing"
-	"time"
 
-	config "github.com/harness/mcp-server/common"
-	"github.com/harness/mcp-server/common/client"
-	"github.com/harness/mcp-server/common/pkg/auth"
-	commonModules "github.com/harness/mcp-server/common/pkg/modules"
-	"github.com/harness/mcp-server/common/pkg/toolsets"
-	mcplint "github.com/harness/mcp-server/mcp-lint"
-	"github.com/harness/mcp-server/pkg/modules"
+	"github.com/harness/mcp-server/pkg/test"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
 // legacyToolNames contains existing tools that predate naming conventions.
-// New tools must follow conventions; these are allowed for backwards compatibility.
+// New tools must follow {module}_{verb}_{noun} pattern.
 // Do not add new entries here - fix the tool name instead.
 var legacyToolNames = []string{
 	"revoke_delegate_token",
@@ -50,6 +41,126 @@ var legacyToolNames = []string{
 	"ccm_perspective_filter_values_event",
 	"override_ccm_recommendation_savings",
 	"report_ccm_anomaly_feedback",
+	"create_ccm_perspective",
+	"create_delegate_token",
+	"create_jira_ticket_for_ccm_recommendation",
+	"create_opa_policy",
+	"create_resource_group",
+	"create_role",
+	"create_role_assignment",
+	"create_service_account",
+	"create_service_now_ticket_for_ccm_recommendation",
+	"create_user_group",
+	"delete_ccm_perspective",
+	"delete_delegate_token",
+	"delete_resource_group",
+	"delete_role",
+	"delete_service_account",
+	"delete_user_group",
+	"download_sbom",
+	"execute_workflow",
+	"fetch_compliance_results_for_repo_by_id",
+	"fetch_execution_url",
+	"get_all_security_issues",
+	"get_all_users",
+	"get_artifact_chain_of_custody",
+	"get_audit_yaml",
+	"get_autonomous_code_maintenance_task_executions",
+	"get_azure_vm_recommendation_detail",
+	"get_ccm_anomalies_for_perspective",
+	"get_ccm_anomalies_summary",
+	"get_ccm_commitment_coverage",
+	"get_ccm_commitment_ec2_analysis",
+	"get_ccm_commitment_estimated_savings",
+	"get_ccm_commitment_savings",
+	"get_ccm_commitment_utilisation",
+	"get_ccm_cost_category",
+	"get_ccm_metadata",
+	"get_ccm_overview",
+	"get_ccm_perspective",
+	"get_ccm_recommendations_stats",
+	"get_code_repository_overview",
+	"get_connector_details",
+	"get_dashboard_data",
+	"get_delegate_token",
+	"get_ec2_recommendation_detail",
+	"get_ecs_service_recommendation_detail",
+	"get_entity",
+	"get_environment",
+	"get_execution",
+	"get_fme_feature_flag_definition",
+	"get_input_set",
+	"get_last_period_cost_ccm_perspective",
+	"get_last_twelve_months_cost_ccm_perspective",
+	"get_node_pool_recommendation_detail",
+	"get_pipeline",
+	"get_pipeline_summary",
+	"get_prompt",
+	"get_pull_request",
+	"get_pull_request_activities",
+	"get_pull_request_checks",
+	"get_registry",
+	"get_repository",
+	"get_role_info",
+	"get_score_summary",
+	"get_scorecard",
+	"get_scorecard_check",
+	"get_scorecard_check_stats",
+	"get_scorecard_stats",
+	"get_scores",
+	"get_secret",
+	"get_service",
+	"get_service_account",
+	"get_user_group_info",
+	"get_user_info",
+	"get_workload_recommendation_detail",
+	"list_all_ccm_anomalies",
+	"list_artifact_files",
+	"list_artifact_versions",
+	"list_artifacts",
+	"list_artifacts_scs",
+	"list_available_permissions",
+	"list_available_roles",
+	"list_ccm_anomalies",
+	"list_ccm_cost_categories",
+	"list_ccm_cost_categories_detail",
+	"list_ccm_ignored_anomalies",
+	"list_ccm_perspectives_detail",
+	"list_ccm_recommendations",
+	"list_ccm_recommendations_by_resource_type",
+	"list_connector_catalogue",
+	"list_connectors",
+	"list_dashboards",
+	"list_delegate_tokens",
+	"list_entities",
+	"list_environments",
+	"list_executions",
+	"list_filter_values_ccm_anomalies",
+	"list_fme_environments",
+	"list_fme_feature_flags",
+	"list_fme_workspaces",
+	"list_infrastructures",
+	"list_input_sets",
+	"list_jira_issue_types",
+	"list_jira_projects",
+	"list_pipelines",
+	"list_prompts",
+	"list_pull_requests",
+	"list_registries",
+	"list_repositories",
+	"list_role_assignments",
+	"list_scorecard_checks",
+	"list_scorecards",
+	"list_scs_code_repos",
+	"list_secrets",
+	"list_services",
+	"list_settings",
+	"list_templates",
+	"list_triggers",
+	"list_user_audits",
+	"search_tech_docs",
+	"update_ccm_perspective",
+	"update_ccm_recommendation_state",
 }
 
 func isLegacyTool(name string) bool {
@@ -61,93 +172,17 @@ func isLegacyTool(name string) bool {
 	return false
 }
 
-/*
-Test setup for tool name validation:
-1. Define NoOp providers that return dummy clients (no real API calls)
-2. Swap global providers with NoOps before module registration
-3. Register all modules to collect tool definitions
-4. Restore original providers via cleanup function
-
-This avoids needing real credentials to validate tool names.
-*/
-
-// noopAuthProvider implements auth.Provider for testing.
-type noopAuthProvider struct{}
-
-func (p *noopAuthProvider) GetHeader(_ context.Context) (string, string, error) {
-	return "x-api-key", "test-key", nil
-}
-
-// noopClientProvider implements commonModules.ClientProvider for testing.
-type noopClientProvider struct{}
-
-func (p *noopClientProvider) CreateClient(_ *config.McpServerConfig, _ string, _ ...time.Duration) (*client.Client, error) {
-	return &client.Client{
-		BaseURL:      &url.URL{Scheme: "http", Host: "localhost"},
-		AuthProvider: &noopAuthProvider{},
-	}, nil
-}
-
-func (p *noopClientProvider) CreateClientWithIdentity(_ *config.McpServerConfig, _ string, _ string, timeout ...time.Duration) (*client.Client, error) {
-	return p.CreateClient(nil, "", timeout...)
-}
-
-// useNoOpProviders swaps in NoOp providers and returns a cleanup function.
-func useNoOpProviders() func() {
-	origClient := commonModules.DefaultClientProvider
-	origCode := commonModules.DefaultCodeClientFactory
-	origNgManager := commonModules.DefaultNgManagerAuthProviderFactory
-
-	commonModules.DefaultClientProvider = &noopClientProvider{}
-	commonModules.DefaultCodeClientFactory = func(_ *config.McpServerConfig) (*client.Client, error) {
-		return (&noopClientProvider{}).CreateClient(nil, "")
-	}
-	commonModules.DefaultNgManagerAuthProviderFactory = func(_ *config.McpServerConfig) auth.Provider {
-		return &noopAuthProvider{}
-	}
-
-	return func() {
-		commonModules.DefaultClientProvider = origClient
-		commonModules.DefaultCodeClientFactory = origCode
-		commonModules.DefaultNgManagerAuthProviderFactory = origNgManager
-	}
-}
-
-// getAllTools registers all modules using NoOp providers and returns all tool definitions.
-func getAllTools(t *testing.T) []mcp.Tool {
-	t.Helper()
-
-	cleanup := useNoOpProviders()
-	defer cleanup()
-
-	tsg := toolsets.NewToolsetGroup(true)
-	registry := modules.NewModuleRegistry(&config.McpServerConfig{}, tsg)
-
-	for _, m := range registry.GetAllModules() {
-		if err := m.RegisterToolsets(); err != nil {
-			t.Fatalf("Failed to register module %s: %v", m.ID(), err)
-		}
-	}
-
-	// Extract tools from all toolsets
-	var tools []mcp.Tool
-	for _, toolset := range tsg.Toolsets {
-		for _, st := range toolset.GetAvailableTools() {
-			tools = append(tools, st.Tool)
-		}
-	}
-	return tools
-}
-
 // TestToolNameValidation validates that all tool names follow naming conventions.
-// Legacy tools are skipped; new tools must comply.
+// Legacy tools are skipped; new tools must comply with {module}_{verb}_{noun} pattern.
 func TestToolNameValidation(t *testing.T) {
-	tools := getAllTools(t)
+	tools, err := test.GetAllTools()
+	if err != nil {
+		t.Fatalf("Failed to get tools: %v", err)
+	}
 	if len(tools) == 0 {
 		t.Fatal("No tools registered")
 	}
 
-	// Filter out legacy tools
 	var newTools []mcp.Tool
 	for _, tool := range tools {
 		if !isLegacyTool(tool.Name) {
@@ -157,8 +192,7 @@ func TestToolNameValidation(t *testing.T) {
 
 	t.Logf("Validating %d tools (%d legacy)...", len(newTools), len(tools)-len(newTools))
 
-	errors := mcplint.ValidateTools(newTools)
-	for _, err := range errors {
+	for _, err := range test.ValidateTools(newTools) {
 		t.Errorf("%v", err)
 	}
 }
