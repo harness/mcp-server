@@ -130,10 +130,10 @@ func TestValidateTools(t *testing.T) {
 
 	t.Run("some invalid", func(t *testing.T) {
 		tools := []mcp.Tool{
-			mcp.NewTool("get_pipeline"),      // valid
-			mcp.NewTool("getPipeline"),       // invalid - camelCase
-			mcp.NewTool("pipeline_details"),  // invalid - no verb
-			mcp.NewTool("ccm_get_costs"),     // valid
+			mcp.NewTool("get_pipeline"),     // valid
+			mcp.NewTool("getPipeline"),      // invalid - camelCase
+			mcp.NewTool("pipeline_details"), // invalid - no verb
+			mcp.NewTool("ccm_get_costs"),    // valid
 		}
 		errors := ValidateTools(tools)
 		if len(errors) != 2 {
