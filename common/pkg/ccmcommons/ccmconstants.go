@@ -256,6 +256,6 @@ Fetch cost anomalies filtered by a specific perspective in Harness Cloud Cost Ma
 
 var CCMListLabelsV2KeysDescription = `
 Retrieves the list of valid label keys available for labelsV2 in Harness Cloud Cost Management.
-This tool helps you discover what label dimensions exist in your account for the time period PREVIOUS_TO_CURRENT_MONTH.
+This tool helps you discover what label dimensions exist in your account for the time period LAST_30_DAYS.
 This query is account-wide and not limited to a specific perspective.
 `
