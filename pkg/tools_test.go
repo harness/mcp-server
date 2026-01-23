@@ -1,0 +1,198 @@
+package tools_test
+
+import (
+	"testing"
+
+	"github.com/harness/mcp-server/pkg/test"
+	"github.com/mark3labs/mcp-go/mcp"
+)
+
+// legacyToolNames contains existing tools that predate naming conventions.
+// New tools must follow {module}_{verb}_{noun} pattern.
+// Do not add new entries here - fix the tool name instead.
+var legacyToolNames = []string{
+	"revoke_delegate_token",
+	"invite_users",
+	"chaos_experiments_list",
+	"chaos_experiment_describe",
+	"chaos_experiment_run_result",
+	"chaos_experiment_run",
+	"chaos_probes_list",
+	"chaos_probe_describe",
+	"chaos_experiment_template_list",
+	"chaos_experiment_variables_list",
+	"sei_productivity_feature_metrics",
+	"sei_efficiency_lead_time",
+	"sei_deployment_frequency",
+	"sei_change_failure_rate",
+	"sei_mttr",
+	"sei_deployment_frequency_drilldown",
+	"sei_change_failure_rate_drilldown",
+	"sto_global_exemptions",
+	"sto_exemptions_promote_and_approve",
+	"exemptions_reject_and_approve",
+	"validate_ccm_perspective_rules",
+	"ccm_perspective_grid",
+	"ccm_perspective_time_series",
+	"ccm_perspective_summary_with_budget",
+	"ccm_perspective_budget",
+	"ccm_perspective_recommendations",
+	"ccm_perspective_filter_values",
+	"ccm_perspective_filter_values_event",
+	"override_ccm_recommendation_savings",
+	"report_ccm_anomaly_feedback",
+	"create_ccm_perspective",
+	"create_delegate_token",
+	"create_jira_ticket_for_ccm_recommendation",
+	"create_opa_policy",
+	"create_resource_group",
+	"create_role",
+	"create_role_assignment",
+	"create_service_account",
+	"create_service_now_ticket_for_ccm_recommendation",
+	"create_user_group",
+	"delete_ccm_perspective",
+	"delete_delegate_token",
+	"delete_resource_group",
+	"delete_role",
+	"delete_service_account",
+	"delete_user_group",
+	"download_sbom",
+	"execute_workflow",
+	"fetch_compliance_results_for_repo_by_id",
+	"fetch_execution_url",
+	"get_all_security_issues",
+	"get_all_users",
+	"get_artifact_chain_of_custody",
+	"get_audit_yaml",
+	"get_autonomous_code_maintenance_task_executions",
+	"get_azure_vm_recommendation_detail",
+	"get_ccm_anomalies_for_perspective",
+	"get_ccm_anomalies_summary",
+	"get_ccm_commitment_coverage",
+	"get_ccm_commitment_ec2_analysis",
+	"get_ccm_commitment_estimated_savings",
+	"get_ccm_commitment_savings",
+	"get_ccm_commitment_utilisation",
+	"get_ccm_cost_category",
+	"get_ccm_metadata",
+	"get_ccm_overview",
+	"get_ccm_perspective",
+	"get_ccm_recommendations_stats",
+	"get_code_repository_overview",
+	"get_connector_details",
+	"get_dashboard_data",
+	"get_delegate_token",
+	"get_ec2_recommendation_detail",
+	"get_ecs_service_recommendation_detail",
+	"get_entity",
+	"get_environment",
+	"get_execution",
+	"get_fme_feature_flag_definition",
+	"get_input_set",
+	"get_last_period_cost_ccm_perspective",
+	"get_last_twelve_months_cost_ccm_perspective",
+	"get_node_pool_recommendation_detail",
+	"get_pipeline",
+	"get_pipeline_summary",
+	"get_prompt",
+	"get_pull_request",
+	"get_pull_request_activities",
+	"get_pull_request_checks",
+	"get_registry",
+	"get_repository",
+	"get_role_info",
+	"get_score_summary",
+	"get_scorecard",
+	"get_scorecard_check",
+	"get_scorecard_check_stats",
+	"get_scorecard_stats",
+	"get_scores",
+	"get_secret",
+	"get_service",
+	"get_service_account",
+	"get_user_group_info",
+	"get_user_info",
+	"get_workload_recommendation_detail",
+	"list_all_ccm_anomalies",
+	"list_artifact_files",
+	"list_artifact_versions",
+	"list_artifacts",
+	"list_artifacts_scs",
+	"list_available_permissions",
+	"list_available_roles",
+	"list_ccm_anomalies",
+	"list_ccm_cost_categories",
+	"list_ccm_cost_categories_detail",
+	"list_ccm_ignored_anomalies",
+	"list_ccm_perspectives_detail",
+	"list_ccm_recommendations",
+	"list_ccm_recommendations_by_resource_type",
+	"list_connector_catalogue",
+	"list_connectors",
+	"list_dashboards",
+	"list_delegate_tokens",
+	"list_entities",
+	"list_environments",
+	"list_executions",
+	"list_filter_values_ccm_anomalies",
+	"list_fme_environments",
+	"list_fme_feature_flags",
+	"list_fme_workspaces",
+	"list_infrastructures",
+	"list_input_sets",
+	"list_jira_issue_types",
+	"list_jira_projects",
+	"list_pipelines",
+	"list_prompts",
+	"list_pull_requests",
+	"list_registries",
+	"list_repositories",
+	"list_role_assignments",
+	"list_scorecard_checks",
+	"list_scorecards",
+	"list_scs_code_repos",
+	"list_secrets",
+	"list_services",
+	"list_settings",
+	"list_templates",
+	"list_triggers",
+	"list_user_audits",
+	"search_tech_docs",
+	"update_ccm_perspective",
+	"update_ccm_recommendation_state",
+}
+
+func isLegacyTool(name string) bool {
+	for _, legacy := range legacyToolNames {
+		if legacy == name {
+			return true
+		}
+	}
+	return false
+}
+
+// TestToolNameValidation validates that all tool names follow naming conventions.
+// Legacy tools are skipped; new tools must comply with {module}_{verb}_{noun} pattern.
+func TestToolNameValidation(t *testing.T) {
+	tools, err := test.GetAllTools()
+	if err != nil {
+		t.Fatalf("Failed to get tools: %v", err)
+	}
+	if len(tools) == 0 {
+		t.Fatal("No tools registered")
+	}
+
+	var newTools []mcp.Tool
+	for _, tool := range tools {
+		if !isLegacyTool(tool.Name) {
+			newTools = append(newTools, tool)
+		}
+	}
+
+	t.Logf("Validating %d tools (%d legacy)...", len(newTools), len(tools)-len(newTools))
+
+	for _, err := range test.ValidateTools(newTools) {
+		t.Errorf("%v", err)
+	}
+}
