@@ -746,6 +746,8 @@ Files downloaded to : /Users/testuser/log-files/logs1/logs-<YOUR_PLAN_EXECUTION_
 
 ## Development
 
+See [AGENTS.md](AGENTS.md) for code conventions, repository layout, and contribution guidelines.
+
 ### Command Line Arguments
 
 The Harness MCP Server supports the following command line arguments:
