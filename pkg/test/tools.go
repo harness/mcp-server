@@ -12,7 +12,7 @@ import (
 // GetAllTools registers all modules using NoOp providers and returns all tool definitions.
 // This allows introspection of tool metadata without requiring real API credentials.
 func GetAllTools() ([]mcp.Tool, error) {
-	cleanup := useNoOpProviders()
+	cleanup := UseNoOpProviders()
 	defer cleanup()
 
 	tsg := toolsets.NewToolsetGroup(true)

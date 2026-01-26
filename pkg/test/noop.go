@@ -34,8 +34,8 @@ func (p *noOpClientProvider) CreateClientWithIdentity(
 	return p.CreateClient(nil, "", timeout...)
 }
 
-// useNoOpProviders swaps global providers with no-ops and returns a cleanup function.
-func useNoOpProviders() func() {
+// UseNoOpProviders swaps global providers with no-ops and returns a cleanup function.
+func UseNoOpProviders() func() {
 	origClient := commonModules.DefaultClientProvider
 	origCode := commonModules.DefaultCodeClientFactory
 	origNgManager := commonModules.DefaultNgManagerAuthProviderFactory

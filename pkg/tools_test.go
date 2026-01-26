@@ -1,8 +1,12 @@
 package tools_test
 
 import (
+	"context"
 	"testing"
 
+	config "github.com/harness/mcp-server/common"
+	"github.com/harness/mcp-server/common/pkg/toolsets"
+	tools "github.com/harness/mcp-server/pkg"
 	"github.com/harness/mcp-server/pkg/test"
 	"github.com/mark3labs/mcp-go/mcp"
 )
@@ -194,5 +198,113 @@ func TestToolNameValidation(t *testing.T) {
 
 	for _, err := range test.ValidateTools(newTools) {
 		t.Errorf("%v", err)
+	}
+}
+
+func TestRegisterAllowedToolsets_EnableAll(t *testing.T) {
+	cleanup := test.UseNoOpProviders()
+	defer cleanup()
+
+	tsg := toolsets.NewToolsetGroup(true)
+	cfg := &config.McpServerConfig{}
+
+	err := tools.RegisterAllowedToolsets(context.Background(), tsg, cfg, nil, true)
+	if err != nil {
+		t.Fatalf("RegisterAllowedToolsets failed: %v", err)
+	}
+
+	// Verify that multiple toolsets were registered
+	if len(tsg.Toolsets) == 0 {
+		t.Fatal("No toolsets registered when enableAll=true")
+	}
+
+	// Check that key toolsets are present
+	expectedToolsets := []string{"acm", "pipelines", "connectors", "dashboards", "audit"}
+	for _, name := range expectedToolsets {
+		if _, exists := tsg.Toolsets[name]; !exists {
+			t.Errorf("Expected toolset %q not found when enableAll=true", name)
+		}
+	}
+
+	t.Logf("Registered %d toolsets with enableAll=true", len(tsg.Toolsets))
+}
+
+func TestRegisterAllowedToolsets_SelectiveRegistration(t *testing.T) {
+	cleanup := test.UseNoOpProviders()
+	defer cleanup()
+
+	tsg := toolsets.NewToolsetGroup(true)
+	cfg := &config.McpServerConfig{}
+
+	// Register only specific toolsets
+	allowedToolsets := []string{"pipelines", "connectors"}
+	err := tools.RegisterAllowedToolsets(context.Background(), tsg, cfg, allowedToolsets, false)
+	if err != nil {
+		t.Fatalf("RegisterAllowedToolsets failed: %v", err)
+	}
+
+	// Verify that only the specified toolsets were registered
+	if len(tsg.Toolsets) != 2 {
+		t.Errorf("Expected 2 toolsets, got %d", len(tsg.Toolsets))
+	}
+
+	for _, name := range allowedToolsets {
+		if _, exists := tsg.Toolsets[name]; !exists {
+			t.Errorf("Expected toolset %q not found", name)
+		}
+	}
+
+	// Verify that non-requested toolsets were NOT registered
+	unexpectedToolsets := []string{"acm", "dashboards", "audit"}
+	for _, name := range unexpectedToolsets {
+		if _, exists := tsg.Toolsets[name]; exists {
+			t.Errorf("Toolset %q should not have been registered", name)
+		}
+	}
+}
+
+func TestRegisterAllowedToolsets_EmptyList(t *testing.T) {
+	cleanup := test.UseNoOpProviders()
+	defer cleanup()
+
+	tsg := toolsets.NewToolsetGroup(true)
+	cfg := &config.McpServerConfig{}
+
+	// Register with empty list and enableAll=false
+	err := tools.RegisterAllowedToolsets(context.Background(), tsg, cfg, []string{}, false)
+	if err != nil {
+		t.Fatalf("RegisterAllowedToolsets failed: %v", err)
+	}
+
+	// Verify that no toolsets were registered
+	if len(tsg.Toolsets) != 0 {
+		t.Errorf("Expected 0 toolsets with empty list, got %d", len(tsg.Toolsets))
+	}
+}
+
+func TestRegisterAllowedToolsets_SingleToolset(t *testing.T) {
+	cleanup := test.UseNoOpProviders()
+	defer cleanup()
+
+	testCases := []string{"pipelines", "connectors", "dashboards", "audit", "acm"}
+
+	for _, toolsetName := range testCases {
+		t.Run(toolsetName, func(t *testing.T) {
+			tsg := toolsets.NewToolsetGroup(true)
+			cfg := &config.McpServerConfig{}
+
+			err := tools.RegisterAllowedToolsets(context.Background(), tsg, cfg, []string{toolsetName}, false)
+			if err != nil {
+				t.Fatalf("RegisterAllowedToolsets failed for %q: %v", toolsetName, err)
+			}
+
+			if len(tsg.Toolsets) != 1 {
+				t.Errorf("Expected 1 toolset for %q, got %d", toolsetName, len(tsg.Toolsets))
+			}
+
+			if _, exists := tsg.Toolsets[toolsetName]; !exists {
+				t.Errorf("Toolset %q not found after registration", toolsetName)
+			}
+		})
 	}
 }
