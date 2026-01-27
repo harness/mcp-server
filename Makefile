@@ -21,6 +21,11 @@ build:
 	@echo "Building mcp-server"
 	go build -ldflags=${LDFLAGS} -o ./cmd/harness-mcp-server/harness-mcp-server ./cmd/harness-mcp-server
 
+export-tools: ## Export MCP tool metadata to JSON
+	@echo "Exporting tool metadata..."
+	@mkdir -p _resources
+	@go run ./cmd/export-tools > _resources/tools_metadata.json 2>/dev/null
+	@echo "Exported to _resources/tools_metadata.json"
 
 ###############################################################################
 #
@@ -45,7 +50,7 @@ test: ## Run the go tests
 	@go test ./... -coverprofile=coverage.out
 	@go tool cover -html=coverage.out
 
-.PHONY: help format tools test build
+.PHONY: help format tools test build export-tools
 
 $(GOBIN)/gci:
 	go install github.com/daixiang0/gci@v0.13.1

@@ -42,6 +42,7 @@ The Harness MCP Server is a [Model Context Protocol (MCP)](https://modelcontextp
   - [Cursor Configuration](#cursor-configuration)
   - [VS Code Configuration](#vs-code-configuration)
 - [Development](#development)
+  - [Coding Agents](#coding-agents)
   - [Command Line Arguments](#command-line-arguments)
   - [Environment Variables](#environment-variables)
   - [Authentication](#authentication)
@@ -746,7 +747,28 @@ Files downloaded to : /Users/testuser/log-files/logs1/logs-<YOUR_PLAN_EXECUTION_
 
 ## Development
 
-See [AGENTS.md](AGENTS.md) for code conventions, repository layout, and contribution guidelines.
+### Coding Agents
+
+See [AGENTS.md](AGENTS.md) for code conventions, repository layout, and contribution guidelines for AI coding agents.
+
+#### Agent Commands
+
+##### `review-mcp-tool`
+
+Reviews MCP tool definitions against quality criteria in `.harness/rules/review.md`.
+
+> **💡 Tip:** Run this command whenever you are making changes to an MCP tool.
+
+**Supported IDEs:** Cursor, Claude Code, Windsurf
+
+**Examples:**
+```
+/review-mcp-tool review tool get_pipeline
+/review-mcp-tool review this MCP tool change
+/review-mcp-tool review all ccm tools
+```
+
+**Source:** `.harness/commands/review-mcp-tool.md`
 
 ### Command Line Arguments
 
