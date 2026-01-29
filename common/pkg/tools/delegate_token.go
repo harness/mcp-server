@@ -494,7 +494,7 @@ func DeleteDelegateTokenTool(config *config.McpServerConfig, client *client.Dele
 
 // GetDelegateByTokenTool creates a tool for getting delegate token by name
 func GetDelegateByTokenTool(config *config.McpServerConfig, client *client.DelegateTokenClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("get_delegate_by_token",
+	return mcp.NewTool("core_get_delegates_by_token",
 			mcp.WithDescription("Gets all delegates using a given delegate token name."),
 			mcp.WithString("token_name",
 				mcp.Description("Name of the delegate token to get all delegates using it."),
