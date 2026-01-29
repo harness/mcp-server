@@ -87,6 +87,7 @@ var legacyToolNames = []string{
 	"get_connector_details",
 	"get_dashboard_data",
 	"get_delegate_token",
+	"get_delegate_by_token",
 	"get_ec2_recommendation_detail",
 	"get_ecs_service_recommendation_detail",
 	"get_entity",
