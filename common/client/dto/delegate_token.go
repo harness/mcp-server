@@ -112,3 +112,53 @@ type DelegateTokenOptions struct {
 	Status     string `json:"status,omitempty"`     // Filter by token status
 	SearchTerm string `json:"searchTerm,omitempty"` // Search by name
 }
+
+// DelegateInstanceDetail represents details of a delegate instance
+type DelegateInstanceDetail struct {
+	UUID                          string `json:"uuid"`
+	LastHeartbeat                 int64  `json:"lastHeartbeat"`
+	ActivelyConnected             bool   `json:"activelyConnected"`
+	HostName                      string `json:"hostName"`
+	TokenActive                   bool   `json:"tokenActive"`
+	Version                       string `json:"version"`
+	DelegateExpirationTime        int64  `json:"delegateExpirationTime"`
+	PollingModeEnabled            bool   `json:"polllingModeEnabled"`
+	DelegateInstanceVersionStatus string `json:"delegateInstanceVersionStatus"`
+	Runner                        bool   `json:"runner"`
+	Disabled                      bool   `json:"disabled"`
+}
+
+// DelegateGroupDetail represents details of a delegate group
+type DelegateGroupDetail struct {
+	GroupID                     string                   `json:"groupId"`
+	DelegateGroupIdentifier     string                   `json:"delegateGroupIdentifier"`
+	DelegateType                string                   `json:"delegateType"`
+	GroupName                   string                   `json:"groupName"`
+	GroupImplicitSelectors      map[string]string        `json:"groupImplicitSelectors"`
+	LastHeartBeat               int64                    `json:"lastHeartBeat"`
+	ConnectivityStatus          string                   `json:"connectivityStatus"`
+	ActivelyConnected           bool                     `json:"activelyConnected"`
+	GrpcActive                  bool                     `json:"grpcActive"`
+	DelegateInstanceDetails     []DelegateInstanceDetail `json:"delegateInstanceDetails"`
+	TokenActive                 bool                     `json:"tokenActive"`
+	AutoUpgrade                 string                   `json:"autoUpgrade"`
+	DelegateGroupExpirationTime int64                    `json:"delegateGroupExpirationTime"`
+	UpgraderLastUpdated         int64                    `json:"upgraderLastUpdated"`
+	Immutable                   bool                     `json:"immutable"`
+	GroupVersion                string                   `json:"groupVersion"`
+	DelegateGroupVersionStatus  string                   `json:"delegateGroupVersionStatus"`
+	Unsupported                 bool                     `json:"unsupported"`
+}
+
+// DelegateGroupsResource represents the resource in delegate groups response
+type DelegateGroupsResource struct {
+	DelegateGroupDetails []DelegateGroupDetail `json:"delegateGroupDetails"`
+	AutoUpgradeOffCount  int                   `json:"autoUpgradeOffCount"`
+}
+
+// DelegateGroupsResponse represents the response from the get delegate groups by token API
+type DelegateGroupsResponse struct {
+	MetaData         map[string]interface{} `json:"metaData"`
+	Resource         DelegateGroupsResource `json:"resource"`
+	ResponseMessages []string               `json:"responseMessages"`
+}

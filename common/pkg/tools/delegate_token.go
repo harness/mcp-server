@@ -492,6 +492,92 @@ func DeleteDelegateTokenTool(config *config.McpServerConfig, client *client.Dele
 		}
 }
 
+// GetDelegateByTokenTool creates a tool for getting delegate token by name
+func GetDelegateByTokenTool(config *config.McpServerConfig, client *client.DelegateTokenClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("get_delegate_by_token",
+			mcp.WithDescription("Gets all delegates using a given delegate token name."),
+			mcp.WithString("token_name",
+				mcp.Description("Name of the delegate token to get all delegates using it."),
+				mcp.Required(),
+			),
+			common.WithScope(config, false),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			// Get token name
+			tokenName, err := RequiredParam[string](request, "token_name")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			if err := validateTokenName(tokenName); err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// Fetch scope from config and request
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// Call appropriate API based on scope
+			var scopeToSend dto.Scope
+			scopeParam, err := OptionalParam[string](request, "scope")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// If scope is not explicitly specified, determine it from available parameters
+			if scopeParam == "" {
+				if scope.ProjectID != "" && scope.OrgID != "" {
+					scopeParam = "project"
+				} else if scope.OrgID != "" {
+					scopeParam = "org"
+				} else {
+					scopeParam = "account"
+				}
+			}
+
+			switch scopeParam {
+			case "account":
+				scopeToSend = dto.Scope{AccountID: scope.AccountID}
+			case "org":
+				if scope.OrgID == "" {
+					return mcp.NewToolResultError("org_id is required for org scope"), nil
+				}
+				scopeToSend = dto.Scope{AccountID: scope.AccountID, OrgID: scope.OrgID}
+			case "project":
+				if scope.OrgID == "" || scope.ProjectID == "" {
+					return mcp.NewToolResultError("org_id and project_id are required for project scope"), nil
+				}
+				scopeToSend = dto.Scope{AccountID: scope.AccountID, OrgID: scope.OrgID, ProjectID: scope.ProjectID}
+			}
+
+			delegateGroups, err := client.GetDelegateByToken(ctx, scopeToSend, tokenName)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get delegates by token: %w", err)
+			}
+			if len(delegateGroups) == 0 {
+				return mcp.NewToolResultText("No delegates found using this token"), nil
+			}
+
+			// Create response with delegate groups
+			response := dto.DelegateGroupsResponse{
+				MetaData: map[string]interface{}{},
+				Resource: dto.DelegateGroupsResource{
+					DelegateGroupDetails: delegateGroups,
+				},
+				ResponseMessages: []string{},
+			}
+
+			r, err := json.Marshal(response)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal delegate groups: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
 func validateTokenName(name string) error {
 	if name == "" {
 		return fmt.Errorf("token name cannot be empty string")

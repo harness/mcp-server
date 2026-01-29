@@ -186,6 +186,7 @@ func RegisterDelegateTokens(config *config.McpServerConfig, tsg *toolsets.Toolse
 			toolsets.NewServerTool(tools.CreateDelegateTokenTool(config, delegateTokenServiceClient)),
 			toolsets.NewServerTool(tools.RevokeDelegateTokenTool(config, delegateTokenServiceClient)),
 			toolsets.NewServerTool(tools.DeleteDelegateTokenTool(config, delegateTokenServiceClient)),
+			toolsets.NewServerTool(tools.GetDelegateByTokenTool(config, delegateTokenServiceClient)),
 		)
 
 	tsg.AddToolset(delegateTokens)
