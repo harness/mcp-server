@@ -135,6 +135,7 @@ var legacyToolNames = []string{
 	"list_connector_catalogue",
 	"list_connectors",
 	"list_dashboards",
+	"list_delegates",
 	"list_delegate_tokens",
 	"list_entities",
 	"list_environments",

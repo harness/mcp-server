@@ -172,6 +172,11 @@ func RegisterAllowedToolsets(ctx context.Context, tsg *toolsets.ToolsetGroup, co
 			return err
 		}
 	}
+	if enableAll || slices.Contains(allowedToolsets, "delegate") {
+		if err := commonModules.RegisterDelegates(config, tsg); err != nil {
+			return err
+		}
+	}
 	if enableAll || slices.Contains(allowedToolsets, "dashboards") {
 		if err := commonModules.RegisterDashboards(config, tsg); err != nil {
 			return err

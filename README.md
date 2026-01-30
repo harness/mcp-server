@@ -142,6 +142,12 @@ Toolset Name: `delegatetokens`
 - `revoke_delegate_token`: Revokes a delegate token in Harness
 - `delete_delegate_token`: Deletes a revoked delegate token from Harness
 
+#### Delegate Toolset
+
+Toolset Name: `delegate`
+
+- `list_delegates`: Lists all delegates in Harness filtered by provided conditions such as status, delegate name, type, and version status.
+
 #### Repositories Toolset
 
 Toolset Name: `repositories`

@@ -41,6 +41,7 @@ func (m *CoreModule) Toolsets() []string {
 		"connectors",
 		"audit",
 		"delegateTokens",
+		"delegate",
 		"dashboards",
 		"access_control",
 		"templates",
@@ -67,6 +68,11 @@ func (m *CoreModule) RegisterToolsets() error {
 			}
 		case "delegateTokens":
 			err := RegisterDelegateTokens(m.config, m.tsg)
+			if err != nil {
+				return err
+			}
+		case "delegate":
+			err := RegisterDelegates(m.config, m.tsg)
 			if err != nil {
 				return err
 			}
@@ -189,6 +195,24 @@ func RegisterDelegateTokens(config *config.McpServerConfig, tsg *toolsets.Toolse
 		)
 
 	tsg.AddToolset(delegateTokens)
+	return nil
+}
+
+// RegisterDelegates registers the delegates toolset
+func RegisterDelegates(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
+	delegateClient, err := DefaultClientProvider.CreateClient(config, "ngMan")
+	if err != nil {
+		return fmt.Errorf("failed to create client for Delegates: %w", err)
+	}
+	delegateServiceClient := &client.DelegateClient{Client: delegateClient}
+
+	// Create the delegates toolset
+	delegates := toolsets.NewToolset("delegate", "Harness Delegate related tools").
+		AddReadTools(
+			toolsets.NewServerTool(tools.ListDelegatesTool(config, delegateServiceClient)),
+		)
+
+	tsg.AddToolset(delegates)
 	return nil
 }
 
