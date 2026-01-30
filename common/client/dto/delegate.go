@@ -42,9 +42,9 @@ type DelegateListFilter struct {
 
 // DelegateListResponse represents the response from the list delegates API
 type DelegateListResponse struct {
-	MetaData         interface{}  `json:"metaData"`
-	Resource         []Delegate   `json:"resource"`
-	ResponseMessages []string     `json:"responseMessages"`
+	MetaData         interface{} `json:"metaData"`
+	Resource         []Delegate  `json:"resource"`
+	ResponseMessages []string    `json:"responseMessages"`
 }
 
 // DelegateListOptions represents the options for listing delegates
