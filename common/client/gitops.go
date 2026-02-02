@@ -10,22 +10,22 @@ import (
 
 const (
 	gitopsApplicationsPath     = "applications"
-	gitopsApplicationPath      = "applications/%s"
-	gitopsResourceTreePath     = "applications/%s/resource-tree"
-	gitopsEventsPath           = "applications/%s/events"
-	gitopsPodLogsPath          = "applications/%s/pods/%s/logs/batch"
-	gitopsManagedResourcesPath = "applications/%s/managed-resources"
-	gitopsResourceActionsPath  = "applications/%s/resource/actions"
+	gitopsApplicationPath      = "agents/%s/applications/%s"
+	gitopsResourceTreePath     = "agents/%s/applications/%s/resource-tree"
+	gitopsEventsPath           = "agents/%s/applications/%s/events"
+	gitopsPodLogsPath          = "agents/%s/applications/%s/pods/%s/logs/batch"
+	gitopsManagedResourcesPath = "agents/%s/applications/%s/managed-resources"
+	gitopsResourceActionsPath  = "agents/%s/applications/%s/resource/actions"
 	gitopsAgentsPath           = "agents"
 	gitopsAgentPath            = "agents/%s"
 	gitopsAppSetsPath          = "applicationsets"
 	gitopsAppSetPath           = "applicationsets/%s"
 	gitopsClustersPath         = "clusters"
-	gitopsClusterPath          = "clusters/%s"
+	gitopsClusterPath          = "agents/%s/clusters/%s"
 	gitopsReposPath            = "repositories"
-	gitopsRepoPath             = "repositories/%s"
+	gitopsRepoPath             = "agents/%s/repositories/%s"
 	gitopsRepoCredsPath        = "repocreds"
-	gitopsRepoCredPath         = "repocreds/%s"
+	gitopsRepoCredPath         = "agents/%s/repocreds/%s"
 	gitopsDashboardPath        = "dashboard/overview"
 )
 
@@ -85,14 +85,13 @@ func (g *GitOpsService) GetApplication(
 	applicationName string,
 	refresh string,
 ) (*generated.Servicev1Application, error) {
-	path := fmt.Sprintf(gitopsApplicationPath, applicationName)
+	path := fmt.Sprintf(gitopsApplicationPath, agentIdentifier, applicationName)
 
 	params := map[string]string{
 		"routingId":         scope.AccountID,
 		"accountIdentifier": scope.AccountID,
 		"orgIdentifier":     scope.OrgID,
 		"projectIdentifier": scope.ProjectID,
-		"agentIdentifier":   agentIdentifier,
 	}
 
 	if refresh != "" {
@@ -187,14 +186,13 @@ func (g *GitOpsService) GetApplicationResourceTree(
 	agentIdentifier string,
 	applicationName string,
 ) (*generated.ApplicationsApplicationTree, error) {
-	path := fmt.Sprintf(gitopsResourceTreePath, applicationName)
+	path := fmt.Sprintf(gitopsResourceTreePath, agentIdentifier, applicationName)
 
 	params := map[string]string{
 		"routingId":         scope.AccountID,
 		"accountIdentifier": scope.AccountID,
 		"orgIdentifier":     scope.OrgID,
 		"projectIdentifier": scope.ProjectID,
-		"agentIdentifier":   agentIdentifier,
 	}
 
 	var response generated.ApplicationsApplicationTree
@@ -215,14 +213,13 @@ func (g *GitOpsService) ListApplicationEvents(
 	resourceNamespace string,
 	resourceUID string,
 ) (*generated.ApplicationsEventList, error) {
-	path := fmt.Sprintf(gitopsEventsPath, applicationName)
+	path := fmt.Sprintf(gitopsEventsPath, agentIdentifier, applicationName)
 
 	params := map[string]string{
 		"routingId":         scope.AccountID,
 		"accountIdentifier": scope.AccountID,
 		"orgIdentifier":     scope.OrgID,
 		"projectIdentifier": scope.ProjectID,
-		"agentIdentifier":   agentIdentifier,
 	}
 
 	if resourceName != "" {
@@ -254,14 +251,13 @@ func (g *GitOpsService) GetPodLogs(
 	container string,
 	tailLines int,
 ) (*generated.ApplicationsLogEntriesBatch, error) {
-	path := fmt.Sprintf(gitopsPodLogsPath, applicationName, podName)
+	path := fmt.Sprintf(gitopsPodLogsPath, agentIdentifier, applicationName, podName)
 
 	params := map[string]string{
 		"routingId":         scope.AccountID,
 		"accountIdentifier": scope.AccountID,
 		"orgIdentifier":     scope.OrgID,
 		"projectIdentifier": scope.ProjectID,
-		"agentIdentifier":   agentIdentifier,
 		"query.namespace":   namespace,
 		"query.podName":     podName,
 	}
@@ -288,14 +284,13 @@ func (g *GitOpsService) GetManagedResources(
 	agentIdentifier string,
 	applicationName string,
 ) (*generated.ApplicationsManagedResourcesResponse, error) {
-	path := fmt.Sprintf(gitopsManagedResourcesPath, applicationName)
+	path := fmt.Sprintf(gitopsManagedResourcesPath, agentIdentifier, applicationName)
 
 	params := map[string]string{
 		"routingId":         scope.AccountID,
 		"accountIdentifier": scope.AccountID,
 		"orgIdentifier":     scope.OrgID,
 		"projectIdentifier": scope.ProjectID,
-		"agentIdentifier":   agentIdentifier,
 	}
 
 	var response generated.ApplicationsManagedResourcesResponse
@@ -318,14 +313,13 @@ func (g *GitOpsService) ListResourceActions(
 	group string,
 	version string,
 ) (*generated.ApplicationsResourceActionsListResponse, error) {
-	path := fmt.Sprintf(gitopsResourceActionsPath, applicationName)
+	path := fmt.Sprintf(gitopsResourceActionsPath, agentIdentifier, applicationName)
 
 	params := map[string]string{
 		"routingId":              scope.AccountID,
 		"accountIdentifier":      scope.AccountID,
 		"orgIdentifier":          scope.OrgID,
 		"projectIdentifier":      scope.ProjectID,
-		"agentIdentifier":        agentIdentifier,
 		"query.name":             resourceName,
 		"query.namespace":        namespace,
 		"query.resourceName":     resourceName,
@@ -428,13 +422,13 @@ func (g *GitOpsService) ListClusters(
 		"pageIndex":         page,
 		"pageSize":          pageSize,
 	}
+
 	if scope.OrgID != "" {
 		requestBody["orgIdentifier"] = scope.OrgID
 	}
 	if scope.ProjectID != "" {
 		requestBody["projectIdentifier"] = scope.ProjectID
 	}
-
 	if agentIdentifier != "" {
 		requestBody["agentIdentifier"] = agentIdentifier
 	}
@@ -457,12 +451,11 @@ func (g *GitOpsService) GetCluster(
 	agentIdentifier string,
 	identifier string,
 ) (*generated.Servicev1Cluster, error) {
-	path := fmt.Sprintf(gitopsClusterPath, identifier)
+	path := fmt.Sprintf(gitopsClusterPath, agentIdentifier, identifier)
 
 	params := map[string]string{
 		"routingId":         scope.AccountID,
 		"accountIdentifier": scope.AccountID,
-		"agentIdentifier":   agentIdentifier,
 	}
 
 	if scope.OrgID != "" {
@@ -528,12 +521,11 @@ func (g *GitOpsService) GetRepository(
 	agentIdentifier string,
 	identifier string,
 ) (*generated.Servicev1Repository, error) {
-	path := fmt.Sprintf(gitopsRepoPath, identifier)
+	path := fmt.Sprintf(gitopsRepoPath, agentIdentifier, identifier)
 
 	params := map[string]string{
 		"routingId":         scope.AccountID,
 		"accountIdentifier": scope.AccountID,
-		"agentIdentifier":   agentIdentifier,
 	}
 
 	if scope.OrgID != "" {
@@ -599,12 +591,11 @@ func (g *GitOpsService) GetRepoCredentials(
 	agentIdentifier string,
 	identifier string,
 ) (*generated.Servicev1RepositoryCredentials, error) {
-	path := fmt.Sprintf(gitopsRepoCredPath, identifier)
+	path := fmt.Sprintf(gitopsRepoCredPath, agentIdentifier, identifier)
 
 	params := map[string]string{
 		"routingId":         scope.AccountID,
 		"accountIdentifier": scope.AccountID,
-		"agentIdentifier":   agentIdentifier,
 	}
 
 	if scope.OrgID != "" {
