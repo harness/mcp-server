@@ -511,7 +511,7 @@ func CcmListLabelsV2KeysTool(config *config.McpServerConfig, client *client.Clou
 			}
 
 			// Hardcode time filter to match UI behavior
-			timeFilter := dto.TimeFilterPreviousToCurrentMonth
+			timeFilter := dto.TimeFilterLast7
 
 			// Get limit and offset
 			limit := getLimitWithDefault(request, 1000)

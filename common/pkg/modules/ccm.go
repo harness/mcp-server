@@ -118,6 +118,8 @@ func RegisterCloudCostManagement(config *config.McpServerConfig, tsg *toolsets.T
 			toolsets.NewServerTool(tools.CcmPerspectiveFilterValuesTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.CcmListLabelsV2KeysTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.CcmPerspectiveFilterValuesToolEvent(config)),
+			toolsets.NewServerTool(tools.CreateCostCategoriesCostTargetsEventTool(config, ccmClient)),
+			toolsets.NewServerTool(tools.ReportCostCategoryKeyValuesEventTool(config)),
 			toolsets.NewServerTool(tools.ListCcmRecommendationsTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.ListCcmRecommendationsByResourceTypeTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.GetCcmRecommendationsStatsTool(config, ccmClient)),
@@ -139,10 +141,10 @@ func RegisterCloudCostManagement(config *config.McpServerConfig, tsg *toolsets.T
 			toolsets.NewServerTool(tools.GetCcmAnomaliesForPerspectiveTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.ReportCcmAnomalyFeedbackTool(config, ccmClient)),
 			toolsets.NewServerTool(tools.ListFilterValuesCcmAnomaliesTool(config, ccmClient)),
-			toolsets.NewServerTool(tools.FetchCommitmentCoverageTool(config, ccmClient)),
-			toolsets.NewServerTool(tools.FetchCommitmentSavingsTool(config, ccmClient)),
-			toolsets.NewServerTool(tools.FetchCommitmentUtilisationTool(config, ccmClient)),
-			toolsets.NewServerTool(tools.FetchEstimatedSavingsTool(config, ccmClient)),
+			toolsets.NewServerTool(tools.FetchCommitmentCoverageTool(config, ccmCommOrchClient)),
+			toolsets.NewServerTool(tools.FetchCommitmentSavingsTool(config, ccmCommOrchClient)),
+			toolsets.NewServerTool(tools.FetchCommitmentUtilisationTool(config, ccmCommOrchClient)),
+			toolsets.NewServerTool(tools.FetchEstimatedSavingsTool(config, ccmCommOrchClient)),
 			toolsets.NewServerTool(tools.FetchEC2AnalysisTool(config, ccmCommOrchClient)),
 		)
 

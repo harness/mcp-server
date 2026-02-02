@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"sort"
 	"time"
 
@@ -20,7 +21,139 @@ import (
 
 const (
 	CCMCostCategoryCostTargetsEventType = "cost_category_cost_targets"
+
+	// CCM Cost Category Key Values Event Tool
+	CCMReportCostCategoryKeyValuesToolID = "ccm_report_cost_category_key_values_event"
+
+	// Event name used in event.NewCustomEvent() for UI compatibility
+	CCMCostCategoryKeyValuesEventName = "ccm_cost_category_key_values_event"
+
+	// Event name constants for ccm_cost_category_key_values_event
+	CCMEventNamePresentCheckbox = "present_checkbox"
+	CCMEventNameDropDownList    = "drop_down_list"
 )
+
+// CheckboxItem represents a single item in the present_checkbox event data
+type CheckboxItem struct {
+	Key       string  `json:"key"`
+	TotalCost float64 `json:"total_cost"`
+}
+
+// DropdownValue represents a value within a cost category dropdown
+type DropdownValue struct {
+	Value     string  `json:"value"`
+	TotalCost float64 `json:"total_cost"`
+}
+
+// DropdownGroup represents a grouped cost category with its values
+type DropdownGroup struct {
+	CostCategoryName string          `json:"cost_category_name"`
+	ValueList        []DropdownValue `json:"value_list"`
+}
+
+// JSON Schema definitions for documentation and validation
+var (
+	checkboxSchemaExample = `[
+  {"key": "label_key_1", "total_cost": 100.50},
+  {"key": "label_key_2", "total_cost": 200.75}
+]`
+
+	dropdownSchemaExample = `[
+  {
+    "cost_category_name": "Environment",
+    "value_list": [
+      {"value": "production", "total_cost": 1000.00},
+      {"value": "staging", "total_cost": 500.00}
+    ]
+  }
+]`
+
+	costCategoryKeyValuesToolDescription = fmt.Sprintf(`Sends cost category key/value data to UI for user interaction.
+
+Event Types and Behavior:
+- 'present_checkbox': Displays checkboxes for user selection. Agent WAITS for user response before continuing.
+- 'drop_down_list': Displays semantically grouped dropdown menus. Agent continues without waiting.
+
+JSON Schema for 'present_checkbox':
+%s
+
+JSON Schema for 'drop_down_list':
+%s`, checkboxSchemaExample, dropdownSchemaExample)
+)
+
+// validateCheckboxData validates data for present_checkbox event
+func validateCheckboxData(data []any) ([]CheckboxItem, error) {
+	if len(data) == 0 {
+		return nil, fmt.Errorf("data array cannot be empty")
+	}
+
+	jsonBytes, err := json.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal data: %w", err)
+	}
+
+	var items []CheckboxItem
+	if err := json.Unmarshal(jsonBytes, &items); err != nil {
+		return nil, fmt.Errorf("invalid checkbox data format: %w. Expected: %s", err, checkboxSchemaExample)
+	}
+
+	// Validate required fields
+	for i, item := range items {
+		if item.Key == "" {
+			return nil, fmt.Errorf("item[%d]: 'key' field is required and cannot be empty", i)
+		}
+	}
+
+	return items, nil
+}
+
+// validateDropdownData validates data for drop_down_list event
+func validateDropdownData(data []any) ([]DropdownGroup, error) {
+	if len(data) == 0 {
+		return nil, fmt.Errorf("data array cannot be empty")
+	}
+
+	jsonBytes, err := json.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal data: %w", err)
+	}
+
+	var groups []DropdownGroup
+	if err := json.Unmarshal(jsonBytes, &groups); err != nil {
+		return nil, fmt.Errorf("invalid dropdown data format: %w. Expected: %s", err, dropdownSchemaExample)
+	}
+
+	// Validate required fields
+	for i, group := range groups {
+		if group.CostCategoryName == "" {
+			return nil, fmt.Errorf("item[%d]: 'cost_category_name' field is required and cannot be empty", i)
+		}
+		if len(group.ValueList) == 0 {
+			return nil, fmt.Errorf("item[%d]: 'value_list' must contain at least one value", i)
+		}
+		for j, val := range group.ValueList {
+			if val.Value == "" {
+				return nil, fmt.Errorf("item[%d].value_list[%d]: 'value' field is required and cannot be empty", i, j)
+			}
+		}
+	}
+
+	return groups, nil
+}
+
+// validateCostCategoryKeyValuesData validates data based on event name
+func validateCostCategoryKeyValuesData(eventName string, data []any) error {
+	switch eventName {
+	case CCMEventNamePresentCheckbox:
+		_, err := validateCheckboxData(data)
+		return err
+	case CCMEventNameDropDownList:
+		_, err := validateDropdownData(data)
+		return err
+	default:
+		return fmt.Errorf("unknown event name: %s", eventName)
+	}
+}
 
 // GetCcmOverview creates a tool for getting a ccm overview from an account
 func GetCcmOverviewTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
@@ -685,90 +818,110 @@ func processCoverageFollowUpPrompts(groupBy string) (mcp.Content, error) {
 	return promptResource, nil
 }
 
-func TranslateToCostCategoriesCostTargetsTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("ccm_translate_to_cost_categories_cost_targets",
-			mcp.WithDescription("Translate cost category grouping to system specific cost targets"),
-			mcp.WithObject(
+func CreateCostCategoriesCostTargetsEventTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("ccm_create_cost_categories_cost_targets_event",
+			mcp.WithDescription("Create cost category grouping to system specific cost targets"),
+			mcp.WithArray(
 				"cost_target_groupings",
 				mcp.Required(),
 				mcp.Description("Array of cost target groupings for cost category creation"),
-				mcp.Properties(map[string]any{
-					"type":        "array",
-					"description": "List of environment groupings with their associated values",
-					"items": map[string]any{
-						"type": "object",
-						"properties": map[string]any{
-							"title": map[string]any{
-								"type":        "string",
-								"description": "Display title for the grouping (e.g., 'Production Environments')",
-							},
-							"keys": map[string]any{
-								"type":        "array",
-								"description": "List of unique identifier key for the grouping (e.g., 'production')",
-								"items": map[string]any{
-									"type": "string",
-								},
-							},
-							"values": map[string]any{
-								"type":        "array",
-								"description": "List of environment names that belong to this grouping",
-								"items": map[string]any{
-									"type": "string",
-								},
+				mcp.Items(map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"title": map[string]any{
+							"type":        "string",
+							"description": "Display title for the grouping (e.g., 'Production Environments')",
+						},
+						"keys": map[string]any{
+							"type":        "array",
+							"description": "List of unique identifier key for the grouping (e.g., 'production')",
+							"items": map[string]any{
+								"type": "string",
 							},
 						},
-						"required": []string{"title", "keys", "values"},
+						"values": map[string]any{
+							"type":        "array",
+							"description": "List of environment names that belong to this grouping",
+							"items": map[string]any{
+								"type": "string",
+							},
+						},
 					},
+					"required": []string{"title", "keys", "values"},
 				}),
 			),
 			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			costTargetGroupingsInput, ok := request.GetArguments()["cost_target_groupings"]
-			if !ok {
+			if !ok || costTargetGroupingsInput == nil {
 				return mcp.NewToolResultError("Error extracting cost target groupings from request. Check JSON format"), nil
 			}
+
+			slog.Debug("Received cost_target_groupings",
+				"type", fmt.Sprintf("%T", costTargetGroupingsInput),
+				"value", costTargetGroupingsInput)
+
 			var response []dto.CCMCostTarget
-			if costTargetGroupingsMap, ok := costTargetGroupingsInput.(map[string]interface{}); ok {
-				costTargetGroupings, ok := costTargetGroupingsMap["cost_target_groupings"].([]interface{})
-				if !ok {
-				}
-				for _, costTargetGrouping := range costTargetGroupings {
-					if costTargetGroupingMap, ok := costTargetGrouping.(map[string]interface{}); ok {
-						title, ok := costTargetGroupingMap["title"].(string)
-						if !ok {
-							return mcp.NewToolResultError("Error extracting title from cost target grouping"), nil
+
+			costTargetGroupings, ok := costTargetGroupingsInput.([]interface{})
+			if !ok {
+				return mcp.NewToolResultError(fmt.Sprintf("Error: cost_target_groupings must be an array. Got type %T with value: %v", costTargetGroupingsInput, costTargetGroupingsInput)), nil
+			}
+
+			slog.Debug("Successfully extracted cost_target_groupings array", "length", len(costTargetGroupings))
+
+			for _, costTargetGrouping := range costTargetGroupings {
+				if costTargetGroupingMap, ok := costTargetGrouping.(map[string]interface{}); ok {
+					title, ok := costTargetGroupingMap["title"].(string)
+					if !ok {
+						return mcp.NewToolResultError("Error extracting title from cost target grouping"), nil
+					}
+					keysInterface, ok := costTargetGroupingMap["keys"].([]interface{})
+					if !ok {
+						return mcp.NewToolResultError("Error extracting keys from cost target grouping"), nil
+					}
+					keys := make([]string, len(keysInterface))
+					for i, k := range keysInterface {
+						if keyStr, ok := k.(string); ok {
+							keys[i] = keyStr
+						} else {
+							return mcp.NewToolResultError("Error: keys must be an array of strings"), nil
 						}
-						keys, ok := costTargetGroupingMap["keys"].([]string)
-						if !ok {
-							return mcp.NewToolResultError("Error extracting key from cost target grouping"), nil
+					}
+					valuesInterface, ok := costTargetGroupingMap["values"].([]interface{})
+					if !ok {
+						return mcp.NewToolResultError("Error extracting values from cost target grouping"), nil
+					}
+					values := make([]string, len(valuesInterface))
+					for i, v := range valuesInterface {
+						if valueStr, ok := v.(string); ok {
+							values[i] = valueStr
+						} else {
+							return mcp.NewToolResultError("Error: values must be an array of strings"), nil
 						}
-						values, ok := costTargetGroupingMap["values"].([]string)
-						if !ok {
-							return mcp.NewToolResultError("Error extracting values from cost target grouping"), nil
-						}
-						var rules []dto.CCMRule
-						for _, key := range keys {
-							rules = append(rules, dto.CCMRule{
-								ViewConditions: []interface{}{
-									map[string]interface{}{
-										"viewField": map[string]interface{}{
-											"fieldId":        "labels.value",
-											"fieldName":      key,
-											"identifier":     "LABEL_V2", // Labels v2 support ONLY.
-											"identifierName": "Label V2",
-										},
-										"viewOperator": "IN", // Extend support for other operators.
-										"values":       values,
+					}
+					var rules []dto.CCMRule
+					for _, key := range keys {
+						rules = append(rules, dto.CCMRule{
+							ViewConditions: []interface{}{
+								map[string]interface{}{
+									"viewField": map[string]interface{}{
+										"fieldId":        "labels.value",
+										"fieldName":      key,
+										"identifier":     "LABEL_V2", // Labels v2 support ONLY.
+										"identifierName": "Label V2",
 									},
+									"viewOperator": "IN", // Extend support for other operators.
+									"values":       values,
 								},
-							})
-						}
-						response = append(response, dto.CCMCostTarget{
-							Name:  title,
-							Rules: rules,
+							},
 						})
 					}
+					response = append(response, dto.CCMCostTarget{
+						Name:  title,
+						Rules: rules,
+					})
 				}
 			}
 			costCategoryCostTargetsEvent := event.NewCustomEvent(CCMCostCategoryCostTargetsEventType, response, event.WithContinue(true))
@@ -782,6 +935,60 @@ func TranslateToCostCategoriesCostTargetsTool(config *config.McpServerConfig, cl
 			}
 			return &mcp.CallToolResult{
 				Content: responseContents,
+			}, nil
+		}
+}
+
+func ReportCostCategoryKeyValuesEventTool(config *config.McpServerConfig) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool(CCMReportCostCategoryKeyValuesToolID,
+			mcp.WithDescription(costCategoryKeyValuesToolDescription),
+			mcp.WithString("ccm_event_name",
+				mcp.Required(),
+				mcp.Description("Event type determining UI presentation and response behavior. "+
+					"'present_checkbox' waits for user selection, 'drop_down_list' displays data and continues."),
+				mcp.Enum(CCMEventNamePresentCheckbox, CCMEventNameDropDownList),
+			),
+			mcp.WithArray("data",
+				mcp.Required(),
+				mcp.Description("Event payload array - MUST match the JSON schema for the specified ccm_event_name. "+
+					"See tool description for exact schema format."),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			eventName, err := RequiredParamOK[string](request, "ccm_event_name")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// Get data from the array parameter
+			data, err := OptionalAnyArrayParam(request, "data")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// Validate data against the schema for the specified event name
+			if err := validateCostCategoryKeyValuesData(eventName, data); err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("schema validation failed: %s", err.Error())), nil
+			}
+
+			// Determine continue flag based on event name
+			// present_checkbox: wait for user response (continue = false)
+			// drop_down_list: display and continue (continue = true)
+			shouldContinue := eventName == CCMEventNameDropDownList
+
+			// Create event with appropriate continue behavior
+			ccmEvent := event.NewCustomEvent(CCMCostCategoryKeyValuesEventName, map[string]any{
+				"ccm_event_name": eventName,
+				"data":           data,
+			}, event.WithContinue(shouldContinue), event.WithDisplayOrder(100))
+
+			eventResource, err := ccmEvent.CreateEmbeddedResource()
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{eventResource},
 			}, nil
 		}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	config "github.com/harness/mcp-server/common"
@@ -45,7 +46,7 @@ func InitToolsets(ctx context.Context, config *config.McpServerConfig) (*toolset
 		licenseInfo.ModuleLicenses,
 	)
 
-	RegisterAllowedToolsets(ctx, tsg, config, allowedToolsets)
+	RegisterAllowedToolsets(ctx, tsg, config, allowedToolsets, false)
 	// Log denied toolsets
 	for toolset, reason := range deniedToolsets {
 		slog.WarnContext(ctx, "Toolset denied",
@@ -113,117 +114,142 @@ func RegisterDefaultToolsets(config *config.McpServerConfig, tsg *toolsets.Tools
 	return nil
 }
 
-func RegisterAllowedToolsets(ctx context.Context, tsg *toolsets.ToolsetGroup, config *config.McpServerConfig, toolsets []string) error {
-	for _, toolset := range toolsets {
-		switch toolset {
-		case "acm":
-			if err := modules.RegisterACM(config, tsg); err != nil {
-				return err
-			}
-		case "default":
-			if err := RegisterDefaultToolsets(config, tsg); err != nil {
-				return err
-			}
-		case "pipelines":
-			if err := commonModules.RegisterPipelines(config, tsg); err != nil {
-				return err
-			}
-		case "pullrequests":
-			if err := commonModules.RegisterPullRequests(config, tsg); err != nil {
-				return err
-			}
-		case "repositories":
-			if err := commonModules.RegisterRepositories(config, tsg); err != nil {
-				return err
-			}
-		case "registries":
-			if err := commonModules.RegisterRegistries(config, tsg); err != nil {
-				return err
-			}
-		case "logs":
-			if err := modules.RegisterLogs(config, tsg); err != nil {
-				return err
-			}
-		case "ccm":
-			if err := commonModules.RegisterCloudCostManagement(config, tsg); err != nil {
-				return err
-			}
-		case "services":
-			if err := commonModules.RegisterServices(config, tsg); err != nil {
-				return err
-			}
-		case "connectors":
-			if err := commonModules.RegisterConnectors(config, tsg); err != nil {
-				return err
-			}
-		case "delegateTokens":
-			if err := commonModules.RegisterDelegateTokens(config, tsg); err != nil {
-				return err
-			}
-		case "dashboards":
-			if err := commonModules.RegisterDashboards(config, tsg); err != nil {
-				return err
-			}
-		case "audit":
-			if err := commonModules.RegisterAudit(config, tsg); err != nil {
-				return err
-			}
-		case "templates":
-			if err := commonModules.RegisterTemplates(config, tsg); err != nil {
-				return err
-			}
-		case "access_control":
-			if err := commonModules.RegisterAccessControl(config, tsg); err != nil {
-				return err
-			}
-		case "scs":
-			if err := commonModules.RegisterSCS(config, tsg); err != nil {
-				return err
-			}
-		case "sto":
-			if err := commonModules.RegisterSTO(config, tsg); err != nil {
-				return err
-			}
-		case "idp":
-			if err := commonModules.RegisterInternalDeveloperPortal(config, tsg); err != nil {
-				return err
-			}
-		case "chaos":
-			if err := commonModules.RegisterChaos(config, tsg); err != nil {
-				return err
-			}
-		case "environments":
-			if err := commonModules.RegisterEnvironments(config, tsg); err != nil {
-				return err
-			}
-		case "infrastructure":
-			if err := commonModules.RegisterInfrastructure(config, tsg); err != nil {
-				return err
-			}
-		case "settings":
-			if err := commonModules.RegisterSettings(config, tsg); err != nil {
-				return err
-			}
-		case "secrets":
-			if err := commonModules.RegisterSecrets(config, tsg); err != nil {
-				return err
-			}
-		case "prompts":
-			if err := commonModules.RegisterPromptTools(config, tsg); err != nil {
-				return err
-			}
-		case "sei":
-			if err := commonModules.RegisterSoftwareEngineeringInsights(config, tsg); err != nil {
-				return err
-			}
-		case "fme":
-			if err := commonModules.RegisterFeatureManagementAndExperimentation(config, tsg); err != nil {
-				return err
-			}
-		case "gitops":
-			if err := commonModules.RegisterGitOps(config, tsg); err != nil {
-				return err
-			}
+// RegisterAllowedToolsets registers toolsets based on the allowedToolsets list or all toolsets if enableAll is true.
+// To add a new toolset, add a new if block below - this is the single source of truth for available toolsets.
+func RegisterAllowedToolsets(ctx context.Context, tsg *toolsets.ToolsetGroup, config *config.McpServerConfig, allowedToolsets []string, enableAll bool) error {
+	if enableAll || slices.Contains(allowedToolsets, "acm") {
+		if err := modules.RegisterACM(config, tsg); err != nil {
+			return err
+		}
+	}
+	if enableAll || slices.Contains(allowedToolsets, "default") {
+		if err := RegisterDefaultToolsets(config, tsg); err != nil {
+			return err
+		}
+	}
+	if enableAll || slices.Contains(allowedToolsets, "pipelines") {
+		if err := commonModules.RegisterPipelines(config, tsg); err != nil {
+			return err
+		}
+	}
+	if enableAll || slices.Contains(allowedToolsets, "pullrequests") {
+		if err := commonModules.RegisterPullRequests(config, tsg); err != nil {
+			return err
+		}
+	}
+	if enableAll || slices.Contains(allowedToolsets, "repositories") {
+		if err := commonModules.RegisterRepositories(config, tsg); err != nil {
+			return err
+		}
+	}
+	if enableAll || slices.Contains(allowedToolsets, "registries") {
+		if err := commonModules.RegisterRegistries(config, tsg); err != nil {
+			return err
+		}
+	}
+	if enableAll || slices.Contains(allowedToolsets, "logs") {
+		if err := modules.RegisterLogs(config, tsg); err != nil {
+			return err
+		}
+	}
+	if enableAll || slices.Contains(allowedToolsets, "ccm") {
+		if err := commonModules.RegisterCloudCostManagement(config, tsg); err != nil {
+			return err
+		}
+	}
+	if enableAll || slices.Contains(allowedToolsets, "services") {
+		if err := commonModules.RegisterServices(config, tsg); err != nil {
+			return err
+		}
+	}
+	if enableAll || slices.Contains(allowedToolsets, "connectors") {
+		if err := commonModules.RegisterConnectors(config, tsg); err != nil {
+			return err
+		}
+	}
+	if enableAll || slices.Contains(allowedToolsets, "delegateTokens") {
+		if err := commonModules.RegisterDelegateTokens(config, tsg); err != nil {
+			return err
+		}
+	}
+	if enableAll || slices.Contains(allowedToolsets, "dashboards") {
+		if err := commonModules.RegisterDashboards(config, tsg); err != nil {
+			return err
+		}
+	}
+	if enableAll || slices.Contains(allowedToolsets, "audit") {
+		if err := commonModules.RegisterAudit(config, tsg); err != nil {
+			return err
+		}
+	}
+	if enableAll || slices.Contains(allowedToolsets, "templates") {
+		if err := commonModules.RegisterTemplates(config, tsg); err != nil {
+			return err
+		}
+	}
+	if enableAll || slices.Contains(allowedToolsets, "access_control") {
+		if err := commonModules.RegisterAccessControl(config, tsg); err != nil {
+			return err
+		}
+	}
+	if enableAll || slices.Contains(allowedToolsets, "scs") {
+		if err := commonModules.RegisterSCS(config, tsg); err != nil {
+			return err
+		}
+	}
+	if enableAll || slices.Contains(allowedToolsets, "sto") {
+		if err := commonModules.RegisterSTO(config, tsg); err != nil {
+			return err
+		}
+	}
+	if enableAll || slices.Contains(allowedToolsets, "idp") {
+		if err := commonModules.RegisterInternalDeveloperPortal(config, tsg); err != nil {
+			return err
+		}
+	}
+	if enableAll || slices.Contains(allowedToolsets, "chaos") {
+		if err := commonModules.RegisterChaos(config, tsg); err != nil {
+			return err
+		}
+	}
+	if enableAll || slices.Contains(allowedToolsets, "environments") {
+		if err := commonModules.RegisterEnvironments(config, tsg); err != nil {
+			return err
+		}
+	}
+	if enableAll || slices.Contains(allowedToolsets, "infrastructure") {
+		if err := commonModules.RegisterInfrastructure(config, tsg); err != nil {
+			return err
+		}
+	}
+	if enableAll || slices.Contains(allowedToolsets, "settings") {
+		if err := commonModules.RegisterSettings(config, tsg); err != nil {
+			return err
+		}
+	}
+	if enableAll || slices.Contains(allowedToolsets, "secrets") {
+		if err := commonModules.RegisterSecrets(config, tsg); err != nil {
+			return err
+		}
+	}
+	if enableAll || slices.Contains(allowedToolsets, "prompts") {
+		if err := commonModules.RegisterPromptTools(config, tsg); err != nil {
+			return err
+		}
+	}
+	if enableAll || slices.Contains(allowedToolsets, "sei") {
+		if err := commonModules.RegisterSoftwareEngineeringInsights(config, tsg); err != nil {
+			return err
+		}
+	}
+	if enableAll || slices.Contains(allowedToolsets, "fme") {
+		if err := commonModules.RegisterFeatureManagementAndExperimentation(config, tsg); err != nil {
+			return err
+		}
+	}
+	if enableAll || slices.Contains(allowedToolsets, "gitops") {
+		if err := commonModules.RegisterGitOps(config, tsg); err != nil {
+			return err
 		}
 	}
 	return nil

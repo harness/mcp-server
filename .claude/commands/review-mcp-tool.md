@@ -1,0 +1,1 @@
+../../.harness/commands/review-mcp-tool.md
