@@ -142,3 +142,43 @@ func GetScopeFromContext(ctx context.Context) (dto.Scope, error) {
 func WithScopeContext(ctx context.Context, scope dto.Scope) context.Context {
 	return context.WithValue(ctx, ScopeKey{}, scope)
 }
+
+// WithOptionalScope adds org_id/project_id without defaults for multi-level scoping.
+func WithOptionalScope(_ *config.McpServerConfig) mcp.ToolOption {
+	return func(tool *mcp.Tool) {
+		mcp.WithString("org_id",
+			mcp.Description("Organization ID. Omit for account-level query."),
+		)(tool)
+		mcp.WithString("project_id",
+			mcp.Description("Project ID. Omit for account/org-level query."),
+		)(tool)
+	}
+}
+
+// FetchOptionalScope gets scope without config defaults for org/project.
+func FetchOptionalScope(ctx context.Context, config *config.McpServerConfig, request mcp.CallToolRequest) (dto.Scope, error) {
+	if config.Transport == enum.TransportHTTP {
+		scope, err := GetScopeFromContext(ctx)
+		if err != nil {
+			return dto.Scope{}, fmt.Errorf("failed to get scope from context: %w", err)
+		}
+		org, _ := OptionalParam[string](request, "org_id")
+		project, _ := OptionalParam[string](request, "project_id")
+		scope.OrgID = org
+		scope.ProjectID = project
+		return scope, nil
+	}
+
+	if config.AccountID == "" {
+		return dto.Scope{}, fmt.Errorf("account ID is required")
+	}
+
+	org, _ := OptionalParam[string](request, "org_id")
+	project, _ := OptionalParam[string](request, "project_id")
+
+	return dto.Scope{
+		AccountID: config.AccountID,
+		OrgID:     org,
+		ProjectID: project,
+	}, nil
+}

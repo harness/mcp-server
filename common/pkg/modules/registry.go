@@ -68,10 +68,13 @@ func (r *ModuleRegistry) ValidateToolsets(
 		}
 
 		// Check if the module is licensed
-		// Handle special case for CCM -> CE mapping
+		// Handle special cases for module ID -> license key mapping
 		licenseKey := moduleID
-		if moduleID == "CCM" {
+		switch moduleID {
+		case "CCM":
 			licenseKey = "CE"
+		case "GITOPS":
+			licenseKey = "CD" 
 		}
 
 		// Check if module is default (always allowed) or licensed

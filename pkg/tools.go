@@ -220,6 +220,10 @@ func RegisterAllowedToolsets(ctx context.Context, tsg *toolsets.ToolsetGroup, co
 			if err := commonModules.RegisterFeatureManagementAndExperimentation(config, tsg); err != nil {
 				return err
 			}
+		case "gitops":
+			if err := commonModules.RegisterGitOps(config, tsg); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

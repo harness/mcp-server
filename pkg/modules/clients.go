@@ -30,6 +30,7 @@ var ServiceToPathMap = map[string]string{
 	"sei":                 "/gateway/sei/api/",
 	"scs":                 "ssca-manager",
 	"sto":                 "sto",
+	"gitops":              "gateway/gitops/api/v1",
 }
 
 // ExternalClientProvider implements ClientProvider for external mode
