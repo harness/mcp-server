@@ -28,6 +28,7 @@ The Harness MCP Server is a [Model Context Protocol (MCP)](https://modelcontextp
     - [Audit Trail Toolset](#audit-trail-toolset)
     - [Feature Management and Experimentation (FME) Toolset](#feature-management-and-experimentation-fme-toolset)
     - [Sei Toolset](#sei-toolset)
+    - [GitOps Toolset](#gitops-toolset)
 - [Prerequisites](#prerequisites)
 - [Quickstart](#quickstart)
 - [Makefile Usage](#makefile-usage)
@@ -321,6 +322,29 @@ Toolset Name: `sei`
 - `sei_get_ba_insight_metrics`: Get BA insight metrics
 - `sei_get_ba_insight_summary`: Get BA insight summary
 - `sei_get_ba_drilldown_data`: Get BA drilldown data
+
+#### GitOps Toolset
+
+Toolset Name: `gitops`
+
+- `gitops_list_agents`: List all GitOps agents (ArgoCD instances) at account, org, or project level
+- `gitops_get_agent`: Get detailed information about a specific GitOps agent
+- `gitops_list_applications`: List all GitOps applications with filtering and pagination
+- `gitops_get_application`: Get detailed information about a specific GitOps application
+- `gitops_get_app_resource_tree`: Get the resource tree (all Kubernetes resources) for a GitOps application
+- `gitops_list_app_events`: List events for a specific GitOps application
+- `gitops_get_pod_logs`: Get container logs from a pod in a GitOps application
+- `gitops_get_managed_resources`: Get all managed resources for a GitOps application
+- `gitops_list_resource_actions`: List available actions for a specific resource in a GitOps application
+- `gitops_list_applicationsets`: List all ApplicationSets with filtering and pagination
+- `gitops_get_applicationset`: Get detailed information about a specific ApplicationSet
+- `gitops_list_clusters`: List all clusters connected to GitOps agents
+- `gitops_get_cluster`: Get detailed information about a specific cluster
+- `gitops_list_repositories`: List all Git repositories configured in GitOps
+- `gitops_get_repository`: Get detailed information about a specific Git repository
+- `gitops_list_repo_credentials`: List all repository credentials with filtering and pagination
+- `gitops_get_repo_credentials`: Get detailed information about specific repository credentials
+- `gitops_get_dashboard_overview`: Get GitOps dashboard overview with application and sync statistics
 
 ## Prerequisites
 
