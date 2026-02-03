@@ -417,6 +417,68 @@ func (c *Client) PostRawStream(
 	return resp, nil
 }
 
+// GetStream is similar to Get but returns the raw http.Response for streaming
+// This is useful for endpoints that return streaming responses (e.g., Server-Sent Events, newline-delimited JSON)
+func (c *Client) GetStream(
+	ctx context.Context,
+	path string,
+	params map[string]string,
+	b ...backoff.BackOff,
+) (*http.Response, error) {
+	var retryCount int
+	var resp *http.Response
+
+	operation := func() error {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, appendPath(c.BaseURL.String(), path), nil)
+		if err != nil {
+			return backoff.Permanent(fmt.Errorf("unable to create HTTP request: %w", err))
+		}
+
+		addQueryParams(req, params)
+
+		resp, err = c.Do(req)
+		if err != nil || resp == nil {
+			return fmt.Errorf("request failed: %w", err)
+		}
+
+		if isRetryable(resp.StatusCode) {
+			if resp.Body != nil {
+				resp.Body.Close()
+			}
+			return fmt.Errorf("retryable status code: %d", resp.StatusCode)
+		}
+
+		if statusErr := mapStatusCodeToError(resp.StatusCode); statusErr != nil {
+			if resp.Body != nil {
+				resp.Body.Close()
+			}
+			return backoff.Permanent(statusErr)
+		}
+
+		return nil
+	}
+
+	notify := func(err error, next time.Duration) {
+		retryCount++
+		slog.WarnContext(ctx, "Retrying request due to error",
+			"retry_count", retryCount,
+			"next_retry_in", next,
+			"error", err)
+	}
+
+	if len(b) > 0 {
+		if err := backoff.RetryNotify(operation, b[0], notify); err != nil {
+			return nil, fmt.Errorf("request failed after %d retries: %w", retryCount, err)
+		}
+	} else {
+		if err := operation(); err != nil {
+			return nil, err
+		}
+	}
+
+	return resp, nil
+}
+
 // RequestRaw is a simple helper that builds up the request URL, adding the path and parameters.
 // The response from the request is unmarshalled into the out parameter.
 func (c *Client) RequestRaw(

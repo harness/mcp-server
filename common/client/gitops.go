@@ -1,8 +1,13 @@
 package client
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
+	"log/slog"
+	"strings"
+	"time"
 
 	"github.com/harness/mcp-server/common/client/dto"
 	"github.com/harness/mcp-server/common/client/gitops/generated"
@@ -13,13 +18,13 @@ const (
 	gitopsApplicationPath      = "agents/%s/applications/%s"
 	gitopsResourceTreePath     = "agents/%s/applications/%s/resource-tree"
 	gitopsEventsPath           = "agents/%s/applications/%s/events"
-	gitopsPodLogsPath          = "agents/%s/applications/%s/pods/%s/logs/batch"
+	gitopsPodLogsPath          = "agents/%s/applications/%s/logs"
 	gitopsManagedResourcesPath = "agents/%s/applications/%s/managed-resources"
 	gitopsResourceActionsPath  = "agents/%s/applications/%s/resource/actions"
 	gitopsAgentsPath           = "agents"
 	gitopsAgentPath            = "agents/%s"
 	gitopsAppSetsPath          = "applicationsets"
-	gitopsAppSetPath           = "applicationsets/%s"
+	gitopsAppSetPath           = "applicationset/%s"
 	gitopsClustersPath         = "clusters"
 	gitopsClusterPath          = "agents/%s/clusters/%s"
 	gitopsReposPath            = "repositories"
@@ -251,15 +256,17 @@ func (g *GitOpsService) GetPodLogs(
 	container string,
 	tailLines int,
 ) (*generated.ApplicationsLogEntriesBatch, error) {
-	path := fmt.Sprintf(gitopsPodLogsPath, agentIdentifier, applicationName, podName)
+	path := fmt.Sprintf(gitopsPodLogsPath, agentIdentifier, applicationName)
 
 	params := map[string]string{
 		"routingId":         scope.AccountID,
 		"accountIdentifier": scope.AccountID,
 		"orgIdentifier":     scope.OrgID,
 		"projectIdentifier": scope.ProjectID,
-		"query.namespace":   namespace,
 		"query.podName":     podName,
+		"query.namespace":   namespace,
+		"query.kind":        "Pod",
+		"query.follow":      "true",
 	}
 
 	if container != "" {
@@ -269,13 +276,84 @@ func (g *GitOpsService) GetPodLogs(
 		params["query.tailLines"] = fmt.Sprintf("%d", tailLines)
 	}
 
-	var response generated.ApplicationsLogEntriesBatch
-	err := g.Client.Get(ctx, path, params, nil, &response)
+	// Use original context for HTTP connection (no timeout on connection)
+	resp, err := g.Client.GetStream(ctx, path, params)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get pod logs for '%s': %w", podName, err)
+		return nil, fmt.Errorf("failed to get pod logs stream for '%s': %w", podName, err)
+	}
+	defer resp.Body.Close()
+
+	var entries []generated.ApplicationsLogEntry
+	scanner := bufio.NewScanner(resp.Body)
+
+	// Apply timeout only to reading the stream (not the HTTP connection)
+	readCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	// Read lines until we have enough entries or timeout
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for scanner.Scan() {
+			select {
+			case <-readCtx.Done():
+				// Context cancelled or timed out, stop reading
+				return
+			default:
+				line := scanner.Text()
+
+				// Skip empty lines
+				if line == "" {
+					continue
+				}
+
+				// The API returns different formats:
+				// - With session cookies: SSE format "data: {json}"
+				// - With API key: Plain JSON "{json}"
+				jsonData := line
+				if strings.HasPrefix(line, "data: ") {
+					jsonData = strings.TrimPrefix(line, "data: ")
+				}
+
+				// Parse {"result": {...}} wrapper
+				var wrapper struct {
+					Result generated.ApplicationsLogEntry `json:"result"`
+				}
+
+				if err := json.Unmarshal([]byte(jsonData), &wrapper); err != nil {
+					slog.WarnContext(ctx, "Failed to unmarshal log entry from stream", "error", err, "json", jsonData)
+					continue // Skip malformed lines
+				}
+
+				entries = append(entries, wrapper.Result)
+
+				// Stop after collecting requested number of lines
+				if tailLines > 0 && len(entries) >= tailLines {
+					return
+				}
+			}
+		}
+	}()
+
+	// Wait for either timeout or stream to finish
+	select {
+	case <-readCtx.Done():
+		// Stream reading timed out or context cancelled
+		slog.InfoContext(ctx, "Pod logs stream reading finished due to timeout or cancellation", "entriesCollected", len(entries))
+	case <-done:
+		// Stream finished naturally
+		slog.InfoContext(ctx, "Pod logs stream reading finished naturally", "entriesCollected", len(entries))
 	}
 
-	return &response, nil
+	if scanner.Err() != nil {
+		return nil, fmt.Errorf("error reading log stream: %w", scanner.Err())
+	}
+
+	count := int32(len(entries))
+	return &generated.ApplicationsLogEntriesBatch{
+		Entries: &entries,
+		Count:   &count,
+	}, nil
 }
 
 func (g *GitOpsService) GetManagedResources(
@@ -316,21 +394,20 @@ func (g *GitOpsService) ListResourceActions(
 	path := fmt.Sprintf(gitopsResourceActionsPath, agentIdentifier, applicationName)
 
 	params := map[string]string{
-		"routingId":              scope.AccountID,
-		"accountIdentifier":      scope.AccountID,
-		"orgIdentifier":          scope.OrgID,
-		"projectIdentifier":      scope.ProjectID,
-		"query.name":             resourceName,
-		"query.namespace":        namespace,
-		"query.resourceName":     resourceName,
-		"query.kind":             kind,
+		"routingId":            scope.AccountID,
+		"accountIdentifier":    scope.AccountID,
+		"orgIdentifier":        scope.OrgID,
+		"projectIdentifier":    scope.ProjectID,
+		"request.namespace":    namespace,
+		"request.resourceName": resourceName,
+		"request.kind":         kind,
 	}
 
 	if group != "" {
-		params["query.group"] = group
+		params["request.group"] = group
 	}
 	if version != "" {
-		params["query.version"] = version
+		params["request.version"] = version
 	}
 
 	var response generated.ApplicationsResourceActionsListResponse
@@ -640,4 +717,3 @@ func (g *GitOpsService) GetDashboardOverview(
 
 	return &response, nil
 }
-
