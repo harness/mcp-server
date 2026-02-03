@@ -25,4 +25,3 @@ func (t *V1Time) UnmarshalJSON(data []byte) error {
 	aux := &struct{ *Alias }{Alias: (*Alias)(t)}
 	return json.Unmarshal(data, aux)
 }
-

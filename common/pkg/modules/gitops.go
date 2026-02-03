@@ -87,4 +87,3 @@ func RegisterGitOps(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) 
 	tsg.AddToolset(gitops)
 	return nil
 }
-
