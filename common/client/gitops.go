@@ -5,8 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/harness/mcp-server/common/client/dto"
@@ -276,84 +276,94 @@ func (g *GitOpsService) GetPodLogs(
 		params["query.tailLines"] = fmt.Sprintf("%d", tailLines)
 	}
 
-	// Use original context for HTTP connection (no timeout on connection)
-	resp, err := g.Client.GetStream(ctx, path, params)
+	resp, err := g.Client.GetStream(context.Background(), path, params)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get pod logs stream for '%s': %w", podName, err)
 	}
 	defer resp.Body.Close()
 
-	var entries []generated.ApplicationsLogEntry
-	scanner := bufio.NewScanner(resp.Body)
-
-	// Apply timeout only to reading the stream (not the HTTP connection)
-	readCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	// Read lines until we have enough entries or timeout
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		for scanner.Scan() {
-			select {
-			case <-readCtx.Done():
-				// Context cancelled or timed out, stop reading
-				return
-			default:
-				line := scanner.Text()
-
-				// Skip empty lines
-				if line == "" {
-					continue
-				}
-
-				// The API returns different formats:
-				// - With session cookies: SSE format "data: {json}"
-				// - With API key: Plain JSON "{json}"
-				jsonData := line
-				if strings.HasPrefix(line, "data: ") {
-					jsonData = strings.TrimPrefix(line, "data: ")
-				}
-
-				// Parse {"result": {...}} wrapper
-				var wrapper struct {
-					Result generated.ApplicationsLogEntry `json:"result"`
-				}
-
-				if err := json.Unmarshal([]byte(jsonData), &wrapper); err != nil {
-					slog.WarnContext(ctx, "Failed to unmarshal log entry from stream", "error", err, "json", jsonData)
-					continue // Skip malformed lines
-				}
-
-				entries = append(entries, wrapper.Result)
-
-				// Stop after collecting requested number of lines
-				if tailLines > 0 && len(entries) >= tailLines {
-					return
-				}
-			}
-		}
-	}()
-
-	// Wait for either timeout or stream to finish
-	select {
-	case <-readCtx.Done():
-		// Stream reading timed out or context cancelled
-		slog.InfoContext(ctx, "Pod logs stream reading finished due to timeout or cancellation", "entriesCollected", len(entries))
-	case <-done:
-		// Stream finished naturally
-		slog.InfoContext(ctx, "Pod logs stream reading finished naturally", "entriesCollected", len(entries))
-	}
-
-	if scanner.Err() != nil {
-		return nil, fmt.Errorf("error reading log stream: %w", scanner.Err())
-	}
+	entries := g.readLogStream(ctx, resp.Body, tailLines)
 
 	count := int32(len(entries))
 	return &generated.ApplicationsLogEntriesBatch{
 		Entries: &entries,
 		Count:   &count,
 	}, nil
+}
+
+func (g *GitOpsService) readLogStream(ctx context.Context, body io.ReadCloser, tailLines int) []generated.ApplicationsLogEntry {
+	const (
+		streamReadTimeout = 10 * time.Second
+		scannerBufferSize = 64 * 1024
+		scannerMaxSize    = 1024 * 1024
+		channelBufferSize = 100
+	)
+
+	scanner := bufio.NewScanner(body)
+	scanner.Buffer(make([]byte, scannerBufferSize), scannerMaxSize)
+
+	readCtx, cancel := context.WithTimeout(ctx, streamReadTimeout)
+	defer cancel()
+
+	entriesCh := make(chan generated.ApplicationsLogEntry, channelBufferSize)
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+		defer close(entriesCh)
+
+		count := 0
+		for scanner.Scan() {
+			select {
+			case <-readCtx.Done():
+				return
+			default:
+				if entry := parseLogLine(ctx, scanner.Text()); entry != nil {
+					entriesCh <- *entry
+					count++
+					if tailLines > 0 && count >= tailLines {
+						return
+					}
+				}
+			}
+		}
+
+		if err := scanner.Err(); err != nil {
+			slog.DebugContext(ctx, "Scanner error while reading log stream", "error", err)
+		}
+	}()
+
+	var entries []generated.ApplicationsLogEntry
+	for {
+		select {
+		case <-readCtx.Done():
+			slog.DebugContext(ctx, "Pod logs stream reading timed out", "entriesCollected", len(entries))
+			return entries
+		case entry, ok := <-entriesCh:
+			if !ok {
+				slog.DebugContext(ctx, "Pod logs stream reading completed", "entriesCollected", len(entries))
+				return entries
+			}
+			entries = append(entries, entry)
+		}
+	}
+}
+
+func parseLogLine(ctx context.Context, line string) *generated.ApplicationsLogEntry {
+	if line == "" {
+		return nil
+	}
+
+	var wrapper struct {
+		Result generated.ApplicationsLogEntry `json:"result"`
+	}
+
+	if err := json.Unmarshal([]byte(line), &wrapper); err != nil {
+		slog.DebugContext(ctx, "Failed to parse log entry", "error", err)
+		return nil
+	}
+
+	return &wrapper.Result
 }
 
 func (g *GitOpsService) GetManagedResources(
