@@ -462,10 +462,10 @@ Retrieves logs from running or terminated containers.
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			namespace, err := RequiredParam[string](request, "namespace")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
+		namespace, err := RequiredParam[string](request, "namespace")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
 
 		container, _ := OptionalParam[string](request, "container")
 		tailLines, _ := OptionalParamWithDefault[float64](request, "tail_lines", 100)
@@ -479,16 +479,16 @@ Retrieves logs from running or terminated containers.
 		}
 
 		data, err := client.GetPodLogs(ctx, scope, agentIdentifier, applicationName, podName, namespace, container, int(tailLines))
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
 
-			r, err := json.Marshal(data)
-			if err != nil {
-				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal pod logs response: %v", err)), nil
-			}
+		r, err := json.Marshal(data)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("failed to marshal pod logs response: %v", err)), nil
+		}
 
-			return mcp.NewToolResultText(string(r)), nil
+		return mcp.NewToolResultText(string(r)), nil
 		}
 }
 

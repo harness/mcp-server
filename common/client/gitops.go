@@ -256,6 +256,11 @@ func (g *GitOpsService) GetPodLogs(
 	container string,
 	tailLines int,
 ) (*generated.ApplicationsLogEntriesBatch, error) {
+	const (
+		resourceKind = "Pod"
+		followStream = "true"
+	)
+
 	path := fmt.Sprintf(gitopsPodLogsPath, agentIdentifier, applicationName)
 
 	params := map[string]string{
@@ -265,8 +270,8 @@ func (g *GitOpsService) GetPodLogs(
 		"projectIdentifier": scope.ProjectID,
 		"query.podName":     podName,
 		"query.namespace":   namespace,
-		"query.kind":        "Pod",
-		"query.follow":      "true",
+		"query.kind":        resourceKind,
+		"query.follow":      followStream,
 	}
 
 	if container != "" {
@@ -293,21 +298,14 @@ func (g *GitOpsService) GetPodLogs(
 
 func (g *GitOpsService) readLogStream(ctx context.Context, body io.ReadCloser, tailLines int) []generated.ApplicationsLogEntry {
 	const (
-		streamReadTimeout      = 10 * time.Second
-		scannerBufferSize      = 64 * 1024
-		scannerMaxSize         = 1024 * 1024
-		defaultChannelBuffer   = 100
-		maxChannelBuffer       = 1000
+		streamReadTimeout    = 10 * time.Second
+		scannerBufferSize    = 64 * 1024
+		scannerMaxSize       = 1024 * 1024
+		defaultChannelBuffer = 100
+		maxChannelBuffer     = 1000
 	)
 
-	channelBufferSize := defaultChannelBuffer
-	if tailLines > 0 {
-		if tailLines < maxChannelBuffer {
-			channelBufferSize = tailLines
-		} else {
-			channelBufferSize = maxChannelBuffer
-		}
-	}
+	channelBufferSize := calculateChannelBuffer(tailLines, defaultChannelBuffer, maxChannelBuffer)
 
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, scannerBufferSize), scannerMaxSize)
@@ -343,15 +341,27 @@ func (g *GitOpsService) readLogStream(ctx context.Context, body io.ReadCloser, t
 		}
 	}()
 
+	return collectLogEntries(readCtx, entriesCh)
+}
+
+func calculateChannelBuffer(tailLines, defaultBuffer, maxBuffer int) int {
+	if tailLines <= 0 {
+		return defaultBuffer
+	}
+	if tailLines < maxBuffer {
+		return tailLines
+	}
+	return maxBuffer
+}
+
+func collectLogEntries(ctx context.Context, entriesCh <-chan generated.ApplicationsLogEntry) []generated.ApplicationsLogEntry {
 	var entries []generated.ApplicationsLogEntry
 	for {
 		select {
-		case <-readCtx.Done():
-			slog.DebugContext(ctx, "Pod logs stream reading timed out", "entriesCollected", len(entries))
+		case <-ctx.Done():
 			return entries
 		case entry, ok := <-entriesCh:
 			if !ok {
-				slog.DebugContext(ctx, "Pod logs stream reading completed", "entriesCollected", len(entries))
 				return entries
 			}
 			entries = append(entries, entry)
@@ -359,15 +369,16 @@ func (g *GitOpsService) readLogStream(ctx context.Context, body io.ReadCloser, t
 	}
 }
 
+type logEntryWrapper struct {
+	Result generated.ApplicationsLogEntry `json:"result"`
+}
+
 func parseLogLine(ctx context.Context, line string) *generated.ApplicationsLogEntry {
 	if line == "" {
 		return nil
 	}
 
-	var wrapper struct {
-		Result generated.ApplicationsLogEntry `json:"result"`
-	}
-
+	var wrapper logEntryWrapper
 	if err := json.Unmarshal([]byte(line), &wrapper); err != nil {
 		slog.DebugContext(ctx, "Failed to parse log entry", "error", err)
 		return nil
