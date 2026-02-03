@@ -293,11 +293,21 @@ func (g *GitOpsService) GetPodLogs(
 
 func (g *GitOpsService) readLogStream(ctx context.Context, body io.ReadCloser, tailLines int) []generated.ApplicationsLogEntry {
 	const (
-		streamReadTimeout = 10 * time.Second
-		scannerBufferSize = 64 * 1024
-		scannerMaxSize    = 1024 * 1024
-		channelBufferSize = 100
+		streamReadTimeout      = 10 * time.Second
+		scannerBufferSize      = 64 * 1024
+		scannerMaxSize         = 1024 * 1024
+		defaultChannelBuffer   = 100
+		maxChannelBuffer       = 1000
 	)
+
+	channelBufferSize := defaultChannelBuffer
+	if tailLines > 0 {
+		if tailLines < maxChannelBuffer {
+			channelBufferSize = tailLines
+		} else {
+			channelBufferSize = maxChannelBuffer
+		}
+	}
 
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, scannerBufferSize), scannerMaxSize)

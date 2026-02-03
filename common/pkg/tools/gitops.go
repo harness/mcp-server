@@ -436,10 +436,10 @@ Retrieves logs from running or terminated containers.
 			mcp.WithString("container",
 				mcp.Description("Optional: Specific container name (defaults to main container)"),
 			),
-			mcp.WithNumber("tail_lines",
-				mcp.Description("Number of lines to return from the end of logs (default: 100)"),
-				mcp.DefaultNumber(100),
-			),
+		mcp.WithNumber("tail_lines",
+			mcp.Description("Number of lines to return from the end of logs (default: 100, max: 1000)"),
+			mcp.DefaultNumber(100),
+		),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -467,10 +467,18 @@ Retrieves logs from running or terminated containers.
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			container, _ := OptionalParam[string](request, "container")
-			tailLines, _ := OptionalParamWithDefault[float64](request, "tail_lines", 100)
+		container, _ := OptionalParam[string](request, "container")
+		tailLines, _ := OptionalParamWithDefault[float64](request, "tail_lines", 100)
 
-			data, err := client.GetPodLogs(ctx, scope, agentIdentifier, applicationName, podName, namespace, container, int(tailLines))
+		const maxTailLines = 1000
+		if tailLines > maxTailLines {
+			return mcp.NewToolResultError(fmt.Sprintf("tail_lines cannot exceed %d (requested: %.0f)", maxTailLines, tailLines)), nil
+		}
+		if tailLines < 0 {
+			return mcp.NewToolResultError("tail_lines cannot be negative"), nil
+		}
+
+		data, err := client.GetPodLogs(ctx, scope, agentIdentifier, applicationName, podName, namespace, container, int(tailLines))
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
