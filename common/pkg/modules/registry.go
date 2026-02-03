@@ -74,7 +74,7 @@ func (r *ModuleRegistry) ValidateToolsets(
 		case "CCM":
 			licenseKey = "CE"
 		case "GITOPS":
-			licenseKey = "CD" 
+			licenseKey = "CD"
 		}
 
 		// Check if module is default (always allowed) or licensed

@@ -71,12 +71,12 @@ Agents can be scoped at ACCOUNT, ORG, or PROJECT level.
 			searchTerm, _ := OptionalParam[string](request, "search_term")
 			includeAllScopes, _ := OptionalParam[bool](request, "include_all_scopes")
 
-		data, err := client.ListAgents(ctx, scope, agentType, searchTerm, page, size, includeAllScopes)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
+			data, err := client.ListAgents(ctx, scope, agentType, searchTerm, page, size, includeAllScopes)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
-		return marshalResponse(data)
+			return marshalResponse(data)
 		}
 }
 
@@ -120,12 +120,12 @@ func GetAgentTool(config *config.McpServerConfig, client *client.GitOpsService) 
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-		data, err := client.GetAgent(ctx, scope, agentIdentifier)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
+			data, err := client.GetAgent(ctx, scope, agentIdentifier)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
-		return marshalResponse(data)
+			return marshalResponse(data)
 		}
 }
 
@@ -184,12 +184,12 @@ use gitops_get_application for each app.`),
 			repoIdentifier, _ := OptionalParam[string](request, "repo_identifier")
 			searchTerm, _ := OptionalParam[string](request, "search_term")
 
-		data, err := client.ListApplications(ctx, scope, agentIdentifier, clusterIdentifier, repoIdentifier, searchTerm, page, size)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
+			data, err := client.ListApplications(ctx, scope, agentIdentifier, clusterIdentifier, repoIdentifier, searchTerm, page, size)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
-		return marshalResponse(data)
+			return marshalResponse(data)
 		}
 }
 
@@ -243,12 +243,12 @@ Returns complete application details including resources, sync history, and oper
 
 			refresh, _ := OptionalParam[string](request, "refresh")
 
-		data, err := client.GetApplication(ctx, scope, agentIdentifier, applicationName, refresh)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
+			data, err := client.GetApplication(ctx, scope, agentIdentifier, applicationName, refresh)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
-		return marshalResponse(data)
+			return marshalResponse(data)
 		}
 }
 
@@ -300,12 +300,12 @@ Shows all Kubernetes resources deployed by the application with their health sta
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-		data, err := client.GetApplicationResourceTree(ctx, scope, agentIdentifier, applicationName)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
+			data, err := client.GetApplicationResourceTree(ctx, scope, agentIdentifier, applicationName)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
-		return marshalResponse(data)
+			return marshalResponse(data)
 		}
 }
 
@@ -368,12 +368,12 @@ Shows events like pod scheduling, image pulls, errors, and warnings.
 			resourceNamespace, _ := OptionalParam[string](request, "resource_namespace")
 			resourceUID, _ := OptionalParam[string](request, "resource_uid")
 
-		data, err := client.ListApplicationEvents(ctx, scope, agentIdentifier, applicationName, resourceName, resourceNamespace, resourceUID)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
+			data, err := client.ListApplicationEvents(ctx, scope, agentIdentifier, applicationName, resourceName, resourceNamespace, resourceUID)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
-		return marshalResponse(data)
+			return marshalResponse(data)
 		}
 }
 
@@ -414,10 +414,10 @@ Retrieves logs from running or terminated containers.
 			mcp.WithString("container",
 				mcp.Description("Optional: Specific container name (defaults to main container)"),
 			),
-		mcp.WithNumber("tail_lines",
-			mcp.Description("Number of lines to return from the end of logs (default: 100, max: 1000)"),
-			mcp.DefaultNumber(100),
-		),
+			mcp.WithNumber("tail_lines",
+				mcp.Description("Number of lines to return from the end of logs (default: 100, max: 1000)"),
+				mcp.DefaultNumber(100),
+			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -440,28 +440,28 @@ Retrieves logs from running or terminated containers.
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-		namespace, err := RequiredParam[string](request, "namespace")
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
+			namespace, err := RequiredParam[string](request, "namespace")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
-		container, _ := OptionalParam[string](request, "container")
-		tailLines, _ := OptionalParamWithDefault[float64](request, "tail_lines", 100)
+			container, _ := OptionalParam[string](request, "container")
+			tailLines, _ := OptionalParamWithDefault[float64](request, "tail_lines", 100)
 
-		const maxTailLines = 1000
-		if tailLines > maxTailLines {
-			return mcp.NewToolResultError(fmt.Sprintf("tail_lines cannot exceed %d (requested: %.0f)", maxTailLines, tailLines)), nil
-		}
-		if tailLines < 0 {
-			return mcp.NewToolResultError("tail_lines cannot be negative"), nil
-		}
+			const maxTailLines = 1000
+			if tailLines > maxTailLines {
+				return mcp.NewToolResultError(fmt.Sprintf("tail_lines cannot exceed %d (requested: %.0f)", maxTailLines, tailLines)), nil
+			}
+			if tailLines < 0 {
+				return mcp.NewToolResultError("tail_lines cannot be negative"), nil
+			}
 
-	data, err := client.GetPodLogs(ctx, scope, agentIdentifier, applicationName, podName, namespace, container, int(tailLines))
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
+			data, err := client.GetPodLogs(ctx, scope, agentIdentifier, applicationName, podName, namespace, container, int(tailLines))
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
-	return marshalResponse(data)
+			return marshalResponse(data)
 		}
 }
 
@@ -510,12 +510,12 @@ Shows the actual Kubernetes manifests being managed and any differences from des
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-		data, err := client.GetManagedResources(ctx, scope, agentIdentifier, applicationName)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
+			data, err := client.GetManagedResources(ctx, scope, agentIdentifier, applicationName)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
-		return marshalResponse(data)
+			return marshalResponse(data)
 		}
 }
 
@@ -598,12 +598,12 @@ Shows what operations can be performed on a resource (like restart, scale, etc.)
 			group, _ := OptionalParam[string](request, "group")
 			version, _ := OptionalParam[string](request, "version")
 
-		data, err := client.ListResourceActions(ctx, scope, agentIdentifier, applicationName, resourceName, namespace, kind, group, version)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
+			data, err := client.ListResourceActions(ctx, scope, agentIdentifier, applicationName, resourceName, namespace, kind, group, version)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
-		return marshalResponse(data)
+			return marshalResponse(data)
 		}
 }
 
@@ -648,12 +648,12 @@ ApplicationSets are templates that generate multiple Applications from a single 
 			agentIdentifier, _ := OptionalParam[string](request, "agent_identifier")
 			searchTerm, _ := OptionalParam[string](request, "search_term")
 
-		data, err := client.ListApplicationSets(ctx, scope, agentIdentifier, searchTerm, page, size)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
+			data, err := client.ListApplicationSets(ctx, scope, agentIdentifier, searchTerm, page, size)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
-		return marshalResponse(data)
+			return marshalResponse(data)
 		}
 }
 
@@ -705,12 +705,12 @@ gitops_list_applicationsets response (look for the 'identifier' field or metadat
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-		data, err := client.GetApplicationSet(ctx, scope, agentIdentifier, identifier)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
+			data, err := client.GetApplicationSet(ctx, scope, agentIdentifier, identifier)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
-		return marshalResponse(data)
+			return marshalResponse(data)
 		}
 }
 
@@ -761,12 +761,12 @@ Clusters are Kubernetes clusters where ArgoCD can deploy applications.
 			agentIdentifier, _ := OptionalParam[string](request, "agent_identifier")
 			searchTerm, _ := OptionalParam[string](request, "search_term")
 
-		data, err := client.ListClusters(ctx, scope, agentIdentifier, searchTerm, page, size)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
+			data, err := client.ListClusters(ctx, scope, agentIdentifier, searchTerm, page, size)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
-		return marshalResponse(data)
+			return marshalResponse(data)
 		}
 }
 
@@ -820,12 +820,12 @@ Returns the complete cluster configuration including connection info and namespa
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-		data, err := client.GetCluster(ctx, scope, agentIdentifier, identifier)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
+			data, err := client.GetCluster(ctx, scope, agentIdentifier, identifier)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
-		return marshalResponse(data)
+			return marshalResponse(data)
 		}
 }
 
@@ -875,12 +875,12 @@ Repositories are the source locations where ArgoCD pulls application manifests f
 			agentIdentifier, _ := OptionalParam[string](request, "agent_identifier")
 			searchTerm, _ := OptionalParam[string](request, "search_term")
 
-		data, err := client.ListRepositories(ctx, scope, agentIdentifier, searchTerm, page, size)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
+			data, err := client.ListRepositories(ctx, scope, agentIdentifier, searchTerm, page, size)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
-		return marshalResponse(data)
+			return marshalResponse(data)
 		}
 }
 
@@ -934,12 +934,12 @@ Returns the complete repository configuration including connection info and cred
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-		data, err := client.GetRepository(ctx, scope, agentIdentifier, identifier)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
+			data, err := client.GetRepository(ctx, scope, agentIdentifier, identifier)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
-		return marshalResponse(data)
+			return marshalResponse(data)
 		}
 }
 
@@ -990,12 +990,12 @@ matching a URL pattern.
 			agentIdentifier, _ := OptionalParam[string](request, "agent_identifier")
 			searchTerm, _ := OptionalParam[string](request, "search_term")
 
-		data, err := client.ListRepoCredentials(ctx, scope, agentIdentifier, searchTerm, page, size)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
+			data, err := client.ListRepoCredentials(ctx, scope, agentIdentifier, searchTerm, page, size)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
-		return marshalResponse(data)
+			return marshalResponse(data)
 		}
 }
 
@@ -1047,12 +1047,12 @@ Returns the complete credential configuration including URL pattern and type.
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-		data, err := client.GetRepoCredentials(ctx, scope, agentIdentifier, identifier)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
+			data, err := client.GetRepoCredentials(ctx, scope, agentIdentifier, identifier)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
-		return marshalResponse(data)
+			return marshalResponse(data)
 		}
 }
 
@@ -1087,12 +1087,12 @@ Returns aggregate statistics about applications, clusters, and repositories.
 
 			agentIdentifier, _ := OptionalParam[string](request, "agent_identifier")
 
-		data, err := client.GetDashboardOverview(ctx, scope, agentIdentifier)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
+			data, err := client.GetDashboardOverview(ctx, scope, agentIdentifier)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
-		return marshalResponse(data)
+			return marshalResponse(data)
 		}
 }
 
@@ -1108,4 +1108,3 @@ func OptionalParamWithDefault[T any](request mcp.CallToolRequest, paramName stri
 func isZeroValue[T any](val T) bool {
 	return fmt.Sprintf("%v", val) == fmt.Sprintf("%v", *new(T))
 }
-

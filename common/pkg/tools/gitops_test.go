@@ -116,11 +116,11 @@ func TestListAgentsTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok)
-		
+
 		var agentList generated.V1AgentList
 		err = json.Unmarshal([]byte(textContent.Text), &agentList)
 		require.NoError(t, err, "Response should be valid JSON")
-		
+
 		require.NotNil(t, agentList.Content)
 		require.Len(t, *agentList.Content, 1)
 		agent := (*agentList.Content)[0]
@@ -1099,11 +1099,10 @@ func TestGetApplicationTool(t *testing.T) {
 
 		handlerFunc := func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodGet, r.Method)
-			assert.True(t, strings.Contains(r.URL.Path, "/applications/my-app"))
+			assert.True(t, strings.Contains(r.URL.Path, "/agents/account.myagent/applications/my-app"))
 
 			q := r.URL.Query()
 			assert.Equal(t, "test-account-123", q.Get("accountIdentifier"))
-			assert.Equal(t, "account.myagent", q.Get("agentIdentifier"))
 
 			resp := generated.Servicev1Application{
 				Name:              &appName,
@@ -1265,7 +1264,7 @@ func TestGetApplicationResourceTreeTool(t *testing.T) {
 	t.Run("Valid_Request", func(t *testing.T) {
 		handlerFunc := func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodGet, r.Method)
-			
+
 			resp := generated.ApplicationsApplicationTree{}
 			json.NewEncoder(w).Encode(resp)
 		}
@@ -1274,10 +1273,10 @@ func TestGetApplicationResourceTreeTool(t *testing.T) {
 		defer server.Close()
 
 		_, toolHandler := GetApplicationResourceTreeTool(cfg, client)
-		
+
 		request := newToolRequest(map[string]interface{}{
-			"agent_identifier":   "account.myagent",
-			"application_name":   "my-app",
+			"agent_identifier": "account.myagent",
+			"application_name": "my-app",
 		})
 
 		result, err := toolHandler(context.Background(), request)
@@ -1372,7 +1371,7 @@ func TestListApplicationEventsTool(t *testing.T) {
 	t.Run("Valid_Request", func(t *testing.T) {
 		handlerFunc := func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodGet, r.Method)
-			
+
 			resp := generated.ApplicationsEventList{}
 			json.NewEncoder(w).Encode(resp)
 		}
@@ -1381,10 +1380,10 @@ func TestListApplicationEventsTool(t *testing.T) {
 		defer server.Close()
 
 		_, toolHandler := ListApplicationEventsTool(cfg, client)
-		
+
 		request := newToolRequest(map[string]interface{}{
-			"agent_identifier":   "account.myagent",
-			"application_name":   "my-app",
+			"agent_identifier": "account.myagent",
+			"application_name": "my-app",
 		})
 
 		result, err := toolHandler(context.Background(), request)
@@ -1397,7 +1396,7 @@ func TestListApplicationEventsTool(t *testing.T) {
 			q := r.URL.Query()
 			assert.Equal(t, "my-pod", q.Get("query.resourceName"))
 			assert.Equal(t, "default", q.Get("query.resourceNamespace"))
-			
+
 			resp := generated.ApplicationsEventList{}
 			json.NewEncoder(w).Encode(resp)
 		}
@@ -1406,12 +1405,12 @@ func TestListApplicationEventsTool(t *testing.T) {
 		defer server.Close()
 
 		_, toolHandler := ListApplicationEventsTool(cfg, client)
-		
+
 		request := newToolRequest(map[string]interface{}{
-			"agent_identifier":     "account.myagent",
-			"application_name":     "my-app",
-			"resource_name":        "my-pod",
-			"resource_namespace":   "default",
+			"agent_identifier":   "account.myagent",
+			"application_name":   "my-app",
+			"resource_name":      "my-pod",
+			"resource_namespace": "default",
 		})
 
 		result, err := toolHandler(context.Background(), request)
@@ -1470,7 +1469,7 @@ func TestGetPodLogsTool(t *testing.T) {
 	t.Run("Valid_Request", func(t *testing.T) {
 		handlerFunc := func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodGet, r.Method)
-			
+
 			resp := generated.ApplicationsLogEntriesBatch{}
 			json.NewEncoder(w).Encode(resp)
 		}
@@ -1479,12 +1478,12 @@ func TestGetPodLogsTool(t *testing.T) {
 		defer server.Close()
 
 		_, toolHandler := GetPodLogsTool(cfg, client)
-		
+
 		request := newToolRequest(map[string]interface{}{
-			"agent_identifier":   "account.myagent",
-			"application_name":   "my-app",
-			"pod_name":          "my-pod",
-			"namespace":         "default",
+			"agent_identifier": "account.myagent",
+			"application_name": "my-app",
+			"pod_name":         "my-pod",
+			"namespace":        "default",
 		})
 
 		result, err := toolHandler(context.Background(), request)
@@ -1521,8 +1520,8 @@ func TestGetPodLogsTool(t *testing.T) {
 		request := newToolRequest(map[string]interface{}{
 			"agent_identifier": "account.myagent",
 			"application_name": "my-app",
-			"pod_name":        "my-pod",
-			"namespace":       "default",
+			"pod_name":         "my-pod",
+			"namespace":        "default",
 		})
 
 		result, err := toolHandler(context.Background(), request)
@@ -1546,7 +1545,7 @@ func TestGetManagedResourcesTool(t *testing.T) {
 	t.Run("Valid_Request", func(t *testing.T) {
 		handlerFunc := func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodGet, r.Method)
-			
+
 			resp := generated.ApplicationsManagedResourcesResponse{}
 			json.NewEncoder(w).Encode(resp)
 		}
@@ -1555,10 +1554,10 @@ func TestGetManagedResourcesTool(t *testing.T) {
 		defer server.Close()
 
 		_, toolHandler := GetManagedResourcesTool(cfg, client)
-		
+
 		request := newToolRequest(map[string]interface{}{
-			"agent_identifier":   "account.myagent",
-			"application_name":   "my-app",
+			"agent_identifier": "account.myagent",
+			"application_name": "my-app",
 		})
 
 		result, err := toolHandler(context.Background(), request)
@@ -1617,7 +1616,7 @@ func TestListResourceActionsTool(t *testing.T) {
 	t.Run("Valid_Request", func(t *testing.T) {
 		handlerFunc := func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodGet, r.Method)
-			
+
 			resp := generated.ApplicationsResourceActionsListResponse{}
 			json.NewEncoder(w).Encode(resp)
 		}
@@ -1626,13 +1625,13 @@ func TestListResourceActionsTool(t *testing.T) {
 		defer server.Close()
 
 		_, toolHandler := ListResourceActionsTool(cfg, client)
-		
+
 		request := newToolRequest(map[string]interface{}{
-			"agent_identifier":   "account.myagent",
-			"application_name":   "my-app",
-			"resource_name":      "my-deployment",
-			"namespace":          "default",
-			"kind":               "Deployment",
+			"agent_identifier": "account.myagent",
+			"application_name": "my-app",
+			"resource_name":    "my-deployment",
+			"namespace":        "default",
+			"kind":             "Deployment",
 		})
 
 		result, err := toolHandler(context.Background(), request)
@@ -1695,7 +1694,7 @@ func TestListApplicationSetsTool(t *testing.T) {
 	t.Run("Valid_Request", func(t *testing.T) {
 		handlerFunc := func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodPost, r.Method)
-			
+
 			resp := generated.Servicev1ApplicationSetList{}
 			json.NewEncoder(w).Encode(resp)
 		}
@@ -1704,7 +1703,7 @@ func TestListApplicationSetsTool(t *testing.T) {
 		defer server.Close()
 
 		_, toolHandler := ListApplicationSetsTool(cfg, client)
-		
+
 		request := newToolRequest(map[string]interface{}{
 			"org_id":     "my-org",
 			"project_id": "my-project",
@@ -1718,18 +1717,18 @@ func TestListApplicationSetsTool(t *testing.T) {
 	t.Run("POST_Body_Verification", func(t *testing.T) {
 		handlerFunc := func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodPost, r.Method)
-			
+
 			var body map[string]interface{}
 			err := json.NewDecoder(r.Body).Decode(&body)
 			require.NoError(t, err)
-			
+
 			assert.Equal(t, "test-account-123", body["accountIdentifier"])
 			assert.Equal(t, "test-org", body["orgIdentifier"])
 			assert.Equal(t, "test-project", body["projectIdentifier"])
 			assert.Equal(t, "my-agent", body["agentIdentifier"])
 			assert.Equal(t, float64(1), body["pageIndex"])
 			assert.Equal(t, float64(20), body["pageSize"])
-			
+
 			resp := generated.Servicev1ApplicationSetList{}
 			json.NewEncoder(w).Encode(resp)
 		}
@@ -1738,7 +1737,7 @@ func TestListApplicationSetsTool(t *testing.T) {
 		defer server.Close()
 
 		_, toolHandler := ListApplicationSetsTool(cfg, client)
-		
+
 		request := newToolRequest(map[string]interface{}{
 			"org_id":           "test-org",
 			"project_id":       "test-project",
@@ -1768,7 +1767,7 @@ func TestGetApplicationSetTool(t *testing.T) {
 	t.Run("Valid_Request", func(t *testing.T) {
 		handlerFunc := func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodGet, r.Method)
-			
+
 			resp := generated.Servicev1ApplicationSet{}
 			json.NewEncoder(w).Encode(resp)
 		}
@@ -1777,12 +1776,12 @@ func TestGetApplicationSetTool(t *testing.T) {
 		defer server.Close()
 
 		_, toolHandler := GetApplicationSetTool(cfg, client)
-		
+
 		request := newToolRequest(map[string]interface{}{
-			"org_id":     "my-org",
-			"project_id": "my-project",
+			"org_id":           "my-org",
+			"project_id":       "my-project",
 			"agent_identifier": "account.myagent",
-			"identifier": "my-appset",
+			"identifier":       "my-appset",
 		})
 
 		result, err := toolHandler(context.Background(), request)
@@ -1844,7 +1843,7 @@ func TestListClustersTool(t *testing.T) {
 	t.Run("Valid_Request", func(t *testing.T) {
 		handlerFunc := func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodPost, r.Method)
-			
+
 			resp := generated.V1Clusterlist{Content: &[]generated.Servicev1Cluster{}}
 			json.NewEncoder(w).Encode(resp)
 		}
@@ -1853,7 +1852,7 @@ func TestListClustersTool(t *testing.T) {
 		defer server.Close()
 
 		_, toolHandler := ListClustersTool(cfg, client)
-		
+
 		request := newToolRequest(map[string]interface{}{
 			"agent_identifier": "account.myagent",
 		})
@@ -1866,17 +1865,17 @@ func TestListClustersTool(t *testing.T) {
 	t.Run("POST_Body_Verification_With_Search", func(t *testing.T) {
 		handlerFunc := func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodPost, r.Method)
-			
+
 			var body map[string]interface{}
 			err := json.NewDecoder(r.Body).Decode(&body)
 			require.NoError(t, err)
-			
+
 			assert.Equal(t, "test-account-123", body["accountIdentifier"])
 			assert.Equal(t, "my-agent", body["agentIdentifier"])
 			assert.Equal(t, "prod-cluster", body["searchTerm"])
 			assert.Equal(t, float64(0), body["pageIndex"])
 			assert.Equal(t, float64(10), body["pageSize"])
-			
+
 			resp := generated.V1Clusterlist{Content: &[]generated.Servicev1Cluster{}}
 			json.NewEncoder(w).Encode(resp)
 		}
@@ -1885,7 +1884,7 @@ func TestListClustersTool(t *testing.T) {
 		defer server.Close()
 
 		_, toolHandler := ListClustersTool(cfg, client)
-		
+
 		request := newToolRequest(map[string]interface{}{
 			"agent_identifier": "my-agent",
 			"search_term":      "prod-cluster",
@@ -1914,7 +1913,7 @@ func TestGetClusterTool(t *testing.T) {
 	t.Run("Valid_Request", func(t *testing.T) {
 		handlerFunc := func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodGet, r.Method)
-			
+
 			resp := generated.Servicev1Cluster{}
 			json.NewEncoder(w).Encode(resp)
 		}
@@ -1923,10 +1922,10 @@ func TestGetClusterTool(t *testing.T) {
 		defer server.Close()
 
 		_, toolHandler := GetClusterTool(cfg, client)
-		
+
 		request := newToolRequest(map[string]interface{}{
 			"agent_identifier": "account.myagent",
-			"identifier": "my-cluster",
+			"identifier":       "my-cluster",
 		})
 
 		result, err := toolHandler(context.Background(), request)
@@ -1985,7 +1984,7 @@ func TestGitOpsListRepositoriesTool(t *testing.T) {
 	t.Run("Valid_Request", func(t *testing.T) {
 		handlerFunc := func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodPost, r.Method)
-			
+
 			resp := generated.V1Repositorylist{Content: &[]generated.Servicev1Repository{}}
 			json.NewEncoder(w).Encode(resp)
 		}
@@ -1994,7 +1993,7 @@ func TestGitOpsListRepositoriesTool(t *testing.T) {
 		defer server.Close()
 
 		_, toolHandler := GitOpsListRepositoriesTool(cfg, client)
-		
+
 		request := newToolRequest(map[string]interface{}{
 			"agent_identifier": "account.myagent",
 		})
@@ -2007,17 +2006,17 @@ func TestGitOpsListRepositoriesTool(t *testing.T) {
 	t.Run("POST_Body_Verification", func(t *testing.T) {
 		handlerFunc := func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodPost, r.Method)
-			
+
 			var body map[string]interface{}
 			err := json.NewDecoder(r.Body).Decode(&body)
 			require.NoError(t, err)
-			
+
 			assert.Equal(t, "test-account-123", body["accountIdentifier"])
 			assert.Equal(t, "test-agent", body["agentIdentifier"])
 			assert.Equal(t, "github", body["searchTerm"])
 			assert.Equal(t, float64(2), body["pageIndex"])
 			assert.Equal(t, float64(15), body["pageSize"])
-			
+
 			resp := generated.V1Repositorylist{Content: &[]generated.Servicev1Repository{}}
 			json.NewEncoder(w).Encode(resp)
 		}
@@ -2026,7 +2025,7 @@ func TestGitOpsListRepositoriesTool(t *testing.T) {
 		defer server.Close()
 
 		_, toolHandler := GitOpsListRepositoriesTool(cfg, client)
-		
+
 		request := newToolRequest(map[string]interface{}{
 			"agent_identifier": "test-agent",
 			"search_term":      "github",
@@ -2055,7 +2054,7 @@ func TestGitOpsGetRepositoryTool(t *testing.T) {
 	t.Run("Valid_Request", func(t *testing.T) {
 		handlerFunc := func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodGet, r.Method)
-			
+
 			resp := generated.Servicev1Repository{}
 			json.NewEncoder(w).Encode(resp)
 		}
@@ -2064,10 +2063,10 @@ func TestGitOpsGetRepositoryTool(t *testing.T) {
 		defer server.Close()
 
 		_, toolHandler := GitOpsGetRepositoryTool(cfg, client)
-		
+
 		request := newToolRequest(map[string]interface{}{
 			"agent_identifier": "account.myagent",
-			"identifier": "my-repo",
+			"identifier":       "my-repo",
 		})
 
 		result, err := toolHandler(context.Background(), request)
@@ -2126,7 +2125,7 @@ func TestListRepoCredentialsTool(t *testing.T) {
 	t.Run("Valid_Request", func(t *testing.T) {
 		handlerFunc := func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodPost, r.Method)
-			
+
 			resp := generated.Servicev1RepositoryCredentialsList{Content: &[]generated.Servicev1RepositoryCredentials{}}
 			json.NewEncoder(w).Encode(resp)
 		}
@@ -2135,7 +2134,7 @@ func TestListRepoCredentialsTool(t *testing.T) {
 		defer server.Close()
 
 		_, toolHandler := ListRepoCredentialsTool(cfg, client)
-		
+
 		request := newToolRequest(map[string]interface{}{
 			"agent_identifier": "account.myagent",
 		})
@@ -2148,16 +2147,16 @@ func TestListRepoCredentialsTool(t *testing.T) {
 	t.Run("POST_Body_Verification_With_Pagination", func(t *testing.T) {
 		handlerFunc := func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodPost, r.Method)
-			
+
 			var body map[string]interface{}
 			err := json.NewDecoder(r.Body).Decode(&body)
 			require.NoError(t, err)
-			
+
 			assert.Equal(t, "test-account-123", body["accountIdentifier"])
 			assert.Equal(t, "cred-agent", body["agentIdentifier"])
 			assert.Equal(t, float64(5), body["pageIndex"])
 			assert.Equal(t, float64(50), body["pageSize"])
-			
+
 			resp := generated.Servicev1RepositoryCredentialsList{
 				Content:       &[]generated.Servicev1RepositoryCredentials{},
 				PageIndex:     int32Ptr(5),
@@ -2172,7 +2171,7 @@ func TestListRepoCredentialsTool(t *testing.T) {
 		defer server.Close()
 
 		_, toolHandler := ListRepoCredentialsTool(cfg, client)
-		
+
 		request := newToolRequest(map[string]interface{}{
 			"agent_identifier": "cred-agent",
 			"page":             float64(5),
@@ -2200,7 +2199,7 @@ func TestGetRepoCredentialsTool(t *testing.T) {
 	t.Run("Valid_Request", func(t *testing.T) {
 		handlerFunc := func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodGet, r.Method)
-			
+
 			resp := generated.Servicev1RepositoryCredentials{}
 			json.NewEncoder(w).Encode(resp)
 		}
@@ -2209,10 +2208,10 @@ func TestGetRepoCredentialsTool(t *testing.T) {
 		defer server.Close()
 
 		_, toolHandler := GetRepoCredentialsTool(cfg, client)
-		
+
 		request := newToolRequest(map[string]interface{}{
 			"agent_identifier": "account.myagent",
-			"identifier": "my-cred",
+			"identifier":       "my-cred",
 		})
 
 		result, err := toolHandler(context.Background(), request)
@@ -2271,7 +2270,7 @@ func TestGetDashboardOverviewTool(t *testing.T) {
 	t.Run("Valid_Request", func(t *testing.T) {
 		handlerFunc := func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodGet, r.Method)
-			
+
 			resp := generated.V1DashboardOverview{}
 			json.NewEncoder(w).Encode(resp)
 		}
@@ -2280,7 +2279,7 @@ func TestGetDashboardOverviewTool(t *testing.T) {
 		defer server.Close()
 
 		_, toolHandler := GetDashboardOverviewTool(cfg, client)
-		
+
 		request := newToolRequest(map[string]interface{}{
 			"agent_identifier": "account.myagent",
 		})

@@ -38,6 +38,60 @@ type GitOpsService struct {
 	Client *Client
 }
 
+func buildGitOpsParamsRequired(scope dto.Scope) map[string]string {
+	return map[string]string{
+		"routingId":         scope.AccountID,
+		"accountIdentifier": scope.AccountID,
+		"orgIdentifier":     scope.OrgID,
+		"projectIdentifier": scope.ProjectID,
+	}
+}
+
+func buildGitOpsParamsOptional(scope dto.Scope) map[string]string {
+	params := map[string]string{
+		"routingId":         scope.AccountID,
+		"accountIdentifier": scope.AccountID,
+	}
+	if scope.OrgID != "" {
+		params["orgIdentifier"] = scope.OrgID
+	}
+	if scope.ProjectID != "" {
+		params["projectIdentifier"] = scope.ProjectID
+	}
+	return params
+}
+
+func buildGitOpsBodyRequired(scope dto.Scope) map[string]interface{} {
+	return map[string]interface{}{
+		"accountIdentifier": scope.AccountID,
+		"orgIdentifier":     scope.OrgID,
+		"projectIdentifier": scope.ProjectID,
+	}
+}
+
+func buildGitOpsBodyOptional(scope dto.Scope) map[string]interface{} {
+	body := map[string]interface{}{
+		"accountIdentifier": scope.AccountID,
+	}
+	if scope.OrgID != "" {
+		body["orgIdentifier"] = scope.OrgID
+	}
+	if scope.ProjectID != "" {
+		body["projectIdentifier"] = scope.ProjectID
+	}
+	return body
+}
+
+func addGitOpsPaginationToBody(body map[string]interface{}, page, pageSize int) {
+	body["pageIndex"] = page
+	body["pageSize"] = pageSize
+}
+
+func addGitOpsPaginationToParams(params map[string]string, page, pageSize int) {
+	params["pageIndex"] = fmt.Sprintf("%d", page)
+	params["pageSize"] = fmt.Sprintf("%d", pageSize)
+}
+
 func (g *GitOpsService) ListApplications(
 	ctx context.Context,
 	scope dto.Scope,
@@ -53,13 +107,8 @@ func (g *GitOpsService) ListApplications(
 		"routingId": scope.AccountID,
 	}
 
-	requestBody := map[string]interface{}{
-		"accountIdentifier": scope.AccountID,
-		"orgIdentifier":     scope.OrgID,
-		"projectIdentifier": scope.ProjectID,
-		"pageIndex":         page,
-		"pageSize":          pageSize,
-	}
+	requestBody := buildGitOpsBodyRequired(scope)
+	addGitOpsPaginationToBody(requestBody, page, pageSize)
 
 	if agentIdentifier != "" {
 		requestBody["agentIdentifier"] = agentIdentifier
@@ -92,12 +141,7 @@ func (g *GitOpsService) GetApplication(
 ) (*generated.Servicev1Application, error) {
 	path := fmt.Sprintf(gitopsApplicationPath, agentIdentifier, applicationName)
 
-	params := map[string]string{
-		"routingId":         scope.AccountID,
-		"accountIdentifier": scope.AccountID,
-		"orgIdentifier":     scope.OrgID,
-		"projectIdentifier": scope.ProjectID,
-	}
+	params := buildGitOpsParamsRequired(scope)
 
 	if refresh != "" {
 		params["query.refresh"] = refresh
@@ -122,20 +166,8 @@ func (g *GitOpsService) ListAgents(
 ) (*generated.V1AgentList, error) {
 	path := gitopsAgentsPath
 
-	params := map[string]string{
-		"routingId":         scope.AccountID,
-		"accountIdentifier": scope.AccountID,
-		"pageIndex":         fmt.Sprintf("%d", page),
-		"pageSize":          fmt.Sprintf("%d", pageSize),
-	}
-
-	// Add org/project only if provided (empty means account-level query)
-	if scope.OrgID != "" {
-		params["orgIdentifier"] = scope.OrgID
-	}
-	if scope.ProjectID != "" {
-		params["projectIdentifier"] = scope.ProjectID
-	}
+	params := buildGitOpsParamsOptional(scope)
+	addGitOpsPaginationToParams(params, page, pageSize)
 
 	if agentType != "" {
 		params["type"] = agentType
@@ -164,17 +196,7 @@ func (g *GitOpsService) GetAgent(
 ) (*generated.V1Agent, error) {
 	path := fmt.Sprintf(gitopsAgentPath, agentIdentifier)
 
-	params := map[string]string{
-		"routingId":         scope.AccountID,
-		"accountIdentifier": scope.AccountID,
-	}
-
-	if scope.OrgID != "" {
-		params["orgIdentifier"] = scope.OrgID
-	}
-	if scope.ProjectID != "" {
-		params["projectIdentifier"] = scope.ProjectID
-	}
+	params := buildGitOpsParamsOptional(scope)
 
 	var response generated.V1Agent
 	err := g.Client.Get(ctx, path, params, nil, &response)
@@ -193,12 +215,7 @@ func (g *GitOpsService) GetApplicationResourceTree(
 ) (*generated.ApplicationsApplicationTree, error) {
 	path := fmt.Sprintf(gitopsResourceTreePath, agentIdentifier, applicationName)
 
-	params := map[string]string{
-		"routingId":         scope.AccountID,
-		"accountIdentifier": scope.AccountID,
-		"orgIdentifier":     scope.OrgID,
-		"projectIdentifier": scope.ProjectID,
-	}
+	params := buildGitOpsParamsRequired(scope)
 
 	var response generated.ApplicationsApplicationTree
 	err := g.Client.Get(ctx, path, params, nil, &response)
@@ -220,12 +237,7 @@ func (g *GitOpsService) ListApplicationEvents(
 ) (*generated.ApplicationsEventList, error) {
 	path := fmt.Sprintf(gitopsEventsPath, agentIdentifier, applicationName)
 
-	params := map[string]string{
-		"routingId":         scope.AccountID,
-		"accountIdentifier": scope.AccountID,
-		"orgIdentifier":     scope.OrgID,
-		"projectIdentifier": scope.ProjectID,
-	}
+	params := buildGitOpsParamsRequired(scope)
 
 	if resourceName != "" {
 		params["query.resourceName"] = resourceName
@@ -263,16 +275,11 @@ func (g *GitOpsService) GetPodLogs(
 
 	path := fmt.Sprintf(gitopsPodLogsPath, agentIdentifier, applicationName)
 
-	params := map[string]string{
-		"routingId":         scope.AccountID,
-		"accountIdentifier": scope.AccountID,
-		"orgIdentifier":     scope.OrgID,
-		"projectIdentifier": scope.ProjectID,
-		"query.podName":     podName,
-		"query.namespace":   namespace,
-		"query.kind":        resourceKind,
-		"query.follow":      followStream,
-	}
+	params := buildGitOpsParamsRequired(scope)
+	params["query.podName"] = podName
+	params["query.namespace"] = namespace
+	params["query.kind"] = resourceKind
+	params["query.follow"] = followStream
 
 	if container != "" {
 		params["query.container"] = container
@@ -395,12 +402,7 @@ func (g *GitOpsService) GetManagedResources(
 ) (*generated.ApplicationsManagedResourcesResponse, error) {
 	path := fmt.Sprintf(gitopsManagedResourcesPath, agentIdentifier, applicationName)
 
-	params := map[string]string{
-		"routingId":         scope.AccountID,
-		"accountIdentifier": scope.AccountID,
-		"orgIdentifier":     scope.OrgID,
-		"projectIdentifier": scope.ProjectID,
-	}
+	params := buildGitOpsParamsRequired(scope)
 
 	var response generated.ApplicationsManagedResourcesResponse
 	err := g.Client.Get(ctx, path, params, nil, &response)
@@ -424,15 +426,10 @@ func (g *GitOpsService) ListResourceActions(
 ) (*generated.ApplicationsResourceActionsListResponse, error) {
 	path := fmt.Sprintf(gitopsResourceActionsPath, agentIdentifier, applicationName)
 
-	params := map[string]string{
-		"routingId":            scope.AccountID,
-		"accountIdentifier":    scope.AccountID,
-		"orgIdentifier":        scope.OrgID,
-		"projectIdentifier":    scope.ProjectID,
-		"request.namespace":    namespace,
-		"request.resourceName": resourceName,
-		"request.kind":         kind,
-	}
+	params := buildGitOpsParamsRequired(scope)
+	params["request.namespace"] = namespace
+	params["request.resourceName"] = resourceName
+	params["request.kind"] = kind
 
 	if group != "" {
 		params["request.group"] = group
@@ -463,13 +460,8 @@ func (g *GitOpsService) ListApplicationSets(
 		"routingId": scope.AccountID,
 	}
 
-	requestBody := map[string]interface{}{
-		"accountIdentifier": scope.AccountID,
-		"orgIdentifier":     scope.OrgID,
-		"projectIdentifier": scope.ProjectID,
-		"pageIndex":         page,
-		"pageSize":          pageSize,
-	}
+	requestBody := buildGitOpsBodyRequired(scope)
+	addGitOpsPaginationToBody(requestBody, page, pageSize)
 
 	if agentIdentifier != "" {
 		requestBody["agentIdentifier"] = agentIdentifier
@@ -495,13 +487,8 @@ func (g *GitOpsService) GetApplicationSet(
 ) (*generated.Servicev1ApplicationSet, error) {
 	path := fmt.Sprintf(gitopsAppSetPath, identifier)
 
-	params := map[string]string{
-		"routingId":         scope.AccountID,
-		"accountIdentifier": scope.AccountID,
-		"orgIdentifier":     scope.OrgID,
-		"projectIdentifier": scope.ProjectID,
-		"agentIdentifier":   agentIdentifier,
-	}
+	params := buildGitOpsParamsRequired(scope)
+	params["agentIdentifier"] = agentIdentifier
 
 	var response generated.Servicev1ApplicationSet
 	err := g.Client.Get(ctx, path, params, nil, &response)
@@ -525,18 +512,9 @@ func (g *GitOpsService) ListClusters(
 		"routingId": scope.AccountID,
 	}
 
-	requestBody := map[string]interface{}{
-		"accountIdentifier": scope.AccountID,
-		"pageIndex":         page,
-		"pageSize":          pageSize,
-	}
+	requestBody := buildGitOpsBodyOptional(scope)
+	addGitOpsPaginationToBody(requestBody, page, pageSize)
 
-	if scope.OrgID != "" {
-		requestBody["orgIdentifier"] = scope.OrgID
-	}
-	if scope.ProjectID != "" {
-		requestBody["projectIdentifier"] = scope.ProjectID
-	}
 	if agentIdentifier != "" {
 		requestBody["agentIdentifier"] = agentIdentifier
 	}
@@ -561,17 +539,7 @@ func (g *GitOpsService) GetCluster(
 ) (*generated.Servicev1Cluster, error) {
 	path := fmt.Sprintf(gitopsClusterPath, agentIdentifier, identifier)
 
-	params := map[string]string{
-		"routingId":         scope.AccountID,
-		"accountIdentifier": scope.AccountID,
-	}
-
-	if scope.OrgID != "" {
-		params["orgIdentifier"] = scope.OrgID
-	}
-	if scope.ProjectID != "" {
-		params["projectIdentifier"] = scope.ProjectID
-	}
+	params := buildGitOpsParamsOptional(scope)
 
 	var response generated.Servicev1Cluster
 	err := g.Client.Get(ctx, path, params, nil, &response)
@@ -595,18 +563,9 @@ func (g *GitOpsService) ListRepositories(
 		"routingId": scope.AccountID,
 	}
 
-	requestBody := map[string]interface{}{
-		"accountIdentifier": scope.AccountID,
-		"pageIndex":         page,
-		"pageSize":          pageSize,
-	}
+	requestBody := buildGitOpsBodyOptional(scope)
+	addGitOpsPaginationToBody(requestBody, page, pageSize)
 
-	if scope.OrgID != "" {
-		requestBody["orgIdentifier"] = scope.OrgID
-	}
-	if scope.ProjectID != "" {
-		requestBody["projectIdentifier"] = scope.ProjectID
-	}
 	if agentIdentifier != "" {
 		requestBody["agentIdentifier"] = agentIdentifier
 	}
@@ -631,17 +590,7 @@ func (g *GitOpsService) GetRepository(
 ) (*generated.Servicev1Repository, error) {
 	path := fmt.Sprintf(gitopsRepoPath, agentIdentifier, identifier)
 
-	params := map[string]string{
-		"routingId":         scope.AccountID,
-		"accountIdentifier": scope.AccountID,
-	}
-
-	if scope.OrgID != "" {
-		params["orgIdentifier"] = scope.OrgID
-	}
-	if scope.ProjectID != "" {
-		params["projectIdentifier"] = scope.ProjectID
-	}
+	params := buildGitOpsParamsOptional(scope)
 
 	var response generated.Servicev1Repository
 	err := g.Client.Get(ctx, path, params, nil, &response)
@@ -665,18 +614,9 @@ func (g *GitOpsService) ListRepoCredentials(
 		"routingId": scope.AccountID,
 	}
 
-	requestBody := map[string]interface{}{
-		"accountIdentifier": scope.AccountID,
-		"pageIndex":         page,
-		"pageSize":          pageSize,
-	}
+	requestBody := buildGitOpsBodyOptional(scope)
+	addGitOpsPaginationToBody(requestBody, page, pageSize)
 
-	if scope.OrgID != "" {
-		requestBody["orgIdentifier"] = scope.OrgID
-	}
-	if scope.ProjectID != "" {
-		requestBody["projectIdentifier"] = scope.ProjectID
-	}
 	if agentIdentifier != "" {
 		requestBody["agentIdentifier"] = agentIdentifier
 	}
@@ -701,17 +641,7 @@ func (g *GitOpsService) GetRepoCredentials(
 ) (*generated.Servicev1RepositoryCredentials, error) {
 	path := fmt.Sprintf(gitopsRepoCredPath, agentIdentifier, identifier)
 
-	params := map[string]string{
-		"routingId":         scope.AccountID,
-		"accountIdentifier": scope.AccountID,
-	}
-
-	if scope.OrgID != "" {
-		params["orgIdentifier"] = scope.OrgID
-	}
-	if scope.ProjectID != "" {
-		params["projectIdentifier"] = scope.ProjectID
-	}
+	params := buildGitOpsParamsOptional(scope)
 
 	var response generated.Servicev1RepositoryCredentials
 	err := g.Client.Get(ctx, path, params, nil, &response)
@@ -729,12 +659,7 @@ func (g *GitOpsService) GetDashboardOverview(
 ) (*generated.V1DashboardOverview, error) {
 	path := gitopsDashboardPath
 
-	params := map[string]string{
-		"routingId":         scope.AccountID,
-		"accountIdentifier": scope.AccountID,
-		"orgIdentifier":     scope.OrgID,
-		"projectIdentifier": scope.ProjectID,
-	}
+	params := buildGitOpsParamsRequired(scope)
 
 	if agentIdentifier != "" {
 		params["agentIdentifier"] = agentIdentifier
