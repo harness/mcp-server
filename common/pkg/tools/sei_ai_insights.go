@@ -17,8 +17,8 @@ import (
 
 // GetAIUsageMetricsTool creates a tool for getting AI coding assistant feature metrics
 func GetAIUsageMetricsTool(config *config.McpServerConfig, aiClient *client.AIInsightsService) (mcp.Tool, server.ToolHandlerFunc) {
-	return mcp.NewTool("sei_ai_usage_metrics",
-			mcp.WithDescription("Get AI coding assistant feature metrics with time-series data. Returns data points over time for the selected metric type. See also: sei_ai_usage_summary for aggregate stats, sei_ai_adoptions for adoption trends."),
+	return mcp.NewTool("sei_get_ai_usage_metrics",
+			mcp.WithDescription("Get AI coding assistant feature metrics with time-series data. Returns data points over time for the selected metric type. See also: sei_get_ai_usage_summary for aggregate stats, sei_get_ai_adoptions for adoption trends."),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint: utils.ToBoolPtr(true),
 			}),
@@ -121,8 +121,8 @@ func GetAIUsageMetricsTool(config *config.McpServerConfig, aiClient *client.AIIn
 
 // GetAIUsageBreakdownTool creates a tool for getting AI coding assistant team breakdown metrics
 func GetAIUsageBreakdownTool(config *config.McpServerConfig, aiClient *client.AIInsightsService) (mcp.Tool, server.ToolHandlerFunc) {
-	return mcp.NewTool("sei_ai_usage_breakdown",
-			mcp.WithDescription("Get AI coding assistant usage breakdown by child teams. Returns metrics for each sub-team with team ID and name. See also: sei_ai_usage_summary for aggregate stats."),
+	return mcp.NewTool("sei_get_ai_usage_breakdown",
+			mcp.WithDescription("Get AI coding assistant usage breakdown by child teams. Returns metrics for each sub-team with team ID and name. See also: sei_get_ai_usage_summary for aggregate stats."),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint: utils.ToBoolPtr(true),
 			}),
@@ -219,8 +219,8 @@ func GetAIUsageBreakdownTool(config *config.McpServerConfig, aiClient *client.AI
 
 // GetAIUsageSummaryTool creates a tool for getting AI coding assistant usage summary
 func GetAIUsageSummaryTool(config *config.McpServerConfig, aiClient *client.AIInsightsService) (mcp.Tool, server.ToolHandlerFunc) {
-	return mcp.NewTool("sei_ai_usage_summary",
-			mcp.WithDescription("Get summary statistics for AI coding assistants. Returns total users, acceptance rates, and lines of code for the period. See also: sei_ai_usage_metrics for time-series data, sei_ai_raw_metrics_v2 for per-developer details."),
+	return mcp.NewTool("sei_get_ai_usage_summary",
+			mcp.WithDescription("Get summary statistics for AI coding assistants. Returns total users, acceptance rates, and lines of code for the period. See also: sei_get_ai_usage_metrics for time-series data, sei_get_ai_raw_metrics_v2 for per-developer details."),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint: utils.ToBoolPtr(true),
 			}),
@@ -302,8 +302,8 @@ func GetAIUsageSummaryTool(config *config.McpServerConfig, aiClient *client.AIIn
 
 // GetAITopLanguagesTool creates a tool for getting top programming languages used with AI assistants
 func GetAITopLanguagesTool(config *config.McpServerConfig, aiClient *client.AIInsightsService) (mcp.Tool, server.ToolHandlerFunc) {
-	return mcp.NewTool("sei_ai_top_languages",
-			mcp.WithDescription("Get top programming languages used with AI coding assistants. Returns languages ranked by usage count and percentage. See also: sei_ai_usage_summary for overall stats."),
+	return mcp.NewTool("sei_get_ai_top_languages",
+			mcp.WithDescription("Get top programming languages used with AI coding assistants. Returns languages ranked by usage count and percentage. See also: sei_get_ai_usage_summary for overall stats."),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint: utils.ToBoolPtr(true),
 			}),
@@ -385,8 +385,8 @@ func GetAITopLanguagesTool(config *config.McpServerConfig, aiClient *client.AIIn
 
 // GetAIAdoptionsTool creates a tool for getting AI coding assistant adoption metrics
 func GetAIAdoptionsTool(config *config.McpServerConfig, aiClient *client.AIInsightsService) (mcp.Tool, server.ToolHandlerFunc) {
-	return mcp.NewTool("sei_ai_adoptions",
-			mcp.WithDescription("Get AI coding assistant adoption metrics over time. Returns active/inactive/unassigned user counts per period. See also: sei_ai_adoptions_summary for period comparison."),
+	return mcp.NewTool("sei_get_ai_adoptions",
+			mcp.WithDescription("Get AI coding assistant adoption metrics over time. Returns active/inactive/unassigned user counts per period. See also: sei_get_ai_adoptions_summary for period comparison."),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint: utils.ToBoolPtr(true),
 			}),
@@ -478,8 +478,8 @@ func GetAIAdoptionsTool(config *config.McpServerConfig, aiClient *client.AIInsig
 
 // GetAIAdoptionsBreakdownTool creates a tool for getting AI adoption breakdown by child teams
 func GetAIAdoptionsBreakdownTool(config *config.McpServerConfig, aiClient *client.AIInsightsService) (mcp.Tool, server.ToolHandlerFunc) {
-	return mcp.NewTool("sei_ai_adoptions_breakdown",
-			mcp.WithDescription("Get AI coding assistant adoption breakdown by child teams. Returns aggregated adoption metrics for each sub-team. See also: sei_ai_adoptions for time-series data."),
+	return mcp.NewTool("sei_get_ai_adoptions_breakdown",
+			mcp.WithDescription("Get AI coding assistant adoption breakdown by child teams. Returns aggregated adoption metrics for each sub-team. See also: sei_get_ai_adoptions for time-series data."),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint: utils.ToBoolPtr(true),
 			}),
@@ -561,8 +561,8 @@ func GetAIAdoptionsBreakdownTool(config *config.McpServerConfig, aiClient *clien
 
 // GetAIAdoptionsSummaryTool creates a tool for getting AI adoption summary with period comparison
 func GetAIAdoptionsSummaryTool(config *config.McpServerConfig, aiClient *client.AIInsightsService) (mcp.Tool, server.ToolHandlerFunc) {
-	return mcp.NewTool("sei_ai_adoptions_summary",
-			mcp.WithDescription("Get AI coding assistant adoption summary comparing current vs previous period. Returns growth metrics and adoption rate changes. See also: sei_ai_adoptions for time-series data."),
+	return mcp.NewTool("sei_get_ai_adoptions_summary",
+			mcp.WithDescription("Get AI coding assistant adoption summary comparing current vs previous period. Returns growth metrics and adoption rate changes. See also: sei_get_ai_adoptions for time-series data."),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint: utils.ToBoolPtr(true),
 			}),
@@ -583,7 +583,7 @@ func GetAIAdoptionsSummaryTool(config *config.McpServerConfig, aiClient *client.
 				mcp.Required(),
 				mcp.Description("End date in YYYY-MM-DD format"),
 			),
-		mcp.WithString("integrationType",
+			mcp.WithString("integrationType",
 				mcp.Required(),
 				mcp.Description("AI integration type (cursor, windsurf)"),
 				mcp.Enum("cursor", "windsurf"),
@@ -644,8 +644,8 @@ func GetAIAdoptionsSummaryTool(config *config.McpServerConfig, aiClient *client.
 
 // GetAIRawMetricsTool creates a tool for getting raw metrics for AI coding assistants
 func GetAIRawMetricsTool(config *config.McpServerConfig, aiClient *client.AIInsightsService) (mcp.Tool, server.ToolHandlerFunc) {
-	return mcp.NewTool("sei_ai_raw_metrics",
-			mcp.WithDescription("Get paginated per-developer AI coding assistant metrics. Returns detailed data including acceptance rate, lines accepted, and coding days. See also: sei_ai_raw_metrics_v2 for enhanced filtering."),
+	return mcp.NewTool("sei_get_ai_raw_metrics",
+			mcp.WithDescription("Get paginated per-developer AI coding assistant metrics. Returns detailed data including acceptance rate, lines accepted, and coding days. See also: sei_get_ai_raw_metrics_v2 for enhanced filtering."),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint: utils.ToBoolPtr(true),
 			}),
@@ -746,8 +746,8 @@ func GetAIRawMetricsTool(config *config.McpServerConfig, aiClient *client.AIInsi
 
 // GetAIRawMetricsV2Tool creates a tool for getting raw metrics v2 for AI coding assistants
 func GetAIRawMetricsV2Tool(config *config.McpServerConfig, aiClient *client.AIInsightsService) (mcp.Tool, server.ToolHandlerFunc) {
-	return mcp.NewTool("sei_ai_raw_metrics_v2",
-			mcp.WithDescription("Get paginated per-developer AI metrics (v2) with enhanced filtering. Returns acceptance rate, lines accepted, coding days, and PR metrics per developer. See also: sei_ai_raw_metrics for the v1 endpoint."),
+	return mcp.NewTool("sei_get_ai_raw_metrics_v2",
+			mcp.WithDescription("Get paginated per-developer AI metrics (v2) with enhanced filtering. Returns acceptance rate, lines accepted, coding days, and PR metrics per developer. See also: sei_get_ai_raw_metrics for the v1 endpoint."),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint: utils.ToBoolPtr(true),
 			}),
@@ -848,8 +848,8 @@ func GetAIRawMetricsV2Tool(config *config.McpServerConfig, aiClient *client.AIIn
 
 // GetAIPRVelocitySummaryTool creates a tool for getting PR velocity summary for AI coding assistants
 func GetAIPRVelocitySummaryTool(config *config.McpServerConfig, aiClient *client.AIInsightsService) (mcp.Tool, server.ToolHandlerFunc) {
-	return mcp.NewTool("sei_ai_pr_velocity_summary",
-			mcp.WithDescription("Get PR velocity summary comparing AI-assisted vs non-AI-assisted pull requests. Returns cycle time and throughput comparisons. See also: sei_ai_rework_summary for code quality comparison."),
+	return mcp.NewTool("sei_get_ai_pr_velocity_summary",
+			mcp.WithDescription("Get PR velocity summary comparing AI-assisted vs non-AI-assisted pull requests. Returns cycle time and throughput comparisons. See also: sei_get_ai_rework_summary for code quality comparison."),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint: utils.ToBoolPtr(true),
 			}),
@@ -931,8 +931,8 @@ func GetAIPRVelocitySummaryTool(config *config.McpServerConfig, aiClient *client
 
 // GetAIReworkSummaryTool creates a tool for getting rework summary for AI coding assistants
 func GetAIReworkSummaryTool(config *config.McpServerConfig, aiClient *client.AIInsightsService) (mcp.Tool, server.ToolHandlerFunc) {
-	return mcp.NewTool("sei_ai_rework_summary",
-			mcp.WithDescription("Get rework summary comparing AI-assisted vs non-AI-assisted code changes. Returns rework rates and quality metrics comparison. See also: sei_ai_pr_velocity_summary for PR velocity comparison."),
+	return mcp.NewTool("sei_get_ai_rework_summary",
+			mcp.WithDescription("Get rework summary comparing AI-assisted vs non-AI-assisted code changes. Returns rework rates and quality metrics comparison. See also: sei_get_ai_pr_velocity_summary for PR velocity comparison."),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint: utils.ToBoolPtr(true),
 			}),

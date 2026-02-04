@@ -321,17 +321,17 @@ Toolset Name: `sei`
 - `sei_get_ba_insight_metrics`: Get BA insight metrics
 - `sei_get_ba_insight_summary`: Get BA insight summary
 - `sei_get_ba_drilldown_data`: Get BA drilldown data
-- `sei_ai_usage_metrics`: Get AI coding assistant feature metrics (lines suggested/accepted, acceptance rate, daily active users) with time-series data
-- `sei_ai_usage_breakdown`: Get AI coding assistant usage breakdown by child teams
-- `sei_ai_usage_summary`: Get summary statistics for AI coding assistants including total users, acceptance rates, and lines of code
-- `sei_ai_top_languages`: Get top programming languages used with AI coding assistants
-- `sei_ai_adoptions`: Get AI coding assistant adoption metrics showing team adoption rates over time
-- `sei_ai_adoptions_breakdown`: Get AI coding assistant adoption breakdown by direct child teams
-- `sei_ai_adoptions_summary`: Get AI coding assistant adoption summary with current vs previous period comparison
-- `sei_ai_raw_metrics`: Get paginated raw metrics for AI coding assistants with detailed per-developer data
-- `sei_ai_raw_metrics_v2`: Get paginated raw metrics (v2) for AI coding assistants with enhanced filtering options
-- `sei_ai_pr_velocity_summary`: Get PR velocity summary comparing AI-assisted vs non-AI-assisted pull requests
-- `sei_ai_rework_summary`: Get rework summary comparing AI-assisted vs non-AI-assisted code changes
+- `sei_get_ai_usage_metrics`: Get AI coding assistant feature metrics (lines suggested/accepted, acceptance rate, daily active users) with time-series data
+- `sei_get_ai_usage_breakdown`: Get AI coding assistant usage breakdown by child teams
+- `sei_get_ai_usage_summary`: Get summary statistics for AI coding assistants including total users, acceptance rates, and lines of code
+- `sei_get_ai_top_languages`: Get top programming languages used with AI coding assistants
+- `sei_get_ai_adoptions`: Get AI coding assistant adoption metrics showing team adoption rates over time
+- `sei_get_ai_adoptions_breakdown`: Get AI coding assistant adoption breakdown by direct child teams
+- `sei_get_ai_adoptions_summary`: Get AI coding assistant adoption summary with current vs previous period comparison
+- `sei_get_ai_raw_metrics`: Get paginated raw metrics for AI coding assistants with detailed per-developer data
+- `sei_get_ai_raw_metrics_v2`: Get paginated raw metrics (v2) for AI coding assistants with enhanced filtering options
+- `sei_get_ai_pr_velocity_summary`: Get PR velocity summary comparing AI-assisted vs non-AI-assisted pull requests
+- `sei_get_ai_rework_summary`: Get rework summary comparing AI-assisted vs non-AI-assisted code changes
 
 ## Prerequisites
 
