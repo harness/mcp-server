@@ -247,5 +247,10 @@ func RegisterAllowedToolsets(ctx context.Context, tsg *toolsets.ToolsetGroup, co
 			return err
 		}
 	}
+	if enableAll || slices.Contains(allowedToolsets, "gitops") {
+		if err := commonModules.RegisterGitOps(config, tsg); err != nil {
+			return err
+		}
+	}
 	return nil
 }

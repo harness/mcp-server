@@ -286,7 +286,7 @@ func TestRegisterAllowedToolsets_SingleToolset(t *testing.T) {
 	cleanup := test.UseNoOpProviders()
 	defer cleanup()
 
-	testCases := []string{"pipelines", "connectors", "dashboards", "audit", "acm"}
+	testCases := []string{"pipelines", "connectors", "dashboards", "audit", "acm", "gitops"}
 
 	for _, toolsetName := range testCases {
 		t.Run(toolsetName, func(t *testing.T) {

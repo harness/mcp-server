@@ -23,6 +23,7 @@ func NewModuleRegistry(config *config.McpServerConfig, tsg *toolsets.ToolsetGrou
 			commonModules.NewIDPModule(config, tsg),
 			commonModules.NewHARModule(config, tsg),
 			commonModules.NewFMEModule(config, tsg),
+			commonModules.NewGitOpsModule(config, tsg),
 			NewACMModule(config, tsg),
 		},
 		Config:           config,
