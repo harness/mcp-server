@@ -329,9 +329,7 @@ Toolset Name: `sei`
 - `sei_get_ai_adoptions_breakdown`: Get AI coding assistant adoption breakdown by direct child teams
 - `sei_get_ai_adoptions_summary`: Get AI coding assistant adoption summary with current vs previous period comparison
 - `sei_get_ai_raw_metrics`: Get paginated raw metrics for AI coding assistants with detailed per-developer data
-- `sei_get_ai_raw_metrics_v2`: Get paginated raw metrics (v2) for AI coding assistants with enhanced filtering options
-- `sei_get_ai_pr_velocity_summary`: Get PR velocity summary comparing AI-assisted vs non-AI-assisted pull requests
-- `sei_get_ai_rework_summary`: Get rework summary comparing AI-assisted vs non-AI-assisted code changes
+- `sei_get_ai_impact`: Get AI impact metrics comparing AI-assisted vs non-AI-assisted code (supports impactType: pr_velocity or rework)
 
 ## Prerequisites
 
