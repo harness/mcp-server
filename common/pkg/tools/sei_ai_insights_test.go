@@ -73,6 +73,114 @@ func createFullRequest(toolName string, extraArgs map[string]any) mcp.CallToolRe
 	}
 }
 
+// ===== Tests for Helper Functions =====
+
+func TestAIBaseParamsToParamsMap(t *testing.T) {
+	params := &aiBaseParams{
+		AccountID:       "acc-123",
+		TeamRefID:       "team-456",
+		StartDate:       "2025-01-01",
+		EndDate:         "2025-01-31",
+		IntegrationType: "cursor",
+		ProjectID:       "proj-789",
+		OrgID:           "org-abc",
+	}
+
+	result := params.toParamsMap()
+
+	assert.Equal(t, "acc-123", result["accountId"])
+	assert.Equal(t, "team-456", result["teamRefId"])
+	assert.Equal(t, "2025-01-01", result["startDate"])
+	assert.Equal(t, "2025-01-31", result["endDate"])
+	assert.Equal(t, "cursor", result["integrationType"])
+	assert.Equal(t, "proj-789", result["projectId"])
+	assert.Equal(t, "org-abc", result["orgId"])
+}
+
+func TestMarshalResult(t *testing.T) {
+	t.Run("Success case", func(t *testing.T) {
+		data := map[string]interface{}{"key": "value"}
+		result, err := marshalResult(data)
+		assert.Nil(t, err)
+		assert.NotNil(t, result)
+		assert.False(t, result.IsError)
+	})
+}
+
+func TestWithCommonAIToolOptions(t *testing.T) {
+	cfg := createTestConfig()
+	opts := withCommonAIToolOptions(cfg)
+	assert.NotEmpty(t, opts)
+	// Should have at least 6 options: annotation, scope, accountId, teamRefId, startDate, endDate, integrationType
+	assert.GreaterOrEqual(t, len(opts), 6)
+}
+
+func TestExtractPaginationParams(t *testing.T) {
+	t.Run("Extracts all pagination params", func(t *testing.T) {
+		request := mcp.CallToolRequest{
+			Params: mcp.CallToolParams{
+				Name: "test_tool",
+				Arguments: map[string]any{
+					"type":     "acceptance_rate",
+					"page":     float64(2),
+					"pageSize": float64(25),
+				},
+			},
+		}
+
+		params := map[string]interface{}{}
+		extractPaginationParams(request, params)
+
+		assert.Equal(t, "acceptance_rate", params["type"])
+		assert.Equal(t, 2, params["page"])
+		assert.Equal(t, 25, params["pageSize"])
+	})
+
+	t.Run("Handles missing params", func(t *testing.T) {
+		request := mcp.CallToolRequest{
+			Params: mcp.CallToolParams{
+				Name:      "test_tool",
+				Arguments: map[string]any{},
+			},
+		}
+
+		params := map[string]interface{}{}
+		extractPaginationParams(request, params)
+
+		_, hasType := params["type"]
+		_, hasPage := params["page"]
+		_, hasPageSize := params["pageSize"]
+
+		assert.False(t, hasType)
+		assert.False(t, hasPage)
+		assert.False(t, hasPageSize)
+	})
+
+	t.Run("Handles empty type string", func(t *testing.T) {
+		request := mcp.CallToolRequest{
+			Params: mcp.CallToolParams{
+				Name: "test_tool",
+				Arguments: map[string]any{
+					"type": "",
+				},
+			},
+		}
+
+		params := map[string]interface{}{}
+		extractPaginationParams(request, params)
+
+		_, hasType := params["type"]
+		assert.False(t, hasType, "Empty type should not be added to params")
+	})
+}
+
+func TestRawMetricsPaginationOptions(t *testing.T) {
+	opts := rawMetricsPaginationOptions()
+	assert.NotEmpty(t, opts)
+	// Should have exactly 3 options: type, page, pageSize
+	assert.Equal(t, 3, len(opts))
+}
+
 func TestGetAIUsageMetricsTool(t *testing.T) {
 	testConfig := createTestConfig()
 
@@ -1210,6 +1318,25 @@ func TestGetAIPRVelocitySummaryTool(t *testing.T) {
 		assert.True(t, result.IsError)
 	})
 
+	t.Run("Missing granularity returns error", func(t *testing.T) {
+		_, handler := GetAIPRVelocitySummaryTool(testConfig, nil)
+		request := mcp.CallToolRequest{
+			Params: mcp.CallToolParams{
+				Name: "sei_get_ai_pr_velocity_summary",
+				Arguments: map[string]any{
+					"accountId":       "test-account",
+					"teamRefId":       "12345",
+					"startDate":       "2025-01-01",
+					"endDate":         "2025-01-31",
+					"integrationType": "cursor",
+				},
+			},
+		}
+		result, err := handler(context.Background(), request)
+		assert.Nil(t, err)
+		assert.True(t, result.IsError)
+	})
+
 	t.Run("Full request with mock server succeeds", func(t *testing.T) {
 		server := createMockServer()
 		defer server.Close()
@@ -1217,7 +1344,9 @@ func TestGetAIPRVelocitySummaryTool(t *testing.T) {
 		mockClient := createTestAIClient(server.URL)
 		_, handler := GetAIPRVelocitySummaryTool(testConfig, mockClient)
 
-		request := createFullRequest("sei_get_ai_pr_velocity_summary", nil)
+		request := createFullRequest("sei_get_ai_pr_velocity_summary", map[string]any{
+			"granularity": "MONTHLY",
+		})
 
 		result, err := handler(context.Background(), request)
 		assert.Nil(t, err)
@@ -1318,6 +1447,25 @@ func TestGetAIReworkSummaryTool(t *testing.T) {
 		assert.True(t, result.IsError)
 	})
 
+	t.Run("Missing granularity returns error", func(t *testing.T) {
+		_, handler := GetAIReworkSummaryTool(testConfig, nil)
+		request := mcp.CallToolRequest{
+			Params: mcp.CallToolParams{
+				Name: "sei_get_ai_rework_summary",
+				Arguments: map[string]any{
+					"accountId":       "test-account",
+					"teamRefId":       "12345",
+					"startDate":       "2025-01-01",
+					"endDate":         "2025-01-31",
+					"integrationType": "cursor",
+				},
+			},
+		}
+		result, err := handler(context.Background(), request)
+		assert.Nil(t, err)
+		assert.True(t, result.IsError)
+	})
+
 	t.Run("Full request with mock server succeeds", func(t *testing.T) {
 		server := createMockServer()
 		defer server.Close()
@@ -1325,7 +1473,9 @@ func TestGetAIReworkSummaryTool(t *testing.T) {
 		mockClient := createTestAIClient(server.URL)
 		_, handler := GetAIReworkSummaryTool(testConfig, mockClient)
 
-		request := createFullRequest("sei_get_ai_rework_summary", nil)
+		request := createFullRequest("sei_get_ai_rework_summary", map[string]any{
+			"granularity": "WEEKLY",
+		})
 
 		result, err := handler(context.Background(), request)
 		assert.Nil(t, err)

@@ -227,6 +227,109 @@ func TestAIInsightsService_NewService(t *testing.T) {
 	})
 }
 
+func TestBuildBaseRequestBody(t *testing.T) {
+	t.Run("All fields are populated", func(t *testing.T) {
+		params := map[string]interface{}{
+			"teamRefId":       "12345",
+			"startDate":       "2025-01-01",
+			"endDate":         "2025-01-31",
+			"integrationType": "cursor",
+		}
+
+		body := buildBaseRequestBody(params)
+
+		assert.Equal(t, 12345, body["teamRefId"])
+		assert.Equal(t, "2025-01-01", body["startDate"])
+		assert.Equal(t, "2025-01-31", body["endDate"])
+		assert.Equal(t, []string{"cursor"}, body["integrationType"])
+	})
+
+	t.Run("Missing fields are not included", func(t *testing.T) {
+		params := map[string]interface{}{
+			"teamRefId": "12345",
+		}
+
+		body := buildBaseRequestBody(params)
+
+		assert.Equal(t, 12345, body["teamRefId"])
+		_, hasStartDate := body["startDate"]
+		assert.False(t, hasStartDate)
+	})
+
+	t.Run("Integer teamRefId stays integer", func(t *testing.T) {
+		params := map[string]interface{}{
+			"teamRefId": 203129,
+		}
+
+		body := buildBaseRequestBody(params)
+		assert.Equal(t, 203129, body["teamRefId"])
+	})
+}
+
+func TestBuildPaginatedRequestBody(t *testing.T) {
+	t.Run("Default pagination values", func(t *testing.T) {
+		params := map[string]interface{}{
+			"teamRefId":       "12345",
+			"startDate":       "2025-01-01",
+			"endDate":         "2025-01-31",
+			"integrationType": "cursor",
+		}
+
+		body := buildPaginatedRequestBody(params)
+
+		pagination := body["pagination"].(map[string]interface{})
+		assert.Equal(t, 0, pagination["pageNumber"])
+		assert.Equal(t, 10, pagination["maxPageSize"])
+	})
+
+	t.Run("Custom pagination values", func(t *testing.T) {
+		params := map[string]interface{}{
+			"teamRefId":       "12345",
+			"startDate":       "2025-01-01",
+			"endDate":         "2025-01-31",
+			"integrationType": "cursor",
+			"page":            5,
+			"pageSize":        20,
+		}
+
+		body := buildPaginatedRequestBody(params)
+
+		pagination := body["pagination"].(map[string]interface{})
+		assert.Equal(t, 5, pagination["pageNumber"])
+		assert.Equal(t, 20, pagination["maxPageSize"])
+	})
+
+	t.Run("Type field is included", func(t *testing.T) {
+		params := map[string]interface{}{
+			"teamRefId":       "12345",
+			"startDate":       "2025-01-01",
+			"endDate":         "2025-01-31",
+			"integrationType": "cursor",
+			"type":            "active",
+		}
+
+		body := buildPaginatedRequestBody(params)
+
+		assert.Equal(t, "active", body["type"])
+	})
+
+	t.Run("Base fields are included", func(t *testing.T) {
+		params := map[string]interface{}{
+			"teamRefId":       "12345",
+			"startDate":       "2025-01-01",
+			"endDate":         "2025-01-31",
+			"integrationType": "cursor",
+		}
+
+		body := buildPaginatedRequestBody(params)
+
+		assert.Equal(t, 12345, body["teamRefId"])
+		assert.Equal(t, "2025-01-01", body["startDate"])
+		assert.Equal(t, "2025-01-31", body["endDate"])
+		assert.Equal(t, []string{"cursor"}, body["integrationType"])
+	})
+}
+
 func TestBuildRequestBody(t *testing.T) {
 	t.Run("teamRefId is converted to integer", func(t *testing.T) {
 		params := map[string]interface{}{
@@ -662,7 +765,7 @@ func TestAIInsightsService_ErrorHandling(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestAIInsightsService_WithOptionalParams(t *testing.T) {
+func TestAIInsightsService_WithPaginationStructure(t *testing.T) {
 	response := map[string]interface{}{"success": true}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -670,13 +773,14 @@ func TestAIInsightsService_WithOptionalParams(t *testing.T) {
 		var reqBody map[string]interface{}
 		json.Unmarshal(body, &reqBody)
 
-		// Verify optional params are included
-		if page, ok := reqBody["page"]; ok {
-			assert.Equal(t, float64(0), page)
-		}
-		if pageSize, ok := reqBody["pageSize"]; ok {
-			assert.Equal(t, float64(10), pageSize)
-		}
+		// Verify pagination is a nested object with correct structure
+		pagination, ok := reqBody["pagination"].(map[string]interface{})
+		assert.True(t, ok, "pagination should be a nested object")
+		assert.Equal(t, float64(2), pagination["pageNumber"])
+		assert.Equal(t, float64(20), pagination["maxPageSize"])
+
+		// Verify type field
+		assert.Equal(t, "active", reqBody["type"])
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -694,8 +798,9 @@ func TestAIInsightsService_WithOptionalParams(t *testing.T) {
 		"integrationType": "cursor",
 		"projectId":       "test-project",
 		"orgId":           "default",
-		"page":            0,
-		"pageSize":        10,
+		"page":            2,
+		"pageSize":        20,
+		"type":            "active",
 	}
 
 	result, err := aiService.GetAIRawMetrics(context.Background(), params)
@@ -740,6 +845,76 @@ func TestAIInsightsService_WithGranularityAndMetricType(t *testing.T) {
 	}
 
 	result, err := aiService.GetAIUsageBreakdown(context.Background(), params)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func TestAIInsightsService_PRVelocityWithGranularity(t *testing.T) {
+	response := map[string]interface{}{"success": true}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var reqBody map[string]interface{}
+		json.Unmarshal(body, &reqBody)
+
+		// Verify granularity is included for PR velocity
+		assert.Equal(t, "MONTHLY", reqBody["granularity"])
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	aiService := createTestAIService(server.URL)
+
+	params := map[string]interface{}{
+		"accountId":       "test-account",
+		"teamRefId":       "12345",
+		"startDate":       "2025-01-01",
+		"endDate":         "2025-12-31",
+		"granularity":     "MONTHLY",
+		"integrationType": "cursor",
+		"projectId":       "test-project",
+		"orgId":           "default",
+	}
+
+	result, err := aiService.GetAIPRVelocitySummary(context.Background(), params)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func TestAIInsightsService_ReworkWithGranularity(t *testing.T) {
+	response := map[string]interface{}{"success": true}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var reqBody map[string]interface{}
+		json.Unmarshal(body, &reqBody)
+
+		// Verify granularity is included for rework summary
+		assert.Equal(t, "WEEKLY", reqBody["granularity"])
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	aiService := createTestAIService(server.URL)
+
+	params := map[string]interface{}{
+		"accountId":       "test-account",
+		"teamRefId":       "12345",
+		"startDate":       "2025-01-01",
+		"endDate":         "2025-12-31",
+		"granularity":     "WEEKLY",
+		"integrationType": "cursor",
+		"projectId":       "test-project",
+		"orgId":           "default",
+	}
+
+	result, err := aiService.GetAIReworkSummary(context.Background(), params)
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
 }
