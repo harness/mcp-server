@@ -9,6 +9,7 @@ import (
 
 const (
 	delegateTokenPath = "/delegate-token-ng"
+	delegateGroupPath = "/delegate-token-ng/delegate-groups"
 )
 
 type DelegateTokenClient struct {
@@ -176,4 +177,27 @@ func (d *DelegateTokenClient) DeleteDelegateToken(ctx context.Context, scope dto
 	}
 
 	return nil
+}
+
+// GetDelegateByToken gets all delegates using a given delegate token name.
+// Parameters:
+// - ctx: Context for the request
+// - scope: The scope (account/org/project) for the token
+// - tokenName: Name of the delegate token to get delegates for
+// Returns:
+// - []DelegateGroupDetail: List of delegate groups using the token
+// - error: Any error that occurred during the request
+func (d *DelegateTokenClient) GetDelegateByToken(ctx context.Context, scope dto.Scope, tokenName string) ([]dto.DelegateGroupDetail, error) {
+	path := delegateGroupPath
+	params := make(map[string]string)
+	addScope(ctx, scope, params)
+	params["delegateTokenName"] = tokenName
+
+	var response dto.DelegateGroupsResponse
+	err := d.Client.Get(ctx, path, params, nil, &response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get delegates by token name : %w", err)
+	}
+
+	return response.Resource.DelegateGroupDetails, nil
 }

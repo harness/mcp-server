@@ -142,6 +142,13 @@ Toolset Name: `delegatetokens`
 - `create_delegate_token`: Creates a new delegate token in Harness
 - `revoke_delegate_token`: Revokes a delegate token in Harness
 - `delete_delegate_token`: Deletes a revoked delegate token from Harness
+- `core_get_delegate_by_token`: Gets all delegates using a given delegate token name
+
+#### Delegate Toolset
+
+Toolset Name: `delegate`
+
+- `core_list_delegates`: Lists all delegates in Harness filtered by provided conditions such as status, delegate name, type, and version status.
 
 #### Repositories Toolset
 
