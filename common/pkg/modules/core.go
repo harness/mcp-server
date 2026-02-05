@@ -178,7 +178,7 @@ func RegisterConnectors(config *config.McpServerConfig, tsg *toolsets.ToolsetGro
 
 // RegisterDelegateTokens registers the DelegateTokens toolset
 func RegisterDelegateTokens(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
-	delegateTokenClient, err := DefaultClientProvider.CreateClient(config, "ngMan")
+	delegateTokenClient, err := DefaultClientProvider.CreateClient(config, "harnessManager")
 	if err != nil {
 		return fmt.Errorf("failed to create client for DelegateTokens: %w", err)
 	}
@@ -201,7 +201,7 @@ func RegisterDelegateTokens(config *config.McpServerConfig, tsg *toolsets.Toolse
 
 // RegisterDelegates registers the delegates toolset
 func RegisterDelegates(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
-	delegateClient, err := DefaultClientProvider.CreateClient(config, "ngMan")
+	delegateClient, err := DefaultClientProvider.CreateClient(config, "harnessManager")
 	if err != nil {
 		return fmt.Errorf("failed to create client for Delegates: %w", err)
 	}

@@ -13,6 +13,7 @@ import (
 var ServiceToPathMap = map[string]string{
 	"acm":                 "autoai",
 	"ngMan":               "ng/api",
+	"harnessManager":      "ng/api",
 	"nextgen":             "",
 	"commOrch":            "lw/co/api",
 	"chaos":               "chaos/manager/api",
