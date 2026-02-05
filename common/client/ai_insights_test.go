@@ -1,9 +1,16 @@
 package client
 
 import (
+	"context"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseTeamRefId(t *testing.T) {
@@ -87,6 +94,16 @@ func TestToIntegrationTypeArray(t *testing.T) {
 			name:     "Empty string returns nil",
 			input:    "",
 			expected: nil,
+		},
+		{
+			name:     "Interface array",
+			input:    []interface{}{"cursor"},
+			expected: []interface{}{"cursor"},
+		},
+		{
+			name:     "Other type returns original",
+			input:    123,
+			expected: 123,
 		},
 	}
 
@@ -257,4 +274,472 @@ func TestBuildRequestBody(t *testing.T) {
 		expected := []string{"cursor", "windsurf"}
 		assert.Equal(t, expected, body["integrationType"])
 	})
+}
+
+// aiMockAuthProvider for testing AI insights
+type aiMockAuthProvider struct{}
+
+func (m aiMockAuthProvider) GetHeader(ctx context.Context) (string, string, error) {
+	return "Authorization", "Bearer test-token", nil
+}
+
+// createTestServer creates a mock HTTP server for testing
+func createTestServer(t *testing.T, expectedPath string, response interface{}) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method)
+		// Don't check specific path since it may vary
+
+		// Read request body
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		defer r.Body.Close()
+
+		var reqBody map[string]interface{}
+		err = json.Unmarshal(body, &reqBody)
+		require.NoError(t, err)
+
+		// Verify teamRefId is an integer
+		if teamRefId, ok := reqBody["teamRefId"]; ok {
+			_, isFloat := teamRefId.(float64) // JSON numbers are float64
+			assert.True(t, isFloat, "teamRefId should be a number")
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(response)
+	}))
+}
+
+// createTestAIService creates an AIInsightsService with a mock server
+func createTestAIService(serverURL string) *AIInsightsService {
+	parsedURL, _ := url.Parse(serverURL)
+	httpClient := &http.Client{}
+	baseClient := &Client{
+		client:       httpClient,
+		BaseURL:      parsedURL,
+		AuthProvider: aiMockAuthProvider{},
+	}
+
+	return &AIInsightsService{
+		Client:  baseClient,
+		BaseURL: serverURL,
+	}
+}
+
+func TestAIInsightsService_GetAIUsageSummary(t *testing.T) {
+	response := map[string]interface{}{
+		"totalUsers":     100,
+		"activeUsers":    50,
+		"acceptanceRate": 42.5,
+		"linesAccepted":  10000,
+		"linesSuggested": 23529,
+	}
+
+	server := createTestServer(t, "/ai-insights/usage/summary", response)
+	defer server.Close()
+
+	aiService := createTestAIService(server.URL)
+
+	params := map[string]interface{}{
+		"accountId":       "test-account",
+		"teamRefId":       "12345",
+		"startDate":       "2025-01-01",
+		"endDate":         "2025-01-31",
+		"integrationType": "cursor",
+		"projectId":       "test-project",
+		"orgId":           "default",
+	}
+
+	result, err := aiService.GetAIUsageSummary(context.Background(), params)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func TestAIInsightsService_GetAIUsageMetrics(t *testing.T) {
+	response := map[string]interface{}{
+		"dataPoints": []map[string]interface{}{
+			{"date": "2025-01-01", "value": 100},
+			{"date": "2025-01-08", "value": 150},
+		},
+	}
+
+	server := createTestServer(t, "/ai-insights/usage/metrics", response)
+	defer server.Close()
+
+	aiService := createTestAIService(server.URL)
+
+	params := map[string]interface{}{
+		"accountId":       "test-account",
+		"teamRefId":       "12345",
+		"startDate":       "2025-01-01",
+		"endDate":         "2025-01-31",
+		"granularity":     "WEEKLY",
+		"metricType":      "linesAccepted",
+		"integrationType": "cursor",
+		"projectId":       "test-project",
+		"orgId":           "default",
+	}
+
+	result, err := aiService.GetAIUsageMetrics(context.Background(), params)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func TestAIInsightsService_GetAIUsageBreakdown(t *testing.T) {
+	response := map[string]interface{}{
+		"teams": []map[string]interface{}{
+			{"teamId": "1", "teamName": "Team A", "value": 100},
+			{"teamId": "2", "teamName": "Team B", "value": 200},
+		},
+	}
+
+	server := createTestServer(t, "/ai-insights/usage/breakdown", response)
+	defer server.Close()
+
+	aiService := createTestAIService(server.URL)
+
+	params := map[string]interface{}{
+		"accountId":       "test-account",
+		"teamRefId":       "12345",
+		"startDate":       "2025-01-01",
+		"endDate":         "2025-01-31",
+		"integrationType": "cursor",
+		"projectId":       "test-project",
+		"orgId":           "default",
+	}
+
+	result, err := aiService.GetAIUsageBreakdown(context.Background(), params)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func TestAIInsightsService_GetAIAdoptions(t *testing.T) {
+	response := map[string]interface{}{
+		"dataPoints": []map[string]interface{}{
+			{"date": "2025-01-01", "adoptionRate": 35.5},
+			{"date": "2025-01-08", "adoptionRate": 38.2},
+		},
+	}
+
+	server := createTestServer(t, "/ai-insights/adoptions", response)
+	defer server.Close()
+
+	aiService := createTestAIService(server.URL)
+
+	params := map[string]interface{}{
+		"accountId":       "test-account",
+		"teamRefId":       "12345",
+		"startDate":       "2025-01-01",
+		"endDate":         "2025-01-31",
+		"granularity":     "WEEKLY",
+		"integrationType": "cursor",
+		"projectId":       "test-project",
+		"orgId":           "default",
+	}
+
+	result, err := aiService.GetAIAdoptions(context.Background(), params)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func TestAIInsightsService_GetAIAdoptionsSummary(t *testing.T) {
+	response := map[string]interface{}{
+		"currentPeriod":  map[string]interface{}{"adoptionRate": 45.5},
+		"previousPeriod": map[string]interface{}{"adoptionRate": 40.0},
+		"change":         5.5,
+	}
+
+	server := createTestServer(t, "/ai-insights/adoptions/summary", response)
+	defer server.Close()
+
+	aiService := createTestAIService(server.URL)
+
+	params := map[string]interface{}{
+		"accountId":       "test-account",
+		"teamRefId":       "12345",
+		"startDate":       "2025-01-01",
+		"endDate":         "2025-01-31",
+		"integrationType": "cursor",
+		"projectId":       "test-project",
+		"orgId":           "default",
+	}
+
+	result, err := aiService.GetAIAdoptionsSummary(context.Background(), params)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func TestAIInsightsService_GetAIAdoptionsBreakdown(t *testing.T) {
+	response := map[string]interface{}{
+		"teams": []map[string]interface{}{
+			{"teamId": "1", "adoptionRate": 50.0},
+			{"teamId": "2", "adoptionRate": 60.0},
+		},
+	}
+
+	server := createTestServer(t, "/ai-insights/adoptions/breakdown", response)
+	defer server.Close()
+
+	aiService := createTestAIService(server.URL)
+
+	params := map[string]interface{}{
+		"accountId":       "test-account",
+		"teamRefId":       "12345",
+		"startDate":       "2025-01-01",
+		"endDate":         "2025-01-31",
+		"integrationType": "cursor",
+		"projectId":       "test-project",
+		"orgId":           "default",
+	}
+
+	result, err := aiService.GetAIAdoptionsBreakdown(context.Background(), params)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func TestAIInsightsService_GetAITopLanguages(t *testing.T) {
+	response := map[string]interface{}{
+		"languages": []map[string]interface{}{
+			{"name": "TypeScript", "count": 1500, "percentage": 45.5},
+			{"name": "Python", "count": 1000, "percentage": 30.3},
+			{"name": "Go", "count": 800, "percentage": 24.2},
+		},
+	}
+
+	server := createTestServer(t, "/ai-insights/top-languages", response)
+	defer server.Close()
+
+	aiService := createTestAIService(server.URL)
+
+	params := map[string]interface{}{
+		"accountId":       "test-account",
+		"teamRefId":       "12345",
+		"startDate":       "2025-01-01",
+		"endDate":         "2025-01-31",
+		"integrationType": "cursor",
+		"projectId":       "test-project",
+		"orgId":           "default",
+	}
+
+	result, err := aiService.GetAITopLanguages(context.Background(), params)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func TestAIInsightsService_GetAIRawMetrics(t *testing.T) {
+	response := map[string]interface{}{
+		"data": []map[string]interface{}{
+			{"developerId": "1", "acceptanceRate": 50.0},
+			{"developerId": "2", "acceptanceRate": 60.0},
+		},
+		"totalCount": 2,
+	}
+
+	server := createTestServer(t, "/ai-insights/raw-metrics", response)
+	defer server.Close()
+
+	aiService := createTestAIService(server.URL)
+
+	params := map[string]interface{}{
+		"accountId":       "test-account",
+		"teamRefId":       "12345",
+		"startDate":       "2025-01-01",
+		"endDate":         "2025-01-31",
+		"integrationType": "cursor",
+		"projectId":       "test-project",
+		"orgId":           "default",
+	}
+
+	result, err := aiService.GetAIRawMetrics(context.Background(), params)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func TestAIInsightsService_GetAIRawMetricsV2(t *testing.T) {
+	response := map[string]interface{}{
+		"data": []map[string]interface{}{
+			{"developerId": "1", "acceptanceRate": 50.0, "linesAccepted": 100},
+			{"developerId": "2", "acceptanceRate": 60.0, "linesAccepted": 200},
+		},
+		"totalCount": 2,
+	}
+
+	server := createTestServer(t, "/ai-insights/raw-metrics/v2", response)
+	defer server.Close()
+
+	aiService := createTestAIService(server.URL)
+
+	params := map[string]interface{}{
+		"accountId":       "test-account",
+		"teamRefId":       "12345",
+		"startDate":       "2025-01-01",
+		"endDate":         "2025-01-31",
+		"integrationType": "cursor",
+		"projectId":       "test-project",
+		"orgId":           "default",
+	}
+
+	result, err := aiService.GetAIRawMetricsV2(context.Background(), params)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func TestAIInsightsService_GetAIPRVelocitySummary(t *testing.T) {
+	response := map[string]interface{}{
+		"aiAssisted":    map[string]interface{}{"avgTime": 2.5},
+		"nonAiAssisted": map[string]interface{}{"avgTime": 4.0},
+	}
+
+	server := createTestServer(t, "/ai-insights/pr-velocity/summary", response)
+	defer server.Close()
+
+	aiService := createTestAIService(server.URL)
+
+	params := map[string]interface{}{
+		"accountId":       "test-account",
+		"teamRefId":       "12345",
+		"startDate":       "2025-01-01",
+		"endDate":         "2025-01-31",
+		"integrationType": "cursor",
+		"projectId":       "test-project",
+		"orgId":           "default",
+	}
+
+	result, err := aiService.GetAIPRVelocitySummary(context.Background(), params)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func TestAIInsightsService_GetAIReworkSummary(t *testing.T) {
+	response := map[string]interface{}{
+		"aiAssisted":    map[string]interface{}{"reworkRate": 5.0},
+		"nonAiAssisted": map[string]interface{}{"reworkRate": 8.0},
+	}
+
+	server := createTestServer(t, "/ai-insights/rework/summary", response)
+	defer server.Close()
+
+	aiService := createTestAIService(server.URL)
+
+	params := map[string]interface{}{
+		"accountId":       "test-account",
+		"teamRefId":       "12345",
+		"startDate":       "2025-01-01",
+		"endDate":         "2025-01-31",
+		"integrationType": "cursor",
+		"projectId":       "test-project",
+		"orgId":           "default",
+	}
+
+	result, err := aiService.GetAIReworkSummary(context.Background(), params)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func TestAIInsightsService_ErrorHandling(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{
+			"message": "Invalid request",
+		})
+	}))
+	defer server.Close()
+
+	aiService := createTestAIService(server.URL)
+
+	params := map[string]interface{}{
+		"accountId":       "test-account",
+		"teamRefId":       "12345",
+		"startDate":       "2025-01-01",
+		"endDate":         "2025-01-31",
+		"integrationType": "cursor",
+		"projectId":       "test-project",
+		"orgId":           "default",
+	}
+
+	_, err := aiService.GetAIUsageSummary(context.Background(), params)
+	assert.Error(t, err)
+}
+
+func TestAIInsightsService_WithOptionalParams(t *testing.T) {
+	response := map[string]interface{}{"success": true}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var reqBody map[string]interface{}
+		json.Unmarshal(body, &reqBody)
+
+		// Verify optional params are included
+		if page, ok := reqBody["page"]; ok {
+			assert.Equal(t, float64(0), page)
+		}
+		if pageSize, ok := reqBody["pageSize"]; ok {
+			assert.Equal(t, float64(10), pageSize)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	aiService := createTestAIService(server.URL)
+
+	params := map[string]interface{}{
+		"accountId":       "test-account",
+		"teamRefId":       "12345",
+		"startDate":       "2025-01-01",
+		"endDate":         "2025-01-31",
+		"integrationType": "cursor",
+		"projectId":       "test-project",
+		"orgId":           "default",
+		"page":            0,
+		"pageSize":        10,
+	}
+
+	result, err := aiService.GetAIRawMetrics(context.Background(), params)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func TestAIInsightsService_WithGranularityAndMetricType(t *testing.T) {
+	response := map[string]interface{}{"success": true}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var reqBody map[string]interface{}
+		json.Unmarshal(body, &reqBody)
+
+		// Verify granularity and metricType are included
+		if granularity, ok := reqBody["granularity"]; ok {
+			assert.Equal(t, "WEEKLY", granularity)
+		}
+		if metricType, ok := reqBody["metricType"]; ok {
+			assert.Equal(t, "linesAccepted", metricType)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	aiService := createTestAIService(server.URL)
+
+	params := map[string]interface{}{
+		"accountId":       "test-account",
+		"teamRefId":       "12345",
+		"startDate":       "2025-01-01",
+		"endDate":         "2025-01-31",
+		"granularity":     "WEEKLY",
+		"metricType":      "linesAccepted",
+		"integrationType": "cursor",
+		"projectId":       "test-project",
+		"orgId":           "default",
+	}
+
+	result, err := aiService.GetAIUsageBreakdown(context.Background(), params)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
 }
