@@ -199,7 +199,7 @@ func GetAIUsageBreakdownTool(cfg *config.McpServerConfig, aiClient *client.AIIns
 // GetAIUsageSummaryTool creates a tool for getting AI coding assistant usage summary
 func GetAIUsageSummaryTool(cfg *config.McpServerConfig, aiClient *client.AIInsightsService) (mcp.Tool, server.ToolHandlerFunc) {
 	opts := append(withCommonAIToolOptions(cfg),
-		mcp.WithDescription("Get summary statistics for AI coding assistants. Returns total users, acceptance rates, and lines of code for the period. See also: sei_get_ai_usage_metrics for time-series data, sei_get_ai_raw_metrics_v2 for per-developer details."),
+		mcp.WithDescription("Get summary statistics for AI coding assistants. Returns total users, acceptance rates, and lines of code for the period. See also: sei_get_ai_usage_metrics for time-series data, sei_get_ai_raw_metrics for per-developer details."),
 	)
 
 	return mcp.NewTool("sei_get_ai_usage_summary", opts...),
@@ -320,10 +320,10 @@ func GetAIAdoptionsSummaryTool(cfg *config.McpServerConfig, aiClient *client.AII
 
 // ===== AI Coding Assistant Raw Metrics Tool =====
 
-// GetAIRawMetricsTool creates a tool for getting paginated raw AI metrics
+// GetAIRawMetricsTool creates a tool for getting paginated raw AI metrics with detailed per-developer data
 func GetAIRawMetricsTool(cfg *config.McpServerConfig, aiClient *client.AIInsightsService) (mcp.Tool, server.ToolHandlerFunc) {
 	opts := append(withCommonAIToolOptions(cfg),
-		mcp.WithDescription("Get paginated raw metrics for AI coding assistants with detailed per-developer data. Returns individual developer usage statistics. See also: sei_get_ai_raw_metrics_v2 for enhanced filtering."),
+		mcp.WithDescription("Get paginated raw metrics for AI coding assistants with detailed per-developer data. Returns individual developer usage statistics including lines suggested, accepted, and acceptance rates. See also: sei_get_ai_usage_summary for aggregate stats."),
 	)
 	opts = append(opts, rawMetricsPaginationOptions()...)
 
@@ -337,7 +337,8 @@ func GetAIRawMetricsTool(cfg *config.McpServerConfig, aiClient *client.AIInsight
 			params := base.toParamsMap()
 			extractPaginationParams(request, params)
 
-			result, err := aiClient.GetAIRawMetrics(ctx, params)
+			// Uses v2 API internally for enhanced filtering
+			result, err := aiClient.GetAIRawMetricsV2(ctx, params)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get AI raw metrics: %w", err)
 			}
@@ -345,45 +346,24 @@ func GetAIRawMetricsTool(cfg *config.McpServerConfig, aiClient *client.AIInsight
 		}
 }
 
-// ===== AI Coding Assistant Raw Metrics V2 Tool =====
+// ===== AI Coding Assistant Impact Tool =====
 
-// GetAIRawMetricsV2Tool creates a tool for getting paginated raw AI metrics with enhanced filtering
-func GetAIRawMetricsV2Tool(cfg *config.McpServerConfig, aiClient *client.AIInsightsService) (mcp.Tool, server.ToolHandlerFunc) {
+// GetAIImpactTool creates a tool for getting AI impact metrics (PR velocity or rework comparison)
+func GetAIImpactTool(cfg *config.McpServerConfig, aiClient *client.AIInsightsService) (mcp.Tool, server.ToolHandlerFunc) {
 	opts := append(withCommonAIToolOptions(cfg),
-		mcp.WithDescription("Get paginated raw metrics (v2) for AI coding assistants with enhanced filtering options. Provides more detailed per-developer data than v1. See also: sei_get_ai_usage_summary for aggregate stats."),
+		mcp.WithDescription("Get AI impact metrics comparing AI-assisted vs non-AI-assisted code. Use impactType 'pr_velocity' for PR cycle time comparison or 'rework' for code quality/rework rate comparison. See also: sei_get_ai_usage_summary for usage stats."),
+		mcp.WithString("impactType", mcp.Required(), mcp.Description("Type of impact metric: 'pr_velocity' for PR cycle time, 'rework' for code quality"), mcp.Enum("pr_velocity", "rework")),
+		mcp.WithString("granularity", mcp.Required(), mcp.Description("Time granularity for the metrics"), mcp.Enum("DAILY", "WEEKLY", "MONTHLY")),
 	)
-	opts = append(opts, rawMetricsPaginationOptions()...)
 
-	return mcp.NewTool("sei_get_ai_raw_metrics_v2", opts...),
+	return mcp.NewTool("sei_get_ai_impact", opts...),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			base, err := extractBaseParams(ctx, cfg, request)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			params := base.toParamsMap()
-			extractPaginationParams(request, params)
-
-			result, err := aiClient.GetAIRawMetricsV2(ctx, params)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get AI raw metrics v2: %w", err)
-			}
-			return marshalResult(result)
-		}
-}
-
-// ===== AI Coding Assistant PR Velocity Summary Tool =====
-
-// GetAIPRVelocitySummaryTool creates a tool for getting PR velocity comparison
-func GetAIPRVelocitySummaryTool(cfg *config.McpServerConfig, aiClient *client.AIInsightsService) (mcp.Tool, server.ToolHandlerFunc) {
-	opts := append(withCommonAIToolOptions(cfg),
-		mcp.WithDescription("Get PR velocity summary comparing AI-assisted vs non-AI-assisted pull requests. Shows impact of AI tools on PR cycle time. See also: sei_get_ai_rework_summary for quality impact."),
-		mcp.WithString("granularity", mcp.Required(), mcp.Description("Time granularity for the metrics"), mcp.Enum("DAILY", "WEEKLY", "MONTHLY")),
-	)
-
-	return mcp.NewTool("sei_get_ai_pr_velocity_summary", opts...),
-		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			base, err := extractBaseParams(ctx, cfg, request)
+			impactType, err := RequiredParam[string](request, "impactType")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -396,42 +376,22 @@ func GetAIPRVelocitySummaryTool(cfg *config.McpServerConfig, aiClient *client.AI
 			params := base.toParamsMap()
 			params["granularity"] = granularity
 
-			result, err := aiClient.GetAIPRVelocitySummary(ctx, params)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get AI PR velocity summary: %w", err)
-			}
-			return marshalResult(result)
-		}
-}
-
-// ===== AI Coding Assistant Rework Summary Tool =====
-
-// GetAIReworkSummaryTool creates a tool for getting rework comparison
-func GetAIReworkSummaryTool(cfg *config.McpServerConfig, aiClient *client.AIInsightsService) (mcp.Tool, server.ToolHandlerFunc) {
-	opts := append(withCommonAIToolOptions(cfg),
-		mcp.WithDescription("Get rework summary comparing AI-assisted vs non-AI-assisted code changes. Shows impact of AI tools on code quality and rework rates. See also: sei_get_ai_pr_velocity_summary for velocity impact."),
-		mcp.WithString("granularity", mcp.Required(), mcp.Description("Time granularity for the metrics"), mcp.Enum("DAILY", "WEEKLY", "MONTHLY")),
-	)
-
-	return mcp.NewTool("sei_get_ai_rework_summary", opts...),
-		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			base, err := extractBaseParams(ctx, cfg, request)
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
+			var result interface{}
+			switch impactType {
+			case "pr_velocity":
+				result, err = aiClient.GetAIPRVelocitySummary(ctx, params)
+				if err != nil {
+					return nil, fmt.Errorf("failed to get AI PR velocity impact: %w", err)
+				}
+			case "rework":
+				result, err = aiClient.GetAIReworkSummary(ctx, params)
+				if err != nil {
+					return nil, fmt.Errorf("failed to get AI rework impact: %w", err)
+				}
+			default:
+				return mcp.NewToolResultError(fmt.Sprintf("invalid impactType: %s, must be 'pr_velocity' or 'rework'", impactType)), nil
 			}
 
-			granularity, err := RequiredParam[string](request, "granularity")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-
-			params := base.toParamsMap()
-			params["granularity"] = granularity
-
-			result, err := aiClient.GetAIReworkSummary(ctx, params)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get AI rework summary: %w", err)
-			}
 			return marshalResult(result)
 		}
 }

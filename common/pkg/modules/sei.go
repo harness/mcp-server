@@ -132,9 +132,7 @@ func RegisterSoftwareEngineeringInsights(config *config.McpServerConfig, tsg *to
 	getAIAdoptionsBreakdownTool, getAIAdoptionsBreakdownHandler := tools.GetAIAdoptionsBreakdownTool(config, aiInsightsClient)
 	getAIAdoptionsSummaryTool, getAIAdoptionsSummaryHandler := tools.GetAIAdoptionsSummaryTool(config, aiInsightsClient)
 	getAIRawMetricsTool, getAIRawMetricsHandler := tools.GetAIRawMetricsTool(config, aiInsightsClient)
-	getAIRawMetricsV2Tool, getAIRawMetricsV2Handler := tools.GetAIRawMetricsV2Tool(config, aiInsightsClient)
-	getAIPRVelocitySummaryTool, getAIPRVelocitySummaryHandler := tools.GetAIPRVelocitySummaryTool(config, aiInsightsClient)
-	getAIReworkSummaryTool, getAIReworkSummaryHandler := tools.GetAIReworkSummaryTool(config, aiInsightsClient)
+	getAIImpactTool, getAIImpactHandler := tools.GetAIImpactTool(config, aiInsightsClient)
 
 	// Add tools to the toolset
 	sei.AddReadTools(
@@ -173,9 +171,7 @@ func RegisterSoftwareEngineeringInsights(config *config.McpServerConfig, tsg *to
 		toolsets.NewServerTool(getAIAdoptionsBreakdownTool, getAIAdoptionsBreakdownHandler),
 		toolsets.NewServerTool(getAIAdoptionsSummaryTool, getAIAdoptionsSummaryHandler),
 		toolsets.NewServerTool(getAIRawMetricsTool, getAIRawMetricsHandler),
-		toolsets.NewServerTool(getAIRawMetricsV2Tool, getAIRawMetricsV2Handler),
-		toolsets.NewServerTool(getAIPRVelocitySummaryTool, getAIPRVelocitySummaryHandler),
-		toolsets.NewServerTool(getAIReworkSummaryTool, getAIReworkSummaryHandler),
+		toolsets.NewServerTool(getAIImpactTool, getAIImpactHandler),
 	)
 
 	// Add toolset to the group

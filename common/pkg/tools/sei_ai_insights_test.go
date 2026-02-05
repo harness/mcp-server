@@ -1099,19 +1099,25 @@ func TestGetAIRawMetricsTool(t *testing.T) {
 	})
 }
 
-func TestGetAIRawMetricsV2Tool(t *testing.T) {
+func TestGetAIImpactTool(t *testing.T) {
 	testConfig := createTestConfig()
 
 	t.Run("Tool has correct name", func(t *testing.T) {
-		tool, _ := GetAIRawMetricsV2Tool(testConfig, nil)
-		assert.Equal(t, "sei_get_ai_raw_metrics_v2", tool.Name)
+		tool, _ := GetAIImpactTool(testConfig, nil)
+		assert.Equal(t, "sei_get_ai_impact", tool.Name)
+	})
+
+	t.Run("Tool has description mentioning both impact types", func(t *testing.T) {
+		tool, _ := GetAIImpactTool(testConfig, nil)
+		assert.Contains(t, tool.Description, "pr_velocity")
+		assert.Contains(t, tool.Description, "rework")
 	})
 
 	t.Run("Missing required parameter returns error", func(t *testing.T) {
-		_, handler := GetAIRawMetricsV2Tool(testConfig, nil)
+		_, handler := GetAIImpactTool(testConfig, nil)
 		request := mcp.CallToolRequest{
 			Params: mcp.CallToolParams{
-				Name:      "sei_get_ai_raw_metrics_v2",
+				Name:      "sei_get_ai_impact",
 				Arguments: map[string]any{},
 			},
 		}
@@ -1121,15 +1127,17 @@ func TestGetAIRawMetricsV2Tool(t *testing.T) {
 	})
 
 	t.Run("Missing teamRefId returns error", func(t *testing.T) {
-		_, handler := GetAIRawMetricsV2Tool(testConfig, nil)
+		_, handler := GetAIImpactTool(testConfig, nil)
 		request := mcp.CallToolRequest{
 			Params: mcp.CallToolParams{
-				Name: "sei_get_ai_raw_metrics_v2",
+				Name: "sei_get_ai_impact",
 				Arguments: map[string]any{
 					"accountId":       "test-account",
 					"startDate":       "2025-01-01",
 					"endDate":         "2025-01-31",
 					"integrationType": "cursor",
+					"impactType":      "pr_velocity",
+					"granularity":     "WEEKLY",
 				},
 			},
 		}
@@ -1138,178 +1146,18 @@ func TestGetAIRawMetricsV2Tool(t *testing.T) {
 		assert.True(t, result.IsError)
 	})
 
-	t.Run("Missing startDate returns error", func(t *testing.T) {
-		_, handler := GetAIRawMetricsV2Tool(testConfig, nil)
+	t.Run("Missing impactType returns error", func(t *testing.T) {
+		_, handler := GetAIImpactTool(testConfig, nil)
 		request := mcp.CallToolRequest{
 			Params: mcp.CallToolParams{
-				Name: "sei_get_ai_raw_metrics_v2",
-				Arguments: map[string]any{
-					"accountId":       "test-account",
-					"teamRefId":       "12345",
-					"endDate":         "2025-01-31",
-					"integrationType": "cursor",
-				},
-			},
-		}
-		result, err := handler(context.Background(), request)
-		assert.Nil(t, err)
-		assert.True(t, result.IsError)
-	})
-
-	t.Run("Missing endDate returns error", func(t *testing.T) {
-		_, handler := GetAIRawMetricsV2Tool(testConfig, nil)
-		request := mcp.CallToolRequest{
-			Params: mcp.CallToolParams{
-				Name: "sei_get_ai_raw_metrics_v2",
+				Name: "sei_get_ai_impact",
 				Arguments: map[string]any{
 					"accountId":       "test-account",
 					"teamRefId":       "12345",
 					"startDate":       "2025-01-01",
-					"integrationType": "cursor",
-				},
-			},
-		}
-		result, err := handler(context.Background(), request)
-		assert.Nil(t, err)
-		assert.True(t, result.IsError)
-	})
-
-	t.Run("Missing integrationType returns error", func(t *testing.T) {
-		_, handler := GetAIRawMetricsV2Tool(testConfig, nil)
-		request := mcp.CallToolRequest{
-			Params: mcp.CallToolParams{
-				Name: "sei_get_ai_raw_metrics_v2",
-				Arguments: map[string]any{
-					"accountId": "test-account",
-					"teamRefId": "12345",
-					"startDate": "2025-01-01",
-					"endDate":   "2025-01-31",
-				},
-			},
-		}
-		result, err := handler(context.Background(), request)
-		assert.Nil(t, err)
-		assert.True(t, result.IsError)
-	})
-
-	t.Run("Full request with mock server succeeds", func(t *testing.T) {
-		server := createMockServer()
-		defer server.Close()
-
-		mockClient := createTestAIClient(server.URL)
-		_, handler := GetAIRawMetricsV2Tool(testConfig, mockClient)
-
-		request := createFullRequest("sei_get_ai_raw_metrics_v2", nil)
-
-		result, err := handler(context.Background(), request)
-		assert.Nil(t, err)
-		assert.False(t, result.IsError)
-	})
-
-	t.Run("Full request with optional params succeeds", func(t *testing.T) {
-		server := createMockServer()
-		defer server.Close()
-
-		mockClient := createTestAIClient(server.URL)
-		_, handler := GetAIRawMetricsV2Tool(testConfig, mockClient)
-
-		request := createFullRequest("sei_get_ai_raw_metrics_v2", map[string]any{
-			"type":     "acceptance_rate",
-			"page":     float64(0),
-			"pageSize": float64(10),
-		})
-
-		result, err := handler(context.Background(), request)
-		assert.Nil(t, err)
-		assert.False(t, result.IsError)
-	})
-}
-
-func TestGetAIPRVelocitySummaryTool(t *testing.T) {
-	testConfig := createTestConfig()
-
-	t.Run("Tool has correct name", func(t *testing.T) {
-		tool, _ := GetAIPRVelocitySummaryTool(testConfig, nil)
-		assert.Equal(t, "sei_get_ai_pr_velocity_summary", tool.Name)
-	})
-
-	t.Run("Missing required parameter returns error", func(t *testing.T) {
-		_, handler := GetAIPRVelocitySummaryTool(testConfig, nil)
-		request := mcp.CallToolRequest{
-			Params: mcp.CallToolParams{
-				Name:      "sei_get_ai_pr_velocity_summary",
-				Arguments: map[string]any{},
-			},
-		}
-		result, err := handler(context.Background(), request)
-		assert.Nil(t, err)
-		assert.True(t, result.IsError)
-	})
-
-	t.Run("Missing teamRefId returns error", func(t *testing.T) {
-		_, handler := GetAIPRVelocitySummaryTool(testConfig, nil)
-		request := mcp.CallToolRequest{
-			Params: mcp.CallToolParams{
-				Name: "sei_get_ai_pr_velocity_summary",
-				Arguments: map[string]any{
-					"accountId":       "test-account",
-					"startDate":       "2025-01-01",
 					"endDate":         "2025-01-31",
 					"integrationType": "cursor",
-				},
-			},
-		}
-		result, err := handler(context.Background(), request)
-		assert.Nil(t, err)
-		assert.True(t, result.IsError)
-	})
-
-	t.Run("Missing startDate returns error", func(t *testing.T) {
-		_, handler := GetAIPRVelocitySummaryTool(testConfig, nil)
-		request := mcp.CallToolRequest{
-			Params: mcp.CallToolParams{
-				Name: "sei_get_ai_pr_velocity_summary",
-				Arguments: map[string]any{
-					"accountId":       "test-account",
-					"teamRefId":       "12345",
-					"endDate":         "2025-01-31",
-					"integrationType": "cursor",
-				},
-			},
-		}
-		result, err := handler(context.Background(), request)
-		assert.Nil(t, err)
-		assert.True(t, result.IsError)
-	})
-
-	t.Run("Missing endDate returns error", func(t *testing.T) {
-		_, handler := GetAIPRVelocitySummaryTool(testConfig, nil)
-		request := mcp.CallToolRequest{
-			Params: mcp.CallToolParams{
-				Name: "sei_get_ai_pr_velocity_summary",
-				Arguments: map[string]any{
-					"accountId":       "test-account",
-					"teamRefId":       "12345",
-					"startDate":       "2025-01-01",
-					"integrationType": "cursor",
-				},
-			},
-		}
-		result, err := handler(context.Background(), request)
-		assert.Nil(t, err)
-		assert.True(t, result.IsError)
-	})
-
-	t.Run("Missing integrationType returns error", func(t *testing.T) {
-		_, handler := GetAIPRVelocitySummaryTool(testConfig, nil)
-		request := mcp.CallToolRequest{
-			Params: mcp.CallToolParams{
-				Name: "sei_get_ai_pr_velocity_summary",
-				Arguments: map[string]any{
-					"accountId": "test-account",
-					"teamRefId": "12345",
-					"startDate": "2025-01-01",
-					"endDate":   "2025-01-31",
+					"granularity":     "WEEKLY",
 				},
 			},
 		}
@@ -1319,16 +1167,17 @@ func TestGetAIPRVelocitySummaryTool(t *testing.T) {
 	})
 
 	t.Run("Missing granularity returns error", func(t *testing.T) {
-		_, handler := GetAIPRVelocitySummaryTool(testConfig, nil)
+		_, handler := GetAIImpactTool(testConfig, nil)
 		request := mcp.CallToolRequest{
 			Params: mcp.CallToolParams{
-				Name: "sei_get_ai_pr_velocity_summary",
+				Name: "sei_get_ai_impact",
 				Arguments: map[string]any{
 					"accountId":       "test-account",
 					"teamRefId":       "12345",
 					"startDate":       "2025-01-01",
 					"endDate":         "2025-01-31",
 					"integrationType": "cursor",
+					"impactType":      "pr_velocity",
 				},
 			},
 		}
@@ -1337,144 +1186,33 @@ func TestGetAIPRVelocitySummaryTool(t *testing.T) {
 		assert.True(t, result.IsError)
 	})
 
-	t.Run("Full request with mock server succeeds", func(t *testing.T) {
+	t.Run("PR velocity request with mock server succeeds", func(t *testing.T) {
 		server := createMockServer()
 		defer server.Close()
 
 		mockClient := createTestAIClient(server.URL)
-		_, handler := GetAIPRVelocitySummaryTool(testConfig, mockClient)
+		_, handler := GetAIImpactTool(testConfig, mockClient)
 
-		request := createFullRequest("sei_get_ai_pr_velocity_summary", map[string]any{
-			"granularity": "MONTHLY",
-		})
-
-		result, err := handler(context.Background(), request)
-		assert.Nil(t, err)
-		assert.False(t, result.IsError)
-	})
-}
-
-func TestGetAIReworkSummaryTool(t *testing.T) {
-	testConfig := createTestConfig()
-
-	t.Run("Tool has correct name", func(t *testing.T) {
-		tool, _ := GetAIReworkSummaryTool(testConfig, nil)
-		assert.Equal(t, "sei_get_ai_rework_summary", tool.Name)
-	})
-
-	t.Run("Missing required parameter returns error", func(t *testing.T) {
-		_, handler := GetAIReworkSummaryTool(testConfig, nil)
-		request := mcp.CallToolRequest{
-			Params: mcp.CallToolParams{
-				Name:      "sei_get_ai_rework_summary",
-				Arguments: map[string]any{},
-			},
-		}
-		result, err := handler(context.Background(), request)
-		assert.Nil(t, err)
-		assert.True(t, result.IsError)
-	})
-
-	t.Run("Missing teamRefId returns error", func(t *testing.T) {
-		_, handler := GetAIReworkSummaryTool(testConfig, nil)
-		request := mcp.CallToolRequest{
-			Params: mcp.CallToolParams{
-				Name: "sei_get_ai_rework_summary",
-				Arguments: map[string]any{
-					"accountId":       "test-account",
-					"startDate":       "2025-01-01",
-					"endDate":         "2025-01-31",
-					"integrationType": "cursor",
-				},
-			},
-		}
-		result, err := handler(context.Background(), request)
-		assert.Nil(t, err)
-		assert.True(t, result.IsError)
-	})
-
-	t.Run("Missing startDate returns error", func(t *testing.T) {
-		_, handler := GetAIReworkSummaryTool(testConfig, nil)
-		request := mcp.CallToolRequest{
-			Params: mcp.CallToolParams{
-				Name: "sei_get_ai_rework_summary",
-				Arguments: map[string]any{
-					"accountId":       "test-account",
-					"teamRefId":       "12345",
-					"endDate":         "2025-01-31",
-					"integrationType": "cursor",
-				},
-			},
-		}
-		result, err := handler(context.Background(), request)
-		assert.Nil(t, err)
-		assert.True(t, result.IsError)
-	})
-
-	t.Run("Missing endDate returns error", func(t *testing.T) {
-		_, handler := GetAIReworkSummaryTool(testConfig, nil)
-		request := mcp.CallToolRequest{
-			Params: mcp.CallToolParams{
-				Name: "sei_get_ai_rework_summary",
-				Arguments: map[string]any{
-					"accountId":       "test-account",
-					"teamRefId":       "12345",
-					"startDate":       "2025-01-01",
-					"integrationType": "cursor",
-				},
-			},
-		}
-		result, err := handler(context.Background(), request)
-		assert.Nil(t, err)
-		assert.True(t, result.IsError)
-	})
-
-	t.Run("Missing integrationType returns error", func(t *testing.T) {
-		_, handler := GetAIReworkSummaryTool(testConfig, nil)
-		request := mcp.CallToolRequest{
-			Params: mcp.CallToolParams{
-				Name: "sei_get_ai_rework_summary",
-				Arguments: map[string]any{
-					"accountId": "test-account",
-					"teamRefId": "12345",
-					"startDate": "2025-01-01",
-					"endDate":   "2025-01-31",
-				},
-			},
-		}
-		result, err := handler(context.Background(), request)
-		assert.Nil(t, err)
-		assert.True(t, result.IsError)
-	})
-
-	t.Run("Missing granularity returns error", func(t *testing.T) {
-		_, handler := GetAIReworkSummaryTool(testConfig, nil)
-		request := mcp.CallToolRequest{
-			Params: mcp.CallToolParams{
-				Name: "sei_get_ai_rework_summary",
-				Arguments: map[string]any{
-					"accountId":       "test-account",
-					"teamRefId":       "12345",
-					"startDate":       "2025-01-01",
-					"endDate":         "2025-01-31",
-					"integrationType": "cursor",
-				},
-			},
-		}
-		result, err := handler(context.Background(), request)
-		assert.Nil(t, err)
-		assert.True(t, result.IsError)
-	})
-
-	t.Run("Full request with mock server succeeds", func(t *testing.T) {
-		server := createMockServer()
-		defer server.Close()
-
-		mockClient := createTestAIClient(server.URL)
-		_, handler := GetAIReworkSummaryTool(testConfig, mockClient)
-
-		request := createFullRequest("sei_get_ai_rework_summary", map[string]any{
+		request := createFullRequest("sei_get_ai_impact", map[string]any{
+			"impactType":  "pr_velocity",
 			"granularity": "WEEKLY",
+		})
+
+		result, err := handler(context.Background(), request)
+		assert.Nil(t, err)
+		assert.False(t, result.IsError)
+	})
+
+	t.Run("Rework request with mock server succeeds", func(t *testing.T) {
+		server := createMockServer()
+		defer server.Close()
+
+		mockClient := createTestAIClient(server.URL)
+		_, handler := GetAIImpactTool(testConfig, mockClient)
+
+		request := createFullRequest("sei_get_ai_impact", map[string]any{
+			"impactType":  "rework",
+			"granularity": "MONTHLY",
 		})
 
 		result, err := handler(context.Background(), request)
