@@ -11,7 +11,8 @@ const (
 	loadTestListPath = "v1/load-tests"
 	loadTestGetPath  = "v1/load-tests/%s"
 	loadTestRunPath  = "v1/load-tests/%s/runs"
-	loadTestStopPath = "v1/runs/%s/stop"
+	loadTestStopPath   = "v1/runs/%s/stop"
+	loadTestDeletePath = "v1/load-tests/%s"
 )
 
 // LoadTestService provides methods to interact with the Load Test API
@@ -108,4 +109,46 @@ func (l *LoadTestService) StopLoadTest(ctx context.Context, scope dto.Scope, run
 	}
 
 	return stopResponse, nil
+}
+
+// DeleteLoadTest deletes a load test
+func (l *LoadTestService) DeleteLoadTest(ctx context.Context, scope dto.Scope, loadTestID string) (*dto.DeleteLoadTestResponse, error) {
+	var (
+		path   = fmt.Sprintf(loadTestDeletePath, loadTestID)
+		params = make(map[string]string)
+	)
+
+	// Add scope parameters
+	params["accountIdentifier"] = scope.AccountID
+	params["organizationIdentifier"] = scope.OrgID
+	params["projectIdentifier"] = scope.ProjectID
+
+	deleteResponse := new(dto.DeleteLoadTestResponse)
+	err := l.Client.Delete(ctx, path, params, nil, deleteResponse)
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete load test: %w", err)
+	}
+
+	return deleteResponse, nil
+}
+
+// CreateSampleLoadTest creates a new sample load test
+func (l *LoadTestService) CreateSampleLoadTest(ctx context.Context, scope dto.Scope, request *dto.CreateSampleLoadTestRequest) (*dto.LoadTest, error) {
+	var (
+		path   = loadTestListPath
+		params = make(map[string]string)
+	)
+
+	// Add scope parameters
+	params["accountIdentifier"] = scope.AccountID
+	params["orgIdentifier"] = scope.OrgID
+	params["projectIdentifier"] = scope.ProjectID
+
+	loadTest := new(dto.LoadTest)
+	err := l.Client.Post(ctx, path, params, request, nil, loadTest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create sample load test: %w", err)
+	}
+
+	return loadTest, nil
 }

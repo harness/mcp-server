@@ -654,3 +654,29 @@ func getRuntimeVariables(inputsetIdentity string, experimentVariablesRaw []inter
 
 	return experimentRunRequest
 }
+
+// ListLinuxInfrasTool creates a tool for listing Linux infrastructure (load runners)
+func ListLinuxInfrasTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("loadtest_list_infra",
+			mcp.WithDescription("List available Linux infrastructure (load runners) that can be used for load testing"),
+			common.WithScope(config, false),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.ListLinuxInfras(ctx, scope)
+			if err != nil {
+				return nil, fmt.Errorf("failed to list linux infras: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal list linux infras response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}

@@ -218,6 +218,66 @@ func (c *ChaosService) ListExperimentVariables(ctx context.Context, scope dto.Sc
 	return listExperimentVariables, nil
 }
 
+const listLinuxInfrasQuery = `query ListLinuxInfras($identifiers: IdentifiersRequest!, $request: ListLinuxInfraRequest!) {
+  listLinuxInfras(identifiers: $identifiers, request: $request) {
+    totalNoOfInfras
+    infras {
+      infraID
+      name
+      description
+      tags
+      environmentID
+      isActive
+      isInfraConfirmed
+      isRemoved
+      updatedAt
+      createdAt
+      noOfSchedules
+      noOfWorkflows
+      startTime
+      version
+      lastHeartbeat
+      hostname
+      createdBy {
+        userID
+        username
+        email
+      }
+      updatedBy {
+        userID
+        username
+        email
+      }
+    }
+  }
+}`
+
+func (c *ChaosService) ListLinuxInfras(ctx context.Context, scope dto.Scope) (*dto.ListLinuxInfraResponse, error) {
+	path := fmt.Sprintf("query?routingId=%s", scope.AccountID)
+
+	variables := map[string]any{
+		"identifiers": map[string]any{
+			"accountIdentifier": scope.AccountID,
+			"orgIdentifier":     scope.OrgID,
+			"projectIdentifier": scope.ProjectID,
+		},
+		"request": map[string]any{},
+	}
+
+	payload := map[string]any{
+		"query":     listLinuxInfrasQuery,
+		"variables": variables,
+	}
+
+	result := new(dto.ListLinuxInfraGraphQLResponse)
+	err := c.Client.Post(ctx, path, nil, payload, map[string]string{}, result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list linux infras: %w", err)
+	}
+
+	return &result.Data.ListLinuxInfras, nil
+}
+
 func addIdentifierParams(params map[string]string, scope dto.Scope) map[string]string {
 	params["accountIdentifier"] = scope.AccountID
 	params["projectIdentifier"] = scope.ProjectID

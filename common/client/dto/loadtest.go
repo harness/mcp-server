@@ -1,7 +1,10 @@
 package dto
 
 // ListLoadTestResponse represents the response from listing load tests
-type ListLoadTestResponse []LoadTest
+type ListLoadTestResponse struct {
+	Items      []LoadTest `json:"items"`
+	Pagination Pagination `json:"pagination"`
+}
 
 // LoadTest represents a load test entity
 type LoadTest struct {
@@ -45,6 +48,7 @@ type LoadTestRun struct {
 	SpawnRate       int    `json:"spawnRate"`
 	DurationSeconds int    `json:"durationSeconds"`
 	StartedAt       string `json:"startedAt"`
+	FinishedAt      string `json:"finishedAt,omitempty"`
 	CreatedAt       string `json:"createdAt"`
 	CreatedBy       string `json:"createdBy"`
 }
@@ -107,4 +111,17 @@ type LoadTestRunResponse struct {
 type StopLoadTestResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
+}
+
+// DeleteLoadTestResponse represents the response from deleting a load test
+type DeleteLoadTestResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+// CreateSampleLoadTestRequest represents the request body to create a sample load test
+type CreateSampleLoadTestRequest struct {
+	Name           string `json:"name"`
+	UseSampleTest  bool   `json:"useSampleTest"`
+	LocustClusterID string `json:"locustClusterId"`
 }

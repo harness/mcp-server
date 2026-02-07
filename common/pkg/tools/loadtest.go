@@ -185,3 +185,88 @@ func StopLoadTestTool(config *config.McpServerConfig, client *client.LoadTestSer
 			return mcp.NewToolResultText(string(r)), nil
 		}
 }
+
+// DeleteLoadTestTool creates a tool for deleting a load test
+func DeleteLoadTestTool(config *config.McpServerConfig, client *client.LoadTestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("loadtest_delete",
+			mcp.WithDescription("Delete a load test"),
+			common.WithScope(config, false),
+			mcp.WithString("load_test_id",
+				mcp.Description("The unique identifier of the load test to delete"),
+				mcp.Required(),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			loadTestID, err := RequiredParam[string](request, "load_test_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.DeleteLoadTest(ctx, scope, loadTestID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to delete load test: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal delete load test response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+// CreateSampleLoadTestTool creates a tool for creating a sample load test
+func CreateSampleLoadTestTool(config *config.McpServerConfig, client *client.LoadTestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("loadtest_create_sample",
+			mcp.WithDescription("Create a sample load test. Requires a name and a load runner infrastructure ID (use loadtest_list_infra to find available infrastructure)."),
+			common.WithScope(config, false),
+			mcp.WithString("name",
+				mcp.Description("Name for the new sample load test"),
+				mcp.Required(),
+			),
+			mcp.WithString("locust_cluster_id",
+				mcp.Description("The infrastructure ID of the load runner to use (get from loadtest_list_infra)"),
+				mcp.Required(),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			name, err := RequiredParam[string](request, "name")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			clusterID, err := RequiredParam[string](request, "locust_cluster_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			createRequest := &dto.CreateSampleLoadTestRequest{
+				Name:            name,
+				UseSampleTest:   true,
+				LocustClusterID: clusterID,
+			}
+
+			data, err := client.CreateSampleLoadTest(ctx, scope, createRequest)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create sample load test: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal create sample load test response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
