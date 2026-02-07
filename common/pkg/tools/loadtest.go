@@ -38,12 +38,47 @@ func ListLoadTestsTool(config *config.McpServerConfig, client *client.LoadTestSe
 
 			data, err := client.ListLoadTests(ctx, scope, pagination)
 			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
+				return nil, fmt.Errorf("failed to list load tests: %w", err)
 			}
 
 			r, err := json.Marshal(data)
 			if err != nil {
-				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal list load tests response: %v", err)), nil
+				return nil, fmt.Errorf("failed to marshal list load tests response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+// GetLoadTestTool creates a tool for getting details of a specific load test
+func GetLoadTestTool(config *config.McpServerConfig, client *client.LoadTestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("loadtest_describe",
+			mcp.WithDescription("Get details of a specific load test, including its configuration, target URL, script content, and recent runs"),
+			common.WithScope(config, false),
+			mcp.WithString("load_test_id",
+				mcp.Description("The unique identifier of the load test"),
+				mcp.Required(),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			loadTestID, err := RequiredParam[string](request, "load_test_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.GetLoadTest(ctx, scope, loadTestID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get load test: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal load test response: %w", err)
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
