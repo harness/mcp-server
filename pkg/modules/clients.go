@@ -17,6 +17,7 @@ var ServiceToPathMap = map[string]string{
 	"nextgen":             "",
 	"commOrch":            "lw/co/api",
 	"chaos":               "chaos/manager/api",
+	"loadtest":            "loadTest/manager/api",
 	"code":                "code",
 	"pipelines":           "pipeline",
 	"dashboards":          "dashboard",
