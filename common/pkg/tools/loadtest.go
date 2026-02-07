@@ -84,3 +84,104 @@ func GetLoadTestTool(config *config.McpServerConfig, client *client.LoadTestServ
 			return mcp.NewToolResultText(string(r)), nil
 		}
 }
+
+// RunLoadTestTool creates a tool for running a load test
+func RunLoadTestTool(config *config.McpServerConfig, client *client.LoadTestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("loadtest_run",
+			mcp.WithDescription("Run a load test. If target_users, duration_seconds, or spawn_rate are not provided, the load test's default values will be used."),
+			common.WithScope(config, false),
+			mcp.WithString("load_test_id",
+				mcp.Description("The unique identifier of the load test to run"),
+				mcp.Required(),
+			),
+			mcp.WithNumber("target_users",
+				mcp.Description("Number of concurrent users to simulate"),
+			),
+			mcp.WithNumber("duration_seconds",
+				mcp.Description("Duration of the load test in seconds"),
+			),
+			mcp.WithNumber("spawn_rate",
+				mcp.Description("Rate at which users are spawned per second"),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			loadTestID, err := RequiredParam[string](request, "load_test_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			targetUsers, err := OptionalIntParam(request, "target_users")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			durationSeconds, err := OptionalIntParam(request, "duration_seconds")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			spawnRate, err := OptionalIntParam(request, "spawn_rate")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			runRequest := &dto.RunLoadTestRequest{
+				LoadTestID:      loadTestID,
+				TargetUsers:     targetUsers,
+				DurationSeconds: durationSeconds,
+				SpawnRate:       spawnRate,
+			}
+
+			data, err := client.RunLoadTest(ctx, scope, loadTestID, runRequest)
+			if err != nil {
+				return nil, fmt.Errorf("failed to run load test: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal run load test response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+// StopLoadTestTool creates a tool for stopping a running load test
+func StopLoadTestTool(config *config.McpServerConfig, client *client.LoadTestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("loadtest_stop",
+			mcp.WithDescription("Stop a running load test run"),
+			common.WithScope(config, false),
+			mcp.WithString("run_id",
+				mcp.Description("The unique identifier of the load test run to stop"),
+				mcp.Required(),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			runID, err := RequiredParam[string](request, "run_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.StopLoadTest(ctx, scope, runID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to stop load test run: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal stop load test response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}

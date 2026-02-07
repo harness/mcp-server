@@ -10,6 +10,8 @@ import (
 const (
 	loadTestListPath = "v1/load-tests"
 	loadTestGetPath  = "v1/load-tests/%s"
+	loadTestRunPath  = "v1/load-tests/%s/runs"
+	loadTestStopPath = "v1/runs/%s/stop"
 )
 
 // LoadTestService provides methods to interact with the Load Test API
@@ -64,4 +66,46 @@ func (l *LoadTestService) GetLoadTest(ctx context.Context, scope dto.Scope, load
 	}
 
 	return loadTest, nil
+}
+
+// RunLoadTest starts a new run for a load test
+func (l *LoadTestService) RunLoadTest(ctx context.Context, scope dto.Scope, loadTestID string, request *dto.RunLoadTestRequest) (*dto.LoadTestRunResponse, error) {
+	var (
+		path   = fmt.Sprintf(loadTestRunPath, loadTestID)
+		params = make(map[string]string)
+	)
+
+	// Add scope parameters
+	params["accountIdentifier"] = scope.AccountID
+	params["orgIdentifier"] = scope.OrgID
+	params["projectIdentifier"] = scope.ProjectID
+
+	runResponse := new(dto.LoadTestRunResponse)
+	err := l.Client.Post(ctx, path, params, request, nil, runResponse)
+	if err != nil {
+		return nil, fmt.Errorf("failed to run load test: %w", err)
+	}
+
+	return runResponse, nil
+}
+
+// StopLoadTest stops a running load test run
+func (l *LoadTestService) StopLoadTest(ctx context.Context, scope dto.Scope, runID string) (*dto.StopLoadTestResponse, error) {
+	var (
+		path   = fmt.Sprintf(loadTestStopPath, runID)
+		params = make(map[string]string)
+	)
+
+	// Add scope parameters
+	params["accountIdentifier"] = scope.AccountID
+	params["orgIdentifier"] = scope.OrgID
+	params["projectIdentifier"] = scope.ProjectID
+
+	stopResponse := new(dto.StopLoadTestResponse)
+	err := l.Client.Post(ctx, path, params, nil, nil, stopResponse)
+	if err != nil {
+		return nil, fmt.Errorf("failed to stop load test run: %w", err)
+	}
+
+	return stopResponse, nil
 }

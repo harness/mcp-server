@@ -75,3 +75,36 @@ type LoadTestEndpoint struct {
 type EndpointAssertions struct {
 	StatusCode int `json:"status_code"`
 }
+
+// RunLoadTestRequest represents the request body to run a load test
+type RunLoadTestRequest struct {
+	LoadTestID      string `json:"loadTestId"`
+	TargetUsers     int    `json:"targetUsers,omitempty"`
+	DurationSeconds int    `json:"durationSeconds,omitempty"`
+	SpawnRate       int    `json:"spawnRate,omitempty"`
+}
+
+// LoadTestRunResponse represents the full response from running or stopping a load test
+type LoadTestRunResponse struct {
+	ID              string `json:"id"`
+	LoadTestID      string `json:"loadTestId"`
+	RunSequence     int    `json:"runSequence"`
+	AccountID       string `json:"accountId"`
+	OrgID           string `json:"orgId"`
+	ProjectID       string `json:"projectId"`
+	TargetUsers     int    `json:"targetUsers"`
+	SpawnRate       int    `json:"spawnRate"`
+	DurationSeconds int    `json:"durationSeconds"`
+	Status          string `json:"status"`
+	StartedAt       string `json:"startedAt"`
+	CreatedAt       string `json:"createdAt"`
+	CreatedBy       string `json:"createdBy"`
+	UpdatedAt       string `json:"updatedAt"`
+	UpdatedBy       string `json:"updatedBy"`
+}
+
+// StopLoadTestResponse represents the response from stopping a load test run
+type StopLoadTestResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
