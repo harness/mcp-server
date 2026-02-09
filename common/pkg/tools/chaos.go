@@ -657,8 +657,8 @@ func getRuntimeVariables(inputsetIdentity string, experimentVariablesRaw []inter
 
 // ListLinuxInfrastructuresTool creates a tool for listing Linux infrastructure (load runners)
 func ListLinuxInfrastructuresTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("resilience_testing_list_linux_infrastructures",
-			mcp.WithDescription("List available Linux infrastructure for chaos engineering and load testing. Returns chaos Linux infrastructures (load infrastructures) with their IDs, names, and status. Infra IDs are needed when creating sample load tests. By default only active infrastructures are returned; set status to 'All' to list all."),
+	return mcp.NewTool("chaos_list_linux_infrastructures",
+			mcp.WithDescription("List available Linux infrastructure for chaos engineering and load testing. Returns chaos Linux infrastructures (load infrastructures) with their IDs, names, and status. Infra IDs are needed when creating sample load tests via chaos_create_sample_loadtest. By default only active infrastructures are returned; set status to 'All' to list all."),
 			common.WithScope(config, false),
 			mcp.WithString("status",
 				mcp.Description("Filter by infra status. Defaults to 'Active'. Use 'All' to list all infras regardless of status."),
