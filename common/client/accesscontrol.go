@@ -38,10 +38,6 @@ type PrincipalService struct {
 	Client *Client
 }
 
-type ResourceGroupService struct {
-	Client *Client
-}
-
 func (u *PrincipalService) GetAllUsers(ctx context.Context, scope dto.Scope, searchTerm string, page int, size int, opts *dto.UsersRequestBody) (*dto.AccessControlOutput[dto.UsersOutput], error) {
 	if opts == nil {
 		opts = &dto.UsersRequestBody{}
@@ -291,7 +287,7 @@ func (rAssignment *ACLService) CreateRoleAssignment(ctx context.Context, scope d
 	return resp, nil
 }
 
-func (cResourceGroup *ResourceGroupService) CreateResourceGroup(ctx context.Context, scope dto.Scope, resourceGroup dto.ResourceGroup, opts *dto.CreateResourceGroupRequestBody) (*dto.AccessControlOutput[dto.CreateResourceGroupOutputData], error) {
+func (cResourceGroup *ACLService) CreateResourceGroup(ctx context.Context, scope dto.Scope, resourceGroup dto.ResourceGroup, opts *dto.CreateResourceGroupRequestBody) (*dto.AccessControlOutput[dto.CreateResourceGroupOutputData], error) {
 	if opts == nil {
 		opts = &dto.CreateResourceGroupRequestBody{}
 	}
@@ -444,7 +440,7 @@ func (dRole *ACLService) DeleteRole(ctx context.Context, scope dto.Scope, roleId
 	return resp, nil
 }
 
-func (dResourceGroup *ResourceGroupService) DeleteResourceGroup(ctx context.Context, scope dto.Scope, resourceGroupIdentifier string) (*dto.AccessControlOutput[bool], error) {
+func (dResourceGroup *ACLService) DeleteResourceGroup(ctx context.Context, scope dto.Scope, resourceGroupIdentifier string) (*dto.AccessControlOutput[bool], error) {
 
 	params := make(map[string]string)
 

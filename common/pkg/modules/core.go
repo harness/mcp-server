@@ -294,14 +294,8 @@ func RegisterAccessControl(config *config.McpServerConfig, tsg *toolsets.Toolset
 		return err
 	}
 
-	resourceC, err := DefaultClientProvider.CreateClient(config, "resourcegroup")
-	if err != nil {
-		return err
-	}
-
 	aclClient := &client.ACLService{Client: c}
 	principalClient := &client.PrincipalService{Client: principalC}
-	resourceClient := &client.ResourceGroupService{Client: resourceC}
 
 	accessControl := toolsets.NewToolset("access_control", "Access control related tools").
 		AddReadTools(
@@ -316,13 +310,13 @@ func RegisterAccessControl(config *config.McpServerConfig, tsg *toolsets.Toolset
 			toolsets.NewServerTool(tools.CreateUserGroupTool(config, principalClient)),
 			toolsets.NewServerTool(tools.CreateRoleAssignmentTool(config, aclClient)),
 			toolsets.NewServerTool(tools.CreateServiceAccountTool(config, principalClient)),
-			toolsets.NewServerTool(tools.CreateResourceGroupTool(config, resourceClient)),
+			toolsets.NewServerTool(tools.CreateResourceGroupTool(config, aclClient)),
 			toolsets.NewServerTool(tools.CreateRoleTool(config, aclClient)),
 			toolsets.NewServerTool(tools.InviteUsersTool(config, principalClient)),
 			toolsets.NewServerTool(tools.DeleteUserGroupTool(config, principalClient)),
 			toolsets.NewServerTool(tools.DeleteServiceAccountTool(config, principalClient)),
 			toolsets.NewServerTool(tools.DeleteRoleTool(config, aclClient)),
-			toolsets.NewServerTool(tools.DeleteResourceGroupTool(config, resourceClient)),
+			toolsets.NewServerTool(tools.DeleteResourceGroupTool(config, aclClient)),
 		)
 
 	// Add toolset to the group

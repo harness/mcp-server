@@ -25,7 +25,6 @@ var ServiceToPathMap = map[string]string{
 	"log-service":         "log-service",
 	"templates":           "template",
 	"acl":                 "authz",
-	"resourcegroup":       "resourcegroup",
 	"ar":                  "har/api/v1",
 	"idp":                 "",
 	"sei":                 "/gateway/sei/api/",

@@ -504,7 +504,7 @@ func CreateRoleAssignmentTool(config *config.McpServerConfig, roleAssignmentsCli
 		}
 }
 
-func CreateResourceGroupTool(config *config.McpServerConfig, resourceGroupClient *client.ResourceGroupService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func CreateResourceGroupTool(config *config.McpServerConfig, aclClient *client.ACLService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("create_resource_group",
 			mcp.WithDescription("Create a new resource group."),
 			mcp.WithString("resource_group_identifier",
@@ -617,7 +617,7 @@ func CreateResourceGroupTool(config *config.McpServerConfig, resourceGroupClient
 			resourceGroup.OrgIdentifier = scope.OrgID
 			resourceGroup.ProjectIdentifier = scope.ProjectID
 
-			data, err := resourceGroupClient.CreateResourceGroup(ctx, scope, resourceGroup, nil)
+			data, err := aclClient.CreateResourceGroup(ctx, scope, resourceGroup, nil)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create resource group: %w", err)
 			}
@@ -1044,7 +1044,7 @@ func DeleteRoleTool(config *config.McpServerConfig, roleClient *client.ACLServic
 		}
 }
 
-func DeleteResourceGroupTool(config *config.McpServerConfig, resourceGroupClient *client.ResourceGroupService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func DeleteResourceGroupTool(config *config.McpServerConfig, aclClient *client.ACLService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("delete_resource_group",
 			mcp.WithDescription("Delete a resource group."),
 			mcp.WithString("resource_group_identifier",
@@ -1064,7 +1064,7 @@ func DeleteResourceGroupTool(config *config.McpServerConfig, resourceGroupClient
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			data, err := resourceGroupClient.DeleteResourceGroup(ctx, scope, resourceGroupIdentifier)
+			data, err := aclClient.DeleteResourceGroup(ctx, scope, resourceGroupIdentifier)
 			if err != nil {
 				return nil, fmt.Errorf("failed to delete resource group: %w", err)
 			}
