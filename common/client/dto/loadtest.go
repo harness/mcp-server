@@ -121,7 +121,7 @@ type DeleteLoadTestResponse struct {
 
 // CreateSampleLoadTestRequest represents the request body to create a sample load test
 type CreateSampleLoadTestRequest struct {
-	Name            string `json:"name"`
-	UseSampleTest   bool   `json:"useSampleTest"`
-	LocustClusterID string `json:"locustClusterId"`
+	Name          string         `json:"name"`
+	UseSampleTest bool           `json:"useSampleTest"`
+	LocustCluster *LocustCluster `json:"locustCluster"`
 }

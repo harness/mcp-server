@@ -252,9 +252,11 @@ func CreateSampleLoadTestTool(config *config.McpServerConfig, client *client.Loa
 			}
 
 			createRequest := &dto.CreateSampleLoadTestRequest{
-				Name:            name,
-				UseSampleTest:   true,
-				LocustClusterID: clusterID,
+				Name:          name,
+				UseSampleTest: true,
+				LocustCluster: &dto.LocustCluster{
+					ID: clusterID,
+				},
 			}
 
 			data, err := client.CreateSampleLoadTest(ctx, scope, createRequest)
