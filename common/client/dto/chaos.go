@@ -287,14 +287,7 @@ type ExperimentCreationRequest struct {
 	ExperimentType         string   `json:"experimentType"`
 }
 
-// ListLinuxInfraGraphQLResponse represents the top-level GraphQL response for listLinuxInfras
-type ListLinuxInfraGraphQLResponse struct {
-	Data struct {
-		ListLinuxInfras ListLinuxInfraResponse `json:"listLinuxInfras"`
-	} `json:"data"`
-}
-
-// ListLinuxInfraResponse represents the listLinuxInfras response payload
+// ListLinuxInfraResponse represents the REST response for listing Linux infrastructures
 type ListLinuxInfraResponse struct {
 	TotalNoOfInfras int          `json:"totalNoOfInfras"`
 	Infras          []LinuxInfra `json:"infras"`
@@ -302,24 +295,23 @@ type ListLinuxInfraResponse struct {
 
 // LinuxInfra represents a Linux infrastructure (load runner)
 type LinuxInfra struct {
-	InfraID            string      `json:"infraID"`
-	Name               string      `json:"name"`
-	Description        string      `json:"description"`
-	Tags               []string    `json:"tags"`
-	EnvironmentID      string      `json:"environmentID"`
-	IsActive           bool        `json:"isActive"`
-	IsInfraConfirmed   bool        `json:"isInfraConfirmed"`
-	IsRemoved          bool        `json:"isRemoved"`
-	UpdatedAt          string      `json:"updatedAt"`
-	CreatedAt          string      `json:"createdAt"`
-	NoOfSchedules      int         `json:"noOfSchedules"`
-	NoOfWorkflows      int         `json:"noOfWorkflows"`
-	StartTime          string      `json:"startTime"`
-	Version            string      `json:"version"`
-	LastHeartbeat      string      `json:"lastHeartbeat"`
-	Hostname           string      `json:"hostname"`
-	CreatedBy          *UserDetail `json:"createdBy,omitempty"`
-	UpdatedBy          *UserDetail `json:"updatedBy,omitempty"`
+	InfraID          string      `json:"infraID"`
+	Name             string      `json:"name"`
+	Description      string      `json:"description"`
+	Tags             []string    `json:"tags"`
+	EnvironmentID    string      `json:"environmentID"`
+	IsActive         bool        `json:"isActive"`
+	IsInfraConfirmed bool        `json:"isInfraConfirmed"`
+	IsRegistered     bool        `json:"isRegistered"`
+	UpdatedAt        string      `json:"updatedAt"`
+	CreatedAt        string      `json:"createdAt"`
+	StartTime        string      `json:"startTime"`
+	Version          string      `json:"version"`
+	LastHeartbeat    string      `json:"lastHeartbeat"`
+	Hostname         string      `json:"hostname"`
+	Status           string      `json:"status"`
+	CreatedBy        *UserDetail `json:"createdBy,omitempty"`
+	UpdatedBy        *UserDetail `json:"updatedBy,omitempty"`
 }
 
 // UserDetail represents user information in chaos responses

@@ -218,64 +218,44 @@ func (c *ChaosService) ListExperimentVariables(ctx context.Context, scope dto.Sc
 	return listExperimentVariables, nil
 }
 
-const listLinuxInfrasQuery = `query ListLinuxInfras($identifiers: IdentifiersRequest!, $request: ListLinuxInfraRequest!) {
-  listLinuxInfras(identifiers: $identifiers, request: $request) {
-    totalNoOfInfras
-    infras {
-      infraID
-      name
-      description
-      tags
-      environmentID
-      isActive
-      isInfraConfirmed
-      isRemoved
-      updatedAt
-      createdAt
-      noOfSchedules
-      noOfWorkflows
-      startTime
-      version
-      lastHeartbeat
-      hostname
-      createdBy {
-        userID
-        username
-        email
-      }
-      updatedBy {
-        userID
-        username
-        email
-      }
-    }
-  }
-}`
+const (
+	chaosListLinuxInfrastructuresPath = "rest/machine/infras"
+)
 
-func (c *ChaosService) ListLinuxInfras(ctx context.Context, scope dto.Scope) (*dto.ListLinuxInfraResponse, error) {
-	path := fmt.Sprintf("query?routingId=%s", scope.AccountID)
+// ListLinuxInfrastructures lists available Linux infrastructure (load runners).
+// statusFilter controls the status filter: non-empty values filter by that status, empty string omits the filter.
+func (c *ChaosService) ListLinuxInfrastructures(ctx context.Context, scope dto.Scope, statusFilter string) (*dto.ListLinuxInfraResponse, error) {
+	var (
+		path   = chaosListLinuxInfrastructuresPath
+		params = make(map[string]string)
+	)
 
-	variables := map[string]any{
-		"identifiers": map[string]any{
-			"accountIdentifier": scope.AccountID,
-			"orgIdentifier":     scope.OrgID,
-			"projectIdentifier": scope.ProjectID,
+	// Add scope parameters
+	params = addIdentifierParams(params, scope)
+	params["infraType"] = "Linux"
+	params["page"] = "0"
+	params["limit"] = "15"
+
+	filter := map[string]any{}
+	if statusFilter != "" {
+		filter["status"] = statusFilter
+	}
+
+	body := map[string]any{
+		"filter": filter,
+		"sort": map[string]any{
+			"field":     "NAME",
+			"ascending": true,
 		},
-		"request": map[string]any{},
 	}
 
-	payload := map[string]any{
-		"query":     listLinuxInfrasQuery,
-		"variables": variables,
-	}
-
-	result := new(dto.ListLinuxInfraGraphQLResponse)
-	err := c.Client.Post(ctx, path, nil, payload, map[string]string{}, result)
+	result := new(dto.ListLinuxInfraResponse)
+	err := c.Client.Post(ctx, path, params, body, nil, result)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list linux infras: %w", err)
 	}
 
-	return &result.Data.ListLinuxInfras, nil
+	return result, nil
 }
 
 func addIdentifierParams(params map[string]string, scope dto.Scope) map[string]string {

@@ -224,14 +224,14 @@ func DeleteLoadTestTool(config *config.McpServerConfig, client *client.LoadTestS
 // CreateSampleLoadTestTool creates a tool for creating a sample load test
 func CreateSampleLoadTestTool(config *config.McpServerConfig, client *client.LoadTestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("loadtest_create_sample",
-			mcp.WithDescription("Create a sample load test. Requires a name and a load runner infrastructure ID (use loadtest_list_infra to find available infrastructure)."),
+			mcp.WithDescription("Create a sample load test. Requires a name and a load runner infrastructure ID (use resilience_testing_list_linux_infrastructures to find available infrastructure)."),
 			common.WithScope(config, false),
 			mcp.WithString("name",
 				mcp.Description("Name for the new sample load test"),
 				mcp.Required(),
 			),
 			mcp.WithString("locust_cluster_id",
-				mcp.Description("The infrastructure ID of the load runner to use (get from loadtest_list_infra)"),
+				mcp.Description("The infrastructure ID of the load runner to use (get from resilience_testing_list_linux_infrastructures)"),
 				mcp.Required(),
 			),
 		),
