@@ -52,7 +52,7 @@ func ListLoadTestsTool(config *config.McpServerConfig, client *client.LoadTestSe
 
 // GetLoadTestTool creates a tool for getting details of a specific load test
 func GetLoadTestTool(config *config.McpServerConfig, client *client.LoadTestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_describe_loadtest_instance",
+	return mcp.NewTool("chaos_get_loadtest_instance",
 			mcp.WithDescription("Get details of a specific load test, including its configuration, target URL, script content, and recent runs. Use chaos_list_loadtest_instances to find load test IDs."),
 			common.WithScope(config, false),
 			mcp.WithString("load_test_id",
@@ -154,7 +154,7 @@ func RunLoadTestTool(config *config.McpServerConfig, client *client.LoadTestServ
 // StopLoadTestTool creates a tool for stopping a running load test
 func StopLoadTestTool(config *config.McpServerConfig, client *client.LoadTestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("chaos_stop_loadtest_run",
-			mcp.WithDescription("Stop a running load test run. Use chaos_describe_loadtest_instance to find active run IDs."),
+			mcp.WithDescription("Stop a running load test run. Use chaos_get_loadtest_instance to find active run IDs."),
 			common.WithScope(config, false),
 			mcp.WithString("run_id",
 				mcp.Description("The unique identifier of the load test run to stop"),
