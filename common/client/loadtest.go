@@ -8,9 +8,9 @@ import (
 )
 
 const (
-	loadTestListPath = "v1/load-tests"
-	loadTestGetPath  = "v1/load-tests/%s"
-	loadTestRunPath  = "v1/load-tests/%s/runs"
+	loadTestListPath   = "v1/load-tests"
+	loadTestGetPath    = "v1/load-tests/%s"
+	loadTestRunPath    = "v1/load-tests/%s/runs"
 	loadTestStopPath   = "v1/runs/%s/stop"
 	loadTestDeletePath = "v1/load-tests/%s"
 )
