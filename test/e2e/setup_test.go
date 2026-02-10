@@ -132,7 +132,7 @@ func setupMCPClient(t *testing.T, options ...clientOption) *mcpClient.Client {
 		accountID := getE2EAccountID(t)
 		// Create and configure options
 		opts := &clientOpts{
-			enabledToolsets: []string{"delegate", "delegateTokens"},
+			enabledToolsets: []string{"delegate", "delegateTokens", "scs"},
 		}
 
 		// Apply all options to configure the opts struct

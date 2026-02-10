@@ -140,7 +140,7 @@ func ListArtifactSourcesTool(config *config.McpServerConfig, client *generated.C
 				Limit:          (*generated.Limit)(&size),
 				HarnessAccount: generated.AccountHeader(scope.AccountID),
 				Order:          (*generated.ListArtifactSourcesParamsOrder)(&order),
-				Sort:           &sortVal,
+				Sort:           sortVal,
 			}
 			size = 5
 			artifactParams := &generated.ArtifactListV2Params{
@@ -148,7 +148,7 @@ func ListArtifactSourcesTool(config *config.McpServerConfig, client *generated.C
 				Limit:          (*generated.Limit)(&size),
 				HarnessAccount: generated.AccountHeader(scope.AccountID),
 				Order:          (*generated.ArtifactListV2ParamsOrder)(&order),
-				Sort:           &sortVal,
+				Sort:           sortVal,
 			}
 
 			// build the body using a helper function
@@ -411,7 +411,7 @@ func ArtifactListV2Tool(config *config.McpServerConfig, client *generated.Client
 				Limit:          (*generated.Limit)(&size),
 				HarnessAccount: generated.AccountHeader(scope.AccountID),
 				Order:          (*generated.ArtifactListV2ParamsOrder)(&order),
-				Sort:           &sortVal,
+				Sort:           sortVal,
 			}
 
 			// build the body using a helper function
