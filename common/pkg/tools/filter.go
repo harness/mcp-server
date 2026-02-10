@@ -2,6 +2,7 @@ package tools
 
 import (
 	"fmt"
+	"log/slog"
 
 	"github.com/harness/mcp-server/common/client/scs"
 	generated "github.com/harness/mcp-server/common/client/scs/generated"
@@ -29,7 +30,10 @@ func ParseArtifactListParams(request mcp.CallToolRequest) (order string, sort st
 	}
 	sort, _ = OptionalParam[string](request, "sort")
 	page, size, _ = FetchPagination(request)
-	size = 5
+	// Default size to 20 if not provided (removed hardcoded size = 5)
+	if size <= 0 {
+		size = 20
+	}
 	sortVal = interface{}(sort)
 	return
 }
@@ -93,6 +97,39 @@ func BuildComplianceResultByArtifactFilter(request mcp.CallToolRequest) (generat
 	}
 	if err := bindParam(request, "status", func(v []generated.ComplianceResultStatus) { bb.WithStatus(v) }); err != nil {
 		return generated.ComplianceResultByArtifactFilter{}, err
+	}
+	return bb.Build(), nil
+}
+
+// BuildArtifactComponentViewBody builds the request body for artifact component view using bindParam and the builder pattern.
+func BuildArtifactComponentViewBody(request mcp.CallToolRequest) (generated.ArtifactComponentViewRequestBody, error) {
+	bb := scs.ArtifactComponentViewRequestBodyBuilder()
+
+	// Debug: log raw component_filter from request
+	rawFilter, _ := request.GetArguments()["component_filter"]
+	slog.Debug("BuildArtifactComponentViewBody: raw component_filter", "rawFilter", rawFilter, "type", fmt.Sprintf("%T", rawFilter))
+
+	if err := bindParam(request, "component_filter", func(v []generated.ComponentFilter) {
+		slog.Debug("BuildArtifactComponentViewBody: parsed component_filter", "filter", v, "len", len(v))
+		bb.WithComponentFilter(v)
+	}); err != nil {
+		slog.Error("BuildArtifactComponentViewBody: error parsing component_filter", "error", err)
+		return generated.ArtifactComponentViewRequestBody{}, err
+	}
+	if err := bindParam(request, "dependency_type_filter", func(v []generated.DependencyType) { bb.WithDependencyTypeFilter(v) }); err != nil {
+		return generated.ArtifactComponentViewRequestBody{}, err
+	}
+	if err := bindParam(request, "image_layer", func(v generated.LayerType) { bb.WithImageLayer(v) }); err != nil {
+		return generated.ArtifactComponentViewRequestBody{}, err
+	}
+	if err := bindParam(request, "license_filter", func(v generated.LicenseFilter) { bb.WithLicenseFilter(v) }); err != nil {
+		return generated.ArtifactComponentViewRequestBody{}, err
+	}
+	if err := bindParam(request, "package_manager", func(v string) { bb.WithPackageManager(v) }); err != nil {
+		return generated.ArtifactComponentViewRequestBody{}, err
+	}
+	if err := bindParam(request, "package_supplier", func(v string) { bb.WithPackageSupplier(v) }); err != nil {
+		return generated.ArtifactComponentViewRequestBody{}, err
 	}
 	return bb.Build(), nil
 }

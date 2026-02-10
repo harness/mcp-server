@@ -96,6 +96,8 @@ func RegisterSCS(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) err
 			toolsets.NewServerTool(tools.FetchComplianceResultsByArtifactTool(config, scsClient)),
 			toolsets.NewServerTool(tools.ListArtifactSourcesTool(config, scsClient)),
 			toolsets.NewServerTool(tools.GetArtifactChainOfCustodyV2Tool(config, scsClient)),
+			toolsets.NewServerTool(tools.GetArtifactDetailComponentViewTool(config, scsClient)),
+			toolsets.NewServerTool(tools.GetArtifactComponentRemediationByPurlTool(config, scsClient)),
 			toolsets.NewServerTool(tools.CreateOPAPolicyTool(config, scsClient)),
 			toolsets.NewServerTool(tools.DownloadSbomTool(config, scsClient)),
 		)

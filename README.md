@@ -241,13 +241,17 @@ Toolset Name: `chaos`
 
 Toolset Name: `scs`
 
-- `list_artifact_sources`: List all artifact sources available in Harness SCS for a specific organization and project.
-- `list_artifacts_per_source`: List all artifacts within a specific artifact source.
-- `get_artifact_overview`: Get metadata, security findings, SBOM, and compliance status for a specific artifact.
-- `get_artifact_chain_of_custody`: Retrieve the full chain of custody (event history) for a specific artifact.
-- `fetch_compliance_results_by_artifact`: Fetch compliance results for a specific artifact.
-- `get_code_repository_overview`: Get an overview of vulnerabilities, SBOM, compliance issues, and policy violations for a code repository.
-- `list_scs_code_repos`: List all code repositories scanned by Harness SCS.
+- `scs_list_artifact_sources`: List all artifact sources available in Harness SCS for a specific organization and project.
+- `scs_list_artifacts_per_source`: List all artifacts within a specific artifact source.
+- `scs_get_artifact_overview`: Get metadata, security findings, SBOM, and compliance status for a specific artifact.
+- `scs_get_artifact_component_view`: Retrieve a detailed component view of a specific artifact, including dependencies and license information.
+- `scs_get_artifact_component_remediation`: Get remediation recommendations for a specific component in an artifact.
+- `scs_get_artifact_chain_of_custody`: Retrieve the full chain of custody (event history) for a specific artifact.
+- `scs_fetch_compliance_results_for_repo_by_id`: Fetch compliance results for a specific code repository or CI/CD build system.
+- `scs_get_code_repository_overview`: Get an overview of vulnerabilities, SBOM, compliance issues, and policy violations for a code repository.
+- `scs_list_code_repos`: List all code repositories scanned by Harness SCS.
+- `scs_create_opa_policy`: Create an OPA policy based on a list of denied licenses.
+- `scs_download_sbom`: Get the download URL for the Software Bill of Materials (SBOM) for a given artifact orchestration.
 
 #### Security Test Orchestration (STO) Toolset
 

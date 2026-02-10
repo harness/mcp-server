@@ -1,0 +1,11 @@
+---
+name: "scs"
+description: "Ensure parameters are provided correctly and in the right format"
+result_description: "Input parameters validation"
+---
+
+When calling download_sbom, don't try to read the file. Its only meant for downloading the SBOM.
+
+When calling any tool from scs other than download_sbom, make sure final summary should contain
+- Orchestration id from the request
+- Pipeline execution id from the request

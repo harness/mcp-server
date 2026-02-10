@@ -145,3 +145,69 @@ func (bb *codeRepositoryListingRequestBodyBuilder) WithSearchTerm(v string) *cod
 func (bb *codeRepositoryListingRequestBodyBuilder) Build() generated.CodeRepositoryListingRequestBody {
 	return bb.b
 }
+
+type artifactComponentViewRequestBodyBuilder struct {
+	b generated.ArtifactComponentViewRequestBody
+}
+
+func ArtifactComponentViewRequestBodyBuilder() *artifactComponentViewRequestBodyBuilder {
+	// Initialize with empty arrays for required fields
+	emptyComponentFilter := []generated.ComponentFilter{}
+	return &artifactComponentViewRequestBodyBuilder{b: generated.ArtifactComponentViewRequestBody{
+		ComponentFilter: &emptyComponentFilter,
+	}}
+}
+
+func (bb *artifactComponentViewRequestBodyBuilder) WithComponentFilter(v []generated.ComponentFilter) *artifactComponentViewRequestBodyBuilder {
+	if len(v) > 0 {
+		bb.b.ComponentFilter = &v
+	}
+	return bb
+}
+
+func (bb *artifactComponentViewRequestBodyBuilder) WithDependencyTypeFilter(v []generated.DependencyType) *artifactComponentViewRequestBodyBuilder {
+	if len(v) > 0 {
+		bb.b.DependencyTypeFilter = &v
+	}
+	return bb
+}
+
+func (bb *artifactComponentViewRequestBodyBuilder) WithImageLayer(v generated.LayerType) *artifactComponentViewRequestBodyBuilder {
+	if v != nil {
+		bb.b.ImageLayer = &v
+	}
+	return bb
+}
+
+func (bb *artifactComponentViewRequestBodyBuilder) WithLicenseFilter(v generated.LicenseFilter) *artifactComponentViewRequestBodyBuilder {
+	var zero generated.LicenseFilter
+	if v != zero {
+		bb.b.LicenseFilter = &v
+	}
+	return bb
+}
+
+func (bb *artifactComponentViewRequestBodyBuilder) WithOwaspFilter(v []generated.OwaspFilter) *artifactComponentViewRequestBodyBuilder {
+	if len(v) > 0 {
+		bb.b.OwaspFilter = &v
+	}
+	return bb
+}
+
+func (bb *artifactComponentViewRequestBodyBuilder) WithPackageManager(v string) *artifactComponentViewRequestBodyBuilder {
+	if v != "" {
+		bb.b.PackageManager = &v
+	}
+	return bb
+}
+
+func (bb *artifactComponentViewRequestBodyBuilder) WithPackageSupplier(v string) *artifactComponentViewRequestBodyBuilder {
+	if v != "" {
+		bb.b.PackageSupplier = &v
+	}
+	return bb
+}
+
+func (bb *artifactComponentViewRequestBodyBuilder) Build() generated.ArtifactComponentViewRequestBody {
+	return bb.b
+}
