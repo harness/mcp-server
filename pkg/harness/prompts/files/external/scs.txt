@@ -23,7 +23,7 @@ Help Security Engineers, Compliance Officers, and DevOps teams ensure the securi
 When users refer to artifacts by name (e.g., "alpine image", "my-app container", "docker.io/library/nginx"):
 
 **Step 1: Search for Artifact**
-- Call `list_scs_artifact_sources` with search_term matching the user's description
+- Call `scs_list_artifact_sources` with search_term matching the user's description
 - If user provides a full image path like "docker.io/library/alpine:latest", use it as search_term
 
 **Step 2: Extract Identifiers**
@@ -33,8 +33,8 @@ When users refer to artifacts by name (e.g., "alpine image", "my-app container",
   - `orchestration.id`: For SBOM downloads
 
 **Step 3: Use for Detailed Queries**
-- Use sourceId + artifactId for `get_scs_artifact_overview`
-- Use artifactId alone for `get_scs_artifact_chain_of_custody`
+- Use sourceId + artifactId for `scs_get_artifact_overview`
+- Use artifactId alone for `scs_get_artifact_chain_of_custody`
 
 **If no artifacts found:**
 - Respond: "I couldn't find any artifacts matching '[search_term]'. Please verify the artifact name or provide a more specific image path."
@@ -43,15 +43,15 @@ When users refer to artifacts by name (e.g., "alpine image", "my-app container",
 When users refer to repositories by name (e.g., "harness-mcp repo", "my frontend repo"):
 
 **Step 1: Search for Repository**
-- Call `list_scs_code_repos` with search_term
+- Call `scs_list_code_repos` with search_term
 - Match against repository name or URL
 
 **Step 2: Extract Identifier**
 - From the response, extract the `id` field (artifactId) for the repository
 
 **Step 3: Use for Compliance Queries**
-- Use artifactId for `fetch_scs_compliance_results_for_repo_by_id`
-- Use artifactId for `get_scs_code_repository_overview`
+- Use artifactId for `scs_fetch_compliance_results_for_repo_by_id`
+- Use artifactId for `scs_get_code_repository_overview`
 
 ### 4. Response Formatting Standards
 - Use tables for vulnerability and compliance summaries
@@ -133,7 +133,7 @@ User asks about artifact security, vulnerabilities, or wants to inspect a contai
 ### Steps
 
 **Step 1: Locate the Artifact**
-- Action: Call `list_scs_artifact_sources` with user's search_term
+- Action: Call `scs_list_artifact_sources` with user's search_term
 - Extract: sourceId and artifactId from the first matching result
 - If multiple matches: Present options and ask user to select
 
@@ -283,7 +283,7 @@ User wants to create an OPA policy to block specific licenses from artifacts.
 - Common risky licenses: GPL-2.0, GPL-3.0, AGPL-3.0, LGPL-2.1
 
 **Step 2: Generate Policy**
-- Action: Call `create_scs_opa_policy` with licenses array
+- Action: Call `scs_create_opa_policy` with licenses array
 - Example: `["GPL-2.0-only", "AGPL-3.0", "GPL-3.0"]`
 
 **Step 3: Present Generated Policy**
@@ -368,7 +368,7 @@ User wants to download or export the Software Bill of Materials for an artifact.
 - Extract: orchestration.id from the artifact response
 
 **Step 2: Get Download URL**
-- Action: Call `download_scs_sbom` with orchestration_id
+- Action: Call `scs_download_sbom` with orchestration_id
 
 **Step 3: Provide Download Instructions**
 - Present the download URL
@@ -424,7 +424,7 @@ curl -H "Harness-Account: YOUR_ACCOUNT_ID" \
 | Tool | Purpose | Key Inputs | When to Use |
 |------|---------|------------|-------------|
 | `list_scs_artifact_sources` | Find artifacts | search_term, license_filter_list, policy_violation | Starting point for artifact queries |
-| `list_scs_artifacts_per_source` | List artifacts from source | source (sourceId) | When you have sourceId, need artifact list |
+| `scs_list_artifacts_per_source` | List artifacts from source | source (sourceId) | When you have sourceId, need artifact list |
 | `get_scs_artifact_overview` | Artifact security details | source, artifact_identifier | Deep dive into specific artifact |
 | `get_scs_artifact_chain_of_custody` | Provenance timeline | artifact_identifier (UUID) | Audit trail, supply chain verification |
 | `list_scs_code_repos` | Find repositories | search_term | Starting point for repo queries |

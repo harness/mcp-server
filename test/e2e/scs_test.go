@@ -29,15 +29,15 @@ func TestListSCSTools(t *testing.T) {
 	// Check that SCS tools are available
 	foundSCSTools := make(map[string]string)
 	scsToolPatterns := []string{
-		"list_scs_artifact_sources",
-		"list_scs_artifacts_per_source",
-		"get_scs_artifact_overview",
-		"get_scs_artifact_chain_of_custody",
-		"fetch_scs_compliance_results_for_repo_by_id",
-		"get_scs_code_repository_overview",
-		"create_scs_opa_policy",
-		"download_scs_sbom",
-		"list_scs_code_repos",
+		"scs_list_artifact_sources",
+		"scs_list_artifacts_per_source",
+		"scs_get_artifact_overview",
+		"scs_get_artifact_chain_of_custody",
+		"scs_fetch_compliance_results_for_repo_by_id",
+		"scs_get_code_repository_overview",
+		"scs_create_opa_policy",
+		"scs_download_sbom",
+		"scs_list_code_repos",
 	}
 
 	fmt.Println("Available tools in TestListSCSTools:")
@@ -68,7 +68,7 @@ func TestListArtifactSources(t *testing.T) {
 
 	// List artifact sources
 	listReq := mcp.CallToolRequest{}
-	listReq.Params.Name = "list_scs_artifact_sources"
+	listReq.Params.Name = "scs_list_artifact_sources"
 	listReq.Params.Arguments = map[string]any{
 		"accountIdentifier": accountID,
 		"orgIdentifier":     getE2EOrgID(),
@@ -78,7 +78,7 @@ func TestListArtifactSources(t *testing.T) {
 	}
 
 	listResp, err := mcpClient.CallTool(ctx, listReq)
-	require.NoError(t, err, "expected to call 'list_scs_artifact_sources' tool successfully")
+	require.NoError(t, err, "expected to call 'scs_list_artifact_sources' tool successfully")
 	if listResp.IsError {
 		t.Logf("Error response: %v", listResp.Content)
 	}
@@ -106,7 +106,7 @@ func TestListCodeRepos(t *testing.T) {
 
 	// List code repositories
 	listReq := mcp.CallToolRequest{}
-	listReq.Params.Name = "list_scs_code_repos"
+	listReq.Params.Name = "scs_list_code_repos"
 	listReq.Params.Arguments = map[string]any{
 		"accountIdentifier": accountID,
 		"orgIdentifier":     getE2EOrgID(),
@@ -116,7 +116,7 @@ func TestListCodeRepos(t *testing.T) {
 	}
 
 	listResp, err := mcpClient.CallTool(ctx, listReq)
-	require.NoError(t, err, "expected to call 'list_scs_code_repos' tool successfully")
+	require.NoError(t, err, "expected to call 'scs_list_code_repos' tool successfully")
 	if listResp.IsError {
 		t.Logf("Error response: %v", listResp.Content)
 	}
@@ -190,7 +190,7 @@ func TestGetCodeRepositoryOverview(t *testing.T) {
 
 	// Get repo overview
 	overviewReq := mcp.CallToolRequest{}
-	overviewReq.Params.Name = "get_scs_code_repository_overview"
+	overviewReq.Params.Name = "scs_get_code_repository_overview"
 	overviewReq.Params.Arguments = map[string]any{
 		"accountIdentifier": accountID,
 		"orgIdentifier":     getE2EOrgID(),
@@ -199,7 +199,7 @@ func TestGetCodeRepositoryOverview(t *testing.T) {
 	}
 
 	overviewResp, err := mcpClient.CallTool(ctx, overviewReq)
-	require.NoError(t, err, "expected to call 'get_scs_code_repository_overview' tool successfully")
+	require.NoError(t, err, "expected to call 'scs_get_code_repository_overview' tool successfully")
 	if overviewResp.IsError {
 		t.Logf("Error response: %v", overviewResp.Content)
 	}
@@ -261,7 +261,7 @@ func TestFetchComplianceResults(t *testing.T) {
 
 	// Fetch compliance results
 	complianceReq := mcp.CallToolRequest{}
-	complianceReq.Params.Name = "fetch_scs_compliance_results_for_repo_by_id"
+	complianceReq.Params.Name = "scs_fetch_compliance_results_for_repo_by_id"
 	complianceReq.Params.Arguments = map[string]any{
 		"accountIdentifier":   accountID,
 		"orgIdentifier":       getE2EOrgID(),
@@ -272,7 +272,7 @@ func TestFetchComplianceResults(t *testing.T) {
 	}
 
 	complianceResp, err := mcpClient.CallTool(ctx, complianceReq)
-	require.NoError(t, err, "expected to call 'fetch_scs_compliance_results_for_repo_by_id' tool successfully")
+	require.NoError(t, err, "expected to call 'scs_fetch_compliance_results_for_repo_by_id' tool successfully")
 	if complianceResp.IsError {
 		t.Logf("Error response: %v", complianceResp.Content)
 	}
@@ -292,7 +292,7 @@ func TestCreateOPAPolicy(t *testing.T) {
 
 	// Create OPA policy with test licenses
 	createReq := mcp.CallToolRequest{}
-	createReq.Params.Name = "create_scs_opa_policy"
+	createReq.Params.Name = "scs_create_opa_policy"
 	createReq.Params.Arguments = map[string]any{
 		"accountIdentifier": accountID,
 		"orgIdentifier":     getE2EOrgID(),
@@ -301,7 +301,7 @@ func TestCreateOPAPolicy(t *testing.T) {
 	}
 
 	createResp, err := mcpClient.CallTool(ctx, createReq)
-	require.NoError(t, err, "expected to call 'create_scs_opa_policy' tool successfully")
+	require.NoError(t, err, "expected to call 'scs_create_opa_policy' tool successfully")
 	if createResp.IsError {
 		t.Logf("Error response: %v", createResp.Content)
 	}
@@ -378,7 +378,7 @@ func TestDownloadSBOM(t *testing.T) {
 
 	// Get SBOM download URL
 	downloadReq := mcp.CallToolRequest{}
-	downloadReq.Params.Name = "download_scs_sbom"
+	downloadReq.Params.Name = "scs_download_sbom"
 	downloadReq.Params.Arguments = map[string]any{
 		"accountIdentifier": accountID,
 		"orgIdentifier":     getE2EOrgID(),
@@ -387,7 +387,7 @@ func TestDownloadSBOM(t *testing.T) {
 	}
 
 	downloadResp, err := mcpClient.CallTool(ctx, downloadReq)
-	require.NoError(t, err, "expected to call 'download_scs_sbom' tool successfully")
+	require.NoError(t, err, "expected to call 'scs_download_sbom' tool successfully")
 	if downloadResp.IsError {
 		t.Logf("Error response: %v", downloadResp.Content)
 	}
@@ -467,7 +467,7 @@ func TestGetArtifactChainOfCustody(t *testing.T) {
 
 	// Get chain of custody
 	cocReq := mcp.CallToolRequest{}
-	cocReq.Params.Name = "get_scs_artifact_chain_of_custody"
+	cocReq.Params.Name = "scs_get_artifact_chain_of_custody"
 	cocReq.Params.Arguments = map[string]any{
 		"accountIdentifier":   accountID,
 		"orgIdentifier":       getE2EOrgID(),
@@ -476,7 +476,7 @@ func TestGetArtifactChainOfCustody(t *testing.T) {
 	}
 
 	cocResp, err := mcpClient.CallTool(ctx, cocReq)
-	require.NoError(t, err, "expected to call 'get_scs_artifact_chain_of_custody' tool successfully")
+	require.NoError(t, err, "expected to call 'scs_get_artifact_chain_of_custody' tool successfully")
 	if cocResp.IsError {
 		t.Logf("Error response (may be due to artifact ID format): %v", cocResp.Content)
 		return

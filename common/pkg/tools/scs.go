@@ -19,7 +19,7 @@ import (
 
 // ListArtifactSourcesTool returns a tool for listing artifact sources.
 func ListArtifactSourcesTool(config *config.McpServerConfig, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("list_scs_artifact_sources",
+	return mcp.NewTool("scs_list_artifact_sources",
 			mcp.WithDescription(`
 			Lists all artifacts available in Harness SCS.
 
@@ -295,7 +295,7 @@ func ListArtifactSourcesTool(config *config.McpServerConfig, client *generated.C
 
 // ArtifactListV2Tool returns a tool for listing artifacts from a source.
 func ArtifactListV2Tool(config *config.McpServerConfig, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("list_scs_artifacts_per_source",
+	return mcp.NewTool("scs_list_artifacts_per_source",
 			mcp.WithDescription(`
 			Lists all artifacts from a specified artifact source in Harness SCS.Call this tool with sourceId of the artifact source.
 			Show in data table format unless otherwise specified.
@@ -314,7 +314,7 @@ func ArtifactListV2Tool(config *config.McpServerConfig, client *generated.Client
 
 			How to obtain sourceId:
 			1. If you do not know the sourceId:
-			- Use the 'list_scs_artifact_sources' tool with a relevant search_term (e.g., image name like 'alpine' or 'docker.io/library/alpine:latest') to find the artifact source.
+			- Use the 'scs_list_artifact_sources' tool with a relevant search_term (e.g., image name like 'alpine' or 'docker.io/library/alpine:latest') to find the artifact source.
 			- Then use the sourceId from the response as the input to this tool.
 
 			Tip: Once you have the list of artifacts, you can use the sourceId from the results with other tools such as 'get_artifact_overview' or 'get_artifact_chain_of_custody' for further analysis.
@@ -437,7 +437,7 @@ func ArtifactListV2Tool(config *config.McpServerConfig, client *generated.Client
 
 // GetArtifactV2OverviewTool returns a tool for getting artifact overview from a source.
 func GetArtifactV2OverviewTool(config *config.McpServerConfig, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("get_scs_artifact_overview",
+	return mcp.NewTool("scs_get_artifact_overview",
 			mcp.WithDescription(`
 				Retrieves an overview of a specific artifact from a source in Harness SCS.
 
@@ -500,7 +500,7 @@ func GetArtifactV2OverviewTool(config *config.McpServerConfig, client *generated
 
 // GetArtifactDetailComponentViewTool returns a tool for getting detailed component view of an artifact.
 func GetArtifactDetailComponentViewTool(config *config.McpServerConfig, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("get_scs_artifact_component_view",
+	return mcp.NewTool("scs_get_artifact_component_view",
 			mcp.WithDescription(`
 				Retrieves a detailed component view of a specific artifact in Harness SCS.
 
@@ -514,7 +514,7 @@ func GetArtifactDetailComponentViewTool(config *config.McpServerConfig, client *
 				How to obtain artifactId:
 				1. If you do not know the artifactId:
 				- For artifact Use the 'list_scs_artifact_sources'  tool with a relevant search_term (e.g., image name like 'docker.io/library/alpine:latest') to locate the source_id.
-				- For repo Use list_scs_code_repos tool to locate the id of the repo and use it as artifact_identifier for this tool.
+				- For repo Use scs_list_code_repos tool to locate the id of the repo and use it as artifact_identifier for this tool.
 
 				Filters Supported:
 				- component_filter (filter by component name/version)
@@ -658,7 +658,7 @@ func GetArtifactDetailComponentViewTool(config *config.McpServerConfig, client *
 
 // GetArtifactComponentRemediationByPurlTool returns a tool for getting remediation info for a component by its PURL.
 func GetArtifactComponentRemediationByPurlTool(config *config.McpServerConfig, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("get_scs_artifact_component_remediation",
+	return mcp.NewTool("scs_get_artifact_component_remediation",
 			mcp.WithDescription(`
 				Retrieves remediation information for a specific component in an artifact by its Package URL (PURL).
 
@@ -747,7 +747,7 @@ func GetArtifactComponentRemediationByPurlTool(config *config.McpServerConfig, c
 
 // GetArtifactChainOfCustodyV2Tool returns a tool for getting chain of custody for an artifact.
 func GetArtifactChainOfCustodyV2Tool(config *config.McpServerConfig, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("get_scs_artifact_chain_of_custody",
+	return mcp.NewTool("scs_get_artifact_chain_of_custody",
 			mcp.WithDescription(`
 				Retrieves the full chain of custody for a specific artifact in Harness SCS. Show in data table format unless otherwise specified.
 
@@ -808,7 +808,7 @@ func GetArtifactChainOfCustodyV2Tool(config *config.McpServerConfig, client *gen
 
 // FetchComplianceResultsByArtifactTool returns a tool for fetching compliance results by artifact from Harness SCS.
 func FetchComplianceResultsByArtifactTool(config *config.McpServerConfig, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("fetch_scs_compliance_results_for_repo_by_id",
+	return mcp.NewTool("scs_fetch_compliance_results_for_repo_by_id",
 			mcp.WithDescription(`
 				Fetch compliance results for a specific CI/CD build systems or repositories from Harness SCS. Show in data table format unless otherwise specified.
 
@@ -917,7 +917,7 @@ func FetchComplianceResultsByArtifactTool(config *config.McpServerConfig, client
 
 // GetCodeRepositoryOverviewTool returns a tool for getting an overview of a code repository from Harness SCS.
 func GetCodeRepositoryOverviewTool(config *config.McpServerConfig, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("get_scs_code_repository_overview",
+	return mcp.NewTool("scs_get_code_repository_overview",
 			mcp.WithDescription(`
 				Retrieves an overview of a specific code repository from Harness SCS, including vulnerabilities, SBOM (Software Bill of Materials), compliance issues, and policy violations.
 				Show in data table format unless otherwise specified.
@@ -979,7 +979,7 @@ func GetCodeRepositoryOverviewTool(config *config.McpServerConfig, client *gener
 
 // CreateOPAPolicyTool returns a tool for creating OPA policies based on a list of licenses to deny
 func CreateOPAPolicyTool(config *config.McpServerConfig, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("create_scs_opa_policy",
+	return mcp.NewTool("scs_create_opa_policy",
 			mcp.WithDescription(`
 			Creates an OPA policy based on a list of denied licenses.
 			
@@ -1071,7 +1071,7 @@ func CreateOPAPolicyTool(config *config.McpServerConfig, client *generated.Clien
 
 // DownloadSbomTool returns a tool that provides the download URL for an SBOM.
 func DownloadSbomTool(cfg *config.McpServerConfig, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("download_scs_sbom",
+	return mcp.NewTool("scs_download_sbom",
 			mcp.WithDescription(`
 		Returns the download URL for the Software Bill of Materials (SBOM) for a given artifact orchestration in Harness SCS.
 
@@ -1144,7 +1144,7 @@ func DownloadSbomTool(cfg *config.McpServerConfig, client *generated.ClientWithR
 
 // ListSCSCodeReposTool returns a tool for listing code repositories from Harness SCS.
 func ListSCSCodeReposTool(config *config.McpServerConfig, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("list_scs_code_repos",
+	return mcp.NewTool("scs_list_code_repos",
 			mcp.WithDescription(`
 			Lists all code repositories that have been scanned by Harness SCS (Supply Chain Security).Show in data table format unless otherwise specified.
 

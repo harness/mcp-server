@@ -155,7 +155,7 @@ var legacyToolNames = []string{
 	"list_role_assignments",
 	"list_scorecard_checks",
 	"list_scorecards",
-	"list_scs_code_repos",
+	"scs_list_code_repos",
 	"list_secrets",
 	"list_services",
 	"list_settings",

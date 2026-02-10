@@ -15,7 +15,7 @@ import (
 
 var validModules = []string{
 	"acm", "ccm", "cd", "chaos", "ci", "code",
-	"core", "fme", "gitops", "har", "idp", "sei", "ssca", "sto",
+	"core", "fme", "gitops", "har", "idp", "scs", "sei", "ssca", "sto",
 }
 
 var validVerbs = []string{
