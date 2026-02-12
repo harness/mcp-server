@@ -1,6 +1,15 @@
 package prompts
 
-import "github.com/mark3labs/mcp-go/server"
+import (
+	_ "embed"
+	"encoding/json"
+	"fmt"
+
+	"github.com/mark3labs/mcp-go/server"
+)
+
+//go:embed sei_ai_insights_agentic.txt
+var seiAgenticPromptText string
 
 // PromptRegistrar defines the interface for registering prompts with the MCP server.
 // This interface allows different implementations for internal and external repos.
@@ -50,5 +59,16 @@ func (b *BasePromptRegistrar) RegisterCommonPrompts(prompts *Prompts) {
 			SetDescription("Guidelines for calling SEI AI Insights tools to analyze AI coding assistant adoption and productivity metrics.").
 			SetResultDescription("SEI AI Insights parameter guidance").
 			SetText(`{"standard": "**SEI AI Insights Tools Usage Guide**:\n\nWhen calling any SEI AI Insights tool (sei_get_ai_usage_summary, sei_get_ai_adoptions, sei_get_ai_raw_metrics_v2, etc.), ensure ALL required parameters are provided:\n\n**Required for ALL SEI tools:**\n- org_id: Organization identifier (default: 'default')\n- project_id: Project identifier (default: 'Sprint_Insights')\n- accountId: Harness Account ID\n- teamRefId: Team reference ID (use sei_get_teams_list to find available teams)\n- startDate: Start date in 'YYYY-MM-DD' format\n- endDate: End date in 'YYYY-MM-DD' format\n\n**Tool-specific required parameters:**\n- sei_get_ai_adoptions: requires 'granularity' (DAILY, WEEKLY, or MONTHLY) and 'integrationType' (cursor or windsurf)\n- sei_get_ai_usage_metrics: requires 'granularity' and 'metricType' (linesAddedPerContributor, linesSuggested, linesAccepted, acceptanceRatePercentage, DAILY_ACTIVE_USERS)\n\n**Defaults:**\n- If dates not provided: default to last 30 days\n- If integrationType not specified: default to 'cursor'\n- If granularity not specified: default to 'WEEKLY'\n\n**Team Resolution:**\n- If user mentions a team by name, first call sei_get_teams_list to find the teamRefId\n- Never guess teamRefId - always look it up"}`).
+			Build())
+
+	// SEI AI Insights Agentic prompt - full analysis instructions for agentic mode
+	// The prompt text is embedded from sei_ai_insights_agentic.txt and JSON-encoded
+	// so it can be stored in the {"standard": "..."} mode map format.
+	escapedAgenticPrompt, _ := json.Marshal(seiAgenticPromptText)
+	prompts.Append(
+		NewPrompt().SetName("sei_ai_insights_agentic").
+			SetDescription("Agentic analysis instructions for SEI AI Insights - defines which tools to call, analysis approach, and output format for automated AI metrics analysis.").
+			SetResultDescription("SEI AI Insights agentic analysis prompt").
+			SetText(fmt.Sprintf(`{"standard": %s}`, string(escapedAgenticPrompt))).
 			Build())
 }
