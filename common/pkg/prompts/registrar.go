@@ -1,11 +1,12 @@
 package prompts
 
 import (
-	_ "embed"
 	"encoding/json"
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/server"
+
+	_ "embed"
 )
 
 //go:embed sei_ai_insights_agentic.txt
