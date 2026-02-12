@@ -96,7 +96,7 @@ func withCommonAIToolOptions(cfg *config.McpServerConfig) []mcp.ToolOption {
 		mcp.WithString("teamRefId", mcp.Required(), mcp.Description("Team reference ID (use sei_get_teams_list to find available teams)")),
 		mcp.WithString("startDate", mcp.Required(), mcp.Description("Start date in YYYY-MM-DD format")),
 		mcp.WithString("endDate", mcp.Required(), mcp.Description("End date in YYYY-MM-DD format")),
-		mcp.WithString("integrationType", mcp.Required(), mcp.Description("AI integration type (cursor, windsurf)"), mcp.Enum("cursor", "windsurf")),
+		mcp.WithString("integrationType", mcp.Required(), mcp.Description("AI integration type (cursor, windsurf, or all_assistants for both)"), mcp.Enum("cursor", "windsurf", "all_assistants")),
 	}
 }
 

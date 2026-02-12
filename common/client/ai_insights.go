@@ -85,10 +85,14 @@ func parseTeamRefId(value interface{}) interface{} {
 	}
 }
 
-// toIntegrationTypeArray converts integrationType to array format (API expects array)
+// toIntegrationTypeArray converts integrationType to array format (API expects array).
+// "all_assistants" is expanded to ["cursor", "windsurf"] so the backend fetches both.
 func toIntegrationTypeArray(value interface{}) interface{} {
 	switch v := value.(type) {
 	case string:
+		if v == "all_assistants" {
+			return []string{"cursor", "windsurf"}
+		}
 		if v != "" {
 			return []string{v}
 		}
