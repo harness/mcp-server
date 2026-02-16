@@ -173,36 +173,60 @@ type FinalLogKeys struct {
 	StepLogBaseKeys []string `json:"stepLogBaseKeys,omitempty"`
 }
 
-// PipelineExecution represents a pipeline execution
-type PipelineExecution struct {
-	PipelineIdentifier         string                `json:"pipelineIdentifier,omitempty"`
-	ProjectIdentifier          string                `json:"projectIdentifier,omitempty"`
-	OrgIdentifier              string                `json:"orgIdentifier,omitempty"`
-	PlanExecutionId            string                `json:"planExecutionId,omitempty"`
-	Name                       string                `json:"name,omitempty"`
-	Status                     string                `json:"status,omitempty"`
-	FailureInfo                ExecutionFailureInfo  `json:"failureInfo,omitempty"`
-	StartTs                    int64                 `json:"startTs,omitempty"`
-	StartTsTime                string                `json:"startTsTime,omitempty"`
-	EndTs                      int64                 `json:"endTs,omitempty"`
-	EndTsTime                  string                `json:"endTsTime,omitempty"`
-	CreatedAt                  int64                 `json:"createdAt,omitempty"`
-	CreatedAtTime              string                `json:"createdAtTime,omitempty"`
-	ConnectorRef               string                `json:"connectorRef,omitempty"`
-	SuccessfulStagesCount      int                   `json:"successfulStagesCount,omitempty"`
-	FailedStagesCount          int                   `json:"failedStagesCount,omitempty"`
-	RunningStagesCount         int                   `json:"runningStagesCount,omitempty"`
-	TotalStagesRunningCount    int                   `json:"totalStagesRunningCount,omitempty"`
-	StagesExecuted             []string              `json:"stagesExecuted,omitempty"`
-	AbortedBy                  User                  `json:"abortedBy,omitempty"`
-	QueuedType                 string                `json:"queuedType,omitempty"`
-	RunSequence                int32                 `json:"runSequence,omitempty"`
-	ShouldUseSimplifiedBaseKey bool                  `json:"shouldUseSimplifiedKey,omitempty"`
-	ExecutionTriggerInfo       *ExecutionTriggerInfo `json:"executionTriggerInfo,omitempty"`
+// LayoutNode represents a node in the execution layout graph
+type LayoutNode struct {
+	NodeType       string `json:"nodeType,omitempty"`
+	NodeGroup      string `json:"nodeGroup,omitempty"`
+	NodeIdentifier string `json:"nodeIdentifier,omitempty"`
+	Name           string `json:"name,omitempty"`
+	NodeUuid       string `json:"nodeUuid,omitempty"`
+	Status         string `json:"status,omitempty"`
+	Module         string `json:"module,omitempty"`
+	StartTs        int64  `json:"startTs,omitempty"`
+	EndTs          int64  `json:"endTs,omitempty"`
 }
 
-// FormatTimestamps formats the Unix timestamps into human-readable format
+// PipelineExecution represents a pipeline execution
+type PipelineExecution struct {
+	PipelineIdentifier         string                 `json:"pipelineIdentifier,omitempty"`
+	ProjectIdentifier          string                 `json:"projectIdentifier,omitempty"`
+	OrgIdentifier              string                 `json:"orgIdentifier,omitempty"`
+	PlanExecutionId            string                 `json:"planExecutionId,omitempty"`
+	Name                       string                 `json:"name,omitempty"`
+	Status                     string                 `json:"status,omitempty"`
+	FailureInfo                ExecutionFailureInfo   `json:"failureInfo,omitempty"`
+	StartTs                    int64                  `json:"startTs,omitempty"`
+	StartTsTime                string                 `json:"startTsTime,omitempty"`
+	EndTs                      int64                  `json:"endTs,omitempty"`
+	EndTsTime                  string                 `json:"endTsTime,omitempty"`
+	CreatedAt                  int64                  `json:"createdAt,omitempty"`
+	CreatedAtTime              string                 `json:"createdAtTime,omitempty"`
+	ConnectorRef               string                 `json:"connectorRef,omitempty"`
+	SuccessfulStagesCount      int                    `json:"successfulStagesCount,omitempty"`
+	FailedStagesCount          int                    `json:"failedStagesCount,omitempty"`
+	RunningStagesCount         int                    `json:"runningStagesCount,omitempty"`
+	TotalStagesRunningCount    int                    `json:"totalStagesRunningCount,omitempty"`
+	StagesExecuted             []string               `json:"stagesExecuted,omitempty"`
+	AbortedBy                  User                   `json:"abortedBy,omitempty"`
+	QueuedType                 string                 `json:"queuedType,omitempty"`
+	RunSequence                int32                  `json:"runSequence,omitempty"`
+	ShouldUseSimplifiedBaseKey bool                   `json:"shouldUseSimplifiedKey,omitempty"`
+	ExecutionTriggerInfo       *ExecutionTriggerInfo  `json:"executionTriggerInfo,omitempty"`
+	StartingNodeId             string                 `json:"startingNodeId,omitempty"`
+	LayoutNodeMap              map[string]*LayoutNode `json:"layoutNodeMap,omitempty"`
+}
+
+// FormatTimestamps formats the Unix timestamps into human-readable format.
+// If startTs/endTs are not directly available, it extracts them from the starting node in layoutNodeMap.
 func (p *PipelineExecution) FormatTimestamps() {
+	// If startTs is not set but we have layoutNodeMap with a starting node, extract from there
+	if p.StartTs == 0 && p.StartingNodeId != "" && p.LayoutNodeMap != nil {
+		if startNode, ok := p.LayoutNodeMap[p.StartingNodeId]; ok && startNode != nil {
+			p.StartTs = startNode.StartTs
+			p.EndTs = startNode.EndTs
+		}
+	}
+
 	if p.StartTs > 0 {
 		p.StartTsTime = FormatUnixMillisToRFC3339(p.StartTs)
 	}
