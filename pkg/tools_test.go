@@ -61,6 +61,7 @@ var legacyToolNames = []string{
 	"delete_role",
 	"delete_service_account",
 	"delete_user_group",
+	"download_execution_logs",
 	"download_sbom",
 	"execute_workflow",
 	"fetch_compliance_results_for_repo_by_id",
