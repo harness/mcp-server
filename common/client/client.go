@@ -16,6 +16,8 @@ import (
 	"github.com/harness/mcp-server/common/client/dto"
 	"github.com/harness/mcp-server/common/pkg/auth"
 	"github.com/harness/mcp-server/common/pkg/common"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 const (
@@ -225,6 +227,14 @@ func (c *Client) PostRaw(
 		}
 
 		req.Header.Set("Content-Type", "application/json")
+
+		// Inject OpenTelemetry trace context into HTTP headers for distributed tracing
+		// This propagates the trace context to downstream services
+		// NOTE: This is a no-op if OTEL is not initialized
+		// Only active when otel.SetTextMapPropagator() has been called
+		propagator := otel.GetTextMapPropagator()
+		propagator.Inject(ctx, propagation.HeaderCarrier(req.Header))
+
 		// Add custom headers from the headers map
 		for key, value := range headers {
 			req.Header.Set(key, value)
@@ -363,6 +373,13 @@ func (c *Client) PostRawStream(
 		}
 
 		req.Header.Set("Content-Type", "application/json")
+
+		// Inject OpenTelemetry trace context into HTTP headers for distributed tracing
+		// This propagates the trace context to downstream services
+		// NOTE: This is a no-op if OTEL is not initialized
+		// Only active when otel.SetTextMapPropagator() has been called
+		propagator := otel.GetTextMapPropagator()
+		propagator.Inject(ctx, propagation.HeaderCarrier(req.Header))
 
 		// First add custom headers from the headers map
 		for key, value := range headers {
