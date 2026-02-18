@@ -235,6 +235,12 @@ func (c *Client) PostRaw(
 		propagator := otel.GetTextMapPropagator()
 		propagator.Inject(ctx, propagation.HeaderCarrier(req.Header))
 
+		// DEBUG: Log trace context injection
+		slog.InfoContext(ctx, "HTTP client injecting trace context",
+			"url", req.URL.String(),
+			"traceparent", req.Header.Get("traceparent"),
+			"has_traceparent", req.Header.Get("traceparent") != "")
+
 		// Add custom headers from the headers map
 		for key, value := range headers {
 			req.Header.Set(key, value)
