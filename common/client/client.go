@@ -387,6 +387,12 @@ func (c *Client) PostRawStream(
 		propagator := otel.GetTextMapPropagator()
 		propagator.Inject(ctx, propagation.HeaderCarrier(req.Header))
 
+		// Debug: Log trace context injection for streaming requests
+		slog.InfoContext(ctx, "HTTP streaming client injecting trace context",
+			"url", req.URL.String(),
+			"traceparent", req.Header.Get("traceparent"),
+			"has_traceparent", req.Header.Get("traceparent") != "")
+
 		// First add custom headers from the headers map
 		for key, value := range headers {
 			req.Header.Set(key, value)
