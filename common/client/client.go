@@ -236,7 +236,7 @@ func (c *Client) PostRaw(
 		propagator.Inject(ctx, propagation.HeaderCarrier(req.Header))
 
 		// DEBUG: Log trace context injection
-		slog.InfoContext(ctx, "HTTP client injecting trace context",
+		slog.DebugContext(ctx, "HTTP client injecting trace context",
 			"url", req.URL.String(),
 			"traceparent", req.Header.Get("traceparent"),
 			"has_traceparent", req.Header.Get("traceparent") != "")
@@ -388,7 +388,7 @@ func (c *Client) PostRawStream(
 		propagator.Inject(ctx, propagation.HeaderCarrier(req.Header))
 
 		// Debug: Log trace context injection for streaming requests
-		slog.InfoContext(ctx, "HTTP streaming client injecting trace context",
+		slog.DebugContext(ctx, "HTTP streaming client injecting trace context",
 			"url", req.URL.String(),
 			"traceparent", req.Header.Get("traceparent"),
 			"has_traceparent", req.Header.Get("traceparent") != "")
