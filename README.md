@@ -27,6 +27,7 @@ The Harness MCP Server is a [Model Context Protocol (MCP)](https://modelcontextp
     - [Internal Developer Portal Toolset](#internal-developer-portal-toolset)
     - [Audit Trail Toolset](#audit-trail-toolset)
     - [Feature Management and Experimentation (FME) Toolset](#feature-management-and-experimentation-fme-toolset)
+    - [Infrastructure as Code Management (IaCM) Toolset](#infrastructure-as-code-management-iacm-toolset)
     - [Sei Toolset](#sei-toolset)
     - [GitOps Toolset](#gitops-toolset)
 - [Prerequisites](#prerequisites)
@@ -305,6 +306,25 @@ Toolset Name: `fme`
 - `list_fme_environments`: List environments for a specific workspace
 - `list_fme_feature_flags`: List feature flags for a specific workspace
 - `get_fme_feature_flag_definition`: Get the definition of a specific feature flag in an environment
+
+#### Infrastructure as Code Management (IaCM) Toolset
+
+The IaCM toolset provides tools for managing Infrastructure as Code workspaces, resources, and module registries in Harness.
+
+**Workspace Tools** (Toolset Name: `workspace_tools`)
+
+- `workspace_tools_list_workspaces`: List all IaCM workspaces visible to the user. Supports filtering by project, org, and status. Use pagination for large result sets.
+- `workspace_tools_get_workspace`: Get detailed metadata for a specific IaCM workspace, including status, last run, variables, and cost summary.
+
+**Resource Tools** (Toolset Name: `resource_tools`)
+
+- `resource_tools_list_resources`: List all resources within an IaCM workspace. Supports filtering by provider, type, or module.
+- `resource_tools_get_resource`: Retrieve full metadata of a specific IaCM resource, including type, module, provider, drift status, and cost data.
+
+**Module Registry Tools** (Toolset Name: `module_registry_tools`)
+
+- `module_registry_tools_list_modules`: List all modules in the IaCM project-level registry. Supports filtering by tag, version, or provider.
+- `module_registry_tools_get_module`: Retrieve details of a specific IaCM module, including name, source repo, version, invocation count, and dependencies.
 
 #### SEI Toolset
 
