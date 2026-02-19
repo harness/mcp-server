@@ -18,7 +18,7 @@ const tracerName = "mcp-server-http-client"
 func startHTTPClientSpan(ctx context.Context, method, path string, req *http.Request) (context.Context, trace.Span) {
 	tracer := otel.Tracer(tracerName)
 	spanName := "http.client." + method
-	
+
 	spanCtx, span := tracer.Start(ctx, spanName,
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
@@ -30,7 +30,7 @@ func startHTTPClientSpan(ctx context.Context, method, path string, req *http.Req
 	// Set full URL after request is created
 	if req != nil {
 		span.SetAttributes(attribute.String("http.url", req.URL.String()))
-		
+
 		// Inject OpenTelemetry trace context into HTTP headers
 		propagator := otel.GetTextMapPropagator()
 		propagator.Inject(spanCtx, propagation.HeaderCarrier(req.Header))
