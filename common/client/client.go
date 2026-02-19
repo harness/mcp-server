@@ -16,10 +16,6 @@ import (
 	"github.com/harness/mcp-server/common/client/dto"
 	"github.com/harness/mcp-server/common/pkg/auth"
 	"github.com/harness/mcp-server/common/pkg/common"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -107,6 +103,13 @@ func (c *Client) Get(
 	if err != nil {
 		return fmt.Errorf("unable to create new http request : %w", err)
 	}
+
+	// Start HTTP client span and inject trace context
+	spanCtx, span := startHTTPClientSpan(ctx, "GET", path, httpReq)
+	defer span.End()
+
+	// Update request context with span context
+	httpReq = httpReq.WithContext(spanCtx)
 
 	addQueryParams(httpReq, params)
 	return c.doRequest(httpReq, headers, response)
@@ -230,43 +233,12 @@ func (c *Client) PostRaw(
 
 		req.Header.Set("Content-Type", "application/json")
 
-		// Create span for HTTP client call to make it visible in traces
-		tracer := otel.Tracer("mcp-server-http-client")
-		spanCtx, span := tracer.Start(ctx, "http.client.post",
-			trace.WithSpanKind(trace.SpanKindClient),
-			trace.WithAttributes(
-				attribute.String("http.method", "POST"),
-				attribute.String("http.url", req.URL.String()),
-				attribute.String("http.target", path),
-			),
-		)
+		// Start HTTP client span and inject trace context
+		spanCtx, span := startHTTPClientSpan(ctx, "POST", path, req)
+		defer span.End()
 
-		// Declare resp and err variables for use in defer
-		var resp *http.Response
-		var respErr error
-
-		defer func() {
-			if resp != nil {
-				span.SetAttributes(attribute.Int("http.status_code", resp.StatusCode))
-			}
-			if respErr != nil {
-				span.RecordError(respErr)
-			}
-			span.End()
-		}()
-
-		// Inject OpenTelemetry trace context into HTTP headers for distributed tracing
-		// This propagates the trace context (including the new span) to downstream services
-		// NOTE: This is a no-op if OTEL is not initialized
-		// Only active when otel.SetTextMapPropagator() has been called
-		propagator := otel.GetTextMapPropagator()
-		propagator.Inject(spanCtx, propagation.HeaderCarrier(req.Header))
-
-		// DEBUG: Log trace context injection
-		slog.DebugContext(spanCtx, "HTTP client injecting trace context",
-			"url", req.URL.String(),
-			"traceparent", req.Header.Get("traceparent"),
-			"has_traceparent", req.Header.Get("traceparent") != "")
+		// Update request context with span context
+		req = req.WithContext(spanCtx)
 
 		// Add custom headers from the headers map
 		for key, value := range headers {
@@ -276,10 +248,13 @@ func (c *Client) PostRaw(
 
 		slog.DebugContext(spanCtx, "Request", "url", req.URL.String())
 
-		resp, respErr = c.Do(req)
-		if respErr != nil || resp == nil {
-			return fmt.Errorf("request failed: %w", respErr)
+		resp, err := c.Do(req)
+		if err != nil || resp == nil {
+			span.RecordError(err)
+			return fmt.Errorf("request failed: %w", err)
 		}
+
+		recordHTTPResponse(span, resp.StatusCode)
 
 		// Read response body
 		var responseBody []byte
@@ -407,20 +382,10 @@ func (c *Client) PostRawStream(
 
 		req.Header.Set("Content-Type", "application/json")
 
-		// Inject OpenTelemetry trace context into HTTP headers for distributed tracing
-		// This propagates the trace context to downstream services
-		// NOTE: This is a no-op if OTEL is not initialized
-		// Only active when otel.SetTextMapPropagator() has been called
-		propagator := otel.GetTextMapPropagator()
-		propagator.Inject(ctx, propagation.HeaderCarrier(req.Header))
+		// Inject trace context into headers (no span creation for streaming to avoid premature closure)
+		injectTraceContext(ctx, req)
 
-		// Debug: Log trace context injection for streaming requests
-		slog.DebugContext(ctx, "HTTP streaming client injecting trace context",
-			"url", req.URL.String(),
-			"traceparent", req.Header.Get("traceparent"),
-			"has_traceparent", req.Header.Get("traceparent") != "")
-
-		// First add custom headers from the headers map
+		// Add custom headers from the headers map
 		for key, value := range headers {
 			req.Header.Set(key, value)
 		}
@@ -564,6 +529,14 @@ func (c *Client) RequestRaw(
 		}
 
 		req.Header.Set("Content-Type", "application/json")
+
+		// Start HTTP client span and inject trace context
+		spanCtx, span := startHTTPClientSpan(ctx, httpMethod, path, req)
+		defer span.End()
+
+		// Update request context with span context
+		req = req.WithContext(spanCtx)
+
 		// Add custom headers from the headers map
 		for key, value := range headers {
 			req.Header.Add(key, value)
@@ -572,11 +545,14 @@ func (c *Client) RequestRaw(
 
 		resp, err := c.Do(req)
 
-		slog.DebugContext(ctx, "Request", "url", req.URL.String())
+		slog.DebugContext(spanCtx, "Request", "url", req.URL.String())
 
 		if err != nil || resp == nil {
+			span.RecordError(err)
 			return fmt.Errorf("request failed: %w", err)
 		}
+
+		recordHTTPResponse(span, resp.StatusCode)
 
 		// Read response body once and reuse it
 		var responseBody []byte
