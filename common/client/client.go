@@ -17,7 +17,9 @@ import (
 	"github.com/harness/mcp-server/common/pkg/auth"
 	"github.com/harness/mcp-server/common/pkg/common"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -228,15 +230,40 @@ func (c *Client) PostRaw(
 
 		req.Header.Set("Content-Type", "application/json")
 
+		// Create span for HTTP client call to make it visible in traces
+		tracer := otel.Tracer("mcp-server-http-client")
+		spanCtx, span := tracer.Start(ctx, "http.client.post",
+			trace.WithSpanKind(trace.SpanKindClient),
+			trace.WithAttributes(
+				attribute.String("http.method", "POST"),
+				attribute.String("http.url", req.URL.String()),
+				attribute.String("http.target", path),
+			),
+		)
+
+		// Declare resp and err variables for use in defer
+		var resp *http.Response
+		var respErr error
+
+		defer func() {
+			if resp != nil {
+				span.SetAttributes(attribute.Int("http.status_code", resp.StatusCode))
+			}
+			if respErr != nil {
+				span.RecordError(respErr)
+			}
+			span.End()
+		}()
+
 		// Inject OpenTelemetry trace context into HTTP headers for distributed tracing
-		// This propagates the trace context to downstream services
+		// This propagates the trace context (including the new span) to downstream services
 		// NOTE: This is a no-op if OTEL is not initialized
 		// Only active when otel.SetTextMapPropagator() has been called
 		propagator := otel.GetTextMapPropagator()
-		propagator.Inject(ctx, propagation.HeaderCarrier(req.Header))
+		propagator.Inject(spanCtx, propagation.HeaderCarrier(req.Header))
 
 		// DEBUG: Log trace context injection
-		slog.DebugContext(ctx, "HTTP client injecting trace context",
+		slog.DebugContext(spanCtx, "HTTP client injecting trace context",
 			"url", req.URL.String(),
 			"traceparent", req.Header.Get("traceparent"),
 			"has_traceparent", req.Header.Get("traceparent") != "")
@@ -247,11 +274,11 @@ func (c *Client) PostRaw(
 		}
 		addQueryParams(req, params)
 
-		slog.DebugContext(ctx, "Request", "url", req.URL.String())
+		slog.DebugContext(spanCtx, "Request", "url", req.URL.String())
 
-		resp, err := c.Do(req)
-		if err != nil || resp == nil {
-			return fmt.Errorf("request failed: %w", err)
+		resp, respErr = c.Do(req)
+		if respErr != nil || resp == nil {
+			return fmt.Errorf("request failed: %w", respErr)
 		}
 
 		// Read response body
