@@ -417,6 +417,14 @@ Optional environment variables:
 
 ### Use Docker Image
 
+#### Build the Docker image locally
+
+To build the Docker image from this repository:
+
+```bash
+docker buildx build -t harness/mcp-server:latest .
+```
+
 #### Stdio mode
 Alternatively, you can use the pre-built Docker image:
 
