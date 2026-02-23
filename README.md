@@ -333,6 +333,15 @@ Toolset Name: `sei`
 - `sei_get_ba_insight_metrics`: Get BA insight metrics
 - `sei_get_ba_insight_summary`: Get BA insight summary
 - `sei_get_ba_drilldown_data`: Get BA drilldown data
+- `sei_get_ai_usage_metrics`: Get AI coding assistant feature metrics (lines suggested/accepted, acceptance rate, daily active users) with time-series data
+- `sei_get_ai_usage_breakdown`: Get AI coding assistant usage breakdown by child teams
+- `sei_get_ai_usage_summary`: Get summary statistics for AI coding assistants including total users, acceptance rates, and lines of code
+- `sei_get_ai_top_languages`: Get top programming languages used with AI coding assistants
+- `sei_get_ai_adoptions`: Get AI coding assistant adoption metrics showing team adoption rates over time
+- `sei_get_ai_adoptions_breakdown`: Get AI coding assistant adoption breakdown by direct child teams
+- `sei_get_ai_adoptions_summary`: Get AI coding assistant adoption summary with current vs previous period comparison
+- `sei_get_ai_raw_metrics`: Get paginated raw metrics for AI coding assistants with detailed per-developer data
+- `sei_get_ai_impact`: Get AI impact metrics comparing AI-assisted vs non-AI-assisted code (supports impactType: pr_velocity or rework)
 
 #### GitOps Toolset
 

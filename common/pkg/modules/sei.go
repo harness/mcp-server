@@ -80,6 +80,13 @@ func RegisterSoftwareEngineeringInsights(config *config.McpServerConfig, tsg *to
 		Secret:  "",
 	}
 
+	// Create AI Insights client (uses sei-panorama-api)
+	aiInsightsClient := &client.AIInsightsService{
+		Client:  c,
+		BaseURL: "",
+		Secret:  "",
+	}
+
 	// Create the SEI toolset
 	sei := toolsets.NewToolset("sei", "Harness Software Engineering Insights related tools")
 
@@ -116,6 +123,17 @@ func RegisterSoftwareEngineeringInsights(config *config.McpServerConfig, tsg *to
 	getBAInsightSummaryTool, getBAInsightSummaryHandler := tools.GetBAInsightSummaryTool(config, seiClient)
 	getBADrilldownDataTool, getBADrilldownDataHandler := tools.GetBADrilldownDataTool(config, seiClient)
 
+	// Get AI Insights tools and handlers (sei-panorama-api)
+	getAIUsageMetricsTool, getAIUsageMetricsHandler := tools.GetAIUsageMetricsTool(config, aiInsightsClient)
+	getAIUsageBreakdownTool, getAIUsageBreakdownHandler := tools.GetAIUsageBreakdownTool(config, aiInsightsClient)
+	getAIUsageSummaryTool, getAIUsageSummaryHandler := tools.GetAIUsageSummaryTool(config, aiInsightsClient)
+	getAITopLanguagesTool, getAITopLanguagesHandler := tools.GetAITopLanguagesTool(config, aiInsightsClient)
+	getAIAdoptionsTool, getAIAdoptionsHandler := tools.GetAIAdoptionsTool(config, aiInsightsClient)
+	getAIAdoptionsBreakdownTool, getAIAdoptionsBreakdownHandler := tools.GetAIAdoptionsBreakdownTool(config, aiInsightsClient)
+	getAIAdoptionsSummaryTool, getAIAdoptionsSummaryHandler := tools.GetAIAdoptionsSummaryTool(config, aiInsightsClient)
+	getAIRawMetricsTool, getAIRawMetricsHandler := tools.GetAIRawMetricsTool(config, aiInsightsClient)
+	getAIImpactTool, getAIImpactHandler := tools.GetAIImpactTool(config, aiInsightsClient)
+
 	// Add tools to the toolset
 	sei.AddReadTools(
 		toolsets.NewServerTool(productivityFeatureMetricsTool, productivityFeatureMetricsHandler),
@@ -144,6 +162,16 @@ func RegisterSoftwareEngineeringInsights(config *config.McpServerConfig, tsg *to
 		toolsets.NewServerTool(getBAInsightMetricsTool, getBAInsightMetricsHandler),
 		toolsets.NewServerTool(getBAInsightSummaryTool, getBAInsightSummaryHandler),
 		toolsets.NewServerTool(getBADrilldownDataTool, getBADrilldownDataHandler),
+		// AI Insights tools (sei-panorama-api)
+		toolsets.NewServerTool(getAIUsageMetricsTool, getAIUsageMetricsHandler),
+		toolsets.NewServerTool(getAIUsageBreakdownTool, getAIUsageBreakdownHandler),
+		toolsets.NewServerTool(getAIUsageSummaryTool, getAIUsageSummaryHandler),
+		toolsets.NewServerTool(getAITopLanguagesTool, getAITopLanguagesHandler),
+		toolsets.NewServerTool(getAIAdoptionsTool, getAIAdoptionsHandler),
+		toolsets.NewServerTool(getAIAdoptionsBreakdownTool, getAIAdoptionsBreakdownHandler),
+		toolsets.NewServerTool(getAIAdoptionsSummaryTool, getAIAdoptionsSummaryHandler),
+		toolsets.NewServerTool(getAIRawMetricsTool, getAIRawMetricsHandler),
+		toolsets.NewServerTool(getAIImpactTool, getAIImpactHandler),
 	)
 
 	// Add toolset to the group

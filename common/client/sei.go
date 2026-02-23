@@ -516,9 +516,13 @@ func (s *SEIService) GetTeamsList(ctx context.Context, params map[string]interfa
 	}
 	if page, ok := params["page"]; ok {
 		queryParams["page"] = fmt.Sprintf("%v", page)
+	} else {
+		queryParams["page"] = "0"
 	}
 	if pageSize, ok := params["pageSize"]; ok {
 		queryParams["pageSize"] = fmt.Sprintf("%v", pageSize)
+	} else {
+		queryParams["pageSize"] = "100"
 	}
 
 	// Build additional headers
