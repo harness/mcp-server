@@ -218,6 +218,46 @@ func (c *ChaosService) ListExperimentVariables(ctx context.Context, scope dto.Sc
 	return listExperimentVariables, nil
 }
 
+const (
+	chaosListLinuxInfrastructuresPath = "rest/machine/infras"
+)
+
+// ListLinuxInfrastructures lists available Linux infrastructure (load runners).
+// statusFilter controls the status filter: non-empty values filter by that status, empty string omits the filter.
+func (c *ChaosService) ListLinuxInfrastructures(ctx context.Context, scope dto.Scope, statusFilter string) (*dto.ListLinuxInfraResponse, error) {
+	var (
+		path   = chaosListLinuxInfrastructuresPath
+		params = make(map[string]string)
+	)
+
+	// Add scope parameters
+	params = addIdentifierParams(params, scope)
+	params["infraType"] = "Linux"
+	params["page"] = "0"
+	params["limit"] = "15"
+
+	filter := map[string]any{}
+	if statusFilter != "" {
+		filter["status"] = statusFilter
+	}
+
+	body := map[string]any{
+		"filter": filter,
+		"sort": map[string]any{
+			"field":     "NAME",
+			"ascending": true,
+		},
+	}
+
+	result := new(dto.ListLinuxInfraResponse)
+	err := c.Client.Post(ctx, path, params, body, nil, result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list linux infras: %w", err)
+	}
+
+	return result, nil
+}
+
 func addIdentifierParams(params map[string]string, scope dto.Scope) map[string]string {
 	params["accountIdentifier"] = scope.AccountID
 	params["projectIdentifier"] = scope.ProjectID

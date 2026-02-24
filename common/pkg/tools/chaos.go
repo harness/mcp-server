@@ -654,3 +654,44 @@ func getRuntimeVariables(inputsetIdentity string, experimentVariablesRaw []inter
 
 	return experimentRunRequest
 }
+
+// ListLinuxInfrastructuresTool creates a tool for listing Linux infrastructure (load runners)
+func ListLinuxInfrastructuresTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_list_linux_infrastructures",
+			mcp.WithDescription("List available Linux infrastructure for chaos engineering and load testing. Returns chaos Linux infrastructures (load infrastructures) with their IDs, names, and status. Infra IDs are needed when creating sample load tests via chaos_create_sample_loadtest. By default only active infrastructures are returned; set status to 'All' to list all."),
+			common.WithScope(config, false),
+			mcp.WithString("status",
+				mcp.Description("Filter by infra status. Defaults to 'Active'. Use 'All' to list all infras regardless of status."),
+				mcp.Enum("Active", "All"),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			statusFilter := "Active"
+			status, err := OptionalParam[string](request, "status")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if status == "All" {
+				statusFilter = ""
+			} else if status != "" {
+				statusFilter = status
+			}
+
+			data, err := client.ListLinuxInfrastructures(ctx, scope, statusFilter)
+			if err != nil {
+				return nil, fmt.Errorf("failed to list linux infras: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal list linux infras response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
