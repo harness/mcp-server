@@ -89,6 +89,7 @@ func RegisterChaos(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) e
 		).AddWriteTools(
 			toolsets.NewServerTool(tools.StopExperimentRunsTool(config, chaosClient)),
 		)
+
 	// Add toolset to the group
 	tsg.AddToolset(chaos)
 	return nil
