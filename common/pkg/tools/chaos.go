@@ -245,6 +245,69 @@ func RunExperimentTool(config *config.McpServerConfig, client *client.ChaosServi
 		}
 }
 
+// StopExperimentRunsTool creates a tool for stopping the experiment runs
+func StopExperimentRunsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_experiments_stop",
+			mcp.WithDescription("Stops a chaos experiment run. If notifyId is set, the run is found by notifyId and scope; otherwise by experimentRunID and scope. If both are omitted, all runs for the experiment with phase 'Running' are stopped."),
+			common.WithScope(config, false),
+			mcp.WithString("experimentID",
+				mcp.Description("Unique Identifier for an experiment"),
+				mcp.Required(),
+			),
+			mcp.WithString("experimentRunID",
+				mcp.Description("Unique identifier of the experiment run to stop. If omitted, the stop request may apply to the latest or all relevant runs depending on backend behavior."),
+			),
+			mcp.WithString("notifyId",
+				mcp.Description("Notification or callback identifier associated with the experiment run; used to correlate the stop request with the run that was started."),
+			),
+			mcp.WithBoolean("force",
+				mcp.Description("When true, immediately marks the run as Stopped in the database (run, execution nodes, experiment recents). When false (default), only requests stop on cluster/machine; DB is updated later when the delegate or infra reports status."),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			experimentID, err := RequiredParam[string](request, "experimentID")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			if !isValidUUID(experimentID) { // do we need this check as in hce it's treated as string?
+				return mcp.NewToolResultError(fmt.Sprintf("invalid experimentID %s, expected a valid UUID", experimentID)), nil
+			}
+
+			experimentRunID, err := OptionalParam[string](request, "experimentRunID")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			notifyId, err := OptionalParam[string](request, "notifyId")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			force, err := OptionalParam[bool](request, "force")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.StopExperimentRuns(ctx, scope, experimentID, experimentRunID, notifyId, force)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal stop chaos experiment response: %v", err)), nil
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
 // ListProbesTool creates a tool for listing the probes
 func ListProbesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("chaos_probes_list",
