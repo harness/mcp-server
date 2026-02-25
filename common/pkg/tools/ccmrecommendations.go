@@ -294,7 +294,7 @@ func CreateCcmJiraTicketTool(config *config.McpServerConfig, client *client.Clou
 
 func CreateCcmServiceNowTicketTool(config *config.McpServerConfig, client *client.CloudCostManagementService,
 ) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return createTicketTool("create_service_now_ticket_for_ccm_recommendation", "Creates a Service Now ticket for a CCM recommendation", config, client.CreateServiceNowTicket)
+	return createTicketTool("create_snow_ticket_for_ccm_rec", "Creates a Service Now ticket for a CCM recommendation", config, client.CreateServiceNowTicket)
 }
 
 func createTicketTool(name string, description string, config *config.McpServerConfig, clientCall CreateTicketForRecommendation,

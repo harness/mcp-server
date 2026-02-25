@@ -53,7 +53,7 @@ var legacyToolNames = []string{
 	"create_role",
 	"create_role_assignment",
 	"create_service_account",
-	"create_service_now_ticket_for_ccm_recommendation",
+	"create_snow_ticket_for_ccm_rec",
 	"create_user_group",
 	"delete_ccm_perspective",
 	"delete_delegate_token",
