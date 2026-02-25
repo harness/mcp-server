@@ -5,6 +5,12 @@ type ListExperimentResponse struct {
 	Pagination Pagination     `json:"pagination"`
 }
 
+type StopChaosV2ExperimentResponse struct {
+	IsStopped      bool   `json:"isStopped"`
+	ExperimentID   string `json:"experimentId"`
+	ExperimentName string `json:"experimentName"`
+}
+
 type GetExperimentResponse struct {
 	ExperimentID               string                `json:"ExperimentID"`
 	Identity                   string                `json:"Identity"`

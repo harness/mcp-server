@@ -86,8 +86,9 @@ func RegisterChaos(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) e
 			toolsets.NewServerTool(tools.ListExperimentTemplatesTool(config, chaosClient)),
 			toolsets.NewServerTool(tools.CreateExperimentFromTemplateTool(config, chaosClient)),
 			toolsets.NewServerTool(tools.ListExperimentVariablesTool(config, chaosClient)),
+		).AddWriteTools(
+			toolsets.NewServerTool(tools.StopExperimentRunsTool(config, chaosClient)),
 		)
-
 	// Add toolset to the group
 	tsg.AddToolset(chaos)
 	return nil
