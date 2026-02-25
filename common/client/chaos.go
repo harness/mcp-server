@@ -11,6 +11,7 @@ import (
 const (
 	// Base API paths
 	chaosListExperimentsPath          = "rest/v2/experiment"
+	chaosStopExperimentRunsPath       = "rest/v2/experiment/%s/stop"
 	chaosGetExperimentPath            = "rest/v2/experiments/%s"
 	chaosGetExperimentRunPipelinePath = "rest/v2/chaos-pipeline/%s"
 	chaosExperimentRunPath            = "rest/v2/experiments/%s/run"
@@ -47,6 +48,28 @@ func (c *ChaosService) ListExperiments(ctx context.Context, scope dto.Scope, pag
 	}
 
 	return listExperiments, nil
+}
+
+func (c *ChaosService) StopExperimentRuns(ctx context.Context, scope dto.Scope, experimentID, experimentRunID, notifyId string, force bool) (*dto.StopChaosV2ExperimentResponse, error) {
+	var (
+		path   = fmt.Sprintf(chaosStopExperimentRunsPath, experimentID)
+		params = make(map[string]string)
+	)
+
+	params["experimentRunId"] = experimentRunID
+	params["notifyId"] = notifyId
+	params["force"] = fmt.Sprintf("%t", force)
+
+	// Add scope parameters
+	params = addIdentifierParams(params, scope)
+
+	stopExperimentRuns := new(dto.StopChaosV2ExperimentResponse)
+	err := c.Client.Post(ctx, path, params, struct{}{}, nil, stopExperimentRuns) // review empty body request
+	if err != nil {
+		return nil, fmt.Errorf("failed to stop experiment runs: %w", err)
+	}
+
+	return stopExperimentRuns, nil
 }
 
 func (c *ChaosService) GetExperiment(ctx context.Context, scope dto.Scope, experimentID string) (*dto.GetExperimentResponse, error) {
