@@ -102,6 +102,7 @@ func RegisterChaos(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) e
 			toolsets.NewServerTool(tools.StopLoadTestTool(config, loadTestService)),
 			toolsets.NewServerTool(tools.DeleteLoadTestTool(config, loadTestService)),
 			toolsets.NewServerTool(tools.CreateSampleLoadTestTool(config, loadTestService)),
+			toolsets.NewServerTool(tools.StopExperimentRunsTool(config, chaosClient)),
 		)
 
 	// Add toolset to the group
