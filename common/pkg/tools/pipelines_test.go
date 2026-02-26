@@ -294,7 +294,7 @@ func TestFetchExecutionURLTool(t *testing.T) {
 			"pipeline_id":       "test-pipeline",
 			"plan_execution_id": "exec-123",
 			"org_id":            "test-org",
-			"project_id":       "test-project",
+			"project_id":        "test-project",
 		})
 
 		result, err := toolHandler(context.Background(), request)
@@ -316,7 +316,7 @@ func TestFetchExecutionURLTool(t *testing.T) {
 		request := newToolRequest(map[string]interface{}{
 			"plan_execution_id": "exec-123",
 			"org_id":            "test-org",
-			"project_id":       "test-project",
+			"project_id":        "test-project",
 		})
 
 		result, err := toolHandler(context.Background(), request)
@@ -373,7 +373,7 @@ func TestFetchExecutionURLTool(t *testing.T) {
 			"pipeline_id":       "test-pipeline",
 			"plan_execution_id": "exec-123",
 			"org_id":            "test-org",
-			"project_id":       "test-project",
+			"project_id":        "test-project",
 		})
 
 		result, err := toolHandler(context.Background(), request)
@@ -434,7 +434,7 @@ func TestGetExecutionTool(t *testing.T) {
 		request := newToolRequest(map[string]interface{}{
 			"plan_execution_id": "exec-123",
 			"org_id":            "test-org",
-			"project_id":       "test-project",
+			"project_id":        "test-project",
 		})
 
 		result, err := toolHandler(context.Background(), request)
@@ -475,7 +475,7 @@ func TestGetExecutionTool(t *testing.T) {
 			"plan_execution_id": "exec-123",
 			"stage_node_id":     "stage-1",
 			"org_id":            "test-org",
-			"project_id":       "test-project",
+			"project_id":        "test-project",
 		})
 
 		result, err := toolHandler(context.Background(), request)
@@ -529,7 +529,7 @@ func TestGetExecutionTool(t *testing.T) {
 		request := newToolRequest(map[string]interface{}{
 			"plan_execution_id": "exec-123",
 			"org_id":            "test-org",
-			"project_id":       "test-project",
+			"project_id":        "test-project",
 		})
 
 		result, err := toolHandler(context.Background(), request)
@@ -625,7 +625,7 @@ func TestListExecutionsTool(t *testing.T) {
 
 		request := newToolRequest(map[string]interface{}{
 			"org_id":              "test-org",
-			"project_id":         "test-project",
+			"project_id":          "test-project",
 			"search_term":         "deploy",
 			"pipeline_identifier": "my-pipeline",
 			"status":              "Failed",
@@ -723,7 +723,7 @@ func TestListInputSetsTool(t *testing.T) {
 		request := newToolRequest(map[string]interface{}{
 			"pipeline_identifier": "my-pipeline",
 			"org_id":              "test-org",
-			"project_id":         "test-project",
+			"project_id":          "test-project",
 		})
 
 		result, err := toolHandler(context.Background(), request)
@@ -758,7 +758,7 @@ func TestListInputSetsTool(t *testing.T) {
 		request := newToolRequest(map[string]interface{}{
 			"pipeline_identifier": "my-pipeline",
 			"org_id":              "test-org",
-			"project_id":         "test-project",
+			"project_id":          "test-project",
 			"search_term":         "prod",
 		})
 
@@ -797,7 +797,7 @@ func TestListInputSetsTool(t *testing.T) {
 		request := newToolRequest(map[string]interface{}{
 			"pipeline_identifier": "my-pipeline",
 			"org_id":              "test-org",
-			"project_id":         "test-project",
+			"project_id":          "test-project",
 		})
 
 		result, err := toolHandler(context.Background(), request)
@@ -853,7 +853,7 @@ func TestGetInputSetTool(t *testing.T) {
 			"pipeline_identifier":  "my-pipeline",
 			"input_set_identifier": "input-set-1",
 			"org_id":               "test-org",
-			"project_id":          "test-project",
+			"project_id":           "test-project",
 		})
 
 		result, err := toolHandler(context.Background(), request)
@@ -875,7 +875,7 @@ func TestGetInputSetTool(t *testing.T) {
 		request := newToolRequest(map[string]interface{}{
 			"input_set_identifier": "input-set-1",
 			"org_id":               "test-org",
-			"project_id":          "test-project",
+			"project_id":           "test-project",
 		})
 
 		result, err := toolHandler(context.Background(), request)
@@ -893,7 +893,7 @@ func TestGetInputSetTool(t *testing.T) {
 		request := newToolRequest(map[string]interface{}{
 			"pipeline_identifier": "my-pipeline",
 			"org_id":              "test-org",
-			"project_id":         "test-project",
+			"project_id":          "test-project",
 		})
 
 		result, err := toolHandler(context.Background(), request)
@@ -932,7 +932,7 @@ func TestGetInputSetTool(t *testing.T) {
 			"pipeline_identifier":  "my-pipeline",
 			"input_set_identifier": "input-set-1",
 			"org_id":               "test-org",
-			"project_id":          "test-project",
+			"project_id":           "test-project",
 		})
 
 		result, err := toolHandler(context.Background(), request)
@@ -1021,7 +1021,7 @@ func TestGetPipelineSummaryTool(t *testing.T) {
 		request := newToolRequest(map[string]interface{}{
 			"pipeline_id":       "test-pipeline",
 			"org_id":            "test-org",
-			"project_id":       "test-project",
+			"project_id":        "test-project",
 			"get_metadata_only": true,
 		})
 
@@ -1137,7 +1137,7 @@ func TestListTriggersTool(t *testing.T) {
 		request := newToolRequest(map[string]interface{}{
 			"target_identifier": "my-pipeline",
 			"org_id":            "test-org",
-			"project_id":       "test-project",
+			"project_id":        "test-project",
 		})
 
 		result, err := toolHandler(context.Background(), request)
@@ -1172,7 +1172,7 @@ func TestListTriggersTool(t *testing.T) {
 		request := newToolRequest(map[string]interface{}{
 			"target_identifier": "my-pipeline",
 			"org_id":            "test-org",
-			"project_id":       "test-project",
+			"project_id":        "test-project",
 			"search_term":       "webhook",
 		})
 
@@ -1227,7 +1227,7 @@ func TestListTriggersTool(t *testing.T) {
 		request := newToolRequest(map[string]interface{}{
 			"target_identifier": "my-pipeline",
 			"org_id":            "test-org",
-			"project_id":       "test-project",
+			"project_id":        "test-project",
 		})
 
 		result, err := toolHandler(context.Background(), request)

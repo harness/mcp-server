@@ -646,8 +646,8 @@ func TestIdpExecuteWorkflowTool(t *testing.T) {
 		_, handler := ExecuteWorkflowTool(cfg, svc)
 		result, err := handler(context.Background(), newToolRequest(map[string]interface{}{
 			"workflow_details": map[string]interface{}{"name": "My Workflow"},
-			"identifier":      "wf-1",
-			"values":          map[string]interface{}{"param1": "value1"},
+			"identifier":       "wf-1",
+			"values":           map[string]interface{}{"param1": "value1"},
 		}))
 		require.NoError(t, err)
 		assert.False(t, result.IsError)
@@ -681,8 +681,8 @@ func TestIdpExecuteWorkflowTool(t *testing.T) {
 		_, handler := ExecuteWorkflowTool(cfg, svc)
 		_, err := handler(context.Background(), newToolRequest(map[string]interface{}{
 			"workflow_details": map[string]interface{}{"name": "My Workflow"},
-			"identifier":      "wf-1",
-			"values":          map[string]interface{}{"param1": "value1"},
+			"identifier":       "wf-1",
+			"values":           map[string]interface{}{"param1": "value1"},
 		}))
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to execute workflow")

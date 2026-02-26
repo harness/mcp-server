@@ -16,36 +16,36 @@ var ToolAliases = map[string]string{
 	"chaos_list_linux_infrastructures":      "list_linux_infrastructures",
 
 	// Chaos loadtest tools
-	"chaos_create_sample_loadtest":  "create_sample_loadtest",
+	"chaos_create_sample_loadtest":   "create_sample_loadtest",
 	"chaos_delete_loadtest_instance": "delete_loadtest_instance",
-	"chaos_get_loadtest_instance":   "get_loadtest_instance",
-	"chaos_list_loadtest_instances": "list_loadtest_instances",
-	"chaos_run_loadtest_instance":   "execute_loadtest_instance",
-	"chaos_stop_loadtest_run":       "stop_loadtest_run",
+	"chaos_get_loadtest_instance":    "get_loadtest_instance",
+	"chaos_list_loadtest_instances":  "list_loadtest_instances",
+	"chaos_run_loadtest_instance":    "execute_loadtest_instance",
+	"chaos_stop_loadtest_run":        "stop_loadtest_run",
 
 	// SCS → supply_chain tools
-	"scs_list_artifact_sources":                    "list_artifact_sources",
-	"scs_list_artifacts_per_source":                "list_source_artifacts",
-	"scs_get_artifact_overview":                    "get_artifact_overview",
-	"scs_get_artifact_chain_of_custody":            "get_artifact_chain_of_custody",
-	"scs_fetch_compliance_results_for_repo_by_id":  "get_repository_compliance_results",
-	"scs_get_code_repository_overview":             "get_code_repository_overview",
-	"scs_list_code_repos":                          "list_code_repositories",
-	"scs_create_opa_policy":                        "create_opa_policy",
-	"scs_download_sbom":                            "download_sbom",
-	"scs_get_artifact_component_remediation":       "get_artifact_component_remediation",
-	"scs_get_artifact_component_view":              "get_artifact_component_view",
+	"scs_list_artifact_sources":                   "list_artifact_sources",
+	"scs_list_artifacts_per_source":               "list_source_artifacts",
+	"scs_get_artifact_overview":                   "get_artifact_overview",
+	"scs_get_artifact_chain_of_custody":           "get_artifact_chain_of_custody",
+	"scs_fetch_compliance_results_for_repo_by_id": "get_repository_compliance_results",
+	"scs_get_code_repository_overview":            "get_code_repository_overview",
+	"scs_list_code_repos":                         "list_code_repositories",
+	"scs_create_opa_policy":                       "create_opa_policy",
+	"scs_download_sbom":                           "download_sbom",
+	"scs_get_artifact_component_remediation":      "get_artifact_component_remediation",
+	"scs_get_artifact_component_view":             "get_artifact_component_view",
 
 	// STO → security_testing tools
-	"get_all_security_issues":          "list_security_issues",
-	"sto_global_exemptions":            "list_global_exemptions",
+	"get_all_security_issues":            "list_security_issues",
+	"sto_global_exemptions":              "list_global_exemptions",
 	"sto_exemptions_promote_and_approve": "promote_and_approve_exemptions",
-	"exemptions_reject_and_approve":    "reject_and_approve_exemptions",
+	"exemptions_reject_and_approve":      "reject_and_approve_exemptions",
 
 	// FME → feature_flags tools
-	"list_fme_workspaces":            "list_workspaces",
-	"list_fme_environments":          "list_feature_flag_environments",
-	"list_fme_feature_flags":         "list_feature_flags",
+	"list_fme_workspaces":             "list_workspaces",
+	"list_fme_environments":           "list_feature_flag_environments",
+	"list_fme_feature_flags":          "list_feature_flags",
 	"get_fme_feature_flag_definition": "get_feature_flag",
 
 	// IDP → developer_portal tools
@@ -78,10 +78,10 @@ var ToolAliases = map[string]string{
 	"get_database_schema_info": "get_schema",
 
 	// Release management tools (internal)
-	"releasemgmt_search_releases":        "search_releases",
-	"releasemgmt_get_release_status":     "get_release_status",
-	"releasemgmt_get_tasks_for_release":  "get_release_tasks",
-	"releasemgmt_get_release_outputs":    "get_release_outputs",
+	"releasemgmt_search_releases":         "search_releases",
+	"releasemgmt_get_release_status":      "get_release_status",
+	"releasemgmt_get_tasks_for_release":   "get_release_tasks",
+	"releasemgmt_get_release_outputs":     "get_release_outputs",
 	"releasemgmt_list_release_activities": "list_release_activities",
 }
 
