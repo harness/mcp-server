@@ -215,7 +215,7 @@ func splitAndTrim(s, sep string) []string {
 
 // GetPullRequestChecksTool creates a tool for getting pull request status checks
 func GetPullRequestChecksTool(config *config.McpServerConfig, client *client.PullRequestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("get_pull_request_checks",
+	return mcp.NewTool("list_pull_request_checks",
 			mcp.WithDescription("Get status checks for a specific pull request in a Harness repository."),
 			mcp.WithString("repo_identifier",
 				mcp.Required(),
@@ -347,7 +347,7 @@ func CreatePullRequestTool(config *config.McpServerConfig, client *client.PullRe
 
 // GetPullRequestActivitiesTool creates a tool for getting activities (including comments) for a specific pull request
 func GetPullRequestActivitiesTool(config *config.McpServerConfig, client *client.PullRequestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("get_pull_request_activities",
+	return mcp.NewTool("list_pull_request_activities",
 			mcp.WithDescription("Get activities and comments for a specific pull request in a Harness repository."),
 			mcp.WithString("repo_id",
 				mcp.Required(),

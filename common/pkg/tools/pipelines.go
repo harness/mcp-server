@@ -98,7 +98,7 @@ func ListPipelinesTool(config *config.McpServerConfig, client *client.PipelineSe
 }
 
 func FetchExecutionURLTool(config *config.McpServerConfig, client *client.PipelineService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("fetch_execution_url",
+	return mcp.NewTool("get_execution_url",
 			mcp.WithDescription("Fetch the execution URL for a pipeline execution in Harness."),
 			mcp.WithString("pipeline_id",
 				mcp.Required(),

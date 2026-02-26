@@ -40,7 +40,7 @@ func (m *STOModule) Name() string {
 // Toolsets returns the names of toolsets provided by this module
 func (m *STOModule) Toolsets() []string {
 	return []string{
-		"sto",
+		"security_testing",
 	}
 }
 
@@ -48,7 +48,7 @@ func (m *STOModule) Toolsets() []string {
 func (m *STOModule) RegisterToolsets() error {
 	for _, t := range m.Toolsets() {
 		switch t {
-		case "sto":
+		case "security_testing":
 			if err := RegisterSTO(m.config, m.tsg); err != nil {
 				return err
 			}
@@ -95,7 +95,7 @@ func RegisterSTO(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) err
 		slog.Warn("Failed to create generated STO client. STO toolset will not be available", "error", err)
 		return nil
 	}
-	sto := toolsets.NewToolset("sto", "Harness Security Test Orchestration tools").
+	sto := toolsets.NewToolset("security_testing", "Harness Security Test Orchestration tools").
 		AddReadTools(
 			toolsets.NewServerTool(tools.StoAllIssuesListTool(config, stoClient)),
 			toolsets.NewServerTool(tools.StoGlobalExemptionsTool(config, stoClient, principalClient)),

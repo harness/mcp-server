@@ -138,7 +138,7 @@ func ListEnvironmentsTool(config *config.McpServerConfig, client *client.Environ
 // MoveEnvironmentConfigsTool creates a tool for moving environment YAML from inline to remote
 // https://apidocs.harness.io/tag/Environments#operation/moveEnvironmentConfigs
 func MoveEnvironmentConfigsTool(config *config.McpServerConfig, client *client.EnvironmentClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("move_environment_configs",
+	return mcp.NewTool("move_environment_config",
 			mcp.WithDescription("Move environment YAML from inline to remote in Harness. Note: Moving from remote to inline is not supported for environments."),
 			mcp.WithString("environment_identifier",
 				mcp.Required(),

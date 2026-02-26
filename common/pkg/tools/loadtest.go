@@ -15,7 +15,7 @@ import (
 
 // ListLoadTestsTool creates a tool for listing load tests
 func ListLoadTestsTool(config *config.McpServerConfig, client *client.LoadTestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_list_loadtest_instances",
+	return mcp.NewTool("list_loadtest_instances",
 			mcp.WithDescription("List all load tests in the project"),
 			common.WithScope(config, false),
 			WithPagination(),
@@ -52,8 +52,8 @@ func ListLoadTestsTool(config *config.McpServerConfig, client *client.LoadTestSe
 
 // GetLoadTestTool creates a tool for getting details of a specific load test
 func GetLoadTestTool(config *config.McpServerConfig, client *client.LoadTestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_get_loadtest_instance",
-			mcp.WithDescription("Get details of a specific load test, including its configuration, target URL, script content, and recent runs. Use chaos_list_loadtest_instances to find load test IDs."),
+	return mcp.NewTool("get_loadtest_instance",
+			mcp.WithDescription("Get details of a specific load test, including its configuration, target URL, script content, and recent runs. Use list_loadtest_instances to find load test IDs."),
 			common.WithScope(config, false),
 			mcp.WithString("load_test_id",
 				mcp.Description("The unique identifier of the load test"),
@@ -87,8 +87,8 @@ func GetLoadTestTool(config *config.McpServerConfig, client *client.LoadTestServ
 
 // RunLoadTestTool creates a tool for running a load test
 func RunLoadTestTool(config *config.McpServerConfig, client *client.LoadTestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_run_loadtest_instance",
-			mcp.WithDescription("Run a load test. If target_users, duration_seconds, or spawn_rate are not provided, the load test's default values will be used. Use chaos_list_loadtest_instances to find load test IDs."),
+	return mcp.NewTool("execute_loadtest_instance",
+			mcp.WithDescription("Run a load test. If target_users, duration_seconds, or spawn_rate are not provided, the load test's default values will be used. Use list_loadtest_instances to find load test IDs."),
 			common.WithScope(config, false),
 			mcp.WithString("load_test_id",
 				mcp.Description("The unique identifier of the load test to run"),
@@ -153,8 +153,8 @@ func RunLoadTestTool(config *config.McpServerConfig, client *client.LoadTestServ
 
 // StopLoadTestTool creates a tool for stopping a running load test
 func StopLoadTestTool(config *config.McpServerConfig, client *client.LoadTestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_stop_loadtest_run",
-			mcp.WithDescription("Stop a running load test run. Use chaos_get_loadtest_instance to find active run IDs."),
+	return mcp.NewTool("stop_loadtest_run",
+			mcp.WithDescription("Stop a running load test run. Use get_loadtest_instance to find active run IDs."),
 			common.WithScope(config, false),
 			mcp.WithString("run_id",
 				mcp.Description("The unique identifier of the load test run to stop"),
@@ -188,8 +188,8 @@ func StopLoadTestTool(config *config.McpServerConfig, client *client.LoadTestSer
 
 // DeleteLoadTestTool creates a tool for deleting a load test
 func DeleteLoadTestTool(config *config.McpServerConfig, client *client.LoadTestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_delete_loadtest_instance",
-			mcp.WithDescription("Delete a load test. Use chaos_list_loadtest_instances to find load test IDs."),
+	return mcp.NewTool("delete_loadtest_instance",
+			mcp.WithDescription("Delete a load test. Use list_loadtest_instances to find load test IDs."),
 			common.WithScope(config, false),
 			mcp.WithString("load_test_id",
 				mcp.Description("The unique identifier of the load test to delete"),
@@ -223,15 +223,15 @@ func DeleteLoadTestTool(config *config.McpServerConfig, client *client.LoadTestS
 
 // CreateSampleLoadTestTool creates a tool for creating a sample load test
 func CreateSampleLoadTestTool(config *config.McpServerConfig, client *client.LoadTestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_create_sample_loadtest",
-			mcp.WithDescription("Create a sample load test. Requires a name and a Linux infrastructure ID (use chaos_list_linux_infrastructures to find available infrastructure)."),
+	return mcp.NewTool("create_sample_loadtest",
+			mcp.WithDescription("Create a sample load test. Requires a name and a Linux infrastructure ID (use list_linux_infrastructures to find available infrastructure)."),
 			common.WithScope(config, false),
 			mcp.WithString("name",
 				mcp.Description("Name for the new sample load test"),
 				mcp.Required(),
 			),
 			mcp.WithString("infra_id",
-				mcp.Description("The Linux infrastructure ID to use (get from chaos_list_linux_infrastructures)"),
+				mcp.Description("The Linux infrastructure ID to use (get from list_linux_infrastructures)"),
 				mcp.Required(),
 			),
 		),

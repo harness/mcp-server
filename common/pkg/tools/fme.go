@@ -13,7 +13,7 @@ import (
 
 // ListFMEWorkspacesTool creates a tool for listing FME workspaces
 func ListFMEWorkspacesTool(config *config.McpServerConfig, fmeService *client.FMEService) (mcp.Tool, server.ToolHandlerFunc) {
-	return mcp.NewTool("list_fme_workspaces",
+	return mcp.NewTool("list_workspaces",
 			mcp.WithDescription("List Feature Management & Experimentation (FME) workspaces."),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -33,7 +33,7 @@ func ListFMEWorkspacesTool(config *config.McpServerConfig, fmeService *client.FM
 
 // ListFMEEnvironmentsTool creates a tool for listing FME environments for a specific workspace
 func ListFMEEnvironmentsTool(config *config.McpServerConfig, fmeService *client.FMEService) (mcp.Tool, server.ToolHandlerFunc) {
-	return mcp.NewTool("list_fme_environments",
+	return mcp.NewTool("list_feature_flag_environments",
 			mcp.WithDescription("List Feature Management & Experimentation (FME) environments for a specific workspace."),
 			mcp.WithString("ws_id",
 				mcp.Required(),
@@ -62,7 +62,7 @@ func ListFMEEnvironmentsTool(config *config.McpServerConfig, fmeService *client.
 
 // ListFMEFeatureFlagsTool creates a tool for listing FME feature flags for a specific workspace
 func ListFMEFeatureFlagsTool(config *config.McpServerConfig, fmeService *client.FMEService) (mcp.Tool, server.ToolHandlerFunc) {
-	return mcp.NewTool("list_fme_feature_flags",
+	return mcp.NewTool("list_feature_flags",
 			mcp.WithDescription("List Feature Management & Experimentation (FME) feature flags for a specific workspace."),
 			mcp.WithString("ws_id",
 				mcp.Required(),
@@ -91,7 +91,7 @@ func ListFMEFeatureFlagsTool(config *config.McpServerConfig, fmeService *client.
 
 // GetFMEFeatureFlagDefinitionTool creates a tool for getting a specific FME feature flag definition
 func GetFMEFeatureFlagDefinitionTool(config *config.McpServerConfig, fmeService *client.FMEService) (mcp.Tool, server.ToolHandlerFunc) {
-	return mcp.NewTool("get_fme_feature_flag_definition",
+	return mcp.NewTool("get_feature_flag",
 			mcp.WithDescription("Get the definition of a specific Feature Management & Experimentation (FME) feature flag in an environment."),
 			mcp.WithString("ws_id",
 				mcp.Required(),

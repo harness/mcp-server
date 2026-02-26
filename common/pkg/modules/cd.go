@@ -36,7 +36,7 @@ func (m *CDModule) Toolsets() []string {
 	return []string{
 		"services",
 		"environments",
-		"infrastructure",
+		"infrastructures",
 	}
 }
 
@@ -52,7 +52,7 @@ func (m *CDModule) RegisterToolsets() error {
 			if err := RegisterEnvironments(m.config, m.tsg); err != nil {
 				return err
 			}
-		case "infrastructure":
+		case "infrastructures":
 			if err := RegisterInfrastructure(m.config, m.tsg); err != nil {
 				return err
 			}
@@ -82,7 +82,7 @@ func RegisterInfrastructure(config *config.McpServerConfig, tsg *toolsets.Toolse
 	infrastructureClient := &client.InfrastructureClient{Client: c}
 
 	// Create the infrastructure toolset
-	infrastructure := toolsets.NewToolset("infrastructure", "Harness Infrastructure related tools").
+	infrastructure := toolsets.NewToolset("infrastructures", "Harness Infrastructure related tools").
 		AddReadTools(
 			toolsets.NewServerTool(tools.ListInfrastructuresTool(config, infrastructureClient)),
 		).

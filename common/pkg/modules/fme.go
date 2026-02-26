@@ -37,7 +37,7 @@ func (m *FMEModule) Name() string {
 // Toolsets returns the names of toolsets provided by this module
 func (m *FMEModule) Toolsets() []string {
 	return []string{
-		"fme",
+		"feature_flags",
 	}
 }
 
@@ -45,7 +45,7 @@ func (m *FMEModule) Toolsets() []string {
 func (m *FMEModule) RegisterToolsets() error {
 	for _, t := range m.Toolsets() {
 		switch t {
-		case "fme":
+		case "feature_flags":
 			if err := RegisterFeatureManagementAndExperimentation(m.config, m.tsg); err != nil {
 				return err
 			}
@@ -84,7 +84,7 @@ func RegisterFeatureManagementAndExperimentation(config *config.McpServerConfig,
 	}
 
 	// Create the FME toolset
-	fme := toolsets.NewToolset("fme", "Feature Management and Experimentation related tools").
+	fme := toolsets.NewToolset("feature_flags", "Feature Management and Experimentation related tools").
 		AddReadTools(
 			toolsets.NewServerTool(tools.ListFMEWorkspacesTool(config, fmeService)),
 			toolsets.NewServerTool(tools.ListFMEEnvironmentsTool(config, fmeService)),

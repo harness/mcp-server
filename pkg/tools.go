@@ -33,7 +33,7 @@ func InitToolsets(ctx context.Context, config *config.McpServerConfig) (*toolset
 	if !licenseInfo.IsValid || len(config.Toolsets) == 0 {
 		RegisterDefaultToolsets(config, tsg)
 
-		if err := tsg.EnableToolset("default"); err != nil {
+		if err := tsg.EnableToolset("core"); err != nil {
 			return nil, fmt.Errorf("failed to enable toolsets: %w", err)
 		}
 		tool_registration_utils.RegisterAllToolsetsWithTracker(ctx, tsg)
@@ -91,7 +91,7 @@ func RegisterDefaultToolsets(config *config.McpServerConfig, tsg *toolsets.Tools
 	dashboardServiceClient := &commonClient.DashboardService{Client: dashboardClient}
 
 	// Create the default toolset with essential tools
-	defaultToolset := toolsets.NewToolset("default", "Default essential Harness tools").AddReadTools(
+	defaultToolset := toolsets.NewToolset("core", "Default essential Harness tools").AddReadTools(
 		// Connector Management tools
 		toolsets.NewServerTool(commonTools.GetConnectorDetailsTool(config, connectorServiceClient)),
 		toolsets.NewServerTool(commonTools.ListConnectorCatalogueTool(config, connectorServiceClient)),
@@ -122,7 +122,7 @@ func RegisterAllowedToolsets(ctx context.Context, tsg *toolsets.ToolsetGroup, co
 			return err
 		}
 	}
-	if enableAll || slices.Contains(allowedToolsets, "default") {
+	if enableAll || slices.Contains(allowedToolsets, "core") {
 		if err := RegisterDefaultToolsets(config, tsg); err != nil {
 			return err
 		}
@@ -132,7 +132,7 @@ func RegisterAllowedToolsets(ctx context.Context, tsg *toolsets.ToolsetGroup, co
 			return err
 		}
 	}
-	if enableAll || slices.Contains(allowedToolsets, "pullrequests") {
+	if enableAll || slices.Contains(allowedToolsets, "pull_requests") {
 		if err := commonModules.RegisterPullRequests(config, tsg); err != nil {
 			return err
 		}
@@ -142,7 +142,7 @@ func RegisterAllowedToolsets(ctx context.Context, tsg *toolsets.ToolsetGroup, co
 			return err
 		}
 	}
-	if enableAll || slices.Contains(allowedToolsets, "registries") {
+	if enableAll || slices.Contains(allowedToolsets, "artifact_registry") {
 		if err := commonModules.RegisterRegistries(config, tsg); err != nil {
 			return err
 		}
@@ -197,17 +197,17 @@ func RegisterAllowedToolsets(ctx context.Context, tsg *toolsets.ToolsetGroup, co
 			return err
 		}
 	}
-	if enableAll || slices.Contains(allowedToolsets, "scs") {
+	if enableAll || slices.Contains(allowedToolsets, "supply_chain") {
 		if err := commonModules.RegisterSCS(config, tsg); err != nil {
 			return err
 		}
 	}
-	if enableAll || slices.Contains(allowedToolsets, "sto") {
+	if enableAll || slices.Contains(allowedToolsets, "security_testing") {
 		if err := commonModules.RegisterSTO(config, tsg); err != nil {
 			return err
 		}
 	}
-	if enableAll || slices.Contains(allowedToolsets, "idp") {
+	if enableAll || slices.Contains(allowedToolsets, "developer_portal") {
 		if err := commonModules.RegisterInternalDeveloperPortal(config, tsg); err != nil {
 			return err
 		}
@@ -222,7 +222,7 @@ func RegisterAllowedToolsets(ctx context.Context, tsg *toolsets.ToolsetGroup, co
 			return err
 		}
 	}
-	if enableAll || slices.Contains(allowedToolsets, "infrastructure") {
+	if enableAll || slices.Contains(allowedToolsets, "infrastructures") {
 		if err := commonModules.RegisterInfrastructure(config, tsg); err != nil {
 			return err
 		}
@@ -247,7 +247,7 @@ func RegisterAllowedToolsets(ctx context.Context, tsg *toolsets.ToolsetGroup, co
 			return err
 		}
 	}
-	if enableAll || slices.Contains(allowedToolsets, "fme") {
+	if enableAll || slices.Contains(allowedToolsets, "feature_flags") {
 		if err := commonModules.RegisterFeatureManagementAndExperimentation(config, tsg); err != nil {
 			return err
 		}

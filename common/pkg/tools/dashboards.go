@@ -163,7 +163,7 @@ func ListDashboardsTool(config *config.McpServerConfig, client *client.Dashboard
 
 // GetDashboardDataTool creates a tool for retrieving data from a specific dashboard
 func GetDashboardDataTool(config *config.McpServerConfig, client *client.DashboardService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("get_dashboard_data",
+	return mcp.NewTool("get_dashboard",
 			mcp.WithDescription("Retrieves the data from a specific Harness dashboard"),
 			mcp.WithString("dashboard_id",
 				mcp.Required(),

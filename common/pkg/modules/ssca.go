@@ -39,7 +39,7 @@ func (m *SSCAModule) Name() string {
 // Toolsets returns the names of toolsets provided by this module
 func (m *SSCAModule) Toolsets() []string {
 	return []string{
-		"scs",
+		"supply_chain",
 	}
 }
 
@@ -47,7 +47,7 @@ func (m *SSCAModule) Toolsets() []string {
 func (m *SSCAModule) RegisterToolsets() error {
 	for _, t := range m.Toolsets() {
 		switch t {
-		case "scs":
+		case "supply_chain":
 			if err := RegisterSCS(m.config, m.tsg); err != nil {
 				return err
 			}
@@ -89,7 +89,7 @@ func RegisterSCS(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) err
 		return fmt.Errorf("failed to create generated SCS client: %w", err)
 	}
 
-	scsToolset := toolsets.NewToolset("scs", "Harness Supply Chain Security tools").
+	scsToolset := toolsets.NewToolset("supply_chain", "Harness Supply Chain Security tools").
 		AddReadTools(
 			toolsets.NewServerTool(tools.ListSCSCodeReposTool(config, scsClient)),
 			toolsets.NewServerTool(tools.GetCodeRepositoryOverviewTool(config, scsClient)),

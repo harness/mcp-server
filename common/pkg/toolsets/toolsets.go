@@ -126,12 +126,15 @@ func (tg *ToolsetGroup) IsEnabled(name string) bool {
 // EnableToolsets enables multiple toolsets by name
 func (tg *ToolsetGroup) EnableToolsets(names []string) error {
 	if len(names) == 0 {
-		err := tg.EnableToolset("default")
+		err := tg.EnableToolset("core")
 		if err != nil {
 			return err
 		}
 		return nil
 	}
+
+	// Resolve any old toolset names to new names
+	names = ResolveToolsetAliases(names)
 
 	for _, name := range names {
 		if name == "all" {
@@ -158,6 +161,9 @@ func (tg *ToolsetGroup) EnableToolsets(names []string) error {
 
 // EnableToolset enables a specific toolset by name
 func (tg *ToolsetGroup) EnableToolset(name string) error {
+	// Resolve any old toolset name to new name
+	name = ResolveToolsetAlias(name)
+
 	toolset, exists := tg.Toolsets[name]
 	if !exists {
 		return fmt.Errorf("toolset %s does not exist", name)

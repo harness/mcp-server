@@ -127,7 +127,7 @@ func ListInfrastructuresTool(config *config.McpServerConfig, client *client.Infr
 // MoveInfrastructureConfigsTool creates a tool for moving configurations between infrastructures
 // https://apidocs.harness.io/tag/Infrastructures#operation/moveInfraConfigs
 func MoveInfrastructureConfigsTool(config *config.McpServerConfig, client *client.InfrastructureClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("move_infrastructure_configs",
+	return mcp.NewTool("move_infrastructure_config",
 			mcp.WithDescription("Move infrastructure YAML from inline to remote or vice versa in Harness."),
 			mcp.WithString("infra_identifier",
 				mcp.Required(),

@@ -46,7 +46,7 @@ func (m *IDPModule) Name() string {
 // Toolsets returns the names of toolsets provided by this module
 func (m *IDPModule) Toolsets() []string {
 	return []string{
-		"idp",
+		"developer_portal",
 	}
 }
 
@@ -54,7 +54,7 @@ func (m *IDPModule) Toolsets() []string {
 func (m *IDPModule) RegisterToolsets() error {
 	for _, t := range m.Toolsets() {
 		switch t {
-		case "idp":
+		case "developer_portal":
 			if err := RegisterInternalDeveloperPortal(m.config, m.tsg); err != nil {
 				return err
 			}
@@ -101,7 +101,7 @@ func RegisterInternalDeveloperPortal(config *config.McpServerConfig, tsg *toolse
 		toolsets.NewServerTool(tools.SearchTechDocsTool(config, idpClient)),
 	}
 
-	idp := toolsets.NewToolset("idp", "Harness Internal Developer Portal catalog related tools for managing catalog Entities which represent the core components of your system. It also hosts the technical documentation for the entities which can be used to answer questions regarding the installation/setup/configuration/testing or any other information about the entities.").
+	idp := toolsets.NewToolset("developer_portal", "Harness Internal Developer Portal catalog related tools for managing catalog Entities which represent the core components of your system. It also hosts the technical documentation for the entities which can be used to answer questions regarding the installation/setup/configuration/testing or any other information about the entities.").
 		AddReadTools(idpTools...)
 
 	// Add toolset to the group

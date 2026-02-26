@@ -294,7 +294,7 @@ func GetScoreSummaryTool(config *config.McpServerConfig, client *client.IDPServi
 }
 
 func GetScoresTool(config *config.McpServerConfig, client *client.IDPService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("get_scores",
+	return mcp.NewTool("list_scores",
 			mcp.WithDescription("Get Scores for Scorecards in the Harness Internal Developer Portal Catalog."),
 			mcp.WithString("entity_identifier",
 				mcp.Required(),

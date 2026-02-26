@@ -99,7 +99,7 @@ func GetAuditYamlTool(config *config.McpServerConfig, auditClient *client.AuditS
 
 // ListAuditsOfUser creates a tool for listing the audit trail.
 func ListUserAuditTrailTool(config *config.McpServerConfig, auditClient *client.AuditService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("list_user_audits",
+	return mcp.NewTool("list_audit_events",
 			mcp.WithDescription("List the audit trail."),
 			mcp.WithString("user_id_list",
 				mcp.Description("Enter one or more user email IDs (comma-separated) to filter the audit trail; leave blank to include all users."),
@@ -156,7 +156,7 @@ func ListUserAuditTrailTool(config *config.McpServerConfig, auditClient *client.
 			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			slog.InfoContext(ctx, "Handling list_user_audits request", "request", request.GetArguments())
+			slog.InfoContext(ctx, "Handling list_audit_events request", "request", request.GetArguments())
 
 			userIDList, err := OptionalParam[string](request, "user_id_list")
 			if err != nil {

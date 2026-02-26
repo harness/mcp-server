@@ -45,7 +45,7 @@ func (m *CODEModule) Name() string {
 func (m *CODEModule) Toolsets() []string {
 	return []string{
 		"repositories",
-		"pullrequests",
+		"pull_requests",
 	}
 }
 
@@ -57,7 +57,7 @@ func (m *CODEModule) RegisterToolsets() error {
 			if err := RegisterRepositories(m.config, m.tsg); err != nil {
 				return err
 			}
-		case "pullrequests":
+		case "pull_requests":
 			if err := RegisterPullRequests(m.config, m.tsg); err != nil {
 				return err
 			}
@@ -110,7 +110,7 @@ func RegisterPullRequests(config *config.McpServerConfig, tsg *toolsets.ToolsetG
 	pullRequestClient := &client.PullRequestService{Client: c}
 
 	// Create the pull requests toolset
-	pullrequests := toolsets.NewToolset("pullrequests", "Harness Pull Request related tools").
+	pullrequests := toolsets.NewToolset("pull_requests", "Harness Pull Request related tools").
 		AddReadTools(
 			toolsets.NewServerTool(tools.GetPullRequestTool(config, pullRequestClient)),
 			toolsets.NewServerTool(tools.ListPullRequestsTool(config, pullRequestClient)),

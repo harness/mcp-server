@@ -105,7 +105,7 @@ func fetchFilters(ctx context.Context, scope dto.Scope, client *generated.Client
 
 // StoAllIssuesListTool returns a tool for listing all issues from the STO Frontend.
 func StoAllIssuesListTool(config *config.McpServerConfig, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("get_all_security_issues",
+	return mcp.NewTool("list_security_issues",
 			mcp.WithDescription(`
                 List all issues or vulnerabilities from the STO. Show in data table format unless otherwise specified.
 				
@@ -297,7 +297,7 @@ func StoAllIssuesListTool(config *config.McpServerConfig, client *generated.Clie
 }
 
 func StoGlobalExemptionsTool(config *config.McpServerConfig, client *generated.ClientWithResponses, principalClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("sto_global_exemptions",
+	return mcp.NewTool("list_global_exemptions",
 			mcp.WithDescription(`
 		List global exemptions. **You must always provide exactly one status filter**
 
@@ -445,7 +445,7 @@ func StoGlobalExemptionsTool(config *config.McpServerConfig, client *generated.C
 
 // ExemptionsPromoteExemptionTool promotes a pending exemption to approval/rejection.
 func ExemptionsPromoteExemptionTool(config *config.McpServerConfig, client *generated.ClientWithResponses, principalClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("sto_exemptions_promote_and_approve",
+	return mcp.NewTool("promote_and_approve_exemptions",
 			mcp.WithDescription(`
 				Promote (approve) an exemption request at higher scope (Org or Account).
 			This tool could be used only for Approving an exemption either to Organization(Org) level or to Account level
@@ -556,7 +556,7 @@ func ExemptionsPromoteExemptionTool(config *config.McpServerConfig, client *gene
 
 // ExemptionsApproveExemptionTool approves or rejects an exemption request.
 func ExemptionsApproveExemptionTool(config *config.McpServerConfig, client *generated.ClientWithResponses, principalClient *client.PrincipalService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("exemptions_reject_and_approve",
+	return mcp.NewTool("reject_and_approve_exemptions",
 			mcp.WithDescription(`
 			Approve or reject an exemption request at its current (requested) scope.
 
@@ -565,7 +565,7 @@ func ExemptionsApproveExemptionTool(config *config.McpServerConfig, client *gene
 			- Always provide one Action to take: approve or reject
 			- Provide approve as an action to approve an exemption
 			- Provide reject as an action to reject an exemption
-			- Do NOT use this endpoint to promote an exemption to a higher scope (see exemptions_promote_and_approve).
+			- Do NOT use this endpoint to promote an exemption to a higher scope (see promote_and_approve_exemptions).
 			- You must provide the exemption id, the action (approve or reject), and the relevant scope identifiers.
 			- Optionally, you may provide a comment.
 

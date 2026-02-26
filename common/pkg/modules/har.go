@@ -37,7 +37,7 @@ func (m *HARModule) Name() string {
 // Toolsets returns the names of toolsets provided by this module
 func (m *HARModule) Toolsets() []string {
 	return []string{
-		"registries",
+		"artifact_registry",
 	}
 }
 
@@ -45,7 +45,7 @@ func (m *HARModule) Toolsets() []string {
 func (m *HARModule) RegisterToolsets() error {
 	for _, t := range m.Toolsets() {
 		switch t {
-		case "registries":
+		case "artifact_registry":
 			if err := RegisterRegistries(m.config, m.tsg); err != nil {
 				return err
 			}
@@ -90,7 +90,7 @@ func RegisterRegistries(config *config.McpServerConfig, tsg *toolsets.ToolsetGro
 	}
 
 	// Create the registries toolset
-	registries := toolsets.NewToolset("registries", "Harness Artifact Registry related tools").
+	registries := toolsets.NewToolset("artifact_registry", "Harness Artifact Registry related tools").
 		AddReadTools(
 			toolsets.NewServerTool(tools.GetRegistryTool(config, arClient)),
 			toolsets.NewServerTool(tools.ListRegistriesTool(config, arClient)),
