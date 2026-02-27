@@ -154,6 +154,13 @@ type ListProbeResponse struct {
 	TotalNoOfProbes int                `json:"totalNoOfProbes"`
 	Probes          []GetProbeResponse `json:"data"`
 }
+
+// ProbeBulkEnableRequest is the body for POST rest/v2/probes/:probeId/enable.
+type ProbeBulkEnableRequest struct {
+	IsEnabled    bool  `json:"isEnabled"`
+	IsBulkUpdate *bool `json:"isBulkUpdate,omitempty"` // when true, enable/disable probe across all experiments
+}
+
 type GetProbeResponse struct {
 	ProbeRequest `json:",inline"`
 	CreatedAt    int64 `json:"createdAt"`
@@ -257,6 +264,93 @@ type Pagination struct {
 	Limit      int64 `json:"limit"`
 	TotalPages int64 `json:"totalPages"`
 	TotalItems int64 `json:"totalItems"`
+}
+
+// ChaosFault represents a chaos fault (list/get response from rest/faults).
+type ChaosFault struct {
+	ID                  string     `json:"id,omitempty"`
+	Identity            string     `json:"identity"`
+	Name                string     `json:"name"`
+	Description         string     `json:"description"`
+	Tags                []string   `json:"tags"`
+	Category            []string   `json:"category"`
+	InfraType           string     `json:"infraType"`
+	Infras              []string   `json:"infras"`
+	Type                string     `json:"type"`
+	Template            string     `json:"template"`
+	TemplateUID         string     `json:"templateUid"`
+	TemplateReference   string     `json:"templateReference,omitempty"`
+	TemplateRevision    string     `json:"templateRevision,omitempty"`
+	ImportType          string     `json:"importType"`
+	Variables           []Variable `json:"variables"`
+	PermissionsRequired string     `json:"permissionsRequired"`
+	ManagedBy           string     `json:"managedBy,omitempty"`
+	IsEnterprise        bool       `json:"isEnterprise"`
+	ExperimentRunsCount int        `json:"experimentRunsCount"`
+	CreatedAt           int64      `json:"createdAt"`
+	UpdatedAt           int64      `json:"updatedAt"`
+}
+
+// ListFaultResponse is the response for GET rest/faults (list faults).
+type ListFaultResponse struct {
+	Data          []ChaosFault `json:"data"`
+	Pagination    Pagination   `json:"pagination"`
+	CorrelationID string       `json:"correlationID"`
+}
+
+// GetFaultResponse is the response for GET rest/faults/{identity} (get one fault).
+// ChaosFault is embedded so fault fields (identity, name, etc.) unmarshal from flat JSON.
+type GetFaultResponse struct {
+	CorrelationID string `json:"correlationID"`
+	ChaosFault
+	ManagedBy    string `json:"managedBy"`
+	IsEnterprise bool   `json:"isEnterprise"`
+}
+
+// FaultYaml is the response for GET rest/faults/{identity}/yaml.
+type FaultYaml struct {
+	CorrelationID string `json:"correlationID"`
+	Template      string `json:"template"`
+}
+
+// FaultVariables is the response for GET rest/faults/{identity}/variables (fault inputs).
+type FaultVariables struct {
+	CorrelationID       string     `json:"correlationID"`
+	Variables           []Variable `json:"variables"`
+	FaultAuthentication []Variable `json:"faultAuthentication"`
+	FaultTargets        []Variable `json:"faultTargets"`
+	FaultTunable        []Variable `json:"faultTunable"`
+}
+
+// ExperimentRunOfFault represents one experiment run in list experiment runs of fault response.
+type ExperimentRunOfFault struct {
+	NotifyID        *string      `json:"notifyID"`
+	ResiliencyScore *float64     `json:"resiliencyScore,omitempty"`
+	InfraID         string       `json:"infraID"`
+	ExperimentRunID string       `json:"experimentRunID"`
+	ExperimentID    string       `json:"experimentID"`
+	ExperimentName  string       `json:"experimentName"`
+	Phase           string       `json:"phase"`
+	FaultIDs        []string     `json:"faultIDs"`
+	RunSequence     int          `json:"runSequence"`
+	Completed       bool         `json:"completed"`
+	CreatedAt       int64        `json:"createdAt"`
+	UpdatedAt       int64        `json:"updatedAt"`
+	CreatedBy       *UserDetails `json:"createdBy,omitempty"`
+	UpdatedBy       *UserDetails `json:"updatedBy,omitempty"`
+}
+
+// UserDetails holds minimal user info in fault/experiment run responses.
+type UserDetails struct {
+	Name  string `json:"name,omitempty"`
+	Email string `json:"email,omitempty"`
+}
+
+// ListExperimentRunsInFaultResponse is the response for GET rest/faults/{identity}/experimentruns.
+type ListExperimentRunsInFaultResponse struct {
+	Data          []ExperimentRunOfFault `json:"data"`
+	Pagination    Pagination             `json:"pagination"`
+	CorrelationID string                 `json:"correlationID"`
 }
 
 type ListExperimentVariables struct {
