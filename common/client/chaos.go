@@ -3,23 +3,34 @@ package client
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/google/uuid"
 	"github.com/harness/mcp-server/common/client/dto"
 )
 
 const (
-	// Base API paths
+	// Base API paths for experiments
 	chaosListExperimentsPath          = "rest/v2/experiment"
 	chaosStopExperimentRunsPath       = "rest/v2/experiment/%s/stop"
 	chaosGetExperimentPath            = "rest/v2/experiments/%s"
 	chaosGetExperimentRunPipelinePath = "rest/v2/chaos-pipeline/%s"
 	chaosExperimentRunPath            = "rest/v2/experiments/%s/run"
-	chaosListProbesPath               = "rest/v2/probes"
-	chaosGetProbePath                 = "rest/v2/probes/%s"
+	chaosListExperimentVariables      = "rest/v2/experiments/%s/variables"
+	// Base API paths for probes
+	chaosListProbesPath       = "rest/v2/probes"
+	chaosGetProbePath         = "rest/v2/probes/%s"
+	chaosGetProbeManifestPath = "rest/v2/probes/manifest/%s"
+	chaosEnableProbePath      = "rest/v2/probes/%s/enable"
+	// Base API paths for experiment templates
 	chaosCreateExperimentFromTemplate = "rest/experimenttemplates/%s/launch"
 	chaosListExperimentTemplates      = "rest/experimenttemplates"
-	chaosListExperimentVariables      = "rest/v2/experiments/%s/variables"
+	// Base API paths for faults
+	chaosListFaultsPath                = "rest/faults"
+	chaosGetFaultPath                  = "rest/faults/%s"
+	chaosGetFaultVariablesPath         = "rest/faults/%s/variables"
+	chaosGetFaultYamlPath              = "rest/faults/%s/yaml"
+	chaosListExperimentRunsOfFaultPath = "rest/faults/%s/experimentruns"
 )
 
 type ChaosService struct {
@@ -128,6 +139,102 @@ func (c *ChaosService) RunExperiment(ctx context.Context, scope dto.Scope, exper
 	return experimentRun, nil
 }
 
+func (c *ChaosService) ListFaults(ctx context.Context, scope dto.Scope, pagination *dto.PaginationOptions, isEnterprise bool) (*dto.ListFaultResponse, error) {
+	var (
+		path   = chaosListFaultsPath
+		params = make(map[string]string)
+	)
+
+	setDefaultPagination(pagination)
+	params["page"] = fmt.Sprintf("%d", pagination.Page)
+	params["limit"] = fmt.Sprintf("%d", pagination.Size)
+
+	correlationID := uuid.New().String()
+	params["correlationID"] = correlationID
+	params = addIdentifierParams(params, scope)
+	if isEnterprise {
+		params["isEnterprise"] = "true"
+	}
+
+	slog.InfoContext(ctx, "ListFaults request", "path", path, "params", params, "correlationID", correlationID)
+
+	out := new(dto.ListFaultResponse)
+	if err := c.Client.Get(ctx, path, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to list faults: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) GetFaultVariables(ctx context.Context, scope dto.Scope, identity string, isEnterprise bool) (*dto.FaultVariables, error) {
+	var (
+		path   = fmt.Sprintf(chaosGetFaultVariablesPath, identity)
+		params = make(map[string]string)
+	)
+	params["correlationID"] = uuid.New().String()
+	params = addIdentifierParams(params, scope)
+	if isEnterprise {
+		params["isEnterprise"] = "true"
+	}
+
+	out := new(dto.FaultVariables)
+	if err := c.Client.Get(ctx, path, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to get fault variables: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) GetFault(ctx context.Context, scope dto.Scope, identity string, isEnterprise bool) (*dto.GetFaultResponse, error) {
+	path := fmt.Sprintf(chaosGetFaultPath, identity)
+	params := make(map[string]string)
+	params["correlationID"] = uuid.New().String()
+	params = addIdentifierParams(params, scope)
+	if isEnterprise {
+		params["isEnterprise"] = "true"
+	}
+
+	out := new(dto.GetFaultResponse)
+	if err := c.Client.Get(ctx, path, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to get fault: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) GetFaultYaml(ctx context.Context, scope dto.Scope, identity string, isEnterprise bool) (*dto.FaultYaml, error) {
+	path := fmt.Sprintf(chaosGetFaultYamlPath, identity)
+	params := make(map[string]string)
+	params["correlationID"] = uuid.New().String()
+	params = addIdentifierParams(params, scope)
+	if isEnterprise {
+		params["isEnterprise"] = "true"
+	}
+
+	out := new(dto.FaultYaml)
+	if err := c.Client.Get(ctx, path, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to get fault yaml: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) ListExperimentRunsOfFault(ctx context.Context, scope dto.Scope, identity string, pagination *dto.PaginationOptions, isEnterprise bool) (*dto.ListExperimentRunsInFaultResponse, error) {
+	path := fmt.Sprintf(chaosListExperimentRunsOfFaultPath, identity)
+	params := make(map[string]string)
+
+	setDefaultPagination(pagination)
+	params["page"] = fmt.Sprintf("%d", pagination.Page)
+	params["limit"] = fmt.Sprintf("%d", pagination.Size)
+	params["correlationID"] = uuid.New().String()
+	params = addIdentifierParams(params, scope)
+	if isEnterprise {
+		params["isEnterprise"] = "true"
+	}
+
+	out := new(dto.ListExperimentRunsInFaultResponse)
+	if err := c.Client.Get(ctx, path, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to list experiment runs of fault: %w", err)
+	}
+	return out, nil
+}
+
 func (c *ChaosService) ListProbes(ctx context.Context, scope dto.Scope, pagination *dto.PaginationOptions) (*dto.ListProbeResponse, error) {
 	var (
 		path   = chaosListProbesPath
@@ -168,6 +275,31 @@ func (c *ChaosService) GetProbe(ctx context.Context, scope dto.Scope, probeID st
 	}
 
 	return getProbe, nil
+}
+
+// GetProbeManifest returns the probe YAML manifest (chaos engine compatible) for the given probe ID.
+func (c *ChaosService) GetProbeManifest(ctx context.Context, scope dto.Scope, probeID string) (string, error) {
+	path := fmt.Sprintf(chaosGetProbeManifestPath, probeID)
+	params := addIdentifierParams(make(map[string]string), scope)
+
+	var manifest string
+	if err := c.Client.Get(ctx, path, params, nil, &manifest); err != nil {
+		return "", fmt.Errorf("failed to get probe manifest: %w", err)
+	}
+	return manifest, nil
+}
+
+// EnableProbe enables or disables a probe (optionally bulk across experiments).
+func (c *ChaosService) EnableProbe(ctx context.Context, scope dto.Scope, probeID string, isEnabled bool, isBulkUpdate *bool) (string, error) {
+	path := fmt.Sprintf(chaosEnableProbePath, probeID)
+	params := addIdentifierParams(make(map[string]string), scope)
+
+	body := dto.ProbeBulkEnableRequest{IsEnabled: isEnabled, IsBulkUpdate: isBulkUpdate}
+	var resp string
+	if err := c.Client.Post(ctx, path, params, body, nil, &resp); err != nil {
+		return "", fmt.Errorf("failed to enable/disable probe: %w", err)
+	}
+	return resp, nil
 }
 
 func (c *ChaosService) ListExperimentTemplates(ctx context.Context, scope dto.Scope, pagination *dto.PaginationOptions, hubIdentity string, infrastructureType string) (*dto.ListExperimentTemplateResponse, error) {
