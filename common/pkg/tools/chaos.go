@@ -380,6 +380,305 @@ func GetProbeTool(config *config.McpServerConfig, client *client.ChaosService) (
 		}
 }
 
+// GetProbeManifestTool creates a tool to get the probe YAML manifest (chaos engine compatible).
+func GetProbeManifestTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_probe_manifest",
+			mcp.WithDescription("Get the YAML manifest for a chaos probe by its ID (compatible with chaos engine)"),
+			common.WithScope(config, false),
+			mcp.WithString("probeId",
+				mcp.Description("Unique Identifier for the probe"),
+				mcp.Required(),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			probeID, err := RequiredParam[string](request, "probeId")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			manifest, err := client.GetProbeManifest(ctx, scope, probeID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get probe manifest: %w", err)
+			}
+
+			// Return as JSON object for consistency with other tools
+			r, err := json.Marshal(map[string]string{"manifest": manifest})
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal probe manifest response: %v", err)), nil
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+// EnableProbeTool creates a tool to enable or disable a chaos probe.
+func EnableProbeTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_probe_enable",
+			mcp.WithDescription("Enable or disable a chaos probe by ID; optionally bulk-update across all experiments"),
+			common.WithScope(config, false),
+			mcp.WithString("probeId",
+				mcp.Description("Unique Identifier for the probe"),
+				mcp.Required(),
+			),
+			mcp.WithBoolean("isEnabled",
+				mcp.Description("True to enable the probe, false to disable"),
+				mcp.Required(),
+			),
+			mcp.WithBoolean("isBulkUpdate",
+				mcp.Description("When true, enable/disable the probe across all experiments that use it"),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			probeID, err := RequiredParam[string](request, "probeId")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			isEnabled, ok, err := OptionalParamOK[bool](request, "isEnabled")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if !ok {
+				return mcp.NewToolResultError("missing required parameter: isEnabled"), nil
+			}
+
+			var isBulkUpdate *bool
+			if bulkVal, bulkOK, _ := OptionalParamOK[bool](request, "isBulkUpdate"); bulkOK {
+				isBulkUpdate = &bulkVal
+			}
+
+			msg, err := client.EnableProbe(ctx, scope, probeID, isEnabled, isBulkUpdate)
+			if err != nil {
+				return nil, fmt.Errorf("failed to enable/disable probe: %w", err)
+			}
+
+			r, err := json.Marshal(map[string]string{"message": msg})
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal enable probe response: %v", err)), nil
+			}
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+// ListFaultsTool creates a tool for listing chaos faults in a project.
+func ListFaultsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_faults_list",
+			mcp.WithDescription("List the chaos faults"),
+			common.WithScope(config, false),
+			WithPagination(),
+			mcp.WithBoolean("isEnterprise",
+				mcp.Description("When true, list only enterprise faults"),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			page, size, err := FetchPagination(request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			pagination := &dto.PaginationOptions{
+				Page: page,
+				Size: size,
+			}
+
+			isEnterprise, _ := OptionalParam[bool](request, "isEnterprise")
+
+			data, err := client.ListFaults(ctx, scope, pagination, isEnterprise)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal list chaos faults response: %v", err)), nil
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+// GetFaultVariablesTool creates a tool to get the inputs/variables of a chaos fault.
+func GetFaultVariablesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_fault_variables",
+			mcp.WithDescription("Retrieves the list of inputs and variables (variables, faultAuthentication, faultTargets, faultTunable) for a chaos fault by its identity"),
+			common.WithScope(config, false),
+			mcp.WithString("identity",
+				mcp.Description("Unique identity of the fault"),
+				mcp.Required(),
+			),
+			mcp.WithBoolean("isEnterprise",
+				mcp.Description("When true, get variables for an enterprise fault"),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			identity, err := RequiredParam[string](request, "identity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			isEnterprise, _ := OptionalParam[bool](request, "isEnterprise")
+
+			data, err := client.GetFaultVariables(ctx, scope, identity, isEnterprise)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal fault variables response: %v", err)), nil
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+// GetFaultTool creates a tool to get a single chaos fault by identity.
+func GetFaultTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_fault_describe",
+			mcp.WithDescription("Get details of a single chaos fault by its identity"),
+			common.WithScope(config, false),
+			mcp.WithString("identity",
+				mcp.Description("Unique identity of the fault"),
+				mcp.Required(),
+			),
+			mcp.WithBoolean("isEnterprise",
+				mcp.Description("When true, get an enterprise fault"),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			identity, err := RequiredParam[string](request, "identity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			isEnterprise, _ := OptionalParam[bool](request, "isEnterprise")
+
+			data, err := client.GetFault(ctx, scope, identity, isEnterprise)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get fault: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal get fault response: %v", err)), nil
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+// GetFaultYamlTool creates a tool to get the fault template YAML by identity.
+func GetFaultYamlTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_fault_yaml",
+			mcp.WithDescription("Get the fault template YAML for a chaos fault by its identity"),
+			common.WithScope(config, false),
+			mcp.WithString("identity",
+				mcp.Description("Unique identity of the fault"),
+				mcp.Required(),
+			),
+			mcp.WithBoolean("isEnterprise",
+				mcp.Description("When true, get YAML for an enterprise fault"),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			identity, err := RequiredParam[string](request, "identity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			isEnterprise, _ := OptionalParam[bool](request, "isEnterprise")
+
+			data, err := client.GetFaultYaml(ctx, scope, identity, isEnterprise)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get fault yaml: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal fault yaml response: %v", err)), nil
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+// ListExperimentRunsOfFaultTool creates a tool to list experiment runs for a chaos fault.
+func ListExperimentRunsOfFaultTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_fault_experiment_runs",
+			mcp.WithDescription("List experiment runs for a chaos fault by its identity"),
+			common.WithScope(config, false),
+			mcp.WithString("identity",
+				mcp.Description("Unique identity of the fault"),
+				mcp.Required(),
+			),
+			WithPagination(),
+			mcp.WithBoolean("isEnterprise",
+				mcp.Description("When true, list runs for an enterprise fault"),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			identity, err := RequiredParam[string](request, "identity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			page, size, err := FetchPagination(request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			pagination := &dto.PaginationOptions{Page: page, Size: size}
+			isEnterprise, _ := OptionalParam[bool](request, "isEnterprise")
+
+			data, err := client.ListExperimentRunsOfFault(ctx, scope, identity, pagination, isEnterprise)
+			if err != nil {
+				return nil, fmt.Errorf("failed to list experiment runs of fault: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal list experiment runs of fault response: %v", err)), nil
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
 // CreateExperimentFromTemplateTool creates a tool to create the experiment from template
 func CreateExperimentFromTemplateTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("chaos_create_experiment_from_template",

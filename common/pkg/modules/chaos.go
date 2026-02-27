@@ -84,15 +84,26 @@ func RegisterChaos(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) e
 	// Create the CHAOS toolset
 	chaos := toolsets.NewToolset("chaos", "Harness Chaos Engineering related tools").
 		AddReadTools(
+			// Experiments tools
 			toolsets.NewServerTool(tools.ListExperimentsTool(config, chaosClient)),
 			toolsets.NewServerTool(tools.GetExperimentsTool(config, chaosClient)),
 			toolsets.NewServerTool(tools.GetExperimentRunsTool(config, chaosClient)),
 			toolsets.NewServerTool(tools.RunExperimentTool(config, chaosClient)),
+			// Probes tools
 			toolsets.NewServerTool(tools.ListProbesTool(config, chaosClient)),
 			toolsets.NewServerTool(tools.GetProbeTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.GetProbeManifestTool(config, chaosClient)),
+			// Faults tools
+			toolsets.NewServerTool(tools.ListFaultsTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.GetFaultTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.GetFaultVariablesTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.GetFaultYamlTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.ListExperimentRunsOfFaultTool(config, chaosClient)),
+			// Experiment templates tools
 			toolsets.NewServerTool(tools.ListExperimentTemplatesTool(config, chaosClient)),
 			toolsets.NewServerTool(tools.CreateExperimentFromTemplateTool(config, chaosClient)),
 			toolsets.NewServerTool(tools.ListExperimentVariablesTool(config, chaosClient)),
+			// Load Tests tools
 			toolsets.NewServerTool(tools.ListLoadTestsTool(config, loadTestService)),
 			toolsets.NewServerTool(tools.GetLoadTestTool(config, loadTestService)),
 			toolsets.NewServerTool(tools.ListLinuxInfrastructuresTool(config, chaosClient)),
@@ -103,6 +114,7 @@ func RegisterChaos(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) e
 			toolsets.NewServerTool(tools.DeleteLoadTestTool(config, loadTestService)),
 			toolsets.NewServerTool(tools.CreateSampleLoadTestTool(config, loadTestService)),
 			toolsets.NewServerTool(tools.StopExperimentRunsTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.EnableProbeTool(config, chaosClient)),
 		)
 
 	// Add toolset to the group
