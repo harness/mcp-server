@@ -145,6 +145,13 @@ type CCMCostTarget struct {
 	Rules []CCMRule `json:"rules"`
 }
 
+type CCMCostCategoryEventPayload struct {
+	CostTargets     []CCMCostTarget     `json:"costTargets"`
+	Name            string              `json:"name,omitempty"`
+	SharedCosts     []CCMSharedCost     `json:"sharedCosts,omitempty"`
+	UnallocatedCost *CCMUnallocatedCost `json:"unallocatedCost,omitempty"`
+}
+
 type CCMSharedCost struct {
 	Name     string     `json:"name"`
 	Rules    []CCMRule  `json:"rules"`
