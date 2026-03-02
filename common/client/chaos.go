@@ -31,6 +31,7 @@ const (
 	chaosGetFaultVariablesPath         = "rest/faults/%s/variables"
 	chaosGetFaultYamlPath              = "rest/faults/%s/yaml"
 	chaosListExperimentRunsOfFaultPath = "rest/faults/%s/experimentruns"
+	chaosDeleteFaultPath              = "rest/faults/%s"
 )
 
 type ChaosService struct {
@@ -231,6 +232,19 @@ func (c *ChaosService) ListExperimentRunsOfFault(ctx context.Context, scope dto.
 	out := new(dto.ListExperimentRunsInFaultResponse)
 	if err := c.Client.Get(ctx, path, params, nil, out); err != nil {
 		return nil, fmt.Errorf("failed to list experiment runs of fault: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) DeleteFault(ctx context.Context, scope dto.Scope, identity string) (*dto.DeleteFaultResponse, error) {
+	path := fmt.Sprintf(chaosDeleteFaultPath, identity)
+	params := make(map[string]string)
+	params["correlationID"] = uuid.New().String()
+	params = addIdentifierParams(params, scope)
+
+	out := new(dto.DeleteFaultResponse)
+	if err := c.Client.Delete(ctx, path, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to delete fault: %w", err)
 	}
 	return out, nil
 }
