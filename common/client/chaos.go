@@ -31,7 +31,7 @@ const (
 	chaosGetFaultVariablesPath         = "rest/faults/%s/variables"
 	chaosGetFaultYamlPath              = "rest/faults/%s/yaml"
 	chaosListExperimentRunsOfFaultPath = "rest/faults/%s/experimentruns"
-	chaosDeleteFaultPath              = "rest/faults/%s"
+	chaosDeleteFaultPath               = "rest/faults/%s"
 )
 
 type ChaosService struct {
