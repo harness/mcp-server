@@ -679,6 +679,43 @@ func ListExperimentRunsOfFaultTool(config *config.McpServerConfig, client *clien
 		}
 }
 
+// DeleteFaultTool creates a tool to delete a chaos fault by its identity.
+// The upstream API performs a soft-delete and rejects the request if the fault
+// is still referenced by any experiment.
+func DeleteFaultTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_fault_delete",
+			mcp.WithDescription("Delete a chaos fault by its identity. The fault must not be in use by any experiment. This performs a soft-delete."),
+			common.WithScope(config, false),
+			mcp.WithString("identity",
+				mcp.Description("Unique identity of the fault to delete"),
+				mcp.Required(),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			identity, err := RequiredParam[string](request, "identity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.DeleteFault(ctx, scope, identity)
+			if err != nil {
+				return nil, fmt.Errorf("failed to delete fault: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal delete fault response: %v", err)), nil
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
 // CreateExperimentFromTemplateTool creates a tool to create the experiment from template
 func CreateExperimentFromTemplateTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("chaos_create_experiment_from_template",
