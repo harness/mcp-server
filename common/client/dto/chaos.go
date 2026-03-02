@@ -266,43 +266,66 @@ type Pagination struct {
 	TotalItems int64 `json:"totalItems"`
 }
 
-// ChaosFault represents a chaos fault (list/get response from rest/faults).
-type ChaosFault struct {
-	ID                  string     `json:"id,omitempty"`
-	Identity            string     `json:"identity"`
-	Name                string     `json:"name"`
-	Description         string     `json:"description"`
-	Tags                []string   `json:"tags"`
-	Category            []string   `json:"category"`
-	InfraType           string     `json:"infraType"`
-	Infras              []string   `json:"infras"`
-	Type                string     `json:"type"`
-	Template            string     `json:"template"`
-	TemplateUID         string     `json:"templateUid"`
-	TemplateReference   string     `json:"templateReference,omitempty"`
-	TemplateRevision    string     `json:"templateRevision,omitempty"`
-	ImportType          string     `json:"importType"`
-	Variables           []Variable `json:"variables"`
-	PermissionsRequired string     `json:"permissionsRequired"`
-	ManagedBy           string     `json:"managedBy,omitempty"`
-	IsEnterprise        bool       `json:"isEnterprise"`
-	ExperimentRunsCount int        `json:"experimentRunsCount"`
-	CreatedAt           int64      `json:"createdAt"`
-	UpdatedAt           int64      `json:"updatedAt"`
+// ResourceDetails mirrors hce-sdk/schema/common.ResourceDetails.
+type ResourceDetails struct {
+	Name        string   `json:"name"`
+	Identity    string   `json:"identity"`
+	Description string   `json:"description,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+}
+
+// MetaData mirrors hce-sdk/schema/common.MetaData.
+type MetaData struct {
+	Kind       string `json:"kind"`
+	APIVersion string `json:"apiVersion"`
+}
+
+// TemplateReference mirrors hce-sdk/schema/fault.TemplateReference
+// (with common.IdentifierReference inlined).
+type TemplateReference struct {
+	OrganizationIdentifier string `json:"organizationIdentifier,omitempty"`
+	ProjectIdentifier      string `json:"projectIdentifier,omitempty"`
+	Identity               string `json:"identity"`
+	Revision               string `json:"revision"`
+	HubIdentity            string `json:"hubIdentity"`
+}
+
+// Link mirrors hce-sdk/schema/fault.Link.
+type Link struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
+// Fault mirrors hce-sdk/schema/fault.Fault.
+type Fault struct {
+	ResourceDetails     `json:",inline"`
+	MetaData            `json:",inline"`
+	Category            []string           `json:"category"`
+	Type                string             `json:"type"`
+	InfraType           string             `json:"infraType"`
+	Infras              []string           `json:"infras"`
+	Spec                interface{}        `json:"spec"`
+	Variables           []Variable         `json:"variables"`
+	TemplateReference   *TemplateReference `json:"templateReference,omitempty"`
+	Values              []VariableMinimum  `json:"values"`
+	PermissionsRequired string             `json:"permissionsRequired"`
+	Links               []Link             `json:"links"`
+	ImportType          string             `json:"importType"`
+	UpdatedAt           int64              `json:"updatedAt"`
 }
 
 // ListFaultResponse is the response for GET rest/faults (list faults).
 type ListFaultResponse struct {
-	Data          []ChaosFault `json:"data"`
-	Pagination    Pagination   `json:"pagination"`
-	CorrelationID string       `json:"correlationID"`
+	Data          []Fault    `json:"data"`
+	Pagination    Pagination `json:"pagination"`
+	CorrelationID string     `json:"correlationID"`
 }
 
 // GetFaultResponse is the response for GET rest/faults/{identity} (get one fault).
-// ChaosFault is embedded so fault fields (identity, name, etc.) unmarshal from flat JSON.
+// Mirrors hce-saas GetFaultResponse which embeds fault.Fault inline.
 type GetFaultResponse struct {
 	CorrelationID string `json:"correlationID"`
-	ChaosFault
+	Fault
 	ManagedBy    string `json:"managedBy"`
 	IsEnterprise bool   `json:"isEnterprise"`
 }
@@ -351,6 +374,12 @@ type ListExperimentRunsInFaultResponse struct {
 	Data          []ExperimentRunOfFault `json:"data"`
 	Pagination    Pagination             `json:"pagination"`
 	CorrelationID string                 `json:"correlationID"`
+}
+
+// DeleteFaultResponse is the response for DELETE rest/faults/{identity}.
+// The upstream API returns an empty JSON object on success.
+type DeleteFaultResponse struct {
+	CorrelationID string `json:"correlationID,omitempty"`
 }
 
 type ListExperimentVariables struct {
