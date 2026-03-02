@@ -33,6 +33,7 @@ func TestCreateCostCategoriesCostTargetsEventTool(t *testing.T) {
 		request := mcp.CallToolRequest{}
 		request.Params.Name = "ccm_translate_to_cost_categories_cost_targets"
 		request.Params.Arguments = map[string]interface{}{
+			"cost_category_name": "Test Category",
 			"cost_target_groupings": []interface{}{
 				map[string]interface{}{
 					"title":  "Production Environments",
@@ -57,16 +58,16 @@ func TestCreateCostCategoriesCostTargetsEventTool(t *testing.T) {
 		err = json.Unmarshal([]byte(textResource.Text), &eventData)
 		require.NoError(t, err, "Should be able to parse event data")
 		assert.Equal(t, CCMCostCategoryCostTargetsEventType, eventData.Type, "Event type should match")
-		// Parse the response data
-		var costTargets []dto.CCMCostTarget
+		// Parse the response data as wrapper payload
+		var payload dto.CCMCostCategoryEventPayload
 		dataBytes, _ := json.Marshal(eventData.Content)
-		err = json.Unmarshal(dataBytes, &costTargets)
-		require.NoError(t, err, "Should be able to parse cost targets")
-		assert.Len(t, costTargets, 1, "Should have one cost target")
-		assert.Equal(t, "Production Environments", costTargets[0].Name, "Cost target name should match")
-		assert.Len(t, costTargets[0].Rules, 1, "Should have one rule")
+		err = json.Unmarshal(dataBytes, &payload)
+		require.NoError(t, err, "Should be able to parse payload")
+		assert.Len(t, payload.CostTargets, 1, "Should have one cost target")
+		assert.Equal(t, "Production Environments", payload.CostTargets[0].Name, "Cost target name should match")
+		assert.Len(t, payload.CostTargets[0].Rules, 1, "Should have one rule")
 		// Verify the rule structure
-		rule := costTargets[0].Rules[0]
+		rule := payload.CostTargets[0].Rules[0]
 		assert.NotNil(t, rule.ViewConditions, "Rule should have view conditions")
 		assert.Len(t, rule.ViewConditions, 1, "Rule should have one condition")
 	})
@@ -76,6 +77,7 @@ func TestCreateCostCategoriesCostTargetsEventTool(t *testing.T) {
 		request.Params.Name = "ccm_translate_to_cost_categories_cost_targets"
 		// Direct array format (MCP Inspector)
 		request.Params.Arguments = map[string]interface{}{
+			"cost_category_name": "Test Category",
 			"cost_target_groupings": []interface{}{
 				map[string]interface{}{
 					"title":  "Production Environments",
@@ -99,18 +101,19 @@ func TestCreateCostCategoriesCostTargetsEventTool(t *testing.T) {
 		require.True(t, ok, "Resource should be text content")
 		var eventData event.CustomEvent
 		json.Unmarshal([]byte(textResource.Text), &eventData)
-		var costTargets []dto.CCMCostTarget
+		var payload dto.CCMCostCategoryEventPayload
 		dataBytes, _ := json.Marshal(eventData.Content)
-		json.Unmarshal(dataBytes, &costTargets)
-		assert.Len(t, costTargets, 2, "Should have two cost targets")
-		assert.Equal(t, "Production Environments", costTargets[0].Name)
-		assert.Equal(t, "Development Environments", costTargets[1].Name)
+		json.Unmarshal(dataBytes, &payload)
+		assert.Len(t, payload.CostTargets, 2, "Should have two cost targets")
+		assert.Equal(t, "Production Environments", payload.CostTargets[0].Name)
+		assert.Equal(t, "Development Environments", payload.CostTargets[1].Name)
 	})
 	t.Run("Valid Cost Target Groupings - Multiple Keys", func(t *testing.T) {
 		ctx := context.Background()
 		request := mcp.CallToolRequest{}
 		request.Params.Name = "ccm_translate_to_cost_categories_cost_targets"
 		request.Params.Arguments = map[string]interface{}{
+			"cost_category_name": "Test Category",
 			"cost_target_groupings": []interface{}{
 				map[string]interface{}{
 					"title":  "Multi-Key Target",
@@ -129,13 +132,13 @@ func TestCreateCostCategoriesCostTargetsEventTool(t *testing.T) {
 		require.True(t, ok, "Resource should be text content")
 		var eventData event.CustomEvent
 		json.Unmarshal([]byte(textResource.Text), &eventData)
-		var costTargets []dto.CCMCostTarget
+		var payload dto.CCMCostCategoryEventPayload
 		dataBytes, _ := json.Marshal(eventData.Content)
-		json.Unmarshal(dataBytes, &costTargets)
-		assert.Len(t, costTargets, 1, "Should have one cost target")
-		assert.Len(t, costTargets[0].Rules, 2, "Should have two rules (one per key)")
+		json.Unmarshal(dataBytes, &payload)
+		assert.Len(t, payload.CostTargets, 1, "Should have one cost target")
+		assert.Len(t, payload.CostTargets[0].Rules, 2, "Should have two rules (one per key)")
 		// Verify rule structure for both keys
-		for i, rule := range costTargets[0].Rules {
+		for i, rule := range payload.CostTargets[0].Rules {
 			assert.Len(t, rule.ViewConditions, 1, "Each rule should have one condition")
 			condition := rule.ViewConditions[0].(map[string]interface{})
 			viewField := condition["viewField"].(map[string]interface{})
@@ -239,6 +242,7 @@ func TestCreateCostCategoriesCostTargetsEventTool(t *testing.T) {
 		request := mcp.CallToolRequest{}
 		request.Params.Name = "ccm_translate_to_cost_categories_cost_targets"
 		request.Params.Arguments = map[string]interface{}{
+			"cost_category_name":    "Test Category",
 			"cost_target_groupings": []interface{}{},
 		}
 		result, err := handler(ctx, request)
@@ -251,16 +255,17 @@ func TestCreateCostCategoriesCostTargetsEventTool(t *testing.T) {
 		require.True(t, ok, "Resource should be text content")
 		var eventData event.CustomEvent
 		json.Unmarshal([]byte(textResource.Text), &eventData)
-		var costTargets []dto.CCMCostTarget
+		var payload dto.CCMCostCategoryEventPayload
 		dataBytes, _ := json.Marshal(eventData.Content)
-		json.Unmarshal(dataBytes, &costTargets)
-		assert.Empty(t, costTargets, "Should have no cost targets")
+		json.Unmarshal(dataBytes, &payload)
+		assert.Empty(t, payload.CostTargets, "Should have no cost targets")
 	})
 	t.Run("Rule Structure Validation", func(t *testing.T) {
 		ctx := context.Background()
 		request := mcp.CallToolRequest{}
 		request.Params.Name = "ccm_translate_to_cost_categories_cost_targets"
 		request.Params.Arguments = map[string]interface{}{
+			"cost_category_name": "Test Category",
 			"cost_target_groupings": []interface{}{
 				map[string]interface{}{
 					"title":  "Test Environment",
@@ -279,11 +284,11 @@ func TestCreateCostCategoriesCostTargetsEventTool(t *testing.T) {
 		require.True(t, ok, "Resource should be text content")
 		var eventData event.CustomEvent
 		json.Unmarshal([]byte(textResource.Text), &eventData)
-		var costTargets []dto.CCMCostTarget
+		var payload dto.CCMCostCategoryEventPayload
 		dataBytes, _ := json.Marshal(eventData.Content)
-		json.Unmarshal(dataBytes, &costTargets)
-		assert.Len(t, costTargets, 1)
-		rule := costTargets[0].Rules[0]
+		json.Unmarshal(dataBytes, &payload)
+		assert.Len(t, payload.CostTargets, 1)
+		rule := payload.CostTargets[0].Rules[0]
 		condition := rule.ViewConditions[0].(map[string]interface{})
 		viewField := condition["viewField"].(map[string]interface{})
 		// Verify all required fields
@@ -304,6 +309,7 @@ func TestCreateCostCategoriesCostTargetsEventTool(t *testing.T) {
 		request := mcp.CallToolRequest{}
 		request.Params.Name = "ccm_translate_to_cost_categories_cost_targets"
 		request.Params.Arguments = map[string]interface{}{
+			"cost_category_name": "Test Category",
 			"cost_target_groupings": []interface{}{
 				map[string]interface{}{
 					"title":  "Staging",
@@ -324,6 +330,385 @@ func TestCreateCostCategoriesCostTargetsEventTool(t *testing.T) {
 		json.Unmarshal([]byte(textResource.Text), &eventData)
 		assert.Equal(t, CCMCostCategoryCostTargetsEventType, eventData.Type)
 		assert.True(t, eventData.Continue, "Event should have Continue set to true")
+	})
+	t.Run("With cost_category_name Only", func(t *testing.T) {
+		ctx := context.Background()
+		request := mcp.CallToolRequest{}
+		request.Params.Name = "ccm_create_cost_categories_cost_targets_event"
+		request.Params.Arguments = map[string]interface{}{
+			"cost_target_groupings": []interface{}{
+				map[string]interface{}{
+					"title":  "Production",
+					"keys":   []interface{}{"env"},
+					"values": []interface{}{"prod"},
+				},
+			},
+			"cost_category_name": "Environment Category",
+		}
+		result, err := handler(ctx, request)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		embeddedResource, ok := result.Content[0].(mcp.EmbeddedResource)
+		require.True(t, ok)
+		textResource, ok := embeddedResource.Resource.(*mcp.TextResourceContents)
+		require.True(t, ok)
+		var eventData event.CustomEvent
+		json.Unmarshal([]byte(textResource.Text), &eventData)
+		var payload dto.CCMCostCategoryEventPayload
+		dataBytes, _ := json.Marshal(eventData.Content)
+		json.Unmarshal(dataBytes, &payload)
+		assert.Equal(t, "Environment Category", payload.Name)
+		assert.Len(t, payload.CostTargets, 1)
+		assert.Equal(t, "Production", payload.CostTargets[0].Name)
+	})
+	t.Run("Shared Costs - EQUAL Strategy", func(t *testing.T) {
+		ctx := context.Background()
+		request := mcp.CallToolRequest{}
+		request.Params.Name = "ccm_create_cost_categories_cost_targets_event"
+		request.Params.Arguments = map[string]interface{}{
+			"cost_category_name": "Test Category",
+			"cost_target_groupings": []interface{}{
+				map[string]interface{}{
+					"title":  "Production",
+					"keys":   []interface{}{"env"},
+					"values": []interface{}{"prod"},
+				},
+			},
+			"shared_cost_groupings": []interface{}{
+				map[string]interface{}{
+					"title":    "Shared Infrastructure",
+					"keys":     []interface{}{"service"},
+					"values":   []interface{}{"infra", "platform"},
+					"strategy": "EQUAL",
+				},
+			},
+		}
+		result, err := handler(ctx, request)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		embeddedResource, ok := result.Content[0].(mcp.EmbeddedResource)
+		require.True(t, ok)
+		textResource, ok := embeddedResource.Resource.(*mcp.TextResourceContents)
+		require.True(t, ok)
+		var eventData event.CustomEvent
+		json.Unmarshal([]byte(textResource.Text), &eventData)
+		var payload dto.CCMCostCategoryEventPayload
+		dataBytes, _ := json.Marshal(eventData.Content)
+		json.Unmarshal(dataBytes, &payload)
+		require.Len(t, payload.SharedCosts, 1)
+		assert.Equal(t, "Shared Infrastructure", payload.SharedCosts[0].Name)
+		assert.Equal(t, "EQUAL", payload.SharedCosts[0].Strategy)
+		assert.Len(t, payload.SharedCosts[0].Rules, 1)
+		assert.Empty(t, payload.SharedCosts[0].Splits)
+	})
+	t.Run("Shared Costs - FIXED With Splits", func(t *testing.T) {
+		ctx := context.Background()
+		request := mcp.CallToolRequest{}
+		request.Params.Name = "ccm_create_cost_categories_cost_targets_event"
+		request.Params.Arguments = map[string]interface{}{
+			"cost_category_name": "Test Category",
+			"cost_target_groupings": []interface{}{
+				map[string]interface{}{
+					"title":  "Production",
+					"keys":   []interface{}{"env"},
+					"values": []interface{}{"prod"},
+				},
+			},
+			"shared_cost_groupings": []interface{}{
+				map[string]interface{}{
+					"title":    "Shared DB",
+					"keys":     []interface{}{"service"},
+					"values":   []interface{}{"db"},
+					"strategy": "FIXED",
+					"splits": []interface{}{
+						map[string]interface{}{
+							"cost_target_name":        "Production",
+							"percentage_contribution": 70.0,
+						},
+						map[string]interface{}{
+							"cost_target_name":        "Development",
+							"percentage_contribution": 30.0,
+						},
+					},
+				},
+			},
+		}
+		result, err := handler(ctx, request)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		embeddedResource, ok := result.Content[0].(mcp.EmbeddedResource)
+		require.True(t, ok)
+		textResource, ok := embeddedResource.Resource.(*mcp.TextResourceContents)
+		require.True(t, ok)
+		var eventData event.CustomEvent
+		json.Unmarshal([]byte(textResource.Text), &eventData)
+		var payload dto.CCMCostCategoryEventPayload
+		dataBytes, _ := json.Marshal(eventData.Content)
+		json.Unmarshal(dataBytes, &payload)
+		require.Len(t, payload.SharedCosts, 1)
+		assert.Equal(t, "FIXED", payload.SharedCosts[0].Strategy)
+		require.Len(t, payload.SharedCosts[0].Splits, 2)
+		assert.Equal(t, "Production", *payload.SharedCosts[0].Splits[0].CostTargetName)
+		assert.Equal(t, 70.0, *payload.SharedCosts[0].Splits[0].PercentageContribution)
+		assert.Equal(t, "Development", *payload.SharedCosts[0].Splits[1].CostTargetName)
+		assert.Equal(t, 30.0, *payload.SharedCosts[0].Splits[1].PercentageContribution)
+	})
+	t.Run("Unallocated Cost - HIDE", func(t *testing.T) {
+		ctx := context.Background()
+		request := mcp.CallToolRequest{}
+		request.Params.Name = "ccm_create_cost_categories_cost_targets_event"
+		request.Params.Arguments = map[string]interface{}{
+			"cost_category_name": "Test Category",
+			"cost_target_groupings": []interface{}{
+				map[string]interface{}{
+					"title":  "Production",
+					"keys":   []interface{}{"env"},
+					"values": []interface{}{"prod"},
+				},
+			},
+			"unallocated_cost": map[string]interface{}{
+				"strategy": "HIDE",
+			},
+		}
+		result, err := handler(ctx, request)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		embeddedResource, ok := result.Content[0].(mcp.EmbeddedResource)
+		require.True(t, ok)
+		textResource, ok := embeddedResource.Resource.(*mcp.TextResourceContents)
+		require.True(t, ok)
+		var eventData event.CustomEvent
+		json.Unmarshal([]byte(textResource.Text), &eventData)
+		var payload dto.CCMCostCategoryEventPayload
+		dataBytes, _ := json.Marshal(eventData.Content)
+		json.Unmarshal(dataBytes, &payload)
+		require.NotNil(t, payload.UnallocatedCost)
+		assert.Equal(t, "HIDE", payload.UnallocatedCost.Strategy)
+		assert.Empty(t, payload.UnallocatedCost.Label)
+	})
+	t.Run("Unallocated Cost - DISPLAY_NAME With Label", func(t *testing.T) {
+		ctx := context.Background()
+		request := mcp.CallToolRequest{}
+		request.Params.Name = "ccm_create_cost_categories_cost_targets_event"
+		request.Params.Arguments = map[string]interface{}{
+			"cost_category_name": "Test Category",
+			"cost_target_groupings": []interface{}{
+				map[string]interface{}{
+					"title":  "Production",
+					"keys":   []interface{}{"env"},
+					"values": []interface{}{"prod"},
+				},
+			},
+			"unallocated_cost": map[string]interface{}{
+				"strategy": "DISPLAY_NAME",
+				"label":    "Other Costs",
+			},
+		}
+		result, err := handler(ctx, request)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		embeddedResource, ok := result.Content[0].(mcp.EmbeddedResource)
+		require.True(t, ok)
+		textResource, ok := embeddedResource.Resource.(*mcp.TextResourceContents)
+		require.True(t, ok)
+		var eventData event.CustomEvent
+		json.Unmarshal([]byte(textResource.Text), &eventData)
+		var payload dto.CCMCostCategoryEventPayload
+		dataBytes, _ := json.Marshal(eventData.Content)
+		json.Unmarshal(dataBytes, &payload)
+		require.NotNil(t, payload.UnallocatedCost)
+		assert.Equal(t, "DISPLAY_NAME", payload.UnallocatedCost.Strategy)
+		assert.Equal(t, "Other Costs", payload.UnallocatedCost.Label)
+	})
+	t.Run("Unallocated Cost - DISPLAY_NAME Without Label Defaults to Unattributed", func(t *testing.T) {
+		ctx := context.Background()
+		request := mcp.CallToolRequest{}
+		request.Params.Name = "ccm_create_cost_categories_cost_targets_event"
+		request.Params.Arguments = map[string]interface{}{
+			"cost_category_name": "Test Category",
+			"cost_target_groupings": []interface{}{
+				map[string]interface{}{
+					"title":  "Production",
+					"keys":   []interface{}{"env"},
+					"values": []interface{}{"prod"},
+				},
+			},
+			"unallocated_cost": map[string]interface{}{
+				"strategy": "DISPLAY_NAME",
+			},
+		}
+		result, err := handler(ctx, request)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		embeddedResource, ok := result.Content[0].(mcp.EmbeddedResource)
+		require.True(t, ok)
+		textResource, ok := embeddedResource.Resource.(*mcp.TextResourceContents)
+		require.True(t, ok)
+		var eventData event.CustomEvent
+		json.Unmarshal([]byte(textResource.Text), &eventData)
+		var payload dto.CCMCostCategoryEventPayload
+		dataBytes, _ := json.Marshal(eventData.Content)
+		json.Unmarshal(dataBytes, &payload)
+		require.NotNil(t, payload.UnallocatedCost)
+		assert.Equal(t, "DISPLAY_NAME", payload.UnallocatedCost.Strategy)
+		assert.Equal(t, "Unattributed", payload.UnallocatedCost.Label)
+	})
+	t.Run("All Fields Combined", func(t *testing.T) {
+		ctx := context.Background()
+		request := mcp.CallToolRequest{}
+		request.Params.Name = "ccm_create_cost_categories_cost_targets_event"
+		request.Params.Arguments = map[string]interface{}{
+			"cost_target_groupings": []interface{}{
+				map[string]interface{}{
+					"title":  "Production",
+					"keys":   []interface{}{"env"},
+					"values": []interface{}{"prod"},
+				},
+				map[string]interface{}{
+					"title":  "Development",
+					"keys":   []interface{}{"env"},
+					"values": []interface{}{"dev"},
+				},
+			},
+			"cost_category_name": "My Category",
+			"shared_cost_groupings": []interface{}{
+				map[string]interface{}{
+					"title":    "Shared Infra",
+					"keys":     []interface{}{"service"},
+					"values":   []interface{}{"infra"},
+					"strategy": "PROPORTIONAL",
+				},
+			},
+			"unallocated_cost": map[string]interface{}{
+				"strategy": "DISPLAY_NAME",
+				"label":    "Uncategorized",
+			},
+		}
+		result, err := handler(ctx, request)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		embeddedResource, ok := result.Content[0].(mcp.EmbeddedResource)
+		require.True(t, ok)
+		textResource, ok := embeddedResource.Resource.(*mcp.TextResourceContents)
+		require.True(t, ok)
+		var eventData event.CustomEvent
+		json.Unmarshal([]byte(textResource.Text), &eventData)
+		var payload dto.CCMCostCategoryEventPayload
+		dataBytes, _ := json.Marshal(eventData.Content)
+		json.Unmarshal(dataBytes, &payload)
+		assert.Equal(t, "My Category", payload.Name)
+		assert.Len(t, payload.CostTargets, 2)
+		assert.Len(t, payload.SharedCosts, 1)
+		assert.Equal(t, "PROPORTIONAL", payload.SharedCosts[0].Strategy)
+		require.NotNil(t, payload.UnallocatedCost)
+		assert.Equal(t, "DISPLAY_NAME", payload.UnallocatedCost.Strategy)
+		assert.Equal(t, "Uncategorized", payload.UnallocatedCost.Label)
+	})
+	t.Run("Missing cost_category_name", func(t *testing.T) {
+		ctx := context.Background()
+		request := mcp.CallToolRequest{}
+		request.Params.Name = "ccm_create_cost_categories_cost_targets_event"
+		request.Params.Arguments = map[string]interface{}{
+			"cost_target_groupings": []interface{}{
+				map[string]interface{}{
+					"title":  "Production",
+					"keys":   []interface{}{"env"},
+					"values": []interface{}{"prod"},
+				},
+			},
+		}
+		result, err := handler(ctx, request)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.IsError)
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok)
+		assert.Contains(t, textContent.Text, "cost_category_name")
+	})
+	t.Run("Invalid shared_cost_groupings Type", func(t *testing.T) {
+		ctx := context.Background()
+		request := mcp.CallToolRequest{}
+		request.Params.Name = "ccm_create_cost_categories_cost_targets_event"
+		request.Params.Arguments = map[string]interface{}{
+			"cost_category_name": "Test Category",
+			"cost_target_groupings": []interface{}{
+				map[string]interface{}{
+					"title":  "Production",
+					"keys":   []interface{}{"env"},
+					"values": []interface{}{"prod"},
+				},
+			},
+			"shared_cost_groupings": "invalid-string",
+		}
+		result, err := handler(ctx, request)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.IsError)
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok)
+		assert.Contains(t, textContent.Text, "shared_cost_groupings must be an array")
+	})
+	t.Run("Missing Strategy in Shared Grouping", func(t *testing.T) {
+		ctx := context.Background()
+		request := mcp.CallToolRequest{}
+		request.Params.Name = "ccm_create_cost_categories_cost_targets_event"
+		request.Params.Arguments = map[string]interface{}{
+			"cost_category_name": "Test Category",
+			"cost_target_groupings": []interface{}{
+				map[string]interface{}{
+					"title":  "Production",
+					"keys":   []interface{}{"env"},
+					"values": []interface{}{"prod"},
+				},
+			},
+			"shared_cost_groupings": []interface{}{
+				map[string]interface{}{
+					"title":  "Shared Infra",
+					"keys":   []interface{}{"service"},
+					"values": []interface{}{"infra"},
+					// Missing strategy
+				},
+			},
+		}
+		result, err := handler(ctx, request)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.IsError)
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok)
+		assert.Contains(t, textContent.Text, "strategy is required")
+	})
+	t.Run("Only Required Fields Provided - Optional Fields Absent", func(t *testing.T) {
+		ctx := context.Background()
+		request := mcp.CallToolRequest{}
+		request.Params.Name = "ccm_create_cost_categories_cost_targets_event"
+		request.Params.Arguments = map[string]interface{}{
+			"cost_category_name": "Minimal Category",
+			"cost_target_groupings": []interface{}{
+				map[string]interface{}{
+					"title":  "Production",
+					"keys":   []interface{}{"env"},
+					"values": []interface{}{"prod"},
+				},
+			},
+		}
+		result, err := handler(ctx, request)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		embeddedResource, ok := result.Content[0].(mcp.EmbeddedResource)
+		require.True(t, ok)
+		textResource, ok := embeddedResource.Resource.(*mcp.TextResourceContents)
+		require.True(t, ok)
+		var eventData event.CustomEvent
+		json.Unmarshal([]byte(textResource.Text), &eventData)
+		var payload dto.CCMCostCategoryEventPayload
+		dataBytes, _ := json.Marshal(eventData.Content)
+		json.Unmarshal(dataBytes, &payload)
+		assert.Len(t, payload.CostTargets, 1)
+		assert.Equal(t, "Production", payload.CostTargets[0].Name)
+		assert.Equal(t, "Minimal Category", payload.Name)
+		assert.Empty(t, payload.SharedCosts)
+		assert.Nil(t, payload.UnallocatedCost)
 	})
 }
 

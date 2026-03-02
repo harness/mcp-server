@@ -818,9 +818,68 @@ func processCoverageFollowUpPrompts(groupBy string) (mcp.Content, error) {
 	return promptResource, nil
 }
 
+// extractGroupingFields extracts and validates title, keys, values from a grouping map.
+func extractGroupingFields(groupingMap map[string]interface{}) (title string, keys []string, values []string, err error) {
+	titleVal, ok := groupingMap["title"].(string)
+	if !ok {
+		return "", nil, nil, fmt.Errorf("Error extracting title from cost target grouping")
+	}
+	keysInterface, ok := groupingMap["keys"].([]interface{})
+	if !ok {
+		return "", nil, nil, fmt.Errorf("Error extracting keys from cost target grouping")
+	}
+	keys = make([]string, len(keysInterface))
+	for i, k := range keysInterface {
+		keyStr, ok := k.(string)
+		if !ok {
+			return "", nil, nil, fmt.Errorf("Error: keys must be an array of strings")
+		}
+		keys[i] = keyStr
+	}
+	valuesInterface, ok := groupingMap["values"].([]interface{})
+	if !ok {
+		return "", nil, nil, fmt.Errorf("Error extracting values from cost target grouping")
+	}
+	values = make([]string, len(valuesInterface))
+	for i, v := range valuesInterface {
+		valueStr, ok := v.(string)
+		if !ok {
+			return "", nil, nil, fmt.Errorf("Error: values must be an array of strings")
+		}
+		values[i] = valueStr
+	}
+	return titleVal, keys, values, nil
+}
+
+// buildViewConditionRules creates one CCMRule per key using the LABEL_V2 / "IN" operator pattern.
+func buildViewConditionRules(keys []string, values []string) []dto.CCMRule {
+	var rules []dto.CCMRule
+	for _, key := range keys {
+		rules = append(rules, dto.CCMRule{
+			ViewConditions: []interface{}{
+				map[string]interface{}{
+					"viewField": map[string]interface{}{
+						"fieldId":        "labels.value",
+						"fieldName":      key,
+						"identifier":     "LABEL_V2",
+						"identifierName": "Label V2",
+					},
+					"viewOperator": "IN",
+					"values":       values,
+				},
+			},
+		})
+	}
+	return rules
+}
+
 func CreateCostCategoriesCostTargetsEventTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("ccm_create_cost_categories_cost_targets_event",
 			mcp.WithDescription("Create cost category grouping to system specific cost targets"),
+			mcp.WithString("cost_category_name",
+				mcp.Required(),
+				mcp.Description("Name for the cost category"),
+			),
 			mcp.WithArray(
 				"cost_target_groupings",
 				mcp.Required(),
@@ -850,7 +909,71 @@ func CreateCostCategoriesCostTargetsEventTool(config *config.McpServerConfig, cl
 					"required": []string{"title", "keys", "values"},
 				}),
 			),
-			common.WithScope(config, false),
+			mcp.WithArray(
+				"shared_cost_groupings",
+				mcp.Description("Optional array of shared cost groupings for the cost category"),
+				mcp.Items(map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"title": map[string]any{
+							"type":        "string",
+							"description": "Display title for the shared cost bucket",
+						},
+						"keys": map[string]any{
+							"type":        "array",
+							"description": "List of label keys for this shared cost bucket",
+							"items": map[string]any{
+								"type": "string",
+							},
+						},
+						"values": map[string]any{
+							"type":        "array",
+							"description": "List of values that belong to this shared cost bucket",
+							"items": map[string]any{
+								"type": "string",
+							},
+						},
+						"strategy": map[string]any{
+							"type":        "string",
+							"description": "Sharing strategy for this shared cost bucket",
+							"enum":        []string{"EQUAL", "PROPORTIONAL", "FIXED"},
+						},
+						"splits": map[string]any{
+							"type":        "array",
+							"description": "Required when strategy is FIXED. Array of split allocations across cost targets.",
+							"items": map[string]any{
+								"type": "object",
+								"properties": map[string]any{
+									"cost_target_name": map[string]any{
+										"type":        "string",
+										"description": "Name of the cost target bucket to allocate to",
+									},
+									"percentage_contribution": map[string]any{
+										"type":        "number",
+										"description": "Percentage of shared cost to allocate (0-100)",
+									},
+								},
+								"required": []string{"cost_target_name", "percentage_contribution"},
+							},
+						},
+					},
+					"required": []string{"title", "keys", "values", "strategy"},
+				}),
+			),
+			mcp.WithObject("unallocated_cost",
+				mcp.Description("Optional unallocated cost configuration"),
+				mcp.Properties(map[string]any{
+					"strategy": map[string]any{
+						"type":        "string",
+						"description": "How to handle unallocated costs",
+						"enum":        []string{"HIDE", "DISPLAY_NAME"},
+					},
+					"label": map[string]any{
+						"type":        "string",
+						"description": "Display label when strategy is DISPLAY_NAME (defaults to 'Unattributed')",
+					},
+				}),
+			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			costTargetGroupingsInput, ok := request.GetArguments()["cost_target_groupings"]
@@ -862,7 +985,7 @@ func CreateCostCategoriesCostTargetsEventTool(config *config.McpServerConfig, cl
 				"type", fmt.Sprintf("%T", costTargetGroupingsInput),
 				"value", costTargetGroupingsInput)
 
-			var response []dto.CCMCostTarget
+			var costTargets []dto.CCMCostTarget
 
 			costTargetGroupings, ok := costTargetGroupingsInput.([]interface{})
 			if !ok {
@@ -873,58 +996,116 @@ func CreateCostCategoriesCostTargetsEventTool(config *config.McpServerConfig, cl
 
 			for _, costTargetGrouping := range costTargetGroupings {
 				if costTargetGroupingMap, ok := costTargetGrouping.(map[string]interface{}); ok {
-					title, ok := costTargetGroupingMap["title"].(string)
-					if !ok {
-						return mcp.NewToolResultError("Error extracting title from cost target grouping"), nil
+					title, keys, values, err := extractGroupingFields(costTargetGroupingMap)
+					if err != nil {
+						return mcp.NewToolResultError(err.Error()), nil
 					}
-					keysInterface, ok := costTargetGroupingMap["keys"].([]interface{})
-					if !ok {
-						return mcp.NewToolResultError("Error extracting keys from cost target grouping"), nil
-					}
-					keys := make([]string, len(keysInterface))
-					for i, k := range keysInterface {
-						if keyStr, ok := k.(string); ok {
-							keys[i] = keyStr
-						} else {
-							return mcp.NewToolResultError("Error: keys must be an array of strings"), nil
-						}
-					}
-					valuesInterface, ok := costTargetGroupingMap["values"].([]interface{})
-					if !ok {
-						return mcp.NewToolResultError("Error extracting values from cost target grouping"), nil
-					}
-					values := make([]string, len(valuesInterface))
-					for i, v := range valuesInterface {
-						if valueStr, ok := v.(string); ok {
-							values[i] = valueStr
-						} else {
-							return mcp.NewToolResultError("Error: values must be an array of strings"), nil
-						}
-					}
-					var rules []dto.CCMRule
-					for _, key := range keys {
-						rules = append(rules, dto.CCMRule{
-							ViewConditions: []interface{}{
-								map[string]interface{}{
-									"viewField": map[string]interface{}{
-										"fieldId":        "labels.value",
-										"fieldName":      key,
-										"identifier":     "LABEL_V2", // Labels v2 support ONLY.
-										"identifierName": "Label V2",
-									},
-									"viewOperator": "IN", // Extend support for other operators.
-									"values":       values,
-								},
-							},
-						})
-					}
-					response = append(response, dto.CCMCostTarget{
+					rules := buildViewConditionRules(keys, values)
+					costTargets = append(costTargets, dto.CCMCostTarget{
 						Name:  title,
 						Rules: rules,
 					})
 				}
 			}
-			costCategoryCostTargetsEvent := event.NewCustomEvent(CCMCostCategoryCostTargetsEventType, response, event.WithContinue(true))
+
+			// Build the wrapper payload
+			payload := dto.CCMCostCategoryEventPayload{
+				CostTargets: costTargets,
+			}
+
+			// Extract required cost_category_name
+			costCategoryName, err := RequiredParam[string](request, "cost_category_name")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			payload.Name = costCategoryName
+
+			// Extract optional shared_cost_groupings
+			sharedCostGroupingsInput, sharedOk := request.GetArguments()["shared_cost_groupings"]
+			if sharedOk && sharedCostGroupingsInput != nil {
+				sharedCostGroupings, ok := sharedCostGroupingsInput.([]interface{})
+				if !ok {
+					return mcp.NewToolResultError(fmt.Sprintf("Error: shared_cost_groupings must be an array. Got type %T", sharedCostGroupingsInput)), nil
+				}
+				var sharedCosts []dto.CCMSharedCost
+				for _, scg := range sharedCostGroupings {
+					scgMap, ok := scg.(map[string]interface{})
+					if !ok {
+						return mcp.NewToolResultError("Error: each shared_cost_grouping must be an object"), nil
+					}
+					title, keys, values, err := extractGroupingFields(scgMap)
+					if err != nil {
+						return mcp.NewToolResultError(err.Error()), nil
+					}
+					strategy, ok := scgMap["strategy"].(string)
+					if !ok || strategy == "" {
+						return mcp.NewToolResultError("Error: strategy is required for each shared cost grouping"), nil
+					}
+					rules := buildViewConditionRules(keys, values)
+					sc := dto.CCMSharedCost{
+						Name:     title,
+						Rules:    rules,
+						Strategy: strategy,
+					}
+					// Extract splits if strategy is FIXED
+					if strategy == "FIXED" {
+						if splitsInput, splitsOk := scgMap["splits"]; splitsOk && splitsInput != nil {
+							splitsArray, ok := splitsInput.([]interface{})
+							if !ok {
+								return mcp.NewToolResultError("Error: splits must be an array"), nil
+							}
+							var splits []dto.CCMSplit
+							for _, s := range splitsArray {
+								splitMap, ok := s.(map[string]interface{})
+								if !ok {
+									return mcp.NewToolResultError("Error: each split must be an object"), nil
+								}
+								costTargetName, ok := splitMap["cost_target_name"].(string)
+								if !ok {
+									return mcp.NewToolResultError("Error: cost_target_name is required in each split"), nil
+								}
+								pctContrib, ok := splitMap["percentage_contribution"].(float64)
+								if !ok {
+									return mcp.NewToolResultError("Error: percentage_contribution is required in each split"), nil
+								}
+								splits = append(splits, dto.CCMSplit{
+									CostTargetName:         &costTargetName,
+									PercentageContribution: &pctContrib,
+								})
+							}
+							sc.Splits = splits
+						}
+					}
+					sharedCosts = append(sharedCosts, sc)
+				}
+				payload.SharedCosts = sharedCosts
+			}
+
+			// Extract optional unallocated_cost
+			unallocatedCostInput, unallocatedOk := request.GetArguments()["unallocated_cost"]
+			if unallocatedOk && unallocatedCostInput != nil {
+				ucMap, ok := unallocatedCostInput.(map[string]interface{})
+				if !ok {
+					return mcp.NewToolResultError(fmt.Sprintf("Error: unallocated_cost must be an object. Got type %T", unallocatedCostInput)), nil
+				}
+				strategy, ok := ucMap["strategy"].(string)
+				if !ok || strategy == "" {
+					return mcp.NewToolResultError("Error: strategy is required for unallocated_cost"), nil
+				}
+				uc := dto.CCMUnallocatedCost{
+					Strategy: strategy,
+				}
+				if strategy == "DISPLAY_NAME" {
+					label, ok := ucMap["label"].(string)
+					if !ok || label == "" {
+						label = "Unattributed"
+					}
+					uc.Label = label
+				}
+				payload.UnallocatedCost = &uc
+			}
+
+			costCategoryCostTargetsEvent := event.NewCustomEvent(CCMCostCategoryCostTargetsEventType, payload, event.WithContinue(true))
 			responseContents := []mcp.Content{}
 			// Create embedded resources for the event
 			eventResource, err := costCategoryCostTargetsEvent.CreateEmbeddedResource()
