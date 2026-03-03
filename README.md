@@ -1,4 +1,4 @@
-# Harness MCP Server
+# Harness MCP Server 2.0
 
 An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 10 consolidated tools and 113+ resource types.
 
