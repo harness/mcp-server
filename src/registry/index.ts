@@ -2,7 +2,7 @@ import type { Config } from "../config.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import type { ResourceDefinition, ToolsetDefinition, ToolsetName, OperationName, EndpointSpec } from "./types.js";
 import { createLogger } from "../utils/logger.js";
-import { buildDeepLink } from "../utils/deep-links.js";
+import { buildDeepLink, appendStoreType } from "../utils/deep-links.js";
 
 // Import all toolsets
 import { pipelinesToolset } from "./toolsets/pipelines.js";
@@ -277,12 +277,14 @@ export class Registry {
       const isList = r.items && Array.isArray(r.items);
       if (!isList) {
         try {
-          resultRecord.openInHarness = buildDeepLink(
+          let link = buildDeepLink(
             this.config.HARNESS_BASE_URL,
             this.config.HARNESS_ACCOUNT_ID,
             def.deepLinkTemplate,
             baseLinkParams,
           );
+          link = appendStoreType(link, resultRecord);
+          resultRecord.openInHarness = link;
         } catch {
           // Deep link construction failed — non-critical
         }
@@ -308,12 +310,14 @@ export class Registry {
               }
             }
 
-            itemRecord.openInHarness = buildDeepLink(
+            let itemLink = buildDeepLink(
               this.config.HARNESS_BASE_URL,
               this.config.HARNESS_ACCOUNT_ID,
               def.deepLinkTemplate,
               itemLinkParams,
             );
+            itemLink = appendStoreType(itemLink, itemRecord);
+            itemRecord.openInHarness = itemLink;
           } catch {
             // Per-item deep link failed — non-critical, skip
           }

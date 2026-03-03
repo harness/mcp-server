@@ -1,6 +1,15 @@
 import type { ToolsetDefinition, BodySchema } from "../types.js";
 import { ngExtract, pageExtract } from "../extractors.js";
 
+const ngExtractWithInlineStore = (raw: unknown) => {
+  const result = ngExtract(raw);
+  if (result && typeof result === "object") {
+    const r = result as Record<string, unknown>;
+    if (!r.storeType) r.storeType = "INLINE";
+  }
+  return result;
+};
+
 const pipelineCreateSchema: BodySchema = {
   description: "Pipeline YAML definition",
   fields: [
@@ -68,7 +77,7 @@ export const pipelinesToolset: ToolsetDefinition = {
             }
             return input.body;
           },
-          responseExtractor: ngExtract,
+          responseExtractor: ngExtractWithInlineStore,
           description: "Create a new pipeline from YAML",
           bodySchema: pipelineCreateSchema,
         },
@@ -87,7 +96,7 @@ export const pipelinesToolset: ToolsetDefinition = {
             }
             throw new Error("body must include either pipeline (JSON object) or yamlPipeline (YAML string)");
           },
-          responseExtractor: ngExtract,
+          responseExtractor: ngExtractWithInlineStore,
           description: "Update an existing pipeline YAML. Response includes openInHarness link to the updated pipeline in Pipeline Studio.",
           bodySchema: pipelineUpdateSchema,
         },
