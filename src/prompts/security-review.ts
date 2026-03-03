@@ -20,9 +20,10 @@ export function registerSecurityReviewPrompt(server: McpServer): void {
 
 Steps:
 1. Call harness_list with resource_type="security_issue"${projectId ? `, project_id="${projectId}"` : ""}, severity="${severityFilter}" to get current security findings
-2. Call harness_list with resource_type="security_scan" to see recent scan history
-3. Group findings by service/resource
-4. For each finding, provide:
+2. Call harness_list with resource_type="artifact_security"${projectId ? `, project_id="${projectId}"` : ""} to check artifact-level security posture
+3. Call harness_list with resource_type="code_repo_security"${projectId ? `, project_id="${projectId}"` : ""} to check code repository security
+4. Group findings by service/resource
+5. For each finding, provide:
    - **Severity**: Critical / High / Medium / Low
    - **Resource**: Which service or component is affected
    - **Issue**: Description of the vulnerability

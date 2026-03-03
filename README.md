@@ -399,7 +399,7 @@ The server exposes 10 MCP tools. Every tool accepts `org_id` and `project_id` as
 
 | Resource Type | List | Get | Create | Update | Delete | Execute Actions |
 |---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `template` | x | x | | | | |
+| `template` | x | x | x | x | | |
 
 ### Dashboards
 
@@ -553,13 +553,41 @@ The server exposes 10 MCP tools. Every tool accepts `org_id` and `project_id` as
 
 ## MCP Prompts
 
+### DevOps
+
 | Prompt | Description | Parameters |
 |--------|-------------|------------|
 | `debug-pipeline-failure` | Analyze a failed execution: gathers execution details, pipeline YAML, and logs, then provides root cause analysis and suggested fixes | `executionId` (required), `projectId` (optional) |
 | `create-pipeline` | Generate a new pipeline YAML from natural language requirements, reviewing existing resources for context | `description` (required), `projectId` (optional) |
-| `optimize-costs` | Analyze cloud cost data, surface recommendations and anomalies, prioritized by potential savings | `projectId` (optional) |
-| `security-review` | Review security issues across Harness resources and suggest remediations by severity | `projectId` (optional), `severity` (optional, default: `critical,high`) |
 | `onboard-service` | Walk through onboarding a new service with environments and a deployment pipeline | `serviceName` (required), `projectId` (optional) |
+| `dora-metrics-review` | Review DORA metrics (deployment frequency, change failure rate, MTTR, lead time) with Elite/High/Medium/Low classification and improvement recommendations | `teamRefId` (optional), `dateStart` (optional), `dateEnd` (optional) |
+| `setup-gitops-application` | Guide through onboarding a GitOps application — verify agent, cluster, repo, and create the application | `agentId` (required), `projectId` (optional) |
+| `chaos-resilience-test` | Design a chaos experiment to test service resilience with fault injection, probes, and expected outcomes | `serviceName` (required), `projectId` (optional) |
+| `feature-flag-rollout` | Plan and execute a progressive feature flag rollout across environments with safety gates | `flagIdentifier` (required), `projectId` (optional) |
+| `migrate-pipeline-to-template` | Analyze an existing pipeline and extract reusable stage/step templates from it | `pipelineId` (required), `projectId` (optional) |
+| `delegate-health-check` | Check delegate connectivity, health, token status, and troubleshoot infrastructure issues | `projectId` (optional) |
+| `developer-portal-scorecard` | Review IDP scorecards for services and identify gaps to improve developer experience | `projectId` (optional) |
+
+### FinOps
+
+| Prompt | Description | Parameters |
+|--------|-------------|------------|
+| `optimize-costs` | Analyze cloud cost data, surface recommendations and anomalies, prioritized by potential savings | `projectId` (optional) |
+| `cloud-cost-breakdown` | Deep-dive into cloud costs by service, environment, or cluster with trend analysis and anomaly detection | `perspectiveId` (optional), `projectId` (optional) |
+| `commitment-utilization-review` | Analyze reserved instance and savings plan utilization to find waste and optimize commitments | `projectId` (optional) |
+| `cost-anomaly-investigation` | Investigate cost anomalies — determine root cause, impacted resources, and remediation | `projectId` (optional) |
+| `rightsizing-recommendations` | Review and prioritize rightsizing recommendations, optionally create Jira or ServiceNow tickets | `projectId` (optional), `minSavings` (optional) |
+
+### DevSecOps
+
+| Prompt | Description | Parameters |
+|--------|-------------|------------|
+| `security-review` | Review security issues across Harness resources and suggest remediations by severity | `projectId` (optional), `severity` (optional, default: `critical,high`) |
+| `vulnerability-triage` | Triage security vulnerabilities across pipelines and artifacts, prioritize by severity and exploitability | `projectId` (optional), `severity` (optional) |
+| `sbom-compliance-check` | Audit SBOM and compliance posture for artifacts — license risks, policy violations, component vulnerabilities | `artifactId` (optional), `projectId` (optional) |
+| `supply-chain-audit` | End-to-end software supply chain security audit — provenance, chain of custody, policy compliance | `projectId` (optional) |
+| `security-exemption-review` | Review pending security exemptions and make batch approval or rejection decisions | `projectId` (optional) |
+| `access-control-audit` | Audit user permissions, over-privileged accounts, and role assignments to enforce least-privilege | `projectId` (optional), `orgId` (optional) |
 
 ## MCP Resources
 
@@ -753,11 +781,27 @@ src/
     pipeline-yaml.ts
     execution-summary.ts
   prompts/                          # MCP prompt templates
-    debug-pipeline.ts
-    create-pipeline.ts
-    optimize-costs.ts
-    security-review.ts
-    onboard-service.ts
+    debug-pipeline.ts               # DevOps: debug failed executions
+    create-pipeline.ts              # DevOps: generate pipeline from requirements
+    onboard-service.ts              # DevOps: onboard new service
+    dora-metrics.ts                 # DevOps: DORA metrics review
+    setup-gitops.ts                 # DevOps: GitOps application setup
+    chaos-resilience.ts             # DevOps: chaos experiment design
+    feature-flag-rollout.ts         # DevOps: progressive flag rollout
+    migrate-to-template.ts          # DevOps: extract templates from pipeline
+    delegate-health.ts              # DevOps: delegate health check
+    developer-scorecard.ts          # DevOps: IDP scorecard review
+    optimize-costs.ts               # FinOps: cost optimization
+    cloud-cost-breakdown.ts         # FinOps: cost deep-dive
+    commitment-utilization.ts       # FinOps: RI/savings plan analysis
+    cost-anomaly.ts                 # FinOps: anomaly investigation
+    rightsizing.ts                  # FinOps: rightsizing recommendations
+    security-review.ts              # DevSecOps: security issue review
+    vulnerability-triage.ts         # DevSecOps: vulnerability triage
+    sbom-compliance.ts              # DevSecOps: SBOM compliance audit
+    supply-chain-audit.ts           # DevSecOps: supply chain audit
+    exemption-review.ts             # DevSecOps: exemption approval
+    access-control-audit.ts         # DevSecOps: access control audit
   utils/
     cli.ts                          # CLI arg parsing (transport, port)
     errors.ts                       # Error normalization
