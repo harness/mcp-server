@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/harness/mcp-server/common/client/dto"
 )
@@ -12,12 +13,18 @@ type FMEService struct {
 	Client *Client
 }
 
-// ListWorkspaces retrieves all FME workspaces
+// ListWorkspaces retrieves FME workspaces with pagination support.
 // GET https://api.split.io/internal/api/v2/workspaces
-func (f *FMEService) ListWorkspaces(ctx context.Context) (*dto.FMEWorkspacesResponse, error) {
+// offset specifies the number of items to skip; limit controls how many items to return (max 100).
+func (f *FMEService) ListWorkspaces(ctx context.Context, offset, limit int) (*dto.FMEWorkspacesResponse, error) {
 	var response dto.FMEWorkspacesResponse
 
-	err := f.Client.Get(ctx, "internal/api/v2/workspaces", nil, nil, &response)
+	params := map[string]string{
+		"offset": strconv.Itoa(offset),
+		"limit":  strconv.Itoa(limit),
+	}
+
+	err := f.Client.Get(ctx, "internal/api/v2/workspaces", params, nil, &response)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list workspaces: %w", err)
 	}

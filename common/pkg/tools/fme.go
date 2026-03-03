@@ -11,13 +11,37 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+const (
+	fmeWorkspacesDefaultCount = 20
+	fmeWorkspacesMaxCount     = 1000
+)
+
 // ListFMEWorkspacesTool creates a tool for listing FME workspaces
 func ListFMEWorkspacesTool(config *config.McpServerConfig, fmeService *client.FMEService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("list_fme_workspaces",
 			mcp.WithDescription("List Feature Management & Experimentation (FME) workspaces."),
+			mcp.WithNumber("offset",
+				mcp.Description("The number of workspaces to skip for pagination (default: 0)"),
+			),
+			mcp.WithNumber("count",
+				mcp.Description(fmt.Sprintf("The number of workspaces to return (default: %d, max: %d)", fmeWorkspacesDefaultCount, fmeWorkspacesMaxCount)),
+			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			workspaces, err := fmeService.ListWorkspaces(ctx)
+			offset, err := OptionalIntParam(request, "offset")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			count, err := OptionalIntParamWithDefault(request, "count", fmeWorkspacesDefaultCount)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if count > fmeWorkspacesMaxCount {
+				count = fmeWorkspacesMaxCount
+			}
+
+			workspaces, err := fmeService.ListWorkspaces(ctx, offset, count)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to list FME workspaces: %v", err)), nil
 			}
