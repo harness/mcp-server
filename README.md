@@ -4,11 +4,19 @@ An MCP (Model Context Protocol) server that gives AI agents full access to the H
 
 [![CI](https://github.com/thisrohangupta/harness-poc-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/thisrohangupta/harness-poc-mcp/actions/workflows/ci.yml)
 
-## Why This Exists
+## Why Use This MCP Server
 
-The naive approach to building an MCP server for a platform like Harness is 1:1 API-to-tool mapping: one tool per endpoint. That path leads to 240+ tools, which is an anti-pattern — LLMs degrade at tool selection when the tool count is high, context windows fill with schema definitions, and every new API endpoint requires a new tool.
+Most MCP servers map one tool per API endpoint. For a platform as broad as Harness, that means 240+ tools — and LLMs get worse at tool selection as the count grows. Context windows fill up with schemas, and every new endpoint means new code.
 
-This server takes a different approach: **registry-based dispatch**. Instead of hundreds of individual tools, there are 10 generic tools that operate on any of 113+ resource types. Adding a new Harness resource means adding a declarative data file — no new tool registration, no schema changes, no prompt updates.
+This server is built differently:
+
+- **10 tools, 113+ resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 10 tools instead of hundreds.
+- **Full platform coverage.** 25 toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Internal Developer Portal, Software Supply Chain, and more. Not just pipelines — the entire Harness platform.
+- **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
+- **21 prompt templates.** Pre-built prompts for common workflows: debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, and more.
+- **Works everywhere.** Stdio transport for local clients (Claude Desktop, Cursor, Windsurf), HTTP transport for remote/shared deployments, Docker and Kubernetes ready.
+- **Zero-config start.** Just provide a Harness API key. Account ID is auto-extracted from PAT tokens, org/project defaults are optional, and toolset filtering lets you expose only what you need.
+- **Extensible by design.** Adding a new Harness resource means adding a declarative data file — no new tool registration, no schema changes, no prompt updates.
 
 ## Quick Start
 
