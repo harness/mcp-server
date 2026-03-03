@@ -119,11 +119,16 @@ export class HarnessClient {
   }
 
   private buildUrl(options: RequestOptions): string {
-    let path = options.path;
+    const path = options.path;
 
-    // Inject accountIdentifier into query params
+    // Inject accountIdentifier into query params (used by most Harness APIs)
     const params = new URLSearchParams();
     params.set("accountIdentifier", this.accountId);
+
+    // Log-service gateway expects accountID (capital ID) in query params
+    if (path.includes("/log-service/")) {
+      params.set("accountID", this.accountId);
+    }
 
     if (options.params) {
       for (const [key, value] of Object.entries(options.params)) {
