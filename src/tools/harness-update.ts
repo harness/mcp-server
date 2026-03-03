@@ -8,7 +8,7 @@ import { toMcpError } from "../utils/errors.js";
 export function registerUpdateTool(server: McpServer, registry: Registry, client: HarnessClient): void {
   server.tool(
     "harness_update",
-    "Update an existing Harness resource. Requires confirmation=true to proceed.",
+    "Update an existing Harness resource. Requires confirmation=true to proceed. Response includes openInHarness link to the updated resource when applicable (e.g. pipeline, service).",
     {
       resource_type: z.string().describe("The type of resource to update (e.g. pipeline, service, environment, connector, trigger)"),
       resource_id: z.string().describe("The identifier of the resource to update"),

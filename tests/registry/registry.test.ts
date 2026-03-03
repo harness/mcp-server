@@ -176,5 +176,54 @@ describe("Registry", () => {
         registry.dispatch(client, "pipeline", "get", {}),
       ).rejects.toThrow(/Missing required field/);
     });
+
+    it("pipeline update with yamlPipeline sends { yamlPipeline } and returns result with openInHarness", async () => {
+      const yaml = "pipeline:\n  name: Test\n  identifier: test_pipeline\n  stages: []";
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: { identifier: "test_pipeline", yamlPipeline: yaml },
+      });
+      const client = makeClient(mockRequest);
+
+      const result = (await registry.dispatch(client, "pipeline", "update", {
+        pipeline_id: "test_pipeline",
+        project_id: "my-project",
+        org_id: "default",
+        body: { yamlPipeline: yaml },
+      })) as Record<string, unknown>;
+
+      expect(mockRequest).toHaveBeenCalledOnce();
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("PUT");
+      expect(call.path).toBe("/pipeline/api/pipelines/v2/test_pipeline");
+      expect(call.body).toEqual({ yamlPipeline: yaml });
+      expect(result.openInHarness).toBeDefined();
+      expect(String(result.openInHarness)).toContain("/pipelines/test_pipeline/pipeline-studio");
+    });
+
+    it("pipeline update with body.pipeline passes body through", async () => {
+      const body = { pipeline: { name: "X", identifier: "x", stages: [] } };
+      const mockRequest = vi.fn().mockResolvedValue({ data: body.pipeline });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "pipeline", "update", {
+        pipeline_id: "x",
+        project_id: "p",
+        org_id: "default",
+        body,
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body).toEqual(body);
+    });
+
+    it("pipeline update without pipeline or yamlPipeline throws", async () => {
+      const client = makeClient();
+      await expect(
+        registry.dispatch(client, "pipeline", "update", {
+          pipeline_id: "x",
+          body: {},
+        }),
+      ).rejects.toThrow(/body must include either pipeline/);
+    });
   });
 });

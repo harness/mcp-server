@@ -80,7 +80,7 @@ export const pipelinesToolset: ToolsetDefinition = {
             throw new Error("body must include either pipeline (JSON object) or yamlPipeline (YAML string)");
           },
           responseExtractor: ngExtract,
-          description: "Update an existing pipeline YAML",
+          description: "Update an existing pipeline YAML. Response includes openInHarness link to the updated pipeline in Pipeline Studio.",
           bodySchema: pipelineUpdateSchema,
         },
         delete: {
