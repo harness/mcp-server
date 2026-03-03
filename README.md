@@ -20,59 +20,49 @@ This server is built differently:
 
 ## Quick Start
 
-### Prerequisites
+### Option 1: npx (Recommended)
 
-- Node.js 20+
-- pnpm
+No install required — just run it:
 
-### Install and Build
+```bash
+npx harness-poc-mcp-server
+```
+
+That's it. Pass your Harness API key via environment variable or configure it in your AI client (see [Client Configuration](#client-configuration) below).
+
+```bash
+# Stdio transport (default — for Claude Desktop, Cursor, Windsurf, etc.)
+HARNESS_API_KEY=pat.xxx npx harness-poc-mcp-server
+
+# HTTP transport (for remote/shared deployments)
+HARNESS_API_KEY=pat.xxx npx harness-poc-mcp-server http --port 8080
+```
+
+> **Note:** The account ID is auto-extracted from PAT tokens (`pat.<accountId>.<tokenId>.<secret>`), so `HARNESS_ACCOUNT_ID` is only needed for non-PAT API keys.
+
+### Option 2: Global Install
+
+```bash
+npm install -g harness-poc-mcp-server
+
+# Then run directly
+harness-poc-mcp-server
+```
+
+### Option 3: Build from Source
+
+For development or customization:
 
 ```bash
 git clone https://github.com/thisrohangupta/harness-poc-mcp.git
 cd harness-poc-mcp
 pnpm install
 pnpm build
-```
 
-### Configure
-
-Copy `.env.example` to `.env` and fill in your Harness credentials:
-
-```bash
-cp .env.example .env
-```
-
-At minimum, set `HARNESS_API_KEY`. The account ID is auto-extracted from PAT tokens (`pat.<accountId>.<tokenId>.<secret>`), so `HARNESS_ACCOUNT_ID` is only needed for non-PAT tokens.
-
-### Run
-
-```bash
-# Stdio transport (for local AI clients)
-pnpm start
-
-# Or directly
-node build/index.js stdio
-
-# HTTP transport (for remote/shared deployment)
-pnpm start:http
-
-# Or with a custom port
-node build/index.js http --port 8080
-
-# Test with MCP Inspector
-pnpm inspect
-```
-
-### Zero-Install via npx
-
-Run without cloning or installing — just provide env vars:
-
-```bash
-# Stdio (default)
-HARNESS_API_KEY=pat.xxx HARNESS_ACCOUNT_ID=abc123 npx harness-poc-mcp-server
-
-# HTTP on port 8080
-HARNESS_API_KEY=pat.xxx HARNESS_ACCOUNT_ID=abc123 npx harness-poc-mcp-server http --port 8080
+# Run
+pnpm start              # Stdio transport
+pnpm start:http         # HTTP transport
+pnpm inspect            # Test with MCP Inspector
 ```
 
 ### HTTP Transport
@@ -99,14 +89,18 @@ curl -X POST http://localhost:3000/mcp \
 
 ### Client Configuration
 
+All clients below use `npx` so there's nothing to clone or build. Just add the config and go.
+
+> **Note:** `HARNESS_DEFAULT_ORG_ID` and `HARNESS_DEFAULT_PROJECT_ID` are optional. Agents can discover orgs and projects dynamically using `harness_list(resource_type="organization")` and `harness_list(resource_type="project")`. Set them only if you want to pin a default scope for convenience.
+
 **Claude Desktop** (`claude_desktop_config.json`):
 
 ```json
 {
   "mcpServers": {
     "harness": {
-      "command": "node",
-      "args": ["/absolute/path/to/harness-poc-mcp/build/index.js", "stdio"],
+      "command": "npx",
+      "args": ["harness-poc-mcp-server"],
       "env": {
         "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
       }
@@ -115,7 +109,13 @@ curl -X POST http://localhost:3000/mcp \
 }
 ```
 
-> **Note:** `HARNESS_DEFAULT_ORG_ID` and `HARNESS_DEFAULT_PROJECT_ID` are optional. Agents can discover orgs and projects dynamically using `harness_list(resource_type="organization")` and `harness_list(resource_type="project")`. Set them only if you want to pin a default scope for convenience.
+**Claude Code** (via `claude mcp add`):
+
+```bash
+claude mcp add harness -- npx harness-poc-mcp-server
+```
+
+Then set `HARNESS_API_KEY` in your environment or `.env` file.
 
 **Cursor** (`.cursor/mcp.json`):
 
@@ -123,8 +123,8 @@ curl -X POST http://localhost:3000/mcp \
 {
   "mcpServers": {
     "harness": {
-      "command": "node",
-      "args": ["/absolute/path/to/harness-poc-mcp/build/index.js", "stdio"],
+      "command": "npx",
+      "args": ["harness-poc-mcp-server"],
       "env": {
         "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
       }
@@ -139,8 +139,8 @@ curl -X POST http://localhost:3000/mcp \
 {
   "mcpServers": {
     "harness": {
-      "command": "node",
-      "args": ["/absolute/path/to/harness-poc-mcp/build/index.js", "stdio"],
+      "command": "npx",
+      "args": ["harness-poc-mcp-server"],
       "env": {
         "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
       }
@@ -148,6 +148,20 @@ curl -X POST http://localhost:3000/mcp \
   }
 }
 ```
+
+<details>
+<summary>Using a local build instead of npx?</summary>
+
+Replace `"command": "npx"` and `"args": ["harness-poc-mcp-server"]` with:
+
+```json
+{
+  "command": "node",
+  "args": ["/absolute/path/to/harness-poc-mcp/build/index.js", "stdio"]
+}
+```
+
+</details>
 
 ### Docker
 
