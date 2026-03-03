@@ -14,7 +14,7 @@ export const secretsToolset: ToolsetDefinition = {
       scope: "project",
       identifierFields: ["secret_id"],
       listFilterFields: ["search_term", "type"],
-      deepLinkTemplate: "/ng/account/{accountId}/home/orgs/{orgIdentifier}/projects/{projectIdentifier}/setup/resources/secrets/{secretIdentifier}",
+      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/setup/resources/secrets/{secretIdentifier}",
       operations: {
         list: {
           method: "POST",

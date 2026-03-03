@@ -15,7 +15,7 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       identifierFields: ["experiment_id"],
       listFilterFields: ["search_term"],
-      deepLinkTemplate: "/ng/account/{accountId}/home/orgs/{orgIdentifier}/projects/{projectIdentifier}/chaos/experiments/{experimentId}",
+      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/chaos/experiments/{experimentId}",
       operations: {
         list: {
           method: "POST",
@@ -121,7 +121,7 @@ export const chaosToolset: ToolsetDefinition = {
       toolset: "chaos",
       scope: "project",
       identifierFields: ["experiment_id"],
-      deepLinkTemplate: "/ng/account/{accountId}/home/orgs/{orgIdentifier}/projects/{projectIdentifier}/chaos/experiments/{experimentId}",
+      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/chaos/experiments/{experimentId}",
       operations: {
         list: {
           method: "GET",
@@ -139,7 +139,7 @@ export const chaosToolset: ToolsetDefinition = {
       toolset: "chaos",
       scope: "project",
       identifierFields: ["experiment_id", "run_id"],
-      deepLinkTemplate: "/ng/account/{accountId}/home/orgs/{orgIdentifier}/projects/{projectIdentifier}/chaos/experiments/{experimentId}",
+      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/chaos/experiments/{experimentId}",
       operations: {
         list: {
           method: "POST",

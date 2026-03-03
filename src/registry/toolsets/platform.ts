@@ -210,7 +210,7 @@ export const platformToolset: ToolsetDefinition = {
       scope: "account",
       identifierFields: ["project_id"],
       listFilterFields: ["search_term", "sort", "order", "has_module", "module_type"],
-      deepLinkTemplate: "/ng/account/{accountId}/home/orgs/{org}/projects/{project}",
+      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{org}/projects/{project}",
       operations: {
         list: {
           method: "GET",

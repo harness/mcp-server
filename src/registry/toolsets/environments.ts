@@ -38,7 +38,7 @@ export const environmentsToolset: ToolsetDefinition = {
       scope: "project",
       identifierFields: ["environment_id"],
       listFilterFields: ["search_term", "env_type", "sort"],
-      deepLinkTemplate: "/ng/account/{accountId}/home/orgs/{orgIdentifier}/projects/{projectIdentifier}/environments/{environmentIdentifier}",
+      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/environments/{environmentIdentifier}",
       operations: {
         list: {
           method: "GET",

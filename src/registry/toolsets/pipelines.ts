@@ -33,7 +33,7 @@ export const pipelinesToolset: ToolsetDefinition = {
       scope: "project",
       identifierFields: ["pipeline_id"],
       listFilterFields: ["search_term", "module", "filter_type"],
-      deepLinkTemplate: "/ng/account/{accountId}/home/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipelineIdentifier}/pipeline-studio",
+      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipelineIdentifier}/pipeline-studio",
       operations: {
         list: {
           method: "POST",
@@ -128,7 +128,7 @@ export const pipelinesToolset: ToolsetDefinition = {
       scope: "project",
       identifierFields: ["execution_id"],
       listFilterFields: ["pipeline_id", "status", "module"],
-      deepLinkTemplate: "/ng/account/{accountId}/home/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipelineIdentifier}/executions/{planExecutionId}/pipeline",
+      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipelineIdentifier}/executions/{planExecutionId}/pipeline",
       operations: {
         list: {
           method: "POST",
@@ -174,7 +174,7 @@ export const pipelinesToolset: ToolsetDefinition = {
       scope: "project",
       identifierFields: ["pipeline_id", "trigger_id"],
       listFilterFields: ["pipeline_id", "search_term"],
-      deepLinkTemplate: "/ng/account/{accountId}/home/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipeline_id}/triggers",
+      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipeline_id}/triggers",
       operations: {
         list: {
           method: "GET",
@@ -227,7 +227,7 @@ export const pipelinesToolset: ToolsetDefinition = {
       toolset: "pipelines",
       scope: "project",
       identifierFields: ["pipeline_id"],
-      deepLinkTemplate: "/ng/account/{accountId}/home/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipelineIdentifier}/pipeline-studio",
+      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipelineIdentifier}/pipeline-studio",
       operations: {
         get: {
           method: "GET",
@@ -246,7 +246,7 @@ export const pipelinesToolset: ToolsetDefinition = {
       scope: "project",
       identifierFields: ["pipeline_id", "input_set_id"],
       listFilterFields: ["pipeline_id"],
-      deepLinkTemplate: "/ng/account/{accountId}/home/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipeline_id}/input-sets",
+      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipeline_id}/input-sets",
       operations: {
         list: {
           method: "GET",

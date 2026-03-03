@@ -15,7 +15,7 @@ export const scsToolset: ToolsetDefinition = {
       scope: "project",
       identifierFields: ["artifact_id"],
       listFilterFields: ["search"],
-      deepLinkTemplate: "/ng/account/{accountId}/home/orgs/{orgIdentifier}/projects/{projectIdentifier}/supply-chain/artifacts/{artifactId}",
+      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/supply-chain/artifacts/{artifactId}",
       operations: {
         list: {
           method: "GET",
@@ -45,7 +45,7 @@ export const scsToolset: ToolsetDefinition = {
       scope: "project",
       identifierFields: ["repo_id"],
       listFilterFields: ["search"],
-      deepLinkTemplate: "/ng/account/{accountId}/home/orgs/{orgIdentifier}/projects/{projectIdentifier}/supply-chain/repositories/{repoId}",
+      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/supply-chain/repositories/{repoId}",
       operations: {
         list: {
           method: "GET",
@@ -135,7 +135,7 @@ export const scsToolset: ToolsetDefinition = {
       toolset: "scs",
       scope: "project",
       identifierFields: ["artifact_id", "component_id"],
-      deepLinkTemplate: "/ng/account/{accountId}/home/orgs/{orgIdentifier}/projects/{projectIdentifier}/supply-chain/artifacts/{artifactId}",
+      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/supply-chain/artifacts/{artifactId}",
       operations: {
         get: {
           method: "GET",
@@ -156,7 +156,7 @@ export const scsToolset: ToolsetDefinition = {
       toolset: "scs",
       scope: "project",
       identifierFields: ["artifact_id"],
-      deepLinkTemplate: "/ng/account/{accountId}/home/orgs/{orgIdentifier}/projects/{projectIdentifier}/supply-chain/artifacts/{artifactId}",
+      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/supply-chain/artifacts/{artifactId}",
       operations: {
         get: {
           method: "GET",

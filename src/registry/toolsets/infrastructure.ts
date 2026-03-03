@@ -14,7 +14,7 @@ export const infrastructureToolset: ToolsetDefinition = {
       scope: "project",
       identifierFields: ["infrastructure_id"],
       listFilterFields: ["environment_id", "search_term"],
-      deepLinkTemplate: "/ng/account/{accountId}/home/orgs/{orgIdentifier}/projects/{projectIdentifier}/environments",
+      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/environments",
       operations: {
         list: {
           method: "GET",

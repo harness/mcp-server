@@ -39,7 +39,7 @@ export const connectorsToolset: ToolsetDefinition = {
       scope: "project",
       identifierFields: ["connector_id"],
       listFilterFields: ["search_term", "type", "category"],
-      deepLinkTemplate: "/ng/account/{accountId}/home/orgs/{orgIdentifier}/projects/{projectIdentifier}/setup/connectors/{connectorIdentifier}",
+      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/setup/connectors/{connectorIdentifier}",
       operations: {
         list: {
           method: "GET",
