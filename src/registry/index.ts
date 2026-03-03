@@ -225,6 +225,7 @@ export class Registry {
       path,
       params,
       body,
+      ...(spec.headers ? { headers: spec.headers } : {}),
     });
 
     // Extract response

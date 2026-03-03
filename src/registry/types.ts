@@ -76,6 +76,8 @@ export interface EndpointSpec {
   queryParams?: Record<string, string>;
   /** For POST/PUT: how to build the request body from tool input */
   bodyBuilder?: (input: Record<string, unknown>) => unknown;
+  /** Static headers to merge into the request (e.g. Content-Type override) */
+  headers?: Record<string, string>;
   /** For GET: extract the useful part from the raw response */
   responseExtractor?: (raw: unknown) => unknown;
   /** Description shown in harness_describe output */

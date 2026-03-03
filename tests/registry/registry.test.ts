@@ -177,7 +177,7 @@ describe("Registry", () => {
       ).rejects.toThrow(/Missing required field/);
     });
 
-    it("pipeline update with yamlPipeline sends { yamlPipeline } and returns result with openInHarness", async () => {
+    it("pipeline update with yamlPipeline sends raw YAML string as body with Content-Type header and returns openInHarness", async () => {
       const yaml = "pipeline:\n  name: Test\n  identifier: test_pipeline\n  stages: []";
       const mockRequest = vi.fn().mockResolvedValue({
         data: { identifier: "test_pipeline", yamlPipeline: yaml },
@@ -195,7 +195,10 @@ describe("Registry", () => {
       const call = mockRequest.mock.calls[0][0];
       expect(call.method).toBe("PUT");
       expect(call.path).toBe("/pipeline/api/pipelines/v2/test_pipeline");
-      expect(call.body).toEqual({ yamlPipeline: yaml });
+      // Body is the raw YAML string, not a JSON wrapper
+      expect(call.body).toBe(yaml);
+      // Content-Type header is set to application/yaml via spec headers
+      expect(call.headers).toEqual({ "Content-Type": "application/yaml" });
       expect(result.openInHarness).toBeDefined();
       expect(String(result.openInHarness)).toContain("/pipelines/test_pipeline/pipeline-studio");
     });

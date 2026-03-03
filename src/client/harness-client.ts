@@ -42,7 +42,11 @@ export class HarnessClient {
     };
 
     if (options.body) {
-      headers["Content-Type"] = headers["Content-Type"] ?? "application/json";
+      if (typeof options.body === "string") {
+        headers["Content-Type"] = headers["Content-Type"] ?? "application/yaml";
+      } else {
+        headers["Content-Type"] = headers["Content-Type"] ?? "application/json";
+      }
     }
 
     let lastError: Error | undefined;
@@ -63,7 +67,9 @@ export class HarnessClient {
         const response = await fetch(url, {
           method,
           headers,
-          body: options.body ? JSON.stringify(options.body) : undefined,
+          body: options.body
+            ? (typeof options.body === "string" ? options.body : JSON.stringify(options.body))
+            : undefined,
           signal: controller.signal,
         });
 

@@ -60,7 +60,14 @@ export const pipelinesToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/pipeline/api/pipelines/v2",
-          bodyBuilder: (input) => input.body,
+          headers: { "Content-Type": "application/yaml" },
+          bodyBuilder: (input) => {
+            const b = input.body as Record<string, unknown> | undefined;
+            if (b && typeof b === "object" && typeof b.yamlPipeline === "string") {
+              return b.yamlPipeline;
+            }
+            return input.body;
+          },
           responseExtractor: ngExtract,
           description: "Create a new pipeline from YAML",
           bodySchema: pipelineCreateSchema,
@@ -69,10 +76,11 @@ export const pipelinesToolset: ToolsetDefinition = {
           method: "PUT",
           path: "/pipeline/api/pipelines/v2/{pipelineIdentifier}",
           pathParams: { pipeline_id: "pipelineIdentifier" },
+          headers: { "Content-Type": "application/yaml" },
           bodyBuilder: (input) => {
             const b = input.body as Record<string, unknown> | undefined;
             if (b && typeof b === "object" && typeof b.yamlPipeline === "string") {
-              return { yamlPipeline: b.yamlPipeline };
+              return b.yamlPipeline;
             }
             if (b && typeof b === "object" && b.pipeline !== undefined) {
               return b;
