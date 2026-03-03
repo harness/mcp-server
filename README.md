@@ -89,11 +89,12 @@ curl -X POST http://localhost:3000/mcp \
 
 ### Client Configuration
 
-All clients below use `npx` so there's nothing to clone or build. Just add the config and go.
-
 > **Note:** `HARNESS_DEFAULT_ORG_ID` and `HARNESS_DEFAULT_PROJECT_ID` are optional. Agents can discover orgs and projects dynamically using `harness_list(resource_type="organization")` and `harness_list(resource_type="project")`. Set them only if you want to pin a default scope for convenience.
 
-**Claude Desktop** (`claude_desktop_config.json`):
+#### Claude Desktop (`claude_desktop_config.json`)
+
+<details open>
+<summary>npx (zero install)</summary>
 
 ```json
 {
@@ -109,50 +110,143 @@ All clients below use `npx` so there's nothing to clone or build. Just add the c
 }
 ```
 
-**Claude Code** (via `claude mcp add`):
+</details>
+
+<details>
+<summary>node (local install)</summary>
+
+```bash
+npm install -g harness-poc-mcp-server
+```
+
+```json
+{
+  "mcpServers": {
+    "harness": {
+      "command": "harness-poc-mcp-server",
+      "env": {
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+#### Claude Code (via `claude mcp add`)
+
+<details open>
+<summary>npx (zero install)</summary>
 
 ```bash
 claude mcp add harness -- npx harness-poc-mcp-server
 ```
 
-Then set `HARNESS_API_KEY` in your environment or `.env` file.
-
-**Cursor** (`.cursor/mcp.json`):
-
-```json
-{
-  "mcpServers": {
-    "harness": {
-      "command": "npx",
-      "args": ["harness-poc-mcp-server"],
-      "env": {
-        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
-      }
-    }
-  }
-}
-```
-
-**Windsurf** (`~/.windsurf/mcp.json`):
-
-```json
-{
-  "mcpServers": {
-    "harness": {
-      "command": "npx",
-      "args": ["harness-poc-mcp-server"],
-      "env": {
-        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
-      }
-    }
-  }
-}
-```
+</details>
 
 <details>
-<summary>Using a local build instead of npx?</summary>
+<summary>node (local install)</summary>
 
-Replace `"command": "npx"` and `"args": ["harness-poc-mcp-server"]` with:
+```bash
+npm install -g harness-poc-mcp-server
+claude mcp add harness -- harness-poc-mcp-server
+```
+
+</details>
+
+Then set `HARNESS_API_KEY` in your environment or `.env` file.
+
+#### Cursor (`.cursor/mcp.json`)
+
+<details open>
+<summary>npx (zero install)</summary>
+
+```json
+{
+  "mcpServers": {
+    "harness": {
+      "command": "npx",
+      "args": ["harness-poc-mcp-server"],
+      "env": {
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary>node (local install)</summary>
+
+```bash
+npm install -g harness-poc-mcp-server
+```
+
+```json
+{
+  "mcpServers": {
+    "harness": {
+      "command": "harness-poc-mcp-server",
+      "env": {
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+#### Windsurf (`~/.windsurf/mcp.json`)
+
+<details open>
+<summary>npx (zero install)</summary>
+
+```json
+{
+  "mcpServers": {
+    "harness": {
+      "command": "npx",
+      "args": ["harness-poc-mcp-server"],
+      "env": {
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary>node (local install)</summary>
+
+```bash
+npm install -g harness-poc-mcp-server
+```
+
+```json
+{
+  "mcpServers": {
+    "harness": {
+      "command": "harness-poc-mcp-server",
+      "env": {
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary>Using a local build from source?</summary>
+
+Replace the command with the path to your built `index.js`:
 
 ```json
 {
