@@ -28,6 +28,11 @@ import { registerSupplyChainAuditPrompt } from "./supply-chain-audit.js";
 import { registerExemptionReviewPrompt } from "./exemption-review.js";
 import { registerAccessControlAuditPrompt } from "./access-control-audit.js";
 
+// Harness Code prompts
+import { registerCodeReviewPrompt } from "./code-review.js";
+import { registerPrSummaryPrompt } from "./pr-summary.js";
+import { registerBranchCleanupPrompt } from "./branch-cleanup.js";
+
 export function registerAllPrompts(server: McpServer): void {
   // Existing prompts
   registerDebugPipelinePrompt(server);
@@ -57,4 +62,9 @@ export function registerAllPrompts(server: McpServer): void {
   registerSupplyChainAuditPrompt(server);
   registerExemptionReviewPrompt(server);
   registerAccessControlAuditPrompt(server);
+
+  // Harness Code
+  registerCodeReviewPrompt(server);
+  registerPrSummaryPrompt(server);
+  registerBranchCleanupPrompt(server);
 }

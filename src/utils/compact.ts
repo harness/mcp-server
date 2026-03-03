@@ -9,7 +9,7 @@ const TIMESTAMP_PATTERN = /(?:At|Ts|Time|Date)$/;
 /** Fields to always keep when compacting list items. */
 const IDENTITY_FIELDS = new Set([
   "identifier", "name", "displayName", "description", "slug",
-  "versionLabel",
+  "versionLabel", "sha", "title", "message",
 ]);
 
 const STATUS_FIELDS = new Set([
@@ -23,7 +23,7 @@ const TYPE_FIELDS = new Set([
 ]);
 
 const OWNERSHIP_FIELDS = new Set([
-  "tags", "labels", "owner",
+  "tags", "labels", "owner", "author", "committer",
 ]);
 
 const ALWAYS_KEEP = new Set(["openInHarness"]);

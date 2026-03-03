@@ -1,6 +1,6 @@
 # Harness MCP Server 2.0
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 10 consolidated tools and 113+ resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 10 consolidated tools and 119+ resource types.
 
 [![CI](https://github.com/thisrohangupta/harness-poc-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/thisrohangupta/harness-poc-mcp/actions/workflows/ci.yml)
 
@@ -10,10 +10,10 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **10 tools, 113+ resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 10 tools instead of hundreds.
+- **10 tools, 119+ resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 10 tools instead of hundreds.
 - **Full platform coverage.** 25 toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Internal Developer Portal, Software Supply Chain, and more. Not just pipelines — the entire Harness platform.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
-- **21 prompt templates.** Pre-built prompts for common workflows: debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, and more.
+- **24 prompt templates.** Pre-built prompts for common workflows: debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, and more.
 - **Works everywhere.** Stdio transport for local clients (Claude Desktop, Cursor, Windsurf), HTTP transport for remote/shared deployments, Docker and Kubernetes ready.
 - **Zero-config start.** Just provide a Harness API key. Account ID is auto-extracted from PAT tokens, org/project defaults are optional, and toolset filtering lets you expose only what you need.
 - **Extensible by design.** Adding a new Harness resource means adding a declarative data file — no new tool registration, no schema changes, no prompt updates.
@@ -319,7 +319,7 @@ The server exposes 10 MCP tools. Every tool accepts `org_id` and `project_id` as
 
 ## Resource Types
 
-113+ resource types organized across 25 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+119+ resource types organized across 25 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -392,7 +392,11 @@ The server exposes 10 MCP tools. Every tool accepts `org_id` and `project_id` as
 
 | Resource Type | List | Get | Create | Update | Delete | Execute Actions |
 |---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `repository` | x | x | | | | |
+| `repository` | x | x | x | x | | |
+| `branch` | x | x | x | | x | |
+| `commit` | x | x | | | | `diff`, `diff_stats` |
+| `file_content` | | x | | | | `blame` |
+| `tag` | x | | x | | x | |
 
 ### Artifact Registries
 
@@ -433,7 +437,9 @@ The server exposes 10 MCP tools. Every tool accepts `org_id` and `project_id` as
 
 | Resource Type | List | Get | Create | Update | Delete | Execute Actions |
 |---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `pull_request` | x | x | x | | | |
+| `pull_request` | x | x | x | x | | `merge` |
+| `pr_reviewer` | x | | x | | | `submit_review` |
+| `pr_comment` | x | | x | | | |
 | `pr_check` | x | | | | | |
 | `pr_activity` | x | | | | | |
 
@@ -597,6 +603,14 @@ The server exposes 10 MCP tools. Every tool accepts `org_id` and `project_id` as
 | `security-exemption-review` | Review pending security exemptions and make batch approval or rejection decisions | `projectId` (optional) |
 | `access-control-audit` | Audit user permissions, over-privileged accounts, and role assignments to enforce least-privilege | `projectId` (optional), `orgId` (optional) |
 
+### Harness Code
+
+| Prompt | Description | Parameters |
+|--------|-------------|------------|
+| `code-review` | Review a pull request — analyze diff, commits, checks, and comments to provide structured feedback on bugs, security, performance, and style | `repoId` (required), `prNumber` (required), `projectId` (optional) |
+| `pr-summary` | Auto-generate a PR title and description from the commit history and diff of a branch | `repoId` (required), `sourceBranch` (required), `targetBranch` (optional, default: main), `projectId` (optional) |
+| `branch-cleanup` | Analyze branches in a repository and recommend stale or merged branches to delete | `repoId` (required), `projectId` (optional) |
+
 ## MCP Resources
 
 | Resource URI | Description | MIME Type |
@@ -610,7 +624,7 @@ The server exposes 10 MCP tools. Every tool accepts `org_id` and `project_id` as
 
 ## Toolset Filtering
 
-By default, all 25 toolsets (and their 113+ resource types) are enabled. Use `HARNESS_TOOLSETS` to expose only the toolsets you need. This reduces the resource types the LLM sees, improving tool selection accuracy.
+By default, all 25 toolsets (and their 119+ resource types) are enabled. Use `HARNESS_TOOLSETS` to expose only the toolsets you need. This reduces the resource types the LLM sees, improving tool selection accuracy.
 
 ```bash
 # Only expose pipelines, services, and connectors
@@ -631,12 +645,12 @@ Available toolset names:
 | `logs` | execution_log |
 | `audit` | audit_event |
 | `delegates` | delegate, delegate_token |
-| `repositories` | repository |
+| `repositories` | repository, branch, commit, file_content, tag |
 | `registries` | registry, artifact, artifact_version, artifact_file |
 | `templates` | template |
 | `dashboards` | dashboard, dashboard_data |
 | `idp` | idp_entity, scorecard, scorecard_check, scorecard_stats, scorecard_check_stats, idp_score, idp_workflow, idp_tech_doc |
-| `pull-requests` | pull_request, pr_check, pr_activity |
+| `pull-requests` | pull_request, pr_reviewer, pr_comment, pr_check, pr_activity |
 | `feature-flags` | fme_workspace, fme_environment, feature_flag |
 | `gitops` | gitops_agent, gitops_application, gitops_cluster, gitops_repository, gitops_applicationset, gitops_repo_credential, gitops_app_event, gitops_pod_log, gitops_managed_resource, gitops_resource_action, gitops_dashboard, gitops_app_resource_tree |
 | `chaos` | chaos_experiment, chaos_probe, chaos_experiment_template, chaos_infrastructure, chaos_experiment_variable, chaos_experiment_run, chaos_loadtest |
@@ -663,7 +677,7 @@ Available toolset names:
                  +--------v---------+
                  |    Registry       |  <-- Declarative resource definitions
                  |  25 Toolsets      |      (data files, not code)
-                 |  113+ Resource Types|
+                 |  119+ Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+
@@ -810,6 +824,9 @@ src/
     supply-chain-audit.ts           # DevSecOps: supply chain audit
     exemption-review.ts             # DevSecOps: exemption approval
     access-control-audit.ts         # DevSecOps: access control audit
+    code-review.ts                  # Harness Code: PR code review
+    pr-summary.ts                   # Harness Code: auto-generate PR summary
+    branch-cleanup.ts               # Harness Code: stale branch cleanup
   utils/
     cli.ts                          # CLI arg parsing (transport, port)
     errors.ts                       # Error normalization
