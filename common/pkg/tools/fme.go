@@ -62,7 +62,7 @@ func ListFMEEnvironmentsTool(config *config.McpServerConfig, fmeService *client.
 
 const (
 	fmeFeatureFlagsDefaultCount = 20
-	fmeFeatureFlagsMaxCount     = 100
+	fmeFeatureFlagsMaxCount     = 50
 )
 
 // ListFMEFeatureFlagsTool creates a tool for listing FME feature flags for a specific workspace
