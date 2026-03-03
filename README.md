@@ -303,7 +303,7 @@ Toolset Name: `fme`
 
 - `list_fme_workspaces`: List all FME workspaces
 - `list_fme_environments`: List environments for a specific workspace
-- `list_fme_feature_flags`: List feature flags for a specific workspace
+- `list_fme_feature_flags`: List feature flags for a specific workspace (supports pagination via `offset` and `count`; default count: 20, max count: 100)
 - `get_fme_feature_flag_definition`: Get the definition of a specific feature flag in an environment
 
 #### SEI Toolset
