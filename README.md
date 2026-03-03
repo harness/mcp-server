@@ -411,7 +411,7 @@ The server exposes 10 MCP tools. Every tool accepts `org_id` and `project_id` as
 
 | Resource Type | List | Get | Create | Update | Delete | Execute Actions |
 |---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `template` | x | x | x | x | | |
+| `template` | x | x | x | x | x | |
 
 ### Dashboards
 

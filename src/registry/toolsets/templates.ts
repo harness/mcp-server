@@ -21,7 +21,7 @@ export const templatesToolset: ToolsetDefinition = {
     {
       resourceType: "template",
       displayName: "Template",
-      description: "Reusable template definition. Supports list, get, create, and update.",
+      description: "Reusable template definition. Supports list, get, create, update, and delete.",
       toolset: "templates",
       scope: "project",
       identifierFields: ["template_id"],
@@ -117,6 +117,15 @@ export const templatesToolset: ToolsetDefinition = {
             return r.data ?? raw;
           },
           description: "Create a template (step, stage, or pipeline). Body: template_yaml (string, required), identifier, name, label (version), is_stable.",
+        },
+        delete: {
+          method: "DELETE",
+          path: "/template/api/templates/{templateIdentifier}",
+          pathParams: { template_id: "templateIdentifier" },
+          queryParams: { version_label: "versionLabel" },
+          responseExtractor: ngExtract,
+          description:
+            "Delete a template. If version_label is provided, only that version is deleted. If omitted, all versions of the template are deleted.",
         },
       },
     },
