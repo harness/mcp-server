@@ -29,6 +29,7 @@ import { scsToolset } from "./toolsets/scs.js";
 import { stoToolset } from "./toolsets/sto.js";
 import { accessControlToolset } from "./toolsets/access-control.js";
 import { settingsToolset } from "./toolsets/settings.js";
+import { platformToolset } from "./toolsets/platform.js";
 
 const log = createLogger("registry");
 
@@ -58,6 +59,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   stoToolset,
   accessControlToolset,
   settingsToolset,
+  platformToolset,
 ];
 
 /**
@@ -235,6 +237,28 @@ export class Registry {
         orgIdentifier: (params.orgIdentifier as string) ?? "",
         projectIdentifier: (params.projectIdentifier as string) ?? "",
       };
+
+      // Populate resolved path param values so deep link templates using
+      // path-style placeholders (e.g. {org}, {project}) get substituted.
+      // Merge from both the current spec and the get spec to cover cases where
+      // the list spec lacks path params that the deep link template references.
+      const allPathParams: Record<string, string> = {
+        ...def.operations.get?.pathParams,
+        ...spec.pathParams,
+      };
+      for (const [inputKey, pathPlaceholder] of Object.entries(allPathParams)) {
+        if (baseLinkParams[pathPlaceholder]) continue; // already set
+        let value = input[inputKey] as string | undefined;
+        if (!value && pathPlaceholder === "org") {
+          value = this.config.HARNESS_DEFAULT_ORG_ID;
+        } else if (!value && pathPlaceholder === "project") {
+          value = this.config.HARNESS_DEFAULT_PROJECT_ID;
+        }
+        if (value) {
+          baseLinkParams[pathPlaceholder] = value;
+        }
+      }
+
       const getPathParam = def.operations.get?.pathParams;
       for (const field of def.identifierFields) {
         const pathParamName = spec.pathParams?.[field] ?? getPathParam?.[field] ?? field;
@@ -246,19 +270,22 @@ export class Registry {
           baseLinkParams[pathParamName] = String(value);
         }
       }
-      try {
-        resultRecord.openInHarness = buildDeepLink(
-          this.config.HARNESS_BASE_URL,
-          this.config.HARNESS_ACCOUNT_ID,
-          def.deepLinkTemplate,
-          baseLinkParams,
-        );
-      } catch {
-        // Deep link construction failed — non-critical
-      }
-
-      // Attach per-item deep links for list results
+      // Only attach top-level openInHarness for single-item results (get/create/update),
+      // not for list results where there's no single entity to link to.
       const r = result as { items?: unknown[] };
+      const isList = r.items && Array.isArray(r.items);
+      if (!isList) {
+        try {
+          resultRecord.openInHarness = buildDeepLink(
+            this.config.HARNESS_BASE_URL,
+            this.config.HARNESS_ACCOUNT_ID,
+            def.deepLinkTemplate,
+            baseLinkParams,
+          );
+        } catch {
+          // Deep link construction failed — non-critical
+        }
+      }
       if (r.items && Array.isArray(r.items)) {
         for (const item of r.items) {
           if (typeof item !== "object" || item === null) continue;

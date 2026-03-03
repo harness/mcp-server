@@ -28,7 +28,8 @@ export type ToolsetName =
   | "scs"
   | "sto"
   | "access_control"
-  | "settings";
+  | "settings"
+  | "platform";
 
 export type OperationName = "list" | "get" | "create" | "update" | "delete";
 

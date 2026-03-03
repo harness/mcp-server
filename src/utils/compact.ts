@@ -43,6 +43,7 @@ function isWhitelistedKey(key: string): boolean {
 /**
  * Strip verbose fields from an array of list items.
  * Keeps identity, status, type, ownership, timestamp, and deep link fields.
+ * Merges openInHarness into name as a markdown hyperlink.
  */
 export function compactItems(items: unknown[]): unknown[] {
   return items.map((item) => {
@@ -54,6 +55,13 @@ export function compactItems(items: unknown[]): unknown[] {
         slim[key] = full[key];
       }
     }
+
+    // Merge deep link into name as markdown hyperlink, then drop the separate field
+    if (typeof slim.openInHarness === "string" && typeof slim.name === "string") {
+      slim.name = `[${slim.name}](${slim.openInHarness})`;
+      delete slim.openInHarness;
+    }
+
     return slim;
   });
 }

@@ -1,6 +1,6 @@
 # Harness MCP Server
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 10 consolidated tools and 110+ resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 10 consolidated tools and 113+ resource types.
 
 [![CI](https://github.com/thisrohangupta/harness-poc-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/thisrohangupta/harness-poc-mcp/actions/workflows/ci.yml)
 
@@ -8,7 +8,7 @@ An MCP (Model Context Protocol) server that gives AI agents full access to the H
 
 The naive approach to building an MCP server for a platform like Harness is 1:1 API-to-tool mapping: one tool per endpoint. That path leads to 240+ tools, which is an anti-pattern — LLMs degrade at tool selection when the tool count is high, context windows fill with schema definitions, and every new API endpoint requires a new tool.
 
-This server takes a different approach: **registry-based dispatch**. Instead of hundreds of individual tools, there are 10 generic tools that operate on any of 110+ resource types. Adding a new Harness resource means adding a declarative data file — no new tool registration, no schema changes, no prompt updates.
+This server takes a different approach: **registry-based dispatch**. Instead of hundreds of individual tools, there are 10 generic tools that operate on any of 113+ resource types. Adding a new Harness resource means adding a declarative data file — no new tool registration, no schema changes, no prompt updates.
 
 ## Quick Start
 
@@ -100,14 +100,14 @@ curl -X POST http://localhost:3000/mcp \
       "command": "node",
       "args": ["/absolute/path/to/harness-poc-mcp/build/index.js", "stdio"],
       "env": {
-        "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
-        "HARNESS_DEFAULT_ORG_ID": "default",
-        "HARNESS_DEFAULT_PROJECT_ID": "your-project"
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
       }
     }
   }
 }
 ```
+
+> **Note:** `HARNESS_DEFAULT_ORG_ID` and `HARNESS_DEFAULT_PROJECT_ID` are optional. Agents can discover orgs and projects dynamically using `harness_list(resource_type="organization")` and `harness_list(resource_type="project")`. Set them only if you want to pin a default scope for convenience.
 
 **Cursor** (`.cursor/mcp.json`):
 
@@ -118,9 +118,7 @@ curl -X POST http://localhost:3000/mcp \
       "command": "node",
       "args": ["/absolute/path/to/harness-poc-mcp/build/index.js", "stdio"],
       "env": {
-        "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
-        "HARNESS_DEFAULT_ORG_ID": "default",
-        "HARNESS_DEFAULT_PROJECT_ID": "your-project"
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
       }
     }
   }
@@ -136,9 +134,7 @@ curl -X POST http://localhost:3000/mcp \
       "command": "node",
       "args": ["/absolute/path/to/harness-poc-mcp/build/index.js", "stdio"],
       "env": {
-        "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
-        "HARNESS_DEFAULT_ORG_ID": "default",
-        "HARNESS_DEFAULT_PROJECT_ID": "your-project"
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
       }
     }
   }
@@ -193,8 +189,8 @@ The deployment runs 2 replicas with readiness/liveness probes, resource limits, 
 | `HARNESS_API_KEY` | Yes | -- | Harness personal access token or service account token |
 | `HARNESS_ACCOUNT_ID` | No | *(from PAT)* | Harness account identifier. Auto-extracted from PAT tokens; only needed for non-PAT API keys |
 | `HARNESS_BASE_URL` | No | `https://app.harness.io` | Base URL (override for self-managed Harness) |
-| `HARNESS_DEFAULT_ORG_ID` | No | `default` | Default organization identifier |
-| `HARNESS_DEFAULT_PROJECT_ID` | No | -- | Default project identifier |
+| `HARNESS_DEFAULT_ORG_ID` | No | `default` | Default organization identifier. Optional convenience — agents can discover orgs dynamically via `harness_list(resource_type="organization")` |
+| `HARNESS_DEFAULT_PROJECT_ID` | No | -- | Default project identifier. Optional convenience — agents can discover projects dynamically via `harness_list(resource_type="project")` |
 | `HARNESS_API_TIMEOUT_MS` | No | `30000` | HTTP request timeout in milliseconds |
 | `HARNESS_MAX_RETRIES` | No | `3` | Retry count for transient failures (429, 5xx) |
 | `LOG_LEVEL` | No | `info` | Log verbosity: `debug`, `info`, `warn`, `error` |
@@ -223,6 +219,18 @@ The server exposes 10 MCP tools. Every tool accepts `org_id` and `project_id` as
 
 ```json
 { "resource_type": "pipeline" }
+```
+
+**List organizations in the account:**
+
+```json
+{ "resource_type": "organization" }
+```
+
+**List projects in an organization:**
+
+```json
+{ "resource_type": "project", "org_id": "default" }
 ```
 
 **List pipelines in a project:**
@@ -303,7 +311,14 @@ The server exposes 10 MCP tools. Every tool accepts `org_id` and `project_id` as
 
 ## Resource Types
 
-110+ resource types organized across 24 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+113+ resource types organized across 25 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+
+### Platform
+
+| Resource Type | List | Get | Create | Update | Delete | Execute Actions |
+|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
+| `organization` | x | x | x | x | x | |
+| `project` | x | x | x | x | x | |
 
 ### Pipelines
 
@@ -559,7 +574,7 @@ The server exposes 10 MCP tools. Every tool accepts `org_id` and `project_id` as
 
 ## Toolset Filtering
 
-By default, all 24 toolsets (and their 110+ resource types) are enabled. Use `HARNESS_TOOLSETS` to expose only the toolsets you need. This reduces the resource types the LLM sees, improving tool selection accuracy.
+By default, all 25 toolsets (and their 113+ resource types) are enabled. Use `HARNESS_TOOLSETS` to expose only the toolsets you need. This reduces the resource types the LLM sees, improving tool selection accuracy.
 
 ```bash
 # Only expose pipelines, services, and connectors
@@ -570,6 +585,7 @@ Available toolset names:
 
 | Toolset | Resource Types |
 |---------|---------------|
+| `platform` | organization, project |
 | `pipelines` | pipeline, execution, trigger, pipeline_summary, input_set |
 | `services` | service |
 | `environments` | environment |
@@ -610,8 +626,8 @@ Available toolset names:
                           |
                  +--------v---------+
                  |    Registry       |  <-- Declarative resource definitions
-                 |  24 Toolsets      |      (data files, not code)
-                 |  110+ Resource Types|
+                 |  25 Toolsets      |      (data files, not code)
+                 |  113+ Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+
@@ -716,6 +732,7 @@ src/
     index.ts                        # Registry class + dispatch logic
     types.ts                        # ResourceDefinition, ToolsetDefinition, etc.
     toolsets/                        # One file per toolset (declarative data)
+      platform.ts
       pipelines.ts
       services.ts
       ccm.ts

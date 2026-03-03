@@ -13,9 +13,10 @@ const pipelineCreateSchema: BodySchema = {
 };
 
 const pipelineUpdateSchema: BodySchema = {
-  description: "Pipeline YAML definition (full replacement)",
+  description: "Pipeline YAML definition (full replacement). Pass either pipeline (JSON object) or yamlPipeline (YAML string).",
   fields: [
-    { name: "pipeline", type: "object", required: true, description: "Complete pipeline object (replaces existing)" },
+    { name: "pipeline", type: "object", required: false, description: "Complete pipeline as JSON object (replaces existing)" },
+    { name: "yamlPipeline", type: "string", required: false, description: "Complete pipeline as YAML string (replaces existing). Use this when updating from get pipeline response or editing YAML." },
   ],
 };
 
@@ -68,7 +69,16 @@ export const pipelinesToolset: ToolsetDefinition = {
           method: "PUT",
           path: "/pipeline/api/pipelines/v2/{pipelineIdentifier}",
           pathParams: { pipeline_id: "pipelineIdentifier" },
-          bodyBuilder: (input) => input.body,
+          bodyBuilder: (input) => {
+            const b = input.body as Record<string, unknown> | undefined;
+            if (b && typeof b === "object" && typeof b.yamlPipeline === "string") {
+              return { yamlPipeline: b.yamlPipeline };
+            }
+            if (b && typeof b === "object" && b.pipeline !== undefined) {
+              return b;
+            }
+            throw new Error("body must include either pipeline (JSON object) or yamlPipeline (YAML string)");
+          },
           responseExtractor: ngExtract,
           description: "Update an existing pipeline YAML",
           bodySchema: pipelineUpdateSchema,
