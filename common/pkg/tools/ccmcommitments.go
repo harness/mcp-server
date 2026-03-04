@@ -26,7 +26,7 @@ const (
 )
 
 func FetchCommitmentSpendsTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("get_commitment_spends",
+	return mcp.NewTool("ccm_get_commitment_spends",
 			mcp.WithDescription("Returns Commitment Orchestrator spend details for a Harness CCM account, "+
 				"broken down by commitment type (AWS Reserved Instances and Savings Plans) with month-over-month trend data. "+
 				"Commitment Orchestrator is the Harness module that automates purchase and management of cloud cost commitments. "+
