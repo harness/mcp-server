@@ -257,6 +257,85 @@ Replace the command with the path to your built `index.js`:
 
 </details>
 
+### MCP Gateway
+
+The Harness MCP server is fully compatible with MCP Gateways — reverse proxies that provide centralized authentication, governance, tool routing, and observability across multiple MCP servers. Since the server implements the standard MCP protocol with both stdio and HTTP transports, it works behind any MCP-compliant gateway with no code changes.
+
+**Why use a gateway?**
+- Centralized credential management — no API keys in agent configs
+- Governance & audit logging for all tool calls across teams
+- Single endpoint for agents instead of N connections to N MCP servers
+- Access control — restrict which teams can use which tools
+
+#### Docker MCP Gateway
+
+Register the server in your Docker MCP Gateway configuration:
+
+```json
+{
+  "mcpServers": {
+    "harness": {
+      "command": "npx",
+      "args": ["harness-poc-mcp-server"],
+      "env": {
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+      }
+    }
+  }
+}
+```
+
+#### Portkey
+
+Add the Harness MCP server to your [Portkey MCP Gateway](https://portkey.ai/features/mcp) for enterprise governance, cost tracking, and multi-LLM routing:
+
+```json
+{
+  "mcpServers": {
+    "harness": {
+      "command": "npx",
+      "args": ["harness-poc-mcp-server"],
+      "env": {
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+      }
+    }
+  }
+}
+```
+
+#### LiteLLM
+
+Add to your [LiteLLM proxy config](https://docs.litellm.ai/docs/mcp):
+
+```yaml
+mcp_servers:
+  - name: harness
+    command: npx
+    args:
+      - harness-poc-mcp-server
+    env:
+      HARNESS_API_KEY: "pat.xxx.xxx.xxx"
+```
+
+#### Envoy AI Gateway
+
+The server works with [Envoy AI Gateway's MCP support](https://aigateway.envoyproxy.io/docs/0.5/capabilities/mcp/) via HTTP transport:
+
+```bash
+# Start the server in HTTP mode
+HARNESS_API_KEY=pat.xxx.xxx.xxx npx harness-poc-mcp-server http --port 8080
+```
+
+Then configure Envoy to route to `http://localhost:8080/mcp` as an upstream MCP backend.
+
+#### Kong
+
+Use [Kong's AI MCP Proxy plugin](https://developer.konghq.com/mcp/) to expose the Harness MCP server through your existing Kong gateway infrastructure.
+
+#### Other Gateways
+
+Any gateway that supports the MCP specification (Microsoft MCP Gateway, IBM ContextForge, Cloudflare Workers, etc.) can proxy this server. For **stdio-based** gateways, use the default transport. For **HTTP-based** gateways, start the server with `http` transport and point the gateway at the `/mcp` endpoint.
+
 ### Docker
 
 Build and run the server as a Docker container:
