@@ -222,6 +222,7 @@ Toolset Name: `ccm`
 - `get_ccm_commitment_utilisation`: Get commitment utilisation information for an account in Harness Cloud Cost Management broken down by Reserved Instances and Savings Plans in day wise granularity.
 - `get_ccm_estimated_savings`: Get estimated savings information for a cloud account in Harness Cloud Cost Management
 - `get_ccm_commitment_ec2_analysis`: Get AWS EC2 commitment analysis for an account in Harness Cloud Cost Management, including RI/SP commitment spend, utilization breakdown, current savings, estimated annualized savings, and ESR.
+- `get_commitment_spends`: Returns Commitment Orchestrator spend details for an account in Harness Cloud Cost Management, broken down by commitment type (Reserved Instances and Savings Plans) with month-over-month trend data.
 
 #### Chaos Engineering Toolset
 
