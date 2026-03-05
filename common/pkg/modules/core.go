@@ -48,6 +48,7 @@ func (m *CoreModule) Toolsets() []string {
 		"settings",
 		"secrets",
 		"prompts",
+		"intelligence",
 	}
 }
 
@@ -108,6 +109,11 @@ func (m *CoreModule) RegisterToolsets() error {
 			}
 		case "prompts":
 			err := RegisterPromptTools(m.config, m.tsg)
+			if err != nil {
+				return err
+			}
+		case "intelligence":
+			err := RegisterIntelligence(m.config, m.tsg)
 			if err != nil {
 				return err
 			}
@@ -381,5 +387,28 @@ func RegisterPromptTools(config *config.McpServerConfig, tsg *toolsets.ToolsetGr
 
 	// Add toolset to the group
 	tsg.AddToolset(prompt)
+	return nil
+}
+
+// RegisterIntelligence registers the intelligence toolset with AI DevOps Agent
+func RegisterIntelligence(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
+	// Create base client for intelligence service
+	// Default timeout for Intelligence service
+	const defaultIntelligenceTimeout = 300 * time.Second
+
+	c, err := DefaultClientProvider.CreateClient(config, "intelligence", defaultIntelligenceTimeout)
+	if err != nil {
+		return fmt.Errorf("failed to create client for intelligence: %w", err)
+	}
+
+	intelligenceClient := client.NewIntelligenceService(c)
+
+	// Create the intelligence toolset
+	intelligence := toolsets.NewToolset("intelligence", "Harness Intelligence related tools").
+		AddReadTools(
+			toolsets.NewServerTool(tools.AIDevOpsAgentTool(config, intelligenceClient)),
+		)
+
+	tsg.AddToolset(intelligence)
 	return nil
 }

@@ -33,6 +33,7 @@ var ServiceToPathMap = map[string]string{
 	"scs":                 "ssca-manager",
 	"sto":                 "sto",
 	"gitops":              "gateway/gitops/api/v1",
+	"intelligence":        "gateway/harness-intelligence",
 }
 
 // ExternalClientProvider implements ClientProvider for external mode
