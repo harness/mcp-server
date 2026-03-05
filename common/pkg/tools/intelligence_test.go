@@ -51,7 +51,7 @@ func TestAIDevOpsAgentTool_Definition(t *testing.T) {
 	assert.NotNil(t, handler)
 	assert.Contains(t, tool.Description, "create or update Harness entities")
 	assert.Contains(t, tool.Description, "Returns the generated or updated YAML")
-	assert.Contains(t, tool.Description, "get_pipeline")
+	assert.Contains(t, tool.Description, "CREATE_PIPELINE or UPDATE_PIPELINE")
 
 	props := tool.InputSchema.Properties
 	assert.Contains(t, props, "prompt")
