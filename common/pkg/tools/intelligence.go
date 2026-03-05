@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	commonConfig "github.com/harness/mcp-server/common"
 	commonClient "github.com/harness/mcp-server/common/client"
 	"github.com/harness/mcp-server/common/client/dto"
-	commonConfig "github.com/harness/mcp-server/common"
 	commonScopeUtils "github.com/harness/mcp-server/common/pkg/common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"

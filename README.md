@@ -29,6 +29,7 @@ The Harness MCP Server is a [Model Context Protocol (MCP)](https://modelcontextp
     - [Feature Management and Experimentation (FME) Toolset](#feature-management-and-experimentation-fme-toolset)
     - [Sei Toolset](#sei-toolset)
     - [GitOps Toolset](#gitops-toolset)
+    - [Intelligence Toolset](#intelligence-toolset)
 - [Prerequisites](#prerequisites)
 - [Quickstart](#quickstart)
 - [Makefile Usage](#makefile-usage)
@@ -366,6 +367,12 @@ Toolset Name: `gitops`
 - `gitops_get_repo_credentials`: Get detailed information about specific repository credentials
 - `gitops_get_dashboard_overview`: Get GitOps dashboard overview with application and sync statistics
 
+#### Intelligence Toolset
+
+Toolset Name: `intelligence`
+
+- `ask_ai_devops_agent`: Ask the AI DevOps Agent to create or update Harness entities such as pipelines, steps, step groups, environments, connectors, services, and secrets. Returns the generated or updated YAML along with a conversational response. Supports streaming via SSE progress notifications.
+
 ## Prerequisites
 
 1. You will need to have Go 1.23 or later installed on your system.
@@ -378,10 +385,11 @@ Toolset Name: `gitops`
 This project provides a `Makefile` to simplify common development tasks. The main targets are:
 
 - `make build` – Build the mcp-server binary with version information embedded.
-- `make init` – Set up git hooks and submodules for pre-commit checks.
-- `make dep` – Download Go module dependencies.
-- `make tools` – Install tools required for the build (if any are specified).
 - `make format` – Format Go code using goimports and gci.
+- `make test` – Run all Go tests with coverage and open an HTML coverage report.
+- `make tools` – Install tools required for the build (goimports, gci).
+- `make export-tools` – Export MCP tool metadata to JSON (`_resources/tools_metadata.json`).
+- `make help` – Show available Makefile targets.
 
 You can run any of these commands from the project root. For example:
 
