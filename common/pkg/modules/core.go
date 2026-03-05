@@ -405,7 +405,7 @@ func RegisterIntelligence(config *config.McpServerConfig, tsg *toolsets.ToolsetG
 
 	// Create the intelligence toolset
 	intelligence := toolsets.NewToolset("intelligence", "Harness Intelligence related tools").
-		AddReadTools(
+		AddWriteTools(
 			toolsets.NewServerTool(tools.AIDevOpsAgentTool(config, intelligenceClient)),
 		)
 

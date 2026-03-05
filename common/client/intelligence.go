@@ -78,8 +78,6 @@ func (s *IntelligenceService) SendAIDevOpsChat(
 		if err != nil {
 			return nil, fmt.Errorf("failed to send request to intelligence service: %w", err)
 		}
-		slog.InfoContext(ctx, "Non-streaming request completed", "response", response)
-
 		return &response, nil
 	}
 
@@ -181,13 +179,7 @@ func (s *IntelligenceService) processStreamingResponse(
 
 	slog.InfoContext(ctx, "Finished processing streaming response", "totalEvents", eventCount)
 
-	// Add note about streamed events
-	instructionNote := "NOTE: The SSE events below have already been streamed to the user in real-time.\n" +
-		"Do not repeat the full content of these events in your response.\n" +
-		"Focus on summarizing key outcomes and providing additional context or next steps.\n" +
-		"---\n\n"
-
-	finalResponse.Response = instructionNote + allContent.String()
+	finalResponse.Response = allContent.String()
 
 	if err := scanner.Err(); err != nil {
 		slog.WarnContext(ctx, "Error in scanner", "error", err.Error())

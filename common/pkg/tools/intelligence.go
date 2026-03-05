@@ -19,9 +19,10 @@ import (
 // AIDevOpsAgentTool creates the ask_ai_devops_agent tool
 func AIDevOpsAgentTool(config *commonConfig.McpServerConfig, client *commonClient.IntelligenceService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("ask_ai_devops_agent",
-			mcp.WithDescription("The AI DevOps Agent is an expert in planning and executing requests "+
-				"related to generation/updation of Harness entities like pipeline, step, environment, connector, service, secret. "+
-				"Stage generation is not supported, use pipeline actions instead."),
+			mcp.WithDescription("Ask the AI DevOps Agent to create or update Harness entities such as "+
+				"pipelines, steps, step groups, environments, connectors, services, and secrets. "+
+				"Returns the generated or updated YAML along with a conversational response. "+
+				"For stage-level changes, use CREATE_PIPELINE or UPDATE_PIPELINE actions."),
 			mcp.WithString("prompt",
 				mcp.Required(),
 				mcp.Description("The prompt to send to the AI DevOps agent"),
@@ -124,22 +125,13 @@ func AIDevOpsAgentTool(config *commonConfig.McpServerConfig, client *commonClien
 				Stream:         stream,
 			}
 
-			// Safely access progress token with nil check
 			var progressToken mcp.ProgressToken
 			if request.Params.Meta != nil {
 				progressToken = request.Params.Meta.ProgressToken
 			}
 
-			// Generate a default progress token if none is provided
-			if progressToken == nil {
-				tokenID := uuid.New().String()
-				progressToken = mcp.ProgressToken(tokenID)
-			}
-
-			// Determine if we can actually stream (need progress token and server context)
-			shouldStream := stream && progressToken != nil
 			mcpServer := server.ServerFromContext(ctx)
-			shouldStream = shouldStream && mcpServer != nil
+			shouldStream := stream && mcpServer != nil
 
 			slog.InfoContext(ctx, "Intelligence service request", "shouldStream", shouldStream, "action", action)
 
@@ -198,8 +190,6 @@ func AIDevOpsAgentTool(config *commonConfig.McpServerConfig, client *commonClien
 			if response.Error != "" {
 				return mcp.NewToolResultError(response.Error), nil
 			}
-			slog.InfoContext(ctx, "Non-streaming request completed", "response", response)
-
 			rawResponse, err := json.Marshal(response)
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal response: %w", err)

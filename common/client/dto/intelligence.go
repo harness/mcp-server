@@ -59,6 +59,8 @@ func ActionTypeValues() []string {
 		string(UpdateSecret),
 		string(UpdateService),
 		string(UpdateConnector),
+		string(CreateStepGroup),
+		string(UpdateStepGroup),
 	}
 }
 
