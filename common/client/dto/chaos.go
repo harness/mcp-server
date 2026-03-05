@@ -155,6 +155,17 @@ type ListProbeResponse struct {
 	Probes          []GetProbeResponse `json:"data"`
 }
 
+// DeleteProbeResponse mirrors the upstream ProbeDeleteResponse from hce-saas.
+// The handler returns resp.Response (bool), so the HTTP body is just true/false.
+type DeleteProbeResponse struct {
+	Response bool `json:"response,omitempty"`
+}
+
+// ProbeVerifyRequest is the body for POST rest/v2/probes/:probeId/verify.
+type ProbeVerifyRequest struct {
+	Verify bool `json:"verify"`
+}
+
 // ProbeBulkEnableRequest is the body for POST rest/v2/probes/:probeId/enable.
 type ProbeBulkEnableRequest struct {
 	IsEnabled    bool  `json:"isEnabled"`
@@ -198,6 +209,7 @@ type ExecutedByExperiment struct {
 	ExperimentType  string `json:"experimentType"`
 	UpdatedAt       int    `json:"updatedAt"`
 }
+
 type ProbeTemplateRunProperties struct {
 	ProbeTimeout         string       `json:"timeout,omitempty"`
 	Interval             string       `json:"interval,omitempty"`
@@ -207,6 +219,43 @@ type ProbeTemplateRunProperties struct {
 	StopOnFailure        bool         `json:"stopOnFailure,omitempty"`
 	Verbosity            *string      `json:"verbosity,omitempty"`
 	Retry                *interface{} `json:"retry,omitempty"`
+}
+
+// ProbeDetailsInExperimentRequest is the body for POST rest/v2/probes/experiment-run.
+// At least one of NotifyIDs or ExperimentRunIDs must be non-empty.
+type ProbeDetailsInExperimentRequest struct {
+	NotifyIDs        []string `json:"notifyIds,omitempty"`
+	ExperimentRunIDs []string `json:"experimentRunIds,omitempty"`
+}
+
+// ProbeDetailsInExperimentResponse is the response for POST rest/v2/probes/experiment-run.
+type ProbeDetailsInExperimentResponse struct {
+	Probes []ProbeDetailsInExperiment `json:"data"`
+}
+
+// ProbeDetailsInExperiment holds probe execution details for a single probe in an experiment run.
+type ProbeDetailsInExperiment struct {
+	ID                     string              `json:"probeId"`
+	ProbeName              string              `json:"name"`
+	ProbeType              string              `json:"type"`
+	ProbeMode              string              `json:"mode"`
+	ProbeStatus            string              `json:"status"`
+	ExperimentID           string              `json:"experimentId"`
+	ExperimentRunID        string              `json:"experimentRunId"`
+	NotifyID               string              `json:"notifyId"`
+	ExperimentName         string              `json:"experimentName"`
+	NodeName               string              `json:"nodeName,omitempty"`
+	FaultName              string              `json:"faultName,omitempty"`
+	IsExperimentLevelProbe bool                `json:"isExperimentLevelProbe"`
+	ProbeDetails           ProbeDetailsMinimal `json:"probeDetails"`
+	ProbeYaml              string              `json:"probeYaml,omitempty"`
+}
+
+// ProbeDetailsMinimal holds minimal probe configuration details.
+type ProbeDetailsMinimal struct {
+	InfrastructureType string                     `json:"infrastructureType"`
+	RunProperties      ProbeTemplateRunProperties `json:"runProperties,omitempty"`
+	ProbeProperties    interface{}                `json:"probeProperties,omitempty"`
 }
 
 type ListExperimentTemplateResponse struct {
@@ -448,4 +497,35 @@ type UserDetail struct {
 	UserID   string `json:"userID"`
 	Username string `json:"username"`
 	Email    string `json:"email"`
+}
+
+// ListActionsResponse is the response for GET rest/actions.
+type ListActionsResponse struct {
+	Data       []ActionResponse `json:"data"`
+	Pagination Pagination       `json:"pagination"`
+}
+
+// ActionResponse mirrors hce-saas actions.ActionResponse (dbAction.Action inlined + extra fields).
+type ActionResponse struct {
+	Identity             string       `json:"identity"`
+	Name                 string       `json:"name"`
+	Description          string       `json:"description"`
+	Tags                 []string     `json:"tags"`
+	Type                 string       `json:"type"`
+	InfrastructureType   string       `json:"infrastructureType"`
+	ActionProperties     interface{}  `json:"actionProperties"`
+	RunProperties        interface{}  `json:"runProperties,omitempty"`
+	Variables            []Variable   `json:"variables,omitempty"`
+	ImportType           string       `json:"importType"`
+	HubRef               *string      `json:"hubRef,omitempty"`
+	ActionsTemplateRef   *string      `json:"actionsRef,omitempty"`
+	RecentExecutions     interface{}  `json:"recentExecutions,omitempty"`
+	ActionReferenceCount int64        `json:"actionReferenceCount,omitempty"`
+	ManagedBy            string       `json:"managedBy,omitempty"`
+	ActionTemplate       string       `json:"actionTemplate"`
+	IsImported           bool         `json:"isImported"`
+	CreatedBy            *UserDetails `json:"createdBy,omitempty"`
+	UpdatedBy            *UserDetails `json:"updatedBy,omitempty"`
+	UpdatedAt            int64        `json:"updatedAt"`
+	CreatedAt            int64        `json:"createdAt"`
 }
