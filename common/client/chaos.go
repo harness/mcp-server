@@ -18,10 +18,13 @@ const (
 	chaosExperimentRunPath            = "rest/v2/experiments/%s/run"
 	chaosListExperimentVariables      = "rest/v2/experiments/%s/variables"
 	// Base API paths for probes
-	chaosListProbesPath       = "rest/v2/probes"
-	chaosGetProbePath         = "rest/v2/probes/%s"
-	chaosGetProbeManifestPath = "rest/v2/probes/manifest/%s"
-	chaosEnableProbePath      = "rest/v2/probes/%s/enable"
+	chaosListProbesPath               = "rest/v2/probes"
+	chaosGetProbePath                 = "rest/v2/probes/%s"
+	chaosGetProbeManifestPath         = "rest/v2/probes/manifest/%s"
+	chaosEnableProbePath              = "rest/v2/probes/%s/enable"
+	chaosDeleteProbePath              = "rest/v2/probes/%s"
+	chaosVerifyProbePath              = "rest/v2/probes/%s/verify"
+	chaosGetProbesInExperimentRunPath = "rest/v2/probes/experiment-run"
 	// Base API paths for experiment templates
 	chaosCreateExperimentFromTemplate = "rest/experimenttemplates/%s/launch"
 	chaosListExperimentTemplates      = "rest/experimenttemplates"
@@ -31,7 +34,12 @@ const (
 	chaosGetFaultVariablesPath         = "rest/faults/%s/variables"
 	chaosGetFaultYamlPath              = "rest/faults/%s/yaml"
 	chaosListExperimentRunsOfFaultPath = "rest/faults/%s/experimentruns"
-	chaosDeleteFaultPath              = "rest/faults/%s"
+	chaosDeleteFaultPath               = "rest/faults/%s"
+	// Base API paths for actions
+	chaosListActionsPath       = "rest/actions"
+	chaosGetActionPath         = "rest/actions/%s"
+	chaosGetActionManifestPath = "rest/actions/manifest/%s"
+	chaosDeleteActionPath      = "rest/actions/%s"
 )
 
 type ChaosService struct {
@@ -314,6 +322,103 @@ func (c *ChaosService) EnableProbe(ctx context.Context, scope dto.Scope, probeID
 		return "", fmt.Errorf("failed to enable/disable probe: %w", err)
 	}
 	return resp, nil
+}
+
+func (c *ChaosService) DeleteProbe(ctx context.Context, scope dto.Scope, probeID string) (*dto.DeleteProbeResponse, error) {
+	path := fmt.Sprintf(chaosDeleteProbePath, probeID)
+	params := addIdentifierParams(make(map[string]string), scope)
+
+	out := new(dto.DeleteProbeResponse)
+	if err := c.Client.Delete(ctx, path, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to delete probe: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) VerifyProbe(ctx context.Context, scope dto.Scope, probeID string, verify bool) (string, error) {
+	path := fmt.Sprintf(chaosVerifyProbePath, probeID)
+	params := addIdentifierParams(make(map[string]string), scope)
+
+	body := dto.ProbeVerifyRequest{Verify: verify}
+	var resp string
+	if err := c.Client.Post(ctx, path, params, body, nil, &resp); err != nil {
+		return "", fmt.Errorf("failed to verify probe: %w", err)
+	}
+	return resp, nil
+}
+
+func (c *ChaosService) ListActions(ctx context.Context, scope dto.Scope, pagination *dto.PaginationOptions, hubIdentity, search, infraType, entityType string, includeAllScope bool) (*dto.ListActionsResponse, error) {
+	params := make(map[string]string)
+
+	setDefaultPagination(pagination)
+	params["page"] = fmt.Sprintf("%d", pagination.Page)
+	params["limit"] = fmt.Sprintf("%d", pagination.Size)
+	params = addIdentifierParams(params, scope)
+
+	if hubIdentity != "" {
+		params["hubIdentity"] = hubIdentity
+	}
+	if search != "" {
+		params["search"] = search
+	}
+	if infraType != "" {
+		params["infraType"] = infraType
+	}
+	if entityType != "" {
+		params["entityType"] = entityType
+	}
+	if includeAllScope {
+		params["includeAllScope"] = "true"
+	}
+
+	out := new(dto.ListActionsResponse)
+	if err := c.Client.Get(ctx, chaosListActionsPath, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to list actions: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) GetAction(ctx context.Context, scope dto.Scope, identity string) (*dto.ActionResponse, error) {
+	path := fmt.Sprintf(chaosGetActionPath, identity)
+	params := addIdentifierParams(make(map[string]string), scope)
+
+	out := new(dto.ActionResponse)
+	if err := c.Client.Get(ctx, path, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to get action: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) GetActionManifest(ctx context.Context, scope dto.Scope, identity string) (string, error) {
+	path := fmt.Sprintf(chaosGetActionManifestPath, identity)
+	params := addIdentifierParams(make(map[string]string), scope)
+
+	var manifest string
+	if err := c.Client.Get(ctx, path, params, nil, &manifest); err != nil {
+		return "", fmt.Errorf("failed to get action manifest: %w", err)
+	}
+	return manifest, nil
+}
+
+func (c *ChaosService) DeleteAction(ctx context.Context, scope dto.Scope, identity string) (bool, error) {
+	path := fmt.Sprintf(chaosDeleteActionPath, identity)
+	params := addIdentifierParams(make(map[string]string), scope)
+
+	var out bool
+	if err := c.Client.Delete(ctx, path, params, nil, &out); err != nil {
+		return false, fmt.Errorf("failed to delete action: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) GetProbesInExperimentRun(ctx context.Context, scope dto.Scope, request dto.ProbeDetailsInExperimentRequest) (*dto.ProbeDetailsInExperimentResponse, error) {
+	params := addIdentifierParams(make(map[string]string), scope)
+
+	out := new(dto.ProbeDetailsInExperimentResponse)
+	if err := c.Client.Post(ctx, chaosGetProbesInExperimentRunPath, params, request, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to get probes in experiment run: %w", err)
+	}
+	return out, nil
 }
 
 func (c *ChaosService) ListExperimentTemplates(ctx context.Context, scope dto.Scope, pagination *dto.PaginationOptions, hubIdentity string, infrastructureType string) (*dto.ListExperimentTemplateResponse, error) {

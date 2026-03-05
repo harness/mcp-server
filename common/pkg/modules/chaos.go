@@ -93,6 +93,7 @@ func RegisterChaos(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) e
 			toolsets.NewServerTool(tools.ListProbesTool(config, chaosClient)),
 			toolsets.NewServerTool(tools.GetProbeTool(config, chaosClient)),
 			toolsets.NewServerTool(tools.GetProbeManifestTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.GetProbesInExperimentRunTool(config, chaosClient)),
 			// Faults tools
 			toolsets.NewServerTool(tools.ListFaultsTool(config, chaosClient)),
 			toolsets.NewServerTool(tools.GetFaultTool(config, chaosClient)),
@@ -103,19 +104,31 @@ func RegisterChaos(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) e
 			toolsets.NewServerTool(tools.ListExperimentTemplatesTool(config, chaosClient)),
 			toolsets.NewServerTool(tools.CreateExperimentFromTemplateTool(config, chaosClient)),
 			toolsets.NewServerTool(tools.ListExperimentVariablesTool(config, chaosClient)),
-			// Load Tests tools
+			// Load Testing tools
 			toolsets.NewServerTool(tools.ListLoadTestsTool(config, loadTestService)),
 			toolsets.NewServerTool(tools.GetLoadTestTool(config, loadTestService)),
 			toolsets.NewServerTool(tools.ListLinuxInfrastructuresTool(config, chaosClient)),
+			// Actions tools
+			toolsets.NewServerTool(tools.ListActionsTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.GetActionTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.GetActionManifestTool(config, chaosClient)),
 		).
 		AddWriteTools(
+			// Load Testing tools
 			toolsets.NewServerTool(tools.RunLoadTestTool(config, loadTestService)),
 			toolsets.NewServerTool(tools.StopLoadTestTool(config, loadTestService)),
 			toolsets.NewServerTool(tools.DeleteLoadTestTool(config, loadTestService)),
 			toolsets.NewServerTool(tools.CreateSampleLoadTestTool(config, loadTestService)),
+			// Experiments tools
 			toolsets.NewServerTool(tools.StopExperimentRunsTool(config, chaosClient)),
+			// Probes tools
 			toolsets.NewServerTool(tools.EnableProbeTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.DeleteProbeTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.VerifyProbeTool(config, chaosClient)),
+			// Faults tools
 			toolsets.NewServerTool(tools.DeleteFaultTool(config, chaosClient)),
+			// Actions tools
+			toolsets.NewServerTool(tools.DeleteActionTool(config, chaosClient)),
 		)
 
 	// Add toolset to the group
