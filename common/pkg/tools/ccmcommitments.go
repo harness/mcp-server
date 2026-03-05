@@ -11,6 +11,7 @@ import (
 	"github.com/harness/mcp-server/common/client/dto"
 	"github.com/harness/mcp-server/common/pkg/common"
 	utils "github.com/harness/mcp-server/common/pkg/tools/utils"
+	pkgutils "github.com/harness/mcp-server/common/pkg/utils"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -23,6 +24,106 @@ const (
 	FollowUpGroupCommitmentCoverageByRegionsPrompt = "Help me group commitment coverage by regions"
 	FollowUpGroupCommitmentCoverageBySavingsPrompt = "Help me estimate savings opportunities"
 )
+
+func FetchCommitmentSpendsTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("ccm_get_commitment_spends",
+			mcp.WithDescription("Returns Commitment Orchestrator spend details for a Harness CCM account, "+
+				"broken down by commitment type (AWS Reserved Instances and Savings Plans) with month-over-month trend data. "+
+				"Commitment Orchestrator is the Harness module that automates purchase and management of cloud cost commitments. "+
+				"Use this tool when you need raw spend figures per commitment type for a specific time window. "+
+				"For a full EC2 analysis including utilization, savings, and ESR rolled into one response use get_ccm_commitment_ec2_analysis instead. "+
+				"Defaults to the last 30 days when no date range is supplied."),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{ReadOnlyHint: pkgutils.ToBoolPtr(true)}),
+			mcp.WithString("start_date",
+				mcp.Description("Start of the reporting window in YYYY-MM-DD format. Omit to default to 30 days ago."),
+			),
+			mcp.WithString("end_date",
+				mcp.Description("End of the reporting window in YYYY-MM-DD format. Omit to default to today."),
+			),
+			mcp.WithString("service",
+				mcp.Description("Cloud service to restrict spend data to (e.g. 'EC2', 'Fargate'). Omit to include all services."),
+			),
+			mcp.WithArray("cloud_account_ids",
+				mcp.WithStringItems(),
+				mcp.Description("AWS account IDs to filter spend data (e.g. ['123456789012', '987654321098']). Omit to include all linked accounts."),
+			),
+			mcp.WithBoolean("net_amortized",
+				mcp.Description("Set to true to return net amortized cost. Omit or set false for standard (unblended) cost."),
+			),
+			common.WithScope(config, false),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			accountId, err := getAccountID(ctx, config, request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			params := &dto.CCMCommitmentOptions{}
+			params.AccountIdentifier = &accountId
+
+			// Handle service parameter
+			service, ok, err := OptionalParamOK[string](request, "service")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if ok && service != "" {
+				params.Service = &service
+			}
+
+			// Handle cloud account IDs parameter
+			cloudAccountIDs, err := OptionalStringArrayParam(request, "cloud_account_ids")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if len(cloudAccountIDs) > 0 {
+				params.CloudAccountIDs = cloudAccountIDs
+			}
+
+			// Handle start date parameter
+			startDate, ok, err := OptionalParamOK[string](request, "start_date")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if ok && startDate != "" {
+				params.StartDate = &startDate
+			}
+
+			// Handle end date parameter
+			endDate, ok, err := OptionalParamOK[string](request, "end_date")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if ok && endDate != "" {
+				params.EndDate = &endDate
+			}
+
+			// Handle net_amortized parameter
+			netAmortized, ok, err := OptionalParamOK[bool](request, "net_amortized")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if ok {
+				params.IsNetAmortizedCost = &netAmortized
+			}
+
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.GetCommitmentSpends(ctx, scope, params)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get commitment spends: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal commitment spends: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
 
 func FetchEstimatedSavingsTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_ccm_commitment_estimated_savings",

@@ -144,6 +144,7 @@ func RegisterCloudCostManagement(config *config.McpServerConfig, tsg *toolsets.T
 			toolsets.NewServerTool(tools.FetchCommitmentCoverageTool(config, ccmCommOrchClient)),
 			toolsets.NewServerTool(tools.FetchCommitmentSavingsTool(config, ccmCommOrchClient)),
 			toolsets.NewServerTool(tools.FetchCommitmentUtilisationTool(config, ccmCommOrchClient)),
+			toolsets.NewServerTool(tools.FetchCommitmentSpendsTool(config, ccmCommOrchClient)),
 			toolsets.NewServerTool(tools.FetchEstimatedSavingsTool(config, ccmCommOrchClient)),
 			toolsets.NewServerTool(tools.FetchEC2AnalysisTool(config, ccmCommOrchClient)),
 		)
