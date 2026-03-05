@@ -38,11 +38,8 @@ func AIDevOpsAgentTool(config *commonConfig.McpServerConfig, client *commonClien
 			mcp.WithString("conversation_id",
 				mcp.Description("Optional conversation ID to maintain conversation context (if not provided, a new ID will be generated)"),
 			),
-			mcp.WithString("interaction_id",
-				mcp.Description("Optional interaction ID for tracking purposes (if not provided, a new ID will be generated)"),
-			),
 			mcp.WithArray("context",
-				mcp.Description("Optional context for the request"),
+				mcp.Description("Optional context for the request (for UPDATE operations, contains existing YAML)"),
 				mcp.Items(map[string]any{
 					"type": "object",
 					"properties": map[string]any{
@@ -51,27 +48,10 @@ func AIDevOpsAgentTool(config *commonConfig.McpServerConfig, client *commonClien
 							"description": "The type of context item",
 						},
 						"payload": map[string]any{
-							"description": "The payload for this context item",
+							"description": "The payload for this context item (for UPDATE: contains the existing YAML string)",
 						},
 					},
 					"required": []string{"type", "payload"},
-				}),
-			),
-			mcp.WithArray("conversation_raw",
-				mcp.Description("Optional conversation history for context"),
-				mcp.Items(map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"role": map[string]any{
-							"type":        "string",
-							"description": "The role of the message sender (e.g., 'user', 'assistant')",
-						},
-						"content": map[string]any{
-							"type":        "string",
-							"description": "The content of the conversation message",
-						},
-					},
-					"required": []string{"role", "content"},
 				}),
 			),
 			commonScopeUtils.WithScope(config, false),
@@ -101,17 +81,7 @@ func AIDevOpsAgentTool(config *commonConfig.McpServerConfig, client *commonClien
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			interactionID, err := OptionalParam[string](request, "interaction_id")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-
 			contextRaw, err := OptionalParam[[]any](request, "context")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-
-			conversationRaw, err := OptionalParam[[]any](request, "conversation_raw")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -135,25 +105,9 @@ func AIDevOpsAgentTool(config *commonConfig.McpServerConfig, client *commonClien
 				}
 			}
 
-			// Process conversation history
-			var conversationMessages []dto.ConversationMessage
-			for _, msgRaw := range conversationRaw {
-				if msgMap, ok := msgRaw.(map[string]interface{}); ok {
-					role, _ := msgMap["role"].(string)
-					content, _ := msgMap["content"].(string)
-					conversationMessages = append(conversationMessages, dto.ConversationMessage{
-						Role:    role,
-						Content: content,
-					})
-				}
-			}
-
-			// Generate IDs if not provided
+			// Generate conversation ID if not provided
 			if conversationID == "" {
 				conversationID = uuid.New().String()
-			}
-			if interactionID == "" {
-				interactionID = uuid.New().String()
 			}
 
 			// Create AI DevOps request
@@ -163,13 +117,11 @@ func AIDevOpsAgentTool(config *commonConfig.McpServerConfig, client *commonClien
 					OrgID:     scope.OrgID,
 					ProjectID: scope.ProjectID,
 				},
-				Prompt:          prompt,
-				Action:          dto.RequestAction(strings.ToUpper(action)),
-				ConversationID:  conversationID,
-				InteractionID:   interactionID,
-				ConversationRaw: conversationMessages,
-				Context:         contextItems,
-				Stream:          stream,
+				Prompt:         prompt,
+				Action:         dto.RequestAction(strings.ToUpper(action)),
+				ConversationID: conversationID,
+				Context:        contextItems,
+				Stream:         stream,
 			}
 
 			// Safely access progress token with nil check

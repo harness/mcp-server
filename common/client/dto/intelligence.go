@@ -62,32 +62,21 @@ func ActionTypeValues() []string {
 	}
 }
 
-// ConversationMessage represents a single message in a conversation
-type ConversationMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
 // ServiceChatRequest defines the parameters for AI DevOps agent requests
 type ServiceChatRequest struct {
-	HarnessContext  *HarnessContext       `json:"harness_context"`
-	Prompt          string                `json:"prompt"`
-	Action          RequestAction         `json:"action,omitempty"`
-	ConversationID  string                `json:"conversation_id"`
-	InteractionID   string                `json:"interaction_id,omitempty"`
-	ConversationRaw []ConversationMessage `json:"conversation_raw,omitempty"`
-	Context         []ContextItem         `json:"context,omitempty"`
-	Stream          bool                  `json:"stream,omitempty"`
+	HarnessContext *HarnessContext `json:"harness_context"`
+	Prompt         string          `json:"prompt"`
+	Action         RequestAction   `json:"action,omitempty"`
+	ConversationID string          `json:"conversation_id"`
+	Context        []ContextItem   `json:"context,omitempty"` // For UPDATE: contains existing YAML
+	Stream         bool            `json:"stream,omitempty"`
 }
 
 // ServiceChatResponse represents the response from the Intelligence Service
 type ServiceChatResponse struct {
 	ConversationID    string                   `json:"conversation_id"`
-	ConversationRaw   string                   `json:"conversation_raw,omitempty"`
-	InteractionID     string                   `json:"interaction_id,omitempty"`
-	CapabilitiesToRun []map[string]interface{} `json:"capabilities_to_run,omitempty"`
-	ModelUsage        map[string]interface{}   `json:"model_usage,omitempty"`
-	Response          string                   `json:"response,omitempty"`
+	CapabilitiesToRun []map[string]interface{} `json:"capabilities_to_run,omitempty"` // Contains generated YAML
+	Response          string                   `json:"response,omitempty"`            // Agent conversational response
 	Error             string                   `json:"error,omitempty"`
 }
 
