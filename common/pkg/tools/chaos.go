@@ -470,6 +470,143 @@ func EnableProbeTool(config *config.McpServerConfig, client *client.ChaosService
 		}
 }
 
+// DeleteProbeTool creates a tool to delete a chaos probe by its ID.
+// The probe must be disabled and not in use by any experiment before deletion.
+func DeleteProbeTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_probe_delete",
+			mcp.WithDescription("Delete a chaos probe by its ID. The probe must be disabled first and must not be in use by any experiment. Default probes cannot be deleted."),
+			common.WithScope(config, false),
+			mcp.WithString("probeId",
+				mcp.Description("Unique Identifier for the probe to delete"),
+				mcp.Required(),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			probeID, err := RequiredParam[string](request, "probeId")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.DeleteProbe(ctx, scope, probeID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to delete probe: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal delete probe response: %v", err)), nil
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+// VerifyProbeTool creates a tool to verify or unverify a chaos probe.
+// Default probes cannot be verified/unverified.
+func VerifyProbeTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_probe_verify",
+			mcp.WithDescription("Verify or unverify a chaos probe by its ID. Default probes cannot be verified or unverified."),
+			common.WithScope(config, false),
+			mcp.WithString("probeId",
+				mcp.Description("Unique Identifier for the probe to verify"),
+				mcp.Required(),
+			),
+			mcp.WithBoolean("verify",
+				mcp.Description("True to verify the probe, false to unverify"),
+				mcp.Required(),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			probeID, err := RequiredParam[string](request, "probeId")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			verify, ok, err := OptionalParamOK[bool](request, "verify")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if !ok {
+				return mcp.NewToolResultError("missing required parameter: verify"), nil
+			}
+
+			msg, err := client.VerifyProbe(ctx, scope, probeID, verify)
+			if err != nil {
+				return nil, fmt.Errorf("failed to verify probe: %w", err)
+			}
+
+			r, err := json.Marshal(map[string]string{"message": msg})
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal verify probe response: %v", err)), nil
+			}
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+// GetProbesInExperimentRunTool creates a tool to get probe execution details for experiment runs.
+func GetProbesInExperimentRunTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_probes_in_experiment_run",
+			mcp.WithDescription("Get probe execution details for one or more experiment runs. At least one of experimentRunIds or notifyIds must be provided. Returns probe status, mode, fault association, and configuration for each probe that participated in those runs."),
+			common.WithScope(config, false),
+			mcp.WithArray("experimentRunIds",
+				mcp.Description("List of experiment run IDs to fetch probe details for"),
+				mcp.Items(map[string]any{"type": "string"}),
+			),
+			mcp.WithArray("notifyIds",
+				mcp.Description("List of notify IDs to fetch probe details for"),
+				mcp.Items(map[string]any{"type": "string"}),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			experimentRunIDs, _ := OptionalParam[[]interface{}](request, "experimentRunIds")
+			notifyIDs, _ := OptionalParam[[]interface{}](request, "notifyIds")
+
+			// should we remove this check and allow API to be hit to hce-saas as keeping same validation logic on both repos can cause inconsistencies in future?
+			if len(experimentRunIDs) == 0 && len(notifyIDs) == 0 {
+				return mcp.NewToolResultError("at least one of experimentRunIds or notifyIds must be provided"), nil
+			}
+
+			body := dto.ProbeDetailsInExperimentRequest{}
+			for _, id := range experimentRunIDs {
+				if s, ok := id.(string); ok {
+					body.ExperimentRunIDs = append(body.ExperimentRunIDs, s)
+				}
+			}
+			for _, id := range notifyIDs {
+				if s, ok := id.(string); ok {
+					body.NotifyIDs = append(body.NotifyIDs, s)
+				}
+			}
+
+			data, err := client.GetProbesInExperimentRun(ctx, scope, body)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get probes in experiment run: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal probes in experiment run response: %v", err)), nil
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
 // ListFaultsTool creates a tool for listing chaos faults in a project.
 func ListFaultsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("chaos_faults_list",
@@ -1089,6 +1226,169 @@ func ListLinuxInfrastructuresTool(config *config.McpServerConfig, client *client
 			r, err := json.Marshal(data)
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal list linux infras response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+// ListActionsTool creates a tool for listing chaos actions.
+func ListActionsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_actions_list",
+			mcp.WithDescription("List chaos actions with optional filtering by name, infrastructure type, and action type. Actions are reusable steps (delay, custom script, container) that can be added to chaos experiments."),
+			common.WithScope(config, false),
+			WithPagination(),
+			mcp.WithString("hubIdentity",
+				mcp.Description("Filter actions by chaos hub identity"),
+			),
+			mcp.WithString("search",
+				mcp.Description("Filter actions by name"),
+			),
+			mcp.WithString("infraType",
+				mcp.Description("Filter by infrastructure type"),
+				mcp.Enum("Kubernetes", "KubernetesV2", "Windows", "Linux", "CloudFoundry", "Container"),
+			),
+			mcp.WithString("entityType",
+				mcp.Description("Filter by action type"),
+				mcp.Enum("delay", "customScript", "container"),
+			),
+			mcp.WithBoolean("includeAllScope",
+				mcp.Description("When true, returns actions from all orgs and projects in the account (filters by account only). When false (default), returns only actions in the current org and project."),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			page, size, err := FetchPagination(request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			pagination := &dto.PaginationOptions{Page: page, Size: size}
+
+			hubIdentity, _ := OptionalParam[string](request, "hubIdentity")
+			search, _ := OptionalParam[string](request, "search")
+			infraType, _ := OptionalParam[string](request, "infraType")
+			entityType, _ := OptionalParam[string](request, "entityType")
+			includeAllScope, _ := OptionalParam[bool](request, "includeAllScope")
+
+			data, err := client.ListActions(ctx, scope, pagination, hubIdentity, search, infraType, entityType, includeAllScope)
+			if err != nil {
+				return nil, fmt.Errorf("failed to list actions: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal list actions response: %v", err)), nil
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+// GetActionTool creates a tool to get a single chaos action by its identity.
+func GetActionTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_action_describe",
+			mcp.WithDescription("Get details of a chaos action by its identity. Returns the action configuration, properties, run properties, variables, and recent executions."),
+			common.WithScope(config, false),
+			mcp.WithString("identity",
+				mcp.Description("Unique identity of the action to retrieve"),
+				mcp.Required(),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			identity, err := RequiredParam[string](request, "identity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.GetAction(ctx, scope, identity)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get action: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal get action response: %v", err)), nil
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+// GetActionManifestTool creates a tool to get the YAML manifest for a chaos action.
+func GetActionManifestTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_action_manifest",
+			mcp.WithDescription("Get the YAML manifest for a chaos action by its identity"),
+			common.WithScope(config, false),
+			mcp.WithString("identity",
+				mcp.Description("Unique identity of the action"),
+				mcp.Required(),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			identity, err := RequiredParam[string](request, "identity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			manifest, err := client.GetActionManifest(ctx, scope, identity)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get action manifest: %w", err)
+			}
+
+			r, err := json.Marshal(map[string]string{"manifest": manifest})
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal action manifest response: %v", err)), nil
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+// DeleteActionTool creates a tool to delete a chaos action by its identity.
+// The upstream API performs a soft-delete.
+func DeleteActionTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_action_delete",
+			mcp.WithDescription("Delete a chaos action by its identity. The action must not be in use by any experiment. This performs a soft-delete."),
+			common.WithScope(config, false),
+			mcp.WithString("identity",
+				mcp.Description("Unique identity of the action to delete"),
+				mcp.Required(),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			identity, err := RequiredParam[string](request, "identity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			deleted, err := client.DeleteAction(ctx, scope, identity)
+			if err != nil {
+				return nil, fmt.Errorf("failed to delete action: %w", err)
+			}
+
+			r, err := json.Marshal(map[string]bool{"deleted": deleted})
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal delete action response: %v", err)), nil
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
