@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/harness/mcp-server/common/client/dto"
 )
@@ -39,13 +40,19 @@ func (f *FMEService) ListEnvironments(ctx context.Context, wsID string) (*dto.FM
 	return &response, nil
 }
 
-// ListFeatureFlags retrieves all feature flags for a specific workspace
+// ListFeatureFlags retrieves feature flags for a specific workspace with pagination support.
 // GET https://api.split.io/internal/api/v2/splits/ws/{wsId}
-func (f *FMEService) ListFeatureFlags(ctx context.Context, wsID string) (*dto.FMEFeatureFlagsResponse, error) {
+// offset specifies the number of items to skip; limit controls how many items to return (max 100).
+func (f *FMEService) ListFeatureFlags(ctx context.Context, wsID string, offset, limit int) (*dto.FMEFeatureFlagsResponse, error) {
 	var response dto.FMEFeatureFlagsResponse
 
+	params := map[string]string{
+		"offset": strconv.Itoa(offset),
+		"limit":  strconv.Itoa(limit),
+	}
+
 	path := fmt.Sprintf("internal/api/v2/splits/ws/%s", wsID)
-	err := f.Client.Get(ctx, path, nil, nil, &response)
+	err := f.Client.Get(ctx, path, params, nil, &response)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list feature flags: %w", err)
 	}

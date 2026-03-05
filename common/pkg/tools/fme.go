@@ -60,6 +60,11 @@ func ListFMEEnvironmentsTool(config *config.McpServerConfig, fmeService *client.
 		}
 }
 
+const (
+	fmeFeatureFlagsDefaultCount = 20
+	fmeFeatureFlagsMaxCount     = 50
+)
+
 // ListFMEFeatureFlagsTool creates a tool for listing FME feature flags for a specific workspace
 func ListFMEFeatureFlagsTool(config *config.McpServerConfig, fmeService *client.FMEService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("list_fme_feature_flags",
@@ -68,6 +73,12 @@ func ListFMEFeatureFlagsTool(config *config.McpServerConfig, fmeService *client.
 				mcp.Required(),
 				mcp.Description("The workspace ID to list feature flags for"),
 			),
+			mcp.WithNumber("offset",
+				mcp.Description("The number of feature flags to skip for pagination (default: 0)"),
+			),
+			mcp.WithNumber("count",
+				mcp.Description(fmt.Sprintf("The number of feature flags to return (default: %d, max: %d)", fmeFeatureFlagsDefaultCount, fmeFeatureFlagsMaxCount)),
+			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			wsID, err := RequiredParam[string](request, "ws_id")
@@ -75,7 +86,20 @@ func ListFMEFeatureFlagsTool(config *config.McpServerConfig, fmeService *client.
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			featureFlags, err := fmeService.ListFeatureFlags(ctx, wsID)
+			offset, err := OptionalIntParam(request, "offset")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			count, err := OptionalIntParamWithDefault(request, "count", fmeFeatureFlagsDefaultCount)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if count > fmeFeatureFlagsMaxCount {
+				count = fmeFeatureFlagsMaxCount
+			}
+
+			featureFlags, err := fmeService.ListFeatureFlags(ctx, wsID, offset, count)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to list FME feature flags: %v", err)), nil
 			}
