@@ -23,7 +23,7 @@ var validVerbs = []string{
 	"fetch", "search", "run", "execute", "trigger",
 	"enable", "disable", "add", "set", "check",
 	"download", "upload", "validate", "report", "override",
-	"invite", "revoke",
+	"invite", "revoke", "stop",
 }
 
 const maxNameLength = 64
