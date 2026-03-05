@@ -257,5 +257,10 @@ func RegisterAllowedToolsets(ctx context.Context, tsg *toolsets.ToolsetGroup, co
 			return err
 		}
 	}
+	if enableAll || slices.Contains(allowedToolsets, "intelligence") {
+		if err := commonModules.RegisterIntelligence(config, tsg); err != nil {
+			return err
+		}
+	}
 	return nil
 }
