@@ -156,14 +156,14 @@ type CCMSharedCost struct {
 	Name     string     `json:"name"`
 	Rules    []CCMRule  `json:"rules"`
 	Strategy string     `json:"strategy"`
-	Splits   []CCMSplit `json:"splits"`
+	Splits   []CCMSplit `json:"splits,omitempty"`
 }
 
 type CCMUnallocatedCost struct {
 	Strategy        string     `json:"strategy"`
-	Label           string     `json:"label"`
-	SharingStrategy string     `json:"sharingStrategy"`
-	Splits          []CCMSplit `json:"splits"`
+	Label           string     `json:"label,omitempty"`
+	SharingStrategy string     `json:"sharingStrategy,omitempty"`
+	Splits          []CCMSplit `json:"splits,omitempty"`
 }
 
 type CCMSplit struct {
