@@ -9,8 +9,8 @@
 ## Setup
 
 ```bash
-git clone https://github.com/thisrohangupta/harness-poc-mcp.git
-cd harness-poc-mcp
+git clone https://github.com/thisrohangupta/harness-mcp-v2.git
+cd harness-mcp-v2
 pnpm install
 pnpm build
 ```

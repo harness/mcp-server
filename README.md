@@ -2,7 +2,7 @@
 
 An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 10 consolidated tools and 119+ resource types.
 
-[![CI](https://github.com/thisrohangupta/harness-poc-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/thisrohangupta/harness-poc-mcp/actions/workflows/ci.yml)
+[![CI](https://github.com/thisrohangupta/harness-mcp-v2/actions/workflows/ci.yml/badge.svg)](https://github.com/thisrohangupta/harness-mcp-v2/actions/workflows/ci.yml)
 
 ## Why Use This MCP Server
 
@@ -13,7 +13,7 @@ This server is built differently:
 - **10 tools, 119+ resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 10 tools instead of hundreds.
 - **Full platform coverage.** 25 toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Internal Developer Portal, Software Supply Chain, and more. Not just pipelines — the entire Harness platform.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
-- **24 prompt templates.** Pre-built prompts for common workflows: debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, and more.
+- **25 prompt templates.** Pre-built prompts for common workflows: debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
 - **Works everywhere.** Stdio transport for local clients (Claude Desktop, Cursor, Windsurf), HTTP transport for remote/shared deployments, Docker and Kubernetes ready.
 - **Zero-config start.** Just provide a Harness API key. Account ID is auto-extracted from PAT tokens, org/project defaults are optional, and toolset filtering lets you expose only what you need.
 - **Extensible by design.** Adding a new Harness resource means adding a declarative data file — no new tool registration, no schema changes, no prompt updates.
@@ -25,17 +25,17 @@ This server is built differently:
 No install required — just run it:
 
 ```bash
-npx harness-poc-mcp-server
+npx harness-mcp-v2
 ```
 
 That's it. Pass your Harness API key via environment variable or configure it in your AI client (see [Client Configuration](#client-configuration) below).
 
 ```bash
 # Stdio transport (default — for Claude Desktop, Cursor, Windsurf, etc.)
-HARNESS_API_KEY=pat.xxx npx harness-poc-mcp-server
+HARNESS_API_KEY=pat.xxx npx harness-mcp-v2
 
 # HTTP transport (for remote/shared deployments)
-HARNESS_API_KEY=pat.xxx npx harness-poc-mcp-server http --port 8080
+HARNESS_API_KEY=pat.xxx npx harness-mcp-v2 http --port 8080
 ```
 
 > **Note:** The account ID is auto-extracted from PAT tokens (`pat.<accountId>.<tokenId>.<secret>`), so `HARNESS_ACCOUNT_ID` is only needed for non-PAT API keys.
@@ -43,10 +43,10 @@ HARNESS_API_KEY=pat.xxx npx harness-poc-mcp-server http --port 8080
 ### Option 2: Global Install
 
 ```bash
-npm install -g harness-poc-mcp-server
+npm install -g harness-mcp-v2
 
 # Then run directly
-harness-poc-mcp-server
+harness-mcp-v2
 ```
 
 ### Option 3: Build from Source
@@ -54,8 +54,8 @@ harness-poc-mcp-server
 For development or customization:
 
 ```bash
-git clone https://github.com/thisrohangupta/harness-poc-mcp.git
-cd harness-poc-mcp
+git clone https://github.com/thisrohangupta/harness-mcp-v2.git
+cd harness-mcp-v2
 pnpm install
 pnpm build
 
@@ -68,7 +68,7 @@ pnpm inspect            # Test with MCP Inspector
 ### CLI Usage
 
 ```bash
-harness-mcp-server [stdio|http] [--port <number>]
+harness-mcp-v2 [stdio|http] [--port <number>]
 
 Options:
   --port <number>  Port for HTTP transport (default: 3000, or PORT env var)
@@ -121,7 +121,7 @@ curl -X POST http://localhost:3000/mcp \
   "mcpServers": {
     "harness": {
       "command": "npx",
-      "args": ["harness-poc-mcp-server"],
+      "args": ["harness-mcp-v2"],
       "env": {
         "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
       }
@@ -136,14 +136,14 @@ curl -X POST http://localhost:3000/mcp \
 <summary>node (local install)</summary>
 
 ```bash
-npm install -g harness-poc-mcp-server
+npm install -g harness-mcp-v2
 ```
 
 ```json
 {
   "mcpServers": {
     "harness": {
-      "command": "harness-poc-mcp-server",
+      "command": "harness-mcp-v2",
       "env": {
         "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
       }
@@ -160,7 +160,7 @@ npm install -g harness-poc-mcp-server
 <summary>npx (zero install)</summary>
 
 ```bash
-claude mcp add harness -- npx harness-poc-mcp-server
+claude mcp add harness -- npx harness-mcp-v2
 ```
 
 </details>
@@ -169,8 +169,8 @@ claude mcp add harness -- npx harness-poc-mcp-server
 <summary>node (local install)</summary>
 
 ```bash
-npm install -g harness-poc-mcp-server
-claude mcp add harness -- harness-poc-mcp-server
+npm install -g harness-mcp-v2
+claude mcp add harness -- harness-mcp-v2
 ```
 
 </details>
@@ -187,7 +187,7 @@ Then set `HARNESS_API_KEY` in your environment or `.env` file.
   "mcpServers": {
     "harness": {
       "command": "npx",
-      "args": ["harness-poc-mcp-server"],
+      "args": ["harness-mcp-v2"],
       "env": {
         "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
       }
@@ -202,14 +202,14 @@ Then set `HARNESS_API_KEY` in your environment or `.env` file.
 <summary>node (local install)</summary>
 
 ```bash
-npm install -g harness-poc-mcp-server
+npm install -g harness-mcp-v2
 ```
 
 ```json
 {
   "mcpServers": {
     "harness": {
-      "command": "harness-poc-mcp-server",
+      "command": "harness-mcp-v2",
       "env": {
         "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
       }
@@ -230,7 +230,7 @@ npm install -g harness-poc-mcp-server
   "mcpServers": {
     "harness": {
       "command": "npx",
-      "args": ["harness-poc-mcp-server"],
+      "args": ["harness-mcp-v2"],
       "env": {
         "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
       }
@@ -245,14 +245,14 @@ npm install -g harness-poc-mcp-server
 <summary>node (local install)</summary>
 
 ```bash
-npm install -g harness-poc-mcp-server
+npm install -g harness-mcp-v2
 ```
 
 ```json
 {
   "mcpServers": {
     "harness": {
-      "command": "harness-poc-mcp-server",
+      "command": "harness-mcp-v2",
       "env": {
         "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
       }
@@ -271,7 +271,7 @@ Replace the command with the path to your built `index.js`:
 ```json
 {
   "command": "node",
-  "args": ["/absolute/path/to/harness-poc-mcp/build/index.js", "stdio"]
+  "args": ["/absolute/path/to/harness-mcp-v2/build/index.js", "stdio"]
 }
 ```
 
@@ -296,7 +296,7 @@ Register the server in your Docker MCP Gateway configuration:
   "mcpServers": {
     "harness": {
       "command": "npx",
-      "args": ["harness-poc-mcp-server"],
+      "args": ["harness-mcp-v2"],
       "env": {
         "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
       }
@@ -314,7 +314,7 @@ Add the Harness MCP server to your [Portkey MCP Gateway](https://portkey.ai/feat
   "mcpServers": {
     "harness": {
       "command": "npx",
-      "args": ["harness-poc-mcp-server"],
+      "args": ["harness-mcp-v2"],
       "env": {
         "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
       }
@@ -332,7 +332,7 @@ mcp_servers:
   - name: harness
     command: npx
     args:
-      - harness-poc-mcp-server
+      - harness-mcp-v2
     env:
       HARNESS_API_KEY: "pat.xxx.xxx.xxx"
 ```
@@ -343,7 +343,7 @@ The server works with [Envoy AI Gateway's MCP support](https://aigateway.envoypr
 
 ```bash
 # Start the server in HTTP mode
-HARNESS_API_KEY=pat.xxx.xxx.xxx npx harness-poc-mcp-server http --port 8080
+HARNESS_API_KEY=pat.xxx.xxx.xxx npx harness-mcp-v2 http --port 8080
 ```
 
 Then configure Envoy to route to `http://localhost:8080/mcp` as an upstream MCP backend.
@@ -1042,10 +1042,12 @@ src/
     code-review.ts                  # Harness Code: PR code review
     pr-summary.ts                   # Harness Code: auto-generate PR summary
     branch-cleanup.ts               # Harness Code: stale branch cleanup
+    pending-approvals.ts            # Approvals: find and act on pending approvals
   utils/
     cli.ts                          # CLI arg parsing (transport, port)
     errors.ts                       # Error normalization
     logger.ts                       # stderr-only logger
+    progress.ts                     # MCP progress & logging notifications
     rate-limiter.ts                 # Client-side rate limiting
     deep-links.ts                   # Harness UI deep link builder
     response-formatter.ts           # Consistent MCP response formatting
