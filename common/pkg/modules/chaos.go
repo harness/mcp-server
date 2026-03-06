@@ -118,6 +118,10 @@ func RegisterChaos(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) e
 			toolsets.NewServerTool(tools.GetActionTemplateRevisionsTool(config, chaosClient)),
 			toolsets.NewServerTool(tools.GetActionTemplateVariablesTool(config, chaosClient)),
 			toolsets.NewServerTool(tools.CompareActionTemplateRevisionsTool(config, chaosClient)),
+			// Chaos Hub tools
+			toolsets.NewServerTool(tools.ListChaosHubsTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.GetChaosHubTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.ListChaosHubFaultsTool(config, chaosClient)),
 			// ChaosGuard tools
 			toolsets.NewServerTool(tools.ListChaosGuardConditionsTool(config, chaosClient)),
 			toolsets.NewServerTool(tools.GetChaosGuardConditionTool(config, chaosClient)),
@@ -142,6 +146,8 @@ func RegisterChaos(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) e
 			toolsets.NewServerTool(tools.DeleteProbeTemplateTool(config, chaosClient)),
 			// Action templates tools
 			toolsets.NewServerTool(tools.DeleteActionTemplateTool(config, chaosClient)),
+			// Chaos Hub tools
+			toolsets.NewServerTool(tools.DeleteChaosHubTool(config, chaosClient)),
 			// ChaosGuard tools
 			toolsets.NewServerTool(tools.DeleteChaosGuardConditionTool(config, chaosClient)),
 			toolsets.NewServerTool(tools.DeleteChaosGuardRuleTool(config, chaosClient)),

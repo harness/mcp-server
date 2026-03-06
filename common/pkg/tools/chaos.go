@@ -1910,6 +1910,170 @@ func CompareActionTemplateRevisionsTool(config *config.McpServerConfig, client *
 		}
 }
 
+func ListChaosHubsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_hubs_list",
+			mcp.WithDescription("List ChaosHubs (Git-connected repositories containing fault, experiment, probe, and action templates). Returns hub details including repository info, connector configuration, template counts, and sync status. Supports search, pagination, and cross-scope inclusion."),
+			common.WithScope(config, false),
+			WithPagination(),
+			mcp.WithString("search",
+				mcp.Description("Search hubs by name (case-insensitive)"),
+			),
+			mcp.WithBoolean("includeAllScope",
+				mcp.Description("When true, returns hubs from all scopes (account, org, project). Defaults to false (project scope only)."),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			search, _ := OptionalParam[string](request, "search")
+			includeAllScope, _ := OptionalParam[bool](request, "includeAllScope")
+
+			page, size, err := FetchPagination(request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.ListChaosHubs(ctx, scope, search, includeAllScope, int64(page), int64(size))
+			if err != nil {
+				return nil, fmt.Errorf("failed to list chaos hubs: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal list chaos hubs response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+func GetChaosHubTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_hub_get",
+			mcp.WithDescription("Get a ChaosHub by its identity. Returns full hub details including repository URL, branch, connector info, template counts, sync status, and metadata."),
+			common.WithScope(config, false),
+			mcp.WithString("hubIdentity",
+				mcp.Description("The unique identity of the ChaosHub"),
+				mcp.Required(),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.GetChaosHub(ctx, scope, hubIdentity)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get chaos hub: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal chaos hub response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+func ListChaosHubFaultsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_hub_faults_list",
+			mcp.WithDescription("List faults available in ChaosHubs. Returns fault details including name, category, infrastructure type, permissions required, and platform support. Also returns fault category counts for each infrastructure type. Supports filtering by hub, infrastructure type, category, permissions, and search."),
+			common.WithScope(config, false),
+			WithPagination(),
+			mcp.WithString("hubIdentity",
+				mcp.Description("Filter faults by a specific ChaosHub identity"),
+			),
+			mcp.WithString("search",
+				mcp.Description("Search faults by name (case-insensitive)"),
+			),
+			mcp.WithString("infraType",
+				mcp.Description("Filter by infrastructure type (e.g. Kubernetes, Linux, Windows)"),
+			),
+			mcp.WithString("entityType",
+				mcp.Description("Filter by fault category (e.g. Kubernetes, AWS, GCP, Azure, Linux, Windows, VMWare, Load)"),
+			),
+			mcp.WithString("permissionsRequired",
+				mcp.Description("Filter by permission level required"),
+				mcp.Enum("Basic", "Advanced"),
+			),
+			mcp.WithBoolean("includeAllScope",
+				mcp.Description("When true, returns faults from all scopes. Defaults to false."),
+			),
+			mcp.WithBoolean("onlyTemplatisedFaults",
+				mcp.Description("When true, only returns faults that have templates available. Defaults to false."),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			hubIdentity, _ := OptionalParam[string](request, "hubIdentity")
+			search, _ := OptionalParam[string](request, "search")
+			infraType, _ := OptionalParam[string](request, "infraType")
+			entityType, _ := OptionalParam[string](request, "entityType")
+			permissionsRequired, _ := OptionalParam[string](request, "permissionsRequired")
+			includeAllScope, _ := OptionalParam[bool](request, "includeAllScope")
+			onlyTemplatisedFaults, _ := OptionalParam[bool](request, "onlyTemplatisedFaults")
+
+			page, size, err := FetchPagination(request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.ListChaosHubFaults(ctx, scope, hubIdentity, search, infraType, entityType, permissionsRequired, includeAllScope, onlyTemplatisedFaults, int64(page), int64(size))
+			if err != nil {
+				return nil, fmt.Errorf("failed to list chaos hub faults: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal list chaos hub faults response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+func DeleteChaosHubTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_hub_delete",
+			mcp.WithDescription("Delete a ChaosHub by its identity. Removes the hub and its associated resources. The default Enterprise ChaosHub cannot be deleted."),
+			common.WithScope(config, false),
+			mcp.WithString("hubIdentity",
+				mcp.Description("The unique identity of the ChaosHub to delete"),
+				mcp.Required(),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			err = client.DeleteChaosHub(ctx, scope, hubIdentity)
+			if err != nil {
+				return nil, fmt.Errorf("failed to delete chaos hub: %w", err)
+			}
+
+			return mcp.NewToolResultText("successfully deleted chaos hub"), nil
+		}
+}
+
 func ListChaosGuardConditionsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("chaos_guard_conditions_list",
 			mcp.WithDescription("List ChaosGuard conditions. Conditions define the infrastructure, fault, and application constraints that ChaosGuard rules evaluate against chaos experiments. Supports filtering by infrastructure type, tags, search, sorting, and pagination."),
