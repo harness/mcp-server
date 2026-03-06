@@ -89,6 +89,7 @@ func RegisterFeatureManagementAndExperimentation(config *config.McpServerConfig,
 			toolsets.NewServerTool(tools.ListFMEWorkspacesTool(config, fmeService)),
 			toolsets.NewServerTool(tools.ListFMEEnvironmentsTool(config, fmeService)),
 			toolsets.NewServerTool(tools.ListFMEFeatureFlagsTool(config, fmeService)),
+			toolsets.NewServerTool(tools.GetFMEFeatureFlagTool(config, fmeService)),
 			toolsets.NewServerTool(tools.GetFMEFeatureFlagDefinitionTool(config, fmeService)),
 		)
 

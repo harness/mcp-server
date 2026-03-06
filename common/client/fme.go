@@ -53,6 +53,20 @@ func (f *FMEService) ListFeatureFlags(ctx context.Context, wsID string) (*dto.FM
 	return &response, nil
 }
 
+// GetFeatureFlag retrieves a specific feature flag's metadata (without environment)
+// GET https://api.split.io/internal/api/v2/splits/ws/{wsId}/{feature_flag_name}
+func (f *FMEService) GetFeatureFlag(ctx context.Context, wsID, flagName string) (*dto.FMEFeatureFlag, error) {
+	var response dto.FMEFeatureFlag
+
+	path := fmt.Sprintf("internal/api/v2/splits/ws/%s/%s", wsID, flagName)
+	err := f.Client.Get(ctx, path, nil, nil, &response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get feature flag: %w", err)
+	}
+
+	return &response, nil
+}
+
 // GetFeatureFlagDefinition retrieves a specific feature flag definition
 // GET https://api.split.io/internal/api/v2/splits/ws/{wsId}/{feature_flag_name}/environments/{environment_id_or_name}
 func (f *FMEService) GetFeatureFlagDefinition(ctx context.Context, wsID, flagName, environmentIDOrName string) (*dto.FMEFeatureFlagDefinitionResponse, error) {
