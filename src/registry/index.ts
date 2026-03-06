@@ -122,6 +122,8 @@ export class Registry {
     return def?.executeActions;
   }
 
+  private static readonly READ_OPERATIONS: Set<OperationName> = new Set(["list", "get"]);
+
   /** Dispatch a CRUD operation to the Harness API. */
   async dispatch(
     client: HarnessClient,
@@ -129,6 +131,10 @@ export class Registry {
     operation: OperationName,
     input: Record<string, unknown>,
   ): Promise<unknown> {
+    if (this.config.HARNESS_READ_ONLY && !Registry.READ_OPERATIONS.has(operation)) {
+      throw new Error(`Read-only mode is enabled (HARNESS_READ_ONLY=true). "${operation}" operations are not allowed.`);
+    }
+
     const def = this.getResource(resourceType);
     const spec = def.operations[operation];
     if (!spec) {
@@ -146,6 +152,10 @@ export class Registry {
     action: string,
     input: Record<string, unknown>,
   ): Promise<unknown> {
+    if (this.config.HARNESS_READ_ONLY) {
+      throw new Error(`Read-only mode is enabled (HARNESS_READ_ONLY=true). Execute actions are not allowed.`);
+    }
+
     const def = this.getResource(resourceType);
     const actionSpec = def.executeActions?.[action];
     if (!actionSpec) {

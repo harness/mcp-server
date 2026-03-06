@@ -25,6 +25,7 @@ export const ConfigSchema = z.object({
   HARNESS_TOOLSETS: z.string().optional(),
   HARNESS_MAX_BODY_SIZE_MB: z.coerce.number().default(10),
   HARNESS_RATE_LIMIT_RPS: z.coerce.number().default(10),
+  HARNESS_READ_ONLY: z.coerce.boolean().default(false),
 });
 
 export type Config = z.infer<typeof ConfigSchema> & { HARNESS_ACCOUNT_ID: string };
