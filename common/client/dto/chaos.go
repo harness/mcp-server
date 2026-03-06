@@ -197,11 +197,24 @@ type ProbeTemplateRunProperties struct {
 }
 
 type ListExperimentTemplateResponse struct {
-	Data       []ChaosExperimentTemplate `json:"data"`
-	Pagination Pagination                `json:"pagination"`
+	Data          []ChaosExperimentTemplate `json:"data"`
+	Pagination    Pagination                `json:"pagination"`
+	CorrelationID string                    `json:"correlationID"`
 }
 
+// ChaosExperimentTemplate mirrors the MongoDB schema chaosexperimenttemplate.ChaosExperimentTemplate.
 type ChaosExperimentTemplate struct {
+	AccountID    string     `json:"accountID"`
+	OrgID        string     `json:"orgID"`
+	ProjectID    string     `json:"projectID"`
+	Name         string     `json:"name"`
+	Description  string     `json:"description"`
+	Tags         []string   `json:"tags"`
+	CreatedBy    string     `json:"createdBy"`
+	UpdatedBy    string     `json:"updatedBy"`
+	UpdatedAt    int64      `json:"updatedAt"`
+	CreatedAt    int64      `json:"createdAt"`
+	IsRemoved    bool       `json:"isRemoved"`
 	Identity     string     `json:"identity"`
 	HubIdentity  string     `json:"hubIdentity"`
 	Template     string     `json:"template"`
@@ -211,6 +224,130 @@ type ChaosExperimentTemplate struct {
 	IsEnterprise bool       `json:"isEnterprise"`
 	InfraType    string     `json:"infraType"`
 	Infras       []string   `json:"infras"`
+	EditCounter  int        `json:"editCounter"`
+}
+
+// GetExperimentTemplateResponse mirrors hce-saas chaosexperimenttemplate.GetExperimentTemplateResponse.
+type GetExperimentTemplateResponse struct {
+	ExperimentTemplate `json:",inline"`
+	CorrelationID      string `json:"correlationID"`
+	HubIdentity        string `json:"hubIdentity"`
+}
+
+// ExperimentTemplate mirrors hce-sdk experimenttemplate.ExperimentTemplate.
+type ExperimentTemplate struct {
+	ResourceDetails `json:",inline"`
+	MetaData        `json:",inline"`
+	Spec            ExperimentTemplateSpec `json:"spec"`
+	Revision        string                 `json:"revision"`
+	IsDefault       bool                   `json:"isDefault"`
+}
+
+type ResourceDetails struct {
+	Name        string   `json:"name"`
+	Identity    string   `json:"identity"`
+	Description string   `json:"description,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+}
+
+type MetaData struct {
+	Kind       string `json:"kind"`
+	APIVersion string `json:"apiVersion"`
+}
+
+type ExperimentTemplateSpec struct {
+	InfraType           string                     `json:"infraType"`
+	InfraID             string                     `json:"infraId,omitempty"`
+	Faults              []ExperimentTemplateFault  `json:"faults,omitempty"`
+	Probes              []ExperimentTemplateProbe  `json:"probes,omitempty"`
+	Actions             []ExperimentTemplateAction `json:"actions,omitempty"`
+	Vertices            []Vertex                   `json:"vertices"`
+	CleanupPolicy       string                     `json:"cleanupPolicy"`
+	StatusCheckTimeouts *StatusCheckTimeout        `json:"statusCheckTimeouts,omitempty"`
+}
+
+type ExperimentTemplateFault struct {
+	Name         string            `json:"name"`
+	Identity     string            `json:"identity"`
+	Revision     string            `json:"revision,omitempty"`
+	IsEnterprise bool              `json:"isEnterprise"`
+	InfraID      string            `json:"infraId,omitempty"`
+	Values       []VariableMinimum `json:"values"`
+	AuthEnabled  *bool             `json:"authEnabled,omitempty"`
+}
+
+type ExperimentTemplateProbe struct {
+	Name                 string            `json:"name"`
+	Identity             string            `json:"identity"`
+	Revision             int64             `json:"revision,omitempty"`
+	IsEnterprise         bool              `json:"isEnterprise"`
+	InfraID              string            `json:"infraId,omitempty"`
+	Weightage            int               `json:"weightage,omitempty"`
+	Duration             string            `json:"duration,omitempty"`
+	Conditions           []ProbeConditions `json:"conditions,omitempty"`
+	EnableDataCollection bool              `json:"enableDataCollection,omitempty"`
+	Values               []VariableMinimum `json:"values"`
+}
+
+type ProbeConditions struct {
+	ExecuteUpon *string `json:"executeUpon,omitempty"`
+}
+
+type ExperimentTemplateAction struct {
+	Name                 string            `json:"name"`
+	Identity             string            `json:"identity"`
+	Revision             int64             `json:"revision,omitempty"`
+	IsEnterprise         bool              `json:"isEnterprise"`
+	InfraID              string            `json:"infraId,omitempty"`
+	ContinueOnCompletion bool              `json:"continueOnCompletion"`
+	Values               []VariableMinimum `json:"values"`
+}
+
+type Vertex struct {
+	Name  string      `json:"name"`
+	Start VertexChild `json:"start"`
+	End   VertexChild `json:"end"`
+}
+
+type VertexChild struct {
+	Probes  []VertexResource `json:"probes,omitempty"`
+	Faults  []VertexResource `json:"faults,omitempty"`
+	Actions []VertexResource `json:"actions,omitempty"`
+}
+
+type VertexResource struct {
+	Name string `json:"name"`
+}
+
+type StatusCheckTimeout struct {
+	Delay   int `json:"delay"`
+	Timeout int `json:"timeout"`
+}
+
+// ExperimentTemplateVariablesResponse mirrors chaosexperimenttemplate.ExperimentTemplateVariables.
+type ExperimentTemplateVariablesResponse struct {
+	Faults        []ExperimentTemplateVariableGroup `json:"faults"`
+	Probes        []ExperimentTemplateVariableGroup `json:"probes"`
+	Actions       []ExperimentTemplateVariableGroup `json:"actions"`
+	CorrelationID string                            `json:"correlationID"`
+}
+
+type ExperimentTemplateVariableGroup struct {
+	Name      string     `json:"name"`
+	Variables []Variable `json:"variables"`
+}
+
+// ExperimentTemplateYamlResponse mirrors chaosexperimenttemplate.ExperimentTemplateYaml.
+type ExperimentTemplateYamlResponse struct {
+	CorrelationID string `json:"correlationID"`
+	Template      string `json:"template"`
+}
+
+// CompareRevisionsResponse mirrors chaosexperimenttemplate.CompareRevisions.
+type CompareRevisionsResponse struct {
+	CorrelationID string `json:"correlationID"`
+	Template1     string `json:"template1"`
+	Template2     string `json:"template2"`
 }
 
 type Variable struct {
@@ -319,4 +456,92 @@ type UserDetail struct {
 	UserID   string `json:"userID"`
 	Username string `json:"username"`
 	Email    string `json:"email"`
+}
+
+// ChaosFaultTemplate mirrors the MongoDB schema chaosfaulttemplate.ChaosFaultTemplate.
+type ChaosFaultTemplate struct {
+	AccountID            string      `json:"accountID"`
+	OrgID                string      `json:"orgID"`
+	ProjectID            string      `json:"projectID"`
+	Name                 string      `json:"name"`
+	Description          string      `json:"description"`
+	Tags                 []string    `json:"tags"`
+	CreatedBy            string      `json:"createdBy"`
+	UpdatedBy            string      `json:"updatedBy"`
+	UpdatedAt            int64       `json:"updatedAt"`
+	CreatedAt            int64       `json:"createdAt"`
+	IsRemoved            bool        `json:"isRemoved"`
+	Identity             string      `json:"identity"`
+	HubIdentity          string      `json:"hubRef"`
+	Category             []string    `json:"category"`
+	InfraType            string      `json:"infraType"`
+	Infras               []string    `json:"infras"`
+	Type                 string      `json:"type"`
+	Template             string      `json:"template"`
+	Variables            []Variable  `json:"variables"`
+	PermissionsRequired  string      `json:"permissionsRequired"`
+	Links                []FaultLink `json:"links"`
+	Revision             string      `json:"revision"`
+	IsDefault            bool        `json:"isDefault"`
+	IsEnterprise         bool        `json:"isEnterprise"`
+	CreatedByUserDetails *UserDetail `json:"createdByUserDetails"`
+	UpdatedByUserDetails *UserDetail `json:"updatedByUserDetails"`
+}
+
+type FaultLink struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
+type FaultTemplateCategoriesCount struct {
+	Linux          int `json:"Linux"`
+	CloudFoundry   int `json:"Cloud Foundry"`
+	Windows        int `json:"Windows"`
+	AWS            int `json:"AWS"`
+	Azure          int `json:"Azure"`
+	GCP            int `json:"GCP"`
+	KubeResilience int `json:"Kube Resilience"`
+	Kubernetes     int `json:"Kubernetes"`
+	VMWare         int `json:"VMWare"`
+	Load           int `json:"Load"`
+	SSH            int `json:"SSH"`
+	BYOC           int `json:"BYOC"`
+	SpringBoot     int `json:"Spring Boot"`
+}
+
+// ListFaultTemplateResponse mirrors chaosfaulttemplate.ListFaultTemplateResponse.
+type ListFaultTemplateResponse struct {
+	Data                         []ChaosFaultTemplate         `json:"data"`
+	Pagination                   Pagination                   `json:"pagination"`
+	CorrelationID                string                       `json:"correlationID"`
+	FaultTemplateCategoriesCount FaultTemplateCategoriesCount `json:"categoriesCount"`
+}
+
+// GetFaultTemplateResponse mirrors chaosfaulttemplate.GetFaultTemplateResponse.
+type GetFaultTemplateResponse struct {
+	Data          ChaosFaultTemplate `json:"data"`
+	Fault         interface{}        `json:"fault"`
+	CorrelationID string             `json:"correlationID"`
+}
+
+// FaultTemplateVariablesResponse mirrors chaosfaulttemplate.FaultTemplateVariables.
+type FaultTemplateVariablesResponse struct {
+	CorrelationID       string     `json:"correlationID"`
+	Variables           []Variable `json:"variables"`
+	FaultTargets        []Variable `json:"faultTargets"`
+	FaultTunable        []Variable `json:"faultTunable"`
+	FaultAuthentication []Variable `json:"faultAuthentication"`
+}
+
+// FaultTemplateYamlResponse mirrors chaosfaulttemplate.FaultTemplateYaml.
+type FaultTemplateYamlResponse struct {
+	CorrelationID string `json:"correlationID"`
+	Template      string `json:"template"`
+}
+
+// FaultTemplateCompareRevisionsResponse mirrors chaosfaulttemplate.CompareRevisions.
+type FaultTemplateCompareRevisionsResponse struct {
+	CorrelationID string `json:"correlationID"`
+	Template1     string `json:"template1"`
+	Template2     string `json:"template2"`
 }

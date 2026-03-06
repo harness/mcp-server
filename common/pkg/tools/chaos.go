@@ -421,15 +421,33 @@ func CreateExperimentFromTemplateTool(config *config.McpServerConfig, client *cl
 // ListExperimentTemplatesTool creates a tool for listing the experiment templates
 func ListExperimentTemplatesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("chaos_experiment_template_list",
-			mcp.WithDescription("List the chaos experiment templates"),
+			mcp.WithDescription("List the chaos experiment templates from chaos hubs."),
 			common.WithScope(config, false),
 			WithPagination(),
 			mcp.WithString("hubIdentity",
 				mcp.Description("Unique Identifier for a chaos hub"),
-				mcp.Required(),
 			),
 			mcp.WithString("infrastructureType",
-				mcp.Description("infrastructure type filter for the experiment template"),
+				mcp.Description("Infrastructure type filter (e.g. Kubernetes)"),
+			),
+			mcp.WithString("infrastructure",
+				mcp.Description("Infrastructure filter (e.g. KubernetesV2)"),
+			),
+			mcp.WithString("search",
+				mcp.Description("Search templates by name or identity"),
+			),
+			mcp.WithString("sortField",
+				mcp.Description("Field to sort results by"),
+				mcp.Enum("name", "lastUpdated", "experimentName"),
+			),
+			mcp.WithBoolean("sortAscending",
+				mcp.Description("When true, sort in ascending order. Defaults to false (descending)."),
+			),
+			mcp.WithBoolean("includeAllScope",
+				mcp.Description("When true, returns templates from all orgs and projects in the account. When false (default), returns only templates in the current org and project."),
+			),
+			mcp.WithString("tags",
+				mcp.Description("Comma-separated list of tags to filter by. Templates must have ALL specified tags (AND filter)."),
 			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -438,15 +456,14 @@ func ListExperimentTemplatesTool(config *config.McpServerConfig, client *client.
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-
-			infrastructureType, err := OptionalParam[string](request, "infrastructureType")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
+			hubIdentity, err := OptionalParam[string](request, "hubIdentity")
+			infrastructureType, _ := OptionalParam[string](request, "infrastructureType")
+			infrastructure, _ := OptionalParam[string](request, "infrastructure")
+			search, _ := OptionalParam[string](request, "search")
+			sortField, _ := OptionalParam[string](request, "sortField")
+			sortAscending, _ := OptionalParam[bool](request, "sortAscending")
+			includeAllScope, _ := OptionalParam[bool](request, "includeAllScope")
+			tags, _ := OptionalParam[string](request, "tags")
 
 			page, size, err := FetchPagination(request)
 			if err != nil {
@@ -458,7 +475,7 @@ func ListExperimentTemplatesTool(config *config.McpServerConfig, client *client.
 				Size: size,
 			}
 
-			data, err := client.ListExperimentTemplates(ctx, scope, pagination, hubIdentity, infrastructureType)
+			data, err := client.ListExperimentTemplates(ctx, scope, pagination, hubIdentity, infrastructureType, infrastructure, search, sortField, sortAscending, includeAllScope, tags)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -466,6 +483,337 @@ func ListExperimentTemplatesTool(config *config.McpServerConfig, client *client.
 			r, err := json.Marshal(data)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal list chaos experiment templates response: %v", err)), nil
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+func GetExperimentTemplateTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_experiment_template_describe",
+			mcp.WithDescription("Retrieves detailed information about a specific chaos experiment template by its identity, including its spec, variables, revision, and metadata."),
+			common.WithScope(config, false),
+			mcp.WithString("identity",
+				mcp.Description("Unique identifier for the experiment template"),
+				mcp.Required(),
+			),
+			mcp.WithString("hubIdentity",
+				mcp.Description("Unique identifier for the chaos hub that owns the template"),
+				mcp.Required(),
+			),
+			mcp.WithString("revision",
+				mcp.Description("Specific revision of the template to retrieve. If omitted, the latest revision is returned."),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			identity, err := RequiredParam[string](request, "identity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			revision, _ := OptionalParam[string](request, "revision")
+
+			data, err := client.GetExperimentTemplate(ctx, scope, identity, hubIdentity, revision)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get experiment template: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal experiment template response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+func DeleteExperimentTemplateTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_experiment_template_delete",
+			mcp.WithDescription("Deletes a chaos experiment template by its identity (soft delete). The template must not be referenced by any existing experiment, otherwise the delete will be rejected."),
+			common.WithScope(config, false),
+			mcp.WithString("identity",
+				mcp.Description("Unique identifier for the experiment template to delete"),
+				mcp.Required(),
+			),
+			mcp.WithString("hubIdentity",
+				mcp.Description("Unique identifier for the chaos hub that owns the template"),
+				mcp.Required(),
+			),
+			mcp.WithBoolean("verbose",
+				mcp.Description("When true, enables verbose server-side logging for debugging."),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			identity, err := RequiredParam[string](request, "identity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			verbose, _ := OptionalParam[bool](request, "verbose")
+
+			if err := client.DeleteExperimentTemplate(ctx, scope, identity, hubIdentity, verbose); err != nil {
+				return nil, fmt.Errorf("failed to delete experiment template: %w", err)
+			}
+
+			return mcp.NewToolResultText(`{"deleted":true}`), nil
+		}
+}
+
+func GetExperimentTemplateRevisionsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_experiment_template_revisions",
+			mcp.WithDescription("Lists all revisions of a specific chaos experiment template by its identity. Supports pagination, search, sort, and filtering."),
+			common.WithScope(config, false),
+			WithPagination(),
+			mcp.WithString("identity",
+				mcp.Description("Unique identifier for the experiment template"),
+				mcp.Required(),
+			),
+			mcp.WithString("hubIdentity",
+				mcp.Description("Unique identifier for the chaos hub that owns the template"),
+				mcp.Required(),
+			),
+			mcp.WithString("infrastructureType",
+				mcp.Description("Infrastructure type filter (e.g. Kubernetes)"),
+			),
+			mcp.WithString("infrastructure",
+				mcp.Description("Infrastructure filter (e.g. KubernetesV2)"),
+			),
+			mcp.WithString("search",
+				mcp.Description("Search revisions by name or identity"),
+			),
+			mcp.WithString("sortField",
+				mcp.Description("Field to sort results by"),
+				mcp.Enum("name", "lastUpdated", "experimentName"),
+			),
+			mcp.WithBoolean("sortAscending",
+				mcp.Description("When true, sort in ascending order. Defaults to false (descending)."),
+			),
+			mcp.WithBoolean("includeAllScope",
+				mcp.Description("When true, returns templates from all orgs and projects in the account. When false (default), returns only templates in the current org and project."),
+			),
+			mcp.WithString("tags",
+				mcp.Description("Comma-separated list of tags to filter by. Templates must have ALL specified tags (AND filter)."),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			identity, err := RequiredParam[string](request, "identity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			infrastructureType, _ := OptionalParam[string](request, "infrastructureType")
+			infrastructure, _ := OptionalParam[string](request, "infrastructure")
+			search, _ := OptionalParam[string](request, "search")
+			sortField, _ := OptionalParam[string](request, "sortField")
+			sortAscending, _ := OptionalParam[bool](request, "sortAscending")
+			includeAllScope, _ := OptionalParam[bool](request, "includeAllScope")
+			tags, _ := OptionalParam[string](request, "tags")
+
+			page, size, err := FetchPagination(request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			pagination := &dto.PaginationOptions{
+				Page: page,
+				Size: size,
+			}
+
+			data, err := client.GetExperimentTemplateRevisions(ctx, scope, identity, hubIdentity, pagination, infrastructureType, infrastructure, search, sortField, sortAscending, includeAllScope, tags)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get experiment template revisions: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal experiment template revisions response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+func GetExperimentTemplateVariablesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_experiment_template_variables",
+			mcp.WithDescription("Retrieves the input variables (faults, probes, actions) of a specific chaos experiment template. Useful for understanding what inputs are needed before launching an experiment from a template."),
+			common.WithScope(config, false),
+			mcp.WithString("identity",
+				mcp.Description("Unique identifier for the experiment template"),
+				mcp.Required(),
+			),
+			mcp.WithString("hubIdentity",
+				mcp.Description("Unique identifier for the chaos hub that owns the template"),
+				mcp.Required(),
+			),
+			mcp.WithString("revision",
+				mcp.Description("Specific revision of the template. If omitted, the latest revision is used."),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			identity, err := RequiredParam[string](request, "identity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			revision, _ := OptionalParam[string](request, "revision")
+
+			data, err := client.GetExperimentTemplateVariables(ctx, scope, identity, hubIdentity, revision)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get experiment template variables: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal experiment template variables response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+func GetExperimentTemplateYamlTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_experiment_template_yaml",
+			mcp.WithDescription("Retrieves the YAML representation of a specific chaos experiment template. Returns the raw template YAML string for a given revision."),
+			common.WithScope(config, false),
+			mcp.WithString("identity",
+				mcp.Description("Unique identifier for the experiment template"),
+				mcp.Required(),
+			),
+			mcp.WithString("hubIdentity",
+				mcp.Description("Unique identifier for the chaos hub that owns the template"),
+				mcp.Required(),
+			),
+			mcp.WithString("revision",
+				mcp.Description("Specific revision of the template. If omitted, the latest revision is used."),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			identity, err := RequiredParam[string](request, "identity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			revision, _ := OptionalParam[string](request, "revision")
+
+			data, err := client.GetExperimentTemplateYaml(ctx, scope, identity, hubIdentity, revision)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get experiment template yaml: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal experiment template yaml response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+func CompareExperimentTemplateRevisionsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_experiment_template_compare",
+			mcp.WithDescription("Compares two revisions of a chaos experiment template, returning the YAML of both revisions for diff comparison. Both revision1 and revision2 are required."),
+			common.WithScope(config, false),
+			mcp.WithString("identity",
+				mcp.Description("Unique identifier for the experiment template"),
+				mcp.Required(),
+			),
+			mcp.WithString("hubIdentity",
+				mcp.Description("Unique identifier for the chaos hub that owns the template"),
+				mcp.Required(),
+			),
+			mcp.WithString("revision1",
+				mcp.Description("First revision identifier for comparison"),
+				mcp.Required(),
+			),
+			mcp.WithString("revision2",
+				mcp.Description("Second revision identifier for comparison"),
+				mcp.Required(),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			identity, err := RequiredParam[string](request, "identity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			revision1, err := RequiredParam[string](request, "revision1")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			revision2, err := RequiredParam[string](request, "revision2")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.CompareExperimentTemplateRevisions(ctx, scope, identity, hubIdentity, revision1, revision2)
+			if err != nil {
+				return nil, fmt.Errorf("failed to compare experiment template revisions: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal compare revisions response: %w", err)
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
@@ -690,6 +1038,382 @@ func ListLinuxInfrastructuresTool(config *config.McpServerConfig, client *client
 			r, err := json.Marshal(data)
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal list linux infras response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+func ListFaultTemplatesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_fault_template_list",
+			mcp.WithDescription("List chaos fault templates from chaos hubs. Supports filtering by hub, type, infrastructure, category, tags, and pagination."),
+			common.WithScope(config, false),
+			WithPagination(),
+			mcp.WithString("hubIdentity",
+				mcp.Description("Unique identifier for the chaos hub to list fault templates from"),
+			),
+			mcp.WithString("type",
+				mcp.Description("Fault type filter"),
+			),
+			mcp.WithString("infrastructureType",
+				mcp.Description("Infrastructure type filter (e.g. Kubernetes)"),
+			),
+			mcp.WithString("infrastructure",
+				mcp.Description("Infrastructure filter (e.g. KubernetesV2)"),
+			),
+			mcp.WithString("search",
+				mcp.Description("Search fault templates by name or identity"),
+			),
+			mcp.WithString("sortField",
+				mcp.Description("Field to sort results by"),
+				mcp.Enum("name", "lastUpdated"),
+			),
+			mcp.WithBoolean("sortAscending",
+				mcp.Description("When true, sort in ascending order. Defaults to false (descending)."),
+			),
+			mcp.WithBoolean("includeAllScope",
+				mcp.Description("When true, returns fault templates from all orgs and projects in the account. When false (default), returns only fault templates in the current org and project."),
+			),
+			mcp.WithBoolean("isEnterprise",
+				mcp.Description("When true, filter for enterprise faults only."),
+			),
+			mcp.WithString("tags",
+				mcp.Description("Comma-separated list of tags to filter by. Fault templates must have ALL specified tags (AND filter)."),
+			),
+			mcp.WithString("category",
+				mcp.Description("Comma-separated list of categories to filter by (e.g. Kubernetes,AWS,Linux)."),
+			),
+			mcp.WithString("permissionsRequired",
+				mcp.Description("Filter by permissions required field"),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			hubIdentity, _ := OptionalParam[string](request, "hubIdentity")
+			faultType, _ := OptionalParam[string](request, "type")
+			infrastructureType, _ := OptionalParam[string](request, "infrastructureType")
+			infrastructure, _ := OptionalParam[string](request, "infrastructure")
+			search, _ := OptionalParam[string](request, "search")
+			sortField, _ := OptionalParam[string](request, "sortField")
+			sortAscending, _ := OptionalParam[bool](request, "sortAscending")
+			includeAllScope, _ := OptionalParam[bool](request, "includeAllScope")
+			isEnterprise, _ := OptionalParam[bool](request, "isEnterprise")
+			tags, _ := OptionalParam[string](request, "tags")
+			category, _ := OptionalParam[string](request, "category")
+			permissionsRequired, _ := OptionalParam[string](request, "permissionsRequired")
+
+			page, size, err := FetchPagination(request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			pagination := &dto.PaginationOptions{Page: page, Size: size}
+
+			data, err := client.ListFaultTemplates(ctx, scope, pagination, hubIdentity, faultType, infrastructureType, infrastructure, search, sortField, sortAscending, includeAllScope, isEnterprise, tags, category, permissionsRequired)
+			if err != nil {
+				return nil, fmt.Errorf("failed to list fault templates: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal list fault templates response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+func GetFaultTemplateTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_fault_template_describe",
+			mcp.WithDescription("Retrieves detailed information about a specific chaos fault template by its identity, including its spec, variables, revision, and metadata."),
+			common.WithScope(config, false),
+			mcp.WithString("identity",
+				mcp.Description("Unique identifier for the fault template"),
+				mcp.Required(),
+			),
+			mcp.WithString("hubIdentity",
+				mcp.Description("Unique identifier for the chaos hub that owns the fault template"),
+				mcp.Required(),
+			),
+			mcp.WithString("revision",
+				mcp.Description("Specific revision of the fault template to retrieve. If omitted, the latest revision is returned."),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			identity, err := RequiredParam[string](request, "identity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			revision, _ := OptionalParam[string](request, "revision")
+
+			data, err := client.GetFaultTemplate(ctx, scope, identity, hubIdentity, revision)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get fault template: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal fault template response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+func DeleteFaultTemplateTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_fault_template_delete",
+			mcp.WithDescription("Deletes a chaos fault template by its identity (soft delete)."),
+			common.WithScope(config, false),
+			mcp.WithString("identity",
+				mcp.Description("Unique identifier for the fault template to delete"),
+				mcp.Required(),
+			),
+			mcp.WithString("hubIdentity",
+				mcp.Description("Unique identifier for the chaos hub that owns the fault template"),
+				mcp.Required(),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			identity, err := RequiredParam[string](request, "identity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			if err := client.DeleteFaultTemplate(ctx, scope, identity, hubIdentity); err != nil {
+				return nil, fmt.Errorf("failed to delete fault template: %w", err)
+			}
+
+			return mcp.NewToolResultText(`{"deleted":true}`), nil
+		}
+}
+
+func GetFaultTemplateRevisionsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_fault_template_revisions",
+			mcp.WithDescription("Lists all revisions of a specific chaos fault template by its identity. Supports pagination."),
+			common.WithScope(config, false),
+			WithPagination(),
+			mcp.WithString("identity",
+				mcp.Description("Unique identifier for the fault template"),
+				mcp.Required(),
+			),
+			mcp.WithString("hubIdentity",
+				mcp.Description("Unique identifier for the chaos hub that owns the fault template"),
+				mcp.Required(),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			identity, err := RequiredParam[string](request, "identity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			page, size, err := FetchPagination(request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			pagination := &dto.PaginationOptions{Page: page, Size: size}
+
+			data, err := client.GetFaultTemplateRevisions(ctx, scope, identity, hubIdentity, pagination)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get fault template revisions: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal fault template revisions response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+func GetFaultTemplateVariablesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_fault_template_variables",
+			mcp.WithDescription("Retrieves the runtime input variables of a specific chaos fault template, grouped into variables, faultTargets, faultTunable, and faultAuthentication."),
+			common.WithScope(config, false),
+			mcp.WithString("identity",
+				mcp.Description("Unique identifier for the fault template"),
+				mcp.Required(),
+			),
+			mcp.WithString("hubIdentity",
+				mcp.Description("Unique identifier for the chaos hub that owns the fault template"),
+				mcp.Required(),
+			),
+			mcp.WithString("revision",
+				mcp.Description("Specific revision of the fault template. If omitted, the latest revision is used."),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			identity, err := RequiredParam[string](request, "identity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			revision, _ := OptionalParam[string](request, "revision")
+
+			data, err := client.GetFaultTemplateVariables(ctx, scope, identity, hubIdentity, revision)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get fault template variables: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal fault template variables response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+func GetFaultTemplateYamlTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_fault_template_yaml",
+			mcp.WithDescription("Retrieves the YAML representation of a specific chaos fault template. Returns the raw template YAML string for a given revision."),
+			common.WithScope(config, false),
+			mcp.WithString("identity",
+				mcp.Description("Unique identifier for the fault template"),
+				mcp.Required(),
+			),
+			mcp.WithString("hubIdentity",
+				mcp.Description("Unique identifier for the chaos hub that owns the fault template"),
+				mcp.Required(),
+			),
+			mcp.WithString("revision",
+				mcp.Description("Specific revision of the fault template. If omitted, the latest revision is used."),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			identity, err := RequiredParam[string](request, "identity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			revision, _ := OptionalParam[string](request, "revision")
+
+			data, err := client.GetFaultTemplateYaml(ctx, scope, identity, hubIdentity, revision)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get fault template yaml: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal fault template yaml response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+func CompareFaultTemplateRevisionsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_fault_template_compare",
+			mcp.WithDescription("Compares two revisions of a chaos fault template, returning the YAML of both revisions for diff comparison. Both revision1 and revision2 are required."),
+			common.WithScope(config, false),
+			mcp.WithString("identity",
+				mcp.Description("Unique identifier for the fault template"),
+				mcp.Required(),
+			),
+			mcp.WithString("hubIdentity",
+				mcp.Description("Unique identifier for the chaos hub that owns the fault template"),
+				mcp.Required(),
+			),
+			mcp.WithString("revision1",
+				mcp.Description("First revision identifier for comparison"),
+				mcp.Required(),
+			),
+			mcp.WithString("revision2",
+				mcp.Description("Second revision identifier for comparison"),
+				mcp.Required(),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			identity, err := RequiredParam[string](request, "identity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			revision1, err := RequiredParam[string](request, "revision1")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			revision2, err := RequiredParam[string](request, "revision2")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.CompareFaultTemplateRevisions(ctx, scope, identity, hubIdentity, revision1, revision2)
+			if err != nil {
+				return nil, fmt.Errorf("failed to compare fault template revisions: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal compare fault template revisions response: %w", err)
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
