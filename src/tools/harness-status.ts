@@ -5,7 +5,7 @@ import type { HarnessClient } from "../client/harness-client.js";
 import type { Config } from "../config.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { buildDeepLink } from "../utils/deep-links.js";
-import { toMcpError } from "../utils/errors.js";
+import { isUserError, toMcpError } from "../utils/errors.js";
 import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("status");
@@ -194,9 +194,7 @@ export function registerStatusTool(
 
         return jsonResult(status);
       } catch (err) {
-        if (err instanceof Error) {
-          return errorResult(err.message);
-        }
+        if (isUserError(err)) return errorResult(err.message);
         throw toMcpError(err);
       }
     },

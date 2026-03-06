@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
-import { HarnessApiError, toMcpError } from "../../src/utils/errors.js";
+import { HarnessApiError, isUserError, toMcpError } from "../../src/utils/errors.js";
 
 describe("HarnessApiError", () => {
   it("stores statusCode, harnessCode, and correlationId", () => {
@@ -83,5 +83,25 @@ describe("toMcpError", () => {
     expect(result).toBeInstanceOf(McpError);
     expect(result.code).toBe(ErrorCode.InternalError);
     expect(result.message).toContain("raw string error");
+  });
+});
+
+describe("isUserError", () => {
+  it("returns true for plain Error", () => {
+    expect(isUserError(new Error("Unknown resource_type"))).toBe(true);
+  });
+
+  it("returns false for HarnessApiError", () => {
+    expect(isUserError(new HarnessApiError("server error", 500))).toBe(false);
+  });
+
+  it("returns false for McpError", () => {
+    expect(isUserError(new McpError(ErrorCode.InternalError, "fail"))).toBe(false);
+  });
+
+  it("returns false for non-Error values", () => {
+    expect(isUserError("string")).toBe(false);
+    expect(isUserError(null)).toBe(false);
+    expect(isUserError(undefined)).toBe(false);
   });
 });

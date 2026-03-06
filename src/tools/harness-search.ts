@@ -3,7 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
-import { toMcpError } from "../utils/errors.js";
+import { isUserError, toMcpError } from "../utils/errors.js";
 import { compactItems } from "../utils/compact.js";
 import { createLogger } from "../utils/logger.js";
 
@@ -120,9 +120,7 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
           ...(Object.keys(errors).length > 0 ? { errors } : {}),
         });
       } catch (err) {
-        if (err instanceof Error) {
-          return errorResult(err.message);
-        }
+        if (isUserError(err)) return errorResult(err.message);
         throw toMcpError(err);
       }
     },
