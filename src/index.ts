@@ -135,6 +135,15 @@ async function startHttp(config: Config, port: number): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  // Global error handlers — must be installed before anything else.
+  process.on("unhandledRejection", (reason) => {
+    log.error("Unhandled promise rejection", { error: String(reason), stack: (reason as Error)?.stack });
+  });
+  process.on("uncaughtException", (err) => {
+    log.error("Uncaught exception — exiting", { error: err.message, stack: err.stack });
+    process.exit(1);
+  });
+
   const config = loadConfig();
   setLogLevel(config.LOG_LEVEL);
 
