@@ -229,4 +229,53 @@ describe("Registry", () => {
       ).rejects.toThrow(/body must include either pipeline/);
     });
   });
+
+  describe("read-only mode", () => {
+    let registry: Registry;
+    beforeEach(() => {
+      registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines", HARNESS_READ_ONLY: true }));
+    });
+
+    it("allows list operations", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { content: [], totalElements: 0 } });
+      const client = makeClient(mockRequest);
+      await registry.dispatch(client, "pipeline", "list", {});
+      expect(mockRequest).toHaveBeenCalledOnce();
+    });
+
+    it("allows get operations", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "p1" } });
+      const client = makeClient(mockRequest);
+      await registry.dispatch(client, "pipeline", "get", { pipeline_id: "p1" });
+      expect(mockRequest).toHaveBeenCalledOnce();
+    });
+
+    it("blocks create operations", async () => {
+      const client = makeClient();
+      await expect(
+        registry.dispatch(client, "pipeline", "create", { body: {} }),
+      ).rejects.toThrow(/Read-only mode/);
+    });
+
+    it("blocks update operations", async () => {
+      const client = makeClient();
+      await expect(
+        registry.dispatch(client, "pipeline", "update", { pipeline_id: "p1", body: {} }),
+      ).rejects.toThrow(/Read-only mode/);
+    });
+
+    it("blocks delete operations", async () => {
+      const client = makeClient();
+      await expect(
+        registry.dispatch(client, "pipeline", "delete", { pipeline_id: "p1" }),
+      ).rejects.toThrow(/Read-only mode/);
+    });
+
+    it("blocks execute actions", async () => {
+      const client = makeClient();
+      await expect(
+        registry.dispatchExecute(client, "pipeline", "run", { pipeline_id: "p1" }),
+      ).rejects.toThrow(/Read-only mode/);
+    });
+  });
 });
