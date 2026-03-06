@@ -795,6 +795,7 @@ The server exposes 10 MCP tools. Every tool accepts `org_id` and `project_id` as
 | `migrate-pipeline-to-template` | Analyze an existing pipeline and extract reusable stage/step templates from it | `pipelineId` (required), `projectId` (optional) |
 | `delegate-health-check` | Check delegate connectivity, health, token status, and troubleshoot infrastructure issues | `projectId` (optional) |
 | `developer-portal-scorecard` | Review IDP scorecards for services and identify gaps to improve developer experience | `projectId` (optional) |
+| `pending-approvals` | Find pipeline executions waiting for approval, show details, and offer to approve or reject | `projectId` (optional), `orgId` (optional), `pipelineId` (optional) |
 
 ### FinOps
 
