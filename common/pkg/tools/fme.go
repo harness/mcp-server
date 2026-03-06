@@ -142,7 +142,7 @@ func ListFMEFeatureFlagsTool(config *config.McpServerConfig, fmeService *client.
 
 // GetFMEFeatureFlagTool creates a tool for getting a specific FME feature flag
 func GetFMEFeatureFlagTool(config *config.McpServerConfig, fmeService *client.FMEService) (mcp.Tool, server.ToolHandlerFunc) {
-	return mcp.NewTool("get_fme_feature_flag",
+	return mcp.NewTool("fme_get_feature_flag",
 			mcp.WithDescription("Get a specific Feature Management & Experimentation (FME) feature flag."),
 			mcp.WithString("ws_id",
 				mcp.Required(),
