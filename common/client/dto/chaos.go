@@ -682,6 +682,37 @@ type ChaosGuardCondition struct {
 	MachineSpec interface{} `json:"machineSpec,omitempty"`
 }
 
+type ChaosGuardConditionRule struct {
+	RuleID string `json:"ruleId"`
+	Name   string `json:"name"`
+}
+
+type ChaosGuardConditionResponse struct {
+	ChaosGuardCondition `json:",inline"`
+	Rules               []ChaosGuardConditionRule `json:"rules,omitempty"`
+	UpdatedBy           UserDetail                `json:"updatedBy"`
+	CreatedBy           UserDetail                `json:"createdBy"`
+	CreatedAt           int64                     `json:"createdAt"`
+	UpdatedAt           int64                     `json:"updatedAt"`
+}
+
+type ListChaosGuardConditionsResponse struct {
+	Conditions    []ChaosGuardConditionResponse `json:"conditions"`
+	Pagination    Pagination                    `json:"pagination"`
+	CorrelationID string                        `json:"correlationID"`
+}
+
+type GetChaosGuardConditionResponse struct {
+	ChaosGuardConditionResponse `json:",inline"`
+	CorrelationID               string `json:"correlationID"`
+}
+
+type DeleteChaosGuardConditionResponse struct {
+	Success       bool   `json:"success"`
+	Message       string `json:"message,omitempty"`
+	CorrelationID string `json:"correlationID"`
+}
+
 type ChaosGuardRuleResponse struct {
 	ChaosGuardRule `json:",inline"`
 	Conditions     []ChaosGuardCondition `json:"conditions"`
