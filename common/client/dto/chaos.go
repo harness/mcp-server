@@ -545,3 +545,105 @@ type FaultTemplateCompareRevisionsResponse struct {
 	Template1     string `json:"template1"`
 	Template2     string `json:"template2"`
 }
+
+type ChaosProbeTemplate struct {
+	ID                   string      `json:"id,omitempty"`
+	AccountID            string      `json:"accountID"`
+	OrgID                string      `json:"orgID"`
+	ProjectID            string      `json:"projectID"`
+	Name                 string      `json:"name"`
+	Description          string      `json:"description"`
+	Tags                 []string    `json:"tags"`
+	CreatedBy            string      `json:"createdBy"`
+	UpdatedBy            string      `json:"updatedBy"`
+	UpdatedAt            int64       `json:"updatedAt"`
+	CreatedAt            int64       `json:"createdAt"`
+	IsRemoved            bool        `json:"isRemoved"`
+	Identity             string      `json:"identity"`
+	HubRef               string      `json:"hubRef"`
+	InfrastructureType   string      `json:"infrastructureType"`
+	Type                 string      `json:"type"`
+	Template             string      `json:"template"`
+	Variables            []Variable  `json:"variables"`
+	Revision             int64       `json:"revision"`
+	IsDefault            bool        `json:"isDefault"`
+	IsEnterprise         bool        `json:"isEnterprise"`
+	ProbeProperties      interface{} `json:"probeProperties"`
+	RunProperties        interface{} `json:"runProperties"`
+	CreatedByUserDetails *UserDetail `json:"createdByUserDetails"`
+	UpdatedByUserDetails *UserDetail `json:"updatedByUserDetails"`
+}
+
+type ProbeTemplateCount struct {
+	Type  string `json:"type"`
+	Count int64  `json:"count"`
+}
+
+type ListProbeTemplateResponse struct {
+	Data          []ChaosProbeTemplate `json:"data"`
+	Pagination    Pagination           `json:"pagination"`
+	CountDetails  []ProbeTemplateCount `json:"countDetails"`
+	CorrelationID string               `json:"correlationID"`
+}
+
+type GetProbeTemplateResponse struct {
+	Data          ChaosProbeTemplate `json:"data"`
+	CorrelationID string             `json:"correlationID"`
+}
+
+type ProbeTemplateVariablesResponse struct {
+	Variables       []Variable `json:"variables"`
+	RunProperty     []Variable `json:"probeRunProperty"`
+	ProbeProperties []Variable `json:"probeProperties"`
+}
+
+type ChaosActionTemplate struct {
+	ID                   string      `json:"id,omitempty"`
+	AccountID            string      `json:"accountID"`
+	OrgID                string      `json:"orgID"`
+	ProjectID            string      `json:"projectID"`
+	Name                 string      `json:"name"`
+	Description          string      `json:"description"`
+	Tags                 []string    `json:"tags"`
+	CreatedBy            string      `json:"createdBy"`
+	UpdatedBy            string      `json:"updatedBy"`
+	UpdatedAt            int64       `json:"updatedAt"`
+	CreatedAt            int64       `json:"createdAt"`
+	IsRemoved            bool        `json:"isRemoved"`
+	Identity             string      `json:"identity"`
+	HubRef               string      `json:"hubRef"`
+	InfrastructureType   string      `json:"infrastructureType"`
+	Type                 string      `json:"type"`
+	Template             string      `json:"template"`
+	Variables            []Variable  `json:"variables"`
+	Revision             int64       `json:"revision"`
+	IsDefault            bool        `json:"isDefault"`
+	IsEnterprise         bool        `json:"isEnterprise"`
+	ActionProperties     interface{} `json:"actionProperties"`
+	RunProperties        interface{} `json:"runProperties"`
+	CreatedByUserDetails *UserDetail `json:"createdByUserDetails"`
+	UpdatedByUserDetails *UserDetail `json:"updatedByUserDetails"`
+}
+
+type ActionTemplateCount struct {
+	Type  string `json:"type"`
+	Count int64  `json:"count"`
+}
+
+type ListActionTemplateResponse struct {
+	Data          []ChaosActionTemplate `json:"data"`
+	Pagination    Pagination            `json:"pagination"`
+	CountDetails  []ActionTemplateCount `json:"countDetails"`
+	CorrelationID string                `json:"correlationID"`
+}
+
+type GetActionTemplateResponse struct {
+	Data          ChaosActionTemplate `json:"data"`
+	CorrelationID string              `json:"correlationID"`
+}
+
+type ActionTemplateVariablesResponse struct {
+	Variables        []Variable `json:"variables"`
+	RunProperty      []Variable `json:"actionRunProperty"`
+	ActionProperties []Variable `json:"actionProperties"`
+}
