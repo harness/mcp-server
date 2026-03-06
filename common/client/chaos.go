@@ -45,6 +45,11 @@ const (
 	chaosGetActionTemplateRevisionsPath     = "rest/templates/actions/%s/revisions"
 	chaosGetActionTemplateVariablesPath     = "rest/templates/actions/%s/variables"
 	chaosCompareActionTemplateRevisionsPath = "rest/templates/actions/%s/compare"
+
+	chaosListChaosGuardRulesPath  = "v3/chaosguard-rules"
+	chaosGetChaosGuardRulePath    = "v3/chaosguard-rules/%s"
+	chaosDeleteChaosGuardRulePath = "v3/chaosguard-rules/%s"
+	chaosEnableChaosGuardRulePath = "v3/chaosguard-rules/%s/enable"
 )
 
 type ChaosService struct {
@@ -802,6 +807,82 @@ func (c *ChaosService) CompareActionTemplateRevisions(ctx context.Context, scope
 		return nil, fmt.Errorf("failed to compare action template revisions: %w", err)
 	}
 	return out, nil
+}
+
+func (c *ChaosService) ListChaosGuardRules(ctx context.Context, scope dto.Scope, search, sortField string, sortAscending bool, infraType, tags string, page, limit int) (*dto.ListChaosGuardRulesResponse, error) {
+	params := make(map[string]string)
+	params["correlationID"] = uuid.New().String()
+	if search != "" {
+		params["search"] = search
+	}
+	if sortField != "" {
+		params["sortField"] = sortField
+	}
+	if sortAscending {
+		params["sortAscending"] = "true"
+	}
+	if infraType != "" {
+		params["infrastructureType"] = infraType
+	}
+	if tags != "" {
+		params["tags"] = tags
+	}
+	if page > 0 {
+		params["page"] = fmt.Sprintf("%d", page)
+	}
+	if limit > 0 {
+		params["limit"] = fmt.Sprintf("%d", limit)
+	}
+	params = addIdentifierParams(params, scope)
+
+	out := new(dto.ListChaosGuardRulesResponse)
+	if err := c.Client.Get(ctx, chaosListChaosGuardRulesPath, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to list chaosguard rules: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) GetChaosGuardRule(ctx context.Context, scope dto.Scope, identity string) (*dto.GetChaosGuardRuleResponse, error) {
+	path := fmt.Sprintf(chaosGetChaosGuardRulePath, identity)
+	params := make(map[string]string)
+	params["correlationID"] = uuid.New().String()
+	params = addIdentifierParams(params, scope)
+
+	out := new(dto.GetChaosGuardRuleResponse)
+	if err := c.Client.Get(ctx, path, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to get chaosguard rule: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) DeleteChaosGuardRule(ctx context.Context, scope dto.Scope, identity string) (*dto.DeleteChaosGuardRuleResponse, error) {
+	path := fmt.Sprintf(chaosDeleteChaosGuardRulePath, identity)
+	params := make(map[string]string)
+	params["correlationID"] = uuid.New().String()
+	params = addIdentifierParams(params, scope)
+
+	out := new(dto.DeleteChaosGuardRuleResponse)
+	if err := c.Client.Delete(ctx, path, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to delete chaosguard rule: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) EnableChaosGuardRule(ctx context.Context, scope dto.Scope, identity string, enabled bool) error {
+	path := fmt.Sprintf(chaosEnableChaosGuardRulePath, identity)
+	params := make(map[string]string)
+	params["correlationID"] = uuid.New().String()
+	if enabled {
+		params["enabled"] = "true"
+	} else {
+		params["enabled"] = "false"
+	}
+	params = addIdentifierParams(params, scope)
+
+	if err := c.Client.Put(ctx, path, params, nil, nil); err != nil {
+		return fmt.Errorf("failed to enable/disable chaosguard rule: %w", err)
+	}
+	return nil
 }
 
 func addIdentifierParams(params map[string]string, scope dto.Scope) map[string]string {
