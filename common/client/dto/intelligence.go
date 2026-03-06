@@ -26,8 +26,6 @@ type RequestAction string
 
 // Constants for the various action types
 const (
-	CreateStep      RequestAction = "CREATE_STEP"
-	UpdateStep      RequestAction = "UPDATE_STEP"
 	CreatePipeline  RequestAction = "CREATE_PIPELINE"
 	UpdatePipeline  RequestAction = "UPDATE_PIPELINE"
 	CreateEnv       RequestAction = "CREATE_ENVIRONMENT"
@@ -38,29 +36,23 @@ const (
 	UpdateService   RequestAction = "UPDATE_SERVICE"
 	CreateConnector RequestAction = "CREATE_CONNECTOR"
 	UpdateConnector RequestAction = "UPDATE_CONNECTOR"
-	CreateStepGroup RequestAction = "CREATE_STEP_GROUP"
-	UpdateStepGroup RequestAction = "UPDATE_STEP_GROUP"
 	CreateProcess   RequestAction = "CREATE_PROCESS"
 )
 
 // ActionTypeValues returns all valid action types
 func ActionTypeValues() []string {
 	return []string{
-		string(CreateStep),
 		string(CreatePipeline),
 		string(CreateEnv),
 		string(CreateSecret),
 		string(CreateService),
 		string(CreateConnector),
 		string(CreateProcess),
-		string(UpdateStep),
 		string(UpdatePipeline),
 		string(UpdateEnv),
 		string(UpdateSecret),
 		string(UpdateService),
 		string(UpdateConnector),
-		string(CreateStepGroup),
-		string(UpdateStepGroup),
 	}
 }
 

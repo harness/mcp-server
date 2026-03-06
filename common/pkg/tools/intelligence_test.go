@@ -10,8 +10,6 @@ import (
 
 func TestActionTypeValues_ContainsAllConstants(t *testing.T) {
 	expected := map[string]bool{
-		"CREATE_STEP":        false,
-		"UPDATE_STEP":        false,
 		"CREATE_PIPELINE":    false,
 		"UPDATE_PIPELINE":    false,
 		"CREATE_ENVIRONMENT": false,
@@ -22,8 +20,6 @@ func TestActionTypeValues_ContainsAllConstants(t *testing.T) {
 		"UPDATE_SERVICE":     false,
 		"CREATE_CONNECTOR":   false,
 		"UPDATE_CONNECTOR":   false,
-		"CREATE_STEP_GROUP":  false,
-		"UPDATE_STEP_GROUP":  false,
 		"CREATE_PROCESS":     false,
 	}
 
@@ -84,8 +80,8 @@ func TestAIDevOpsAgentTool_ActionEnum(t *testing.T) {
 
 	assert.Contains(t, enumValues, "CREATE_PIPELINE")
 	assert.Contains(t, enumValues, "UPDATE_PIPELINE")
-	assert.Contains(t, enumValues, "CREATE_STEP")
-	assert.Contains(t, enumValues, "CREATE_STEP_GROUP")
-	assert.Contains(t, enumValues, "UPDATE_STEP_GROUP")
-	assert.GreaterOrEqual(t, len(enumValues), 15)
+	assert.NotContains(t, enumValues, "CREATE_STEP")
+	assert.NotContains(t, enumValues, "CREATE_STEP_GROUP")
+	assert.NotContains(t, enumValues, "UPDATE_STEP_GROUP")
+	assert.GreaterOrEqual(t, len(enumValues), 11)
 }

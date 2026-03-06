@@ -19,10 +19,10 @@ import (
 // AIDevOpsAgentTool creates the ask_ai_devops_agent tool
 func AIDevOpsAgentTool(config *commonConfig.McpServerConfig, client *commonClient.IntelligenceService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("ask_ai_devops_agent",
-			mcp.WithDescription("Ask the AI DevOps Agent to create or update Harness entities such as "+
-				"pipelines, steps, step groups, environments, connectors, services, and secrets. "+
-				"Returns the generated or updated YAML along with a conversational response. "+
-				"For stage-level changes, use CREATE_PIPELINE or UPDATE_PIPELINE actions."),
+		mcp.WithDescription("Ask the AI DevOps Agent to create or update Harness entities such as "+
+			"pipelines, environments, connectors, services, and secrets. "+
+			"Returns the generated or updated YAML along with a conversational response. "+
+			"For stage-level changes, use CREATE_PIPELINE or UPDATE_PIPELINE actions."),
 			mcp.WithString("prompt",
 				mcp.Required(),
 				mcp.Description("The prompt to send to the AI DevOps agent"),
