@@ -547,6 +547,7 @@ The server exposes 10 MCP tools. Every tool accepts `org_id` and `project_id` as
 | `trigger` | x | x | x | x | x | |
 | `pipeline_summary` | | x | | | | |
 | `input_set` | x | x | | | | |
+| `approval_instance` | x | | | | | `approve`, `reject` |
 
 ### Services
 
@@ -849,7 +850,7 @@ Available toolset names:
 | Toolset | Resource Types |
 |---------|---------------|
 | `platform` | organization, project |
-| `pipelines` | pipeline, execution, trigger, pipeline_summary, input_set |
+| `pipelines` | pipeline, execution, trigger, pipeline_summary, input_set, approval_instance |
 | `services` | service |
 | `environments` | environment |
 | `connectors` | connector, connector_catalogue |

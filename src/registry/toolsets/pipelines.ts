@@ -1,5 +1,5 @@
 import type { ToolsetDefinition, BodySchema } from "../types.js";
-import { ngExtract, pageExtract } from "../extractors.js";
+import { ngExtract, pageExtract, passthrough } from "../extractors.js";
 
 const ngExtractWithInlineStore = (raw: unknown) => {
   const result = ngExtract(raw);
@@ -32,7 +32,7 @@ const pipelineUpdateSchema: BodySchema = {
 export const pipelinesToolset: ToolsetDefinition = {
   name: "pipelines",
   displayName: "Pipelines",
-  description: "CI/CD pipelines, executions, triggers, and input sets",
+  description: "CI/CD pipelines, executions, triggers, input sets, and approvals",
   resources: [
     {
       resourceType: "pipeline",
@@ -275,6 +275,73 @@ export const pipelinesToolset: ToolsetDefinition = {
           queryParams: { pipeline_id: "pipelineIdentifier" },
           responseExtractor: ngExtract,
           description: "Get input set details",
+        },
+      },
+    },
+    {
+      resourceType: "approval_instance",
+      displayName: "Approval Instance",
+      description:
+        "Pipeline approval instances. List approvals for an execution (filter by status/type), or approve/reject a waiting approval. Use with harness_list to find pending approvals, then harness_execute to approve or reject.",
+      toolset: "pipelines",
+      scope: "project",
+      identifierFields: ["execution_id"],
+      listFilterFields: ["approval_status", "approval_type", "node_execution_id"],
+      operations: {
+        list: {
+          method: "GET",
+          path: "/v1/orgs/{org}/projects/{project}/approvals/execution/{executionId}",
+          pathParams: { org_id: "org", project_id: "project", execution_id: "executionId" },
+          queryParams: {
+            approval_status: "approval_status",
+            approval_type: "approval_type",
+            node_execution_id: "node_execution_id",
+          },
+          responseExtractor: (raw: unknown): { items: unknown[]; total: number } => {
+            const arr = Array.isArray(raw) ? raw : [];
+            return { items: arr, total: arr.length };
+          },
+          description: "List approval instances for a pipeline execution. Filter by approval_status (WAITING, APPROVED, REJECTED, FAILED, ABORTED, EXPIRED) and approval_type (HarnessApproval, JiraApproval, CustomApproval, ServiceNowApproval).",
+        },
+      },
+      executeActions: {
+        approve: {
+          method: "POST",
+          path: "/pipeline/api/approvals/{approvalInstanceId}/harness/activity",
+          pathParams: { approval_id: "approvalInstanceId" },
+          bodyBuilder: (input) => ({
+            action: "APPROVE",
+            comments: input.comments ?? "",
+            ...(input.approver_inputs ? { approverInputs: input.approver_inputs } : {}),
+          }),
+          responseExtractor: ngExtract,
+          actionDescription: "Approve a Harness approval instance. Requires approval_id. Optional: comments, approver_inputs (array of {name, value}).",
+          bodySchema: {
+            description: "Approval activity",
+            fields: [
+              { name: "approval_id", type: "string", required: true, description: "Approval instance ID (from approval_instance list)" },
+              { name: "comments", type: "string", required: false, description: "Approval comment" },
+              { name: "approver_inputs", type: "array", required: false, description: "Approver inputs as [{name, value}]" },
+            ],
+          },
+        },
+        reject: {
+          method: "POST",
+          path: "/pipeline/api/approvals/{approvalInstanceId}/harness/activity",
+          pathParams: { approval_id: "approvalInstanceId" },
+          bodyBuilder: (input) => ({
+            action: "REJECT",
+            comments: input.comments ?? "",
+          }),
+          responseExtractor: ngExtract,
+          actionDescription: "Reject a Harness approval instance. Requires approval_id. Optional: comments.",
+          bodySchema: {
+            description: "Rejection activity",
+            fields: [
+              { name: "approval_id", type: "string", required: true, description: "Approval instance ID (from approval_instance list)" },
+              { name: "comments", type: "string", required: false, description: "Rejection reason" },
+            ],
+          },
         },
       },
     },
