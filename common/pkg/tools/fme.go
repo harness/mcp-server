@@ -12,10 +12,10 @@ import (
 )
 
 const (
-	fmeWorkspacesDefaultLimit    = 20
-	fmeWorkspacesMaxLimit        = 1000
-	fmeFeatureFlagsDefaultLimit  = 20
-	fmeFeatureFlagsMaxLimit      = 50
+	fmeWorkspacesDefaultLimit   = 20
+	fmeWorkspacesMaxLimit       = 1000
+	fmeFeatureFlagsDefaultLimit = 20
+	fmeFeatureFlagsMaxLimit     = 50
 )
 
 // ListFMEWorkspacesTool creates a tool for listing FME workspaces
