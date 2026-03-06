@@ -22,12 +22,15 @@ function createHarnessServer(config: Config): McpServer {
   const client = new HarnessClient(config);
   const registry = new Registry(config);
 
-  const server = new McpServer({
-    name: "harness-mcp-server",
-    version: "1.0.0",
-    icons: [{ src: "https://app.harness.io/favicon.ico" }],
-    websiteUrl: "https://harness.io",
-  });
+  const server = new McpServer(
+    {
+      name: "harness-mcp-server",
+      version: "1.0.0",
+      icons: [{ src: "https://app.harness.io/favicon.ico" }],
+      websiteUrl: "https://harness.io",
+    },
+    { capabilities: { logging: {} } },
+  );
 
   registerAllTools(server, registry, client, config);
   registerAllResources(server, registry, client, config);

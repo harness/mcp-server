@@ -5,6 +5,7 @@ import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, toMcpError } from "../utils/errors.js";
 import { createLogger } from "../utils/logger.js";
+import { sendProgress } from "../utils/progress.js";
 
 const log = createLogger("diagnose");
 
@@ -19,12 +20,15 @@ export function registerDiagnoseTool(server: McpServer, registry: Registry, clie
       include_yaml: z.boolean().describe("Include the full pipeline YAML definition").default(true).optional(),
       include_logs: z.boolean().describe("Include execution step logs").default(true).optional(),
     },
-    async (args) => {
+    async (args, extra) => {
       try {
         const input: Record<string, unknown> = { ...args };
         const diagnostic: Record<string, unknown> = {};
+        const totalSteps = 1 + (args.include_yaml !== false ? 1 : 0) + (args.include_logs !== false ? 1 : 0);
+        let step = 0;
 
         // 1. Get execution details
+        await sendProgress(extra, step, totalSteps, "Fetching execution details...");
         log.info("Fetching execution details", { executionId: args.execution_id });
         try {
           const execution = await registry.dispatch(client, "execution", "get", input);
@@ -35,8 +39,11 @@ export function registerDiagnoseTool(server: McpServer, registry: Registry, clie
           const pipelineExec = exec?.pipelineExecutionSummary as Record<string, unknown> | undefined;
           const pipelineId = pipelineExec?.pipelineIdentifier as string | undefined;
 
+          step++;
+
           // 2. Get pipeline YAML if requested and pipeline ID available
           if (args.include_yaml !== false && pipelineId) {
+            await sendProgress(extra, step, totalSteps, "Fetching pipeline YAML...");
             try {
               const pipeline = await registry.dispatch(client, "pipeline", "get", {
                 ...input,
@@ -54,6 +61,8 @@ export function registerDiagnoseTool(server: McpServer, registry: Registry, clie
 
         // 3. Get execution logs if requested
         if (args.include_logs !== false) {
+          step++;
+          await sendProgress(extra, step, totalSteps, "Fetching execution logs...");
           try {
             const logs = await registry.dispatch(client, "execution_log", "get", input);
             diagnostic.logs = logs;
@@ -63,6 +72,7 @@ export function registerDiagnoseTool(server: McpServer, registry: Registry, clie
           }
         }
 
+        await sendProgress(extra, totalSteps, totalSteps, "Diagnosis complete");
         return jsonResult(diagnostic);
       } catch (err) {
         if (isUserError(err)) return errorResult(err.message);

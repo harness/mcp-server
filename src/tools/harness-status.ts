@@ -7,6 +7,7 @@ import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { buildDeepLink } from "../utils/deep-links.js";
 import { isUserError, toMcpError } from "../utils/errors.js";
 import { createLogger } from "../utils/logger.js";
+import { sendProgress } from "../utils/progress.js";
 
 const log = createLogger("status");
 
@@ -75,7 +76,7 @@ export function registerStatusTool(
       project_id: z.string().describe("Project identifier (overrides default)").optional(),
       limit: z.number().describe("Max items per section (default 5, max 20)").default(5).optional(),
     },
-    async (args) => {
+    async (args, extra) => {
       try {
         const orgId = args.org_id ?? config.HARNESS_DEFAULT_ORG_ID;
         const projectId = args.project_id ?? config.HARNESS_DEFAULT_PROJECT_ID ?? "";
@@ -89,6 +90,7 @@ export function registerStatusTool(
         };
 
         log.info("Fetching project status", { orgId, projectId, limit });
+        await sendProgress(extra, 0, 2, "Fetching failed, running, and recent executions...");
 
         // 3 parallel dispatches: failed, running, recent activity
         const [failedResult, runningResult, recentResult] = await Promise.allSettled([
@@ -126,6 +128,8 @@ export function registerStatusTool(
         if (recentResult.status === "rejected") {
           log.warn("Failed to fetch recent executions", { error: String(recentResult.reason) });
         }
+
+        await sendProgress(extra, 1, 2, "Building status summary...");
 
         const failedItems = (failed?.items ?? []).map((e) =>
           summarizeExecution(e, config.HARNESS_BASE_URL, config.HARNESS_ACCOUNT_ID, orgId, projectId),
@@ -169,6 +173,8 @@ export function registerStatusTool(
         if (failedResult.status === "rejected") errors.failed = String(failedResult.reason);
         if (runningResult.status === "rejected") errors.running = String(runningResult.reason);
         if (recentResult.status === "rejected") errors.recent = String(recentResult.reason);
+
+        await sendProgress(extra, 2, 2, "Status complete");
 
         const status: Record<string, unknown> = {
           project: {
