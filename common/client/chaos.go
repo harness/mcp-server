@@ -33,6 +33,18 @@ const (
 	chaosGetFaultTemplateVariablesPath = "rest/faulttemplates/%s/variables"
 	chaosGetFaultTemplateYamlPath      = "rest/faulttemplates/%s/yaml"
 	chaosCompareFaultTemplateRevsPath  = "rest/faulttemplates/%s/compare"
+
+	chaosListProbeTemplatesPath        = "rest/templates/probes"
+	chaosGetProbeTemplatePath          = "rest/templates/probes/%s"
+	chaosDeleteProbeTemplatePath       = "rest/templates/probes/%s"
+	chaosGetProbeTemplateVariablesPath = "rest/templates/probes/%s/variables"
+
+	chaosListActionTemplatesPath            = "rest/templates/actions"
+	chaosGetActionTemplatePath              = "rest/templates/actions/%s"
+	chaosDeleteActionTemplatePath           = "rest/templates/actions/%s"
+	chaosGetActionTemplateRevisionsPath     = "rest/templates/actions/%s/revisions"
+	chaosGetActionTemplateVariablesPath     = "rest/templates/actions/%s/variables"
+	chaosCompareActionTemplateRevisionsPath = "rest/templates/actions/%s/compare"
 )
 
 type ChaosService struct {
@@ -562,6 +574,232 @@ func (c *ChaosService) CompareFaultTemplateRevisions(ctx context.Context, scope 
 	out := new(dto.FaultTemplateCompareRevisionsResponse)
 	if err := c.Client.Get(ctx, path, params, nil, out); err != nil {
 		return nil, fmt.Errorf("failed to compare fault template revisions: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) ListProbeTemplates(ctx context.Context, scope dto.Scope, hubIdentity, search, infraType, entityType string, includeAllScope bool, page, limit int) (*dto.ListProbeTemplateResponse, error) {
+	params := make(map[string]string)
+	params["correlationID"] = uuid.New().String()
+	if hubIdentity != "" {
+		params["hubIdentity"] = hubIdentity
+	}
+	if search != "" {
+		params["search"] = search
+	}
+	if infraType != "" {
+		params["infraType"] = infraType
+	}
+	if entityType != "" {
+		params["entityType"] = entityType
+	}
+	if includeAllScope {
+		params["includeAllScope"] = "true"
+	}
+	if page > 0 {
+		params["page"] = fmt.Sprintf("%d", page)
+	}
+	if limit > 0 {
+		params["limit"] = fmt.Sprintf("%d", limit)
+	}
+	params = addIdentifierParams(params, scope)
+
+	out := new(dto.ListProbeTemplateResponse)
+	if err := c.Client.Get(ctx, chaosListProbeTemplatesPath, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to list probe templates: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) GetProbeTemplate(ctx context.Context, scope dto.Scope, identity, hubIdentity string, revision int64) (*dto.GetProbeTemplateResponse, error) {
+	path := fmt.Sprintf(chaosGetProbeTemplatePath, identity)
+	params := make(map[string]string)
+	params["correlationID"] = uuid.New().String()
+	if hubIdentity != "" {
+		params["hubIdentity"] = hubIdentity
+	}
+	if revision > 0 {
+		params["revision"] = fmt.Sprintf("%d", revision)
+	}
+	params = addIdentifierParams(params, scope)
+
+	out := new(dto.GetProbeTemplateResponse)
+	if err := c.Client.Get(ctx, path, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to get probe template: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) DeleteProbeTemplate(ctx context.Context, scope dto.Scope, identity, hubIdentity string, revision int64) (bool, error) {
+	path := fmt.Sprintf(chaosDeleteProbeTemplatePath, identity)
+	params := make(map[string]string)
+	params["correlationID"] = uuid.New().String()
+	params["hubIdentity"] = hubIdentity
+	if revision > 0 {
+		params["revision"] = fmt.Sprintf("%d", revision)
+	}
+	params = addIdentifierParams(params, scope)
+
+	if err := c.Client.Delete(ctx, path, params, nil, nil); err != nil {
+		return false, fmt.Errorf("failed to delete probe template: %w", err)
+	}
+	return true, nil
+}
+
+func (c *ChaosService) GetProbeTemplateVariables(ctx context.Context, scope dto.Scope, identity, hubIdentity string, revision int64) (*dto.ProbeTemplateVariablesResponse, error) {
+	path := fmt.Sprintf(chaosGetProbeTemplateVariablesPath, identity)
+	params := make(map[string]string)
+	params["correlationID"] = uuid.New().String()
+	if hubIdentity != "" {
+		params["hubIdentity"] = hubIdentity
+	}
+	if revision > 0 {
+		params["revision"] = fmt.Sprintf("%d", revision)
+	}
+	params = addIdentifierParams(params, scope)
+
+	out := new(dto.ProbeTemplateVariablesResponse)
+	if err := c.Client.Get(ctx, path, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to get probe template variables: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) ListActionTemplates(ctx context.Context, scope dto.Scope, hubIdentity, search, infraType, entityType string, includeAllScope bool, page, limit int) (*dto.ListActionTemplateResponse, error) {
+	params := make(map[string]string)
+	params["correlationID"] = uuid.New().String()
+	if hubIdentity != "" {
+		params["hubIdentity"] = hubIdentity
+	}
+	if search != "" {
+		params["search"] = search
+	}
+	if infraType != "" {
+		params["infraType"] = infraType
+	}
+	if entityType != "" {
+		params["entityType"] = entityType
+	}
+	if includeAllScope {
+		params["includeAllScope"] = "true"
+	}
+	if page > 0 {
+		params["page"] = fmt.Sprintf("%d", page)
+	}
+	if limit > 0 {
+		params["limit"] = fmt.Sprintf("%d", limit)
+	}
+	params = addIdentifierParams(params, scope)
+
+	out := new(dto.ListActionTemplateResponse)
+	if err := c.Client.Get(ctx, chaosListActionTemplatesPath, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to list action templates: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) GetActionTemplate(ctx context.Context, scope dto.Scope, identity, hubIdentity string, revision int64) (*dto.GetActionTemplateResponse, error) {
+	path := fmt.Sprintf(chaosGetActionTemplatePath, identity)
+	params := make(map[string]string)
+	params["correlationID"] = uuid.New().String()
+	if hubIdentity != "" {
+		params["hubIdentity"] = hubIdentity
+	}
+	if revision > 0 {
+		params["revision"] = fmt.Sprintf("%d", revision)
+	}
+	params = addIdentifierParams(params, scope)
+
+	out := new(dto.GetActionTemplateResponse)
+	if err := c.Client.Get(ctx, path, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to get action template: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) DeleteActionTemplate(ctx context.Context, scope dto.Scope, identity, hubIdentity string, revision int64) (bool, error) {
+	path := fmt.Sprintf(chaosDeleteActionTemplatePath, identity)
+	params := make(map[string]string)
+	params["correlationID"] = uuid.New().String()
+	params["hubIdentity"] = hubIdentity
+	if revision > 0 {
+		params["revision"] = fmt.Sprintf("%d", revision)
+	}
+	params = addIdentifierParams(params, scope)
+
+	if err := c.Client.Delete(ctx, path, params, nil, nil); err != nil {
+		return false, fmt.Errorf("failed to delete action template: %w", err)
+	}
+	return true, nil
+}
+
+func (c *ChaosService) GetActionTemplateRevisions(ctx context.Context, scope dto.Scope, identity, hubIdentity, search, infraType, entityType string, includeAllScope bool, page, limit int) (*dto.ListActionTemplateResponse, error) {
+	path := fmt.Sprintf(chaosGetActionTemplateRevisionsPath, identity)
+	params := make(map[string]string)
+	params["correlationID"] = uuid.New().String()
+	if hubIdentity != "" {
+		params["hubIdentity"] = hubIdentity
+	}
+	if search != "" {
+		params["search"] = search
+	}
+	if infraType != "" {
+		params["infraType"] = infraType
+	}
+	if entityType != "" {
+		params["entityType"] = entityType
+	}
+	if includeAllScope {
+		params["includeAllScope"] = "true"
+	}
+	if page > 0 {
+		params["page"] = fmt.Sprintf("%d", page)
+	}
+	if limit > 0 {
+		params["limit"] = fmt.Sprintf("%d", limit)
+	}
+	params = addIdentifierParams(params, scope)
+
+	out := new(dto.ListActionTemplateResponse)
+	if err := c.Client.Get(ctx, path, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to get action template revisions: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) GetActionTemplateVariables(ctx context.Context, scope dto.Scope, identity, hubIdentity string, revision int64) (*dto.ActionTemplateVariablesResponse, error) {
+	path := fmt.Sprintf(chaosGetActionTemplateVariablesPath, identity)
+	params := make(map[string]string)
+	params["correlationID"] = uuid.New().String()
+	if hubIdentity != "" {
+		params["hubIdentity"] = hubIdentity
+	}
+	if revision > 0 {
+		params["revision"] = fmt.Sprintf("%d", revision)
+	}
+	params = addIdentifierParams(params, scope)
+
+	out := new(dto.ActionTemplateVariablesResponse)
+	if err := c.Client.Get(ctx, path, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to get action template variables: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) CompareActionTemplateRevisions(ctx context.Context, scope dto.Scope, identity, hubIdentity, revision, revisionToCompare string) (*dto.ListActionTemplateResponse, error) {
+	path := fmt.Sprintf(chaosCompareActionTemplateRevisionsPath, identity)
+	params := make(map[string]string)
+	params["correlationID"] = uuid.New().String()
+	if hubIdentity != "" {
+		params["hubIdentity"] = hubIdentity
+	}
+	params["revision"] = revision
+	params["revisionToCompare"] = revisionToCompare
+	params = addIdentifierParams(params, scope)
+
+	out := new(dto.ListActionTemplateResponse)
+	if err := c.Client.Get(ctx, path, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to compare action template revisions: %w", err)
 	}
 	return out, nil
 }

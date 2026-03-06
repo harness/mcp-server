@@ -108,7 +108,17 @@ func RegisterChaos(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) e
 			toolsets.NewServerTool(tools.GetFaultTemplateVariablesTool(config, chaosClient)),
 			toolsets.NewServerTool(tools.GetFaultTemplateYamlTool(config, chaosClient)),
 			toolsets.NewServerTool(tools.CompareFaultTemplateRevisionsTool(config, chaosClient)),
-
+			// Probe templates tools
+			toolsets.NewServerTool(tools.ListProbeTemplatesTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.GetProbeTemplateTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.GetProbeTemplateVariablesTool(config, chaosClient)),
+			// Action templates tools
+			toolsets.NewServerTool(tools.ListActionTemplatesTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.GetActionTemplateTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.GetActionTemplateRevisionsTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.GetActionTemplateVariablesTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.CompareActionTemplateRevisionsTool(config, chaosClient)),
+			// Load Testing tools
 			toolsets.NewServerTool(tools.ListLoadTestsTool(config, loadTestService)),
 			toolsets.NewServerTool(tools.GetLoadTestTool(config, loadTestService)),
 			toolsets.NewServerTool(tools.ListLinuxInfrastructuresTool(config, chaosClient)),
@@ -123,6 +133,10 @@ func RegisterChaos(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) e
 			toolsets.NewServerTool(tools.DeleteExperimentTemplateTool(config, chaosClient)),
 			// Fault templates tools
 			toolsets.NewServerTool(tools.DeleteFaultTemplateTool(config, chaosClient)),
+			// Probe templates tools
+			toolsets.NewServerTool(tools.DeleteProbeTemplateTool(config, chaosClient)),
+			// Action templates tools
+			toolsets.NewServerTool(tools.DeleteActionTemplateTool(config, chaosClient)),
 		)
 
 	// Add toolset to the group
