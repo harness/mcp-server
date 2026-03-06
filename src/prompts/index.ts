@@ -33,6 +33,9 @@ import { registerCodeReviewPrompt } from "./code-review.js";
 import { registerPrSummaryPrompt } from "./pr-summary.js";
 import { registerBranchCleanupPrompt } from "./branch-cleanup.js";
 
+// Approval prompts
+import { registerPendingApprovalsPrompt } from "./pending-approvals.js";
+
 export function registerAllPrompts(server: McpServer): void {
   // Existing prompts
   registerDebugPipelinePrompt(server);
@@ -67,4 +70,7 @@ export function registerAllPrompts(server: McpServer): void {
   registerCodeReviewPrompt(server);
   registerPrSummaryPrompt(server);
   registerBranchCleanupPrompt(server);
+
+  // Approvals
+  registerPendingApprovalsPrompt(server);
 }
