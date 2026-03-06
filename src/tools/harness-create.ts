@@ -3,7 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
-import { toMcpError } from "../utils/errors.js";
+import { isUserError, toMcpError } from "../utils/errors.js";
 
 export function registerCreateTool(server: McpServer, registry: Registry, client: HarnessClient): void {
   server.tool(
@@ -25,9 +25,7 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
         const result = await registry.dispatch(client, args.resource_type, "create", args as Record<string, unknown>);
         return jsonResult(result);
       } catch (err) {
-        if (err instanceof Error && (err.message.startsWith("Unknown resource_type") || err.message.includes("does not support"))) {
-          return errorResult(err.message);
-        }
+        if (isUserError(err)) return errorResult(err.message);
         throw toMcpError(err);
       }
     },

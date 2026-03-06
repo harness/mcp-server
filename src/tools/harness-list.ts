@@ -3,7 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
-import { toMcpError } from "../utils/errors.js";
+import { isUserError, toMcpError } from "../utils/errors.js";
 import { compactItems } from "../utils/compact.js";
 
 export function registerListTool(server: McpServer, registry: Registry, client: HarnessClient): void {
@@ -55,12 +55,7 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
 
         return jsonResult(result);
       } catch (err) {
-        if (err instanceof Error && err.message.startsWith("Unknown resource_type")) {
-          return errorResult(err.message);
-        }
-        if (err instanceof Error && err.message.includes("does not support")) {
-          return errorResult(err.message);
-        }
+        if (isUserError(err)) return errorResult(err.message);
         throw toMcpError(err);
       }
     },

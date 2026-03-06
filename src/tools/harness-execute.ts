@@ -3,7 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
-import { toMcpError } from "../utils/errors.js";
+import { isUserError, toMcpError } from "../utils/errors.js";
 
 export function registerExecuteTool(server: McpServer, registry: Registry, client: HarnessClient): void {
   server.tool(
@@ -57,9 +57,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         const result = await registry.dispatchExecute(client, args.resource_type, args.action, input);
         return jsonResult(result);
       } catch (err) {
-        if (err instanceof Error && (err.message.startsWith("Unknown resource_type") || err.message.includes("no execute action"))) {
-          return errorResult(err.message);
-        }
+        if (isUserError(err)) return errorResult(err.message);
         throw toMcpError(err);
       }
     },
