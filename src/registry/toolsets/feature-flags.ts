@@ -66,11 +66,23 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_feature_flag",
       displayName: "FME Feature Flag",
       description:
-        "Feature flag basic metadata (name, description, traffic type, tags, rollout status) via the Split.io API. Does not require an environment — use feature_flag get for environment-specific definitions.",
+        "Feature flag via the Split.io API. List flags by workspace with pagination (offset/size, default 20, max 50), or get a single flag's metadata. Does not require an environment.",
       toolset: "feature-flags",
       scope: "account",
       identifierFields: ["workspace_id", "feature_flag_name"],
+      listFilterFields: ["offset"],
       operations: {
+        list: {
+          method: "GET",
+          path: "/internal/api/v2/splits/ws/{wsId}",
+          pathParams: { workspace_id: "wsId" },
+          queryParams: {
+            offset: "offset",
+            size: "limit",
+          },
+          responseExtractor: passthrough,
+          description: "List feature flags for a workspace with pagination (offset and size params, max 50)",
+        },
         get: {
           method: "GET",
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}",
