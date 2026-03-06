@@ -6,6 +6,7 @@ import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, toMcpError } from "../utils/errors.js";
 import { compactItems } from "../utils/compact.js";
 import { createLogger } from "../utils/logger.js";
+import { sendProgress, sendLog } from "../utils/progress.js";
 
 const log = createLogger("search");
 
@@ -42,7 +43,7 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
       max_per_type: z.number().describe("Max results per resource type").default(5).optional(),
       compact: z.boolean().describe("Strip verbose metadata from results (default true)").default(true).optional(),
     },
-    async (args) => {
+    async (args, extra) => {
       try {
         // Determine which resource types to search
         let targetTypes = args.resource_types ?? [];
@@ -57,9 +58,11 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
         // Run searches with concurrency limit to avoid overwhelming the API
         const MAX_CONCURRENCY = 5;
         const settled: { rt: string; result: unknown; error: string | null }[] = [];
+        let searched = 0;
 
         for (let i = 0; i < targetTypes.length; i += MAX_CONCURRENCY) {
           const batch = targetTypes.slice(i, i + MAX_CONCURRENCY);
+          await sendProgress(extra, searched, targetTypes.length, `Searching batch ${Math.floor(i / MAX_CONCURRENCY) + 1}...`);
           const batchResults = await Promise.all(
             batch.map(async (rt) => {
               try {
@@ -81,7 +84,9 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
             }),
           );
           settled.push(...batchResults);
+          searched += batch.length;
         }
+        await sendProgress(extra, targetTypes.length, targetTypes.length, "Processing results...");
         let totalMatches = 0;
 
         for (const { rt, result, error } of settled) {
