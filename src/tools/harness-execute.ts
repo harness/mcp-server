@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
@@ -25,11 +25,11 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
       app_name: z.string().describe("GitOps application name").optional(),
       experiment_id: z.string().describe("Chaos experiment identifier").optional(),
       module: z.string().describe("Harness module (CD, CI)").optional(),
-      inputs: z.record(z.unknown()).describe("Runtime inputs for pipeline execution").optional(),
+      inputs: z.record(z.string(), z.unknown()).describe("Runtime inputs for pipeline execution").optional(),
       interrupt_type: z.string().describe("Interrupt type (AbortAll, Pause, Resume, etc.)").optional(),
       enable: z.boolean().describe("Enable/disable for feature flag toggle").optional(),
       environment: z.string().describe("Target environment for feature flag operations").optional(),
-      body: z.record(z.unknown()).describe("Additional body payload for the action").optional(),
+      body: z.record(z.string(), z.unknown()).describe("Additional body payload for the action").optional(),
     },
     async (args) => {
       try {

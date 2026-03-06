@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
@@ -11,7 +11,7 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
     "Create a new Harness resource. Requires confirmation=true to proceed. For pipelines, templates, and triggers — read the schema resource first (e.g. schema:///pipeline) to understand the required body format.",
     {
       resource_type: z.string().describe("The type of resource to create (e.g. pipeline, service, environment, connector, trigger)"),
-      body: z.record(z.unknown()).describe("The resource definition body (varies by resource type — typically the YAML or JSON spec)"),
+      body: z.record(z.string(), z.unknown()).describe("The resource definition body (varies by resource type — typically the YAML or JSON spec)"),
       confirmation: z.boolean().describe("Must be true to confirm the create operation").default(false),
       org_id: z.string().describe("Organization identifier (overrides default)").optional(),
       project_id: z.string().describe("Project identifier (overrides default)").optional(),
