@@ -46,13 +46,18 @@ const (
 	chaosGetActionTemplateVariablesPath     = "rest/templates/actions/%s/variables"
 	chaosCompareActionTemplateRevisionsPath = "rest/templates/actions/%s/compare"
 
+	chaosListHubsPath      = "rest/hubs"
+	chaosGetHubPath        = "rest/hubs/%s"
+	chaosDeleteHubPath     = "rest/hubs/%s"
+	chaosListHubFaultsPath = "rest/hubs/faults"
+
 	chaosListChaosGuardConditionsPath  = "v3/chaosguard-conditions"
-	chaosGetChaosGuardConditionPath   = "v3/chaosguard-conditions/%s"
+	chaosGetChaosGuardConditionPath    = "v3/chaosguard-conditions/%s"
 	chaosDeleteChaosGuardConditionPath = "v3/chaosguard-conditions/%s"
 	chaosListChaosGuardRulesPath       = "v3/chaosguard-rules"
-	chaosGetChaosGuardRulePath    = "v3/chaosguard-rules/%s"
-	chaosDeleteChaosGuardRulePath = "v3/chaosguard-rules/%s"
-	chaosEnableChaosGuardRulePath = "v3/chaosguard-rules/%s/enable"
+	chaosGetChaosGuardRulePath         = "v3/chaosguard-rules/%s"
+	chaosDeleteChaosGuardRulePath      = "v3/chaosguard-rules/%s"
+	chaosEnableChaosGuardRulePath      = "v3/chaosguard-rules/%s/enable"
 )
 
 type ChaosService struct {
@@ -810,6 +815,91 @@ func (c *ChaosService) CompareActionTemplateRevisions(ctx context.Context, scope
 		return nil, fmt.Errorf("failed to compare action template revisions: %w", err)
 	}
 	return out, nil
+}
+
+func (c *ChaosService) ListChaosHubs(ctx context.Context, scope dto.Scope, search string, includeAllScope bool, page, limit int64) (*dto.ListChaosHubResponse, error) {
+	params := make(map[string]string)
+	if search != "" {
+		params["search"] = search
+	}
+	if includeAllScope {
+		params["includeAllScope"] = "true"
+	}
+	if page > 0 {
+		params["page"] = fmt.Sprintf("%d", page)
+	}
+	if limit > 0 {
+		params["limit"] = fmt.Sprintf("%d", limit)
+	}
+	params = addIdentifierParams(params, scope)
+
+	out := new(dto.ListChaosHubResponse)
+	if err := c.Client.Get(ctx, chaosListHubsPath, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to list chaos hubs: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) GetChaosHub(ctx context.Context, scope dto.Scope, hubIdentity string) (*dto.GetChaosHubResponse, error) {
+	path := fmt.Sprintf(chaosGetHubPath, hubIdentity)
+	params := make(map[string]string)
+	params = addIdentifierParams(params, scope)
+
+	out := new(dto.GetChaosHubResponse)
+	if err := c.Client.Get(ctx, path, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to get chaos hub: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) ListChaosHubFaults(ctx context.Context, scope dto.Scope, hubIdentity, search, infraType, entityType, permissionsRequired string, includeAllScope, onlyTemplatisedFaults bool, page, limit int64) (*dto.ListChaosHubFaultsResponse, error) {
+	params := make(map[string]string)
+	if hubIdentity != "" {
+		params["hubIdentity"] = hubIdentity
+	}
+	if search != "" {
+		params["search"] = search
+	}
+	if infraType != "" {
+		params["infraType"] = infraType
+	}
+	if entityType != "" {
+		params["entityType"] = entityType
+	}
+	if permissionsRequired != "" {
+		params["permissionsRequired"] = permissionsRequired
+	}
+	if includeAllScope {
+		params["includeAllScope"] = "true"
+	}
+	if onlyTemplatisedFaults {
+		params["onlyTemplatisedFaults"] = "true"
+	}
+	if page > 0 {
+		params["page"] = fmt.Sprintf("%d", page)
+	}
+	if limit > 0 {
+		params["limit"] = fmt.Sprintf("%d", limit)
+	}
+	params = addIdentifierParams(params, scope)
+
+	out := new(dto.ListChaosHubFaultsResponse)
+	if err := c.Client.Get(ctx, chaosListHubFaultsPath, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to list chaos hub faults: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) DeleteChaosHub(ctx context.Context, scope dto.Scope, hubIdentity string) error {
+	path := fmt.Sprintf(chaosDeleteHubPath, hubIdentity)
+	params := make(map[string]string)
+	params["correlationID"] = uuid.New().String()
+	params = addIdentifierParams(params, scope)
+
+	if err := c.Client.Delete(ctx, path, params, nil, nil); err != nil {
+		return fmt.Errorf("failed to delete chaos hub: %w", err)
+	}
+	return nil
 }
 
 func (c *ChaosService) ListChaosGuardConditions(ctx context.Context, scope dto.Scope, search, sortField string, sortAscending bool, infraType, tags string, page, limit int) (*dto.ListChaosGuardConditionsResponse, error) {

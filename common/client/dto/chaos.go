@@ -738,3 +738,94 @@ type DeleteChaosGuardRuleResponse struct {
 	Message       string `json:"message,omitempty"`
 	CorrelationID string `json:"correlationID"`
 }
+
+type ChaosHub struct {
+	HubID          string   `json:"hubId"`
+	Identity       string   `json:"identity"`
+	Name           string   `json:"name"`
+	Description    string   `json:"description"`
+	Tags           []string `json:"tags"`
+	RepoName       *string  `json:"repoName"`
+	RepoURL        string   `json:"repoUrl"`
+	RepoBranch     string   `json:"repoBranch"`
+	ConnectorID    string   `json:"connectorId"`
+	ConnectorScope string   `json:"connectorScope"`
+	AuthType       string   `json:"authType"`
+	IsDefault      bool     `json:"isDefault"`
+	LastSyncedAt   int64    `json:"lastSyncedAt"`
+	AccountID      string   `json:"accountID"`
+	OrgID          string   `json:"orgID"`
+	ProjectID      string   `json:"projectID"`
+	CreatedBy      string   `json:"createdBy"`
+	UpdatedBy      string   `json:"updatedBy"`
+	CreatedAt      int64    `json:"createdAt"`
+	UpdatedAt      int64    `json:"updatedAt"`
+	IsRemoved      bool     `json:"isRemoved"`
+}
+
+type ChaosHubResponse struct {
+	ChaosHub                `json:",inline"`
+	FaultTemplateCount      int `json:"faultTemplateCount"`
+	ExperimentTemplateCount int `json:"experimentTemplateCount"`
+	ActionTemplateCount     int `json:"actionTemplateCount"`
+	ProbeTemplateCount      int `json:"probeTemplateCount"`
+}
+
+type ListChaosHubResponse struct {
+	Pagination Pagination         `json:"pagination"`
+	Items      []ChaosHubResponse `json:"items"`
+}
+
+type GetChaosHubResponse struct {
+	ChaosHubResponse `json:",inline"`
+}
+
+type ChaosHubFaultLink struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
+type ChaosHubFault struct {
+	Identity            string              `json:"identity"`
+	HubID               string              `json:"hubID"`
+	Name                string              `json:"name"`
+	DisplayName         string              `json:"displayName"`
+	Tags                []string            `json:"tags"`
+	ResourceType        string              `json:"resourceType"`
+	Kind                string              `json:"kind"`
+	Category            string              `json:"category"`
+	Description         string              `json:"description"`
+	Keywords            []string            `json:"keywords"`
+	Platforms           []string            `json:"platforms"`
+	Infras              []string            `json:"infras"`
+	ChaosType           string              `json:"chaosType"`
+	IsDefaultHub        bool                `json:"isDefaultHub"`
+	Links               []ChaosHubFaultLink `json:"links,omitempty"`
+	PermissionsRequired string              `json:"permissionsRequired"`
+	IsTemplatised       bool                `json:"isTemplatised"`
+	AccountID           string              `json:"accountID"`
+	OrgID               string              `json:"orgID"`
+	ProjectID           string              `json:"projectID"`
+}
+
+type FaultCategoriesCount struct {
+	Linux          int `json:"Linux"`
+	CloudFoundry   int `json:"Cloud Foundry"`
+	Windows        int `json:"Windows"`
+	AWS            int `json:"AWS"`
+	Azure          int `json:"Azure"`
+	GCP            int `json:"GCP"`
+	KubeResilience int `json:"Kube Resilience"`
+	Kubernetes     int `json:"Kubernetes"`
+	VMWare         int `json:"VMWare"`
+	Load           int `json:"Load"`
+	SSH            int `json:"SSH"`
+	BYOC           int `json:"BYOC"`
+	SpringBoot     int `json:"Spring Boot"`
+}
+
+type ListChaosHubFaultsResponse struct {
+	Pagination           Pagination           `json:"pagination"`
+	Faults               []ChaosHubFault      `json:"data"`
+	FaultCategoriesCount FaultCategoriesCount  `json:"faultCategoriesCount"`
+}
