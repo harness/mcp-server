@@ -58,6 +58,24 @@ export const featureFlagsToolset: ToolsetDefinition = {
       },
     },
     {
+      resourceType: "fme_feature_flag",
+      displayName: "FME Feature Flag",
+      description:
+        "Feature flag basic metadata (name, description, traffic type, tags, rollout status) via the Split.io API. Does not require an environment — use feature_flag get for environment-specific definitions.",
+      toolset: "feature-flags",
+      scope: "account",
+      identifierFields: ["workspace_id", "feature_flag_name"],
+      operations: {
+        get: {
+          method: "GET",
+          path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}",
+          pathParams: { workspace_id: "wsId", feature_flag_name: "featureFlagName" },
+          responseExtractor: passthrough,
+          description: "Get a specific feature flag's metadata without requiring an environment",
+        },
+      },
+    },
+    {
       resourceType: "feature_flag",
       displayName: "Feature Flag",
       description:
