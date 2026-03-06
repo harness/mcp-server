@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { loadConfig, type Config } from "./config.js";
 import { setLogLevel, createLogger } from "./utils/logger.js";
 import { HarnessClient } from "./client/harness-client.js";
@@ -25,6 +25,8 @@ function createHarnessServer(config: Config): McpServer {
   const server = new McpServer({
     name: "harness-mcp-server",
     version: "1.0.0",
+    icons: [{ src: "https://app.harness.io/favicon.ico" }],
+    websiteUrl: "https://harness.io",
   });
 
   registerAllTools(server, registry, client, config);
@@ -46,84 +48,78 @@ async function startStdio(config: Config): Promise<void> {
 
 /**
  * Start the server in HTTP mode — stateless, one server+transport per POST request.
+ * Uses the MCP SDK's Express adapter which provides automatic DNS rebinding protection
+ * when bound to localhost (validates Host header against allowed hostnames).
  */
 async function startHttp(config: Config, port: number): Promise<void> {
-  const CORS_HEADERS: Record<string, string> = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, mcp-session-id",
-  };
+  const host = "127.0.0.1";
+  const app = createMcpExpressApp({ host });
 
-  const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
-    const url = req.url ?? "/";
+  const maxBodySize = config.HARNESS_MAX_BODY_SIZE_MB * 1024 * 1024;
+  // Override the default express.json() limit to match our config
+  const { json } = await import("express");
+  app.use(json({ limit: maxBodySize }));
 
-    // Health check
-    if (url === "/health" && req.method === "GET") {
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ status: "ok" }));
-      return;
-    }
+  // CORS headers for cross-origin MCP clients
+  app.use((_req, res, next) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, mcp-session-id");
+    next();
+  });
 
-    // Only handle /mcp
-    if (url !== "/mcp") {
-      res.writeHead(404, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Not found" }));
-      return;
-    }
+  // Health check
+  app.get("/health", (_req, res) => {
+    res.json({ status: "ok" });
+  });
 
-    // CORS preflight
-    if (req.method === "OPTIONS") {
-      res.writeHead(204, CORS_HEADERS);
-      res.end();
-      return;
-    }
-
-    // TODO: Add bearer token auth for remote deployments (HARNESS_HTTP_AUTH_TOKEN)
-
-    // Stateless mode only supports POST
-    if (req.method !== "POST") {
-      res.writeHead(405, {
-        ...CORS_HEADERS,
-        Allow: "POST, OPTIONS",
-        "Content-Type": "application/json",
-      });
-      res.end(JSON.stringify({ error: "Method not allowed. Use POST for stateless MCP." }));
-      return;
-    }
-
-    // Set CORS headers on all POST responses
-    for (const [key, value] of Object.entries(CORS_HEADERS)) {
-      res.setHeader(key, value);
-    }
-
+  // MCP endpoint — stateless: fresh server+transport per request
+  app.post("/mcp", async (req, res) => {
     let server: McpServer | undefined;
     let transport: StreamableHTTPServerTransport | undefined;
     try {
-      const maxBodySize = config.HARNESS_MAX_BODY_SIZE_MB * 1024 * 1024;
-      const body = await readBody(req, maxBodySize);
-      const parsedBody: unknown = JSON.parse(body);
-
-      // Create a fresh server + transport per request (stateless)
       server = createHarnessServer(config);
       transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined, // stateless mode
       });
 
       await server.connect(transport);
-      await transport.handleRequest(req, res, parsedBody);
+      await transport.handleRequest(req, res, req.body);
+
+      res.on("close", () => {
+        transport?.close();
+        server?.close();
+      });
     } catch (err) {
       log.error("Error handling MCP request", { error: String(err) });
       if (!res.headersSent) {
-        res.writeHead(400, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "Invalid request" }));
+        res.status(400).json({
+          jsonrpc: "2.0",
+          error: { code: -32700, message: "Invalid request" },
+          id: null,
+        });
       }
-    } finally {
-      await transport?.close?.();
-      await server?.close?.();
+      await transport?.close();
+      await server?.close();
     }
   });
 
+  // Reject other methods on /mcp
+  app.all("/mcp", (_req, res) => {
+    res.status(405).json({
+      jsonrpc: "2.0",
+      error: { code: -32000, message: "Method not allowed. Use POST for stateless MCP." },
+      id: null,
+    });
+  });
+
   // Graceful shutdown
+  const httpServer = app.listen(port, host, () => {
+    log.info(`harness-mcp-server listening on http://${host}:${port}`);
+    log.info(`  POST /mcp    — MCP endpoint (stateless, DNS rebinding protected)`);
+    log.info(`  GET  /health — Health check`);
+  });
+
   const shutdown = (): void => {
     log.info("Shutting down HTTP server...");
     httpServer.close(() => {
@@ -136,30 +132,6 @@ async function startHttp(config: Config, port: number): Promise<void> {
 
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
-
-  httpServer.listen(port, () => {
-    log.info(`harness-mcp-server listening on http://localhost:${port}`);
-    log.info(`  POST /mcp    — MCP endpoint (stateless)`);
-    log.info(`  GET  /health — Health check`);
-  });
-}
-
-function readBody(req: IncomingMessage, maxBodySize: number): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    let totalSize = 0;
-    req.on("data", (chunk: Buffer) => {
-      totalSize += chunk.length;
-      if (totalSize > maxBodySize) {
-        req.destroy();
-        reject(new Error("Request body too large"));
-        return;
-      }
-      chunks.push(chunk);
-    });
-    req.on("end", () => resolve(Buffer.concat(chunks).toString()));
-    req.on("error", reject);
-  });
 }
 
 async function main(): Promise<void> {
