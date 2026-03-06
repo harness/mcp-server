@@ -1,17 +1,5 @@
 import type { ToolsetDefinition } from "../types.js";
-
-const ngExtract = (raw: unknown) => {
-  const r = raw as { data?: unknown };
-  return r.data ?? raw;
-};
-
-const pageExtract = (raw: unknown) => {
-  const r = raw as { data?: { content?: unknown[]; totalElements?: number } };
-  return {
-    items: r.data?.content ?? [],
-    total: r.data?.totalElements ?? 0,
-  };
-};
+import { ngExtract, pageExtract } from "../extractors.js";
 
 export const templatesToolset: ToolsetDefinition = {
   name: "templates",
@@ -74,10 +62,7 @@ export const templatesToolset: ToolsetDefinition = {
             if (b.comments !== undefined) out.comments = b.comments;
             return out;
           },
-          responseExtractor: (raw) => {
-            const r = raw as { data?: unknown };
-            return r.data ?? raw;
-          },
+          responseExtractor: ngExtract,
           description: "Update a template version. Provide full template_yaml (required). Optional: is_stable, comments.",
         },
         create: {
@@ -112,10 +97,7 @@ export const templatesToolset: ToolsetDefinition = {
             if (b.comments !== undefined) out.comments = b.comments;
             return out;
           },
-          responseExtractor: (raw) => {
-            const r = raw as { data?: unknown; identifier?: string; name?: string; yaml?: string };
-            return r.data ?? raw;
-          },
+          responseExtractor: ngExtract,
           description: "Create a template (step, stage, or pipeline). Body: template_yaml (string, required), identifier, name, label (version), is_stable.",
         },
         delete: {
