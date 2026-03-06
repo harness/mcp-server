@@ -1,5 +1,5 @@
 {
-  "name": "harness-poc-mcp-server",
+  "name": "harness-mcp-v2",
   "version": "0.5.0",
   "description": "MCP server for Harness.io CI/CD platform — 10 consolidated tools with registry-based dispatch",
   "type": "module",
