@@ -319,7 +319,6 @@ export const pipelinesToolset: ToolsetDefinition = {
           bodySchema: {
             description: "Approval activity",
             fields: [
-              { name: "approval_id", type: "string", required: true, description: "Approval instance ID (from approval_instance list)" },
               { name: "comments", type: "string", required: false, description: "Approval comment" },
               { name: "approver_inputs", type: "array", required: false, description: "Approver inputs as [{name, value}]" },
             ],
@@ -338,7 +337,6 @@ export const pipelinesToolset: ToolsetDefinition = {
           bodySchema: {
             description: "Rejection activity",
             fields: [
-              { name: "approval_id", type: "string", required: true, description: "Approval instance ID (from approval_instance list)" },
               { name: "comments", type: "string", required: false, description: "Rejection reason" },
             ],
           },
