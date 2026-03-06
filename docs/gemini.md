@@ -1,6 +1,6 @@
 # Harness MCP Server — Gemini CLI Context
 
-This extension connects Gemini CLI to the Harness Platform through 10 consolidated MCP tools that cover 111 resource types across 24 toolsets.
+This extension connects Gemini CLI to the Harness Platform through 10 consolidated MCP tools that cover 119 resource types across 25 toolsets.
 
 ## How This Server Works
 
@@ -106,7 +106,10 @@ Ask natural language questions like:
 
 ## Safety Model
 
-Write operations (`harness_create`, `harness_update`, `harness_delete`, `harness_execute`) all require `confirmation: true`. The server will preview available actions and return helpful context when `confirmation: false`, then only proceed when explicitly confirmed.
+Write operations (`harness_create`, `harness_update`, `harness_delete`, `harness_execute`) all require `confirmation: true`.
+
+- For `harness_execute`, calling with `confirmation: false` returns available actions for the selected `resource_type`.
+- For `harness_create`, `harness_update`, and `harness_delete`, calling with `confirmation: false` returns a safety error and does not execute.
 
 Secret values are never exposed — only metadata (name, type, scope).
 
@@ -119,9 +122,11 @@ Secret values are never exposed — only metadata (name, type, scope).
 2. **Configure environment variables** in the project's `.env` file:
    ```
    HARNESS_API_KEY=pat.xxxxx.xxxxx.xxxxx
-   HARNESS_ACCOUNT_ID=your_account_id
+   HARNESS_ACCOUNT_ID=your_account_id   # Optional for PATs, required for non-PAT API keys
    HARNESS_DEFAULT_ORG_ID=default
    HARNESS_DEFAULT_PROJECT_ID=your_project
+   HARNESS_RATE_LIMIT_RPS=10            # Optional: client-side throttling
+   HARNESS_MAX_BODY_SIZE_MB=10          # Optional: HTTP mode request size limit
    ```
 
 3. **Build the server:**
@@ -139,4 +144,4 @@ Secret values are never exposed — only metadata (name, type, scope).
 
 **Toolset filtering:**
 - Set `HARNESS_TOOLSETS=pipelines,services,connectors` in `.env` to limit which resource types are available
-- Leave empty to enable all 24 toolsets
+- Leave empty to enable all 25 toolsets

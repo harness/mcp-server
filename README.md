@@ -77,6 +77,13 @@ When running in HTTP mode, the server exposes:
 
 The HTTP transport runs in **stateless mode**: each POST request creates a fresh MCP session. This is ideal for serverless or shared deployments where persistent connections aren't practical.
 
+Operational constraints in HTTP mode:
+
+- `POST /mcp` handles MCP JSON-RPC requests (with `OPTIONS /mcp` for CORS preflight).
+- `GET /health` is the only non-MCP endpoint.
+- Request body size is capped by `HARNESS_MAX_BODY_SIZE_MB` (default `10` MB).
+- Each request is isolated (no persisted MCP session state between requests).
+
 ```bash
 # Health check
 curl http://localhost:3000/health
@@ -388,6 +395,8 @@ The deployment runs 2 replicas with readiness/liveness probes, resource limits, 
 | `HARNESS_DEFAULT_PROJECT_ID` | No | -- | Default project identifier. Optional convenience — agents can discover projects dynamically via `harness_list(resource_type="project")` |
 | `HARNESS_API_TIMEOUT_MS` | No | `30000` | HTTP request timeout in milliseconds |
 | `HARNESS_MAX_RETRIES` | No | `3` | Retry count for transient failures (429, 5xx) |
+| `HARNESS_MAX_BODY_SIZE_MB` | No | `10` | Max HTTP request body size in MB for `http` transport |
+| `HARNESS_RATE_LIMIT_RPS` | No | `10` | Client-side request throttle (requests per second) to Harness APIs |
 | `LOG_LEVEL` | No | `info` | Log verbosity: `debug`, `info`, `warn`, `error` |
 | `HARNESS_TOOLSETS` | No | *(all)* | Comma-separated list of enabled toolsets (see [Toolset Filtering](#toolset-filtering)) |
 
@@ -1039,6 +1048,19 @@ tests/
 - **Rate limiting.** The client enforces a 10 requests/second limit to avoid hitting Harness API rate limits.
 - **Retries with backoff.** Transient failures (HTTP 429, 5xx) are retried with exponential backoff and jitter.
 - **No stdout logging.** All logs go to stderr to avoid corrupting the stdio JSON-RPC transport.
+
+## Troubleshooting & Common Pitfalls
+
+| Symptom | Likely Cause | What to Do |
+|---------|--------------|------------|
+| `HARNESS_ACCOUNT_ID is required when the API key is not a PAT...` | API key is not in PAT format (`pat.<accountId>.<tokenId>.<secret>`) so account ID cannot be inferred | Set `HARNESS_ACCOUNT_ID` explicitly |
+| `Unknown transport: "..."` on startup | Unsupported CLI transport arg | Use `stdio` or `http` only |
+| HTTP `405 Method not allowed. Use POST for stateless MCP.` | Request sent to `/mcp` with non-POST method | Use `POST /mcp` for MCP calls (`OPTIONS` is only for CORS preflight) |
+| HTTP `Invalid request` | Invalid JSON body or request body exceeded `HARNESS_MAX_BODY_SIZE_MB` | Validate JSON payload size/shape; increase `HARNESS_MAX_BODY_SIZE_MB` if needed |
+| `Unknown resource_type "..."` from tools | Resource type is misspelled or filtered out via `HARNESS_TOOLSETS` | Call `harness_describe` (with optional `search_term`) to discover valid types |
+| `Missing required field "... for path parameter ..."` | A project/org scoped call is missing identifiers | Set `HARNESS_DEFAULT_ORG_ID`/`HARNESS_DEFAULT_PROJECT_ID` or pass `org_id`/`project_id` per tool call |
+| `Create/Update/Delete ... require confirmation=true` | Safety gate on mutating tools | Re-run with `confirmation: true` only after validating target/resource |
+| `body.template_yaml (or body.yaml) is required` for template create/update | Template APIs expect full YAML payload | Provide full `template_yaml` string in `body`; for deletes, pass `version_label` to delete one version (omit to delete all versions) |
 
 ## License
 
