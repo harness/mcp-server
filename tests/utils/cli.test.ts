@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { parseArgs } from "../../src/utils/cli.js";
 
 describe("parseArgs", () => {
@@ -15,6 +15,23 @@ describe("parseArgs", () => {
     } else {
       delete process.env.PORT;
     }
+    vi.restoreAllMocks();
+  });
+
+  it("exits with 0 on --help", () => {
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => { throw new Error("exit"); });
+    const stderrSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(() => parseArgs(["--help"])).toThrow("exit");
+    expect(exitSpy).toHaveBeenCalledWith(0);
+    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining("Usage:"));
+  });
+
+  it("exits with 0 on --version", () => {
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => { throw new Error("exit"); });
+    const stderrSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(() => parseArgs(["--version"])).toThrow("exit");
+    expect(exitSpy).toHaveBeenCalledWith(0);
+    expect(stderrSpy).toHaveBeenCalledWith(expect.stringMatching(/^\d+\.\d+\.\d+|unknown$/));
   });
 
   it("defaults to stdio transport and port 3000", () => {

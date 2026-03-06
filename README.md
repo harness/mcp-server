@@ -65,6 +65,19 @@ pnpm start:http         # HTTP transport
 pnpm inspect            # Test with MCP Inspector
 ```
 
+### CLI Usage
+
+```bash
+harness-mcp-server [stdio|http] [--port <number>]
+
+Options:
+  --port <number>  Port for HTTP transport (default: 3000, or PORT env var)
+  --help           Show help message and exit
+  --version        Print version and exit
+```
+
+Transport defaults to `stdio` if not specified. Use `http` for remote/shared deployments.
+
 ### HTTP Transport
 
 When running in HTTP mode, the server exposes:
