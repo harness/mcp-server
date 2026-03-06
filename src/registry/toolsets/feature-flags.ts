@@ -28,16 +28,21 @@ export const featureFlagsToolset: ToolsetDefinition = {
     {
       resourceType: "fme_workspace",
       displayName: "FME Workspace",
-      description: "Feature Management workspace. Supports list.",
+      description: "Feature Management workspace. Supports list with pagination (offset/size, default 20, max 1000).",
       toolset: "feature-flags",
       scope: "project",
       identifierFields: ["workspace_id"],
+      listFilterFields: ["offset"],
       operations: {
         list: {
           method: "GET",
           path: "/cf/admin/workspaces",
+          queryParams: {
+            offset: "offset",
+            size: "limit",
+          },
           responseExtractor: passthrough,
-          description: "List FME workspaces",
+          description: "List FME workspaces with pagination (offset and size params, max 1000)",
         },
       },
     },
