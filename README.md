@@ -305,7 +305,7 @@ Toolset Name: `fme`
 - `list_fme_workspaces`: List all FME workspaces (supports pagination via `offset` and `limit`; default limit: 20, max limit: 1000)
 - `list_fme_environments`: List environments for a specific workspace
 - `list_fme_feature_flags`: List feature flags for a specific workspace (supports pagination via `offset` and `limit`; default limit: 20, max limit: 50)
-- `get_fme_feature_flag`: Get a specific feature flag (name, description, traffic type, tags, rollout status)
+- `fme_get_feature_flag`: Get a specific feature flag (name, description, traffic type, tags, rollout status)
 - `get_fme_feature_flag_definition`: Get the definition of a specific feature flag in an environment
 
 #### SEI Toolset
