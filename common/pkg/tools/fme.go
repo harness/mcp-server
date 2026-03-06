@@ -11,13 +11,42 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+const (
+	fmeWorkspacesDefaultLimit    = 20
+	fmeWorkspacesMaxLimit        = 1000
+	fmeFeatureFlagsDefaultLimit  = 20
+	fmeFeatureFlagsMaxLimit      = 50
+)
+
 // ListFMEWorkspacesTool creates a tool for listing FME workspaces
 func ListFMEWorkspacesTool(config *config.McpServerConfig, fmeService *client.FMEService) (mcp.Tool, server.ToolHandlerFunc) {
 	return mcp.NewTool("list_fme_workspaces",
 			mcp.WithDescription("List Feature Management & Experimentation (FME) workspaces."),
+			mcp.WithNumber("offset",
+				mcp.Description("The number of workspaces to skip for pagination (default: 0)"),
+			),
+			mcp.WithNumber("limit",
+				mcp.Description(fmt.Sprintf("The number of workspaces to return (default: %d, max: %d)", fmeWorkspacesDefaultLimit, fmeWorkspacesMaxLimit)),
+			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			workspaces, err := fmeService.ListWorkspaces(ctx)
+			offset, err := OptionalIntParam(request, "offset")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if offset < 0 {
+				return mcp.NewToolResultError("offset must be non-negative"), nil
+			}
+
+			limit, err := OptionalIntParamWithDefault(request, "limit", fmeWorkspacesDefaultLimit)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if limit > fmeWorkspacesMaxLimit {
+				limit = fmeWorkspacesMaxLimit
+			}
+
+			workspaces, err := fmeService.ListWorkspaces(ctx, offset, limit)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to list FME workspaces: %v", err)), nil
 			}
@@ -68,6 +97,12 @@ func ListFMEFeatureFlagsTool(config *config.McpServerConfig, fmeService *client.
 				mcp.Required(),
 				mcp.Description("The workspace ID to list feature flags for"),
 			),
+			mcp.WithNumber("offset",
+				mcp.Description("The number of feature flags to skip for pagination (default: 0)"),
+			),
+			mcp.WithNumber("limit",
+				mcp.Description(fmt.Sprintf("The number of feature flags to return (default: %d, max: %d)", fmeFeatureFlagsDefaultLimit, fmeFeatureFlagsMaxLimit)),
+			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			wsID, err := RequiredParam[string](request, "ws_id")
@@ -75,7 +110,23 @@ func ListFMEFeatureFlagsTool(config *config.McpServerConfig, fmeService *client.
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			featureFlags, err := fmeService.ListFeatureFlags(ctx, wsID)
+			offset, err := OptionalIntParam(request, "offset")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if offset < 0 {
+				return mcp.NewToolResultError("offset must be non-negative"), nil
+			}
+
+			limit, err := OptionalIntParamWithDefault(request, "limit", fmeFeatureFlagsDefaultLimit)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if limit > fmeFeatureFlagsMaxLimit {
+				limit = fmeFeatureFlagsMaxLimit
+			}
+
+			featureFlags, err := fmeService.ListFeatureFlags(ctx, wsID, offset, limit)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to list FME feature flags: %v", err)), nil
 			}
@@ -83,6 +134,44 @@ func ListFMEFeatureFlagsTool(config *config.McpServerConfig, fmeService *client.
 			responseBytes, err := json.Marshal(featureFlags)
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal feature flags: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(responseBytes)), nil
+		}
+}
+
+// GetFMEFeatureFlagTool creates a tool for getting a specific FME feature flag
+func GetFMEFeatureFlagTool(config *config.McpServerConfig, fmeService *client.FMEService) (mcp.Tool, server.ToolHandlerFunc) {
+	return mcp.NewTool("get_fme_feature_flag",
+			mcp.WithDescription("Get a specific Feature Management & Experimentation (FME) feature flag."),
+			mcp.WithString("ws_id",
+				mcp.Required(),
+				mcp.Description("The workspace ID"),
+			),
+			mcp.WithString("feature_flag_name",
+				mcp.Required(),
+				mcp.Description("The name of the feature flag"),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			wsID, err := RequiredParam[string](request, "ws_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			flagName, err := RequiredParam[string](request, "feature_flag_name")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			featureFlag, err := fmeService.GetFeatureFlag(ctx, wsID, flagName)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to get FME feature flag: %v", err)), nil
+			}
+
+			responseBytes, err := json.Marshal(featureFlag)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal feature flag: %w", err)
 			}
 
 			return mcp.NewToolResultText(string(responseBytes)), nil
