@@ -647,3 +647,63 @@ type ActionTemplateVariablesResponse struct {
 	RunProperty      []Variable `json:"actionRunProperty"`
 	ActionProperties []Variable `json:"actionProperties"`
 }
+
+type ChaosGuardRule struct {
+	RuleID       string           `json:"ruleId"`
+	Name         string           `json:"name"`
+	Description  string           `json:"description"`
+	UserGroupIds []string         `json:"userGroupIds"`
+	ConditionIds []string         `json:"conditionIds"`
+	Tags         []string         `json:"tags"`
+	TimeWindows  []RuleTimeWindow `json:"timeWindows"`
+	IsEnabled    bool             `json:"isEnabled"`
+}
+
+type RuleTimeWindow struct {
+	TimeZone   string         `json:"timeZone"`
+	Duration   string         `json:"duration"`
+	Recurrence RuleRecurrence `json:"recurrence,omitempty"`
+	StartTime  int64          `json:"startTime"`
+	EndTime    int64          `json:"endTime"`
+}
+
+type RuleRecurrence struct {
+	RecurrenceType string `json:"type"`
+}
+
+type ChaosGuardCondition struct {
+	ConditionID string      `json:"conditionId,omitempty"`
+	Name        string      `json:"name,omitempty"`
+	Description string      `json:"description,omitempty"`
+	Tags        []string    `json:"tags,omitempty"`
+	InfraType   string      `json:"infraType"`
+	FaultSpec   interface{} `json:"faultSpec"`
+	K8sSpec     interface{} `json:"k8sSpec,omitempty"`
+	MachineSpec interface{} `json:"machineSpec,omitempty"`
+}
+
+type ChaosGuardRuleResponse struct {
+	ChaosGuardRule `json:",inline"`
+	Conditions     []ChaosGuardCondition `json:"conditions"`
+	UpdatedBy      UserDetail            `json:"updatedBy"`
+	CreatedBy      UserDetail            `json:"createdBy"`
+	CreatedAt      int64                 `json:"createdAt"`
+	UpdatedAt      int64                 `json:"updatedAt"`
+	CorrelationID  string                `json:"correlationID"`
+}
+
+type ListChaosGuardRulesResponse struct {
+	Rules         []ChaosGuardRuleResponse `json:"rules"`
+	Pagination    Pagination               `json:"pagination"`
+	CorrelationID string                   `json:"correlationID"`
+}
+
+type GetChaosGuardRuleResponse struct {
+	ChaosGuardRuleResponse `json:",inline"`
+}
+
+type DeleteChaosGuardRuleResponse struct {
+	Success       bool   `json:"success"`
+	Message       string `json:"message,omitempty"`
+	CorrelationID string `json:"correlationID"`
+}
