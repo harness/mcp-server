@@ -31,8 +31,9 @@ func (m *ExtendedCoreModule) Toolsets() []string {
 	// Get common toolsets
 	commonToolsets := m.CoreModule.Toolsets()
 
-	// Add internal-only toolsets
+	// Add internal-only toolsets (default is synthetic but must be in registry for validation)
 	additionalToolsets := []string{
+		"default",
 		"logs",
 	}
 
