@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import type { Config } from "../config.js";
@@ -7,10 +8,36 @@ import { createLogger } from "../utils/logger.js";
 const log = createLogger("resource:pipeline-yaml");
 
 export function registerPipelineYamlResource(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
-  server.resource(
+  const template = new ResourceTemplate("pipeline:///{pipelineId}", {
+    list: async () => {
+      try {
+        const result = await registry.dispatch(client, "pipeline", "list", {
+          org_id: config.HARNESS_DEFAULT_ORG_ID,
+          project_id: config.HARNESS_DEFAULT_PROJECT_ID ?? "",
+          size: 20,
+          page: 0,
+        });
+        const r = result as { items?: Array<{ identifier?: string; name?: string }> };
+        return {
+          resources: (r.items ?? [])
+            .filter((p) => p.identifier)
+            .map((p) => ({
+              uri: `pipeline:///${p.identifier}`,
+              name: p.name ?? p.identifier!,
+            })),
+        };
+      } catch (err) {
+        log.warn("Failed to list pipelines for resource discovery", { error: String(err) });
+        return { resources: [] };
+      }
+    },
+  });
+
+  server.registerResource(
     "pipeline-yaml",
-    "pipeline:///{pipelineId}",
+    template,
     {
+      title: "Pipeline YAML",
       description: "Pipeline YAML definition. Provide orgId, projectId, and pipelineId in the URI path.",
       mimeType: "application/x-yaml",
     },

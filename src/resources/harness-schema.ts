@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("resource:harness-schema");
@@ -42,10 +43,24 @@ function isValidSchemaName(name: string): name is SchemaName {
 }
 
 export function registerHarnessSchemaResource(server: McpServer): void {
-  server.resource(
+  const template = new ResourceTemplate("schema:///{schemaName}", {
+    list: async () => ({
+      resources: VALID_SCHEMAS.map((name) => ({
+        uri: `schema:///${name}`,
+        name: `${name} schema`,
+      })),
+    }),
+    complete: {
+      schemaName: (value) =>
+        VALID_SCHEMAS.filter((s) => s.startsWith(value)),
+    },
+  });
+
+  server.registerResource(
     "harness-schema",
-    "schema:///{schemaName}",
+    template,
     {
+      title: "Harness Schema",
       description: `Harness JSON Schema definitions. Valid schema names: ${VALID_SCHEMAS.join(", ")}. Use these to understand the required body format for harness_create.`,
       mimeType: "application/schema+json",
     },
