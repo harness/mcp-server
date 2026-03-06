@@ -7,10 +7,11 @@ import { createLogger } from "../utils/logger.js";
 const log = createLogger("resource:execution-summary");
 
 export function registerExecutionSummaryResource(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
-  server.resource(
+  server.registerResource(
     "execution-summary",
     "executions:///recent",
     {
+      title: "Recent Executions",
       description: "Recent pipeline execution summaries (last 10).",
       mimeType: "application/json",
     },
