@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
@@ -12,7 +12,7 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
     {
       resource_type: z.string().describe("The type of resource to update (e.g. pipeline, service, environment, connector, trigger)"),
       resource_id: z.string().describe("The identifier of the resource to update"),
-      body: z.record(z.unknown()).describe("The updated resource definition body"),
+      body: z.record(z.string(), z.unknown()).describe("The updated resource definition body"),
       confirmation: z.boolean().describe("Must be true to confirm the update operation").default(false),
       org_id: z.string().describe("Organization identifier (overrides default)").optional(),
       project_id: z.string().describe("Project identifier (overrides default)").optional(),
