@@ -1910,6 +1910,128 @@ func CompareActionTemplateRevisionsTool(config *config.McpServerConfig, client *
 		}
 }
 
+func ListChaosGuardConditionsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_guard_conditions_list",
+			mcp.WithDescription("List ChaosGuard conditions. Conditions define the infrastructure, fault, and application constraints that ChaosGuard rules evaluate against chaos experiments. Supports filtering by infrastructure type, tags, search, sorting, and pagination."),
+			common.WithScope(config, false),
+			WithPagination(),
+			mcp.WithString("search",
+				mcp.Description("Search conditions by name (case-insensitive)"),
+			),
+			mcp.WithString("sortField",
+				mcp.Description("Field to sort results by"),
+				mcp.Enum("name", "lastUpdated"),
+			),
+			mcp.WithBoolean("sortAscending",
+				mcp.Description("When true, sort in ascending order. Defaults to false (descending)."),
+			),
+			mcp.WithString("infrastructureType",
+				mcp.Description("Filter by infrastructure type"),
+				mcp.Enum("Kubernetes", "KubernetesV2", "Linux", "Windows"),
+			),
+			mcp.WithString("tags",
+				mcp.Description("Comma-separated list of tags to filter by"),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			search, _ := OptionalParam[string](request, "search")
+			sortField, _ := OptionalParam[string](request, "sortField")
+			sortAscending, _ := OptionalParam[bool](request, "sortAscending")
+			infraType, _ := OptionalParam[string](request, "infrastructureType")
+			tags, _ := OptionalParam[string](request, "tags")
+
+			page, size, err := FetchPagination(request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.ListChaosGuardConditions(ctx, scope, search, sortField, sortAscending, infraType, tags, page, size)
+			if err != nil {
+				return nil, fmt.Errorf("failed to list chaosguard conditions: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal list chaosguard conditions response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+func GetChaosGuardConditionTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_guard_condition_get",
+			mcp.WithDescription("Get a ChaosGuard condition by its identifier. Returns the full condition details including infrastructure type, fault specifications, K8s/machine specs, associated rules, and tags."),
+			common.WithScope(config, false),
+			mcp.WithString("identity",
+				mcp.Description("The unique identifier of the ChaosGuard condition"),
+				mcp.Required(),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			identity, err := RequiredParam[string](request, "identity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.GetChaosGuardCondition(ctx, scope, identity)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get chaosguard condition: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal chaosguard condition response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+func DeleteChaosGuardConditionTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_guard_condition_delete",
+			mcp.WithDescription("Delete (soft-delete) a ChaosGuard condition by its identifier. The condition is marked as removed and will no longer appear in listings or be evaluated by rules, but is not permanently erased from the database."),
+			common.WithScope(config, false),
+			mcp.WithString("identity",
+				mcp.Description("The unique identifier of the ChaosGuard condition to delete"),
+				mcp.Required(),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			identity, err := RequiredParam[string](request, "identity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			data, err := client.DeleteChaosGuardCondition(ctx, scope, identity)
+			if err != nil {
+				return nil, fmt.Errorf("failed to delete chaosguard condition: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal delete chaosguard condition response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
 func ListChaosGuardRulesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("chaos_guard_rules_list",
 			mcp.WithDescription("List ChaosGuard governance rules. ChaosGuard rules define security policies that control when and how chaos experiments can run, including user group restrictions, time windows, and conditions. Supports filtering by infrastructure type, tags, search, sorting, and pagination."),
