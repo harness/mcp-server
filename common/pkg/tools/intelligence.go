@@ -8,16 +8,16 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	commonConfig "github.com/harness/mcp-server/common"
-	commonClient "github.com/harness/mcp-server/common/client"
+	config "github.com/harness/mcp-server/common"
+	"github.com/harness/mcp-server/common/client"
 	"github.com/harness/mcp-server/common/client/dto"
-	commonScopeUtils "github.com/harness/mcp-server/common/pkg/common"
+	"github.com/harness/mcp-server/common/pkg/common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
 
 // AIDevOpsAgentTool creates the ask_ai_devops_agent tool
-func AIDevOpsAgentTool(config *commonConfig.McpServerConfig, client *commonClient.IntelligenceService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func AIDevOpsAgentTool(config *config.McpServerConfig, client *client.IntelligenceService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("ask_ai_devops_agent",
 		mcp.WithDescription("Ask the AI DevOps Agent to create or update Harness entities such as "+
 			"pipelines, environments, connectors, services, and secrets. "+
@@ -55,7 +55,7 @@ func AIDevOpsAgentTool(config *commonConfig.McpServerConfig, client *commonClien
 					"required": []string{"type", "payload"},
 				}),
 			),
-			commonScopeUtils.WithScope(config, false),
+			common.WithScope(config, false),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			// Get required parameters
@@ -88,7 +88,7 @@ func AIDevOpsAgentTool(config *commonConfig.McpServerConfig, client *commonClien
 			}
 
 			// Try to fetch scope parameters (account_id, org_id, project_id) if provided
-			scope, err := commonScopeUtils.FetchScope(ctx, config, request, false)
+			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
