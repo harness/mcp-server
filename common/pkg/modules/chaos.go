@@ -90,18 +90,39 @@ func RegisterChaos(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) e
 			toolsets.NewServerTool(tools.RunExperimentTool(config, chaosClient)),
 			toolsets.NewServerTool(tools.ListProbesTool(config, chaosClient)),
 			toolsets.NewServerTool(tools.GetProbeTool(config, chaosClient)),
+			// Experiment templates tools
 			toolsets.NewServerTool(tools.ListExperimentTemplatesTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.GetExperimentTemplateTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.GetExperimentTemplateRevisionsTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.GetExperimentTemplateVariablesTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.GetExperimentTemplateYamlTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.CompareExperimentTemplateRevisionsTool(config, chaosClient)),
 			toolsets.NewServerTool(tools.CreateExperimentFromTemplateTool(config, chaosClient)),
+
 			toolsets.NewServerTool(tools.ListExperimentVariablesTool(config, chaosClient)),
+
+			// Fault templates tools
+			toolsets.NewServerTool(tools.ListFaultTemplatesTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.GetFaultTemplateTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.GetFaultTemplateRevisionsTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.GetFaultTemplateVariablesTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.GetFaultTemplateYamlTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.CompareFaultTemplateRevisionsTool(config, chaosClient)),
+
 			toolsets.NewServerTool(tools.ListLoadTestsTool(config, loadTestService)),
 			toolsets.NewServerTool(tools.GetLoadTestTool(config, loadTestService)),
 			toolsets.NewServerTool(tools.ListLinuxInfrastructuresTool(config, chaosClient)),
 		).
 		AddWriteTools(
+			// Load Testing tools
 			toolsets.NewServerTool(tools.RunLoadTestTool(config, loadTestService)),
 			toolsets.NewServerTool(tools.StopLoadTestTool(config, loadTestService)),
 			toolsets.NewServerTool(tools.DeleteLoadTestTool(config, loadTestService)),
 			toolsets.NewServerTool(tools.CreateSampleLoadTestTool(config, loadTestService)),
+			// Experiment templates tools
+			toolsets.NewServerTool(tools.DeleteExperimentTemplateTool(config, chaosClient)),
+			// Fault templates tools
+			toolsets.NewServerTool(tools.DeleteFaultTemplateTool(config, chaosClient)),
 		)
 
 	// Add toolset to the group

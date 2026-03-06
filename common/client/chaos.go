@@ -10,15 +10,29 @@ import (
 
 const (
 	// Base API paths
-	chaosListExperimentsPath          = "rest/v2/experiment"
-	chaosGetExperimentPath            = "rest/v2/experiments/%s"
-	chaosGetExperimentRunPipelinePath = "rest/v2/chaos-pipeline/%s"
-	chaosExperimentRunPath            = "rest/v2/experiments/%s/run"
-	chaosListProbesPath               = "rest/v2/probes"
-	chaosGetProbePath                 = "rest/v2/probes/%s"
-	chaosCreateExperimentFromTemplate = "rest/experimenttemplates/%s/launch"
-	chaosListExperimentTemplates      = "rest/experimenttemplates"
-	chaosListExperimentVariables      = "rest/v2/experiments/%s/variables"
+	chaosListExperimentsPath                = "rest/v2/experiment"
+	chaosGetExperimentPath                  = "rest/v2/experiments/%s"
+	chaosGetExperimentRunPipelinePath       = "rest/v2/chaos-pipeline/%s"
+	chaosExperimentRunPath                  = "rest/v2/experiments/%s/run"
+	chaosListProbesPath                     = "rest/v2/probes"
+	chaosGetProbePath                       = "rest/v2/probes/%s"
+	chaosCreateExperimentFromTemplate       = "rest/experimenttemplates/%s/launch"
+	chaosListExperimentTemplates            = "rest/experimenttemplates"
+	chaosGetExperimentTemplatePath          = "rest/experimenttemplates/%s"
+	chaosDeleteExperimentTemplatePath       = "rest/experimenttemplates/%s"
+	chaosGetExperimentTemplateRevisionsPath = "rest/experimenttemplates/%s/revisions"
+	chaosGetExperimentTemplateVariablesPath = "rest/experimenttemplates/%s/variables"
+	chaosGetExperimentTemplateYamlPath      = "rest/experimenttemplates/%s/yaml"
+	chaosCompareExperimentTemplateRevsPath  = "rest/experimenttemplates/%s/compare"
+	chaosListExperimentVariables            = "rest/v2/experiments/%s/variables"
+
+	chaosListFaultTemplatesPath        = "rest/faulttemplates"
+	chaosGetFaultTemplatePath          = "rest/faulttemplates/%s"
+	chaosDeleteFaultTemplatePath       = "rest/faulttemplates/%s"
+	chaosGetFaultTemplateRevisionsPath = "rest/faulttemplates/%s/revisions"
+	chaosGetFaultTemplateVariablesPath = "rest/faulttemplates/%s/variables"
+	chaosGetFaultTemplateYamlPath      = "rest/faulttemplates/%s/yaml"
+	chaosCompareFaultTemplateRevsPath  = "rest/faulttemplates/%s/compare"
 )
 
 type ChaosService struct {
@@ -147,26 +161,38 @@ func (c *ChaosService) GetProbe(ctx context.Context, scope dto.Scope, probeID st
 	return getProbe, nil
 }
 
-func (c *ChaosService) ListExperimentTemplates(ctx context.Context, scope dto.Scope, pagination *dto.PaginationOptions, hubIdentity string, infrastructureType string) (*dto.ListExperimentTemplateResponse, error) {
+func (c *ChaosService) ListExperimentTemplates(ctx context.Context, scope dto.Scope, pagination *dto.PaginationOptions, hubIdentity, infrastructureType, infrastructure, search, sortField string, sortAscending, includeAllScope bool, tags string) (*dto.ListExperimentTemplateResponse, error) {
 	var (
 		path   = chaosListExperimentTemplates
 		params = make(map[string]string)
 	)
 
-	// Set default pagination
 	setDefaultPagination(pagination)
-
-	// Add pagination parameters
 	params["page"] = fmt.Sprintf("%d", pagination.Page)
 	params["limit"] = fmt.Sprintf("%d", pagination.Size)
 	params["hubIdentity"] = hubIdentity
 	params["correlationID"] = uuid.New().String()
+	params = addIdentifierParams(params, scope)
 
 	if infrastructureType != "" {
 		params["infrastructureType"] = infrastructureType
 	}
-	// Add scope parameters
-	params = addIdentifierParams(params, scope)
+	if infrastructure != "" {
+		params["infrastructure"] = infrastructure
+	}
+	if search != "" {
+		params["search"] = search
+	}
+	if sortField != "" {
+		params["sortField"] = sortField
+		params["sortAscending"] = fmt.Sprintf("%t", sortAscending)
+	}
+	if includeAllScope {
+		params["includeAllScope"] = "true"
+	}
+	if tags != "" {
+		params["tags"] = tags
+	}
 
 	listExperimentTemplates := new(dto.ListExperimentTemplateResponse)
 	err := c.Client.Get(ctx, path, params, nil, listExperimentTemplates)
@@ -175,6 +201,133 @@ func (c *ChaosService) ListExperimentTemplates(ctx context.Context, scope dto.Sc
 	}
 
 	return listExperimentTemplates, nil
+}
+
+func (c *ChaosService) GetExperimentTemplate(ctx context.Context, scope dto.Scope, identity, hubIdentity, revision string) (*dto.GetExperimentTemplateResponse, error) {
+	path := fmt.Sprintf(chaosGetExperimentTemplatePath, identity)
+	params := make(map[string]string)
+	params["hubIdentity"] = hubIdentity
+	params["correlationID"] = uuid.New().String()
+	params = addIdentifierParams(params, scope)
+
+	if revision != "" {
+		params["revision"] = revision
+	}
+
+	out := new(dto.GetExperimentTemplateResponse)
+	if err := c.Client.Get(ctx, path, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to get experiment template: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) DeleteExperimentTemplate(ctx context.Context, scope dto.Scope, identity, hubIdentity string, verbose bool) error {
+	path := fmt.Sprintf(chaosDeleteExperimentTemplatePath, identity)
+	params := make(map[string]string)
+	params["hubIdentity"] = hubIdentity
+	params["correlationID"] = uuid.New().String()
+	params = addIdentifierParams(params, scope)
+
+	if verbose {
+		params["verbose"] = "true"
+	}
+
+	if err := c.Client.Delete(ctx, path, params, nil, nil); err != nil {
+		return fmt.Errorf("failed to delete experiment template: %w", err)
+	}
+	return nil
+}
+
+func (c *ChaosService) GetExperimentTemplateRevisions(ctx context.Context, scope dto.Scope, identity, hubIdentity string, pagination *dto.PaginationOptions, infrastructureType, infrastructure, search, sortField string, sortAscending, includeAllScope bool, tags string) (*dto.ListExperimentTemplateResponse, error) {
+	path := fmt.Sprintf(chaosGetExperimentTemplateRevisionsPath, identity)
+	params := make(map[string]string)
+	params["hubIdentity"] = hubIdentity
+	params["correlationID"] = uuid.New().String()
+	params = addIdentifierParams(params, scope)
+
+	if pagination != nil {
+		params["page"] = fmt.Sprintf("%d", pagination.Page)
+		params["size"] = fmt.Sprintf("%d", pagination.Size)
+	}
+	if infrastructureType != "" {
+		params["infrastructureType"] = infrastructureType
+	}
+	if infrastructure != "" {
+		params["infrastructure"] = infrastructure
+	}
+	if search != "" {
+		params["search"] = search
+	}
+	if sortField != "" {
+		params["sortField"] = sortField
+	}
+	if sortAscending {
+		params["sortAscending"] = "true"
+	}
+	if includeAllScope {
+		params["includeAllScope"] = "true"
+	}
+	if tags != "" {
+		params["tags"] = tags
+	}
+
+	out := new(dto.ListExperimentTemplateResponse)
+	if err := c.Client.Get(ctx, path, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to get experiment template revisions: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) GetExperimentTemplateVariables(ctx context.Context, scope dto.Scope, identity, hubIdentity, revision string) (*dto.ExperimentTemplateVariablesResponse, error) {
+	path := fmt.Sprintf(chaosGetExperimentTemplateVariablesPath, identity)
+	params := make(map[string]string)
+	params["hubIdentity"] = hubIdentity
+	params["correlationID"] = uuid.New().String()
+	params = addIdentifierParams(params, scope)
+
+	if revision != "" {
+		params["revision"] = revision
+	}
+
+	out := new(dto.ExperimentTemplateVariablesResponse)
+	if err := c.Client.Get(ctx, path, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to get experiment template variables: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) GetExperimentTemplateYaml(ctx context.Context, scope dto.Scope, identity, hubIdentity, revision string) (*dto.ExperimentTemplateYamlResponse, error) {
+	path := fmt.Sprintf(chaosGetExperimentTemplateYamlPath, identity)
+	params := make(map[string]string)
+	params["hubIdentity"] = hubIdentity
+	params["correlationID"] = uuid.New().String()
+	params = addIdentifierParams(params, scope)
+
+	if revision != "" {
+		params["revision"] = revision
+	}
+
+	out := new(dto.ExperimentTemplateYamlResponse)
+	if err := c.Client.Get(ctx, path, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to get experiment template yaml: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) CompareExperimentTemplateRevisions(ctx context.Context, scope dto.Scope, identity, hubIdentity, revision1, revision2 string) (*dto.CompareRevisionsResponse, error) {
+	path := fmt.Sprintf(chaosCompareExperimentTemplateRevsPath, identity)
+	params := make(map[string]string)
+	params["hubIdentity"] = hubIdentity
+	params["correlationID"] = uuid.New().String()
+	params["revision1"] = revision1
+	params["revision2"] = revision2
+	params = addIdentifierParams(params, scope)
+
+	out := new(dto.CompareRevisionsResponse)
+	if err := c.Client.Get(ctx, path, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to compare experiment template revisions: %w", err)
+	}
+	return out, nil
 }
 
 func (c *ChaosService) CreateExperimentFromTemplateRequest(ctx context.Context, scope dto.Scope, templateID, hubIdentity string, request dto.CreateExperimentFromTemplateRequest) (*dto.ExperimentCreationResponse, error) {
@@ -256,6 +409,161 @@ func (c *ChaosService) ListLinuxInfrastructures(ctx context.Context, scope dto.S
 	}
 
 	return result, nil
+}
+
+func (c *ChaosService) ListFaultTemplates(ctx context.Context, scope dto.Scope, pagination *dto.PaginationOptions, hubIdentity, faultType, infrastructureType, infrastructure, search, sortField string, sortAscending, includeAllScope, isEnterprise bool, tags, category, permissionsRequired string) (*dto.ListFaultTemplateResponse, error) {
+	params := make(map[string]string)
+	params["correlationID"] = uuid.New().String()
+	params = addIdentifierParams(params, scope)
+
+	if pagination != nil {
+		params["page"] = fmt.Sprintf("%d", pagination.Page)
+		params["size"] = fmt.Sprintf("%d", pagination.Size)
+	}
+	if hubIdentity != "" {
+		params["hubIdentity"] = hubIdentity
+	}
+	if faultType != "" {
+		params["type"] = faultType
+	}
+	if infrastructureType != "" {
+		params["infrastructureType"] = infrastructureType
+	}
+	if infrastructure != "" {
+		params["infrastructure"] = infrastructure
+	}
+	if search != "" {
+		params["search"] = search
+	}
+	if sortField != "" {
+		params["sortField"] = sortField
+	}
+	if sortAscending {
+		params["sortAscending"] = "true"
+	}
+	if includeAllScope {
+		params["includeAllScope"] = "true"
+	}
+	if isEnterprise {
+		params["isEnterprise"] = "true"
+	}
+	if tags != "" {
+		params["tags"] = tags
+	}
+	if category != "" {
+		params["category"] = category
+	}
+	if permissionsRequired != "" {
+		params["permissionsRequired"] = permissionsRequired
+	}
+
+	out := new(dto.ListFaultTemplateResponse)
+	if err := c.Client.Get(ctx, chaosListFaultTemplatesPath, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to list fault templates: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) GetFaultTemplate(ctx context.Context, scope dto.Scope, identity, hubIdentity, revision string) (*dto.GetFaultTemplateResponse, error) {
+	path := fmt.Sprintf(chaosGetFaultTemplatePath, identity)
+	params := make(map[string]string)
+	params["hubIdentity"] = hubIdentity
+	params["correlationID"] = uuid.New().String()
+	params = addIdentifierParams(params, scope)
+
+	if revision != "" {
+		params["revision"] = revision
+	}
+
+	out := new(dto.GetFaultTemplateResponse)
+	if err := c.Client.Get(ctx, path, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to get fault template: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) DeleteFaultTemplate(ctx context.Context, scope dto.Scope, identity, hubIdentity string) error {
+	path := fmt.Sprintf(chaosDeleteFaultTemplatePath, identity)
+	params := make(map[string]string)
+	params["hubIdentity"] = hubIdentity
+	params["correlationID"] = uuid.New().String()
+	params = addIdentifierParams(params, scope)
+
+	if err := c.Client.Delete(ctx, path, params, nil, nil); err != nil {
+		return fmt.Errorf("failed to delete fault template: %w", err)
+	}
+	return nil
+}
+
+func (c *ChaosService) GetFaultTemplateRevisions(ctx context.Context, scope dto.Scope, identity, hubIdentity string, pagination *dto.PaginationOptions) (*dto.ListFaultTemplateResponse, error) {
+	path := fmt.Sprintf(chaosGetFaultTemplateRevisionsPath, identity)
+	params := make(map[string]string)
+	params["hubIdentity"] = hubIdentity
+	params["correlationID"] = uuid.New().String()
+	params = addIdentifierParams(params, scope)
+
+	if pagination != nil {
+		params["page"] = fmt.Sprintf("%d", pagination.Page)
+		params["limit"] = fmt.Sprintf("%d", pagination.Size)
+	}
+
+	out := new(dto.ListFaultTemplateResponse)
+	if err := c.Client.Get(ctx, path, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to get fault template revisions: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) GetFaultTemplateVariables(ctx context.Context, scope dto.Scope, identity, hubIdentity, revision string) (*dto.FaultTemplateVariablesResponse, error) {
+	path := fmt.Sprintf(chaosGetFaultTemplateVariablesPath, identity)
+	params := make(map[string]string)
+	params["hubIdentity"] = hubIdentity
+	params["correlationID"] = uuid.New().String()
+	params = addIdentifierParams(params, scope)
+
+	if revision != "" {
+		params["revision"] = revision
+	}
+
+	out := new(dto.FaultTemplateVariablesResponse)
+	if err := c.Client.Get(ctx, path, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to get fault template variables: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) GetFaultTemplateYaml(ctx context.Context, scope dto.Scope, identity, hubIdentity, revision string) (*dto.FaultTemplateYamlResponse, error) {
+	path := fmt.Sprintf(chaosGetFaultTemplateYamlPath, identity)
+	params := make(map[string]string)
+	params["hubIdentity"] = hubIdentity
+	params["correlationID"] = uuid.New().String()
+	params = addIdentifierParams(params, scope)
+
+	if revision != "" {
+		params["revision"] = revision
+	}
+
+	out := new(dto.FaultTemplateYamlResponse)
+	if err := c.Client.Get(ctx, path, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to get fault template yaml: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) CompareFaultTemplateRevisions(ctx context.Context, scope dto.Scope, identity, hubIdentity, revision1, revision2 string) (*dto.FaultTemplateCompareRevisionsResponse, error) {
+	path := fmt.Sprintf(chaosCompareFaultTemplateRevsPath, identity)
+	params := make(map[string]string)
+	params["hubIdentity"] = hubIdentity
+	params["correlationID"] = uuid.New().String()
+	params["revision1"] = revision1
+	params["revision2"] = revision2
+	params = addIdentifierParams(params, scope)
+
+	out := new(dto.FaultTemplateCompareRevisionsResponse)
+	if err := c.Client.Get(ctx, path, params, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to compare fault template revisions: %w", err)
+	}
+	return out, nil
 }
 
 func addIdentifierParams(params map[string]string, scope dto.Scope) map[string]string {
