@@ -659,7 +659,10 @@ The server exposes 10 MCP tools. Every tool accepts `org_id` and `project_id` as
 |---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
 | `fme_workspace` | x | | | | | |
 | `fme_environment` | x | | | | | |
+| `fme_feature_flag` | x | x | | | | |
 | `feature_flag` | x | x | x | | x | `toggle` |
+
+**FME (Split.io) resources** — `fme_workspace`, `fme_environment`, and `fme_feature_flag` use the Split.io internal API and are scoped by workspace ID rather than org/project. `fme_feature_flag` returns basic flag metadata (name, description, traffic type, tags, rollout status) without requiring an environment. Use `feature_flag` for the Harness CF admin API which supports environment-specific definitions, create, delete, and toggle.
 
 ### GitOps
 
@@ -861,7 +864,7 @@ Available toolset names:
 | `dashboards` | dashboard, dashboard_data |
 | `idp` | idp_entity, scorecard, scorecard_check, scorecard_stats, scorecard_check_stats, idp_score, idp_workflow, idp_tech_doc |
 | `pull-requests` | pull_request, pr_reviewer, pr_comment, pr_check, pr_activity |
-| `feature-flags` | fme_workspace, fme_environment, feature_flag |
+| `feature-flags` | fme_workspace, fme_environment, fme_feature_flag, feature_flag |
 | `gitops` | gitops_agent, gitops_application, gitops_cluster, gitops_repository, gitops_applicationset, gitops_repo_credential, gitops_app_event, gitops_pod_log, gitops_managed_resource, gitops_resource_action, gitops_dashboard, gitops_app_resource_tree |
 | `chaos` | chaos_experiment, chaos_probe, chaos_experiment_template, chaos_infrastructure, chaos_experiment_variable, chaos_experiment_run, chaos_loadtest |
 | `ccm` | cost_perspective, cost_breakdown, cost_timeseries, cost_summary, cost_recommendation, cost_anomaly, cost_category, cost_overview, cost_metadata, cost_filter_value, cost_recommendation_stats, cost_recommendation_by_type, cost_recommendation_detail, cost_ignored_anomaly, cost_commitment_coverage, cost_commitment_savings, cost_commitment_utilisation, cost_commitment_analysis, cost_estimated_savings |
