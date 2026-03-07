@@ -5,13 +5,15 @@ import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, toMcpError } from "../utils/errors.js";
 import { compactItems } from "../utils/compact.js";
+import { applyUrlDefaults } from "../utils/url-parser.js";
 
 export function registerListTool(server: McpServer, registry: Registry, client: HarnessClient): void {
   server.tool(
     "harness_list",
-    "List Harness resources by type with filtering and pagination. Call harness_describe to discover available resource_types, or harness_describe with search_term to find specific ones.",
+    "List Harness resources by type with filtering and pagination. You can pass a Harness URL to auto-extract org, project, and resource type. Call harness_describe to discover available resource_types.",
     {
-      resource_type: z.string().describe("The type of resource to list (e.g. pipeline, service, environment, connector)"),
+      resource_type: z.string().describe("The type of resource to list (e.g. pipeline, service, environment, connector). Auto-detected from url if provided.").optional(),
+      url: z.string().describe("A Harness UI URL — org, project, and resource type are extracted automatically").optional(),
       org_id: z.string().describe("Organization identifier (overrides default)").optional(),
       project_id: z.string().describe("Project identifier (overrides default)").optional(),
       page: z.number().describe("Page number, 0-indexed").default(0).optional(),
@@ -43,11 +45,15 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
     },
     async (args) => {
       try {
-        const input = { ...args } as Record<string, unknown>;
-        if (args.resource_type === "template" && input.template_list_type === undefined) {
+        const input = applyUrlDefaults(args as Record<string, unknown>, args.url);
+        const resourceType = input.resource_type as string | undefined;
+        if (!resourceType) {
+          return errorResult("resource_type is required. Provide it explicitly or via a Harness URL.");
+        }
+        if (resourceType === "template" && input.template_list_type === undefined) {
           input.template_list_type = "All";
         }
-        const result = await registry.dispatch(client, args.resource_type, "list", input);
+        const result = await registry.dispatch(client, resourceType, "list", input);
 
         // Apply compact mode — strip verbose metadata from list items
         if (args.compact !== false) {

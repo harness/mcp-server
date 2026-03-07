@@ -7,6 +7,7 @@ import { isUserError, toMcpError } from "../utils/errors.js";
 import { compactItems } from "../utils/compact.js";
 import { createLogger } from "../utils/logger.js";
 import { sendProgress, sendLog } from "../utils/progress.js";
+import { applyUrlDefaults } from "../utils/url-parser.js";
 
 const log = createLogger("search");
 
@@ -34,10 +35,11 @@ interface SearchResultEntry {
 export function registerSearchTool(server: McpServer, registry: Registry, client: HarnessClient): void {
   server.tool(
     "harness_search",
-    "Search across multiple Harness resource types simultaneously. Returns results ranked by relevance (pipelines/services first, then templates/triggers, then others).",
+    "Search across multiple Harness resource types simultaneously. Returns results ranked by relevance (pipelines/services first, then templates/triggers, then others). You can pass a Harness URL to auto-extract org and project.",
     {
       query: z.string().describe("Search term to find across resource types"),
       resource_types: z.array(z.string()).describe("Resource types to search (defaults to all listable types if empty)").optional(),
+      url: z.string().describe("A Harness UI URL — org and project are extracted automatically").optional(),
       org_id: z.string().describe("Organization identifier (overrides default)").optional(),
       project_id: z.string().describe("Project identifier (overrides default)").optional(),
       max_per_type: z.number().describe("Max results per resource type").default(5).optional(),
@@ -45,6 +47,7 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
     },
     async (args, extra) => {
       try {
+        const mergedArgs = applyUrlDefaults(args as Record<string, unknown>, args.url);
         // Determine which resource types to search
         let targetTypes = args.resource_types ?? [];
         if (targetTypes.length === 0) {
@@ -67,7 +70,7 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
             batch.map(async (rt) => {
               try {
                 const result = await registry.dispatch(client, rt, "list", {
-                  ...args,
+                  ...mergedArgs,
                   search_term: args.query,
                   name: args.query,
                   query: args.query,

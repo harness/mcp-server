@@ -4,14 +4,16 @@ import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, toMcpError } from "../utils/errors.js";
+import { applyUrlDefaults } from "../utils/url-parser.js";
 
 export function registerGetTool(server: McpServer, registry: Registry, client: HarnessClient): void {
   server.tool(
     "harness_get",
-    "Get a specific Harness resource by ID. Call harness_describe to discover available resource_types, or harness_describe with search_term to find specific ones.",
+    "Get a specific Harness resource by ID. You can pass a Harness URL to auto-extract org, project, resource type, and resource ID. Call harness_describe to discover available resource_types.",
     {
-      resource_type: z.string().describe("The type of resource to get (e.g. pipeline, service, environment)"),
-      resource_id: z.string().describe("The primary identifier of the resource"),
+      resource_type: z.string().describe("The type of resource to get (e.g. pipeline, service, environment). Auto-detected from url if provided.").optional(),
+      resource_id: z.string().describe("The primary identifier of the resource. Auto-detected from url if provided.").optional(),
+      url: z.string().describe("A Harness UI URL — org, project, resource type, and ID are extracted automatically").optional(),
       org_id: z.string().describe("Organization identifier (overrides default)").optional(),
       project_id: z.string().describe("Project identifier (overrides default)").optional(),
       // Secondary identifiers for nested resources
@@ -26,15 +28,21 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
     },
     async (args) => {
       try {
-        const def = registry.getResource(args.resource_type);
+        const input = applyUrlDefaults(args as Record<string, unknown>, args.url);
+        const resourceType = input.resource_type as string | undefined;
+        if (!resourceType) {
+          return errorResult("resource_type is required. Provide it explicitly or via a Harness URL.");
+        }
+        const resourceId = input.resource_id as string | undefined;
+
+        const def = registry.getResource(resourceType);
 
         // Map resource_id to the primary identifier field
-        const input: Record<string, unknown> = { ...args };
-        if (def.identifierFields.length > 0 && args.resource_id) {
-          input[def.identifierFields[0]] = args.resource_id;
+        if (def.identifierFields.length > 0 && resourceId) {
+          input[def.identifierFields[0]] = resourceId;
         }
 
-        const result = await registry.dispatch(client, args.resource_type, "get", input);
+        const result = await registry.dispatch(client, resourceType, "get", input);
         return jsonResult(result);
       } catch (err) {
         if (isUserError(err)) return errorResult(err.message);
