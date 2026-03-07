@@ -490,7 +490,7 @@ func ListExperimentTemplatesTool(config *config.McpServerConfig, client *client.
 }
 
 func GetExperimentTemplateTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_experiment_template_describe",
+	return mcp.NewTool("chaos_describe_experimenttemplate",
 			mcp.WithDescription("Retrieves detailed information about a specific chaos experiment template by its identity, including its spec, variables, revision, and metadata."),
 			common.WithScope(config, false),
 			mcp.WithString("identity",
@@ -538,7 +538,7 @@ func GetExperimentTemplateTool(config *config.McpServerConfig, client *client.Ch
 }
 
 func DeleteExperimentTemplateTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_experiment_template_delete",
+	return mcp.NewTool("chaos_delete_experimenttemplate",
 			mcp.WithDescription("Deletes a chaos experiment template by its identity (soft delete). The template must not be referenced by any existing experiment, otherwise the delete will be rejected."),
 			common.WithScope(config, false),
 			mcp.WithString("identity",
@@ -580,7 +580,7 @@ func DeleteExperimentTemplateTool(config *config.McpServerConfig, client *client
 }
 
 func GetExperimentTemplateRevisionsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_experiment_template_revisions",
+	return mcp.NewTool("chaos_list_experimenttemplaterevisions",
 			mcp.WithDescription("Lists all revisions of a specific chaos experiment template by its identity. Supports pagination, search, sort, and filtering."),
 			common.WithScope(config, false),
 			WithPagination(),
@@ -664,7 +664,7 @@ func GetExperimentTemplateRevisionsTool(config *config.McpServerConfig, client *
 }
 
 func GetExperimentTemplateVariablesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_experiment_template_variables",
+	return mcp.NewTool("chaos_get_experimenttemplatevariables",
 			mcp.WithDescription("Retrieves the input variables (faults, probes, actions) of a specific chaos experiment template. Useful for understanding what inputs are needed before launching an experiment from a template."),
 			common.WithScope(config, false),
 			mcp.WithString("identity",
@@ -712,7 +712,7 @@ func GetExperimentTemplateVariablesTool(config *config.McpServerConfig, client *
 }
 
 func GetExperimentTemplateYamlTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_experiment_template_yaml",
+	return mcp.NewTool("chaos_get_experimenttemplateyaml",
 			mcp.WithDescription("Retrieves the YAML representation of a specific chaos experiment template. Returns the raw template YAML string for a given revision."),
 			common.WithScope(config, false),
 			mcp.WithString("identity",
@@ -760,7 +760,7 @@ func GetExperimentTemplateYamlTool(config *config.McpServerConfig, client *clien
 }
 
 func CompareExperimentTemplateRevisionsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_experiment_template_compare",
+	return mcp.NewTool("chaos_compare_experimenttemplaterevisions",
 			mcp.WithDescription("Compares two revisions of a chaos experiment template, returning the YAML of both revisions for diff comparison. Both revision1 and revision2 are required."),
 			common.WithScope(config, false),
 			mcp.WithString("identity",
@@ -1045,7 +1045,7 @@ func ListLinuxInfrastructuresTool(config *config.McpServerConfig, client *client
 }
 
 func ListFaultTemplatesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_fault_template_list",
+	return mcp.NewTool("chaos_list_faulttemplates",
 			mcp.WithDescription("List chaos fault templates from chaos hubs. Supports filtering by hub, type, infrastructure, category, tags, and pagination."),
 			common.WithScope(config, false),
 			WithPagination(),
@@ -1128,7 +1128,7 @@ func ListFaultTemplatesTool(config *config.McpServerConfig, client *client.Chaos
 }
 
 func GetFaultTemplateTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_fault_template_describe",
+	return mcp.NewTool("chaos_describe_faulttemplate",
 			mcp.WithDescription("Retrieves detailed information about a specific chaos fault template by its identity, including its spec, variables, revision, and metadata."),
 			common.WithScope(config, false),
 			mcp.WithString("identity",
@@ -1176,7 +1176,7 @@ func GetFaultTemplateTool(config *config.McpServerConfig, client *client.ChaosSe
 }
 
 func DeleteFaultTemplateTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_fault_template_delete",
+	return mcp.NewTool("chaos_delete_faulttemplate",
 			mcp.WithDescription("Deletes a chaos fault template by its identity (soft delete)."),
 			common.WithScope(config, false),
 			mcp.WithString("identity",
@@ -1213,7 +1213,7 @@ func DeleteFaultTemplateTool(config *config.McpServerConfig, client *client.Chao
 }
 
 func GetFaultTemplateRevisionsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_fault_template_revisions",
+	return mcp.NewTool("chaos_list_faulttemplaterevisions",
 			mcp.WithDescription("Lists all revisions of a specific chaos fault template by its identity. Supports pagination."),
 			common.WithScope(config, false),
 			WithPagination(),
@@ -1264,7 +1264,7 @@ func GetFaultTemplateRevisionsTool(config *config.McpServerConfig, client *clien
 }
 
 func GetFaultTemplateVariablesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_fault_template_variables",
+	return mcp.NewTool("chaos_get_faulttemplatevariables",
 			mcp.WithDescription("Retrieves the runtime input variables of a specific chaos fault template, grouped into variables, faultTargets, faultTunable, and faultAuthentication."),
 			common.WithScope(config, false),
 			mcp.WithString("identity",
@@ -1312,7 +1312,7 @@ func GetFaultTemplateVariablesTool(config *config.McpServerConfig, client *clien
 }
 
 func GetFaultTemplateYamlTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_fault_template_yaml",
+	return mcp.NewTool("chaos_get_faulttemplateyaml",
 			mcp.WithDescription("Retrieves the YAML representation of a specific chaos fault template. Returns the raw template YAML string for a given revision."),
 			common.WithScope(config, false),
 			mcp.WithString("identity",
@@ -1360,7 +1360,7 @@ func GetFaultTemplateYamlTool(config *config.McpServerConfig, client *client.Cha
 }
 
 func CompareFaultTemplateRevisionsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_fault_template_compare",
+	return mcp.NewTool("chaos_compare_faulttemplaterevisions",
 			mcp.WithDescription("Compares two revisions of a chaos fault template, returning the YAML of both revisions for diff comparison. Both revision1 and revision2 are required."),
 			common.WithScope(config, false),
 			mcp.WithString("identity",
@@ -1421,7 +1421,7 @@ func CompareFaultTemplateRevisionsTool(config *config.McpServerConfig, client *c
 }
 
 func ListProbeTemplatesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_probe_template_list",
+	return mcp.NewTool("chaos_list_probetemplates",
 			mcp.WithDescription("List chaos probe templates. Supports filtering by hub, infrastructure type, probe entity type, search, and pagination."),
 			common.WithScope(config, false),
 			WithPagination(),
@@ -1473,7 +1473,7 @@ func ListProbeTemplatesTool(config *config.McpServerConfig, client *client.Chaos
 }
 
 func GetProbeTemplateTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_probe_template_describe",
+	return mcp.NewTool("chaos_describe_probetemplate",
 			mcp.WithDescription("Retrieves detailed information about a specific chaos probe template by its identity, including its type, properties, run properties, and metadata."),
 			common.WithScope(config, false),
 			mcp.WithString("identity",
@@ -1516,7 +1516,7 @@ func GetProbeTemplateTool(config *config.McpServerConfig, client *client.ChaosSe
 }
 
 func DeleteProbeTemplateTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_probe_template_delete",
+	return mcp.NewTool("chaos_delete_probetemplate",
 			mcp.WithDescription("Deletes a chaos probe template by its identity. Requires hubIdentity. When revision is 0 or not provided, all revisions are deleted. The template must not be referenced by any experiments for deletion to succeed."),
 			common.WithScope(config, false),
 			mcp.WithString("identity",
@@ -1564,7 +1564,7 @@ func DeleteProbeTemplateTool(config *config.McpServerConfig, client *client.Chao
 }
 
 func GetProbeTemplateVariablesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_probe_template_variables",
+	return mcp.NewTool("chaos_get_probetemplatevariables",
 			mcp.WithDescription("Retrieves the runtime input variables for a chaos probe template, including probe properties and run properties."),
 			common.WithScope(config, false),
 			mcp.WithString("identity",
@@ -1607,7 +1607,7 @@ func GetProbeTemplateVariablesTool(config *config.McpServerConfig, client *clien
 }
 
 func ListActionTemplatesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_action_template_list",
+	return mcp.NewTool("chaos_list_actiontemplates",
 			mcp.WithDescription("List chaos action templates. Supports filtering by hub, infrastructure type, action entity type, search, and pagination."),
 			common.WithScope(config, false),
 			WithPagination(),
@@ -1659,7 +1659,7 @@ func ListActionTemplatesTool(config *config.McpServerConfig, client *client.Chao
 }
 
 func GetActionTemplateTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_action_template_describe",
+	return mcp.NewTool("chaos_describe_actiontemplate",
 			mcp.WithDescription("Retrieves detailed information about a specific chaos action template by its identity, including its spec, variables, revision, and metadata."),
 			common.WithScope(config, false),
 			mcp.WithString("identity",
@@ -1702,7 +1702,7 @@ func GetActionTemplateTool(config *config.McpServerConfig, client *client.ChaosS
 }
 
 func DeleteActionTemplateTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_action_template_delete",
+	return mcp.NewTool("chaos_delete_actiontemplate",
 			mcp.WithDescription("Deletes a chaos action template by its identity. Requires hubIdentity. When revision is 0 or not provided, all revisions are deleted. The template must not be referenced by any experiments for deletion to succeed."),
 			common.WithScope(config, false),
 			mcp.WithString("identity",
@@ -1750,7 +1750,7 @@ func DeleteActionTemplateTool(config *config.McpServerConfig, client *client.Cha
 }
 
 func GetActionTemplateRevisionsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_action_template_revisions",
+	return mcp.NewTool("chaos_list_actiontemplaterevisions",
 			mcp.WithDescription("Lists all revisions of a chaos action template by its identity, with pagination and optional filtering support."),
 			common.WithScope(config, false),
 			WithPagination(),
@@ -1811,7 +1811,7 @@ func GetActionTemplateRevisionsTool(config *config.McpServerConfig, client *clie
 }
 
 func GetActionTemplateVariablesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_action_template_variables",
+	return mcp.NewTool("chaos_get_actiontemplatevariables",
 			mcp.WithDescription("Retrieves the runtime input variables for a chaos action template, including action properties and run properties."),
 			common.WithScope(config, false),
 			mcp.WithString("identity",
@@ -1854,7 +1854,7 @@ func GetActionTemplateVariablesTool(config *config.McpServerConfig, client *clie
 }
 
 func CompareActionTemplateRevisionsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_action_template_compare",
+	return mcp.NewTool("chaos_compare_actiontemplaterevisions",
 			mcp.WithDescription("Compares two revisions of a chaos action template side by side. Requires the template identity, hub identity, and two revision numbers."),
 			common.WithScope(config, false),
 			mcp.WithString("identity",
@@ -1911,7 +1911,7 @@ func CompareActionTemplateRevisionsTool(config *config.McpServerConfig, client *
 }
 
 func ListChaosHubsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_hubs_list",
+	return mcp.NewTool("chaos_list_hubs",
 			mcp.WithDescription("List ChaosHubs (Git-connected repositories containing fault, experiment, probe, and action templates). Returns hub details including repository info, connector configuration, template counts, and sync status. Supports search, pagination, and cross-scope inclusion."),
 			common.WithScope(config, false),
 			WithPagination(),
@@ -1951,7 +1951,7 @@ func ListChaosHubsTool(config *config.McpServerConfig, client *client.ChaosServi
 }
 
 func GetChaosHubTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_hub_get",
+	return mcp.NewTool("chaos_get_hub",
 			mcp.WithDescription("Get a ChaosHub by its identity. Returns full hub details including repository URL, branch, connector info, template counts, sync status, and metadata."),
 			common.WithScope(config, false),
 			mcp.WithString("hubIdentity",
@@ -1985,7 +1985,7 @@ func GetChaosHubTool(config *config.McpServerConfig, client *client.ChaosService
 }
 
 func ListChaosHubFaultsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_hub_faults_list",
+	return mcp.NewTool("chaos_list_hubfaults",
 			mcp.WithDescription("List faults available in ChaosHubs. Returns fault details including name, category, infrastructure type, permissions required, and platform support. Also returns fault category counts for each infrastructure type. Supports filtering by hub, infrastructure type, category, permissions, and search."),
 			common.WithScope(config, false),
 			WithPagination(),
@@ -2046,7 +2046,7 @@ func ListChaosHubFaultsTool(config *config.McpServerConfig, client *client.Chaos
 }
 
 func DeleteChaosHubTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_hub_delete",
+	return mcp.NewTool("chaos_delete_hub",
 			mcp.WithDescription("Delete a ChaosHub by its identity. Removes the hub and its associated resources. The default Enterprise ChaosHub cannot be deleted."),
 			common.WithScope(config, false),
 			mcp.WithString("hubIdentity",
@@ -2075,7 +2075,7 @@ func DeleteChaosHubTool(config *config.McpServerConfig, client *client.ChaosServ
 }
 
 func CreateChaosHubTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_hub_create",
+	return mcp.NewTool("chaos_create_hub",
 			mcp.WithDescription("Create a new ChaosHub in the given Harness scope (account, org, project). The hub record stores a Git repo and connector reference that provides chaos fault, experiment, probe, and action templates. The hub identity cannot be 'enterprise-chaoshub' as that is reserved for the default hub."),
 			common.WithScope(config, false),
 			mcp.WithString("identity",
@@ -2159,7 +2159,7 @@ func CreateChaosHubTool(config *config.McpServerConfig, client *client.ChaosServ
 }
 
 func UpdateChaosHubTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_hub_update",
+	return mcp.NewTool("chaos_update_hub",
 			mcp.WithDescription("Update the editable fields of a ChaosHub (name, description, tags) by its identity."),
 			common.WithScope(config, false),
 			mcp.WithString("hubIdentity",
@@ -2227,7 +2227,7 @@ func UpdateChaosHubTool(config *config.McpServerConfig, client *client.ChaosServ
 }
 
 func ListChaosGuardConditionsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_guard_conditions_list",
+	return mcp.NewTool("chaos_list_guardconditions",
 			mcp.WithDescription("List ChaosGuard conditions. Conditions define the infrastructure, fault, and application constraints that ChaosGuard rules evaluate against chaos experiments. Supports filtering by infrastructure type, tags, search, sorting, and pagination."),
 			common.WithScope(config, false),
 			WithPagination(),
@@ -2281,7 +2281,7 @@ func ListChaosGuardConditionsTool(config *config.McpServerConfig, client *client
 }
 
 func GetChaosGuardConditionTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_guard_condition_get",
+	return mcp.NewTool("chaos_get_guardcondition",
 			mcp.WithDescription("Get a ChaosGuard condition by its identifier. Returns the full condition details including infrastructure type, fault specifications, K8s/machine specs, associated rules, and tags."),
 			common.WithScope(config, false),
 			mcp.WithString("identity",
@@ -2315,7 +2315,7 @@ func GetChaosGuardConditionTool(config *config.McpServerConfig, client *client.C
 }
 
 func DeleteChaosGuardConditionTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_guard_condition_delete",
+	return mcp.NewTool("chaos_delete_guardcondition",
 			mcp.WithDescription("Delete (soft-delete) a ChaosGuard condition by its identifier. The condition is marked as removed and will no longer appear in listings or be evaluated by rules, but is not permanently erased from the database."),
 			common.WithScope(config, false),
 			mcp.WithString("identity",
@@ -2349,7 +2349,7 @@ func DeleteChaosGuardConditionTool(config *config.McpServerConfig, client *clien
 }
 
 func ListChaosGuardRulesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_guard_rules_list",
+	return mcp.NewTool("chaos_list_guardrules",
 			mcp.WithDescription("List ChaosGuard governance rules. ChaosGuard rules define security policies that control when and how chaos experiments can run, including user group restrictions, time windows, and conditions. Supports filtering by infrastructure type, tags, search, sorting, and pagination."),
 			common.WithScope(config, false),
 			WithPagination(),
@@ -2403,7 +2403,7 @@ func ListChaosGuardRulesTool(config *config.McpServerConfig, client *client.Chao
 }
 
 func GetChaosGuardRuleTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_guard_rule_get",
+	return mcp.NewTool("chaos_get_guardrule",
 			mcp.WithDescription("Get a ChaosGuard rule by its identifier. Returns the full rule details including name, description, conditions, time windows, user group restrictions, and enabled status."),
 			common.WithScope(config, false),
 			mcp.WithString("identity",
@@ -2437,7 +2437,7 @@ func GetChaosGuardRuleTool(config *config.McpServerConfig, client *client.ChaosS
 }
 
 func DeleteChaosGuardRuleTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_guard_rule_delete",
+	return mcp.NewTool("chaos_delete_guardrule",
 			mcp.WithDescription("Delete (soft-delete) a ChaosGuard rule by its identifier. The rule is marked as removed and will no longer appear in listings or be enforced, but is not permanently erased from the database."),
 			common.WithScope(config, false),
 			mcp.WithString("identity",
@@ -2471,7 +2471,7 @@ func DeleteChaosGuardRuleTool(config *config.McpServerConfig, client *client.Cha
 }
 
 func EnableChaosGuardRuleTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_guard_rule_enable",
+	return mcp.NewTool("chaos_enable_guardrule",
 			mcp.WithDescription("Enable or disable a ChaosGuard rule. When enabled, the rule actively enforces its governance conditions on chaos experiments. When disabled, the rule is inactive and does not affect experiment execution."),
 			common.WithScope(config, false),
 			mcp.WithString("identity",
