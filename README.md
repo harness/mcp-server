@@ -423,10 +423,10 @@ The server exposes 10 MCP tools. Every tool accepts `org_id` and `project_id` as
 | `harness_describe` | Discover available resource types, operations, and fields. No API call — returns local registry metadata. |
 | `harness_list` | List resources of a given type with filtering, search, and pagination. |
 | `harness_get` | Get a single resource by its identifier. |
-| `harness_create` | Create a new resource. Requires `confirmation: true`. |
-| `harness_update` | Update an existing resource. Requires `confirmation: true`. |
-| `harness_delete` | Delete a resource. Requires `confirmation: true`. Destructive. |
-| `harness_execute` | Execute an action on a resource (run pipeline, toggle flag, sync app). Requires `confirmation: true`. |
+| `harness_create` | Create a new resource. Prompts for user confirmation via [elicitation](#elicitation). |
+| `harness_update` | Update an existing resource. Prompts for user confirmation via [elicitation](#elicitation). |
+| `harness_delete` | Delete a resource. Prompts for user confirmation via [elicitation](#elicitation). Destructive. |
+| `harness_execute` | Execute an action on a resource (run pipeline, toggle flag, sync app). Prompts for user confirmation via [elicitation](#elicitation). |
 | `harness_search` | Search across multiple resource types in parallel with a single query. |
 | `harness_diagnose` | Aggregate execution details, pipeline YAML, and logs into a single diagnostic payload. |
 | `harness_status` | Get a real-time project health dashboard — recent executions, failure rates, and deep links. |
@@ -470,7 +470,6 @@ The server exposes 10 MCP tools. Every tool accepts `org_id` and `project_id` as
   "resource_type": "pipeline",
   "action": "run",
   "resource_id": "my-pipeline",
-  "confirmation": true,
   "inputs": { "tag": "v1.2.3" }
 }
 ```
@@ -483,8 +482,7 @@ The server exposes 10 MCP tools. Every tool accepts `org_id` and `project_id` as
   "action": "toggle",
   "resource_id": "new_checkout_flow",
   "enable": true,
-  "environment": "production",
-  "confirmation": true
+  "environment": "production"
 }
 ```
 
@@ -511,8 +509,7 @@ The server exposes 10 MCP tools. Every tool accepts `org_id` and `project_id` as
 ```json
 {
   "resource_type": "connector",
-  "body": { "connector": { "name": "My Docker Hub", "identifier": "my_docker", "type": "DockerRegistry" } },
-  "confirmation": true
+  "body": { "connector": { "name": "My Docker Hub", "identifier": "my_docker", "type": "DockerRegistry" } }
 }
 ```
 
@@ -522,8 +519,7 @@ The server exposes 10 MCP tools. Every tool accepts `org_id` and `project_id` as
 {
   "resource_type": "trigger",
   "resource_id": "nightly-trigger",
-  "pipeline_id": "my-pipeline",
-  "confirmation": true
+  "pipeline_id": "my-pipeline"
 }
 ```
 
@@ -1064,10 +1060,32 @@ tests/
     registry.test.ts                # Registry loading, filtering, dispatch tests
 ```
 
+## Elicitation
+
+Write tools (`harness_create`, `harness_update`, `harness_delete`, `harness_execute`) use [MCP elicitation](https://modelcontextprotocol.io/specification/2025-03-26/server/utilities/elicitation) to prompt the user for confirmation before making changes. This gives real human-in-the-loop approval — the user sees what's about to happen and accepts or declines.
+
+**How it works:**
+
+1. The LLM calls a write tool (e.g. `harness_create` with a pipeline body)
+2. The server sends an elicitation request to the client with a summary of the operation
+3. The user sees the details and clicks **Accept** or **Decline**
+4. If accepted, the operation proceeds. If declined, it's blocked and the LLM is told
+
+**Client support:**
+
+| Client | Elicitation Support |
+|--------|-------------------|
+| Cursor | Yes |
+| Claude Desktop | Not yet |
+| Windsurf | Not yet |
+| MCP Inspector | Yes |
+
+For clients that don't support elicitation, the server proceeds directly — the LLM already chose to call the tool, so its intent is trusted. As more clients add elicitation support, users will automatically get the confirmation dialog without any server changes.
+
 ## Safety
 
 - **Secrets are never exposed.** The `secret` resource type returns metadata only (name, type, scope) — secret values are never included in any response.
-- **Write operations require confirmation.** `harness_create`, `harness_update`, `harness_delete`, and `harness_execute` all require `confirmation: true` before proceeding.
+- **Write operations prompt for confirmation.** `harness_create`, `harness_update`, `harness_delete`, and `harness_execute` use MCP elicitation to get user approval before proceeding (see [Elicitation](#elicitation)).
 - **Rate limiting.** The client enforces a 10 requests/second limit to avoid hitting Harness API rate limits.
 - **Retries with backoff.** Transient failures (HTTP 429, 5xx) are retried with exponential backoff and jitter.
 - **No stdout logging.** All logs go to stderr to avoid corrupting the stdio JSON-RPC transport.
@@ -1082,7 +1100,7 @@ tests/
 | HTTP `Invalid request` | Invalid JSON body or request body exceeded `HARNESS_MAX_BODY_SIZE_MB` | Validate JSON payload size/shape; increase `HARNESS_MAX_BODY_SIZE_MB` if needed |
 | `Unknown resource_type "..."` from tools | Resource type is misspelled or filtered out via `HARNESS_TOOLSETS` | Call `harness_describe` (with optional `search_term`) to discover valid types |
 | `Missing required field "... for path parameter ..."` | A project/org scoped call is missing identifiers | Set `HARNESS_DEFAULT_ORG_ID`/`HARNESS_DEFAULT_PROJECT_ID` or pass `org_id`/`project_id` per tool call |
-| `Create/Update/Delete ... require confirmation=true` | Safety gate on mutating tools | Re-run with `confirmation: true` only after validating target/resource |
+| `Operation declined by user` | User declined the elicitation confirmation dialog | The user chose not to proceed — verify the operation details and retry if intended |
 | `body.template_yaml (or body.yaml) is required` for template create/update | Template APIs expect full YAML payload | Provide full `template_yaml` string in `body`; for deletes, pass `version_label` to delete one version (omit to delete all versions) |
 
 ## License
