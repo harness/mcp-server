@@ -1,7 +1,7 @@
 {
   "name": "harness-mcp",
   "description": "AI-native interface to the Harness Platform — ask questions, diagnose failures, and manage deployments without leaving your terminal",
-  "version": "0.1.0",
+  "version": "0.5.2",
   "mcpServers": {
     "harness": {
       "command": "node",
