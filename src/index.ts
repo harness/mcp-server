@@ -72,6 +72,31 @@ async function startHttp(config: Config, port: number): Promise<void> {
     next();
   });
 
+  // Simple per-IP rate limiting: 60 requests per minute
+  const ipHits = new Map<string, { count: number; resetAt: number }>();
+  const RATE_WINDOW_MS = 60_000;
+  const RATE_LIMIT = 60;
+
+  app.use((req, res, next) => {
+    const ip = req.ip ?? "unknown";
+    const now = Date.now();
+    let entry = ipHits.get(ip);
+    if (!entry || now >= entry.resetAt) {
+      entry = { count: 0, resetAt: now + RATE_WINDOW_MS };
+      ipHits.set(ip, entry);
+    }
+    entry.count++;
+    if (entry.count > RATE_LIMIT) {
+      res.status(429).json({
+        jsonrpc: "2.0",
+        error: { code: -32000, message: "Too many requests. Try again later." },
+        id: null,
+      });
+      return;
+    }
+    next();
+  });
+
   // Health check
   app.get("/health", (_req, res) => {
     res.json({ status: "ok" });
