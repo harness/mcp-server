@@ -13,7 +13,9 @@ interface PaginateOptions {
  * Handles both page-based (NG API) and offset-based patterns.
  */
 export async function paginate<T>(opts: PaginateOptions): Promise<{ items: T[]; total: number }> {
-  const { client, request, maxItems = 100, pageSize = 20 } = opts;
+  const { client, request, maxItems: rawMax = 100, pageSize: rawSize = 20 } = opts;
+  const maxItems = Math.min(Math.max(rawMax, 1), 10_000);
+  const pageSize = Math.min(Math.max(rawSize, 1), 100);
   const allItems: T[] = [];
   let page = 0;
   let total = 0;

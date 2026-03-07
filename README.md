@@ -1087,8 +1087,12 @@ For clients that don't support elicitation, the server proceeds directly — the
 
 - **Secrets are never exposed.** The `secret` resource type returns metadata only (name, type, scope) — secret values are never included in any response.
 - **Write operations prompt for confirmation.** `harness_create`, `harness_update`, `harness_delete`, and `harness_execute` use MCP elicitation to get user approval before proceeding (see [Elicitation](#elicitation)).
-- **Rate limiting.** The client enforces a 10 requests/second limit to avoid hitting Harness API rate limits.
+- **CORS restricted to same-origin.** The HTTP transport only allows same-origin requests, preventing CSRF attacks from malicious websites targeting the MCP server on localhost.
+- **HTTP rate limiting.** The HTTP transport enforces 60 requests per minute per IP to prevent request flooding.
+- **API rate limiting.** The Harness API client enforces a 10 requests/second limit to avoid hitting upstream rate limits.
+- **Pagination bounds enforced.** List queries are capped at 10,000 items total and 100 per page to prevent memory exhaustion.
 - **Retries with backoff.** Transient failures (HTTP 429, 5xx) are retried with exponential backoff and jitter.
+- **Localhost binding.** The HTTP transport binds to `127.0.0.1` by default — not accessible from the network.
 - **No stdout logging.** All logs go to stderr to avoid corrupting the stdio JSON-RPC transport.
 
 ## Troubleshooting & Common Pitfalls

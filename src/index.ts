@@ -63,11 +63,37 @@ async function startHttp(config: Config, port: number): Promise<void> {
   const { json } = await import("express");
   app.use(json({ limit: maxBodySize }));
 
-  // CORS headers for cross-origin MCP clients
+  // Block cross-origin requests — prevents CSRF from malicious websites
+  // targeting the MCP server on localhost. Only same-origin requests are allowed.
   app.use((_req, res, next) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Origin", `http://${host}:${port}`);
     res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, mcp-session-id");
+    next();
+  });
+
+  // Simple per-IP rate limiting: 60 requests per minute
+  const ipHits = new Map<string, { count: number; resetAt: number }>();
+  const RATE_WINDOW_MS = 60_000;
+  const RATE_LIMIT = 60;
+
+  app.use((req, res, next) => {
+    const ip = req.ip ?? "unknown";
+    const now = Date.now();
+    let entry = ipHits.get(ip);
+    if (!entry || now >= entry.resetAt) {
+      entry = { count: 0, resetAt: now + RATE_WINDOW_MS };
+      ipHits.set(ip, entry);
+    }
+    entry.count++;
+    if (entry.count > RATE_LIMIT) {
+      res.status(429).json({
+        jsonrpc: "2.0",
+        error: { code: -32000, message: "Too many requests. Try again later." },
+        id: null,
+      });
+      return;
+    }
     next();
   });
 
