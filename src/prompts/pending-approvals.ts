@@ -33,7 +33,7 @@ For each pending approval, show:
 - A deep link to the execution in Harness
 
 **Step 4: Offer to take action**
-Ask me if I want to approve or reject any of the pending approvals. If I choose to act, use harness_execute with resource_type="approval_instance", action="approve" (or "reject"), approval_id=<id>, and confirmation=true.
+Ask me if I want to approve or reject any of the pending approvals. If I choose to act, use harness_execute with resource_type="approval_instance", action="approve" (or "reject"), approval_id=<id>.
 
 If no executions are waiting for approval, let me know the project is clear.`,
         },
