@@ -147,6 +147,8 @@ func RegisterChaos(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) e
 			// Action templates tools
 			toolsets.NewServerTool(tools.DeleteActionTemplateTool(config, chaosClient)),
 			// Chaos Hub tools
+			toolsets.NewServerTool(tools.CreateChaosHubTool(config, chaosClient)),
+			toolsets.NewServerTool(tools.UpdateChaosHubTool(config, chaosClient)),
 			toolsets.NewServerTool(tools.DeleteChaosHubTool(config, chaosClient)),
 			// ChaosGuard tools
 			toolsets.NewServerTool(tools.DeleteChaosGuardConditionTool(config, chaosClient)),

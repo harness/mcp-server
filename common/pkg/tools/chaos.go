@@ -2074,6 +2074,158 @@ func DeleteChaosHubTool(config *config.McpServerConfig, client *client.ChaosServ
 		}
 }
 
+func CreateChaosHubTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_hub_create",
+			mcp.WithDescription("Create a new ChaosHub in the given Harness scope (account, org, project). The hub record stores a Git repo and connector reference that provides chaos fault, experiment, probe, and action templates. The hub identity cannot be 'enterprise-chaoshub' as that is reserved for the default hub."),
+			common.WithScope(config, false),
+			mcp.WithString("identity",
+				mcp.Description("Unique identifier (slug) for the ChaosHub. Must be unique within the project scope. Cannot be 'enterprise-chaoshub'."),
+				mcp.Required(),
+			),
+			mcp.WithString("name",
+				mcp.Description("Display name for the ChaosHub"),
+				mcp.Required(),
+			),
+			mcp.WithString("description",
+				mcp.Description("Description of the ChaosHub"),
+			),
+			mcp.WithString("tags",
+				mcp.Description("Comma-separated list of tags for the ChaosHub"),
+			),
+			mcp.WithString("connectorRef",
+				mcp.Description("Harness connector reference for Git authentication (e.g. 'account.myConnector' or 'org.myConnector')."),
+			),
+			mcp.WithString("repoName",
+				mcp.Description("Name of the Git repository."),
+			),
+			mcp.WithString("repoBranch",
+				mcp.Description("Git branch to use for the ChaosHub."),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			identity, err := RequiredParam[string](request, "identity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			name, err := RequiredParam[string](request, "name")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			connectorRef, _ := OptionalParam[string](request, "connectorRef")
+			repoName, _ := OptionalParam[string](request, "repoName")
+			repoBranch, _ := OptionalParam[string](request, "repoBranch")
+			description, _ := OptionalParam[string](request, "description")
+			tagsStr, _ := OptionalParam[string](request, "tags")
+
+			var tags []string
+			if tagsStr != "" {
+				for _, t := range strings.Split(tagsStr, ",") {
+					trimmed := strings.TrimSpace(t)
+					if trimmed != "" {
+						tags = append(tags, trimmed)
+					}
+				}
+			}
+
+			createReq := dto.CreateChaosHubRequest{
+				Identity:     identity,
+				Name:         name,
+				Description:  description,
+				Tags:         tags,
+				ConnectorRef: connectorRef,
+				RepoName:     repoName,
+				RepoBranch:   repoBranch,
+			}
+
+			data, err := client.CreateChaosHub(ctx, scope, createReq)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create chaos hub: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal create chaos hub response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+func UpdateChaosHubTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("chaos_hub_update",
+			mcp.WithDescription("Update the editable fields of a ChaosHub (name, description, tags) by its identity."),
+			common.WithScope(config, false),
+			mcp.WithString("hubIdentity",
+				mcp.Description("The unique identity of the ChaosHub to update"),
+				mcp.Required(),
+			),
+			mcp.WithString("name",
+				mcp.Description("Updated display name for the ChaosHub"),
+				mcp.Required(),
+			),
+			mcp.WithString("description",
+				mcp.Description("Updated description for the ChaosHub"),
+			),
+			mcp.WithString("tags",
+				mcp.Description("Comma-separated list of tags for the ChaosHub (replaces existing tags)"),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			name, err := RequiredParam[string](request, "name")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			description, _ := OptionalParam[string](request, "description")
+			tagsStr, _ := OptionalParam[string](request, "tags")
+
+			var tags []string
+			if tagsStr != "" {
+				for _, t := range strings.Split(tagsStr, ",") {
+					trimmed := strings.TrimSpace(t)
+					if trimmed != "" {
+						tags = append(tags, trimmed)
+					}
+				}
+			}
+
+			updateReq := dto.UpdateChaosHubRequest{
+				Name:        name,
+				Description: description,
+				Tags:        tags,
+			}
+
+			data, err := client.UpdateChaosHub(ctx, scope, hubIdentity, updateReq)
+			if err != nil {
+				return nil, fmt.Errorf("failed to update chaos hub: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal update chaos hub response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
 func ListChaosGuardConditionsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("chaos_guard_conditions_list",
 			mcp.WithDescription("List ChaosGuard conditions. Conditions define the infrastructure, fault, and application constraints that ChaosGuard rules evaluate against chaos experiments. Supports filtering by infrastructure type, tags, search, sorting, and pagination."),

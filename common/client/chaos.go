@@ -902,6 +902,29 @@ func (c *ChaosService) DeleteChaosHub(ctx context.Context, scope dto.Scope, hubI
 	return nil
 }
 
+func (c *ChaosService) CreateChaosHub(ctx context.Context, scope dto.Scope, request dto.CreateChaosHubRequest) (*dto.GetChaosHubResponse, error) {
+	params := make(map[string]string)
+	params = addIdentifierParams(params, scope)
+
+	out := new(dto.GetChaosHubResponse)
+	if err := c.Client.Post(ctx, chaosListHubsPath, params, request, nil, out); err != nil {
+		return nil, fmt.Errorf("failed to create chaos hub: %w", err)
+	}
+	return out, nil
+}
+
+func (c *ChaosService) UpdateChaosHub(ctx context.Context, scope dto.Scope, hubIdentity string, request dto.UpdateChaosHubRequest) (*dto.GetChaosHubResponse, error) {
+	path := fmt.Sprintf(chaosGetHubPath, hubIdentity)
+	params := make(map[string]string)
+	params = addIdentifierParams(params, scope)
+
+	out := new(dto.GetChaosHubResponse)
+	if err := c.Client.Put(ctx, path, params, request, out); err != nil {
+		return nil, fmt.Errorf("failed to update chaos hub: %w", err)
+	}
+	return out, nil
+}
+
 func (c *ChaosService) ListChaosGuardConditions(ctx context.Context, scope dto.Scope, search, sortField string, sortAscending bool, infraType, tags string, page, limit int) (*dto.ListChaosGuardConditionsResponse, error) {
 	params := make(map[string]string)
 	params["correlationID"] = uuid.New().String()
