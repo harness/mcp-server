@@ -21,7 +21,7 @@ export function registerAllTools(server: McpServer, registry: Registry, client: 
   registerUpdateTool(server, registry, client);
   registerDeleteTool(server, registry, client);
   registerExecuteTool(server, registry, client);
-  registerDiagnoseTool(server, registry, client);
+  registerDiagnoseTool(server, registry, client, config);
   registerSearchTool(server, registry, client);
   registerDescribeTool(server, registry);
   registerStatusTool(server, registry, client, config);

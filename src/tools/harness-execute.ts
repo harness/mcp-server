@@ -3,9 +3,12 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
-import { isUserError, toMcpError } from "../utils/errors.js";
+import { isUserError, toMcpError, HarnessApiError } from "../utils/errors.js";
 import { confirmViaElicitation } from "../utils/elicitation.js";
+import { createLogger } from "../utils/logger.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
+
+const log = createLogger("execute");
 
 export function registerExecuteTool(server: McpServer, registry: Registry, client: HarnessClient): void {
   server.tool(
@@ -60,7 +63,42 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           input[def.identifierFields[0]] = resourceId;
         }
 
-        const result = await registry.dispatchExecute(client, resourceType, args.action, input);
+        let result: unknown;
+        try {
+          result = await registry.dispatchExecute(client, resourceType, args.action, input);
+        } catch (err) {
+          // If retry fails with 405, fall back to a fresh pipeline run
+          if (
+            args.action === "retry" &&
+            resourceType === "pipeline" &&
+            err instanceof HarnessApiError &&
+            err.statusCode === 405
+          ) {
+            log.info("Retry returned 405, falling back to fresh pipeline run");
+            let pipelineId = input.pipeline_id as string | undefined;
+
+            // Resolve pipeline_id from execution if not provided
+            if (!pipelineId && input.execution_id) {
+              try {
+                const exec = await registry.dispatch(client, "execution", "get", input) as Record<string, unknown>;
+                const pes = exec?.pipelineExecutionSummary as Record<string, unknown> | undefined;
+                pipelineId = pes?.pipelineIdentifier as string | undefined;
+              } catch {
+                // Fall through — will error below
+              }
+            }
+
+            if (!pipelineId) {
+              return errorResult("Retry is not available for this execution (405). Provide pipeline_id to run a fresh execution instead.");
+            }
+
+            input.pipeline_id = pipelineId;
+            result = await registry.dispatchExecute(client, "pipeline", "run", input);
+            return jsonResult({ ...result as Record<string, unknown>, _note: "Retry was not available (405). Executed a fresh pipeline run instead." });
+          }
+          throw err;
+        }
+
         return jsonResult(result);
       } catch (err) {
         if (isUserError(err)) return errorResult(err.message);

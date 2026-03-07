@@ -2,6 +2,7 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
+import type { Config } from "../config.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, toMcpError } from "../utils/errors.js";
 import { createLogger } from "../utils/logger.js";
@@ -46,6 +47,13 @@ interface StageSummary {
   duration_ms?: number;
   duration_human?: string;
   steps: StepSummary[];
+}
+
+interface FailedStepInfo {
+  stage_identifier: string;
+  step_identifier: string;
+  step_name: string;
+  failure_message: string;
 }
 
 function formatDuration(ms: number): string {
@@ -148,11 +156,34 @@ function extractStages(layoutNodeMap: Record<string, NodeInfo>, startingNodeId: 
   return stages;
 }
 
+/** Extract failed steps with their parent stage identifiers from the summary stages. */
+function findFailedSteps(stages: StageSummary[]): FailedStepInfo[] {
+  const failed: FailedStepInfo[] = [];
+  for (const stage of stages) {
+    if (stage.status !== "Failed" && stage.status !== "Errored" && stage.status !== "Aborted") continue;
+    for (const step of stage.steps) {
+      if (step.failure_message) {
+        failed.push({
+          stage_identifier: stage.identifier,
+          step_identifier: step.identifier,
+          step_name: step.name,
+          failure_message: step.failure_message,
+        });
+      }
+    }
+  }
+  return failed;
+}
+
 /**
  * Transform the raw execution response into a structured summary report.
  * Falls back to returning the raw data if the expected structure is missing.
  */
-function buildExecutionSummary(execution: Record<string, unknown>): Record<string, unknown> {
+function buildExecutionSummary(
+  execution: Record<string, unknown>,
+  config: Config,
+  input: Record<string, unknown>,
+): Record<string, unknown> {
   const pes = execution.pipelineExecutionSummary as Record<string, unknown> | undefined;
   if (!pes) return execution;
 
@@ -216,8 +247,15 @@ function buildExecutionSummary(execution: Record<string, unknown>): Record<strin
     }
   }
 
-  // Preserve openInHarness from the execution response
-  if (execution.openInHarness) {
+  // Build execution deep link
+  const orgId = (input.org_id as string) ?? config.HARNESS_DEFAULT_ORG_ID;
+  const projectId = (input.project_id as string) ?? config.HARNESS_DEFAULT_PROJECT_ID;
+  const pipelineIdentifier = pes.pipelineIdentifier as string | undefined;
+  const execId = pes.planExecutionId as string | undefined;
+  if (pipelineIdentifier && execId && orgId && projectId) {
+    const base = config.HARNESS_BASE_URL.replace(/\/$/, "");
+    summary.openInHarness = `${base}/ng/account/${config.HARNESS_ACCOUNT_ID}/all/orgs/${orgId}/projects/${projectId}/pipelines/${pipelineIdentifier}/executions/${execId}/pipeline`;
+  } else if (execution.openInHarness) {
     summary.openInHarness = execution.openInHarness;
   }
 
@@ -226,7 +264,7 @@ function buildExecutionSummary(execution: Record<string, unknown>): Record<strin
 
 // ─── Tool registration ───────────────────────────────────────────────────────
 
-export function registerDiagnoseTool(server: McpServer, registry: Registry, client: HarnessClient): void {
+export function registerDiagnoseTool(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
   server.tool(
     "harness_diagnose",
     "Analyze a pipeline execution — returns a structured report with stage breakdown, timing, bottlenecks, and failure info. Accepts an execution_id, a pipeline_id (auto-fetches latest execution), or a Harness URL. Set summary=false for raw diagnostic data with pipeline YAML and execution logs.",
@@ -282,6 +320,12 @@ export function registerDiagnoseTool(server: McpServer, registry: Registry, clie
         const totalSteps = 1 + (includeYaml ? 1 : 0) + (includeLogs ? 1 : 0);
         let step = 0;
 
+        // Hoisted so log-fetch (step 3) can use them outside the execution try block
+        let resolvedPipelineId: string | undefined;
+        let runSequence: number | undefined;
+        let planExecId: string | undefined;
+        let failedSteps: FailedStepInfo[] = [];
+
         // 1. Get execution details
         await sendProgress(extra, step, totalSteps, "Fetching execution details...");
         log.info("Fetching execution details", { executionId });
@@ -290,15 +334,25 @@ export function registerDiagnoseTool(server: McpServer, registry: Registry, clie
 
           // Apply summary transformation or return raw
           if (isSummary) {
-            diagnostic.execution = buildExecutionSummary(execution as Record<string, unknown>);
+            diagnostic.execution = buildExecutionSummary(execution as Record<string, unknown>, config, input);
           } else {
             diagnostic.execution = execution;
           }
 
-          // Extract pipeline ID from execution for YAML fetch
+          // Extract execution metadata for YAML fetch and log prefix
           const exec = execution as Record<string, unknown>;
           const pipelineExec = exec?.pipelineExecutionSummary as Record<string, unknown> | undefined;
-          const resolvedPipelineId = pipelineExec?.pipelineIdentifier as string | undefined;
+          resolvedPipelineId = pipelineExec?.pipelineIdentifier as string | undefined;
+          runSequence = pipelineExec?.runSequence as number | undefined;
+          planExecId = pipelineExec?.planExecutionId as string | undefined;
+
+          // Extract failed steps for targeted log fetching
+          const layoutNodeMap = pipelineExec?.layoutNodeMap as Record<string, NodeInfo> | undefined;
+          const startingNodeId = pipelineExec?.startingNodeId as string | undefined;
+          if (layoutNodeMap && startingNodeId) {
+            const stages = extractStages(layoutNodeMap, startingNodeId);
+            failedSteps = findFailedSteps(stages);
+          }
 
           step++;
 
@@ -320,16 +374,46 @@ export function registerDiagnoseTool(server: McpServer, registry: Registry, clie
           diagnostic.execution_error = String(err);
         }
 
-        // 3. Get execution logs if requested
+        // 3. Get execution logs if requested — fetch only failed step logs for speed and relevance
         if (includeLogs) {
           step++;
-          await sendProgress(extra, step, totalSteps, "Fetching execution logs...");
-          try {
-            const logs = await registry.dispatch(client, "execution_log", "get", input);
-            diagnostic.logs = logs;
-          } catch (err) {
-            log.warn("Failed to fetch execution logs", { error: String(err) });
-            diagnostic.logs_error = String(err);
+          await sendProgress(extra, step, totalSteps, "Fetching failed step logs...");
+
+          if (resolvedPipelineId && runSequence != null && planExecId) {
+            const basePrefix = `${config.HARNESS_ACCOUNT_ID}/pipeline/${resolvedPipelineId}/${runSequence}/-${planExecId}`;
+
+            if (failedSteps.length > 0) {
+              // Fetch logs only for failed steps
+              const stepLogs: Record<string, unknown> = {};
+              for (const fs of failedSteps) {
+                const stepPrefix = `${basePrefix}/${fs.stage_identifier}/${fs.step_identifier}`;
+                try {
+                  const logData = await registry.dispatch(client, "execution_log", "get", {
+                    ...input,
+                    prefix: stepPrefix,
+                  });
+                  stepLogs[`${fs.stage_identifier}/${fs.step_name}`] = logData;
+                } catch (err) {
+                  log.warn("Failed to fetch step logs", { step: fs.step_name, error: String(err) });
+                  stepLogs[`${fs.stage_identifier}/${fs.step_name}`] = { error: String(err) };
+                }
+              }
+              diagnostic.failed_step_logs = stepLogs;
+            } else {
+              // No failed steps found — fall back to pipeline-level prefix
+              try {
+                const logs = await registry.dispatch(client, "execution_log", "get", {
+                  ...input,
+                  prefix: basePrefix,
+                });
+                diagnostic.logs = logs;
+              } catch (err) {
+                log.warn("Failed to fetch execution logs", { error: String(err) });
+                diagnostic.logs_error = String(err);
+              }
+            }
+          } else {
+            diagnostic.logs_error = "Could not construct log prefix — missing pipelineIdentifier, runSequence, or planExecutionId from execution response.";
           }
         }
 

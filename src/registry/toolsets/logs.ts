@@ -8,20 +8,20 @@ export const logsToolset: ToolsetDefinition = {
     {
       resourceType: "execution_log",
       displayName: "Execution Log",
-      description: "Pipeline execution step logs. Get logs by execution ID and optional step/stage IDs.",
+      description: "Pipeline execution step logs. Requires a 'prefix' query param in the format: {accountId}/pipeline/{pipelineId}/{runSequence}/-{executionId} (pipeline-level) or appended with /{stageId}/{stepId} (step-level).",
       toolset: "logs",
       scope: "project",
-      identifierFields: ["execution_id"],
-      listFilterFields: ["step_id", "stage_id", "unit_id"],
+      identifierFields: ["prefix"],
+      listFilterFields: [],
       operations: {
         get: {
           method: "POST",
           path: "/gateway/log-service/blob/download",
           queryParams: {
-            execution_id: "key",
+            prefix: "prefix",
           },
           responseExtractor: (raw) => raw,
-          description: "Download execution logs for a given execution/step",
+          description: "Download execution logs by prefix",
         },
       },
     },
