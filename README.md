@@ -430,7 +430,7 @@ The server exposes 10 MCP tools. Every tool accepts `org_id` and `project_id` as
 | `harness_delete` | Delete a resource. Prompts for user confirmation via [elicitation](#elicitation). Destructive. |
 | `harness_execute` | Execute an action on a resource (run pipeline, toggle flag, sync app). Prompts for user confirmation via [elicitation](#elicitation). |
 | `harness_search` | Search across multiple resource types in parallel with a single query. |
-| `harness_diagnose` | Analyze a pipeline execution — returns a structured report with stage/step breakdown, timing, bottlenecks, and failure details (failed stage, step, error message). Accepts an execution ID, pipeline ID (auto-fetches latest), or a Harness URL. |
+| `harness_diagnose` | Analyze a pipeline execution — returns a structured report with stage/step breakdown, timing, bottlenecks, and failure details (failed step, error message, delegate). Automatically follows chained (child) pipeline failures. Accepts an execution ID, pipeline ID (auto-fetches latest), or a Harness URL. Set `summary=false` for full diagnostic mode with YAML and execution logs. |
 | `harness_status` | Get a real-time project health dashboard — recent executions, failure rates, and deep links. |
 
 ### Tool Examples
@@ -494,7 +494,7 @@ The server exposes 10 MCP tools. Every tool accepts `org_id` and `project_id` as
 { "query": "payment-service" }
 ```
 
-**Diagnose an execution by ID:**
+**Diagnose an execution by ID (summary mode — default):**
 
 ```json
 { "execution_id": "abc123XYZ" }
@@ -510,6 +510,18 @@ The server exposes 10 MCP tools. Every tool accepts `org_id` and `project_id` as
 
 ```json
 { "pipeline_id": "my-pipeline" }
+```
+
+**Full diagnostic mode with YAML and failed step logs:**
+
+```json
+{ "execution_id": "abc123XYZ", "summary": false }
+```
+
+**Summary mode with logs enabled (best of both):**
+
+```json
+{ "execution_id": "abc123XYZ", "include_logs": true }
 ```
 
 **Get project health status:**
@@ -796,7 +808,7 @@ The server exposes 10 MCP tools. Every tool accepts `org_id` and `project_id` as
 | Prompt | Description | Parameters |
 |--------|-------------|------------|
 | `build-deploy-app` | End-to-end CI/CD workflow: scan a git repo, generate CI pipeline (build & push Docker image), discover or generate K8s manifests, create CD pipeline, and deploy — with auto-retry on CI failures (up to 5 attempts) and CD failures (up to 3 attempts with user permission). On exhausted retries, provides Harness UI deep links to all created resources for manual investigation. | `repoUrl` (required), `imageName` (required), `projectId` (optional), `namespace` (optional) |
-| `debug-pipeline-failure` | Analyze a failed execution: accepts an execution ID, pipeline ID, or Harness URL. Gets stage/step breakdown and failure details via `harness_diagnose`, then provides root cause analysis and suggested fixes. | `executionId` (optional), `projectId` (optional) |
+| `debug-pipeline-failure` | Analyze a failed execution: accepts an execution ID, pipeline ID, or Harness URL. Gets stage/step breakdown, failure details, delegate info, and failed step logs via `harness_diagnose`, then provides root cause analysis and suggested fixes. Automatically follows chained pipeline failures. | `executionId` (optional), `projectId` (optional) |
 | `create-pipeline` | Generate a new pipeline YAML from natural language requirements, reviewing existing resources for context | `description` (required), `projectId` (optional) |
 | `onboard-service` | Walk through onboarding a new service with environments and a deployment pipeline | `serviceName` (required), `projectId` (optional) |
 | `dora-metrics-review` | Review DORA metrics (deployment frequency, change failure rate, MTTR, lead time) with Elite/High/Medium/Low classification and improvement recommendations | `teamRefId` (optional), `dateStart` (optional), `dateEnd` (optional) |

@@ -28,9 +28,14 @@ export function registerDebugPipelinePrompt(server: McpServer): void {
 3. **Suggested fix** with specific actions
 4. **Similar patterns** — have we seen this failure type before?
 
-Start by calling harness_diagnose with ${idParam}${projectId ? `, project_id="${projectId}"` : ""} to get the execution report with stage/step breakdown, timing, and failure details.
+Start by calling harness_diagnose with ${idParam}${projectId ? `, project_id="${projectId}"` : ""}, include_logs=true to get the execution report with stage/step breakdown, timing, failure details, and failed step logs.
 
-Then analyze the diagnostic payload — focus on the failure section (failed stage, step, and error message) — and provide actionable recommendations.`,
+Then analyze the diagnostic payload:
+- **failure section**: failed stage, step, error message, and delegate
+- **child_pipeline section**: if present, the failure is in a chained pipeline — focus on the child's failure details
+- **failed_step_logs**: actual log output from the failed steps — look for error patterns, stack traces, and exit codes
+
+Provide actionable recommendations based on the combined evidence.`,
           },
         }],
       };

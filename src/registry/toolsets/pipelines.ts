@@ -159,6 +159,7 @@ export const pipelinesToolset: ToolsetDefinition = {
           method: "GET",
           path: "/pipeline/api/pipelines/execution/v2/{planExecutionId}",
           pathParams: { execution_id: "planExecutionId" },
+          queryParams: { render_full_graph: "renderFullBottomGraph" },
           responseExtractor: ngExtract,
           description: "Get execution details including stage/step status",
         },
