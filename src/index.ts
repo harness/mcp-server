@@ -63,9 +63,10 @@ async function startHttp(config: Config, port: number): Promise<void> {
   const { json } = await import("express");
   app.use(json({ limit: maxBodySize }));
 
-  // CORS headers for cross-origin MCP clients
+  // Block cross-origin requests — prevents CSRF from malicious websites
+  // targeting the MCP server on localhost. Only same-origin requests are allowed.
   app.use((_req, res, next) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Origin", `http://${host}:${port}`);
     res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, mcp-session-id");
     next();
