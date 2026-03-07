@@ -827,5 +827,21 @@ type FaultCategoriesCount struct {
 type ListChaosHubFaultsResponse struct {
 	Pagination           Pagination           `json:"pagination"`
 	Faults               []ChaosHubFault      `json:"data"`
-	FaultCategoriesCount FaultCategoriesCount  `json:"faultCategoriesCount"`
+	FaultCategoriesCount FaultCategoriesCount `json:"faultCategoriesCount"`
+}
+
+type CreateChaosHubRequest struct {
+	Identity     string   `json:"identity"`
+	Name         string   `json:"name"`
+	Description  string   `json:"description,omitempty"`
+	Tags         []string `json:"tags,omitempty"`
+	ConnectorRef string   `json:"connectorRef"`
+	RepoName     string   `json:"repoName"`
+	RepoBranch   string   `json:"repoBranch"`
+}
+
+type UpdateChaosHubRequest struct {
+	Name        string   `json:"name"`
+	Description string   `json:"description,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
 }
