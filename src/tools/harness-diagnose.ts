@@ -6,15 +6,17 @@ import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, toMcpError } from "../utils/errors.js";
 import { createLogger } from "../utils/logger.js";
 import { sendProgress } from "../utils/progress.js";
+import { applyUrlDefaults } from "../utils/url-parser.js";
 
 const log = createLogger("diagnose");
 
 export function registerDiagnoseTool(server: McpServer, registry: Registry, client: HarnessClient): void {
   server.tool(
     "harness_diagnose",
-    "Diagnose a pipeline execution failure. Aggregates execution details, pipeline YAML, and execution logs into a single diagnostic payload for analysis.",
+    "Diagnose a pipeline execution failure. You can pass a Harness execution URL to auto-extract the execution ID, org, and project. Aggregates execution details, pipeline YAML, and execution logs into a single diagnostic payload.",
     {
-      execution_id: z.string().describe("The pipeline execution ID to diagnose"),
+      execution_id: z.string().describe("The pipeline execution ID to diagnose. Auto-detected from url if provided.").optional(),
+      url: z.string().describe("A Harness execution URL — execution ID, org, and project are extracted automatically").optional(),
       org_id: z.string().describe("Organization identifier (overrides default)").optional(),
       project_id: z.string().describe("Project identifier (overrides default)").optional(),
       include_yaml: z.boolean().describe("Include the full pipeline YAML definition").default(true).optional(),
@@ -22,14 +24,18 @@ export function registerDiagnoseTool(server: McpServer, registry: Registry, clie
     },
     async (args, extra) => {
       try {
-        const input: Record<string, unknown> = { ...args };
+        const input = applyUrlDefaults(args as Record<string, unknown>, args.url);
+        const executionId = input.execution_id as string | undefined;
+        if (!executionId) {
+          return errorResult("execution_id is required. Provide it explicitly or via a Harness execution URL.");
+        }
         const diagnostic: Record<string, unknown> = {};
         const totalSteps = 1 + (args.include_yaml !== false ? 1 : 0) + (args.include_logs !== false ? 1 : 0);
         let step = 0;
 
         // 1. Get execution details
         await sendProgress(extra, step, totalSteps, "Fetching execution details...");
-        log.info("Fetching execution details", { executionId: args.execution_id });
+        log.info("Fetching execution details", { executionId });
         try {
           const execution = await registry.dispatch(client, "execution", "get", input);
           diagnostic.execution = execution;

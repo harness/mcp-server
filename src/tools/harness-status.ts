@@ -8,6 +8,7 @@ import { buildDeepLink } from "../utils/deep-links.js";
 import { isUserError, toMcpError } from "../utils/errors.js";
 import { createLogger } from "../utils/logger.js";
 import { sendProgress } from "../utils/progress.js";
+import { applyUrlDefaults } from "../utils/url-parser.js";
 
 const log = createLogger("status");
 
@@ -70,16 +71,18 @@ export function registerStatusTool(
 ): void {
   server.tool(
     "harness_status",
-    "Get a live project health overview: recent failed executions, currently running executions, and recent deployment activity. Ideal first question: 'what's happening in my project right now?'",
+    "Get a live project health overview: recent failed executions, currently running executions, and recent deployment activity. You can pass a Harness URL to auto-extract org and project. Ideal first question: 'what's happening in my project right now?'",
     {
       org_id: z.string().describe("Organization identifier (overrides default)").optional(),
       project_id: z.string().describe("Project identifier (overrides default)").optional(),
+      url: z.string().describe("A Harness UI URL — org and project are extracted automatically").optional(),
       limit: z.number().describe("Max items per section (default 5, max 20)").default(5).optional(),
     },
     async (args, extra) => {
       try {
-        const orgId = args.org_id ?? config.HARNESS_DEFAULT_ORG_ID;
-        const projectId = args.project_id ?? config.HARNESS_DEFAULT_PROJECT_ID ?? "";
+        const merged = applyUrlDefaults(args as Record<string, unknown>, args.url);
+        const orgId = (merged.org_id as string) ?? config.HARNESS_DEFAULT_ORG_ID;
+        const projectId = (merged.project_id as string) ?? config.HARNESS_DEFAULT_PROJECT_ID ?? "";
         const limit = Math.min(args.limit ?? 5, 20);
 
         const baseInput: Record<string, unknown> = {

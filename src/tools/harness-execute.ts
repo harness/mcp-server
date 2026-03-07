@@ -5,13 +5,15 @@ import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, toMcpError } from "../utils/errors.js";
 import { confirmViaElicitation } from "../utils/elicitation.js";
+import { applyUrlDefaults } from "../utils/url-parser.js";
 
 export function registerExecuteTool(server: McpServer, registry: Registry, client: HarnessClient): void {
   server.tool(
     "harness_execute",
-    "Execute an action on a Harness resource: run/retry/interrupt pipelines, toggle feature flags, test connectors, sync GitOps apps, run chaos experiments.",
+    "Execute an action on a Harness resource: run/retry/interrupt pipelines, toggle feature flags, test connectors, sync GitOps apps, run chaos experiments. You can pass a Harness URL to auto-extract identifiers.",
     {
-      resource_type: z.string().describe("The resource type (e.g. pipeline, execution, feature_flag, connector, gitops_application, chaos_experiment)"),
+      resource_type: z.string().describe("The resource type (e.g. pipeline, execution, feature_flag, connector, gitops_application, chaos_experiment). Auto-detected from url if provided.").optional(),
+      url: z.string().describe("A Harness UI URL — org, project, resource type, and ID are extracted automatically").optional(),
       action: z.string().describe("The action to execute (e.g. run, retry, interrupt, toggle, test_connection, sync)"),
       resource_id: z.string().describe("The primary identifier of the resource").optional(),
       org_id: z.string().describe("Organization identifier (overrides default)").optional(),
@@ -36,23 +38,29 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
     },
     async (args) => {
       try {
+        const input = applyUrlDefaults(args as Record<string, unknown>, args.url);
+        const resourceType = input.resource_type as string | undefined;
+        if (!resourceType) {
+          return errorResult("resource_type is required. Provide it explicitly or via a Harness URL.");
+        }
+        const resourceId = input.resource_id as string | undefined;
+
         const elicit = await confirmViaElicitation({
           server,
           toolName: "harness_execute",
-          message: `Execute "${args.action}" on ${args.resource_type}${args.resource_id ? ` "${args.resource_id}"` : ""}?`,
+          message: `Execute "${args.action}" on ${resourceType}${resourceId ? ` "${resourceId}"` : ""}?`,
         });
         if (!elicit.proceed) {
           return errorResult(`Operation ${elicit.reason} by user.`);
         }
 
         // Map resource_id to the primary identifier field
-        const def = registry.getResource(args.resource_type);
-        const input: Record<string, unknown> = { ...args };
-        if (def.identifierFields.length > 0 && args.resource_id) {
-          input[def.identifierFields[0]] = args.resource_id;
+        const def = registry.getResource(resourceType);
+        if (def.identifierFields.length > 0 && resourceId) {
+          input[def.identifierFields[0]] = resourceId;
         }
 
-        const result = await registry.dispatchExecute(client, args.resource_type, args.action, input);
+        const result = await registry.dispatchExecute(client, resourceType, args.action, input);
         return jsonResult(result);
       } catch (err) {
         if (isUserError(err)) return errorResult(err.message);
