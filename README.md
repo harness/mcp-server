@@ -13,7 +13,7 @@ This server is built differently:
 - **10 tools, 119+ resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 10 tools instead of hundreds.
 - **Full platform coverage.** 25 toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Internal Developer Portal, Software Supply Chain, and more. Not just pipelines — the entire Harness platform.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
-- **25 prompt templates.** Pre-built prompts for common workflows: debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
+- **26 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
 - **Works everywhere.** Stdio transport for local clients (Claude Desktop, Cursor, Windsurf), HTTP transport for remote/shared deployments, Docker and Kubernetes ready.
 - **Zero-config start.** Just provide a Harness API key. Account ID is auto-extracted from PAT tokens, org/project defaults are optional, and toolset filtering lets you expose only what you need.
 - **Extensible by design.** Adding a new Harness resource means adding a declarative data file — no new tool registration, no schema changes, no prompt updates.
@@ -785,6 +785,7 @@ The server exposes 10 MCP tools. Every tool accepts `org_id` and `project_id` as
 
 | Prompt | Description | Parameters |
 |--------|-------------|------------|
+| `build-deploy-app` | End-to-end CI/CD workflow: scan a git repo, generate CI pipeline (build & push Docker image), discover or generate K8s manifests, create CD pipeline, and deploy — with auto-retry on CI failures (up to 5 attempts) and CD failures (up to 3 attempts with user permission). On exhausted retries, provides Harness UI deep links to all created resources for manual investigation. | `repoUrl` (required), `imageName` (required), `projectId` (optional), `namespace` (optional) |
 | `debug-pipeline-failure` | Analyze a failed execution: gathers execution details, pipeline YAML, and logs, then provides root cause analysis and suggested fixes | `executionId` (required), `projectId` (optional) |
 | `create-pipeline` | Generate a new pipeline YAML from natural language requirements, reviewing existing resources for context | `description` (required), `projectId` (optional) |
 | `onboard-service` | Walk through onboarding a new service with environments and a deployment pipeline | `serviceName` (required), `projectId` (optional) |
@@ -1018,6 +1019,7 @@ src/
     pipeline-yaml.ts
     execution-summary.ts
   prompts/                          # MCP prompt templates
+    build-deploy-app.ts             # DevOps: end-to-end build & deploy workflow
     debug-pipeline.ts               # DevOps: debug failed executions
     create-pipeline.ts              # DevOps: generate pipeline from requirements
     onboard-service.ts              # DevOps: onboard new service

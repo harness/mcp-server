@@ -55,7 +55,7 @@ async function startStdio(config: Config): Promise<void> {
  * when bound to localhost (validates Host header against allowed hostnames).
  */
 async function startHttp(config: Config, port: number): Promise<void> {
-  const host = "127.0.0.1";
+  const host = process.env.HOST || "127.0.0.1";
   const app = createMcpExpressApp({ host });
 
   const maxBodySize = config.HARNESS_MAX_BODY_SIZE_MB * 1024 * 1024;

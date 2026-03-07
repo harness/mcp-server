@@ -36,6 +36,9 @@ import { registerBranchCleanupPrompt } from "./branch-cleanup.js";
 // Approval prompts
 import { registerPendingApprovalsPrompt } from "./pending-approvals.js";
 
+// Deployment workflow prompts
+import { registerBuildDeployAppPrompt } from "./build-deploy-app.js";
+
 export function registerAllPrompts(server: McpServer): void {
   // Existing prompts
   registerDebugPipelinePrompt(server);
@@ -73,4 +76,7 @@ export function registerAllPrompts(server: McpServer): void {
 
   // Approvals
   registerPendingApprovalsPrompt(server);
+
+  // Deployment workflows
+  registerBuildDeployAppPrompt(server);
 }
