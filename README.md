@@ -1076,6 +1076,7 @@ Write tools (`harness_create`, `harness_update`, `harness_delete`, `harness_exec
 | Client | Elicitation Support |
 |--------|-------------------|
 | Cursor | Yes |
+| VS Code (Copilot) | Yes |
 | Claude Desktop | Not yet |
 | Windsurf | Not yet |
 | MCP Inspector | Yes |
