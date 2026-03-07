@@ -4,16 +4,16 @@ import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, toMcpError } from "../utils/errors.js";
+import { confirmViaElicitation } from "../utils/elicitation.js";
 
 export function registerUpdateTool(server: McpServer, registry: Registry, client: HarnessClient): void {
   server.tool(
     "harness_update",
-    "Update an existing Harness resource. Requires confirmation=true to proceed. Response includes openInHarness link to the updated resource when applicable (e.g. pipeline, service).",
+    "Update an existing Harness resource. Response includes openInHarness link to the updated resource when applicable (e.g. pipeline, service).",
     {
       resource_type: z.string().describe("The type of resource to update (e.g. pipeline, service, environment, connector, trigger)"),
       resource_id: z.string().describe("The identifier of the resource to update"),
       body: z.record(z.string(), z.unknown()).describe("The updated resource definition body"),
-      confirmation: z.boolean().describe("Must be true to confirm the update operation").default(false),
       org_id: z.string().describe("Organization identifier (overrides default)").optional(),
       project_id: z.string().describe("Project identifier (overrides default)").optional(),
       pipeline_id: z.string().describe("Pipeline ID (for trigger updates)").optional(),
@@ -21,8 +21,13 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
     },
     async (args) => {
       try {
-        if (!args.confirmation) {
-          return errorResult("Update operations require confirmation=true. Set confirmation to true to proceed.");
+        const elicit = await confirmViaElicitation({
+          server,
+          toolName: "harness_update",
+          message: `Update ${args.resource_type} "${args.resource_id}"?\n\n${JSON.stringify(args.body, null, 2)}`,
+        });
+        if (!elicit.proceed) {
+          return errorResult(`Operation ${elicit.reason} by user.`);
         }
 
         const def = registry.getResource(args.resource_type);

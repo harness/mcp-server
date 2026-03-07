@@ -32,7 +32,7 @@ Steps:
 6. **Safety gates**: Identify metrics or health checks between each phase
 7. **Rollback plan**: Define conditions that trigger automatic rollback
 
-Present the rollout plan for review. Use harness_execute with resource_type="feature_flag", action="toggle" to execute each phase only after confirmation.`,
+Present the rollout plan for review. Use harness_execute with resource_type="feature_flag", action="toggle" to execute each phase after user approval.`,
           },
         }],
       };

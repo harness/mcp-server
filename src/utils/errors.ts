@@ -4,7 +4,7 @@ import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
  * Error handling convention for tool handlers:
  *
  *   return errorResult(msg)  — for user-fixable problems the LLM can act on:
- *     bad resource_type, missing confirmation, unsupported operation, missing
+ *     bad resource_type, unsupported operation, missing
  *     required fields, validation errors. These are plain Errors thrown by the
  *     registry/toolset layer. The LLM sees the message and can retry/adjust.
  *
