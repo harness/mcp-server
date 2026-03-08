@@ -56,6 +56,22 @@ interface ExecGraphNode {
       projectId?: string;
     };
   };
+  stepParameters?: {
+    name?: string;
+    timeout?: string;
+    type?: string;
+    spec?: {
+      shell?: string;
+      source?: {
+        type?: string;
+        spec?: { script?: string };
+      };
+      environmentVariables?: Record<string, string>;
+    };
+  };
+  interruptHistories?: Array<{
+    interruptType?: string;
+  }>;
 }
 
 interface StepSummary {
@@ -85,6 +101,14 @@ interface FailedNodeDetail {
   failure_message: string;
   log_key?: string;
   delegate?: string;
+  script_context?: {
+    name?: string;
+    timeout?: string;
+    shell?: string;
+    script?: string;
+    env_vars?: Record<string, string>;
+    retried?: boolean;
+  };
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -233,6 +257,24 @@ function findFailedNodes(nodeMap: Record<string, ExecGraphNode>): FailedNodeDeta
       delegate,
     };
 
+    // For ShellScript steps, extract the script source and context for diagnosis
+    if (node.stepType === "ShellScript" && node.stepParameters?.spec) {
+      const spec = node.stepParameters.spec;
+      const scriptSource = spec.source?.spec?.script;
+      const envVars = spec.environmentVariables;
+      const hasRetry = node.interruptHistories?.some((h) => h.interruptType === "RETRY");
+      if (scriptSource || envVars) {
+        detail.script_context = {
+          name: node.stepParameters.name ?? node.name,
+          timeout: node.stepParameters.timeout,
+          shell: spec.shell,
+          script: scriptSource,
+          env_vars: envVars && Object.keys(envVars).length > 0 ? envVars : undefined,
+          retried: hasRetry || undefined,
+        };
+      }
+    }
+
     // baseFqn with `.steps.` = actual step node; otherwise it's a stage/section wrapper
     if (fqn.includes(".steps.")) {
       stepNodes.push(detail);
@@ -357,19 +399,19 @@ function buildExecutionSummary(
   // Build failure summary — prefer executionGraph detail over layoutNodeMap stage-level info
   if (failedNodes.length > 0) {
     const primary = failedNodes[0];
-    summary.failure = {
-      stage: primary.stage,
-      step: primary.step,
-      error: primary.failure_message,
-      delegate: primary.delegate,
-    };
-    if (failedNodes.length > 1) {
-      summary.all_failures = failedNodes.map((f) => ({
+    const failureEntry = (f: FailedNodeDetail) => {
+      const entry: Record<string, unknown> = {
         stage: f.stage,
         step: f.step,
         error: f.failure_message,
         delegate: f.delegate,
-      }));
+      };
+      if (f.script_context) entry.script_context = f.script_context;
+      return entry;
+    };
+    summary.failure = failureEntry(primary);
+    if (failedNodes.length > 1) {
+      summary.all_failures = failedNodes.map(failureEntry);
     }
   } else {
     // Fall back to layoutNodeMap stage-level failure
@@ -516,24 +558,21 @@ export function registerDiagnoseTool(server: McpServer, registry: Registry, clie
               log.info("Detected chained pipeline failure, diagnosing child", result.childRef);
               const childFailedNodes = await diagnoseChildPipeline(client, result.childRef);
               if (childFailedNodes.length > 0) {
+                const childEntry = (f: FailedNodeDetail) => {
+                  const e: Record<string, unknown> = {
+                    stage: f.stage, step: f.step, error: f.failure_message, delegate: f.delegate,
+                  };
+                  if (f.script_context) e.script_context = f.script_context;
+                  return e;
+                };
                 const childPrimary = childFailedNodes[0];
                 (diagnostic.execution as Record<string, unknown>).child_pipeline = {
                   execution_id: result.childRef.executionId,
                   org_id: result.childRef.orgId,
                   project_id: result.childRef.projectId,
-                  failure: {
-                    stage: childPrimary.stage,
-                    step: childPrimary.step,
-                    error: childPrimary.failure_message,
-                    delegate: childPrimary.delegate,
-                  },
+                  failure: childEntry(childPrimary),
                   all_failures: childFailedNodes.length > 1
-                    ? childFailedNodes.map((f) => ({
-                        stage: f.stage,
-                        step: f.step,
-                        error: f.failure_message,
-                        delegate: f.delegate,
-                      }))
+                    ? childFailedNodes.map(childEntry)
                     : undefined,
                 };
                 // Use child's failed nodes for log fetching since those are the real failures
