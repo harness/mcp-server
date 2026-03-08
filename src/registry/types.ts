@@ -106,6 +106,8 @@ export interface ResourceDefinition {
   listFilterFields?: string[];
   /** Harness UI deep-link URL template */
   deepLinkTemplate?: string;
+  /** Troubleshooting guidance for LLMs. Describes how to diagnose issues with this resource type. */
+  diagnosticHint?: string;
   /** CRUD endpoint mappings */
   operations: Partial<Record<OperationName, EndpointSpec>>;
   /** Execute action mappings (e.g. run pipeline, toggle FF) */

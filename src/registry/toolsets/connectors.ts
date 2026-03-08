@@ -38,6 +38,7 @@ export const connectorsToolset: ToolsetDefinition = {
       toolset: "connectors",
       scope: "project",
       identifierFields: ["connector_id"],
+      diagnosticHint: "Use harness_diagnose with resource_id set to the connector identifier to run a live connectivity test and get auth method, status history, and error details.",
       listFilterFields: ["search_term", "type", "category"],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/setup/connectors/{connectorIdentifier}",
       operations: {

@@ -41,6 +41,7 @@ export const pipelinesToolset: ToolsetDefinition = {
       toolset: "pipelines",
       scope: "project",
       identifierFields: ["pipeline_id"],
+      diagnosticHint: "Use harness_diagnose with pipeline_id or execution_id to analyze failures — includes step-level error details, log snippets, delegate info, and chained pipeline traversal.",
       listFilterFields: ["search_term", "module", "filter_type"],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipelineIdentifier}/pipeline-studio",
       operations: {
@@ -136,6 +137,7 @@ export const pipelinesToolset: ToolsetDefinition = {
       toolset: "pipelines",
       scope: "project",
       identifierFields: ["execution_id"],
+      diagnosticHint: "Use harness_diagnose with execution_id to analyze a failed execution — includes step-level error details, log snippets, delegate info, and chained pipeline traversal.",
       listFilterFields: ["pipeline_id", "status", "module"],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipelineIdentifier}/executions/{planExecutionId}/pipeline",
       operations: {

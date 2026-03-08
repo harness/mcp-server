@@ -45,6 +45,7 @@ export const gitopsToolset: ToolsetDefinition = {
         "GitOps application managed by an agent. Supports list, get, and sync action.",
       toolset: "gitops",
       scope: "project",
+      diagnosticHint: "Use harness_diagnose with resource_type='gitops_application', agent_id, and resource_id (app name) to analyze sync failures, health issues, and unhealthy K8s resources. Combines app status, resource tree, and recent events.",
       identifierFields: ["agent_id", "app_name"],
       listFilterFields: ["search_term"],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/gitops/applications/{appName}",

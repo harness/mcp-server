@@ -354,6 +354,7 @@ export class Registry {
           executeActions: r.executeActions ? Object.keys(r.executeActions) : undefined,
           identifierFields: r.identifierFields,
           listFilterFields: r.listFilterFields,
+          diagnosticHint: r.diagnosticHint ?? undefined,
         })),
       };
     }
@@ -414,6 +415,7 @@ export class Registry {
           name: r.displayName,
           toolset: ts.name,
           ops,
+          diagnosticHint: r.diagnosticHint ?? undefined,
         });
       }
     }
