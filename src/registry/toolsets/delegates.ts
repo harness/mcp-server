@@ -13,6 +13,7 @@ export const delegatesToolset: ToolsetDefinition = {
       toolset: "delegates",
       scope: "account",
       identifierFields: ["delegate_id"],
+      diagnosticHint: "Use harness_diagnose with resource_type='delegate' to check health across all delegates — reports connectivity, heartbeat staleness, expiring replicas, and legacy mode. Optionally pass resource_id to filter to a specific delegate.",
       deepLinkTemplate: "/ng/account/{accountId}/settings/resources/delegates",
       listFilterFields: ["all", "status", "delegate_name", "delegate_type"],
       operations: {

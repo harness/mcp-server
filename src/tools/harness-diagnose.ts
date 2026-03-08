@@ -10,13 +10,15 @@ import type { DiagnoseHandler, DiagnoseContext } from "./diagnose/types.js";
 import { pipelineHandler } from "./diagnose/pipeline.js";
 import { connectorHandler } from "./diagnose/connector.js";
 import { delegateHandler } from "./diagnose/delegate.js";
+import { gitopsApplicationHandler } from "./diagnose/gitops-application.js";
 
-const ALIASES: Record<string, string> = { execution: "pipeline" };
+const ALIASES: Record<string, string> = { execution: "pipeline", gitops_app: "gitops_application" };
 
 const handlers: Record<string, DiagnoseHandler> = {
   pipeline: pipelineHandler,
   connector: connectorHandler,
   delegate: delegateHandler,
+  gitops_application: gitopsApplicationHandler,
 };
 
 const SUPPORTED_TYPES = Object.keys(handlers).join(", ");
@@ -24,13 +26,15 @@ const SUPPORTED_TYPES = Object.keys(handlers).join(", ");
 export function registerDiagnoseTool(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
   server.tool(
     "harness_diagnose",
-    `Diagnose a Harness resource — analyze failures, test connectivity, or check health. Supported resource_types: ${SUPPORTED_TYPES}. Defaults to pipeline execution diagnosis. Accepts a Harness URL to auto-detect the resource type.`,
+    `Diagnose a Harness resource — analyze failures, test connectivity, check health, or troubleshoot GitOps sync issues. Supported resource_types: ${SUPPORTED_TYPES}. Defaults to pipeline execution diagnosis. Accepts a Harness URL to auto-detect the resource type.`,
     {
       resource_type: z.string().describe(`Resource type to diagnose: ${SUPPORTED_TYPES}. Auto-detected from url if provided. Defaults to pipeline.`).optional(),
       resource_id: z.string().describe("Primary identifier of the resource (connector ID, delegate name). Auto-detected from url if provided.").optional(),
       url: z.string().describe("A Harness URL — resource type, org, project, and ID are extracted automatically").optional(),
       org_id: z.string().describe("Organization identifier (overrides default)").optional(),
       project_id: z.string().describe("Project identifier (overrides default)").optional(),
+      // GitOps-specific params
+      agent_id: z.string().describe("[gitops_application] GitOps agent identifier. Auto-detected from url.").optional(),
       // Pipeline-specific params (ignored for other resource types)
       execution_id: z.string().describe("[pipeline] The execution ID to analyze. Auto-detected from url.").optional(),
       pipeline_id: z.string().describe("[pipeline] Pipeline identifier — fetches latest execution when no execution_id given.").optional(),
