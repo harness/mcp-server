@@ -14,13 +14,20 @@ export const delegatesToolset: ToolsetDefinition = {
       scope: "account",
       identifierFields: ["delegate_id"],
       deepLinkTemplate: "/ng/account/{accountId}/settings/resources/delegates",
+      listFilterFields: ["all", "status", "delegate_name", "delegate_type"],
       operations: {
         list: {
           method: "POST",
           path: "/ng/api/delegate-setup/listDelegates",
-          bodyBuilder: () => ({}),
+          queryParams: { all: "all" },
+          bodyBuilder: (input) => ({
+            filterType: "Delegate",
+            ...(input.status ? { status: input.status } : {}),
+            ...(input.delegate_name ? { delegateName: input.delegate_name } : {}),
+            ...(input.delegate_type ? { delegateType: input.delegate_type } : {}),
+          }),
           responseExtractor: (raw: unknown) => {
-            const r = raw as { resource?: unknown };
+            const r = raw as Record<string, unknown>;
             return r.resource ?? raw;
           },
           description: "List all delegates in the account",
