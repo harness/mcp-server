@@ -3,7 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
-import { isUserError, toMcpError, HarnessApiError } from "../utils/errors.js";
+import { isUserError, isUserFixableApiError, toMcpError, HarnessApiError } from "../utils/errors.js";
 import { confirmViaElicitation } from "../utils/elicitation.js";
 import { createLogger } from "../utils/logger.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
@@ -102,6 +102,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         return jsonResult(result);
       } catch (err) {
         if (isUserError(err)) return errorResult(err.message);
+        if (isUserFixableApiError(err)) return errorResult(err.message);
         throw toMcpError(err);
       }
     },

@@ -3,7 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
-import { isUserError, toMcpError } from "../utils/errors.js";
+import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
 import { compactItems } from "../utils/compact.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 
@@ -66,6 +66,7 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
         return jsonResult(result);
       } catch (err) {
         if (isUserError(err)) return errorResult(err.message);
+        if (isUserFixableApiError(err)) return errorResult(err.message);
         throw toMcpError(err);
       }
     },

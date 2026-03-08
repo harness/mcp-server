@@ -4,16 +4,18 @@ import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
  * Error handling convention for tool handlers:
  *
  *   return errorResult(msg)  — for user-fixable problems the LLM can act on:
- *     bad resource_type, unsupported operation, missing
- *     required fields, validation errors. These are plain Errors thrown by the
- *     registry/toolset layer. The LLM sees the message and can retry/adjust.
+ *     bad resource_type, unsupported operation, missing required fields,
+ *     validation errors (plain Errors from registry/toolset layer), AND
+ *     Harness API 400/404 responses (bad identifier, wrong project, etc.).
+ *     The LLM sees the message and can retry/adjust.
  *
  *   throw toMcpError(err)    — for infrastructure failures the LLM cannot fix:
  *     HTTP 5xx, auth failures (401/403), timeouts, rate limits (429). These are
  *     HarnessApiErrors thrown by the HTTP client. Thrown as JSON-RPC errors so
  *     MCP clients surface them as system-level failures.
  *
- * Quick test: HarnessApiError → throw. Plain Error → return errorResult.
+ * Quick test: plain Error or HarnessApiError 400/404 → return errorResult.
+ *             HarnessApiError 401/403/429/5xx → throw toMcpError.
  */
 
 /**
@@ -37,6 +39,15 @@ export class HarnessApiError extends Error {
  */
 export function isUserError(err: unknown): err is Error {
   return err instanceof Error && !(err instanceof HarnessApiError) && !(err instanceof McpError);
+}
+
+/**
+ * Returns true for Harness API errors that the LLM can act on (400 bad request,
+ * 404 not found). These indicate wrong identifiers, missing resources, or bad
+ * input — problems the LLM can fix by retrying with different parameters.
+ */
+export function isUserFixableApiError(err: unknown): err is HarnessApiError {
+  return err instanceof HarnessApiError && (err.statusCode === 400 || err.statusCode === 404);
 }
 
 /**

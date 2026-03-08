@@ -4,7 +4,7 @@ import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import type { Config } from "../config.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
-import { isUserError, toMcpError } from "../utils/errors.js";
+import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import type { DiagnoseHandler, DiagnoseContext } from "./diagnose/types.js";
 import { pipelineHandler } from "./diagnose/pipeline.js";
@@ -66,6 +66,7 @@ export function registerDiagnoseTool(server: McpServer, registry: Registry, clie
         return jsonResult(result);
       } catch (err) {
         if (isUserError(err)) return errorResult(err.message);
+        if (isUserFixableApiError(err)) return errorResult(err.message);
         throw toMcpError(err);
       }
     },

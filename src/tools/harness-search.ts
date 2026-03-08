@@ -3,7 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
-import { isUserError, toMcpError } from "../utils/errors.js";
+import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
 import { compactItems } from "../utils/compact.js";
 import { createLogger } from "../utils/logger.js";
 import { sendProgress, sendLog } from "../utils/progress.js";
@@ -129,6 +129,7 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
         });
       } catch (err) {
         if (isUserError(err)) return errorResult(err.message);
+        if (isUserFixableApiError(err)) return errorResult(err.message);
         throw toMcpError(err);
       }
     },
