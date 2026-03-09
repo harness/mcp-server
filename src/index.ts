@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { randomUUID } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -49,8 +50,24 @@ async function startStdio(config: Config): Promise<void> {
   log.info("harness-mcp-server connected via stdio");
 }
 
+// ---------------------------------------------------------------------------
+// Session store — maps session IDs to their MCP server + transport instances.
+// ---------------------------------------------------------------------------
+interface Session {
+  server: McpServer;
+  transport: StreamableHTTPServerTransport;
+  lastActivity: number;
+}
+
+const SESSION_TTL_MS = 30 * 60_000; // 30 minutes
+const REAP_INTERVAL_MS = 60_000;    // check every minute
+
 /**
- * Start the server in HTTP mode — stateless, one server+transport per POST request.
+ * Start the server in HTTP mode — stateful, session-based.
+ * Each `initialize` request creates a persistent session (server + transport).
+ * Subsequent requests re-use the session via the `mcp-session-id` header.
+ * GET /mcp opens an SSE stream for server-initiated messages (progress, elicitation).
+ * DELETE /mcp terminates a session.
  * Uses the MCP SDK's Express adapter which provides automatic DNS rebinding protection
  * when bound to localhost (validates Host header against allowed hostnames).
  */
@@ -59,16 +76,15 @@ async function startHttp(config: Config, port: number): Promise<void> {
   const app = createMcpExpressApp({ host });
 
   const maxBodySize = config.HARNESS_MAX_BODY_SIZE_MB * 1024 * 1024;
-  // Override the default express.json() limit to match our config
   const { json } = await import("express");
   app.use(json({ limit: maxBodySize }));
 
-  // Block cross-origin requests — prevents CSRF from malicious websites
-  // targeting the MCP server on localhost. Only same-origin requests are allowed.
+  // CORS — allow GET, POST, DELETE for session-based MCP
   app.use((_req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", `http://${host}:${port}`);
-    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, mcp-session-id");
+    res.setHeader("Access-Control-Expose-Headers", "mcp-session-id");
     next();
   });
 
@@ -97,34 +113,95 @@ async function startHttp(config: Config, port: number): Promise<void> {
     next();
   });
 
-  // Health check
+  // ---- Session store ----
+  const sessions = new Map<string, Session>();
+
+  function destroySession(sessionId: string): void {
+    const session = sessions.get(sessionId);
+    if (!session) return;
+    sessions.delete(sessionId);
+    session.transport.close().catch(() => {});
+    session.server.close().catch(() => {});
+    log.info("Session destroyed", { sessionId, remaining: sessions.size });
+  }
+
+  // TTL reaper — evicts idle sessions
+  const reaper = setInterval(() => {
+    const now = Date.now();
+    for (const [id, session] of sessions) {
+      if (now - session.lastActivity > SESSION_TTL_MS) {
+        log.info("Reaping idle session", { sessionId: id });
+        destroySession(id);
+      }
+    }
+  }, REAP_INTERVAL_MS);
+  reaper.unref();
+
+  // ---- Routes ----
+
+  // Health check (includes session count for observability)
   app.get("/health", (_req, res) => {
-    res.json({ status: "ok" });
+    res.json({ status: "ok", sessions: sessions.size });
   });
 
-  // MCP endpoint — stateless: fresh server+transport per request
+  // POST /mcp — initialize new sessions or route to existing session
   app.post("/mcp", async (req, res) => {
+    const sessionId = req.headers["mcp-session-id"] as string | undefined;
+
+    // Existing session — route request to its transport
+    if (sessionId) {
+      const session = sessions.get(sessionId);
+      if (!session) {
+        res.status(404).json({
+          jsonrpc: "2.0",
+          error: { code: -32000, message: "Session not found. Send an initialize request to start a new session." },
+          id: null,
+        });
+        return;
+      }
+      session.lastActivity = Date.now();
+      try {
+        await session.transport.handleRequest(req, res, req.body);
+      } catch (err) {
+        log.error("Error handling session request", { sessionId, error: String(err) });
+        if (!res.headersSent) {
+          res.status(400).json({
+            jsonrpc: "2.0",
+            error: { code: -32700, message: "Invalid request" },
+            id: null,
+          });
+        }
+      }
+      return;
+    }
+
+    // No session header — must be an initialize request. Create a new session.
     let server: McpServer | undefined;
     let transport: StreamableHTTPServerTransport | undefined;
     try {
       server = createHarnessServer(config);
       transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: undefined, // stateless mode
+        sessionIdGenerator: () => randomUUID(),
+        onsessioninitialized: (id) => {
+          sessions.set(id, { server: server!, transport: transport!, lastActivity: Date.now() });
+          log.info("Session created", { sessionId: id, total: sessions.size });
+        },
       });
+
+      transport.onclose = () => {
+        if (transport!.sessionId) {
+          destroySession(transport!.sessionId);
+        }
+      };
 
       await server.connect(transport);
       await transport.handleRequest(req, res, req.body);
-
-      res.on("close", () => {
-        transport?.close();
-        server?.close();
-      });
     } catch (err) {
-      log.error("Error handling MCP request", { error: String(err) });
+      log.error("Error initializing session", { error: String(err) });
       if (!res.headersSent) {
         res.status(400).json({
           jsonrpc: "2.0",
-          error: { code: -32700, message: "Invalid request" },
+          error: { code: -32700, message: "Invalid request. Send a JSON-RPC initialize message to start a session." },
           id: null,
         });
       }
@@ -133,29 +210,92 @@ async function startHttp(config: Config, port: number): Promise<void> {
     }
   });
 
-  // Reject other methods on /mcp
-  app.all("/mcp", (_req, res) => {
-    res.status(405).json({
-      jsonrpc: "2.0",
-      error: { code: -32000, message: "Method not allowed. Use POST for stateless MCP." },
-      id: null,
-    });
+  // GET /mcp — SSE stream for server-initiated messages (progress, elicitation)
+  app.get("/mcp", async (req, res) => {
+    const sessionId = req.headers["mcp-session-id"] as string | undefined;
+    if (!sessionId) {
+      res.status(400).json({
+        jsonrpc: "2.0",
+        error: { code: -32000, message: "mcp-session-id header is required. Initialize a session first via POST." },
+        id: null,
+      });
+      return;
+    }
+
+    const session = sessions.get(sessionId);
+    if (!session) {
+      res.status(404).json({
+        jsonrpc: "2.0",
+        error: { code: -32000, message: "Session not found. Send an initialize request to start a new session." },
+        id: null,
+      });
+      return;
+    }
+
+    session.lastActivity = Date.now();
+    try {
+      await session.transport.handleRequest(req, res);
+    } catch (err) {
+      log.error("Error handling SSE request", { sessionId, error: String(err) });
+      if (!res.headersSent) {
+        res.status(500).json({
+          jsonrpc: "2.0",
+          error: { code: -32000, message: "Failed to establish SSE stream" },
+          id: null,
+        });
+      }
+    }
   });
 
-  // Graceful shutdown
+  // DELETE /mcp — terminate a session
+  app.delete("/mcp", async (req, res) => {
+    const sessionId = req.headers["mcp-session-id"] as string | undefined;
+    if (!sessionId) {
+      res.status(400).json({
+        jsonrpc: "2.0",
+        error: { code: -32000, message: "mcp-session-id header is required." },
+        id: null,
+      });
+      return;
+    }
+
+    const session = sessions.get(sessionId);
+    if (!session) {
+      res.status(404).json({
+        jsonrpc: "2.0",
+        error: { code: -32000, message: "Session not found." },
+        id: null,
+      });
+      return;
+    }
+
+    try {
+      await session.transport.handleRequest(req, res);
+    } catch (err) {
+      log.error("Error handling DELETE request", { sessionId, error: String(err) });
+    }
+    destroySession(sessionId);
+  });
+
+  // Graceful shutdown — close all sessions
   const httpServer = app.listen(port, host, () => {
     log.info(`harness-mcp-server listening on http://${host}:${port}`);
-    log.info(`  POST /mcp    — MCP endpoint (stateless, DNS rebinding protected)`);
-    log.info(`  GET  /health — Health check`);
+    log.info(`  POST   /mcp    — MCP endpoint (session-based, DNS rebinding protected)`);
+    log.info(`  GET    /mcp    — SSE stream (progress, elicitation)`);
+    log.info(`  DELETE /mcp    — Terminate session`);
+    log.info(`  GET    /health — Health check`);
   });
 
   const shutdown = (): void => {
     log.info("Shutting down HTTP server...");
+    clearInterval(reaper);
+    for (const [id] of sessions) {
+      destroySession(id);
+    }
     httpServer.close(() => {
       log.info("HTTP server closed");
       process.exit(0);
     });
-    // Force exit after 5s if connections linger
     setTimeout(() => process.exit(1), 5000).unref();
   };
 
