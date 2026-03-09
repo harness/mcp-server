@@ -310,6 +310,46 @@ describe("HarnessClient", () => {
     });
   });
 
+  describe("request — non-JSON responses", () => {
+    it("throws clear error for HTML response (proxy error page)", async () => {
+      const html = "<html><body><h1>502 Bad Gateway</h1></body></html>";
+      fetchSpy.mockResolvedValue(new Response(html, { status: 200, headers: { "Content-Type": "text/html" } }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      try {
+        await client.request({ path: "/test" });
+        expect.fail("should have thrown");
+      } catch (err) {
+        expect(err).toBeInstanceOf(HarnessApiError);
+        expect((err as HarnessApiError).statusCode).toBe(502);
+        expect((err as HarnessApiError).message).toContain("Non-JSON response");
+        expect((err as HarnessApiError).message).toContain("502 Bad Gateway");
+      }
+    });
+
+    it("throws clear error for empty response body", async () => {
+      fetchSpy.mockResolvedValue(new Response("", { status: 200 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      try {
+        await client.request({ path: "/test" });
+        expect.fail("should have thrown");
+      } catch (err) {
+        expect(err).toBeInstanceOf(HarnessApiError);
+        expect((err as HarnessApiError).statusCode).toBe(502);
+        expect((err as HarnessApiError).message).toContain("Empty response body");
+      }
+    });
+
+    it("parses valid JSON response normally", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({ data: "ok" }), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      const result = await client.request<{ data: string }>({ path: "/test" });
+      expect(result.data).toBe("ok");
+    });
+  });
+
   describe("request — body serialization", () => {
     it("sends JSON-stringified body for objects", async () => {
       fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));

@@ -108,7 +108,22 @@ export class HarnessClient {
           throw error;
         }
 
-        const data = await response.json();
+        const text = await response.text();
+        if (!text) {
+          throw new HarnessApiError(
+            `Empty response body from ${method} ${options.path}`,
+            502,
+          );
+        }
+        let data: unknown;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          throw new HarnessApiError(
+            `Non-JSON response from ${method} ${options.path}: ${text.slice(0, 200)}`,
+            502,
+          );
+        }
         return data as T;
       } catch (err) {
         if (err instanceof HarnessApiError) throw err;
