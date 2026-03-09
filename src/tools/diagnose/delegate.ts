@@ -24,7 +24,6 @@ interface DelegateInfo {
   legacy?: boolean;
   orgName?: string;
   projectName?: string;
-  [key: string]: unknown;
 }
 
 function analyzeDelegateHealth(delegate: DelegateInfo): {

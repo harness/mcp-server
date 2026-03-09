@@ -17,9 +17,18 @@ export interface ParsedHarnessUrl {
   registry_id?: string;
   artifact_id?: string;
   environment_id?: string;
-  /** Index signature allows dynamic contextField assignment from URL parsing. */
-  [key: string]: string | undefined;
 }
+
+/** Union of ParsedHarnessUrl fields that RESOURCE_SEGMENTS can write to. */
+type ContextField =
+  | "pipeline_id"
+  | "execution_id"
+  | "resource_id"
+  | "agent_id"
+  | "repo_id"
+  | "registry_id"
+  | "artifact_id"
+  | "environment_id";
 
 /** Known Harness module identifiers that appear in URL paths */
 const MODULES = new Set(["cd", "ci", "cf", "ce", "cv", "sto", "chaos", "idp", "sei"]);
@@ -28,7 +37,7 @@ const MODULES = new Set(["cd", "ci", "cf", "ce", "cv", "sto", "chaos", "idp", "s
  * Maps URL path segments (plural resource names) to registry resource types
  * and the field name used when the resource appears as parent context.
  */
-const RESOURCE_SEGMENTS: Record<string, { type: string; contextField: string }> = {
+const RESOURCE_SEGMENTS: Record<string, { type: string; contextField: ContextField }> = {
   "pipelines":        { type: "pipeline",            contextField: "pipeline_id" },
   "executions":       { type: "execution",           contextField: "execution_id" },
   "deployments":      { type: "execution",           contextField: "execution_id" },
@@ -118,7 +127,7 @@ export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
   // 5. Walk segments to find resource types and IDs.
   //    Each match records the resource type and optional ID.
   //    The last (deepest) match becomes the primary resource.
-  const matches: Array<{ type: string; contextField: string; id?: string }> = [];
+  const matches: Array<{ type: string; contextField: ContextField; id?: string }> = [];
 
   for (let i = 0; i < segments.length; i++) {
     const seg = segments[i]!;

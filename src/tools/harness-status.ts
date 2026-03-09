@@ -20,13 +20,11 @@ interface ExecutionItem {
   status?: string;
   startTs?: number;
   endTs?: number;
-  [key: string]: unknown;
 }
 
 interface ListResult {
   items?: ExecutionItem[];
   total?: number;
-  [key: string]: unknown;
 }
 
 function summarizeExecution(

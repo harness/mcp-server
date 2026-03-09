@@ -26,7 +26,6 @@ interface AppStatus {
   };
   summary?: { images?: string[] };
   resources?: Array<{ kind?: string; name?: string; namespace?: string; health?: { status?: string; message?: string }; status?: string }>;
-  [key: string]: unknown;
 }
 
 interface ResourceNode {
@@ -38,7 +37,6 @@ interface ResourceNode {
   health?: { status?: string; message?: string };
   info?: Array<{ name?: string; value?: string }>;
   parentRefs?: Array<{ kind?: string; name?: string; namespace?: string }>;
-  [key: string]: unknown;
 }
 
 function analyzeAppStatus(raw: Record<string, unknown>): Record<string, unknown> {

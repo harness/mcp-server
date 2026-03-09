@@ -3,6 +3,7 @@
  */
 
 export interface ToolResult {
+  /** Required: MCP SDK's CallToolResult extends Result which has an index signature. */
   [key: string]: unknown;
   content: Array<{ type: "text"; text: string }>;
   isError?: boolean;
