@@ -48,6 +48,17 @@ async function startStdio(config: Config): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   log.info("harness-mcp-server connected via stdio");
+
+  const shutdown = async (signal: string): Promise<void> => {
+    log.info(`Received ${signal}, closing stdio transport...`);
+    await transport.close();
+    await server.close();
+    log.info("Stdio server closed");
+    process.exit(0);
+  };
+
+  process.on("SIGINT", () => { shutdown("SIGINT"); });
+  process.on("SIGTERM", () => { shutdown("SIGTERM"); });
 }
 
 // ---------------------------------------------------------------------------
@@ -277,7 +288,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
     destroySession(sessionId);
   });
 
-  // Graceful shutdown — close all sessions
+  // Graceful shutdown — drain in-flight requests, then close all sessions
   const httpServer = app.listen(port, host, () => {
     log.info(`harness-mcp-server listening on http://${host}:${port}`);
     log.info(`  POST   /mcp    — MCP endpoint (session-based, DNS rebinding protected)`);
@@ -286,27 +297,65 @@ async function startHttp(config: Config, port: number): Promise<void> {
     log.info(`  GET    /health — Health check`);
   });
 
-  const shutdown = (): void => {
-    log.info("Shutting down HTTP server...");
+  let draining = false;
+
+  const shutdown = (signal: string): void => {
+    if (draining) return; // prevent double-shutdown
+    draining = true;
+    log.info(`Received ${signal}, draining...`);
+
+    // 1. Stop accepting new connections
+    httpServer.close(() => {
+      log.info("HTTP server closed — no new connections");
+    });
+
+    // 2. Reject new requests immediately via middleware
+    app.use((_req, res, _next) => {
+      res.status(503).json({
+        jsonrpc: "2.0",
+        error: { code: -32000, message: "Server is shutting down" },
+        id: null,
+      });
+    });
+
+    // 3. Close all sessions (terminates SSE streams, notifies transports)
     clearInterval(reaper);
     for (const [id] of sessions) {
       destroySession(id);
     }
-    httpServer.close(() => {
-      log.info("HTTP server closed");
-      process.exit(0);
-    });
-    setTimeout(() => process.exit(1), 5000).unref();
+
+    // 4. Allow in-flight responses to flush, then exit
+    const DRAIN_TIMEOUT_MS = 10_000;
+    setTimeout(() => {
+      log.warn("Drain timeout — forcing exit");
+      process.exit(1);
+    }, DRAIN_TIMEOUT_MS).unref();
+
+    // Check periodically if all connections are closed
+    const drainCheck = setInterval(() => {
+      httpServer.getConnections((err, count) => {
+        if (err || count === 0) {
+          clearInterval(drainCheck);
+          log.info("All connections drained, exiting");
+          process.exit(0);
+        }
+        log.debug("Draining...", { connections: count });
+      });
+    }, 500);
+    drainCheck.unref();
   };
 
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", () => shutdown("SIGINT"));
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
 }
 
 async function main(): Promise<void> {
   // Global error handlers — must be installed before anything else.
+  // Node 20+ defaults --unhandled-rejections=throw, so unhandled rejections
+  // crash the process. We catch them to log context before exiting.
   process.on("unhandledRejection", (reason) => {
-    log.error("Unhandled promise rejection", { error: String(reason), stack: (reason as Error)?.stack });
+    log.error("Unhandled promise rejection — exiting", { error: String(reason), stack: (reason as Error)?.stack });
+    process.exit(1);
   });
   process.on("uncaughtException", (err) => {
     log.error("Uncaught exception — exiting", { error: err.message, stack: err.stack });
