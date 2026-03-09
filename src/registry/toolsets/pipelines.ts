@@ -115,13 +115,29 @@ export const pipelinesToolset: ToolsetDefinition = {
           path: "/pipeline/api/pipeline/execute/{pipelineIdentifier}",
           pathParams: { pipeline_id: "pipelineIdentifier" },
           queryParams: { module: "module" },
-          bodyBuilder: (input) => input.inputs ?? {},
+          headers: { "Content-Type": "application/yaml" },
+          bodyBuilder: (input) => {
+            const inputs = input.inputs;
+            // No runtime inputs — send empty YAML
+            if (!inputs) return "";
+            // Already a YAML string (LLM passed runtimeInputYaml directly)
+            if (typeof inputs === "string") return inputs;
+            // Object — convert to YAML string for the API
+            // Wrap in pipeline.variables format if it looks like flat key-value pairs
+            const obj = inputs as Record<string, unknown>;
+            // If the LLM passed a full pipeline YAML structure, pass it through
+            if ("pipeline" in obj) {
+              return JSON.stringify(obj);
+            }
+            // Flat key-value inputs → wrap in the runtime input YAML structure
+            return JSON.stringify(obj);
+          },
           responseExtractor: ngExtract,
-          actionDescription: "Execute/run a pipeline. Pass runtime inputs via 'inputs' field.",
+          actionDescription: "Execute/run a pipeline. Pass runtime inputs via 'inputs' field as a YAML string (preferred) or JSON object.",
           bodySchema: {
-            description: "Runtime inputs for pipeline execution. Pass key-value pairs that match the pipeline's runtime input variables. If the pipeline has no runtime inputs, this can be empty.",
+            description: "Runtime input YAML for pipeline execution. The Harness execute API expects a YAML string body. For pipelines with runtime inputs, fetch the input template first via harness_get(resource_type='input_set') or pass the runtime input YAML directly. If the pipeline has no runtime inputs, leave inputs empty.",
             fields: [
-              { name: "inputs", type: "object", required: false, description: "Runtime input overrides as key-value pairs (e.g. {\"variable_name\": \"value\"})" },
+              { name: "inputs", type: "yaml", required: false, description: "Runtime input YAML string (e.g. 'pipeline:\\n  identifier: my_pipeline\\n  variables:\\n    - name: env\\n      value: prod'). Alternatively, pass a JSON object and it will be serialized for the API." },
             ],
           },
         },
@@ -225,18 +241,30 @@ export const pipelinesToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/pipeline/api/triggers",
-          bodyBuilder: (input) => input.body,
+          queryParams: { pipeline_id: "targetIdentifier" },
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            if (!body) return {};
+            // Hoist pipelineIdentifier from body to input so queryParams maps it to targetIdentifier
+            const inner = (body.trigger && typeof body.trigger === "object")
+              ? body.trigger as Record<string, unknown>
+              : body;
+            if (inner.pipelineIdentifier && !input.pipeline_id) {
+              input.pipeline_id = inner.pipelineIdentifier as string;
+            }
+            // If the body already has a "trigger" wrapper, pass it through
+            if (body.trigger && typeof body.trigger === "object") {
+              return body;
+            }
+            // Wrap in trigger envelope — the API expects { trigger: { ... } }
+            return { trigger: body };
+          },
           responseExtractor: ngExtract,
-          description: "Create a new pipeline trigger",
+          description: "Create a new pipeline trigger. Requires pipeline_id to identify the target pipeline.",
           bodySchema: {
-            description: "Trigger configuration object defining the trigger type, source, and pipeline inputs.",
+            description: "Trigger configuration. Pass the trigger fields directly in the body — they will be auto-wrapped in a { trigger: { ... } } envelope. The pipeline_id is auto-extracted from pipelineIdentifier in the body and sent as the targetIdentifier query parameter.",
             fields: [
-              { name: "name", type: "string", required: true, description: "Display name for the trigger" },
-              { name: "identifier", type: "string", required: true, description: "Unique trigger identifier" },
-              { name: "type", type: "string", required: true, description: "Trigger type (Webhook, Scheduled, Artifact, Manifest)" },
-              { name: "pipelineIdentifier", type: "string", required: true, description: "Target pipeline identifier to execute" },
-              { name: "source", type: "object", required: false, description: "Trigger source configuration (webhook, cron, etc.)" },
-              { name: "inputYaml", type: "string", required: false, description: "Runtime input YAML for the triggered pipeline execution" },
+              { name: "trigger", type: "object", required: false, description: "Wrapper key (optional — body is auto-wrapped if not present). Inner fields: name (required), identifier (required), enabled (bool), pipelineIdentifier (required — target pipeline), type (required — Webhook/Scheduled/Artifact/Manifest), source (required — e.g. { type: 'Scheduled', spec: { type: 'Cron', spec: { expression: '0 8 * * *' } } }), inputYaml (optional — runtime input YAML for triggered execution)" },
             ],
           },
         },
@@ -244,18 +272,27 @@ export const pipelinesToolset: ToolsetDefinition = {
           method: "PUT",
           path: "/pipeline/api/triggers/{triggerIdentifier}",
           pathParams: { trigger_id: "triggerIdentifier" },
-          bodyBuilder: (input) => input.body,
+          queryParams: { pipeline_id: "targetIdentifier" },
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            if (!body) return {};
+            const inner = (body.trigger && typeof body.trigger === "object")
+              ? body.trigger as Record<string, unknown>
+              : body;
+            if (inner.pipelineIdentifier && !input.pipeline_id) {
+              input.pipeline_id = inner.pipelineIdentifier as string;
+            }
+            if (body.trigger && typeof body.trigger === "object") {
+              return body;
+            }
+            return { trigger: body };
+          },
           responseExtractor: ngExtract,
           description: "Update a pipeline trigger",
           bodySchema: {
-            description: "Full trigger configuration object (replaces existing). Must include all fields, not just changed ones.",
+            description: "Full trigger configuration (replaces existing). Pass the trigger fields directly — they will be auto-wrapped in a { trigger: { ... } } envelope.",
             fields: [
-              { name: "name", type: "string", required: true, description: "Display name for the trigger" },
-              { name: "identifier", type: "string", required: true, description: "Unique trigger identifier" },
-              { name: "type", type: "string", required: true, description: "Trigger type (Webhook, Scheduled, Artifact, Manifest)" },
-              { name: "pipelineIdentifier", type: "string", required: true, description: "Target pipeline identifier to execute" },
-              { name: "source", type: "object", required: false, description: "Trigger source configuration (webhook, cron, etc.)" },
-              { name: "inputYaml", type: "string", required: false, description: "Runtime input YAML for the triggered pipeline execution" },
+              { name: "trigger", type: "object", required: false, description: "Wrapper key (optional — body is auto-wrapped if not present). Inner fields: name, identifier, enabled, pipelineIdentifier, type, source, inputYaml" },
             ],
           },
         },

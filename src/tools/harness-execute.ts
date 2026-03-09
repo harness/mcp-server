@@ -23,7 +23,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         resource_id: z.string().describe("The primary identifier of the resource").optional(),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
-        inputs: z.record(z.string(), z.unknown()).describe("Runtime inputs for pipeline execution").optional(),
+        inputs: z.union([z.string(), z.record(z.string(), z.unknown())]).describe("Runtime inputs for pipeline execution. Preferred: pass the runtime input YAML string directly. Alternative: pass a JSON object. For pipelines with no runtime inputs, omit this field.").optional(),
         body: z.record(z.string(), z.unknown()).describe("Additional body payload for the action").optional(),
         params: z.record(z.string(), z.unknown()).describe("Action-specific parameters (e.g. pipeline_id, execution_id, flag_id, agent_id, interrupt_type, enable, environment, module). Call harness_describe for available actions and fields per resource_type.").optional(),
       },
