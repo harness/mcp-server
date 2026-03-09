@@ -267,7 +267,7 @@ Toolset Name: `sto`
 
 Toolset Name: `logs`
 
-- `download_execution_logs`: Download logs for a pipeline execution
+- `core_download_execution_logs`: Download logs for a pipeline execution
 
 #### Templates Toolset
 
