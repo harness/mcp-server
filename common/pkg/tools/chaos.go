@@ -14,6 +14,7 @@ import (
 	"github.com/harness/mcp-server/common/client"
 	"github.com/harness/mcp-server/common/client/dto"
 	"github.com/harness/mcp-server/common/pkg/common"
+	mcputils "github.com/harness/mcp-server/common/pkg/utils"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -504,6 +505,10 @@ func GetExperimentTemplateTool(config *config.McpServerConfig, client *client.Ch
 			mcp.WithString("revision",
 				mcp.Description("Specific revision of the template to retrieve. If omitted, the latest revision is returned."),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -552,6 +557,10 @@ func DeleteExperimentTemplateTool(config *config.McpServerConfig, client *client
 			mcp.WithBoolean("verbose",
 				mcp.Description("When true, enables verbose server-side logging for debugging."),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(false),
+				DestructiveHint: mcputils.ToBoolPtr(true),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -614,6 +623,10 @@ func GetExperimentTemplateRevisionsTool(config *config.McpServerConfig, client *
 			mcp.WithString("tags",
 				mcp.Description("Comma-separated list of tags to filter by. Templates must have ALL specified tags (AND filter)."),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -678,6 +691,10 @@ func GetExperimentTemplateVariablesTool(config *config.McpServerConfig, client *
 			mcp.WithString("revision",
 				mcp.Description("Specific revision of the template. If omitted, the latest revision is used."),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -726,6 +743,10 @@ func GetExperimentTemplateYamlTool(config *config.McpServerConfig, client *clien
 			mcp.WithString("revision",
 				mcp.Description("Specific revision of the template. If omitted, the latest revision is used."),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -779,6 +800,10 @@ func CompareExperimentTemplateRevisionsTool(config *config.McpServerConfig, clie
 				mcp.Description("Second revision identifier for comparison"),
 				mcp.Required(),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -1086,6 +1111,10 @@ func ListFaultTemplatesTool(config *config.McpServerConfig, client *client.Chaos
 			mcp.WithString("permissionsRequired",
 				mcp.Description("Filter by permissions required field"),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -1142,6 +1171,10 @@ func GetFaultTemplateTool(config *config.McpServerConfig, client *client.ChaosSe
 			mcp.WithString("revision",
 				mcp.Description("Specific revision of the fault template to retrieve. If omitted, the latest revision is returned."),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -1187,6 +1220,10 @@ func DeleteFaultTemplateTool(config *config.McpServerConfig, client *client.Chao
 				mcp.Description("Unique identifier for the chaos hub that owns the fault template"),
 				mcp.Required(),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(false),
+				DestructiveHint: mcputils.ToBoolPtr(true),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -1225,6 +1262,10 @@ func GetFaultTemplateRevisionsTool(config *config.McpServerConfig, client *clien
 				mcp.Description("Unique identifier for the chaos hub that owns the fault template"),
 				mcp.Required(),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -1278,6 +1319,10 @@ func GetFaultTemplateVariablesTool(config *config.McpServerConfig, client *clien
 			mcp.WithString("revision",
 				mcp.Description("Specific revision of the fault template. If omitted, the latest revision is used."),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -1326,6 +1371,10 @@ func GetFaultTemplateYamlTool(config *config.McpServerConfig, client *client.Cha
 			mcp.WithString("revision",
 				mcp.Description("Specific revision of the fault template. If omitted, the latest revision is used."),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -1379,6 +1428,10 @@ func CompareFaultTemplateRevisionsTool(config *config.McpServerConfig, client *c
 				mcp.Description("Second revision identifier for comparison"),
 				mcp.Required(),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -1440,6 +1493,10 @@ func ListProbeTemplatesTool(config *config.McpServerConfig, client *client.Chaos
 			mcp.WithBoolean("includeAllScope",
 				mcp.Description("When true, returns probe templates from all orgs and projects in the account. When false (default), returns only probe templates in the current org and project."),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -1486,6 +1543,10 @@ func GetProbeTemplateTool(config *config.McpServerConfig, client *client.ChaosSe
 			mcp.WithNumber("revision",
 				mcp.Description("Specific revision number to retrieve. Defaults to the latest revision (0) if not provided."),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -1530,6 +1591,10 @@ func DeleteProbeTemplateTool(config *config.McpServerConfig, client *client.Chao
 			mcp.WithNumber("revision",
 				mcp.Description("Specific revision number to delete. When 0 or not provided, all revisions are deleted."),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(false),
+				DestructiveHint: mcputils.ToBoolPtr(true),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -1577,6 +1642,10 @@ func GetProbeTemplateVariablesTool(config *config.McpServerConfig, client *clien
 			mcp.WithNumber("revision",
 				mcp.Description("Revision number to get variables for. Defaults to latest revision (0) if not provided."),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -1626,6 +1695,10 @@ func ListActionTemplatesTool(config *config.McpServerConfig, client *client.Chao
 			mcp.WithBoolean("includeAllScope",
 				mcp.Description("When true, returns action templates from all orgs and projects in the account. When false (default), returns only action templates in the current org and project."),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -1672,6 +1745,10 @@ func GetActionTemplateTool(config *config.McpServerConfig, client *client.ChaosS
 			mcp.WithNumber("revision",
 				mcp.Description("Specific revision number to retrieve. Defaults to the latest revision (0) if not provided."),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -1716,6 +1793,10 @@ func DeleteActionTemplateTool(config *config.McpServerConfig, client *client.Cha
 			mcp.WithNumber("revision",
 				mcp.Description("Specific revision number to delete. When 0 or not provided, all revisions are deleted."),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(false),
+				DestructiveHint: mcputils.ToBoolPtr(true),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -1773,6 +1854,10 @@ func GetActionTemplateRevisionsTool(config *config.McpServerConfig, client *clie
 			mcp.WithBoolean("includeAllScope",
 				mcp.Description("When true, returns revisions from all orgs and projects in the account. When false (default), returns only revisions in the current org and project."),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -1824,6 +1909,10 @@ func GetActionTemplateVariablesTool(config *config.McpServerConfig, client *clie
 			mcp.WithNumber("revision",
 				mcp.Description("Revision number to get variables for. Defaults to latest revision (0) if not provided."),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -1872,6 +1961,10 @@ func CompareActionTemplateRevisionsTool(config *config.McpServerConfig, client *
 				mcp.Description("Second revision number to compare"),
 				mcp.Required(),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -1921,6 +2014,10 @@ func ListChaosHubsTool(config *config.McpServerConfig, client *client.ChaosServi
 			mcp.WithBoolean("includeAllScope",
 				mcp.Description("When true, returns hubs from all scopes (account, org, project). Defaults to false (project scope only)."),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -1958,6 +2055,10 @@ func GetChaosHubTool(config *config.McpServerConfig, client *client.ChaosService
 				mcp.Description("The unique identity of the ChaosHub"),
 				mcp.Required(),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -2011,6 +2112,10 @@ func ListChaosHubFaultsTool(config *config.McpServerConfig, client *client.Chaos
 			mcp.WithBoolean("onlyTemplatisedFaults",
 				mcp.Description("When true, only returns faults that have templates available. Defaults to false."),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -2053,6 +2158,10 @@ func DeleteChaosHubTool(config *config.McpServerConfig, client *client.ChaosServ
 				mcp.Description("The unique identity of the ChaosHub to delete"),
 				mcp.Required(),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(false),
+				DestructiveHint: mcputils.ToBoolPtr(true),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -2101,6 +2210,10 @@ func CreateChaosHubTool(config *config.McpServerConfig, client *client.ChaosServ
 			mcp.WithString("repoBranch",
 				mcp.Description("Git branch to use for the ChaosHub."),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(false),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -2176,6 +2289,10 @@ func UpdateChaosHubTool(config *config.McpServerConfig, client *client.ChaosServ
 			mcp.WithString("tags",
 				mcp.Description("Comma-separated list of tags for the ChaosHub (replaces existing tags)"),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(false),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -2248,6 +2365,10 @@ func ListChaosGuardConditionsTool(config *config.McpServerConfig, client *client
 			mcp.WithString("tags",
 				mcp.Description("Comma-separated list of tags to filter by"),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -2288,6 +2409,10 @@ func GetChaosGuardConditionTool(config *config.McpServerConfig, client *client.C
 				mcp.Description("The unique identifier of the ChaosGuard condition"),
 				mcp.Required(),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -2322,6 +2447,10 @@ func DeleteChaosGuardConditionTool(config *config.McpServerConfig, client *clien
 				mcp.Description("The unique identifier of the ChaosGuard condition to delete"),
 				mcp.Required(),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(false),
+				DestructiveHint: mcputils.ToBoolPtr(true),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -2370,6 +2499,10 @@ func ListChaosGuardRulesTool(config *config.McpServerConfig, client *client.Chao
 			mcp.WithString("tags",
 				mcp.Description("Comma-separated list of tags to filter by"),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -2410,6 +2543,10 @@ func GetChaosGuardRuleTool(config *config.McpServerConfig, client *client.ChaosS
 				mcp.Description("The unique identifier of the ChaosGuard rule"),
 				mcp.Required(),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -2444,6 +2581,10 @@ func DeleteChaosGuardRuleTool(config *config.McpServerConfig, client *client.Cha
 				mcp.Description("The unique identifier of the ChaosGuard rule to delete"),
 				mcp.Required(),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(false),
+				DestructiveHint: mcputils.ToBoolPtr(true),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -2482,6 +2623,10 @@ func EnableChaosGuardRuleTool(config *config.McpServerConfig, client *client.Cha
 				mcp.Description("Set to true to enable the rule, false to disable it"),
 				mcp.Required(),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(false),
+				DestructiveHint: mcputils.ToBoolPtr(true),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
