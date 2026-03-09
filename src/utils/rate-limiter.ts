@@ -6,8 +6,8 @@ export class RateLimiter {
   private lastRefill: number;
 
   constructor(
-    private maxTokens: number = 10,
-    private refillRatePerMs: number = maxTokens / 1000,
+    private readonly maxTokens: number = 10,
+    private readonly refillRatePerMs: number = maxTokens / 1000,
   ) {
     this.tokens = maxTokens;
     this.lastRefill = Date.now();

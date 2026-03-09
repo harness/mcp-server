@@ -10,12 +10,12 @@ const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
 const BASE_BACKOFF_MS = 1000;
 
 export class HarnessClient {
-  private baseUrl: string;
-  private token: string;
-  private accountId: string;
-  private timeout: number;
-  private maxRetries: number;
-  private rateLimiter: RateLimiter;
+  private readonly baseUrl: string;
+  private readonly token: string;
+  private readonly accountId: string;
+  private readonly timeout: number;
+  private readonly maxRetries: number;
+  private readonly rateLimiter: RateLimiter;
 
   constructor(config: Config) {
     this.baseUrl = config.HARNESS_BASE_URL.replace(/\/$/, "");
