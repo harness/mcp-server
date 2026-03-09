@@ -25,19 +25,27 @@ export function clientSupportsElicitation(server: Server): boolean {
  * Shows a message with the operation details — the user simply accepts or
  * declines. No form fields or checkboxes.
  *
- * If the client doesn't support elicitation (or the call throws),
- * proceeds silently — the LLM already chose to call the tool.
+ * When `destructive` is true (e.g. deletes), the operation is **blocked** if
+ * the client doesn't support elicitation or the elicitation call fails.
+ * Non-destructive writes proceed silently in those cases.
  */
 export async function confirmViaElicitation({
   server,
   toolName,
   message,
+  destructive = false,
 }: {
   server: McpServer;
   toolName: string;
   message: string;
+  /** When true, block the operation if confirmation cannot be obtained. */
+  destructive?: boolean;
 }): Promise<ElicitationResult> {
   if (!clientSupportsElicitation(server.server)) {
+    if (destructive) {
+      log.warn("Client does not support elicitation, blocking destructive operation", { toolName });
+      return { proceed: false, reason: "declined" };
+    }
     log.debug("Client does not support elicitation, proceeding", { toolName });
     return { proceed: true };
   }
@@ -62,6 +70,13 @@ export async function confirmViaElicitation({
     }
     return { proceed: false, reason: "cancelled" };
   } catch (err) {
+    if (destructive) {
+      log.warn("Elicitation failed, blocking destructive operation", {
+        toolName,
+        error: String(err),
+      });
+      return { proceed: false, reason: "cancelled" };
+    }
     log.warn("Elicitation failed, proceeding without confirmation", {
       toolName,
       error: String(err),

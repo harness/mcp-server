@@ -33,14 +33,26 @@ describe("clientSupportsElicitation", () => {
 });
 
 describe("confirmViaElicitation", () => {
-  it("proceeds when client does not support elicitation", async () => {
+  it("proceeds when client does not support elicitation (non-destructive)", async () => {
+    const mcpServer = makeServerStub(undefined);
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_create",
+      message: "Create pipeline?",
+    });
+    expect(result).toEqual({ proceed: true });
+    expect(mcpServer.server.elicitInput).not.toHaveBeenCalled();
+  });
+
+  it("blocks when client does not support elicitation (destructive)", async () => {
     const mcpServer = makeServerStub(undefined);
     const result = await confirmViaElicitation({
       server: mcpServer,
       toolName: "harness_delete",
       message: "Delete pipeline?",
+      destructive: true,
     });
-    expect(result).toEqual({ proceed: true });
+    expect(result).toEqual({ proceed: false, reason: "declined" });
     expect(mcpServer.server.elicitInput).not.toHaveBeenCalled();
   });
 
@@ -84,15 +96,27 @@ describe("confirmViaElicitation", () => {
     expect(result).toEqual({ proceed: false, reason: "cancelled" });
   });
 
-  it("proceeds when elicitInput throws", async () => {
+  it("proceeds when elicitInput throws (non-destructive)", async () => {
+    const mcpServer = makeServerStub({ elicitation: { form: {} } });
+    mcpServer.server.elicitInput.mockRejectedValue(new Error("not implemented"));
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_create",
+      message: "Create service?",
+    });
+    expect(result).toEqual({ proceed: true });
+  });
+
+  it("blocks when elicitInput throws (destructive)", async () => {
     const mcpServer = makeServerStub({ elicitation: { form: {} } });
     mcpServer.server.elicitInput.mockRejectedValue(new Error("not implemented"));
     const result = await confirmViaElicitation({
       server: mcpServer,
       toolName: "harness_delete",
       message: "Delete service?",
+      destructive: true,
     });
-    expect(result).toEqual({ proceed: true });
+    expect(result).toEqual({ proceed: false, reason: "cancelled" });
   });
 
   it("passes message to elicitInput with empty schema", async () => {
