@@ -1121,6 +1121,10 @@ For clients that don't support elicitation, the server proceeds directly — the
 - **Localhost binding.** The HTTP transport binds to `127.0.0.1` by default — not accessible from the network.
 - **No stdout logging.** All logs go to stderr to avoid corrupting the stdio JSON-RPC transport.
 
+## Complementary Skills
+
+The Harness MCP server pairs well with **[Harness Skills](https://github.com/thisrohangupta/harness-skills)** — a collection of ready-made Claude Code skills (slash commands) designed for common Harness workflows. Install them alongside this MCP server to get high-level automation like `/deploy`, `/rollback`, `/triage`, and more without writing custom prompts.
+
 ## Troubleshooting & Common Pitfalls
 
 | Symptom | Likely Cause | What to Do |
