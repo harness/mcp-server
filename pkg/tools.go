@@ -5,12 +5,9 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
-	"time"
 
 	config "github.com/harness/mcp-server/common"
-	commonClient "github.com/harness/mcp-server/common/client"
 	commonModules "github.com/harness/mcp-server/common/pkg/modules"
-	commonTools "github.com/harness/mcp-server/common/pkg/tools"
 	"github.com/harness/mcp-server/common/pkg/toolsets"
 	tool_registration_utils "github.com/harness/mcp-server/common/pkg/utils"
 	"github.com/harness/mcp-server/pkg/modules"
@@ -31,7 +28,7 @@ func InitToolsets(ctx context.Context, config *config.McpServerConfig) (*toolset
 	registry := modules.NewModuleRegistry(config, tsg)
 
 	if !licenseInfo.IsValid || len(config.Toolsets) == 0 {
-		RegisterDefaultToolsets(config, tsg)
+		modules.RegisterDefaultToolsets(config, tsg)
 
 		if err := tsg.EnableToolset("default"); err != nil {
 			return nil, fmt.Errorf("failed to enable toolsets: %w", err)
@@ -67,53 +64,6 @@ func InitToolsets(ctx context.Context, config *config.McpServerConfig) (*toolset
 	return tsg, nil
 }
 
-func RegisterDefaultToolsets(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) error {
-	// Create pipeline service client
-	pipelineClient, err := commonModules.DefaultClientProvider.CreateClient(config, "pipelines", 30*time.Second)
-	if err != nil {
-		return fmt.Errorf("failed to create client for pipeline service: %w", err)
-	}
-	pipelineServiceClient := &commonClient.PipelineService{Client: pipelineClient}
-
-	// Create connector service client
-	connectorClient, err := commonModules.DefaultClientProvider.CreateClient(config, "ngMan", 30*time.Second)
-	if err != nil {
-		return fmt.Errorf("failed to create client for connectors: %w", err)
-	}
-	connectorServiceClient := &commonClient.ConnectorService{Client: connectorClient}
-
-	// Create dashboard service client
-	customTimeout := 30 * time.Second
-	dashboardClient, err := commonModules.DefaultClientProvider.CreateClient(config, "dashboards", customTimeout)
-	if err != nil {
-		return fmt.Errorf("failed to create client for dashboard service: %w", err)
-	}
-	dashboardServiceClient := &commonClient.DashboardService{Client: dashboardClient}
-
-	// Create the default toolset with essential tools
-	defaultToolset := toolsets.NewToolset("default", "Default essential Harness tools").AddReadTools(
-		// Connector Management tools
-		toolsets.NewServerTool(commonTools.GetConnectorDetailsTool(config, connectorServiceClient)),
-		toolsets.NewServerTool(commonTools.ListConnectorCatalogueTool(config, connectorServiceClient)),
-		toolsets.NewServerTool(commonTools.ListConnectorsTool(config, connectorServiceClient)),
-
-		// Pipeline Management tools
-		toolsets.NewServerTool(commonTools.ListPipelinesTool(config, pipelineServiceClient)),
-		toolsets.NewServerTool(commonTools.GetPipelineTool(config, pipelineServiceClient)),
-		toolsets.NewServerTool(commonTools.FetchExecutionURLTool(config, pipelineServiceClient)),
-		toolsets.NewServerTool(commonTools.GetExecutionTool(config, pipelineServiceClient)),
-		toolsets.NewServerTool(commonTools.ListExecutionsTool(config, pipelineServiceClient)),
-
-		// Dashboard tools
-		toolsets.NewServerTool(commonTools.ListDashboardsTool(config, dashboardServiceClient)),
-		toolsets.NewServerTool(commonTools.GetDashboardDataTool(config, dashboardServiceClient)),
-	)
-
-	// Add the default toolset to the group
-	tsg.AddToolset(defaultToolset)
-	return nil
-}
-
 // RegisterAllowedToolsets registers toolsets based on the allowedToolsets list or all toolsets if enableAll is true.
 // To add a new toolset, add a new if block below - this is the single source of truth for available toolsets.
 func RegisterAllowedToolsets(ctx context.Context, tsg *toolsets.ToolsetGroup, config *config.McpServerConfig, allowedToolsets []string, enableAll bool) error {
@@ -123,7 +73,7 @@ func RegisterAllowedToolsets(ctx context.Context, tsg *toolsets.ToolsetGroup, co
 		}
 	}
 	if enableAll || slices.Contains(allowedToolsets, "default") {
-		if err := RegisterDefaultToolsets(config, tsg); err != nil {
+		if err := modules.RegisterDefaultToolsets(config, tsg); err != nil {
 			return err
 		}
 	}
