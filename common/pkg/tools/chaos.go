@@ -382,7 +382,7 @@ func GetProbeTool(config *config.McpServerConfig, client *client.ChaosService) (
 
 // GetProbeManifestTool creates a tool to get the probe YAML manifest (chaos engine compatible).
 func GetProbeManifestTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_probe_manifest",
+	return mcp.NewTool("chaos_get_probe_manifest",
 			mcp.WithDescription("Get the YAML manifest for a chaos probe by its ID (compatible with chaos engine)"),
 			common.WithScope(config, false),
 			mcp.WithString("probeId",
@@ -555,7 +555,7 @@ func VerifyProbeTool(config *config.McpServerConfig, client *client.ChaosService
 
 // GetProbesInExperimentRunTool creates a tool to get probe execution details for experiment runs.
 func GetProbesInExperimentRunTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_probes_in_experiment_run",
+	return mcp.NewTool("chaos_get_probes_in_experiment_run",
 			mcp.WithDescription("Get probe execution details for one or more experiment runs. At least one of experimentRunIds or notifyIds must be provided. Returns probe status, mode, fault association, and configuration for each probe that participated in those runs."),
 			common.WithScope(config, false),
 			mcp.WithArray("experimentRunIds",
@@ -609,7 +609,7 @@ func GetProbesInExperimentRunTool(config *config.McpServerConfig, client *client
 
 // ListFaultsTool creates a tool for listing chaos faults in a project.
 func ListFaultsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_faults_list",
+	return mcp.NewTool("chaos_list_faults",
 			mcp.WithDescription("List the chaos faults"),
 			common.WithScope(config, false),
 			WithPagination(),
@@ -651,7 +651,7 @@ func ListFaultsTool(config *config.McpServerConfig, client *client.ChaosService)
 
 // GetFaultVariablesTool creates a tool to get the inputs/variables of a chaos fault.
 func GetFaultVariablesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_fault_variables",
+	return mcp.NewTool("chaos_get_fault_variables",
 			mcp.WithDescription("Retrieves the list of inputs and variables (variables, faultAuthentication, faultTargets, faultTunable) for a chaos fault by its identity"),
 			common.WithScope(config, false),
 			mcp.WithString("identity",
@@ -691,7 +691,7 @@ func GetFaultVariablesTool(config *config.McpServerConfig, client *client.ChaosS
 
 // GetFaultTool creates a tool to get a single chaos fault by identity.
 func GetFaultTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_fault_describe",
+	return mcp.NewTool("chaos_get_fault",
 			mcp.WithDescription("Get details of a single chaos fault by its identity"),
 			common.WithScope(config, false),
 			mcp.WithString("identity",
@@ -731,7 +731,7 @@ func GetFaultTool(config *config.McpServerConfig, client *client.ChaosService) (
 
 // GetFaultYamlTool creates a tool to get the fault template YAML by identity.
 func GetFaultYamlTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_fault_yaml",
+	return mcp.NewTool("chaos_get_fault_yaml",
 			mcp.WithDescription("Get the fault template YAML for a chaos fault by its identity"),
 			common.WithScope(config, false),
 			mcp.WithString("identity",
@@ -771,7 +771,7 @@ func GetFaultYamlTool(config *config.McpServerConfig, client *client.ChaosServic
 
 // ListExperimentRunsOfFaultTool creates a tool to list experiment runs for a chaos fault.
 func ListExperimentRunsOfFaultTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_fault_experiment_runs",
+	return mcp.NewTool("chaos_list_fault_experiment_runs",
 			mcp.WithDescription("List experiment runs for a chaos fault by its identity"),
 			common.WithScope(config, false),
 			mcp.WithString("identity",
@@ -1234,7 +1234,7 @@ func ListLinuxInfrastructuresTool(config *config.McpServerConfig, client *client
 
 // ListActionsTool creates a tool for listing chaos actions.
 func ListActionsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_actions_list",
+	return mcp.NewTool("chaos_list_actions",
 			mcp.WithDescription("List chaos actions with optional filtering by name, infrastructure type, and action type. Actions are reusable steps (delay, custom script, container) that can be added to chaos experiments."),
 			common.WithScope(config, false),
 			WithPagination(),
@@ -1291,7 +1291,7 @@ func ListActionsTool(config *config.McpServerConfig, client *client.ChaosService
 
 // GetActionTool creates a tool to get a single chaos action by its identity.
 func GetActionTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_action_describe",
+	return mcp.NewTool("chaos_get_action",
 			mcp.WithDescription("Get details of a chaos action by its identity. Returns the action configuration, properties, run properties, variables, and recent executions."),
 			common.WithScope(config, false),
 			mcp.WithString("identity",
@@ -1326,7 +1326,7 @@ func GetActionTool(config *config.McpServerConfig, client *client.ChaosService) 
 
 // GetActionManifestTool creates a tool to get the YAML manifest for a chaos action.
 func GetActionManifestTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_action_manifest",
+	return mcp.NewTool("chaos_get_action_manifest",
 			mcp.WithDescription("Get the YAML manifest for a chaos action by its identity"),
 			common.WithScope(config, false),
 			mcp.WithString("identity",
@@ -1362,7 +1362,7 @@ func GetActionManifestTool(config *config.McpServerConfig, client *client.ChaosS
 // DeleteActionTool creates a tool to delete a chaos action by its identity.
 // The upstream API performs a soft-delete.
 func DeleteActionTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_action_delete",
+	return mcp.NewTool("chaos_delete_action",
 			mcp.WithDescription("Delete a chaos action by its identity. The action must not be in use by any experiment. This performs a soft-delete."),
 			common.WithScope(config, false),
 			mcp.WithString("identity",
