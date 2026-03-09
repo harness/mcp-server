@@ -421,7 +421,7 @@ func CreateExperimentFromTemplateTool(config *config.McpServerConfig, client *cl
 
 // ListExperimentTemplatesTool creates a tool for listing the experiment templates
 func ListExperimentTemplatesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_experiment_template_list",
+	return mcp.NewTool("chaos_list_experiment_templates",
 			mcp.WithDescription("List the chaos experiment templates from chaos hubs."),
 			common.WithScope(config, false),
 			WithPagination(),
@@ -2273,7 +2273,7 @@ func CreateChaosHubTool(config *config.McpServerConfig, client *client.ChaosServ
 
 func UpdateChaosHubTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("chaos_update_hub",
-			mcp.WithDescription("Update the editable fields of a ChaosHub (name, description, tags) by its identity."),
+			mcp.WithDescription("Update the editable fields of a ChaosHub (name, description, tags) by its identity. IMPORTANT: The API uses a replace-all model—all fields are fully replaced, not merged. Omitted or empty values will overwrite and clear existing data. To preserve existing description or tags when changing only some fields, fetch the current hub via chaos_get_hub first and pass through the values you want to keep."),
 			common.WithScope(config, false),
 			mcp.WithString("hubIdentity",
 				mcp.Description("The unique identity of the ChaosHub to update"),
@@ -2284,10 +2284,10 @@ func UpdateChaosHubTool(config *config.McpServerConfig, client *client.ChaosServ
 				mcp.Required(),
 			),
 			mcp.WithString("description",
-				mcp.Description("Updated description for the ChaosHub"),
+				mcp.Description("Updated description for the ChaosHub. If omitted or empty, the existing description will be cleared. To preserve it, pass the current value from chaos_get_hub."),
 			),
 			mcp.WithString("tags",
-				mcp.Description("Comma-separated list of tags for the ChaosHub (replaces existing tags)"),
+				mcp.Description("Comma-separated list of tags for the ChaosHub. Replaces all existing tags; if omitted or empty, all tags will be removed. To preserve tags, pass the current values from chaos_get_hub."),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(false),
