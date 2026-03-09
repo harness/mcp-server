@@ -68,7 +68,7 @@ func RegisterSoftwareEngineeringInsights(config *config.McpServerConfig, tsg *to
 	// Create base client for SEI with extended timeout for productivity calls
 	// Productivity calls can take longer to process, so we increase timeout to 60 seconds
 	seiTimeout := 60 * time.Second
-	c, err := DefaultClientProvider.CreateClient(config, "sei", seiTimeout)
+	c, err := DefaultClientProvider.CreateClientWithIdentity(config, "sei", "IdentityService", seiTimeout)
 	if err != nil {
 		return err
 	}

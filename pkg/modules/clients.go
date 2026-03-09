@@ -58,7 +58,7 @@ func (p *ExternalClientProvider) CreateClient(config *config.McpServerConfig, se
 }
 
 func (p *ExternalClientProvider) CreateClientWithIdentity(config *config.McpServerConfig, service string, serviceIdentity string, timeout ...time.Duration) (*commonClient.Client, error) {
-	return nil, fmt.Errorf("not implemented")
+	return p.CreateClient(config, service, timeout...)
 }
 
 // init registers the external client provider
