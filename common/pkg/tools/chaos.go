@@ -14,6 +14,7 @@ import (
 	"github.com/harness/mcp-server/common/client"
 	"github.com/harness/mcp-server/common/client/dto"
 	"github.com/harness/mcp-server/common/pkg/common"
+	mcputils "github.com/harness/mcp-server/common/pkg/utils"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -263,6 +264,10 @@ func StopExperimentRunsTool(config *config.McpServerConfig, client *client.Chaos
 			mcp.WithBoolean("force",
 				mcp.Description("When true, immediately marks the run as Stopped in the database (run, execution nodes, experiment recents). When false (default), only requests stop on cluster/machine; DB is updated later when the delegate or infra reports status."),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(false),
+				DestructiveHint: mcputils.ToBoolPtr(true),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -389,6 +394,10 @@ func GetProbeManifestTool(config *config.McpServerConfig, client *client.ChaosSe
 				mcp.Description("Unique Identifier for the probe"),
 				mcp.Required(),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -432,6 +441,10 @@ func EnableProbeTool(config *config.McpServerConfig, client *client.ChaosService
 			mcp.WithBoolean("isBulkUpdate",
 				mcp.Description("When true, enable/disable the probe across all experiments that use it"),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(false),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -480,6 +493,10 @@ func DeleteProbeTool(config *config.McpServerConfig, client *client.ChaosService
 				mcp.Description("Unique Identifier for the probe to delete"),
 				mcp.Required(),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(false),
+				DestructiveHint: mcputils.ToBoolPtr(true),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -520,6 +537,10 @@ func VerifyProbeTool(config *config.McpServerConfig, client *client.ChaosService
 				mcp.Description("True to verify the probe, false to unverify"),
 				mcp.Required(),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(false),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -566,6 +587,10 @@ func GetProbesInExperimentRunTool(config *config.McpServerConfig, client *client
 				mcp.Description("List of notify IDs to fetch probe details for"),
 				mcp.Items(map[string]any{"type": "string"}),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -616,6 +641,10 @@ func ListFaultsTool(config *config.McpServerConfig, client *client.ChaosService)
 			mcp.WithBoolean("isEnterprise",
 				mcp.Description("When true, list only enterprise faults"),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -661,6 +690,10 @@ func GetFaultVariablesTool(config *config.McpServerConfig, client *client.ChaosS
 			mcp.WithBoolean("isEnterprise",
 				mcp.Description("When true, get variables for an enterprise fault"),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -701,6 +734,10 @@ func GetFaultTool(config *config.McpServerConfig, client *client.ChaosService) (
 			mcp.WithBoolean("isEnterprise",
 				mcp.Description("When true, get an enterprise fault"),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -741,6 +778,10 @@ func GetFaultYamlTool(config *config.McpServerConfig, client *client.ChaosServic
 			mcp.WithBoolean("isEnterprise",
 				mcp.Description("When true, get YAML for an enterprise fault"),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -782,6 +823,10 @@ func ListExperimentRunsOfFaultTool(config *config.McpServerConfig, client *clien
 			mcp.WithBoolean("isEnterprise",
 				mcp.Description("When true, list runs for an enterprise fault"),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -827,6 +872,10 @@ func DeleteFaultTool(config *config.McpServerConfig, client *client.ChaosService
 				mcp.Description("Unique identity of the fault to delete"),
 				mcp.Required(),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(false),
+				DestructiveHint: mcputils.ToBoolPtr(true),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -1255,6 +1304,10 @@ func ListActionsTool(config *config.McpServerConfig, client *client.ChaosService
 			mcp.WithBoolean("includeAllScope",
 				mcp.Description("When true, returns actions from all orgs and projects in the account (filters by account only). When false (default), returns only actions in the current org and project."),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -1298,6 +1351,10 @@ func GetActionTool(config *config.McpServerConfig, client *client.ChaosService) 
 				mcp.Description("Unique identity of the action to retrieve"),
 				mcp.Required(),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -1333,6 +1390,10 @@ func GetActionManifestTool(config *config.McpServerConfig, client *client.ChaosS
 				mcp.Description("Unique identity of the action"),
 				mcp.Required(),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -1369,6 +1430,10 @@ func DeleteActionTool(config *config.McpServerConfig, client *client.ChaosServic
 				mcp.Description("Unique identity of the action to delete"),
 				mcp.Required(),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(false),
+				DestructiveHint: mcputils.ToBoolPtr(true),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
