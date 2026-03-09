@@ -87,29 +87,29 @@ export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
   // 1. Extract account_id
   const accountIdx = segments.indexOf("account");
   if (accountIdx >= 0 && accountIdx + 1 < segments.length) {
-    result.account_id = segments[accountIdx + 1];
+    result.account_id = segments[accountIdx + 1]!;
   }
 
   // 2. Extract module from /module/{name}/ pattern
   const moduleIdx = segments.indexOf("module");
   if (moduleIdx >= 0 && moduleIdx + 1 < segments.length) {
-    result.module = segments[moduleIdx + 1];
+    result.module = segments[moduleIdx + 1]!;
   }
 
   // 3. Extract org and project
   const orgsIdx = segments.indexOf("orgs");
   if (orgsIdx >= 0 && orgsIdx + 1 < segments.length) {
-    result.org_id = segments[orgsIdx + 1];
+    result.org_id = segments[orgsIdx + 1]!;
   }
   const projectsIdx = segments.indexOf("projects");
   if (projectsIdx >= 0 && projectsIdx + 1 < segments.length) {
-    result.project_id = segments[projectsIdx + 1];
+    result.project_id = segments[projectsIdx + 1]!;
   }
 
   // 4. Check for module after /all/ (e.g. /all/cd/orgs/...)
   const allIdx = segments.indexOf("all");
   if (allIdx >= 0 && !result.module && allIdx + 1 < segments.length) {
-    const afterAll = segments[allIdx + 1];
+    const afterAll = segments[allIdx + 1]!;
     if (MODULES.has(afterAll)) {
       result.module = afterAll;
     }
@@ -121,7 +121,7 @@ export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
   const matches: Array<{ type: string; contextField: string; id?: string }> = [];
 
   for (let i = 0; i < segments.length; i++) {
-    const seg = segments[i];
+    const seg = segments[i]!;
     const def = RESOURCE_SEGMENTS[seg];
     if (!def) continue;
 
@@ -143,7 +143,7 @@ export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
 
   // 6. Build result — set context fields from all matches, resource_id from the primary
   if (matches.length > 0) {
-    const primary = matches[matches.length - 1];
+    const primary = matches[matches.length - 1]!;
     result.resource_type = primary.type;
 
     for (const match of matches) {

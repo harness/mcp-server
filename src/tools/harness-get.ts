@@ -40,8 +40,9 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
         const def = registry.getResource(resourceType);
 
         // Map resource_id to the primary identifier field
-        if (def.identifierFields.length > 0 && resourceId) {
-          input[def.identifierFields[0]] = resourceId;
+        const primaryField = def.identifierFields[0];
+        if (primaryField && resourceId) {
+          input[primaryField] = resourceId;
         }
 
         const result = await registry.dispatch(client, resourceType, "get", input);

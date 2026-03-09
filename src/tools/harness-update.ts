@@ -49,8 +49,9 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
         const { params, ...rest } = args;
         const input = applyUrlDefaults(rest as Record<string, unknown>, args.url);
         if (params) Object.assign(input, params);
-        if (def.identifierFields.length > 0 && args.resource_id) {
-          input[def.identifierFields[0]] = args.resource_id;
+        const primaryField = def.identifierFields[0];
+        if (primaryField && args.resource_id) {
+          input[primaryField] = args.resource_id;
         }
         const versionLabel = asString(input.version_label);
         if (versionLabel) { /* already set via params */ }

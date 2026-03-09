@@ -371,7 +371,7 @@ function buildExecutionSummary(
   }
 
   if (failedNodes.length > 0) {
-    const primary = failedNodes[0];
+    const primary = failedNodes[0]!;
     const failureEntry = (f: FailedNodeDetail) => {
       const entry: Record<string, unknown> = {
         stage: f.stage,
@@ -472,7 +472,7 @@ export const pipelineHandler: DiagnoseHandler = {
         }, signal);
         const items = (execList as { items?: Array<Record<string, unknown>> }).items;
         if (items && items.length > 0) {
-          executionId = (items[0].planExecutionId as string) ?? undefined;
+          executionId = (items[0]!.planExecutionId as string) ?? undefined;
           input.execution_id = executionId;
         }
       } catch (err) {
@@ -517,7 +517,7 @@ export const pipelineHandler: DiagnoseHandler = {
               if (f.script_context) e.script_context = f.script_context;
               return e;
             };
-            const childPrimary = childFailedNodes[0];
+            const childPrimary = childFailedNodes[0]!;
             const execDiag = asRecord(diagnostic.execution) ?? {};
             execDiag.child_pipeline = {
               execution_id: result.childRef.executionId,

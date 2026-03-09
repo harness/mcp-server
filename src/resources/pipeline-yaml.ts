@@ -51,11 +51,11 @@ export function registerPipelineYamlResource(server: McpServer, registry: Regist
       let pipelineId: string;
 
       if (parts.length >= 3) {
-        orgId = parts[0];
-        projectId = parts[1];
-        pipelineId = parts[2];
+        orgId = parts[0] ?? orgId;
+        projectId = parts[1] ?? projectId;
+        pipelineId = parts[2] ?? "";
       } else {
-        pipelineId = parts[0];
+        pipelineId = parts[0] ?? "";
       }
 
       log.info("Fetching pipeline YAML", { pipelineId, orgId, projectId });

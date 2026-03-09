@@ -72,7 +72,7 @@ export function parseArgs(argv: string[] = process.argv.slice(2)): CliArgs {
 function parseTransport(argv: string[]): Transport {
   // First positional arg that isn't a flag or flag value
   for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
+    const arg = argv[i]!;
     if (arg === "--port") {
       i++; // skip the value after --port
       continue;
@@ -93,7 +93,7 @@ function parsePort(argv: string[]): number {
   // Check --port flag first
   const portFlagIndex = argv.indexOf("--port");
   if (portFlagIndex !== -1 && portFlagIndex + 1 < argv.length) {
-    const parsed = Number(argv[portFlagIndex + 1]);
+    const parsed = Number(argv[portFlagIndex + 1]!);
     if (isValidPort(parsed)) return parsed;
   }
 

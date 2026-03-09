@@ -7,8 +7,9 @@ import * as z from "zod/v4";
  */
 export function extractAccountIdFromToken(apiKey: string): string | undefined {
   const parts = apiKey.split(".");
-  if (parts.length >= 3 && parts[0] === "pat" && parts[1].length > 0) {
-    return parts[1];
+  const accountId = parts[1];
+  if (parts.length >= 3 && parts[0] === "pat" && accountId && accountId.length > 0) {
+    return accountId;
   }
   return undefined;
 }
