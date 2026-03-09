@@ -136,12 +136,14 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 export function registerMyPrompt(server: McpServer): void {
-  server.prompt(
+  server.registerPrompt(
     "my-prompt-name",
-    "Short description of what this prompt does",
     {
-      requiredParam: z.string().describe("What this param is"),
-      optionalParam: z.string().describe("Optional context").optional(),
+      description: "Short description of what this prompt does",
+      argsSchema: {
+        requiredParam: z.string().describe("What this param is"),
+        optionalParam: z.string().describe("Optional context").optional(),
+      },
     },
     async ({ requiredParam, optionalParam }) => ({
       messages: [{

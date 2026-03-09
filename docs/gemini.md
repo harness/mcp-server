@@ -14,9 +14,9 @@ Unlike traditional MCP servers with one tool per API endpoint, this server uses 
 **Then use CRUD tools:**
 - `harness_list` — List resources with filtering and pagination
 - `harness_get` — Get a single resource by ID
-- `harness_create` — Create a resource (requires `confirmation: true`)
-- `harness_update` — Update a resource (requires `confirmation: true`)
-- `harness_delete` — Delete a resource (requires `confirmation: true`)
+- `harness_create` — Create a resource (elicits confirmation when supported by the MCP client)
+- `harness_update` — Update a resource (elicits confirmation when supported by the MCP client)
+- `harness_delete` — Delete a resource (destructive; blocked if confirmation cannot be obtained)
 
 **Specialized tools:**
 - `harness_execute` — Run pipelines, toggle feature flags, test connectors, sync GitOps apps
@@ -106,10 +106,11 @@ Ask natural language questions like:
 
 ## Safety Model
 
-Write operations (`harness_create`, `harness_update`, `harness_delete`, `harness_execute`) all require `confirmation: true`.
+Write operations (`harness_create`, `harness_update`, `harness_delete`, `harness_execute`) use MCP elicitation when the client supports it.
 
-- For `harness_execute`, calling with `confirmation: false` returns available actions for the selected `resource_type`.
-- For `harness_create`, `harness_update`, and `harness_delete`, calling with `confirmation: false` returns a safety error and does not execute.
+- If elicitation is unavailable or fails:
+  - `harness_create`, `harness_update`, and `harness_execute` proceed (best-effort behavior).
+  - `harness_delete` is blocked (fail-closed for destructive operations).
 
 Secret values are never exposed — only metadata (name, type, scope).
 

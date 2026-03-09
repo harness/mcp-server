@@ -84,27 +84,41 @@ When running in HTTP mode, the server exposes:
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/mcp` | `POST` | MCP JSON-RPC endpoint (stateless) |
+| `/mcp` | `POST` | MCP JSON-RPC endpoint (initialize + session requests) |
+| `/mcp` | `GET` | SSE stream for server-initiated messages (progress, elicitation) |
+| `/mcp` | `DELETE` | Terminate an active MCP session |
 | `/mcp` | `OPTIONS` | CORS preflight |
-| `/health` | `GET` | Health check — returns `{ "status": "ok" }` |
+| `/health` | `GET` | Health check — returns `{ "status": "ok", "sessions": <count> }` |
 
-The HTTP transport runs in **stateless mode**: each POST request creates a fresh MCP session. This is ideal for serverless or shared deployments where persistent connections aren't practical.
+The HTTP transport runs in **session-based mode**. A new MCP session is created on `initialize`, the server returns an `mcp-session-id` header, and subsequent requests for that session must include the same header.
 
 Operational constraints in HTTP mode:
 
-- `POST /mcp` handles MCP JSON-RPC requests (with `OPTIONS /mcp` for CORS preflight).
+- `POST /mcp` without `mcp-session-id` must be an `initialize` request.
+- `POST /mcp`, `GET /mcp`, and `DELETE /mcp` for existing sessions require the `mcp-session-id` header.
+- `GET /mcp` is used for SSE notifications (progress updates and elicitation prompts).
+- Idle sessions are reaped after 30 minutes.
 - `GET /health` is the only non-MCP endpoint.
 - Request body size is capped by `HARNESS_MAX_BODY_SIZE_MB` (default `10` MB).
-- Each request is isolated (no persisted MCP session state between requests).
 
 ```bash
 # Health check
 curl http://localhost:3000/health
 
-# MCP initialize request
-curl -X POST http://localhost:3000/mcp \
+# MCP initialize request (capture mcp-session-id response header)
+curl -i -X POST http://localhost:3000/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
+
+# Subsequent MCP request (use returned session ID)
+curl -X POST http://localhost:3000/mcp \
+  -H "Content-Type: application/json" \
+  -H "mcp-session-id: <session-id>" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
+
+# Terminate session
+curl -X DELETE http://localhost:3000/mcp \
+  -H "mcp-session-id: <session-id>"
 ```
 
 ### Client Configuration
@@ -1107,12 +1121,19 @@ Write tools (`harness_create`, `harness_update`, `harness_delete`, `harness_exec
 | Windsurf | Not yet |
 | MCP Inspector | Yes |
 
-For clients that don't support elicitation, the server proceeds directly — the LLM already chose to call the tool, so its intent is trusted. As more clients add elicitation support, users will automatically get the confirmation dialog without any server changes.
+Elicitation behavior varies by operation severity when client support is missing:
+For clients that don't support elicitation:
+
+- `harness_create`, `harness_update`, and `harness_execute` proceed without a dialog (best effort).
+- Destructive operations are blocked if confirmation cannot be obtained (`harness_delete`).
+
+If elicitation fails at runtime, the same rules apply: non-destructive writes continue, destructive writes are blocked.
 
 ## Safety
 
 - **Secrets are never exposed.** The `secret` resource type returns metadata only (name, type, scope) — secret values are never included in any response.
-- **Write operations prompt for confirmation.** `harness_create`, `harness_update`, `harness_delete`, and `harness_execute` use MCP elicitation to get user approval before proceeding (see [Elicitation](#elicitation)).
+- **Write operations use elicitation when available.** `harness_create`, `harness_update`, `harness_delete`, and `harness_execute` attempt MCP elicitation before proceeding (see [Elicitation](#elicitation)).
+- **Destructive writes fail closed.** If confirmation cannot be obtained, `harness_delete` is blocked instead of executing blindly.
 - **CORS restricted to same-origin.** The HTTP transport only allows same-origin requests, preventing CSRF attacks from malicious websites targeting the MCP server on localhost.
 - **HTTP rate limiting.** The HTTP transport enforces 60 requests per minute per IP to prevent request flooding.
 - **API rate limiting.** The Harness API client enforces a 10 requests/second limit to avoid hitting upstream rate limits.
@@ -1131,7 +1152,10 @@ The Harness MCP server pairs well with **[Harness Skills](https://github.com/thi
 |---------|--------------|------------|
 | `HARNESS_ACCOUNT_ID is required when the API key is not a PAT...` | API key is not in PAT format (`pat.<accountId>.<tokenId>.<secret>`) so account ID cannot be inferred | Set `HARNESS_ACCOUNT_ID` explicitly |
 | `Unknown transport: "..."` on startup | Unsupported CLI transport arg | Use `stdio` or `http` only |
-| HTTP `405 Method not allowed. Use POST for stateless MCP.` | Request sent to `/mcp` with non-POST method | Use `POST /mcp` for MCP calls (`OPTIONS` is only for CORS preflight) |
+| `Invalid HARNESS_TOOLSETS: ...` on startup | One or more toolset names are not recognized | Use only names from [Toolset Filtering](#toolset-filtering) (exact match) |
+| HTTP `mcp-session-id header is required...` | A session request was sent without session header | Send `initialize` first, then include `mcp-session-id` on `POST/GET/DELETE /mcp` |
+| HTTP `Session not found...` | Session expired (30 min idle TTL) or already closed | Re-run `initialize` to create a new session, then retry with new header |
+| HTTP `405 Method Not Allowed` on `/mcp` | Unsupported method for MCP endpoint | Use `POST`, `GET`, `DELETE`, or `OPTIONS` only |
 | HTTP `Invalid request` | Invalid JSON body or request body exceeded `HARNESS_MAX_BODY_SIZE_MB` | Validate JSON payload size/shape; increase `HARNESS_MAX_BODY_SIZE_MB` if needed |
 | `Unknown resource_type "..."` from tools | Resource type is misspelled or filtered out via `HARNESS_TOOLSETS` | Call `harness_describe` (with optional `search_term`) to discover valid types |
 | `Missing required field "... for path parameter ..."` | A project/org scoped call is missing identifiers | Set `HARNESS_DEFAULT_ORG_ID`/`HARNESS_DEFAULT_PROJECT_ID` or pass `org_id`/`project_id` per tool call |
