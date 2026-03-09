@@ -162,7 +162,7 @@ harness-mcp-server/
 
 ### Authentication
 ```
-Header: x-api-key: <HARNESS_API_TOKEN>
+Header: x-api-key: <HARNESS_API_KEY>
 Base URL: https://app.harness.io
 ```
 - Personal API tokens or Service Account tokens
@@ -268,7 +268,7 @@ annotations: {
 
 ```bash
 # .env — required
-HARNESS_API_TOKEN=pat.xxxxx.xxxxx.xxxxx        # Personal access token or SA token
+HARNESS_API_KEY=pat.xxxxx.xxxxx.xxxxx           # Personal access token or SA token
 HARNESS_ACCOUNT_ID=abc123xyz                    # Account identifier
 HARNESS_BASE_URL=https://app.harness.io         # Override for self-managed
 
@@ -285,7 +285,7 @@ LOG_LEVEL=info                                  # debug | info | warn | error
 import { z } from "zod";
 
 export const ConfigSchema = z.object({
-  HARNESS_API_TOKEN: z.string().min(1, "API token required"),
+  HARNESS_API_KEY: z.string().min(1, "API key required"),
   HARNESS_ACCOUNT_ID: z.string().min(1, "Account ID required"),
   HARNESS_BASE_URL: z.string().url().default("https://app.harness.io"),
   HARNESS_DEFAULT_ORG: z.string().default("default"),
@@ -561,7 +561,7 @@ Add to Claude Desktop config (`claude_desktop_config.json`):
       "command": "node",
       "args": ["/path/to/harness-mcp-server/build/index.js"],
       "env": {
-        "HARNESS_API_TOKEN": "pat.xxx.xxx.xxx",
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
         "HARNESS_ACCOUNT_ID": "your-account-id",
         "HARNESS_DEFAULT_ORG": "default",
         "HARNESS_DEFAULT_PROJECT": "your-project"

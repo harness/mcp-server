@@ -126,6 +126,30 @@ In `src/registry/index.ts`:
 
 **executeActions** add non-CRUD operations like "run pipeline" or "toggle feature flag". They work like operations but are dispatched via `harness_execute`.
 
+### 5. bodySchema — required for create/update operations
+
+Any operation that sends a request body (`create`, `update`, execute actions with payloads) **must** include a `bodySchema` string. This is surfaced by `harness_describe` so the LLM knows what shape to send. Keep it concise — just the essential fields.
+
+```typescript
+operations: {
+  create: {
+    method: "POST",
+    path: "/api/resources",
+    bodySchema: '{ "name": string, "identifier": string, "type": "K8s" | "Docker", "spec": { ... } }',
+    description: "Create a resource",
+  },
+},
+```
+
+### 6. Avoiding parameter bloat
+
+Each resource type adds to the `harness_describe` output that the LLM must process. Keep definitions lean:
+
+- **identifierFields**: Only the primary key(s). Don't add fields that are just query params.
+- **listFilterFields**: Only fields the LLM would realistically use to narrow results. Skip internal API params like `sort` or `getDistinctFromBranches`.
+- **queryParams**: Map only the params that matter. The registry auto-injects `accountIdentifier`, `orgIdentifier`, and `projectIdentifier` based on `scope`.
+- **responseExtractor**: Always unwrap the Harness envelope (`data`, `data.content`). Don't return raw responses — they contain pagination metadata the LLM doesn't need.
+
 ## Adding a Prompt Template
 
 Prompt templates live in `src/prompts/`. Each file exports a `register*Prompt(server)` function.

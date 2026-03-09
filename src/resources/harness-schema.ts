@@ -10,6 +10,8 @@ type SchemaName = (typeof VALID_SCHEMAS)[number];
 const SCHEMA_BASE_URL =
   "https://raw.githubusercontent.com/harness/harness-schema/main/v0";
 
+const SCHEMA_FETCH_TIMEOUT_MS = 10_000;
+
 function buildSchemaUrl(name: SchemaName): string {
   return `${SCHEMA_BASE_URL}/${name}.json`;
 }
@@ -31,7 +33,7 @@ async function fetchSchema(name: SchemaName): Promise<string> {
   const url = buildSchemaUrl(name);
   log.info("Fetching schema from GitHub", { name, url });
 
-  const response = await fetch(url);
+  const response = await fetch(url, { signal: AbortSignal.timeout(SCHEMA_FETCH_TIMEOUT_MS) });
   if (!response.ok) {
     throw new Error(
       `Failed to fetch schema '${name}': HTTP ${response.status} ${response.statusText}`,
