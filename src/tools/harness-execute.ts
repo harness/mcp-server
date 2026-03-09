@@ -8,6 +8,7 @@ import { confirmViaElicitation } from "../utils/elicitation.js";
 import { createLogger } from "../utils/logger.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asRecord, asString } from "../utils/type-guards.js";
+import { isFlatKeyValueInputs, resolveRuntimeInputs } from "../utils/runtime-input-resolver.js";
 
 const log = createLogger("execute");
 
@@ -23,7 +24,8 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         resource_id: z.string().describe("The primary identifier of the resource").optional(),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
-        inputs: z.union([z.string(), z.record(z.string(), z.unknown())]).describe("Runtime inputs for pipeline execution. Preferred: pass the runtime input YAML string directly. Alternative: pass a JSON object. For pipelines with no runtime inputs, omit this field.").optional(),
+        inputs: z.union([z.string(), z.record(z.string(), z.unknown())]).describe("Runtime inputs for pipeline execution. Easiest: pass simple key-value pairs like {branch: 'main', env: 'prod'} — they are auto-resolved against the pipeline's input template. Alternative: pass a full runtime input YAML string. For pipelines with no runtime inputs, omit this field.").optional(),
+        input_set_ids: z.array(z.string()).describe("Input set identifiers to apply when running a pipeline. References saved input sets by ID.").optional(),
         body: z.record(z.string(), z.unknown()).describe("Additional body payload for the action").optional(),
         params: z.record(z.string(), z.unknown()).describe("Action-specific parameters (e.g. pipeline_id, execution_id, flag_id, agent_id, interrupt_type, enable, environment, module). Call harness_describe for available actions and fields per resource_type.").optional(),
       },
@@ -66,6 +68,38 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         const primaryField = def.identifierFields[0];
         if (primaryField && resourceId) {
           input[primaryField] = resourceId;
+        }
+
+        // Pass input_set_ids through to the dispatch input
+        if (args.input_set_ids && args.input_set_ids.length > 0) {
+          input.input_set_ids = args.input_set_ids.join(",");
+        }
+
+        // Auto-resolve flat key-value runtime inputs for pipeline run
+        if (
+          resourceType === "pipeline" &&
+          args.action === "run" &&
+          isFlatKeyValueInputs(args.inputs)
+        ) {
+          const pipelineId = asString(input.pipeline_id);
+          if (!pipelineId) {
+            return errorResult("pipeline_id is required to auto-resolve runtime inputs. Provide it via resource_id, params.pipeline_id, or a Harness URL.");
+          }
+          try {
+            const resolved = await resolveRuntimeInputs(client, args.inputs, {
+              pipelineId,
+              orgId: asString(input.org_id),
+              projectId: asString(input.project_id),
+            });
+            input.inputs = resolved.yaml;
+            // Attach resolution metadata for the LLM
+            if (resolved.unmatched.length > 0) {
+              log.warn(`Unresolved runtime input placeholders: ${resolved.unmatched.join(", ")}`);
+            }
+          } catch (err) {
+            log.warn("Failed to auto-resolve runtime inputs, passing through as-is", { error: String(err) });
+            // Fall through — let the original inputs pass to the API
+          }
         }
 
         let result: unknown;

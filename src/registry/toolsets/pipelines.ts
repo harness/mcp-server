@@ -114,30 +114,24 @@ export const pipelinesToolset: ToolsetDefinition = {
           method: "POST",
           path: "/pipeline/api/pipeline/execute/{pipelineIdentifier}",
           pathParams: { pipeline_id: "pipelineIdentifier" },
-          queryParams: { module: "module" },
+          queryParams: { module: "module", input_set_ids: "inputSetIdentifiers" },
           headers: { "Content-Type": "application/yaml" },
           bodyBuilder: (input) => {
             const inputs = input.inputs;
             // No runtime inputs — send empty YAML
             if (!inputs) return "";
-            // Already a YAML string (LLM passed runtimeInputYaml directly)
+            // Already a YAML string (pre-resolved by execute tool handler or passed directly)
             if (typeof inputs === "string") return inputs;
-            // Object — convert to YAML string for the API
-            // Wrap in pipeline.variables format if it looks like flat key-value pairs
-            const obj = inputs as Record<string, unknown>;
-            // If the LLM passed a full pipeline YAML structure, pass it through
-            if ("pipeline" in obj) {
-              return JSON.stringify(obj);
-            }
-            // Flat key-value inputs → wrap in the runtime input YAML structure
-            return JSON.stringify(obj);
+            // Object — serialize as JSON for the API (full pipeline YAML structure)
+            return JSON.stringify(inputs);
           },
           responseExtractor: ngExtract,
-          actionDescription: "Execute/run a pipeline. Pass runtime inputs via 'inputs' field as a YAML string (preferred) or JSON object.",
+          actionDescription: "Execute/run a pipeline. For runtime inputs, pass simple key-value pairs (e.g. {branch: 'main', env: 'prod'}) and they will be auto-resolved against the pipeline's input template. Alternatively, pass a full runtime input YAML string, or use input_set_ids to reference saved input sets.",
           bodySchema: {
-            description: "Runtime input YAML for pipeline execution. The Harness execute API expects a YAML string body. For pipelines with runtime inputs, fetch the input template first via harness_get(resource_type='input_set') or pass the runtime input YAML directly. If the pipeline has no runtime inputs, leave inputs empty.",
+            description: "Runtime inputs for pipeline execution. Three options: (1) Simple key-value pairs — auto-resolved against the pipeline's input template (easiest). (2) Named input set references via input_set_ids param. (3) Full runtime input YAML string (advanced). If the pipeline has no runtime inputs, omit the inputs field.",
             fields: [
-              { name: "inputs", type: "yaml", required: false, description: "Runtime input YAML string (e.g. 'pipeline:\\n  identifier: my_pipeline\\n  variables:\\n    - name: env\\n      value: prod'). Alternatively, pass a JSON object and it will be serialized for the API." },
+              { name: "inputs", type: "yaml", required: false, description: "Simple key-value pairs (e.g. {branch: 'main', env: 'prod'}) — auto-resolved to full YAML. Or a full runtime input YAML string. Or a JSON object with nested pipeline structure." },
+              { name: "input_set_ids", type: "array", required: false, description: "Array of input set identifiers to apply (references saved input sets). Passed as query parameter." },
             ],
           },
         },
@@ -355,6 +349,37 @@ export const pipelinesToolset: ToolsetDefinition = {
       },
     },
     {
+      resourceType: "runtime_input_template",
+      displayName: "Runtime Input Template",
+      description: "Fetch the runtime input template for a pipeline — shows all `<+input>` placeholders that need values. Use this to discover what runtime inputs a pipeline requires before executing it.",
+      toolset: "pipelines",
+      scope: "project",
+      identifierFields: ["pipeline_id"],
+      operations: {
+        get: {
+          method: "POST",
+          path: "/pipeline/api/inputSets/template",
+          queryParams: {
+            pipeline_id: "pipelineIdentifier",
+            branch: "branch",
+          },
+          bodyBuilder: () => ({}),
+          responseExtractor: (raw: unknown) => {
+            const r = raw as { data?: { inputSetTemplateYaml?: string; hasInputSets?: boolean; modules?: string[] } };
+            return {
+              inputSetTemplateYaml: r.data?.inputSetTemplateYaml ?? null,
+              hasInputSets: r.data?.hasInputSets ?? false,
+              modules: r.data?.modules ?? [],
+              _hint: r.data?.inputSetTemplateYaml
+                ? "This YAML template shows all runtime inputs needed. Fields with '<+input>' are required. Pass matching key-value pairs to harness_execute(action='run', inputs={...})."
+                : "This pipeline has no runtime inputs. You can execute it without providing any inputs.",
+            };
+          },
+          description: "Fetch the runtime input template for a pipeline. Shows all fields that require values at execution time.",
+        },
+      },
+    },
+    {
       resourceType: "approval_instance",
       displayName: "Approval Instance",
       description:
@@ -385,11 +410,16 @@ export const pipelinesToolset: ToolsetDefinition = {
           method: "POST",
           path: "/pipeline/api/approvals/{approvalInstanceId}/harness/activity",
           pathParams: { approval_id: "approvalInstanceId" },
-          bodyBuilder: (input) => ({
-            action: "APPROVE",
-            comments: input.comments ?? "",
-            ...(input.approver_inputs ? { approverInputs: input.approver_inputs } : {}),
-          }),
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            const comments = input.comments ?? body?.comments ?? "";
+            const approverInputs = input.approver_inputs ?? body?.approver_inputs;
+            return {
+              action: "APPROVE",
+              comments,
+              ...(approverInputs ? { approverInputs } : {}),
+            };
+          },
           responseExtractor: ngExtract,
           actionDescription: "Approve a Harness approval instance. Requires approval_id. Optional: comments, approver_inputs (array of {name, value}).",
           bodySchema: {
@@ -404,10 +434,13 @@ export const pipelinesToolset: ToolsetDefinition = {
           method: "POST",
           path: "/pipeline/api/approvals/{approvalInstanceId}/harness/activity",
           pathParams: { approval_id: "approvalInstanceId" },
-          bodyBuilder: (input) => ({
-            action: "REJECT",
-            comments: input.comments ?? "",
-          }),
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            return {
+              action: "REJECT",
+              comments: input.comments ?? body?.comments ?? "",
+            };
+          },
           responseExtractor: ngExtract,
           actionDescription: "Reject a Harness approval instance. Requires approval_id. Optional: comments.",
           bodySchema: {
