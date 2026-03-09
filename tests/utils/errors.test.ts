@@ -69,6 +69,46 @@ describe("isUserError", () => {
   });
 });
 
+describe("HarnessApiError — cause chain", () => {
+  it("preserves cause when provided", () => {
+    const original = new TypeError("fetch failed");
+    const err = new HarnessApiError("Request failed: fetch failed", 502, undefined, undefined, original);
+    expect(err.cause).toBe(original);
+  });
+
+  it("cause is undefined when not provided", () => {
+    const err = new HarnessApiError("Not found", 404);
+    expect(err.cause).toBeUndefined();
+  });
+
+  it("works with non-Error cause values", () => {
+    const err = new HarnessApiError("fail", 500, undefined, undefined, "raw string cause");
+    expect(err.cause).toBe("raw string cause");
+  });
+});
+
+describe("toMcpError — cause chain", () => {
+  it("preserves HarnessApiError as cause on McpError", () => {
+    const original = new HarnessApiError("timeout", 408);
+    const result = toMcpError(original);
+    expect(result.cause).toBe(original);
+  });
+
+  it("preserves plain Error as cause on McpError", () => {
+    const original = new Error("oops");
+    const result = toMcpError(original);
+    expect(result.cause).toBe(original);
+  });
+
+  it("preserves nested cause chain (HarnessApiError wrapping TypeError)", () => {
+    const root = new TypeError("network error");
+    const apiErr = new HarnessApiError("Request failed: network error", 502, undefined, undefined, root);
+    const mcpErr = toMcpError(apiErr);
+    expect(mcpErr.cause).toBe(apiErr);
+    expect((mcpErr.cause as HarnessApiError).cause).toBe(root);
+  });
+});
+
 describe("toMcpError", () => {
   it("passes through McpError unchanged", () => {
     const err = new McpError(ErrorCode.InvalidParams, "bad");

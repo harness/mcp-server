@@ -27,8 +27,9 @@ export class HarnessApiError extends Error {
     public readonly statusCode: number,
     public readonly harnessCode?: string,
     public readonly correlationId?: string,
+    cause?: unknown,
   ) {
-    super(message);
+    super(message, { cause });
     this.name = "HarnessApiError";
   }
 }
@@ -59,11 +60,15 @@ export function toMcpError(err: unknown): McpError {
   if (err instanceof HarnessApiError) {
     const code = mapHttpStatusToMcpCode(err.statusCode);
     const detail = err.correlationId ? ` (correlationId: ${err.correlationId})` : "";
-    return new McpError(code, `${err.message}${detail}`);
+    const mcpErr = new McpError(code, `${err.message}${detail}`);
+    mcpErr.cause = err;
+    return mcpErr;
   }
 
   if (err instanceof Error) {
-    return new McpError(ErrorCode.InternalError, err.message);
+    const mcpErr = new McpError(ErrorCode.InternalError, err.message);
+    mcpErr.cause = err;
+    return mcpErr;
   }
 
   return new McpError(ErrorCode.InternalError, String(err));

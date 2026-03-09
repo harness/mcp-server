@@ -118,10 +118,13 @@ export class HarnessClient {
         let data: unknown;
         try {
           data = JSON.parse(text);
-        } catch {
+        } catch (parseErr) {
           throw new HarnessApiError(
             `Non-JSON response from ${method} ${options.path}: ${text.slice(0, 200)}`,
             502,
+            undefined,
+            undefined,
+            parseErr,
           );
         }
         return data as T;
@@ -130,16 +133,19 @@ export class HarnessClient {
         if (err instanceof Error && err.name === "AbortError") {
           // External signal (client disconnect) — stop immediately, don't retry
           if (options.signal?.aborted) {
-            throw new HarnessApiError("Request cancelled", 499);
+            throw new HarnessApiError("Request cancelled", 499, undefined, undefined, err);
           }
           // Timeout — retry if allowed
-          lastError = new HarnessApiError("Request timed out", 408);
+          lastError = new HarnessApiError("Request timed out", 408, undefined, undefined, err);
           if (attempt < this.maxRetries) continue;
           throw lastError;
         }
         throw new HarnessApiError(
           `Request failed: ${(err as Error).message ?? String(err)}`,
           502,
+          undefined,
+          undefined,
+          err,
         );
       }
     }
