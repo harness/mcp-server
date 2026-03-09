@@ -6,6 +6,7 @@ import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
 import { compactItems } from "../utils/compact.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
+import { asString, isRecord } from "../utils/type-guards.js";
 
 export function registerListTool(server: McpServer, registry: Registry, client: HarnessClient): void {
   server.registerTool(
@@ -35,7 +36,7 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
         const input = applyUrlDefaults(rest as Record<string, unknown>, args.url);
         // Spread caller-supplied filters into the input for registry dispatch
         if (filters) Object.assign(input, filters);
-        const resourceType = input.resource_type as string | undefined;
+        const resourceType = asString(input.resource_type);
         if (!resourceType) {
           return errorResult("resource_type is required. Provide it explicitly or via a Harness URL.");
         }
@@ -45,10 +46,10 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
         const result = await registry.dispatch(client, resourceType, "list", input);
 
         // Apply compact mode — strip verbose metadata from list items
-        if (args.compact !== false) {
-          const r = result as { items?: unknown[] };
-          if (r.items && Array.isArray(r.items)) {
-            r.items = compactItems(r.items);
+        if (args.compact !== false && isRecord(result)) {
+          const items = result.items;
+          if (Array.isArray(items)) {
+            result.items = compactItems(items);
           }
         }
 

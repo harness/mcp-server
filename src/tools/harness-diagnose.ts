@@ -6,6 +6,7 @@ import type { Config } from "../config.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
+import { asString } from "../utils/type-guards.js";
 import type { DiagnoseHandler, DiagnoseContext } from "./diagnose/types.js";
 import { pipelineHandler } from "./diagnose/pipeline.js";
 import { connectorHandler } from "./diagnose/connector.js";
@@ -54,8 +55,8 @@ export function registerDiagnoseTool(server: McpServer, registry: Registry, clie
         }
 
         // Resolve resource_type: explicit > URL-derived > default
-        let resourceType = (args.resource_type as string)
-          ?? (input.resource_type as string)
+        let resourceType = asString(args.resource_type)
+          ?? asString(input.resource_type)
           ?? "pipeline";
         resourceType = ALIASES[resourceType] ?? resourceType;
 

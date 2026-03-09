@@ -6,6 +6,7 @@ import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
 import { confirmViaElicitation } from "../utils/elicitation.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
+import { asString, isRecord } from "../utils/type-guards.js";
 
 export function registerUpdateTool(server: McpServer, registry: Registry, client: HarnessClient): void {
   server.registerTool(
@@ -51,10 +52,10 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
         if (def.identifierFields.length > 0 && args.resource_id) {
           input[def.identifierFields[0]] = args.resource_id;
         }
-        const versionLabel = input.version_label as string | undefined;
+        const versionLabel = asString(input.version_label);
         if (versionLabel) { /* already set via params */ }
-        else if (args.body && typeof args.body === "object" && "version_label" in args.body) {
-          input.version_label = (args.body as Record<string, unknown>).version_label;
+        else if (isRecord(args.body) && "version_label" in args.body) {
+          input.version_label = args.body.version_label;
         } else if (args.resource_type === "template") {
           input.version_label = "v1";
         }

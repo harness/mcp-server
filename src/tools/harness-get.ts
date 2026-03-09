@@ -5,6 +5,7 @@ import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
+import { asString } from "../utils/type-guards.js";
 
 export function registerGetTool(server: McpServer, registry: Registry, client: HarnessClient): void {
   server.registerTool(
@@ -30,11 +31,11 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
         const { params, ...rest } = args;
         const input = applyUrlDefaults(rest as Record<string, unknown>, args.url);
         if (params) Object.assign(input, params);
-        const resourceType = input.resource_type as string | undefined;
+        const resourceType = asString(input.resource_type);
         if (!resourceType) {
           return errorResult("resource_type is required. Provide it explicitly or via a Harness URL.");
         }
-        const resourceId = input.resource_id as string | undefined;
+        const resourceId = asString(input.resource_id);
 
         const def = registry.getResource(resourceType);
 

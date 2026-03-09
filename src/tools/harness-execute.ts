@@ -7,6 +7,7 @@ import { isUserError, isUserFixableApiError, toMcpError, HarnessApiError } from 
 import { confirmViaElicitation } from "../utils/elicitation.js";
 import { createLogger } from "../utils/logger.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
+import { asRecord, asString } from "../utils/type-guards.js";
 
 const log = createLogger("execute");
 
@@ -39,11 +40,11 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         const { params, ...rest } = args;
         const input = applyUrlDefaults(rest as Record<string, unknown>, args.url);
         if (params) Object.assign(input, params);
-        const resourceType = input.resource_type as string | undefined;
+        const resourceType = asString(input.resource_type);
         if (!resourceType) {
           return errorResult("resource_type is required. Provide it explicitly or via a Harness URL.");
         }
-        const resourceId = input.resource_id as string | undefined;
+        const resourceId = asString(input.resource_id);
 
         // Validate resource_type and action before asking user to confirm
         const def = registry.getResource(resourceType);
@@ -78,14 +79,14 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
             err.statusCode === 405
           ) {
             log.info("Retry returned 405, falling back to fresh pipeline run");
-            let pipelineId = input.pipeline_id as string | undefined;
+            let pipelineId = asString(input.pipeline_id);
 
             // Resolve pipeline_id from execution if not provided
             if (!pipelineId && input.execution_id) {
               try {
-                const exec = await registry.dispatch(client, "execution", "get", input) as Record<string, unknown>;
-                const pes = exec?.pipelineExecutionSummary as Record<string, unknown> | undefined;
-                pipelineId = pes?.pipelineIdentifier as string | undefined;
+                const exec = asRecord(await registry.dispatch(client, "execution", "get", input));
+                const pes = asRecord(exec?.pipelineExecutionSummary);
+                pipelineId = asString(pes?.pipelineIdentifier);
               } catch {
                 // Fall through — will error below
               }
@@ -97,7 +98,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
 
             input.pipeline_id = pipelineId;
             result = await registry.dispatchExecute(client, "pipeline", "run", input);
-            return jsonResult({ ...result as Record<string, unknown>, _note: "Retry was not available (405). Executed a fresh pipeline run instead." });
+            return jsonResult({ ...(asRecord(result) ?? {}), _note: "Retry was not available (405). Executed a fresh pipeline run instead." });
           }
           throw err;
         }

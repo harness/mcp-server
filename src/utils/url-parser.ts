@@ -17,6 +17,8 @@ export interface ParsedHarnessUrl {
   registry_id?: string;
   artifact_id?: string;
   environment_id?: string;
+  /** Index signature allows dynamic contextField assignment from URL parsing. */
+  [key: string]: string | undefined;
 }
 
 /** Known Harness module identifiers that appear in URL paths */
@@ -146,7 +148,7 @@ export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
 
     for (const match of matches) {
       if (match.id) {
-        (result as unknown as Record<string, unknown>)[match.contextField] = match.id;
+        result[match.contextField] = match.id;
       }
     }
 

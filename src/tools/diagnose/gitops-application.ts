@@ -1,6 +1,7 @@
 import type { DiagnoseHandler, DiagnoseContext } from "./types.js";
 import { createLogger } from "../../utils/logger.js";
 import { sendProgress } from "../../utils/progress.js";
+import { isRecord, asRecord, asString } from "../../utils/type-guards.js";
 
 const log = createLogger("diagnose:gitops-application");
 
@@ -41,10 +42,10 @@ interface ResourceNode {
 }
 
 function analyzeAppStatus(raw: Record<string, unknown>): Record<string, unknown> {
-  const app = (raw.app ?? raw) as Record<string, unknown>;
-  const spec = app.spec as Record<string, unknown> | undefined;
-  const status = (app.status ?? {}) as AppStatus;
-  const metadata = app.metadata as Record<string, unknown> | undefined;
+  const app = asRecord(raw.app) ?? raw;
+  const spec = asRecord(app.spec);
+  const status = (isRecord(app.status) ? app.status : {}) as AppStatus;
+  const metadata = asRecord(app.metadata);
 
   const result: Record<string, unknown> = {};
 
@@ -55,11 +56,11 @@ function analyzeAppStatus(raw: Record<string, unknown>): Record<string, unknown>
     health_status: status.health?.status,
     health_message: status.health?.message || undefined,
     repo_url: status.sync?.comparedTo?.source?.repoURL
-      ?? (spec?.source as Record<string, unknown>)?.repoURL,
+      ?? asRecord(spec?.source)?.repoURL,
     target_revision: status.sync?.comparedTo?.source?.targetRevision
-      ?? (spec?.source as Record<string, unknown>)?.targetRevision,
+      ?? asRecord(spec?.source)?.targetRevision,
     path: status.sync?.comparedTo?.source?.path
-      ?? (spec?.source as Record<string, unknown>)?.path,
+      ?? asRecord(spec?.source)?.path,
     synced_revision: status.sync?.revision,
   };
 
@@ -109,8 +110,8 @@ function analyzeResourceTree(raw: unknown): {
   total: number;
   healthy_count: number;
 } {
-  const data = raw as Record<string, unknown>;
-  const nodes = (data.nodes ?? []) as ResourceNode[];
+  const data = asRecord(raw) ?? {};
+  const nodes = (Array.isArray(data.nodes) ? data.nodes : []) as ResourceNode[];
 
   const withHealth = nodes.filter((n) => n.health?.status);
   const unhealthy = withHealth
@@ -133,8 +134,8 @@ function analyzeResourceTree(raw: unknown): {
 }
 
 function analyzeEvents(raw: unknown): Record<string, unknown>[] {
-  const data = raw as Record<string, unknown>;
-  const items = (data.items ?? (Array.isArray(raw) ? raw : [])) as Array<Record<string, unknown>>;
+  const data = asRecord(raw);
+  const items = (data?.items ?? (Array.isArray(raw) ? raw : [])) as Array<Record<string, unknown>>;
 
   return items
     .filter((e) => e.type === "Warning")
@@ -155,8 +156,8 @@ export const gitopsApplicationHandler: DiagnoseHandler = {
   async diagnose(ctx: DiagnoseContext): Promise<Record<string, unknown>> {
     const { client, registry, config, input, extra, signal } = ctx;
 
-    const agentId = input.agent_id as string | undefined;
-    const appName = (input.resource_id as string) ?? (input.app_name as string);
+    const agentId = asString(input.agent_id);
+    const appName = asString(input.resource_id) ?? asString(input.app_name);
 
     if (!agentId) {
       throw new Error("agent_id is required for GitOps application diagnosis. Provide it explicitly or via a Harness URL.");
@@ -254,8 +255,8 @@ export const gitopsApplicationHandler: DiagnoseHandler = {
     diagnostic.healthy = issues.length === 0;
 
     // Deep link
-    const orgId = (input.org_id as string) ?? config.HARNESS_DEFAULT_ORG_ID;
-    const projectId = (input.project_id as string) ?? config.HARNESS_DEFAULT_PROJECT_ID;
+    const orgId = asString(input.org_id) ?? config.HARNESS_DEFAULT_ORG_ID;
+    const projectId = asString(input.project_id) ?? config.HARNESS_DEFAULT_PROJECT_ID;
     if (orgId && projectId) {
       const base = config.HARNESS_BASE_URL.replace(/\/$/, "");
       diagnostic.openInHarness = `${base}/ng/account/${config.HARNESS_ACCOUNT_ID}/all/orgs/${orgId}/projects/${projectId}/gitops/applications/${encodeURIComponent(appName)}`;

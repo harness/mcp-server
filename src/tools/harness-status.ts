@@ -9,6 +9,7 @@ import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.
 import { createLogger } from "../utils/logger.js";
 import { sendProgress } from "../utils/progress.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
+import { asString } from "../utils/type-guards.js";
 
 const log = createLogger("status");
 
@@ -89,8 +90,8 @@ export function registerStatusTool(
       try {
         const signal = extra.signal;
         const merged = applyUrlDefaults(args as Record<string, unknown>, args.url);
-        const orgId = (merged.org_id as string) ?? config.HARNESS_DEFAULT_ORG_ID;
-        const projectId = (merged.project_id as string) ?? config.HARNESS_DEFAULT_PROJECT_ID ?? "";
+        const orgId = asString(merged.org_id) ?? config.HARNESS_DEFAULT_ORG_ID;
+        const projectId = asString(merged.project_id) ?? config.HARNESS_DEFAULT_PROJECT_ID ?? "";
         const limit = Math.min(args.limit ?? 5, 20);
 
         const baseInput: Record<string, unknown> = {

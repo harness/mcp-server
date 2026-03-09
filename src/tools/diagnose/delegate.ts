@@ -1,6 +1,7 @@
 import type { DiagnoseHandler, DiagnoseContext } from "./types.js";
 import { createLogger } from "../../utils/logger.js";
 import { sendProgress } from "../../utils/progress.js";
+import { asString, isRecord } from "../../utils/type-guards.js";
 
 const log = createLogger("diagnose:delegate");
 
@@ -86,7 +87,7 @@ export const delegateHandler: DiagnoseHandler = {
   async diagnose(ctx: DiagnoseContext): Promise<Record<string, unknown>> {
     const { client, registry, config, input, extra, signal } = ctx;
 
-    const targetId = (input.resource_id as string) ?? (input.delegate_id as string);
+    const targetId = asString(input.resource_id) ?? asString(input.delegate_id);
 
     await sendProgress(extra, 0, 1, "Fetching delegates...");
     log.info("Listing delegates", { targetId: targetId ?? "all" });
@@ -102,7 +103,7 @@ export const delegateHandler: DiagnoseHandler = {
       log.warn("Unexpected delegate list response shape", {
         type: typeof raw,
         isArray: false,
-        keys: raw && typeof raw === "object" ? Object.keys(raw as Record<string, unknown>) : [],
+        keys: isRecord(raw) ? Object.keys(raw) : [],
       });
     }
 

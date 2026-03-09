@@ -1,6 +1,7 @@
 import type { DiagnoseHandler, DiagnoseContext } from "./types.js";
 import { createLogger } from "../../utils/logger.js";
 import { sendProgress } from "../../utils/progress.js";
+import { isRecord, asRecord, asString, asNumber } from "../../utils/type-guards.js";
 
 const log = createLogger("diagnose:connector");
 
@@ -11,7 +12,7 @@ export const connectorHandler: DiagnoseHandler = {
   async diagnose(ctx: DiagnoseContext): Promise<Record<string, unknown>> {
     const { client, registry, config, input, extra, signal } = ctx;
 
-    const connectorId = (input.resource_id as string) ?? (input.connector_id as string);
+    const connectorId = asString(input.resource_id) ?? asString(input.connector_id);
     if (!connectorId) {
       throw new Error("resource_id (connector identifier) is required. Provide it explicitly or via a Harness URL.");
     }
@@ -24,52 +25,54 @@ export const connectorHandler: DiagnoseHandler = {
     log.info("Fetching connector", { connectorId });
 
     const raw = await registry.dispatch(client, "connector", "get", input, signal);
-    const connectorData = raw as Record<string, unknown>;
-    const connector = (connectorData.connector ?? connectorData) as Record<string, unknown>;
-    const spec = connector.spec as Record<string, unknown> | undefined;
-    const status = connectorData.status as Record<string, unknown> | undefined;
+    const connectorData = asRecord(raw) ?? {};
+    const connector = asRecord(connectorData.connector) ?? connectorData;
+    const spec = asRecord(connector.spec);
+    const status = asRecord(connectorData.status);
 
-    diagnostic.connector = {
+    const connectorInfo: Record<string, unknown> = {
       name: connector.name,
       identifier: connector.identifier,
       type: connector.type,
       description: connector.description || undefined,
-      tags: connector.tags && Object.keys(connector.tags as Record<string, unknown>).length > 0
+      tags: isRecord(connector.tags) && Object.keys(connector.tags).length > 0
         ? connector.tags
         : undefined,
     };
 
     // Extract auth method from spec (varies by connector type)
     if (spec) {
-      const authType = (spec.authentication as Record<string, unknown>)?.type
-        ?? (spec.auth as Record<string, unknown>)?.type
+      const authType = asRecord(spec.authentication)?.type
+        ?? asRecord(spec.auth)?.type
         ?? spec.authType
         ?? spec.type;
       if (authType) {
-        (diagnostic.connector as Record<string, unknown>).auth_type = authType;
+        connectorInfo.auth_type = authType;
       }
 
       const url = spec.url ?? spec.dockerRegistryUrl ?? spec.gitUrl
         ?? spec.masterUrl ?? spec.awsCrossAccountAttributes;
       if (url) {
-        (diagnostic.connector as Record<string, unknown>).url = url;
+        connectorInfo.url = url;
       }
     }
+    diagnostic.connector = connectorInfo;
 
     // Existing status from Harness (last known connectivity state)
     if (status) {
-      diagnostic.last_known_status = {
+      const lastKnown: Record<string, unknown> = {
         status: status.status,
-        last_tested_at: status.lastTestedAt
+        last_tested_at: asNumber(status.lastTestedAt)
           ? new Date(status.lastTestedAt as number).toISOString()
           : undefined,
-        last_connected_at: status.lastConnectedAt
+        last_connected_at: asNumber(status.lastConnectedAt)
           ? new Date(status.lastConnectedAt as number).toISOString()
           : undefined,
       };
       if (status.errorSummary) {
-        (diagnostic.last_known_status as Record<string, unknown>).error_summary = status.errorSummary;
+        lastKnown.error_summary = status.errorSummary;
       }
+      diagnostic.last_known_status = lastKnown;
     }
 
     // 2. Run connectivity test
@@ -78,25 +81,25 @@ export const connectorHandler: DiagnoseHandler = {
 
     try {
       const testResult = await registry.dispatchExecute(client, "connector", "test_connection", input, signal);
-      const test = testResult as Record<string, unknown>;
+      const test = asRecord(testResult) ?? {};
 
-      diagnostic.test_result = {
+      const testInfo: Record<string, unknown> = {
         status: test.status,
         tested_at: new Date().toISOString(),
       };
 
       if (test.status !== "SUCCESS") {
-        const errors = test.errors as Array<Record<string, unknown>> | undefined;
-        const errorSummary = test.errorSummary as string | undefined;
-        (diagnostic.test_result as Record<string, unknown>).error_summary = errorSummary;
+        const errors = Array.isArray(test.errors) ? test.errors : undefined;
+        testInfo.error_summary = asString(test.errorSummary);
         if (errors && errors.length > 0) {
-          (diagnostic.test_result as Record<string, unknown>).errors = errors.map((e) => ({
+          testInfo.errors = errors.filter(isRecord).map((e) => ({
             reason: e.reason,
             message: e.message,
             code: e.code,
           }));
         }
       }
+      diagnostic.test_result = testInfo;
     } catch (err) {
       log.warn("Connector test_connection failed", { connectorId, error: String(err) });
       diagnostic.test_result = {
@@ -107,8 +110,8 @@ export const connectorHandler: DiagnoseHandler = {
     }
 
     // Deep link
-    const orgId = (input.org_id as string) ?? config.HARNESS_DEFAULT_ORG_ID;
-    const projectId = (input.project_id as string) ?? config.HARNESS_DEFAULT_PROJECT_ID;
+    const orgId = asString(input.org_id) ?? config.HARNESS_DEFAULT_ORG_ID;
+    const projectId = asString(input.project_id) ?? config.HARNESS_DEFAULT_PROJECT_ID;
     if (orgId && projectId) {
       const base = config.HARNESS_BASE_URL.replace(/\/$/, "");
       diagnostic.openInHarness = `${base}/ng/account/${config.HARNESS_ACCOUNT_ID}/all/orgs/${orgId}/projects/${projectId}/setup/connectors/${connectorId}`;

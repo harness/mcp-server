@@ -3,6 +3,7 @@ import type { HarnessClient } from "../../client/harness-client.js";
 import type { Config } from "../../config.js";
 import { createLogger } from "../../utils/logger.js";
 import { sendProgress } from "../../utils/progress.js";
+import { isRecord, asRecord, asString, asNumber } from "../../utils/type-guards.js";
 
 const log = createLogger("diagnose:pipeline");
 
@@ -295,9 +296,10 @@ async function diagnoseChildPipeline(
       },
       signal,
     });
-    const data = (response as Record<string, unknown>).data ?? response;
-    const execGraph = (data as Record<string, unknown>).executionGraph as Record<string, unknown> | undefined;
-    const graphNodeMap = execGraph?.nodeMap as Record<string, ExecGraphNode> | undefined;
+    const responseRec = asRecord(response) ?? {};
+    const data = asRecord(responseRec.data) ?? responseRec;
+    const execGraph = asRecord(data.executionGraph);
+    const graphNodeMap = asRecord(execGraph?.nodeMap) as Record<string, ExecGraphNode> | undefined;
     if (graphNodeMap) return findFailedNodes(graphNodeMap);
   } catch (err) {
     log.warn("Child pipeline diagnosis failed", { executionId: child.executionId, error: String(err) });
@@ -310,14 +312,14 @@ function buildExecutionSummary(
   config: Config,
   input: Record<string, unknown>,
 ): { summary: Record<string, unknown>; failedNodes: FailedNodeDetail[]; childRef?: { executionId: string; orgId: string; projectId: string } } {
-  const pes = execution.pipelineExecutionSummary as Record<string, unknown> | undefined;
+  const pes = asRecord(execution.pipelineExecutionSummary);
   if (!pes) return { summary: execution, failedNodes: [] };
 
-  const startTs = pes.startTs as number | undefined;
-  const endTs = pes.endTs as number | undefined;
+  const startTs = asNumber(pes.startTs);
+  const endTs = asNumber(pes.endTs);
   const durationMs = startTs && endTs ? endTs - startTs : undefined;
-  const triggerInfo = pes.executionTriggerInfo as Record<string, unknown> | undefined;
-  const triggeredBy = triggerInfo?.triggeredBy as Record<string, unknown> | undefined;
+  const triggerInfo = asRecord(pes.executionTriggerInfo);
+  const triggeredBy = asRecord(triggerInfo?.triggeredBy);
 
   const summary: Record<string, unknown> = {
     pipeline: {
@@ -329,7 +331,7 @@ function buildExecutionSummary(
       status: pes.status,
       run_sequence: pes.runSequence,
       trigger_type: triggerInfo?.triggerType,
-      triggered_by: triggeredBy?.identifier ?? (triggeredBy?.extraInfo as Record<string, unknown> | undefined)?.email,
+      triggered_by: triggeredBy?.identifier ?? asRecord(triggeredBy?.extraInfo)?.email,
     },
     timing: {
       started_at: startTs ? new Date(startTs).toISOString() : undefined,
@@ -339,10 +341,10 @@ function buildExecutionSummary(
     },
   };
 
-  const layoutNodeMap = pes.layoutNodeMap as Record<string, LayoutNode> | undefined;
-  const startingNodeId = pes.startingNodeId as string | undefined;
-  const executionGraph = execution.executionGraph as Record<string, unknown> | undefined;
-  const nodeMap = executionGraph?.nodeMap as Record<string, ExecGraphNode> | undefined;
+  const layoutNodeMap = isRecord(pes.layoutNodeMap) ? pes.layoutNodeMap as Record<string, LayoutNode> : undefined;
+  const startingNodeId = asString(pes.startingNodeId);
+  const executionGraph = asRecord(execution.executionGraph);
+  const nodeMap = isRecord(executionGraph?.nodeMap) ? executionGraph.nodeMap as Record<string, ExecGraphNode> : undefined;
 
   if (layoutNodeMap && startingNodeId) {
     const stages = extractStages(layoutNodeMap, startingNodeId, nodeMap);
@@ -399,10 +401,10 @@ function buildExecutionSummary(
     }
   }
 
-  const orgId = (input.org_id as string) ?? config.HARNESS_DEFAULT_ORG_ID;
-  const projectId = (input.project_id as string) ?? config.HARNESS_DEFAULT_PROJECT_ID;
-  const pipelineIdentifier = pes.pipelineIdentifier as string | undefined;
-  const execId = pes.planExecutionId as string | undefined;
+  const orgId = asString(input.org_id) ?? config.HARNESS_DEFAULT_ORG_ID;
+  const projectId = asString(input.project_id) ?? config.HARNESS_DEFAULT_PROJECT_ID;
+  const pipelineIdentifier = asString(pes.pipelineIdentifier);
+  const execId = asString(pes.planExecutionId);
   if (pipelineIdentifier && execId && orgId && projectId) {
     const base = config.HARNESS_BASE_URL.replace(/\/$/, "");
     summary.openInHarness = `${base}/ng/account/${config.HARNESS_ACCOUNT_ID}/all/orgs/${orgId}/projects/${projectId}/pipelines/${pipelineIdentifier}/executions/${execId}/pipeline`;
@@ -445,14 +447,14 @@ export const pipelineHandler: DiagnoseHandler = {
   async diagnose(ctx: DiagnoseContext): Promise<Record<string, unknown>> {
     const { client, registry, config, input, args, extra, signal } = ctx;
 
-    let executionId = input.execution_id as string | undefined;
-    const pipelineId = input.pipeline_id as string | undefined;
-    const isSummary = (args as Record<string, unknown>).summary !== false;
+    let executionId = asString(input.execution_id);
+    const pipelineId = asString(input.pipeline_id);
+    const isSummary = args.summary !== false;
 
-    const includeYaml = (args as Record<string, unknown>).include_yaml ?? !isSummary;
-    const includeLogs = (args as Record<string, unknown>).include_logs ?? !isSummary;
-    const logSnippetLines = ((args as Record<string, unknown>).log_snippet_lines as number) ?? 120;
-    const maxFailedSteps = ((args as Record<string, unknown>).max_failed_steps as number) ?? 5;
+    const includeYaml = args.include_yaml ?? !isSummary;
+    const includeLogs = args.include_logs ?? !isSummary;
+    const logSnippetLines = asNumber(args.log_snippet_lines) ?? 120;
+    const maxFailedSteps = asNumber(args.max_failed_steps) ?? 5;
 
     let totalSteps = 1;
     if (includeYaml) totalSteps++;
@@ -495,9 +497,9 @@ export const pipelineHandler: DiagnoseHandler = {
         render_full_graph: true,
       }, signal);
 
-      const exec = execution as Record<string, unknown>;
-      const pes = exec?.pipelineExecutionSummary as Record<string, unknown> | undefined;
-      resolvedPipelineId = pes?.pipelineIdentifier as string | undefined;
+      const exec = asRecord(execution) ?? {};
+      const pes = asRecord(exec.pipelineExecutionSummary);
+      resolvedPipelineId = asString(pes?.pipelineIdentifier);
 
       if (isSummary) {
         const result = buildExecutionSummary(exec, config, input);
@@ -516,7 +518,8 @@ export const pipelineHandler: DiagnoseHandler = {
               return e;
             };
             const childPrimary = childFailedNodes[0];
-            (diagnostic.execution as Record<string, unknown>).child_pipeline = {
+            const execDiag = asRecord(diagnostic.execution) ?? {};
+            execDiag.child_pipeline = {
               execution_id: result.childRef.executionId,
               org_id: result.childRef.orgId,
               project_id: result.childRef.projectId,
@@ -530,8 +533,8 @@ export const pipelineHandler: DiagnoseHandler = {
         }
       } else {
         diagnostic.execution = execution;
-        const execGraph = exec?.executionGraph as Record<string, unknown> | undefined;
-        const graphNodeMap = execGraph?.nodeMap as Record<string, ExecGraphNode> | undefined;
+        const execGraph = asRecord(exec.executionGraph);
+        const graphNodeMap = isRecord(execGraph?.nodeMap) ? execGraph.nodeMap as Record<string, ExecGraphNode> : undefined;
         if (graphNodeMap) {
           failedNodes = findFailedNodes(graphNodeMap);
         }
