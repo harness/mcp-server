@@ -45,4 +45,6 @@ export interface RequestOptions {
   headers?: Record<string, string>;
   /** Override base path prefix (e.g. "/pipeline/api" vs "/ng/api") */
   rawPath?: boolean;
+  /** External abort signal (e.g. from MCP client disconnect). Merged with timeout. */
+  signal?: AbortSignal;
 }

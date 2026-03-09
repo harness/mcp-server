@@ -153,6 +153,7 @@ export class Registry {
     resourceType: string,
     operation: OperationName,
     input: Record<string, unknown>,
+    signal?: AbortSignal,
   ): Promise<unknown> {
     if (this.config.HARNESS_READ_ONLY && !Registry.READ_OPERATIONS.has(operation)) {
       throw new Error(`Read-only mode is enabled (HARNESS_READ_ONLY=true). "${operation}" operations are not allowed.`);
@@ -165,7 +166,7 @@ export class Registry {
       throw new Error(`Resource "${resourceType}" does not support "${operation}". Supported: ${supported}`);
     }
 
-    return this.executeSpec(client, def, spec, input);
+    return this.executeSpec(client, def, spec, input, signal);
   }
 
   /** Dispatch an execute action to the Harness API. */
@@ -174,6 +175,7 @@ export class Registry {
     resourceType: string,
     action: string,
     input: Record<string, unknown>,
+    signal?: AbortSignal,
   ): Promise<unknown> {
     if (this.config.HARNESS_READ_ONLY) {
       throw new Error(`Read-only mode is enabled (HARNESS_READ_ONLY=true). Execute actions are not allowed.`);
@@ -186,7 +188,7 @@ export class Registry {
       throw new Error(`Resource "${resourceType}" has no execute action "${action}". Available: ${available}`);
     }
 
-    return this.executeSpec(client, def, actionSpec, input);
+    return this.executeSpec(client, def, actionSpec, input, signal);
   }
 
   private async executeSpec(
@@ -194,6 +196,7 @@ export class Registry {
     def: ResourceDefinition,
     spec: EndpointSpec,
     input: Record<string, unknown>,
+    signal?: AbortSignal,
   ): Promise<unknown> {
     // Build path with substitutions
     let path = spec.path;
@@ -259,6 +262,7 @@ export class Registry {
       params,
       body,
       ...(spec.headers ? { headers: spec.headers } : {}),
+      signal,
     });
 
     // Extract response

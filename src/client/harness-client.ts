@@ -59,8 +59,17 @@ export class HarnessClient {
       }
 
       try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), this.timeout);
+        // Check if already aborted before starting the request
+        if (options.signal?.aborted) {
+          throw options.signal.reason ?? new DOMException("The operation was aborted", "AbortError");
+        }
+
+        const timeoutController = new AbortController();
+        const timer = setTimeout(() => timeoutController.abort(), this.timeout);
+        // Merge external signal (client disconnect) with timeout signal
+        const signal = options.signal
+          ? AbortSignal.any([options.signal, timeoutController.signal])
+          : timeoutController.signal;
 
         log.debug(`${method} ${url}`);
 
@@ -70,7 +79,7 @@ export class HarnessClient {
           body: options.body
             ? (typeof options.body === "string" ? options.body : JSON.stringify(options.body))
             : undefined,
-          signal: controller.signal,
+          signal,
         });
 
         clearTimeout(timer);
@@ -104,6 +113,11 @@ export class HarnessClient {
       } catch (err) {
         if (err instanceof HarnessApiError) throw err;
         if (err instanceof Error && err.name === "AbortError") {
+          // External signal (client disconnect) — stop immediately, don't retry
+          if (options.signal?.aborted) {
+            throw new HarnessApiError("Request cancelled", 499);
+          }
+          // Timeout — retry if allowed
           lastError = new HarnessApiError("Request timed out", 408);
           if (attempt < this.maxRetries) continue;
           throw lastError;

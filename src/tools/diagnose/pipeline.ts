@@ -282,6 +282,7 @@ function findChildPipelineRef(
 async function diagnoseChildPipeline(
   client: HarnessClient,
   child: { executionId: string; orgId: string; projectId: string },
+  signal?: AbortSignal,
 ): Promise<FailedNodeDetail[]> {
   try {
     const response = await client.request<Record<string, unknown>>({
@@ -292,6 +293,7 @@ async function diagnoseChildPipeline(
         projectIdentifier: child.projectId,
         renderFullBottomGraph: "true",
       },
+      signal,
     });
     const data = (response as Record<string, unknown>).data ?? response;
     const execGraph = (data as Record<string, unknown>).executionGraph as Record<string, unknown> | undefined;
@@ -441,7 +443,7 @@ export const pipelineHandler: DiagnoseHandler = {
   description: "Analyze a pipeline execution — stage/step breakdown, timing, bottlenecks, failure details with exact step, error, delegate, and script context.",
 
   async diagnose(ctx: DiagnoseContext): Promise<Record<string, unknown>> {
-    const { client, registry, config, input, args, extra } = ctx;
+    const { client, registry, config, input, args, extra, signal } = ctx;
 
     let executionId = input.execution_id as string | undefined;
     const pipelineId = input.pipeline_id as string | undefined;
@@ -465,7 +467,7 @@ export const pipelineHandler: DiagnoseHandler = {
           pipeline_id: pipelineId,
           size: 1,
           page: 0,
-        });
+        }, signal);
         const items = (execList as { items?: Array<Record<string, unknown>> }).items;
         if (items && items.length > 0) {
           executionId = (items[0].planExecutionId as string) ?? undefined;
@@ -491,7 +493,7 @@ export const pipelineHandler: DiagnoseHandler = {
       const execution = await registry.dispatch(client, "execution", "get", {
         ...input,
         render_full_graph: true,
-      });
+      }, signal);
 
       const exec = execution as Record<string, unknown>;
       const pes = exec?.pipelineExecutionSummary as Record<string, unknown> | undefined;
@@ -504,7 +506,7 @@ export const pipelineHandler: DiagnoseHandler = {
 
         if (result.childRef) {
           log.info("Detected chained pipeline failure, diagnosing child", result.childRef);
-          const childFailedNodes = await diagnoseChildPipeline(client, result.childRef);
+          const childFailedNodes = await diagnoseChildPipeline(client, result.childRef, signal);
           if (childFailedNodes.length > 0) {
             const childEntry = (f: FailedNodeDetail) => {
               const e: Record<string, unknown> = {
@@ -543,7 +545,7 @@ export const pipelineHandler: DiagnoseHandler = {
           const pipeline = await registry.dispatch(client, "pipeline", "get", {
             ...input,
             pipeline_id: resolvedPipelineId,
-          });
+          }, signal);
           diagnostic.pipeline = pipeline;
         } catch (err) {
           log.warn("Failed to fetch pipeline YAML", { error: String(err) });
@@ -572,7 +574,7 @@ export const pipelineHandler: DiagnoseHandler = {
             const logData = await registry.dispatch(client, "execution_log", "get", {
               ...input,
               prefix,
-            });
+            }, signal);
             return { key, value: truncateLog(logData, logSnippetLines) };
           } catch (err) {
             log.warn("Failed to fetch step logs", { step: fn.step, error: String(err) });

@@ -87,6 +87,7 @@ export function registerStatusTool(
     },
     async (args, extra) => {
       try {
+        const signal = extra.signal;
         const merged = applyUrlDefaults(args as Record<string, unknown>, args.url);
         const orgId = (merged.org_id as string) ?? config.HARNESS_DEFAULT_ORG_ID;
         const projectId = (merged.project_id as string) ?? config.HARNESS_DEFAULT_PROJECT_ID ?? "";
@@ -107,15 +108,15 @@ export function registerStatusTool(
           registry.dispatch(client, "execution", "list", {
             ...baseInput,
             status: "Failed",
-          }),
+          }, signal),
           registry.dispatch(client, "execution", "list", {
             ...baseInput,
             status: "Running",
-          }),
+          }, signal),
           registry.dispatch(client, "execution", "list", {
             ...baseInput,
             size: Math.min(limit * 2, 20),
-          }),
+          }, signal),
         ]);
 
         // Extract results with graceful degradation

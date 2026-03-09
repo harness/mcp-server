@@ -66,7 +66,7 @@ export function registerDiagnoseTool(server: McpServer, registry: Registry, clie
           );
         }
 
-        const ctx: DiagnoseContext = { client, registry, config, input, args: mergedArgs, extra };
+        const ctx: DiagnoseContext = { client, registry, config, input, args: mergedArgs, extra, signal: extra.signal };
         const result = await handler.diagnose(ctx);
         return jsonResult(result);
       } catch (err) {

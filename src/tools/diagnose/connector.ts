@@ -9,7 +9,7 @@ export const connectorHandler: DiagnoseHandler = {
   description: "Diagnose a connector — fetches details and runs a connectivity test, returning type, auth method, status, and any connection errors.",
 
   async diagnose(ctx: DiagnoseContext): Promise<Record<string, unknown>> {
-    const { client, registry, config, input, extra } = ctx;
+    const { client, registry, config, input, extra, signal } = ctx;
 
     const connectorId = (input.resource_id as string) ?? (input.connector_id as string);
     if (!connectorId) {
@@ -23,7 +23,7 @@ export const connectorHandler: DiagnoseHandler = {
     await sendProgress(extra, 0, 2, "Fetching connector details...");
     log.info("Fetching connector", { connectorId });
 
-    const raw = await registry.dispatch(client, "connector", "get", input);
+    const raw = await registry.dispatch(client, "connector", "get", input, signal);
     const connectorData = raw as Record<string, unknown>;
     const connector = (connectorData.connector ?? connectorData) as Record<string, unknown>;
     const spec = connector.spec as Record<string, unknown> | undefined;
@@ -77,7 +77,7 @@ export const connectorHandler: DiagnoseHandler = {
     log.info("Testing connector connectivity", { connectorId });
 
     try {
-      const testResult = await registry.dispatchExecute(client, "connector", "test_connection", input);
+      const testResult = await registry.dispatchExecute(client, "connector", "test_connection", input, signal);
       const test = testResult as Record<string, unknown>;
 
       diagnostic.test_result = {

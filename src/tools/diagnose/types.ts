@@ -13,6 +13,7 @@ export interface DiagnoseContext {
   input: Record<string, unknown>;
   args: Record<string, unknown>;
   extra: Extra;
+  signal: AbortSignal;
 }
 
 export interface DiagnoseHandler {

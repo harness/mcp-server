@@ -153,7 +153,7 @@ export const gitopsApplicationHandler: DiagnoseHandler = {
   description: "Diagnose a GitOps application — combines app sync/health status, Kubernetes resource tree health, and recent warning events into a single diagnosis.",
 
   async diagnose(ctx: DiagnoseContext): Promise<Record<string, unknown>> {
-    const { client, registry, config, input, extra } = ctx;
+    const { client, registry, config, input, extra, signal } = ctx;
 
     const agentId = input.agent_id as string | undefined;
     const appName = (input.resource_id as string) ?? (input.app_name as string);
@@ -174,9 +174,9 @@ export const gitopsApplicationHandler: DiagnoseHandler = {
     log.info("Diagnosing GitOps application", { agentId, appName });
 
     const [appResult, treeResult, eventsResult] = await Promise.allSettled([
-      registry.dispatch(client, "gitops_application", "get", dispatchInput),
-      registry.dispatch(client, "gitops_app_resource_tree", "get", dispatchInput),
-      registry.dispatch(client, "gitops_app_event", "list", dispatchInput),
+      registry.dispatch(client, "gitops_application", "get", dispatchInput, signal),
+      registry.dispatch(client, "gitops_app_resource_tree", "get", dispatchInput, signal),
+      registry.dispatch(client, "gitops_app_event", "list", dispatchInput, signal),
     ]);
 
     // 1. App status (required)

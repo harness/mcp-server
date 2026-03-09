@@ -84,7 +84,7 @@ export const delegateHandler: DiagnoseHandler = {
   description: "Diagnose delegate health — lists all delegates, reports connectivity, heartbeat status, version, and any detected issues.",
 
   async diagnose(ctx: DiagnoseContext): Promise<Record<string, unknown>> {
-    const { client, registry, config, input, extra } = ctx;
+    const { client, registry, config, input, extra, signal } = ctx;
 
     const targetId = (input.resource_id as string) ?? (input.delegate_id as string);
 
@@ -92,7 +92,7 @@ export const delegateHandler: DiagnoseHandler = {
     log.info("Listing delegates", { targetId: targetId ?? "all" });
 
     // Always pass all=true to get delegates across all org/project scopes
-    const raw = await registry.dispatch(client, "delegate", "list", { ...input, all: "true" });
+    const raw = await registry.dispatch(client, "delegate", "list", { ...input, all: "true" }, signal);
 
     let delegates: DelegateInfo[];
     if (Array.isArray(raw)) {

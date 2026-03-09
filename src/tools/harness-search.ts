@@ -54,6 +54,7 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
     },
     async (args, extra) => {
       try {
+        const signal = extra.signal;
         const mergedArgs = applyUrlDefaults(args as Record<string, unknown>, args.url);
         // Determine which resource types to search
         let targetTypes = args.resource_types ?? [];
@@ -71,6 +72,8 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
         let searched = 0;
 
         for (let i = 0; i < targetTypes.length; i += MAX_CONCURRENCY) {
+          // Check for cancellation between batches
+          signal.throwIfAborted();
           const batch = targetTypes.slice(i, i + MAX_CONCURRENCY);
           await sendProgress(extra, searched, targetTypes.length, `Searching batch ${Math.floor(i / MAX_CONCURRENCY) + 1}...`);
           const batchResults = await Promise.all(
@@ -85,7 +88,7 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
                   size: args.max_per_type ?? 5,
                   limit: args.max_per_type ?? 5,
                   page: 0,
-                });
+                }, signal);
                 return { rt, result, error: null };
               } catch (err) {
                 log.debug(`Search failed for ${rt}`, { error: String(err) });

@@ -255,6 +255,61 @@ describe("HarnessClient", () => {
     });
   });
 
+  describe("request — abort signal", () => {
+    it("throws 499 immediately when signal is already aborted", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({ data: "ok" }), { status: 200 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+      const controller = new AbortController();
+      controller.abort();
+
+      try {
+        await client.request({ path: "/test", signal: controller.signal });
+        expect.fail("should have thrown");
+      } catch (err) {
+        expect(err).toBeInstanceOf(HarnessApiError);
+        expect((err as HarnessApiError).statusCode).toBe(499);
+        expect((err as HarnessApiError).message).toContain("cancelled");
+      }
+      // fetch should NOT have been called
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("throws 499 when signal aborts during request (no retry)", async () => {
+      const controller = new AbortController();
+      fetchSpy.mockImplementation(() => {
+        // Abort mid-request
+        controller.abort();
+        const err = new Error("The operation was aborted");
+        err.name = "AbortError";
+        return Promise.reject(err);
+      });
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 3 }));
+
+      try {
+        await client.request({ path: "/test", signal: controller.signal });
+        expect.fail("should have thrown");
+      } catch (err) {
+        expect(err).toBeInstanceOf(HarnessApiError);
+        expect((err as HarnessApiError).statusCode).toBe(499);
+        expect((err as HarnessApiError).message).toContain("cancelled");
+      }
+      // Should NOT retry — only 1 call
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("passes signal through to fetch", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({ data: "ok" }), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+      const controller = new AbortController();
+
+      await client.request({ path: "/test", signal: controller.signal });
+
+      // The signal passed to fetch should be a combined signal (AbortSignal.any)
+      const fetchOptions = fetchSpy.mock.calls[0][1] as RequestInit;
+      expect(fetchOptions.signal).toBeDefined();
+    });
+  });
+
   describe("request — body serialization", () => {
     it("sends JSON-stringified body for objects", async () => {
       fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
