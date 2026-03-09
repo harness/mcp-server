@@ -40,10 +40,32 @@ describe("Registry", () => {
       expect(desc.total_toolsets).toBe(2);
     });
 
-    it("loads zero toolsets for non-matching filter", () => {
-      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "nonexistent" }));
+    it("throws for invalid toolset names in HARNESS_TOOLSETS", () => {
+      expect(() => new Registry(makeConfig({ HARNESS_TOOLSETS: "nonexistent" }))).toThrow(
+        /Invalid HARNESS_TOOLSETS: "nonexistent"/,
+      );
+    });
+
+    it("throws for typo in toolset name (e.g. 'pipeline' instead of 'pipelines')", () => {
+      expect(() => new Registry(makeConfig({ HARNESS_TOOLSETS: "pipeline" }))).toThrow(
+        /Invalid HARNESS_TOOLSETS: "pipeline"/,
+      );
+      expect(() => new Registry(makeConfig({ HARNESS_TOOLSETS: "pipeline" }))).toThrow(
+        /Valid toolset names:/,
+      );
+    });
+
+    it("throws listing all invalid names when multiple are wrong", () => {
+      expect(() => new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines,badname,services,oops" }))).toThrow(
+        /Invalid HARNESS_TOOLSETS: "badname", "oops"/,
+      );
+    });
+
+    it("accepts all valid toolset names without error", () => {
+      // Just use a few known-good names
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines,services,connectors" }));
       const desc = registry.describe() as { total_toolsets: number };
-      expect(desc.total_toolsets).toBe(0);
+      expect(desc.total_toolsets).toBe(3);
     });
   });
 

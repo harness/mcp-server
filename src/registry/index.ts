@@ -87,7 +87,30 @@ export class Registry {
   private parseToolsetFilter(): Set<ToolsetName> | null {
     const raw = this.config.HARNESS_TOOLSETS;
     if (!raw || raw.trim() === "") return null;
-    return new Set(raw.split(",").map((s) => s.trim()) as ToolsetName[]);
+
+    const validNames = new Set<string>(ALL_TOOLSETS.map((t) => t.name));
+    const parsed = raw.split(",").map((s) => s.trim()).filter(Boolean);
+    const valid: ToolsetName[] = [];
+    const invalid: string[] = [];
+
+    for (const name of parsed) {
+      if (validNames.has(name)) {
+        valid.push(name as ToolsetName);
+      } else {
+        invalid.push(name);
+      }
+    }
+
+    if (invalid.length > 0) {
+      const available = Array.from(validNames).sort().join(", ");
+      throw new Error(
+        `Invalid HARNESS_TOOLSETS: ${invalid.map((n) => `"${n}"`).join(", ")}. ` +
+        `Valid toolset names: ${available}`,
+      );
+    }
+
+    if (valid.length === 0) return null;
+    return new Set(valid);
   }
 
   /** Get a resource definition by type, or throw. */
