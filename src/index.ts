@@ -136,13 +136,19 @@ async function startHttp(config: Config, port: number): Promise<void> {
     log.info("Session destroyed", { sessionId, remaining: sessions.size });
   }
 
-  // TTL reaper — evicts idle sessions
+  // TTL reaper — evicts idle sessions and expired rate-limit entries
   const reaper = setInterval(() => {
     const now = Date.now();
     for (const [id, session] of sessions) {
       if (now - session.lastActivity > SESSION_TTL_MS) {
         log.info("Reaping idle session", { sessionId: id });
         destroySession(id);
+      }
+    }
+    // Evict expired rate-limit entries to prevent unbounded map growth
+    for (const [ip, entry] of ipHits) {
+      if (now >= entry.resetAt) {
+        ipHits.delete(ip);
       }
     }
   }, REAP_INTERVAL_MS);
