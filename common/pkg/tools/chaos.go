@@ -308,7 +308,7 @@ func StopExperimentRunsTool(config *config.McpServerConfig, client *client.Chaos
 		}
 }
 
-// ListProbesTool creates a tool for listing the probes
+// ListProbesTool creates a tool for listing down the probes
 func ListProbesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("chaos_probes_list",
 			mcp.WithDescription("List the chaos probes"),
