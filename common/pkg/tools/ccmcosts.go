@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"sort"
 	"time"
 
@@ -873,16 +874,16 @@ func buildViewConditionRules(keys []string, values []string) []dto.CCMRule {
 	return rules
 }
 
-func CreateCostCategoriesCostTargetsEventTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+func CreateCostCategoriesCostTargetsEventTool(config *config.McpServerConfig) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("ccm_create_cost_categories_cost_targets_event",
-			mcp.WithDescription("Create a cost category by defining cost target groupings based on cloud labels. Cost categories let you group cloud costs into buckets (e.g., by environment or team). Returns a UI event for user confirmation."),
+			mcp.WithDescription("Create a cost category by defining cost target groupings based on cloud labels. Cost categories let you group cloud costs into buckets (e.g., by environment or team). Use ccm_list_labelsv2_keys with the Cost Explorer perspective to get the list of available label keys. This tool does not create the cost category directly — it returns a UI event that will be rendered for the user to review and confirm before the cost category is actually created."),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    utils.ToBoolPtr(false),
 				DestructiveHint: utils.ToBoolPtr(false),
 			}),
 			mcp.WithString("cost_category_name",
 				mcp.Required(),
-				mcp.Description("Name for the Cost Category"),
+				mcp.Description("Unique display name for the Cost Category. Use list_ccm_cost_categories to check for existing names."),
 			),
 			mcp.WithArray(
 				"cost_target_groupings",
@@ -897,7 +898,7 @@ func CreateCostCategoriesCostTargetsEventTool(config *config.McpServerConfig, cl
 						},
 						"keys": map[string]any{
 							"type":        "array",
-							"description": "List of unique identifier key for this cost bucket (e.g., 'env', 'Environment')",
+							"description": "List of unique identifier keys for this cost bucket (e.g., 'env', 'Environment')",
 							"items": map[string]any{
 								"type": "string",
 							},
@@ -944,13 +945,13 @@ func CreateCostCategoriesCostTargetsEventTool(config *config.McpServerConfig, cl
 						},
 						"splits": map[string]any{
 							"type":        "array",
-							"description": "Required when strategy is FIXED. Array of split allocations across cost targets.",
+							"description": "Required when strategy is FIXED. Array of split allocations across cost targets. Percentage should sum to 100.",
 							"items": map[string]any{
 								"type": "object",
 								"properties": map[string]any{
 									"cost_target_name": map[string]any{
 										"type":        "string",
-										"description": "Name of the cost target bucket to allocate to",
+										"description": "Name of the cost target bucket to allocate to. Must exactly match a title in cost_target_groupings.",
 									},
 									"percentage_contribution": map[string]any{
 										"type":        "number",
@@ -977,6 +978,9 @@ func CreateCostCategoriesCostTargetsEventTool(config *config.McpServerConfig, cl
 						"description": "Display label when strategy is DISPLAY_NAME (defaults to 'Unattributed')",
 					},
 				}),
+				func(schema map[string]any) {
+					schema["required"] = []string{"strategy"}
+				},
 			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -1059,32 +1063,42 @@ func CreateCostCategoriesCostTargetsEventTool(config *config.McpServerConfig, cl
 					}
 					// Extract splits if strategy is FIXED
 					if strategy == "FIXED" {
-						if splitsInput, splitsOk := scgMap["splits"]; splitsOk && splitsInput != nil {
-							splitsArray, ok := splitsInput.([]interface{})
-							if !ok {
-								return mcp.NewToolResultError("Error: splits must be an array"), nil
-							}
-							var splits []dto.CCMSplit
-							for _, s := range splitsArray {
-								splitMap, ok := s.(map[string]interface{})
-								if !ok {
-									return mcp.NewToolResultError("Error: each split must be an object"), nil
-								}
-								costTargetName, ok := splitMap["cost_target_name"].(string)
-								if !ok {
-									return mcp.NewToolResultError("Error: cost_target_name is required in each split"), nil
-								}
-								pctContrib, ok := splitMap["percentage_contribution"].(float64)
-								if !ok {
-									return mcp.NewToolResultError("Error: percentage_contribution is required in each split"), nil
-								}
-								splits = append(splits, dto.CCMSplit{
-									CostTargetName:         &costTargetName,
-									PercentageContribution: &pctContrib,
-								})
-							}
-							sc.Splits = splits
+						splitsInput, splitsOk := scgMap["splits"]
+						if !splitsOk || splitsInput == nil {
+							return mcp.NewToolResultError("Error: splits is required when strategy is FIXED"), nil
 						}
+						splitsArray, ok := splitsInput.([]interface{})
+						if !ok {
+							return mcp.NewToolResultError("Error: splits must be an array"), nil
+						}
+						if len(splitsArray) == 0 {
+							return mcp.NewToolResultError("Error: splits must contain at least one entry when strategy is FIXED"), nil
+						}
+						var splits []dto.CCMSplit
+						var totalPct float64
+						for _, s := range splitsArray {
+							splitMap, ok := s.(map[string]interface{})
+							if !ok {
+								return mcp.NewToolResultError("Error: each split must be an object"), nil
+							}
+							costTargetName, ok := splitMap["cost_target_name"].(string)
+							if !ok {
+								return mcp.NewToolResultError("Error: cost_target_name is required in each split"), nil
+							}
+							pctContrib, ok := splitMap["percentage_contribution"].(float64)
+							if !ok {
+								return mcp.NewToolResultError("Error: percentage_contribution is required in each split"), nil
+							}
+							totalPct += pctContrib
+							splits = append(splits, dto.CCMSplit{
+								CostTargetName:         &costTargetName,
+								PercentageContribution: &pctContrib,
+							})
+						}
+						if math.Abs(totalPct-100) > 0.01 {
+							return mcp.NewToolResultError(fmt.Sprintf("Error: split percentage_contribution values must sum to 100, got %.2f", totalPct)), nil
+						}
+						sc.Splits = splits
 					}
 					sharedCosts = append(sharedCosts, sc)
 				}
@@ -1120,10 +1134,9 @@ func CreateCostCategoriesCostTargetsEventTool(config *config.McpServerConfig, cl
 			// Create embedded resources for the event
 			eventResource, err := costCategoryCostTargetsEvent.CreateEmbeddedResource()
 			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			} else {
-				responseContents = append(responseContents, eventResource)
+				return nil, fmt.Errorf("failed to create event resource: %w", err)
 			}
+			responseContents = append(responseContents, eventResource)
 			return &mcp.CallToolResult{
 				Content: responseContents,
 			}, nil

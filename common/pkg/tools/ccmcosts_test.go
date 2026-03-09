@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	config "github.com/harness/mcp-server/common"
-	"github.com/harness/mcp-server/common/client"
 	"github.com/harness/mcp-server/common/client/dto"
 	"github.com/harness/mcp-server/common/pkg/event"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -19,9 +18,8 @@ func TestCreateCostCategoriesCostTargetsEventTool(t *testing.T) {
 	cfg := &config.McpServerConfig{
 		AccountID: "test-account-123",
 	}
-	mockClient := &client.CloudCostManagementService{}
 	// Create the tool
-	tool, handler := CreateCostCategoriesCostTargetsEventTool(cfg, mockClient)
+	tool, handler := CreateCostCategoriesCostTargetsEventTool(cfg)
 	t.Run("Tool Creation", func(t *testing.T) {
 		assert.NotNil(t, tool, "Tool should not be nil")
 		assert.NotNil(t, handler, "Handler should not be nil")
@@ -702,6 +700,113 @@ func TestCreateCostCategoriesCostTargetsEventTool(t *testing.T) {
 		assert.Equal(t, "Minimal Category", payload.Name)
 		assert.Empty(t, payload.SharedCosts)
 		assert.Nil(t, payload.UnallocatedCost)
+	})
+	t.Run("Shared Costs - FIXED Without Splits Returns Error", func(t *testing.T) {
+		ctx := context.Background()
+		request := mcp.CallToolRequest{}
+		request.Params.Name = "ccm_create_cost_categories_cost_targets_event"
+		request.Params.Arguments = map[string]interface{}{
+			"cost_category_name": "Test Category",
+			"cost_target_groupings": []interface{}{
+				map[string]interface{}{
+					"title":  "Production",
+					"keys":   []interface{}{"env"},
+					"values": []interface{}{"prod"},
+				},
+			},
+			"shared_cost_groupings": []interface{}{
+				map[string]interface{}{
+					"title":    "Shared DB",
+					"keys":     []interface{}{"service"},
+					"values":   []interface{}{"db"},
+					"strategy": "FIXED",
+					// splits intentionally omitted
+				},
+			},
+		}
+		result, err := handler(ctx, request)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.IsError)
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok)
+		assert.Contains(t, textContent.Text, "splits is required when strategy is FIXED")
+	})
+	t.Run("Shared Costs - FIXED With Empty Splits Returns Error", func(t *testing.T) {
+		ctx := context.Background()
+		request := mcp.CallToolRequest{}
+		request.Params.Name = "ccm_create_cost_categories_cost_targets_event"
+		request.Params.Arguments = map[string]interface{}{
+			"cost_category_name": "Test Category",
+			"cost_target_groupings": []interface{}{
+				map[string]interface{}{
+					"title":  "Production",
+					"keys":   []interface{}{"env"},
+					"values": []interface{}{"prod"},
+				},
+			},
+			"shared_cost_groupings": []interface{}{
+				map[string]interface{}{
+					"title":    "Shared DB",
+					"keys":     []interface{}{"service"},
+					"values":   []interface{}{"db"},
+					"strategy": "FIXED",
+					"splits":   []interface{}{},
+				},
+			},
+		}
+		result, err := handler(ctx, request)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.IsError)
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok)
+		assert.Contains(t, textContent.Text, "splits must contain at least one entry")
+	})
+	t.Run("Shared Costs - FIXED With Splits Not Summing To 100 Returns Error", func(t *testing.T) {
+		ctx := context.Background()
+		request := mcp.CallToolRequest{}
+		request.Params.Name = "ccm_create_cost_categories_cost_targets_event"
+		request.Params.Arguments = map[string]interface{}{
+			"cost_category_name": "Test Category",
+			"cost_target_groupings": []interface{}{
+				map[string]interface{}{
+					"title":  "Production",
+					"keys":   []interface{}{"env"},
+					"values": []interface{}{"prod"},
+				},
+				map[string]interface{}{
+					"title":  "Development",
+					"keys":   []interface{}{"env"},
+					"values": []interface{}{"dev"},
+				},
+			},
+			"shared_cost_groupings": []interface{}{
+				map[string]interface{}{
+					"title":    "Shared DB",
+					"keys":     []interface{}{"service"},
+					"values":   []interface{}{"db"},
+					"strategy": "FIXED",
+					"splits": []interface{}{
+						map[string]interface{}{
+							"cost_target_name":        "Production",
+							"percentage_contribution": 70.0,
+						},
+						map[string]interface{}{
+							"cost_target_name":        "Development",
+							"percentage_contribution": 20.0, // only sums to 90
+						},
+					},
+				},
+			},
+		}
+		result, err := handler(ctx, request)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.IsError)
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok)
+		assert.Contains(t, textContent.Text, "split percentage_contribution values must sum to 100")
 	})
 }
 
