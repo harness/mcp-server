@@ -21,6 +21,13 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
     async (args) => {
       try {
         const input = applyUrlDefaults(args as Record<string, unknown>, args.url);
+
+        // Validate resource_type and operation before asking user to confirm
+        const def = registry.getResource(args.resource_type);
+        if (!def.operations.create) {
+          return errorResult(`Resource "${args.resource_type}" does not support "create". Supported: ${Object.keys(def.operations).join(", ")}`);
+        }
+
         const elicit = await confirmViaElicitation({
           server,
           toolName: "harness_create",

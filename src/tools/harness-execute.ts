@@ -36,6 +36,13 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         }
         const resourceId = input.resource_id as string | undefined;
 
+        // Validate resource_type and action before asking user to confirm
+        const def = registry.getResource(resourceType);
+        if (!def.executeActions?.[args.action]) {
+          const available = def.executeActions ? Object.keys(def.executeActions).join(", ") : "none";
+          return errorResult(`Resource "${resourceType}" has no execute action "${args.action}". Available: ${available}`);
+        }
+
         const elicit = await confirmViaElicitation({
           server,
           toolName: "harness_execute",
@@ -46,7 +53,6 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         }
 
         // Map resource_id to the primary identifier field
-        const def = registry.getResource(resourceType);
         if (def.identifierFields.length > 0 && resourceId) {
           input[def.identifierFields[0]] = resourceId;
         }

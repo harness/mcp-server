@@ -22,6 +22,12 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
     },
     async (args) => {
       try {
+        // Validate resource_type and operation before asking user to confirm
+        const def = registry.getResource(args.resource_type);
+        if (!def.operations.update) {
+          return errorResult(`Resource "${args.resource_type}" does not support "update". Supported: ${Object.keys(def.operations).join(", ")}`);
+        }
+
         const elicit = await confirmViaElicitation({
           server,
           toolName: "harness_update",
@@ -30,8 +36,6 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
         if (!elicit.proceed) {
           return errorResult(`Operation ${elicit.reason} by user.`);
         }
-
-        const def = registry.getResource(args.resource_type);
         const { params, ...rest } = args;
         const input = applyUrlDefaults(rest as Record<string, unknown>, args.url);
         if (params) Object.assign(input, params);
