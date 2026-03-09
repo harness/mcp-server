@@ -8,7 +8,7 @@ import { confirmViaElicitation } from "../utils/elicitation.js";
 import { createLogger } from "../utils/logger.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asRecord, asString } from "../utils/type-guards.js";
-import { isFlatKeyValueInputs, resolveRuntimeInputs } from "../utils/runtime-input-resolver.js";
+import { isFlatKeyValueInputs, resolveRuntimeInputs, type ResolutionResult } from "../utils/runtime-input-resolver.js";
 
 const log = createLogger("execute");
 
@@ -24,8 +24,8 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         resource_id: z.string().describe("The primary identifier of the resource").optional(),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
-        inputs: z.union([z.string(), z.record(z.string(), z.unknown())]).describe("Runtime inputs for pipeline execution. Easiest: pass simple key-value pairs like {branch: 'main', env: 'prod'} — they are auto-resolved against the pipeline's input template. Alternative: pass a full runtime input YAML string. For pipelines with no runtime inputs, omit this field.").optional(),
-        input_set_ids: z.array(z.string()).describe("Input set identifiers to apply when running a pipeline. References saved input sets by ID.").optional(),
+        inputs: z.union([z.string(), z.record(z.string(), z.unknown())]).describe("Runtime inputs for pipeline execution. For simple variables: pass key-value pairs like {branch: 'main', env: 'prod'} — auto-resolved against the pipeline's input template. For complex pipelines (CI codebase, templates with structural fields): use input_set_ids instead, or provide full runtime input YAML. Check harness_get(resource_type='runtime_input_template', resource_id='PIPELINE_ID') first to see what inputs are needed.").optional(),
+        input_set_ids: z.array(z.string()).describe("Input set identifiers to apply when running a pipeline. Recommended for complex pipelines with structural inputs (CI codebase build config, template inputs). List available sets with harness_list(resource_type='input_set', filters={pipeline_id: 'PIPELINE_ID'}).").optional(),
         body: z.record(z.string(), z.unknown()).describe("Additional body payload for the action").optional(),
         params: z.record(z.string(), z.unknown()).describe("Action-specific parameters (e.g. pipeline_id, execution_id, flag_id, agent_id, interrupt_type, enable, environment, module). Call harness_describe for available actions and fields per resource_type.").optional(),
       },
@@ -76,6 +76,9 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         }
 
         // Auto-resolve flat key-value runtime inputs for pipeline run
+        let resolved: ResolutionResult | undefined;
+        const hasInputSets = args.input_set_ids && args.input_set_ids.length > 0;
+
         if (
           resourceType === "pipeline" &&
           args.action === "run" &&
@@ -86,19 +89,45 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
             return errorResult("pipeline_id is required to auto-resolve runtime inputs. Provide it via resource_id, params.pipeline_id, or a Harness URL.");
           }
           try {
-            const resolved = await resolveRuntimeInputs(client, args.inputs, {
+            resolved = await resolveRuntimeInputs(client, args.inputs, {
               pipelineId,
-              orgId: asString(input.org_id),
-              projectId: asString(input.project_id),
+              orgId: asString(input.org_id) || registry.defaultOrgId,
+              projectId: asString(input.project_id) || registry.defaultProjectId,
             });
-            input.inputs = resolved.yaml;
-            // Attach resolution metadata for the LLM
-            if (resolved.unmatched.length > 0) {
-              log.warn(`Unresolved runtime input placeholders: ${resolved.unmatched.join(", ")}`);
+
+            // Smart pre-flight: only block on required unmatched fields when no input sets cover them
+            if (!hasInputSets && resolved.unmatchedRequired.length > 0) {
+              const parts: string[] = [];
+              if (resolved.matched.length > 0) {
+                parts.push(`Matched ${resolved.matched.length} input(s): ${resolved.matched.join(", ")}.`);
+              }
+
+              const structuralFields = resolved.unmatchedRequired.filter(f => isStructuralField(f));
+              const simpleFields = resolved.unmatchedRequired.filter(f => !isStructuralField(f));
+
+              parts.push(`${resolved.unmatchedRequired.length} required field(s) still need values: ${resolved.unmatchedRequired.join(", ")}.`);
+
+              if (structuralFields.length > 0) {
+                parts.push(`Fields [${structuralFields.join(", ")}] likely need complex objects (not simple strings). Use an input set or provide full YAML.`);
+              }
+
+              if (resolved.unmatchedOptional.length > 0) {
+                parts.push(`${resolved.unmatchedOptional.length} optional field(s) have defaults and can be omitted: ${resolved.unmatchedOptional.join(", ")}.`);
+              }
+
+              // Fetch available input sets to suggest them
+              const inputSetHint = await fetchInputSetHint(client, pipelineId, input, registry);
+              if (inputSetHint) parts.push(inputSetHint);
+
+              parts.push(`Expected keys: [${resolved.expectedKeys.join(", ")}]. You provided: [${Object.keys(args.inputs).join(", ")}].`);
+              parts.push(`Tip: use harness_get(resource_type="runtime_input_template", resource_id="${pipelineId}") to see the full template.`);
+
+              return errorResult(parts.join("\n\n"));
             }
+
+            input.inputs = resolved.yaml;
           } catch (err) {
             log.warn("Failed to auto-resolve runtime inputs, passing through as-is", { error: String(err) });
-            // Fall through — let the original inputs pass to the API
           }
         }
 
@@ -116,7 +145,6 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
             log.info("Retry returned 405, falling back to fresh pipeline run");
             let pipelineId = asString(input.pipeline_id);
 
-            // Resolve pipeline_id from execution if not provided
             if (!pipelineId && input.execution_id) {
               try {
                 const exec = asRecord(await registry.dispatch(client, "execution", "get", input));
@@ -138,6 +166,17 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           throw err;
         }
 
+        if (resolved) {
+          return jsonResult({
+            ...(asRecord(result) ?? {}),
+            _inputResolution: {
+              mode: hasInputSets ? "input_set_with_overrides" : "auto_resolved",
+              matched: resolved.matched,
+              ...(resolved.unmatchedOptional.length > 0 ? { defaulted: resolved.unmatchedOptional } : {}),
+            },
+          });
+        }
+
         return jsonResult(result);
       } catch (err) {
         if (isUserError(err)) return errorResult(err.message);
@@ -146,4 +185,46 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
       }
     },
   );
+}
+
+const STRUCTURAL_FIELDS = new Set([
+  "build", "infrastructure", "execution", "spec", "template",
+  "templateinputs", "servicedefinition", "artifacts", "manifests",
+]);
+
+function isStructuralField(fieldName: string): boolean {
+  return STRUCTURAL_FIELDS.has(fieldName.toLowerCase());
+}
+
+async function fetchInputSetHint(
+  client: HarnessClient,
+  pipelineId: string,
+  input: Record<string, unknown>,
+  registry: Registry,
+): Promise<string | null> {
+  try {
+    const raw = await client.request<unknown>({
+      method: "GET",
+      path: "/pipeline/api/inputSets",
+      params: {
+        pipelineIdentifier: pipelineId,
+        orgIdentifier: String(input.org_id || registry.defaultOrgId),
+        projectIdentifier: String(input.project_id || registry.defaultProjectId),
+        size: "5",
+      },
+    });
+    const data = asRecord(asRecord(raw)?.data);
+    const content = data?.content;
+    if (!Array.isArray(content) || content.length === 0) return null;
+
+    const ids = content
+      .map((item: unknown) => asString(asRecord(item)?.identifier))
+      .filter(Boolean);
+    if (ids.length === 0) return null;
+
+    const total = typeof data?.totalElements === "number" ? data.totalElements : ids.length;
+    return `Available input sets for this pipeline (${total} total): [${ids.join(", ")}]. Use input_set_ids=["<id>"] to apply one.`;
+  } catch {
+    return null;
+  }
 }

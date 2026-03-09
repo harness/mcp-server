@@ -108,6 +108,8 @@ export interface ResourceDefinition {
   deepLinkTemplate?: string;
   /** Troubleshooting guidance for LLMs. Describes how to diagnose issues with this resource type. */
   diagnosticHint?: string;
+  /** Execution guidance for LLMs. Describes how to discover and provide runtime inputs. */
+  executeHint?: string;
   /** CRUD endpoint mappings */
   operations: Partial<Record<OperationName, EndpointSpec>>;
   /** Execute action mappings (e.g. run pipeline, toggle FF) */

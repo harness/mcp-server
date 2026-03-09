@@ -383,6 +383,143 @@ describe("harness_execute", () => {
     const data = parseResult(result) as { _note: string };
     expect(data._note).toContain("fresh pipeline run");
   });
+
+  it("blocks when flat inputs have unmatchedRequired and no input_set_ids", async () => {
+    // Template fetch returns a template with required + optional fields
+    const mixedTemplate = `pipeline:
+  identifier: "test_pipe"
+  properties:
+    ci:
+      codebase:
+        build: "<+input>"
+  variables:
+    - name: "DEPLOY"
+      type: "String"
+      value: "<+input>.default(true)"
+`;
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetTemplateYaml: mixedTemplate } }) // template fetch
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { content: [{ identifier: "my-set" }], totalElements: 1 } }); // input set list
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "test_pipe",
+      inputs: { WRONG_KEY: "value" },
+    });
+
+    expect(result.isError).toBe(true);
+    const errText = JSON.stringify(parseResult(result));
+    expect(errText).toContain("required field");
+    expect(errText).toContain("build");
+    expect(errText).toContain("Expected keys");
+  });
+
+  it("allows execution when only unmatchedOptional remain", async () => {
+    const optionalTemplate = `pipeline:
+  identifier: "opt_pipe"
+  variables:
+    - name: "DEPLOY"
+      type: "String"
+      value: "<+input>.default(true)"
+    - name: "BUILD"
+      type: "String"
+      value: "<+input>.default(false)"
+`;
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetTemplateYaml: optionalTemplate } }) // template
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-opt" } }); // execute
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "opt_pipe",
+      inputs: {},
+    });
+
+    expect(result.isError).toBeUndefined();
+  });
+
+  it("skips pre-flight when input_set_ids are present", async () => {
+    const templateWithRequired = `pipeline:
+  identifier: "skip_pipe"
+  variables:
+    - name: "branch"
+      type: "String"
+      value: "<+input>"
+`;
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetTemplateYaml: templateWithRequired } }) // template
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-skip" } }); // execute
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "skip_pipe",
+      inputs: {},
+      input_set_ids: ["my-input-set"],
+    });
+
+    // Should NOT error even though "branch" is required and unmatched,
+    // because input_set_ids are present to cover it
+    expect(result.isError).toBeUndefined();
+  });
+
+  it("includes _inputResolution metadata on successful auto-resolved execution", async () => {
+    const simpleTemplate = `pipeline:
+  identifier: "meta_pipe"
+  variables:
+    - name: "tag"
+      type: "String"
+      value: "<+input>"
+    - name: "REGISTRY"
+      type: "String"
+      value: "<+input>.default(docker.io)"
+`;
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetTemplateYaml: simpleTemplate } }) // template
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-meta" } }); // execute
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "meta_pipe",
+      inputs: { tag: "v1.0" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as { _inputResolution: { mode: string; matched: string[]; defaulted?: string[] } };
+    expect(data._inputResolution).toBeDefined();
+    expect(data._inputResolution.mode).toBe("auto_resolved");
+    expect(data._inputResolution.matched).toContain("tag");
+    expect(data._inputResolution.defaulted).toContain("REGISTRY");
+  });
+
+  it("includes structural field hints in pre-flight error", async () => {
+    const structuralTemplate = `pipeline:
+  identifier: "struct_pipe"
+  properties:
+    ci:
+      codebase:
+        build: "<+input>"
+        repoName: "<+input>"
+`;
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetTemplateYaml: structuralTemplate } }) // template
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { content: [], totalElements: 0 } }); // input set list (empty)
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "struct_pipe",
+      inputs: { something: "wrong" },
+    });
+
+    expect(result.isError).toBe(true);
+    const errText = JSON.stringify(parseResult(result));
+    expect(errText).toContain("build");
+    expect(errText).toContain("complex object");
+  });
 });
 
 describe("harness_describe", () => {

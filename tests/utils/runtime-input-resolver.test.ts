@@ -21,7 +21,6 @@ function makeConfig(): Config {
   };
 }
 
-// A realistic runtime input template YAML from Harness
 const SAMPLE_TEMPLATE_YAML = `pipeline:
   identifier: "my_pipeline"
   stages:
@@ -51,6 +50,39 @@ const SIMPLE_TEMPLATE_YAML = `pipeline:
     - name: "tag"
       type: "String"
       value: "<+input>"
+`;
+
+const MIXED_TEMPLATE_YAML = `pipeline:
+  identifier: "mixed_pipe"
+  properties:
+    ci:
+      codebase:
+        repoName: "<+input>"
+        build: "<+input>"
+  variables:
+    - name: "SERVICE_LIST"
+      type: "String"
+      value: "<+input>"
+    - name: "DEPLOY"
+      type: "String"
+      value: "<+input>.default(true).allowedValues(true,false)"
+    - name: "HAR_REGISTRY"
+      type: "String"
+      value: "<+input>.default(https://registry.example.com)"
+`;
+
+const DEFAULTS_ONLY_TEMPLATE_YAML = `pipeline:
+  identifier: "defaults_pipe"
+  variables:
+    - name: "JAVA_BUILD"
+      type: "String"
+      value: "<+input>.default(true).allowedValues(true, false)"
+    - name: "PYTHON_BUILD"
+      type: "String"
+      value: "<+input>.default(false).allowedValues(true, false)"
+    - name: "NPM_BUILD"
+      type: "String"
+      value: "<+input>.default(false).selectOneFrom(true,false)"
 `;
 
 describe("isFlatKeyValueInputs", () => {
@@ -102,8 +134,7 @@ describe("substituteInputs", () => {
     expect(result.matched).toContain("environment");
     expect(result.yaml).toContain("main");
     expect(result.yaml).toContain("production");
-    // "image" placeholder was not matched — still has <+input>
-    expect(result.unmatched).toContain("image");
+    expect(result.unmatchedRequired).toContain("image");
     expect(result.matched).toHaveLength(2);
   });
 
@@ -115,7 +146,8 @@ describe("substituteInputs", () => {
     });
 
     expect(result.matched).toHaveLength(3);
-    expect(result.unmatched).toHaveLength(0);
+    expect(result.unmatchedRequired).toHaveLength(0);
+    expect(result.unmatchedOptional).toHaveLength(0);
     expect(result.yaml).not.toContain("<+input>");
   });
 
@@ -128,11 +160,14 @@ describe("substituteInputs", () => {
     expect(result.yaml).toContain("v1.0.0");
   });
 
-  it("returns unmatched for missing user inputs", () => {
+  it("returns unmatchedRequired for missing user inputs on required fields", () => {
     const result = substituteInputs(SAMPLE_TEMPLATE_YAML, {});
 
     expect(result.matched).toHaveLength(0);
-    expect(result.unmatched.length).toBeGreaterThan(0);
+    expect(result.unmatchedRequired.length).toBeGreaterThan(0);
+    expect(result.unmatchedRequired).toContain("branch");
+    expect(result.unmatchedRequired).toContain("environment");
+    expect(result.unmatchedRequired).toContain("image");
   });
 
   it("preserves YAML structure", () => {
@@ -168,6 +203,83 @@ describe("substituteInputs", () => {
 
     expect(result.matched).toContain("debug");
     expect(result.yaml).toContain("true");
+  });
+
+  it("classifies <+input>.default(...) as optional", () => {
+    const result = substituteInputs(MIXED_TEMPLATE_YAML, {});
+
+    expect(result.unmatchedRequired).toContain("repoName");
+    expect(result.unmatchedRequired).toContain("build");
+    expect(result.unmatchedRequired).toContain("SERVICE_LIST");
+    expect(result.unmatchedOptional).toContain("DEPLOY");
+    expect(result.unmatchedOptional).toContain("HAR_REGISTRY");
+    expect(result.unmatchedRequired).toHaveLength(3);
+    expect(result.unmatchedOptional).toHaveLength(2);
+  });
+
+  it("classifies <+input>.allowedValues(...) without default as required", () => {
+    const template = `pipeline:
+  variables:
+    - name: "region"
+      type: "String"
+      value: "<+input>.allowedValues(us-east-1,eu-west-1)"
+`;
+    const result = substituteInputs(template, {});
+
+    expect(result.unmatchedRequired).toContain("region");
+    expect(result.unmatchedOptional).toHaveLength(0);
+  });
+
+  it("classifies <+input>.default(...).allowedValues(...) as optional", () => {
+    const result = substituteInputs(DEFAULTS_ONLY_TEMPLATE_YAML, {});
+
+    expect(result.unmatchedRequired).toHaveLength(0);
+    expect(result.unmatchedOptional).toHaveLength(3);
+    expect(result.unmatchedOptional).toContain("JAVA_BUILD");
+    expect(result.unmatchedOptional).toContain("PYTHON_BUILD");
+    expect(result.unmatchedOptional).toContain("NPM_BUILD");
+  });
+
+  it("still substitutes optional fields when values provided", () => {
+    const result = substituteInputs(DEFAULTS_ONLY_TEMPLATE_YAML, {
+      JAVA_BUILD: "false",
+    });
+
+    expect(result.matched).toContain("java_build");
+    expect(result.unmatchedOptional).toHaveLength(2);
+    expect(result.yaml).toContain("false");
+  });
+
+  it("returns expectedKeys for all placeholders", () => {
+    const result = substituteInputs(SAMPLE_TEMPLATE_YAML, {});
+
+    expect(result.expectedKeys).toContain("branch");
+    expect(result.expectedKeys).toContain("environment");
+    expect(result.expectedKeys).toContain("image");
+    expect(result.expectedKeys).toHaveLength(3);
+  });
+
+  it("returns expectedKeys for mixed required/optional templates", () => {
+    const result = substituteInputs(MIXED_TEMPLATE_YAML, {});
+
+    expect(result.expectedKeys).toContain("repoName");
+    expect(result.expectedKeys).toContain("build");
+    expect(result.expectedKeys).toContain("SERVICE_LIST");
+    expect(result.expectedKeys).toContain("DEPLOY");
+    expect(result.expectedKeys).toContain("HAR_REGISTRY");
+    expect(result.expectedKeys).toHaveLength(5);
+  });
+
+  it("handles mixed match: some provided, rest split into required/optional", () => {
+    const result = substituteInputs(MIXED_TEMPLATE_YAML, {
+      SERVICE_LIST: "my-service",
+    });
+
+    expect(result.matched).toContain("service_list");
+    expect(result.unmatchedRequired).toContain("repoName");
+    expect(result.unmatchedRequired).toContain("build");
+    expect(result.unmatchedOptional).toContain("DEPLOY");
+    expect(result.unmatchedOptional).toContain("HAR_REGISTRY");
   });
 });
 
@@ -272,7 +384,8 @@ describe("resolveRuntimeInputs", () => {
     );
 
     expect(result.matched).toContain("tag");
-    expect(result.unmatched).toHaveLength(0);
+    expect(result.unmatchedRequired).toHaveLength(0);
+    expect(result.unmatchedOptional).toHaveLength(0);
     expect(result.yaml).toContain("v2.0.0");
     expect(result.yaml).not.toContain("<+input>");
   });
@@ -293,10 +406,11 @@ describe("resolveRuntimeInputs", () => {
     );
 
     expect(result.yaml).toBe("");
-    expect(result.unmatched).toContain("someKey");
+    expect(result.unmatchedRequired).toHaveLength(0);
+    expect(result.unmatchedOptional).toHaveLength(0);
   });
 
-  it("reports unmatched placeholders", async () => {
+  it("reports unmatched required placeholders", async () => {
     fetchSpy.mockResolvedValueOnce(
       new Response(JSON.stringify({
         status: "SUCCESS",
@@ -312,8 +426,51 @@ describe("resolveRuntimeInputs", () => {
     );
 
     expect(result.matched).toContain("branch");
-    // "environment" and "image" are still unresolved
-    expect(result.unmatched).toContain("environment");
-    expect(result.unmatched).toContain("image");
+    expect(result.unmatchedRequired).toContain("environment");
+    expect(result.unmatchedRequired).toContain("image");
+    expect(result.unmatchedOptional).toHaveLength(0);
+  });
+
+  it("separates required and optional unmatched for mixed templates", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      new Response(JSON.stringify({
+        status: "SUCCESS",
+        data: { inputSetTemplateYaml: MIXED_TEMPLATE_YAML },
+      }), { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+
+    const client = new HarnessClient(makeConfig());
+    const result = await resolveRuntimeInputs(
+      client,
+      { SERVICE_LIST: "my-svc" },
+      { pipelineId: "mixed_pipe", orgId: "default", projectId: "test-project" },
+    );
+
+    expect(result.matched).toContain("service_list");
+    expect(result.unmatchedRequired).toContain("repoName");
+    expect(result.unmatchedRequired).toContain("build");
+    expect(result.unmatchedOptional).toContain("DEPLOY");
+    expect(result.unmatchedOptional).toContain("HAR_REGISTRY");
+    expect(result.expectedKeys).toHaveLength(5);
+  });
+
+  it("returns all empty arrays when all defaults-only template has no user inputs", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      new Response(JSON.stringify({
+        status: "SUCCESS",
+        data: { inputSetTemplateYaml: DEFAULTS_ONLY_TEMPLATE_YAML },
+      }), { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+
+    const client = new HarnessClient(makeConfig());
+    const result = await resolveRuntimeInputs(
+      client,
+      {},
+      { pipelineId: "defaults_pipe", orgId: "default", projectId: "test-project" },
+    );
+
+    expect(result.unmatchedRequired).toHaveLength(0);
+    expect(result.unmatchedOptional).toHaveLength(3);
+    expect(result.yaml).toContain("<+input>.default");
   });
 });

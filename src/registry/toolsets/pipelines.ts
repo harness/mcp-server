@@ -42,6 +42,7 @@ export const pipelinesToolset: ToolsetDefinition = {
       scope: "project",
       identifierFields: ["pipeline_id"],
       diagnosticHint: "Use harness_diagnose with pipeline_id or execution_id to analyze failures — includes step-level error details, log snippets, delegate info, and chained pipeline traversal.",
+      executeHint: "Before executing, check required inputs: harness_get(resource_type='runtime_input_template', resource_id='PIPELINE_ID'). For simple variables, pass key-value pairs in inputs. For complex pipelines (CI codebase build, templates), use input_set_ids — list available sets with harness_list(resource_type='input_set', filters={pipeline_id: '...'}).",
       listFilterFields: ["search_term", "module", "filter_type"],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipelineIdentifier}/pipeline-studio",
       operations: {
@@ -126,12 +127,12 @@ export const pipelinesToolset: ToolsetDefinition = {
             return JSON.stringify(inputs);
           },
           responseExtractor: ngExtract,
-          actionDescription: "Execute/run a pipeline. For runtime inputs, pass simple key-value pairs (e.g. {branch: 'main', env: 'prod'}) and they will be auto-resolved against the pipeline's input template. Alternatively, pass a full runtime input YAML string, or use input_set_ids to reference saved input sets.",
+          actionDescription: "Execute/run a pipeline. RECOMMENDED: first check harness_get(resource_type='runtime_input_template', resource_id='PIPELINE_ID') to see required inputs. For simple variable inputs: pass key-value pairs in inputs (e.g. {branch: 'main'}) — auto-resolved. For complex pipelines with structural inputs (CI codebase build, template inputs): use input_set_ids to reference a saved input set. List available sets with harness_list(resource_type='input_set', filters={pipeline_id: '...'}).",
           bodySchema: {
-            description: "Runtime inputs for pipeline execution. Three options: (1) Simple key-value pairs — auto-resolved against the pipeline's input template (easiest). (2) Named input set references via input_set_ids param. (3) Full runtime input YAML string (advanced). If the pipeline has no runtime inputs, omit the inputs field.",
+            description: "Runtime inputs for pipeline execution. Two strategies: (1) For simple variables — pass key-value pairs in inputs like {branch: 'main', env: 'prod'}, auto-resolved against the pipeline's runtime input template. (2) For complex pipelines with structural fields (CI codebase build config, template inputs) — use input_set_ids to reference saved input sets. You can combine both: input_set_ids for the base config + inputs for simple overrides. Check runtime_input_template first to see what the pipeline expects.",
             fields: [
-              { name: "inputs", type: "yaml", required: false, description: "Simple key-value pairs (e.g. {branch: 'main', env: 'prod'}) — auto-resolved to full YAML. Or a full runtime input YAML string. Or a JSON object with nested pipeline structure." },
-              { name: "input_set_ids", type: "array", required: false, description: "Array of input set identifiers to apply (references saved input sets). Passed as query parameter." },
+              { name: "inputs", type: "yaml", required: false, description: "Simple key-value pairs (e.g. {branch: 'main', env: 'prod'}) — auto-resolved to full YAML. Works best for pipeline variables. For structural fields like CI codebase build, use input_set_ids instead." },
+              { name: "input_set_ids", type: "array", required: false, description: "Input set identifiers to apply. Recommended for complex pipelines with structural inputs. List available: harness_list(resource_type='input_set', filters={pipeline_id: '...'})." },
             ],
           },
         },

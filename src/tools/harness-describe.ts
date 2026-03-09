@@ -46,6 +46,7 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
                 }))
               : undefined,
             diagnosticHint: def.diagnosticHint ?? undefined,
+            executeHint: def.executeHint ?? undefined,
           });
         } catch (err) {
           // Resource type not found — return the compact summary with an error hint

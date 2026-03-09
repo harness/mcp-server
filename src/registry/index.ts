@@ -113,6 +113,9 @@ export class Registry {
     return new Set(valid);
   }
 
+  get defaultOrgId(): string { return this.config.HARNESS_DEFAULT_ORG_ID; }
+  get defaultProjectId(): string | undefined { return this.config.HARNESS_DEFAULT_PROJECT_ID; }
+
   /** Get a resource definition by type, or throw. */
   getResource(resourceType: string): ResourceDefinition {
     const def = this.resourceMap.get(resourceType);

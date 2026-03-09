@@ -16,12 +16,21 @@ import { isRecord, asRecord, asString } from "./type-guards.js";
 const log = createLogger("runtime-inputs");
 
 const INPUT_PLACEHOLDER = /^<\+input>\.?/;
+const HAS_DEFAULT = /^<\+input>\.default\(/;
 
-interface ResolveOptions {
+export interface ResolveOptions {
   pipelineId: string;
   orgId?: string;
   projectId?: string;
   branch?: string;
+}
+
+export interface ResolutionResult {
+  yaml: string;
+  matched: string[];
+  unmatchedRequired: string[];
+  unmatchedOptional: string[];
+  expectedKeys: string[];
 }
 
 interface TemplateResponse {
@@ -90,12 +99,13 @@ export function isFlatKeyValueInputs(inputs: unknown): inputs is Record<string, 
 export function substituteInputs(
   templateYaml: string,
   userInputs: Record<string, unknown>,
-): { yaml: string; matched: string[]; unmatched: string[] } {
+): ResolutionResult {
   const doc = YAML.parseDocument(templateYaml);
   const matched: string[] = [];
-  const unmatched: string[] = [];
+  const unmatchedRequired: string[] = [];
+  const unmatchedOptional: string[] = [];
+  const expectedKeys: string[] = [];
 
-  // Build a case-insensitive lookup from user inputs
   const normalizedInputs = new Map<string, unknown>();
   for (const [key, value] of Object.entries(userInputs)) {
     normalizedInputs.set(key.toLowerCase(), value);
@@ -131,22 +141,27 @@ export function substituteInputs(
     } else if (YAML.isScalar(node)) {
       const val = String(node.value);
       if (INPUT_PLACEHOLDER.test(val)) {
-        const leafKey = path[path.length - 1]?.toLowerCase() ?? "";
+        const rawLeafKey = path[path.length - 1] ?? "";
+        const leafKey = rawLeafKey.toLowerCase();
         const fullPath = path.join(".").toLowerCase();
+        const isOptional = HAS_DEFAULT.test(val);
 
-        // For variable-style entries (value: "<+input>"), use sibling "name" field
-        let variableName: string | undefined;
+        let variableNameRaw: string | undefined;
+        let variableNameLower: string | undefined;
         if ((leafKey === "value" || leafKey === "default") && parentMap) {
-          variableName = getSiblingName(parentMap)?.toLowerCase();
+          variableNameRaw = getSiblingName(parentMap);
+          variableNameLower = variableNameRaw?.toLowerCase();
         }
 
-        // Try matching order: variable name → leaf key → full path
+        const bestKey = variableNameRaw ?? rawLeafKey ?? path.join(".");
+        expectedKeys.push(bestKey);
+
         let replacement: unknown = undefined;
         let matchedAs: string | undefined;
 
-        if (variableName && normalizedInputs.has(variableName)) {
-          replacement = normalizedInputs.get(variableName);
-          matchedAs = variableName;
+        if (variableNameLower && normalizedInputs.has(variableNameLower)) {
+          replacement = normalizedInputs.get(variableNameLower);
+          matchedAs = variableNameLower;
         } else if (normalizedInputs.has(leafKey)) {
           replacement = normalizedInputs.get(leafKey);
           matchedAs = leafKey;
@@ -155,12 +170,14 @@ export function substituteInputs(
           matchedAs = fullPath;
         }
 
-        const displayName = variableName ?? path[path.length - 1] ?? fullPath;
+        const displayName = variableNameRaw ?? rawLeafKey ?? path.join(".");
         if (replacement !== undefined) {
           node.value = replacement;
           matched.push(matchedAs ?? displayName);
+        } else if (isOptional) {
+          unmatchedOptional.push(displayName);
         } else {
-          unmatched.push(displayName);
+          unmatchedRequired.push(displayName);
         }
       }
     }
@@ -171,7 +188,9 @@ export function substituteInputs(
   return {
     yaml: doc.toString(),
     matched,
-    unmatched,
+    unmatchedRequired,
+    unmatchedOptional,
+    expectedKeys,
   };
 }
 
@@ -180,19 +199,20 @@ export function substituteInputs(
  * Returns the resolved YAML string ready for the pipeline execute API.
  *
  * If the pipeline has no runtime inputs, returns an empty string.
- * If some inputs couldn't be matched, includes a warning in the _meta field.
+ * unmatchedRequired: placeholders that MUST be provided (will cause API 400).
+ * unmatchedOptional: placeholders with .default() — the API fills them in.
  */
 export async function resolveRuntimeInputs(
   client: HarnessClient,
   flatInputs: Record<string, unknown>,
   options: ResolveOptions,
-): Promise<{ yaml: string; matched: string[]; unmatched: string[] }> {
+): Promise<ResolutionResult> {
   log.info(`Resolving runtime inputs for pipeline ${options.pipelineId}`);
 
   const templateYaml = await fetchRuntimeInputTemplate(client, options);
   if (!templateYaml) {
     log.info("Pipeline has no runtime inputs, ignoring user-provided inputs");
-    return { yaml: "", matched: [], unmatched: Object.keys(flatInputs) };
+    return { yaml: "", matched: [], unmatchedRequired: [], unmatchedOptional: [], expectedKeys: [] };
   }
 
   log.debug("Template YAML fetched", { templateLength: templateYaml.length });
@@ -202,8 +222,11 @@ export async function resolveRuntimeInputs(
   if (result.matched.length > 0) {
     log.info(`Resolved ${result.matched.length} runtime inputs: ${result.matched.join(", ")}`);
   }
-  if (result.unmatched.length > 0) {
-    log.warn(`${result.unmatched.length} template placeholders unresolved: ${result.unmatched.join(", ")}`);
+  if (result.unmatchedRequired.length > 0) {
+    log.warn(`${result.unmatchedRequired.length} required placeholders unresolved: ${result.unmatchedRequired.join(", ")}`);
+  }
+  if (result.unmatchedOptional.length > 0) {
+    log.debug(`${result.unmatchedOptional.length} optional placeholders (have defaults): ${result.unmatchedOptional.join(", ")}`);
   }
 
   return result;
