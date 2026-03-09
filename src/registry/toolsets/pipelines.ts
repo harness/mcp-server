@@ -1,5 +1,5 @@
 import type { ToolsetDefinition, BodySchema } from "../types.js";
-import { ngExtract, pageExtract, passthrough } from "../extractors.js";
+import { ngExtract, pageExtract, passthrough, v1ListExtract } from "../extractors.js";
 
 const ngExtractWithInlineStore = (raw: unknown) => {
   const result = ngExtract(raw);
@@ -398,10 +398,7 @@ export const pipelinesToolset: ToolsetDefinition = {
             approval_type: "approval_type",
             node_execution_id: "node_execution_id",
           },
-          responseExtractor: (raw: unknown): { items: unknown[]; total: number } => {
-            const arr = Array.isArray(raw) ? raw : [];
-            return { items: arr, total: arr.length };
-          },
+          responseExtractor: v1ListExtract(),
           description: "List approval instances for a pipeline execution. Filter by approval_status (WAITING, APPROVED, REJECTED, FAILED, ABORTED, EXPIRED) and approval_type (HarnessApproval, JiraApproval, CustomApproval, ServiceNowApproval).",
         },
       },

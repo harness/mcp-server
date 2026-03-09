@@ -1,6 +1,5 @@
 import type { ToolsetDefinition } from "../types.js";
-import { ngExtract } from "../extractors.js";
-import { isRecord } from "../../utils/type-guards.js";
+import { ngExtract, v1Unwrap } from "../extractors.js";
 
 export const delegatesToolset: ToolsetDefinition = {
   name: "delegates",
@@ -28,9 +27,7 @@ export const delegatesToolset: ToolsetDefinition = {
             ...(input.delegate_name ? { delegateName: input.delegate_name } : {}),
             ...(input.delegate_type ? { delegateType: input.delegate_type } : {}),
           }),
-          responseExtractor: (raw: unknown) => {
-            return isRecord(raw) ? (raw.resource ?? raw) : raw;
-          },
+          responseExtractor: v1Unwrap("resource"),
           description: "List all delegates in the account",
         },
       },

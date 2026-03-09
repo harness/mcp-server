@@ -2,6 +2,7 @@
  * Shared response extractors for Harness API responses.
  * Used across all toolset definitions — eliminates per-file duplication.
  */
+import { isRecord } from "../utils/type-guards.js";
 
 /** Extract `data` from standard NG API responses: `{ status, data, ... }` */
 export const ngExtract = (raw: unknown): unknown => {
@@ -29,20 +30,15 @@ export const passthrough = (raw: unknown): unknown => raw;
 export const v1ListExtract = (wrapperKey?: string) => (raw: unknown): { items: unknown[]; total: number } => {
   const arr = Array.isArray(raw) ? raw : [];
   const items = wrapperKey
-    ? arr.map(item => {
-        if (typeof item === "object" && item !== null && wrapperKey in item) {
-          return (item as Record<string, unknown>)[wrapperKey];
-        }
-        return item;
-      })
+    ? arr.map(item => (isRecord(item) && wrapperKey in item ? item[wrapperKey] : item))
     : arr;
   return { items, total: items.length };
 };
 
 /** Factory for v1 single-item responses that may be wrapped: `{ org: {...} }` → `{...}`. */
 export const v1Unwrap = (wrapperKey: string) => (raw: unknown): unknown => {
-  if (typeof raw === "object" && raw !== null && wrapperKey in (raw as Record<string, unknown>)) {
-    return (raw as Record<string, unknown>)[wrapperKey];
+  if (isRecord(raw) && wrapperKey in raw) {
+    return raw[wrapperKey];
   }
   return raw;
 };

@@ -62,6 +62,7 @@ Toolset files live in `src/registry/toolsets/`. Each file groups related resourc
 ```typescript
 // src/registry/toolsets/my-module.ts
 import type { ToolsetDefinition } from "../types.js";
+import { ngExtract, pageExtract } from "../extractors.js";
 
 export const myModuleToolset: ToolsetDefinition = {
   name: "my-module",
@@ -81,20 +82,14 @@ export const myModuleToolset: ToolsetDefinition = {
           method: "GET",
           path: "/my-module/api/resources",
           queryParams: { search_term: "search", page: "page", size: "size" },
-          responseExtractor: (raw) => {
-            const r = raw as { data?: { content?: unknown[]; totalElements?: number } };
-            return { items: r.data?.content ?? [], total: r.data?.totalElements ?? 0 };
-          },
+          responseExtractor: pageExtract,    // use shared extractor — don't inline lambdas
           description: "List resources",
         },
         get: {
           method: "GET",
           path: "/my-module/api/resources/{resourceId}",
           pathParams: { resource_id: "resourceId" },
-          responseExtractor: (raw) => {
-            const r = raw as { data?: unknown };
-            return r.data ?? raw;
-          },
+          responseExtractor: ngExtract,      // use shared extractor — don't inline lambdas
           description: "Get resource details",
         },
       },
@@ -128,14 +123,25 @@ In `src/registry/index.ts`:
 
 ### 5. bodySchema — required for create/update operations
 
-Any operation that sends a request body (`create`, `update`, execute actions with payloads) **must** include a `bodySchema` string. This is surfaced by `harness_describe` so the LLM knows what shape to send. Keep it concise — just the essential fields.
+Any operation that sends a request body (`create`, `update`, execute actions with payloads) **must** include a `bodySchema` object. This is surfaced by `harness_describe` so the LLM knows what shape to send. Keep it concise — just the essential fields.
 
 ```typescript
+import type { ToolsetDefinition, BodySchema } from "../types.js";
+
+const createSchema: BodySchema = {
+  description: "Resource definition",
+  fields: [
+    { name: "name", type: "string", required: true, description: "Display name" },
+    { name: "identifier", type: "string", required: true, description: "Unique identifier" },
+    { name: "type", type: "string", required: true, description: "Resource type: K8s | Docker" },
+  ],
+};
+
 operations: {
   create: {
     method: "POST",
     path: "/api/resources",
-    bodySchema: '{ "name": string, "identifier": string, "type": "K8s" | "Docker", "spec": { ... } }',
+    bodySchema: createSchema,
     description: "Create a resource",
   },
 },

@@ -1,4 +1,5 @@
 import type { ToolsetDefinition } from "../types.js";
+import { passthrough } from "../extractors.js";
 
 export const logsToolset: ToolsetDefinition = {
   name: "logs",
@@ -20,7 +21,7 @@ export const logsToolset: ToolsetDefinition = {
           queryParams: {
             prefix: "prefix",
           },
-          responseExtractor: (raw) => raw,
+          responseExtractor: passthrough,
           description: "Download execution logs by prefix",
         },
       },
