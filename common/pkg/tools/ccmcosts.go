@@ -875,32 +875,32 @@ func buildViewConditionRules(keys []string, values []string) []dto.CCMRule {
 
 func CreateCostCategoriesCostTargetsEventTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("ccm_create_cost_categories_cost_targets_event",
-			mcp.WithDescription("Create cost category grouping to system specific cost targets"),
+			mcp.WithDescription("Create a cost category by defining cost target groupings based on cloud labels. Cost categories let you group cloud costs into buckets (e.g., by environment or team). Returns a UI event for user confirmation."),
 			mcp.WithString("cost_category_name",
 				mcp.Required(),
-				mcp.Description("Name for the cost category"),
+				mcp.Description("Name for the Cost Category"),
 			),
 			mcp.WithArray(
 				"cost_target_groupings",
 				mcp.Required(),
-				mcp.Description("Array of cost target groupings for cost category creation"),
+				mcp.Description("Array of cost buckets for the cost category"),
 				mcp.Items(map[string]any{
 					"type": "object",
 					"properties": map[string]any{
 						"title": map[string]any{
 							"type":        "string",
-							"description": "Display title for the grouping (e.g., 'Production Environments')",
+							"description": "Display title for the cost bucket (e.g., 'Production Environments')",
 						},
 						"keys": map[string]any{
 							"type":        "array",
-							"description": "List of unique identifier key for the grouping (e.g., 'production')",
+							"description": "List of unique identifier key for this cost bucket (e.g., 'env', 'Environment')",
 							"items": map[string]any{
 								"type": "string",
 							},
 						},
 						"values": map[string]any{
 							"type":        "array",
-							"description": "List of environment names that belong to this grouping",
+							"description": "List of values that belong to this cost bucket (e.g., 'prod', 'dev', 'qa')",
 							"items": map[string]any{
 								"type": "string",
 							},
@@ -911,13 +911,13 @@ func CreateCostCategoriesCostTargetsEventTool(config *config.McpServerConfig, cl
 			),
 			mcp.WithArray(
 				"shared_cost_groupings",
-				mcp.Description("Optional array of shared cost groupings for the cost category"),
+				mcp.Description("Optional array of shared cost buckets for the cost category"),
 				mcp.Items(map[string]any{
 					"type": "object",
 					"properties": map[string]any{
 						"title": map[string]any{
 							"type":        "string",
-							"description": "Display title for the shared cost bucket",
+							"description": "Display title for the shared cost bucket (e.g., 'Shared Costs')",
 						},
 						"keys": map[string]any{
 							"type":        "array",
@@ -928,7 +928,7 @@ func CreateCostCategoriesCostTargetsEventTool(config *config.McpServerConfig, cl
 						},
 						"values": map[string]any{
 							"type":        "array",
-							"description": "List of values that belong to this shared cost bucket",
+							"description": "List of values that belong to this shared cost bucket (e.g., 'prod', 'dev', 'qa')",
 							"items": map[string]any{
 								"type": "string",
 							},
