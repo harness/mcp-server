@@ -68,6 +68,12 @@ export const delegatesToolset: ToolsetDefinition = {
           bodyBuilder: (input) => ({
             name: input.token_name ?? input.name,
           }),
+          bodySchema: {
+            description: "Delegate token",
+            fields: [
+              { name: "name", type: "string", required: true, description: "Token name" },
+            ],
+          },
           responseExtractor: ngExtract,
           description: "Create a delegate token",
         },
@@ -86,6 +92,7 @@ export const delegatesToolset: ToolsetDefinition = {
           pathParams: { token_name: "tokenName" },
           queryParams: { status: "status" },
           bodyBuilder: () => undefined,
+          bodySchema: { description: "No body required. Token is revoked via path parameter.", fields: [] },
           responseExtractor: ngExtract,
           actionDescription: "Revoke a delegate token. Sets status to REVOKED.",
         },
@@ -93,6 +100,7 @@ export const delegatesToolset: ToolsetDefinition = {
           method: "GET",
           path: "/ng/api/delegate-token-ng/{tokenName}/delegates",
           pathParams: { token_name: "tokenName" },
+          bodySchema: { description: "No body required. Returns delegates for the token.", fields: [] },
           responseExtractor: ngExtract,
           actionDescription: "Get delegates associated with a specific token.",
         },

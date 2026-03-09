@@ -118,6 +118,12 @@ export const pipelinesToolset: ToolsetDefinition = {
           bodyBuilder: (input) => input.inputs ?? {},
           responseExtractor: ngExtract,
           actionDescription: "Execute/run a pipeline. Pass runtime inputs via 'inputs' field.",
+          bodySchema: {
+            description: "Runtime inputs for pipeline execution. Pass key-value pairs that match the pipeline's runtime input variables. If the pipeline has no runtime inputs, this can be empty.",
+            fields: [
+              { name: "inputs", type: "object", required: false, description: "Runtime input overrides as key-value pairs (e.g. {\"variable_name\": \"value\"})" },
+            ],
+          },
         },
         retry: {
           method: "PUT",
@@ -127,6 +133,10 @@ export const pipelinesToolset: ToolsetDefinition = {
           bodyBuilder: () => ({}),
           responseExtractor: ngExtract,
           actionDescription: "Retry a failed pipeline execution.",
+          bodySchema: {
+            description: "No request body required. The retry re-executes the failed pipeline execution identified by execution_id.",
+            fields: [],
+          },
         },
       },
     },
@@ -175,6 +185,10 @@ export const pipelinesToolset: ToolsetDefinition = {
           bodyBuilder: () => ({}),
           responseExtractor: ngExtract,
           actionDescription: "Interrupt a running execution. Set interrupt_type to AbortAll, Pause, etc.",
+          bodySchema: {
+            description: "No request body required. The interrupt type is specified via the interrupt_type query parameter (e.g. AbortAll, Pause, Resume, StageRollback).",
+            fields: [],
+          },
         },
       },
     },
@@ -214,6 +228,17 @@ export const pipelinesToolset: ToolsetDefinition = {
           bodyBuilder: (input) => input.body,
           responseExtractor: ngExtract,
           description: "Create a new pipeline trigger",
+          bodySchema: {
+            description: "Trigger configuration object defining the trigger type, source, and pipeline inputs.",
+            fields: [
+              { name: "name", type: "string", required: true, description: "Display name for the trigger" },
+              { name: "identifier", type: "string", required: true, description: "Unique trigger identifier" },
+              { name: "type", type: "string", required: true, description: "Trigger type (Webhook, Scheduled, Artifact, Manifest)" },
+              { name: "pipelineIdentifier", type: "string", required: true, description: "Target pipeline identifier to execute" },
+              { name: "source", type: "object", required: false, description: "Trigger source configuration (webhook, cron, etc.)" },
+              { name: "inputYaml", type: "string", required: false, description: "Runtime input YAML for the triggered pipeline execution" },
+            ],
+          },
         },
         update: {
           method: "PUT",
@@ -222,6 +247,17 @@ export const pipelinesToolset: ToolsetDefinition = {
           bodyBuilder: (input) => input.body,
           responseExtractor: ngExtract,
           description: "Update a pipeline trigger",
+          bodySchema: {
+            description: "Full trigger configuration object (replaces existing). Must include all fields, not just changed ones.",
+            fields: [
+              { name: "name", type: "string", required: true, description: "Display name for the trigger" },
+              { name: "identifier", type: "string", required: true, description: "Unique trigger identifier" },
+              { name: "type", type: "string", required: true, description: "Trigger type (Webhook, Scheduled, Artifact, Manifest)" },
+              { name: "pipelineIdentifier", type: "string", required: true, description: "Target pipeline identifier to execute" },
+              { name: "source", type: "object", required: false, description: "Trigger source configuration (webhook, cron, etc.)" },
+              { name: "inputYaml", type: "string", required: false, description: "Runtime input YAML for the triggered pipeline execution" },
+            ],
+          },
         },
         delete: {
           method: "DELETE",

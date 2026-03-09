@@ -95,6 +95,16 @@ export const environmentsToolset: ToolsetDefinition = {
           bodyBuilder: (input) => input.body,
           responseExtractor: ngExtract,
           actionDescription: "Move environment configuration (e.g., move inline config to remote or vice versa)",
+          bodySchema: {
+            description: "Move configuration request",
+            fields: [
+              { name: "connectorRef", type: "string", required: false, description: "Connector reference for remote storage" },
+              { name: "repoName", type: "string", required: false, description: "Repository name" },
+              { name: "branch", type: "string", required: false, description: "Branch name" },
+              { name: "filePath", type: "string", required: false, description: "File path in the repository" },
+              { name: "moveConfigOperationType", type: "string", required: false, description: "INLINE_TO_REMOTE or REMOTE_TO_INLINE" },
+            ],
+          },
         },
       },
     },

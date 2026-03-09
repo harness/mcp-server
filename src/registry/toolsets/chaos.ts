@@ -46,6 +46,7 @@ export const chaosToolset: ToolsetDefinition = {
           bodyBuilder: () => ({}),
           responseExtractor: passthrough,
           actionDescription: "Run a chaos experiment",
+          bodySchema: { description: "No body required. Experiment is identified by path parameter.", fields: [] },
         },
       },
     },
@@ -95,6 +96,14 @@ export const chaosToolset: ToolsetDefinition = {
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
           actionDescription: "Create a chaos experiment from a template",
+          bodySchema: {
+            description: "Chaos experiment from template",
+            fields: [
+              { name: "name", type: "string", required: true, description: "Experiment name" },
+              { name: "templateId", type: "string", required: true, description: "Template ID to create from" },
+              { name: "infraId", type: "string", required: false, description: "Chaos infrastructure ID" },
+            ],
+          },
         },
       },
     },
@@ -192,6 +201,13 @@ export const chaosToolset: ToolsetDefinition = {
           bodyBuilder: (input) => input.body ?? {},
           responseExtractor: passthrough,
           description: "Create a sample load test instance",
+          bodySchema: {
+            description: "Load test instance definition",
+            fields: [
+              { name: "name", type: "string", required: true, description: "Load test name" },
+              { name: "type", type: "string", required: false, description: "Load test type" },
+            ],
+          },
         },
         delete: {
           method: "DELETE",
@@ -209,6 +225,7 @@ export const chaosToolset: ToolsetDefinition = {
           bodyBuilder: () => ({}),
           responseExtractor: passthrough,
           actionDescription: "Run a load test instance",
+          bodySchema: { description: "No body required. Load test is identified by path parameter.", fields: [] },
         },
         stop: {
           method: "POST",
@@ -217,6 +234,7 @@ export const chaosToolset: ToolsetDefinition = {
           bodyBuilder: () => ({}),
           responseExtractor: passthrough,
           actionDescription: "Stop a running load test",
+          bodySchema: { description: "No body required. Load test is identified by path parameter.", fields: [] },
         },
       },
     },

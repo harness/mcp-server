@@ -62,6 +62,14 @@ export const templatesToolset: ToolsetDefinition = {
             if (b.comments !== undefined) out.comments = b.comments;
             return out;
           },
+          bodySchema: {
+            description: "Template version update",
+            fields: [
+              { name: "template_yaml", type: "yaml", required: true, description: "Full template YAML string with changes" },
+              { name: "is_stable", type: "boolean", required: false, description: "Mark as stable version" },
+              { name: "comments", type: "string", required: false, description: "Version update comments" },
+            ],
+          },
           responseExtractor: ngExtract,
           description: "Update a template version. Provide full template_yaml (required). Optional: is_stable, comments.",
         },
@@ -96,6 +104,19 @@ export const templatesToolset: ToolsetDefinition = {
             if (b.tags !== undefined) out.tags = b.tags;
             if (b.comments !== undefined) out.comments = b.comments;
             return out;
+          },
+          bodySchema: {
+            description: "Template definition",
+            fields: [
+              { name: "template_yaml", type: "yaml", required: true, description: "Full template YAML string" },
+              { name: "identifier", type: "string", required: true, description: "Unique template identifier" },
+              { name: "name", type: "string", required: true, description: "Display name" },
+              { name: "label", type: "string", required: false, description: "Version label (default: v1)" },
+              { name: "is_stable", type: "boolean", required: false, description: "Mark as stable version (default: true)" },
+              { name: "description", type: "string", required: false, description: "Template description" },
+              { name: "tags", type: "object", required: false, description: "Key-value tag map" },
+              { name: "comments", type: "string", required: false, description: "Version comments" },
+            ],
           },
           responseExtractor: ngExtract,
           description: "Create a template (step, stage, or pipeline). Body: template_yaml (string, required), identifier, name, label (version), is_stable.",

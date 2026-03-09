@@ -189,6 +189,7 @@ export const repositoriesToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           actionDescription:
             "Get the raw diff between two refs. Set range to 'base..head' (e.g., 'main..feature-branch').",
+          bodySchema: { description: "No body required. Diff range is specified via path parameter (e.g. main..feature-branch).", fields: [] },
         },
         diff_stats: {
           method: "GET",
@@ -200,6 +201,7 @@ export const repositoriesToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           actionDescription:
             "Get diff stats (files changed, additions, deletions) between two refs. Set range to 'base..head'.",
+          bodySchema: { description: "No body required. Range is specified via path parameter.", fields: [] },
         },
       },
     },
@@ -245,6 +247,7 @@ export const repositoriesToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           actionDescription:
             "Get git blame for a file. Optional line_from/line_to to restrict range.",
+          bodySchema: { description: "No body required. File path and optional line range specified via path/query parameters.", fields: [] },
         },
       },
     },

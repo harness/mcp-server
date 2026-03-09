@@ -84,6 +84,14 @@ export const gitopsToolset: ToolsetDefinition = {
           bodyBuilder: (input) => input.body ?? {},
           responseExtractor: passthrough,
           actionDescription: "Sync a GitOps application",
+          bodySchema: {
+            description: "Sync options",
+            fields: [
+              { name: "prune", type: "boolean", required: false, description: "Prune resources not in git" },
+              { name: "dryRun", type: "boolean", required: false, description: "Simulate sync without executing" },
+              { name: "revision", type: "string", required: false, description: "Target revision to sync to" },
+            ],
+          },
         },
       },
     },

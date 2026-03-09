@@ -178,6 +178,12 @@ export const idpToolset: ToolsetDefinition = {
           bodyBuilder: (input) => input.body ?? {},
           responseExtractor: ngExtract,
           actionDescription: "Execute an IDP self-service workflow",
+          bodySchema: {
+            description: "Workflow execution inputs",
+            fields: [
+              { name: "inputs", type: "object", required: false, description: "Key-value inputs for the workflow" },
+            ],
+          },
         },
       },
     },

@@ -67,6 +67,7 @@ export const stoToolset: ToolsetDefinition = {
           bodyBuilder: () => ({}),
           responseExtractor: passthrough,
           actionDescription: "Approve (promote and approve) a security exemption",
+          bodySchema: { description: "No body required. Exemption is identified by path parameter.", fields: [] },
         },
         reject: {
           method: "POST",
@@ -75,6 +76,7 @@ export const stoToolset: ToolsetDefinition = {
           bodyBuilder: () => ({}),
           responseExtractor: passthrough,
           actionDescription: "Reject a security exemption",
+          bodySchema: { description: "No body required. Exemption is identified by path parameter.", fields: [] },
         },
         promote: {
           method: "POST",
@@ -86,6 +88,13 @@ export const stoToolset: ToolsetDefinition = {
           }),
           responseExtractor: passthrough,
           actionDescription: "Promote a security exemption to a wider scope. Pass scope and optional comment.",
+          bodySchema: {
+            description: "Exemption promotion details",
+            fields: [
+              { name: "scope", type: "string", required: false, description: "Target scope for promotion" },
+              { name: "comment", type: "string", required: false, description: "Comment for promotion" },
+            ],
+          },
         },
       },
     },

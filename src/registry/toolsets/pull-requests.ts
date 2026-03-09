@@ -93,6 +93,15 @@ export const pullRequestsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           actionDescription:
             "Merge a pull request. Body fields: method (merge/squash/rebase/fast-forward), source_sha, delete_source_branch (boolean), dry_run (boolean).",
+          bodySchema: {
+            description: "Merge options",
+            fields: [
+              { name: "method", type: "string", required: false, description: "Merge method: merge, squash, rebase, or fast-forward" },
+              { name: "source_sha", type: "string", required: false, description: "Expected source SHA for optimistic locking" },
+              { name: "delete_source_branch", type: "boolean", required: false, description: "Delete source branch after merge" },
+              { name: "dry_run", type: "boolean", required: false, description: "Simulate merge without executing" },
+            ],
+          },
         },
       },
     },
@@ -146,6 +155,13 @@ export const pullRequestsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           actionDescription:
             "Submit a review decision. Body fields: decision (required — 'approved' or 'changereq'), commit_sha (optional — SHA reviewed against).",
+          bodySchema: {
+            description: "Review decision",
+            fields: [
+              { name: "decision", type: "string", required: true, description: "Review decision: approved or changereq" },
+              { name: "commit_sha", type: "string", required: false, description: "Commit SHA reviewed against" },
+            ],
+          },
         },
       },
     },

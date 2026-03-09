@@ -69,6 +69,15 @@ export const accessControlToolset: ToolsetDefinition = {
           bodyBuilder: (input) => input.body,
           responseExtractor: ngExtract,
           description: "Create a user group",
+          bodySchema: {
+            description: "User group definition",
+            fields: [
+              { name: "identifier", type: "string", required: true, description: "Unique identifier" },
+              { name: "name", type: "string", required: true, description: "Display name" },
+              { name: "description", type: "string", required: false, description: "Group description" },
+              { name: "users", type: "array", required: false, description: "User IDs to add to the group", itemType: "string" },
+            ],
+          },
         },
         delete: {
           method: "DELETE",
@@ -113,6 +122,16 @@ export const accessControlToolset: ToolsetDefinition = {
           bodyBuilder: (input) => input.body,
           responseExtractor: ngExtract,
           description: "Create a service account",
+          bodySchema: {
+            description: "Service account definition",
+            fields: [
+              { name: "identifier", type: "string", required: true, description: "Unique identifier" },
+              { name: "name", type: "string", required: true, description: "Display name" },
+              { name: "email", type: "string", required: true, description: "Service account email" },
+              { name: "description", type: "string", required: false, description: "Description" },
+              { name: "tags", type: "object", required: false, description: "Key-value tag map" },
+            ],
+          },
         },
         delete: {
           method: "DELETE",
@@ -157,6 +176,16 @@ export const accessControlToolset: ToolsetDefinition = {
           bodyBuilder: (input) => input.body,
           responseExtractor: ngExtract,
           description: "Create a role",
+          bodySchema: {
+            description: "Role definition",
+            fields: [
+              { name: "identifier", type: "string", required: true, description: "Unique identifier" },
+              { name: "name", type: "string", required: true, description: "Display name" },
+              { name: "permissions", type: "array", required: true, description: "Permission identifiers to include", itemType: "string" },
+              { name: "description", type: "string", required: false, description: "Role description" },
+              { name: "allowed_scope_levels", type: "array", required: false, description: "Allowed scope levels", itemType: "string" },
+            ],
+          },
         },
         delete: {
           method: "DELETE",
@@ -194,6 +223,18 @@ export const accessControlToolset: ToolsetDefinition = {
           bodyBuilder: (input) => input.body,
           responseExtractor: ngExtract,
           description: "Create a role assignment",
+          bodySchema: {
+            description: "Role assignment binding",
+            fields: [
+              { name: "resourceGroupIdentifier", type: "string", required: true, description: "Resource group identifier" },
+              { name: "roleIdentifier", type: "string", required: true, description: "Role identifier" },
+              { name: "principal", type: "object", required: true, description: "Principal (user/group/service account)", fields: [
+                { name: "identifier", type: "string", required: true, description: "Principal identifier" },
+                { name: "type", type: "string", required: true, description: "Principal type: USER, USER_GROUP, or SERVICE_ACCOUNT" },
+              ]},
+              { name: "disabled", type: "boolean", required: false, description: "Whether the assignment is disabled" },
+            ],
+          },
         },
       },
     },
@@ -231,6 +272,16 @@ export const accessControlToolset: ToolsetDefinition = {
           bodyBuilder: (input) => input.body,
           responseExtractor: ngExtract,
           description: "Create a resource group",
+          bodySchema: {
+            description: "Resource group definition",
+            fields: [
+              { name: "identifier", type: "string", required: true, description: "Unique identifier" },
+              { name: "name", type: "string", required: true, description: "Display name" },
+              { name: "description", type: "string", required: false, description: "Description" },
+              { name: "includedScopes", type: "array", required: false, description: "Scopes to include", itemType: "scope object" },
+              { name: "resourceFilter", type: "array", required: false, description: "Resource filters", itemType: "filter object" },
+            ],
+          },
         },
         delete: {
           method: "DELETE",

@@ -352,4 +352,71 @@ describe("Registry", () => {
       ).rejects.toThrow(/Read-only mode/);
     });
   });
+
+  describe("bodySchema enforcement", () => {
+    let registry: Registry;
+    beforeEach(() => {
+      registry = new Registry(makeConfig());
+    });
+
+    it("every create operation has a bodySchema", () => {
+      const missing: string[] = [];
+      for (const type of registry.getAllResourceTypes()) {
+        const def = registry.getResource(type);
+        if (def.operations.create && !def.operations.create.bodySchema) {
+          missing.push(`${type}.create`);
+        }
+      }
+      expect(missing, `Missing bodySchema on create: ${missing.join(", ")}`).toEqual([]);
+    });
+
+    it("every update operation has a bodySchema", () => {
+      const missing: string[] = [];
+      for (const type of registry.getAllResourceTypes()) {
+        const def = registry.getResource(type);
+        if (def.operations.update && !def.operations.update.bodySchema) {
+          missing.push(`${type}.update`);
+        }
+      }
+      expect(missing, `Missing bodySchema on update: ${missing.join(", ")}`).toEqual([]);
+    });
+
+    it("every executeAction has a bodySchema", () => {
+      const missing: string[] = [];
+      for (const type of registry.getAllResourceTypes()) {
+        const def = registry.getResource(type);
+        if (def.executeActions) {
+          for (const [action, spec] of Object.entries(def.executeActions)) {
+            if (!spec.bodySchema) {
+              missing.push(`${type}.${action}`);
+            }
+          }
+        }
+      }
+      expect(missing, `Missing bodySchema on executeActions: ${missing.join(", ")}`).toEqual([]);
+    });
+
+    it("bodySchema fields have required properties", () => {
+      const invalid: string[] = [];
+      for (const type of registry.getAllResourceTypes()) {
+        const def = registry.getResource(type);
+        const specs = [
+          ...Object.entries(def.operations).map(([op, s]) => [`${type}.${op}`, s] as const),
+          ...Object.entries(def.executeActions ?? {}).map(([a, s]) => [`${type}.${a}`, s] as const),
+        ];
+        for (const [label, spec] of specs) {
+          if (spec.bodySchema) {
+            if (!spec.bodySchema.description) invalid.push(`${label}: missing description`);
+            if (!Array.isArray(spec.bodySchema.fields)) invalid.push(`${label}: fields not array`);
+            for (const field of spec.bodySchema.fields) {
+              if (!field.name || !field.type || typeof field.required !== "boolean" || !field.description) {
+                invalid.push(`${label}.${field.name ?? "?"}: incomplete field spec`);
+              }
+            }
+          }
+        }
+      }
+      expect(invalid, `Invalid bodySchema fields: ${invalid.join("; ")}`).toEqual([]);
+    });
+  });
 });

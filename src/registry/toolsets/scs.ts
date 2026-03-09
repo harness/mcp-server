@@ -181,6 +181,14 @@ export const scsToolset: ToolsetDefinition = {
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
           description: "Create an OPA policy for supply chain governance",
+          bodySchema: {
+            description: "OPA policy definition",
+            fields: [
+              { name: "name", type: "string", required: true, description: "Policy name" },
+              { name: "rego", type: "string", required: true, description: "Rego policy source code" },
+              { name: "description", type: "string", required: false, description: "Policy description" },
+            ],
+          },
         },
       },
     },

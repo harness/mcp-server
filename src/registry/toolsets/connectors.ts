@@ -97,6 +97,7 @@ export const connectorsToolset: ToolsetDefinition = {
           bodyBuilder: () => ({}),
           responseExtractor: ngExtract,
           actionDescription: "Test connectivity of a connector",
+          bodySchema: { description: "No body required. Connector is identified by path parameter.", fields: [] },
         },
       },
     },
