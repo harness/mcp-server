@@ -20,32 +20,14 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
       size: z.number().min(1).max(100).describe("Page size (1–100)").default(20).optional(),
       search_term: z.string().describe("Filter results by name or keyword").optional(),
       compact: z.boolean().describe("Strip verbose metadata from list items, keeping only essential fields (default true)").default(true).optional(),
-      // Additional filter fields passed through dynamically
-      filter_type: z.string().describe("Filter type qualifier").optional(),
-      module: z.string().describe("Harness module filter (CD, CI, etc.)").optional(),
-      status: z.string().describe("Status filter").optional(),
-      type: z.string().describe("Type/category filter").optional(),
-      category: z.string().describe("Category filter").optional(),
-      env_type: z.string().describe("Environment type filter (Production, PreProduction)").optional(),
-      sort: z.string().describe("Sort field").optional(),
-      execution_id: z.string().describe("Execution identifier for sub-resources (approval instances)").optional(),
-      approval_status: z.string().describe("Approval status filter (WAITING, APPROVED, REJECTED, FAILED, ABORTED, EXPIRED)").optional(),
-      approval_type: z.string().describe("Approval type filter (HarnessApproval, JiraApproval, CustomApproval, ServiceNowApproval)").optional(),
-      node_execution_id: z.string().describe("Node execution ID to filter approval instances by step").optional(),
-      pipeline_id: z.string().describe("Pipeline identifier for sub-resources (triggers, input sets, executions)").optional(),
-      environment_id: z.string().describe("Environment identifier for infrastructure").optional(),
-      agent_id: z.string().describe("GitOps agent identifier for agent sub-resources").optional(),
-      repo_id: z.string().describe("Repository identifier for sub-resources").optional(),
-      registry_id: z.string().describe("Registry identifier for artifact sub-resources").optional(),
-      artifact_id: z.string().describe("Artifact identifier for version sub-resources").optional(),
-      environment: z.string().describe("Feature flag environment").optional(),
-      severity: z.string().describe("Security severity filter").optional(),
-      template_type: z.string().describe("Template entity type for template list (e.g. Pipeline, Stage, Step). Optional filter for resource_type=template.").optional(),
-      template_list_type: z.string().describe("Template list type: Stable, LastUpdated, or All. Used for resource_type=template.").optional(),
+      filters: z.record(z.string(), z.unknown()).describe("Additional filter fields passed to the API (e.g. status, module, pipeline_id, environment_id, agent_id). Call harness_describe for available filters per resource_type.").optional(),
     },
     async (args) => {
       try {
-        const input = applyUrlDefaults(args as Record<string, unknown>, args.url);
+        const { filters, ...rest } = args;
+        const input = applyUrlDefaults(rest as Record<string, unknown>, args.url);
+        // Spread caller-supplied filters into the input for registry dispatch
+        if (filters) Object.assign(input, filters);
         const resourceType = input.resource_type as string | undefined;
         if (!resourceType) {
           return errorResult("resource_type is required. Provide it explicitly or via a Harness URL.");

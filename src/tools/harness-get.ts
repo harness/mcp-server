@@ -16,19 +16,13 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
       url: z.string().describe("A Harness UI URL — org, project, resource type, and ID are extracted automatically").optional(),
       org_id: z.string().describe("Organization identifier (overrides default)").optional(),
       project_id: z.string().describe("Project identifier (overrides default)").optional(),
-      // Secondary identifiers for nested resources
-      pipeline_id: z.string().describe("Pipeline ID (for triggers, input sets)").optional(),
-      environment_id: z.string().describe("Environment ID (for infrastructure)").optional(),
-      agent_id: z.string().describe("GitOps agent ID (for agent sub-resources)").optional(),
-      repo_id: z.string().describe("Repository ID (for pull requests)").optional(),
-      registry_id: z.string().describe("Registry ID (for artifacts)").optional(),
-      artifact_id: z.string().describe("Artifact ID (for versions)").optional(),
-      environment: z.string().describe("Feature flag environment").optional(),
-      version_label: z.string().describe("Template version label").optional(),
+      params: z.record(z.string(), z.unknown()).describe("Additional identifiers for nested resources (e.g. pipeline_id, environment_id, agent_id, repo_id, version_label). Call harness_describe for required fields per resource_type.").optional(),
     },
     async (args) => {
       try {
-        const input = applyUrlDefaults(args as Record<string, unknown>, args.url);
+        const { params, ...rest } = args;
+        const input = applyUrlDefaults(rest as Record<string, unknown>, args.url);
+        if (params) Object.assign(input, params);
         const resourceType = input.resource_type as string | undefined;
         if (!resourceType) {
           return errorResult("resource_type is required. Provide it explicitly or via a Harness URL.");

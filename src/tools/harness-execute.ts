@@ -21,27 +21,15 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
       resource_id: z.string().describe("The primary identifier of the resource").optional(),
       org_id: z.string().describe("Organization identifier (overrides default)").optional(),
       project_id: z.string().describe("Project identifier (overrides default)").optional(),
-      // Dynamic fields for various actions
-      pipeline_id: z.string().describe("Pipeline identifier").optional(),
-      execution_id: z.string().describe("Execution identifier").optional(),
-      flag_id: z.string().describe("Feature flag identifier").optional(),
-      connector_id: z.string().describe("Connector identifier").optional(),
-      agent_id: z.string().describe("GitOps agent identifier").optional(),
-      app_name: z.string().describe("GitOps application name").optional(),
-      experiment_id: z.string().describe("Chaos experiment identifier").optional(),
-      approval_id: z.string().describe("Approval instance identifier for approve/reject actions").optional(),
-      comments: z.string().describe("Comments for approval/rejection").optional(),
-      approver_inputs: z.array(z.record(z.string(), z.string())).describe("Approver inputs as [{name, value}] for approval actions").optional(),
-      module: z.string().describe("Harness module (CD, CI)").optional(),
       inputs: z.record(z.string(), z.unknown()).describe("Runtime inputs for pipeline execution").optional(),
-      interrupt_type: z.string().describe("Interrupt type (AbortAll, Pause, Resume, etc.)").optional(),
-      enable: z.boolean().describe("Enable/disable for feature flag toggle").optional(),
-      environment: z.string().describe("Target environment for feature flag operations").optional(),
       body: z.record(z.string(), z.unknown()).describe("Additional body payload for the action").optional(),
+      params: z.record(z.string(), z.unknown()).describe("Action-specific parameters (e.g. pipeline_id, execution_id, flag_id, agent_id, interrupt_type, enable, environment, module). Call harness_describe for available actions and fields per resource_type.").optional(),
     },
     async (args) => {
       try {
-        const input = applyUrlDefaults(args as Record<string, unknown>, args.url);
+        const { params, ...rest } = args;
+        const input = applyUrlDefaults(rest as Record<string, unknown>, args.url);
+        if (params) Object.assign(input, params);
         const resourceType = input.resource_type as string | undefined;
         if (!resourceType) {
           return errorResult("resource_type is required. Provide it explicitly or via a Harness URL.");

@@ -33,20 +33,18 @@ export function registerDiagnoseTool(server: McpServer, registry: Registry, clie
       url: z.string().describe("A Harness URL — resource type, org, project, and ID are extracted automatically").optional(),
       org_id: z.string().describe("Organization identifier (overrides default)").optional(),
       project_id: z.string().describe("Project identifier (overrides default)").optional(),
-      // GitOps-specific params
-      agent_id: z.string().describe("[gitops_application] GitOps agent identifier. Auto-detected from url.").optional(),
-      // Pipeline-specific params (ignored for other resource types)
-      execution_id: z.string().describe("[pipeline] The execution ID to analyze. Auto-detected from url.").optional(),
-      pipeline_id: z.string().describe("[pipeline] Pipeline identifier — fetches latest execution when no execution_id given.").optional(),
-      summary: z.boolean().describe("[pipeline] Structured summary (default true). Set false for raw diagnostic data.").default(true).optional(),
-      include_yaml: z.boolean().describe("[pipeline] Include pipeline YAML. Default: false in summary, true in raw mode.").optional(),
-      include_logs: z.boolean().describe("[pipeline] Include step logs. Default: false in summary, true in raw mode.").optional(),
-      log_snippet_lines: z.number().describe("[pipeline] Max log lines per step (tail). 0 = unlimited.").default(120).optional(),
-      max_failed_steps: z.number().describe("[pipeline] Max failed steps to fetch logs for. 0 = unlimited.").default(5).optional(),
+      options: z.record(z.string(), z.unknown()).describe("Resource-specific diagnostic options. Pipeline: execution_id, pipeline_id, summary, include_yaml, include_logs, log_snippet_lines, max_failed_steps. GitOps: agent_id. Call harness_describe for details.").optional(),
     },
     async (args, extra) => {
       try {
-        const input = applyUrlDefaults(args as Record<string, unknown>, args.url);
+        const { options, ...rest } = args;
+        const input = applyUrlDefaults(rest as Record<string, unknown>, args.url);
+        // Spread resource-specific options into input (for dispatch) and merged args (for handler logic)
+        const mergedArgs: Record<string, unknown> = { ...rest };
+        if (options) {
+          Object.assign(input, options);
+          Object.assign(mergedArgs, options);
+        }
 
         // Resolve resource_type: explicit > URL-derived > default
         let resourceType = (args.resource_type as string)
@@ -61,7 +59,7 @@ export function registerDiagnoseTool(server: McpServer, registry: Registry, clie
           );
         }
 
-        const ctx: DiagnoseContext = { client, registry, config, input, args: args as Record<string, unknown>, extra };
+        const ctx: DiagnoseContext = { client, registry, config, input, args: mergedArgs, extra };
         const result = await handler.diagnose(ctx);
         return jsonResult(result);
       } catch (err) {

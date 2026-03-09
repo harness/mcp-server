@@ -111,6 +111,80 @@ describe("Registry", () => {
     });
   });
 
+  describe("LLM field discovery flow", () => {
+    let registry: Registry;
+    beforeEach(() => {
+      registry = new Registry(makeConfig());
+    });
+
+    it("harness_describe exposes listFilterFields for each resource type", () => {
+      // Simulate what an LLM would get from harness_describe(resource_type="pipeline")
+      const def = registry.getResource("pipeline");
+      expect(def.listFilterFields).toBeDefined();
+      expect(def.listFilterFields).toContain("search_term");
+      expect(def.listFilterFields).toContain("module");
+    });
+
+    it("listFilterFields are accepted by dispatch when passed as flat input", async () => {
+      // Simulate: LLM discovers filter fields via describe, then passes them via filters catch-all
+      const def = registry.getResource("connector");
+      expect(def.listFilterFields).toContain("search_term");
+      expect(def.listFilterFields).toContain("type");
+      expect(def.listFilterFields).toContain("category");
+
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: { content: [], totalElements: 0 },
+      });
+      const client = makeClient(mockRequest);
+
+      // Pass discovered filter fields as flat input (as they arrive after spreading filters catch-all)
+      await registry.dispatch(client, "connector", "list", {
+        search_term: "docker",
+        type: "DockerRegistry",
+        category: "CONNECTOR",
+        page: 0,
+        size: 10,
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params).toMatchObject({
+        searchTerm: "docker",
+        type: "DockerRegistry",
+        category: "CONNECTOR",
+      });
+    });
+
+    it("identifierFields include parent IDs for nested resources", () => {
+      // Trigger needs both pipeline_id and trigger_id
+      const triggerDef = registry.getResource("trigger");
+      expect(triggerDef.identifierFields).toContain("trigger_id");
+      expect(triggerDef.identifierFields).toContain("pipeline_id");
+      // pipeline_id is passed via queryParams on get, discoverable via describe
+      const getSpec = triggerDef.operations.get;
+      expect(getSpec?.queryParams).toHaveProperty("pipeline_id");
+    });
+
+    it("most listable resource types expose listFilterFields", () => {
+      const allTypes = registry.getAllResourceTypes();
+      let withFilters = 0;
+      let listable = 0;
+      for (const type of allTypes) {
+        const def = registry.getResource(type);
+        if (def.operations.list) {
+          listable++;
+          if (def.listFilterFields) withFilters++;
+        }
+      }
+      // Majority of listable resources should have filter fields defined
+      expect(withFilters / listable).toBeGreaterThanOrEqual(0.5);
+    });
+
+    it("describeSummary includes filter discovery hint", () => {
+      const summary = registry.describeSummary() as { hint: string };
+      expect(summary.hint).toContain("harness_describe");
+    });
+  });
+
   describe("dispatch", () => {
     let registry: Registry;
     beforeEach(() => {
