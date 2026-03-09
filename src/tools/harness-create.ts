@@ -8,15 +8,24 @@ import { confirmViaElicitation } from "../utils/elicitation.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 
 export function registerCreateTool(server: McpServer, registry: Registry, client: HarnessClient): void {
-  server.tool(
+  server.registerTool(
     "harness_create",
-    "Create a new Harness resource. You can pass a Harness URL to auto-extract org and project scope. For pipelines, templates, and triggers — read the schema resource first (e.g. schema:///pipeline) to understand the required body format.",
     {
-      resource_type: z.string().describe("The type of resource to create (e.g. pipeline, service, environment, connector, trigger)"),
-      body: z.record(z.string(), z.unknown()).describe("The resource definition body (varies by resource type — typically the YAML or JSON spec)"),
-      url: z.string().describe("A Harness UI URL — org and project are extracted automatically").optional(),
-      org_id: z.string().describe("Organization identifier (overrides default)").optional(),
-      project_id: z.string().describe("Project identifier (overrides default)").optional(),
+      description: "Create a new Harness resource. You can pass a Harness URL to auto-extract org and project scope. For pipelines, templates, and triggers — read the schema resource first (e.g. schema:///pipeline) to understand the required body format.",
+      inputSchema: {
+        resource_type: z.string().describe("The type of resource to create (e.g. pipeline, service, environment, connector, trigger)"),
+        body: z.record(z.string(), z.unknown()).describe("The resource definition body (varies by resource type — typically the YAML or JSON spec)"),
+        url: z.string().describe("A Harness UI URL — org and project are extracted automatically").optional(),
+        org_id: z.string().describe("Organization identifier (overrides default)").optional(),
+        project_id: z.string().describe("Project identifier (overrides default)").optional(),
+      },
+      annotations: {
+        title: "Create Harness Resource",
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
     },
     async (args) => {
       try {

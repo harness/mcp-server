@@ -7,16 +7,23 @@ import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.
 import { applyUrlDefaults } from "../utils/url-parser.js";
 
 export function registerGetTool(server: McpServer, registry: Registry, client: HarnessClient): void {
-  server.tool(
+  server.registerTool(
     "harness_get",
-    "Get a specific Harness resource by ID. You can pass a Harness URL to auto-extract org, project, resource type, and resource ID. For troubleshooting failures or health issues, prefer harness_diagnose — it combines multiple API calls with domain-specific analysis. Call harness_describe to discover available resource_types and which support diagnosis.",
     {
-      resource_type: z.string().describe("The type of resource to get (e.g. pipeline, service, environment). Auto-detected from url if provided.").optional(),
-      resource_id: z.string().describe("The primary identifier of the resource. Auto-detected from url if provided.").optional(),
-      url: z.string().describe("A Harness UI URL — org, project, resource type, and ID are extracted automatically").optional(),
-      org_id: z.string().describe("Organization identifier (overrides default)").optional(),
-      project_id: z.string().describe("Project identifier (overrides default)").optional(),
-      params: z.record(z.string(), z.unknown()).describe("Additional identifiers for nested resources (e.g. pipeline_id, environment_id, agent_id, repo_id, version_label). Call harness_describe for required fields per resource_type.").optional(),
+      description: "Get a specific Harness resource by ID. You can pass a Harness URL to auto-extract org, project, resource type, and resource ID. For troubleshooting failures or health issues, prefer harness_diagnose — it combines multiple API calls with domain-specific analysis. Call harness_describe to discover available resource_types and which support diagnosis.",
+      inputSchema: {
+        resource_type: z.string().describe("The type of resource to get (e.g. pipeline, service, environment). Auto-detected from url if provided.").optional(),
+        resource_id: z.string().describe("The primary identifier of the resource. Auto-detected from url if provided.").optional(),
+        url: z.string().describe("A Harness UI URL — org, project, resource type, and ID are extracted automatically").optional(),
+        org_id: z.string().describe("Organization identifier (overrides default)").optional(),
+        project_id: z.string().describe("Project identifier (overrides default)").optional(),
+        params: z.record(z.string(), z.unknown()).describe("Additional identifiers for nested resources (e.g. pipeline_id, environment_id, agent_id, repo_id, version_label). Call harness_describe for required fields per resource_type.").optional(),
+      },
+      annotations: {
+        title: "Get Harness Resource",
+        readOnlyHint: true,
+        openWorldHint: true,
+      },
     },
     async (args) => {
       try {

@@ -2,11 +2,13 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 export function registerOptimizeCostsPrompt(server: McpServer): void {
-  server.prompt(
+  server.registerPrompt(
     "optimize-costs",
-    "Analyze cloud cost data and recommend optimizations for a Harness project",
     {
-      projectId: z.string().describe("Project identifier to analyze costs for").optional(),
+      description: "Analyze cloud cost data and recommend optimizations for a Harness project",
+      argsSchema: {
+        projectId: z.string().describe("Project identifier to analyze costs for").optional(),
+      },
     },
     async ({ projectId }) => ({
       messages: [{

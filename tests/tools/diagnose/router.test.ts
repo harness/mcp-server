@@ -15,7 +15,7 @@ let registry: Registry;
 
 function mockServer(): McpServer {
   return {
-    tool: vi.fn((_name: string, _desc: string, _schema: unknown, handler: ToolHandler) => {
+    registerTool: vi.fn((_name: string, _config: unknown, handler: ToolHandler) => {
       capturedHandler = handler;
     }),
   } as unknown as McpServer;

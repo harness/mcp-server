@@ -11,19 +11,28 @@ import { applyUrlDefaults } from "../utils/url-parser.js";
 const log = createLogger("execute");
 
 export function registerExecuteTool(server: McpServer, registry: Registry, client: HarnessClient): void {
-  server.tool(
+  server.registerTool(
     "harness_execute",
-    "Execute an action on a Harness resource: run/retry/interrupt pipelines, toggle feature flags, test connectors, sync GitOps apps, run chaos experiments. You can pass a Harness URL to auto-extract identifiers.",
     {
-      resource_type: z.string().describe("The resource type (e.g. pipeline, execution, feature_flag, connector, gitops_application, chaos_experiment). Auto-detected from url if provided.").optional(),
-      url: z.string().describe("A Harness UI URL — org, project, resource type, and ID are extracted automatically").optional(),
-      action: z.string().describe("The action to execute (e.g. run, retry, interrupt, toggle, test_connection, sync)"),
-      resource_id: z.string().describe("The primary identifier of the resource").optional(),
-      org_id: z.string().describe("Organization identifier (overrides default)").optional(),
-      project_id: z.string().describe("Project identifier (overrides default)").optional(),
-      inputs: z.record(z.string(), z.unknown()).describe("Runtime inputs for pipeline execution").optional(),
-      body: z.record(z.string(), z.unknown()).describe("Additional body payload for the action").optional(),
-      params: z.record(z.string(), z.unknown()).describe("Action-specific parameters (e.g. pipeline_id, execution_id, flag_id, agent_id, interrupt_type, enable, environment, module). Call harness_describe for available actions and fields per resource_type.").optional(),
+      description: "Execute an action on a Harness resource: run/retry/interrupt pipelines, toggle feature flags, test connectors, sync GitOps apps, run chaos experiments. You can pass a Harness URL to auto-extract identifiers.",
+      inputSchema: {
+        resource_type: z.string().describe("The resource type (e.g. pipeline, execution, feature_flag, connector, gitops_application, chaos_experiment). Auto-detected from url if provided.").optional(),
+        url: z.string().describe("A Harness UI URL — org, project, resource type, and ID are extracted automatically").optional(),
+        action: z.string().describe("The action to execute (e.g. run, retry, interrupt, toggle, test_connection, sync)"),
+        resource_id: z.string().describe("The primary identifier of the resource").optional(),
+        org_id: z.string().describe("Organization identifier (overrides default)").optional(),
+        project_id: z.string().describe("Project identifier (overrides default)").optional(),
+        inputs: z.record(z.string(), z.unknown()).describe("Runtime inputs for pipeline execution").optional(),
+        body: z.record(z.string(), z.unknown()).describe("Additional body payload for the action").optional(),
+        params: z.record(z.string(), z.unknown()).describe("Action-specific parameters (e.g. pipeline_id, execution_id, flag_id, agent_id, interrupt_type, enable, environment, module). Call harness_describe for available actions and fields per resource_type.").optional(),
+      },
+      annotations: {
+        title: "Execute Harness Action",
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
     },
     async (args) => {
       try {

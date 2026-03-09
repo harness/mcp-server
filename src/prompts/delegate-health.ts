@@ -2,11 +2,13 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 export function registerDelegateHealthPrompt(server: McpServer): void {
-  server.prompt(
+  server.registerPrompt(
     "delegate-health-check",
-    "Check delegate connectivity, health, and token status with troubleshooting guidance",
     {
-      projectId: z.string().describe("Project identifier").optional(),
+      description: "Check delegate connectivity, health, and token status with troubleshooting guidance",
+      argsSchema: {
+        projectId: z.string().describe("Project identifier").optional(),
+      },
     },
     async ({ projectId }) => {
       const projectFilter = projectId ? `, project_id="${projectId}"` : "";

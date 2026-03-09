@@ -2,12 +2,14 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 export function registerSecurityReviewPrompt(server: McpServer): void {
-  server.prompt(
+  server.registerPrompt(
     "security-review",
-    "Review security issues across Harness resources and suggest remediations",
     {
-      projectId: z.string().describe("Project identifier to review").optional(),
-      severity: z.string().describe("Comma-separated severity filter (default: critical,high)").optional(),
+      description: "Review security issues across Harness resources and suggest remediations",
+      argsSchema: {
+        projectId: z.string().describe("Project identifier to review").optional(),
+        severity: z.string().describe("Comma-separated severity filter (default: critical,high)").optional(),
+      },
     },
     async ({ projectId, severity }) => {
       const severityFilter = severity ?? "critical,high";

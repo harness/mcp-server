@@ -2,12 +2,14 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 export function registerRightsizingPrompt(server: McpServer): void {
-  server.prompt(
+  server.registerPrompt(
     "rightsizing-recommendations",
-    "Review and prioritize rightsizing recommendations, optionally create Jira or ServiceNow tickets",
     {
-      projectId: z.string().describe("Project identifier").optional(),
-      minSavings: z.string().describe("Minimum monthly savings threshold to include (e.g., '100' for $100/mo)").optional(),
+      description: "Review and prioritize rightsizing recommendations, optionally create Jira or ServiceNow tickets",
+      argsSchema: {
+        projectId: z.string().describe("Project identifier").optional(),
+        minSavings: z.string().describe("Minimum monthly savings threshold to include (e.g., '100' for $100/mo)").optional(),
+      },
     },
     async ({ projectId, minSavings }) => {
       const projectFilter = projectId ? `, project_id="${projectId}"` : "";

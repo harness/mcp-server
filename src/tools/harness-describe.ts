@@ -4,13 +4,20 @@ import type { Registry } from "../registry/index.js";
 import { jsonResult } from "../utils/response-formatter.js";
 
 export function registerDescribeTool(server: McpServer, registry: Registry): void {
-  server.tool(
+  server.registerTool(
     "harness_describe",
-    "Describe available Harness resource types, their supported operations, and fields. No API call — returns local metadata only. Use this to discover what resource_types you can use with other harness_ tools.",
     {
-      resource_type: z.string().describe("Get details for a specific resource type").optional(),
-      toolset: z.string().describe("Filter to a specific toolset (e.g. pipelines, services)").optional(),
-      search_term: z.string().describe("Search for resource types by keyword (matches type name, display name, toolset, description)").optional(),
+      description: "Describe available Harness resource types, their supported operations, and fields. No API call — returns local metadata only. Use this to discover what resource_types you can use with other harness_ tools.",
+      inputSchema: {
+        resource_type: z.string().describe("Get details for a specific resource type").optional(),
+        toolset: z.string().describe("Filter to a specific toolset (e.g. pipelines, services)").optional(),
+        search_term: z.string().describe("Search for resource types by keyword (matches type name, display name, toolset, description)").optional(),
+      },
+      annotations: {
+        title: "Describe Harness Resources",
+        readOnlyHint: true,
+        openWorldHint: false,
+      },
     },
     async (args) => {
       if (args.resource_type) {

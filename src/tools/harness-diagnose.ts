@@ -24,16 +24,23 @@ const handlers: Record<string, DiagnoseHandler> = {
 const SUPPORTED_TYPES = Object.keys(handlers).join(", ");
 
 export function registerDiagnoseTool(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
-  server.tool(
+  server.registerTool(
     "harness_diagnose",
-    `Diagnose a Harness resource — analyze failures, test connectivity, check health, or troubleshoot GitOps sync issues. Supported resource_types: ${SUPPORTED_TYPES}. Defaults to pipeline execution diagnosis. Accepts a Harness URL to auto-detect the resource type.`,
     {
-      resource_type: z.string().describe(`Resource type to diagnose: ${SUPPORTED_TYPES}. Auto-detected from url if provided. Defaults to pipeline.`).optional(),
-      resource_id: z.string().describe("Primary identifier of the resource (connector ID, delegate name). Auto-detected from url if provided.").optional(),
-      url: z.string().describe("A Harness URL — resource type, org, project, and ID are extracted automatically").optional(),
-      org_id: z.string().describe("Organization identifier (overrides default)").optional(),
-      project_id: z.string().describe("Project identifier (overrides default)").optional(),
-      options: z.record(z.string(), z.unknown()).describe("Resource-specific diagnostic options. Pipeline: execution_id, pipeline_id, summary, include_yaml, include_logs, log_snippet_lines, max_failed_steps. GitOps: agent_id. Call harness_describe for details.").optional(),
+      description: `Diagnose a Harness resource — analyze failures, test connectivity, check health, or troubleshoot GitOps sync issues. Supported resource_types: ${SUPPORTED_TYPES}. Defaults to pipeline execution diagnosis. Accepts a Harness URL to auto-detect the resource type.`,
+      inputSchema: {
+        resource_type: z.string().describe(`Resource type to diagnose: ${SUPPORTED_TYPES}. Auto-detected from url if provided. Defaults to pipeline.`).optional(),
+        resource_id: z.string().describe("Primary identifier of the resource (connector ID, delegate name). Auto-detected from url if provided.").optional(),
+        url: z.string().describe("A Harness URL — resource type, org, project, and ID are extracted automatically").optional(),
+        org_id: z.string().describe("Organization identifier (overrides default)").optional(),
+        project_id: z.string().describe("Project identifier (overrides default)").optional(),
+        options: z.record(z.string(), z.unknown()).describe("Resource-specific diagnostic options. Pipeline: execution_id, pipeline_id, summary, include_yaml, include_logs, log_snippet_lines, max_failed_steps. GitOps: agent_id. Call harness_describe for details.").optional(),
+      },
+      annotations: {
+        title: "Diagnose Harness Resource",
+        readOnlyHint: true,
+        openWorldHint: true,
+      },
     },
     async (args, extra) => {
       try {

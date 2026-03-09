@@ -2,14 +2,16 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 export function registerPrSummaryPrompt(server: McpServer): void {
-  server.prompt(
+  server.registerPrompt(
     "pr-summary",
-    "Auto-generate a pull request title and description from the commit history and diff of a branch",
     {
-      repoId: z.string().describe("Repository identifier"),
-      sourceBranch: z.string().describe("Source branch name (the feature branch)"),
-      targetBranch: z.string().describe("Target branch name (e.g., main)").optional(),
-      projectId: z.string().describe("Project identifier").optional(),
+      description: "Auto-generate a pull request title and description from the commit history and diff of a branch",
+      argsSchema: {
+        repoId: z.string().describe("Repository identifier"),
+        sourceBranch: z.string().describe("Source branch name (the feature branch)"),
+        targetBranch: z.string().describe("Target branch name (e.g., main)").optional(),
+        projectId: z.string().describe("Project identifier").optional(),
+      },
     },
     async ({ repoId, sourceBranch, targetBranch, projectId }) => {
       const target = targetBranch ?? "main";

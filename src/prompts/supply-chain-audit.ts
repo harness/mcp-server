@@ -2,11 +2,13 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 export function registerSupplyChainAuditPrompt(server: McpServer): void {
-  server.prompt(
+  server.registerPrompt(
     "supply-chain-audit",
-    "End-to-end software supply chain security audit — provenance, chain of custody, policy compliance",
     {
-      projectId: z.string().describe("Project identifier").optional(),
+      description: "End-to-end software supply chain security audit — provenance, chain of custody, policy compliance",
+      argsSchema: {
+        projectId: z.string().describe("Project identifier").optional(),
+      },
     },
     async ({ projectId }) => {
       const projectFilter = projectId ? `, project_id="${projectId}"` : "";

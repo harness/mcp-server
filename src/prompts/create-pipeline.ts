@@ -2,12 +2,14 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 export function registerCreatePipelinePrompt(server: McpServer): void {
-  server.prompt(
+  server.registerPrompt(
     "create-pipeline",
-    "Generate a new Harness pipeline YAML from requirements",
     {
-      description: z.string().describe("Describe what the pipeline should do"),
-      projectId: z.string().describe("Target project identifier").optional(),
+      description: "Generate a new Harness pipeline YAML from requirements",
+      argsSchema: {
+        description: z.string().describe("Describe what the pipeline should do"),
+        projectId: z.string().describe("Target project identifier").optional(),
+      },
     },
     async ({ description, projectId }) => ({
       messages: [{

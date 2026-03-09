@@ -2,13 +2,15 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 export function registerCodeReviewPrompt(server: McpServer): void {
-  server.prompt(
+  server.registerPrompt(
     "code-review",
-    "Review a Harness Code pull request — analyze diff, commits, checks, and comments to provide structured feedback",
     {
-      repoId: z.string().describe("Repository identifier"),
-      prNumber: z.string().describe("Pull request number"),
-      projectId: z.string().describe("Project identifier").optional(),
+      description: "Review a Harness Code pull request — analyze diff, commits, checks, and comments to provide structured feedback",
+      argsSchema: {
+        repoId: z.string().describe("Repository identifier"),
+        prNumber: z.string().describe("Pull request number"),
+        projectId: z.string().describe("Project identifier").optional(),
+      },
     },
     async ({ repoId, prNumber, projectId }) => {
       const projectArg = projectId ? `, project_id="${projectId}"` : "";

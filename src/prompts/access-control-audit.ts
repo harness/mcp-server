@@ -2,12 +2,14 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 export function registerAccessControlAuditPrompt(server: McpServer): void {
-  server.prompt(
+  server.registerPrompt(
     "access-control-audit",
-    "Audit user permissions, over-privileged accounts, and role assignments to enforce least-privilege",
     {
-      projectId: z.string().describe("Project identifier").optional(),
-      orgId: z.string().describe("Organization identifier").optional(),
+      description: "Audit user permissions, over-privileged accounts, and role assignments to enforce least-privilege",
+      argsSchema: {
+        projectId: z.string().describe("Project identifier").optional(),
+        orgId: z.string().describe("Organization identifier").optional(),
+      },
     },
     async ({ projectId, orgId }) => {
       const projectFilter = projectId ? `, project_id="${projectId}"` : "";

@@ -2,12 +2,14 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 export function registerMigrateToTemplatePrompt(server: McpServer): void {
-  server.prompt(
+  server.registerPrompt(
     "migrate-pipeline-to-template",
-    "Analyze an existing pipeline and extract reusable stage/step templates from it",
     {
-      pipelineId: z.string().describe("Pipeline identifier to analyze"),
-      projectId: z.string().describe("Project identifier").optional(),
+      description: "Analyze an existing pipeline and extract reusable stage/step templates from it",
+      argsSchema: {
+        pipelineId: z.string().describe("Pipeline identifier to analyze"),
+        projectId: z.string().describe("Project identifier").optional(),
+      },
     },
     async ({ pipelineId, projectId }) => {
       const projectFilter = projectId ? `, project_id="${projectId}"` : "";

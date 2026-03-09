@@ -8,17 +8,26 @@ import { confirmViaElicitation } from "../utils/elicitation.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 
 export function registerUpdateTool(server: McpServer, registry: Registry, client: HarnessClient): void {
-  server.tool(
+  server.registerTool(
     "harness_update",
-    "Update an existing Harness resource. You can pass a Harness URL to auto-extract identifiers. Response includes openInHarness link to the updated resource when applicable.",
     {
-      resource_type: z.string().describe("The type of resource to update (e.g. pipeline, service, environment, connector, trigger)"),
-      resource_id: z.string().describe("The identifier of the resource to update"),
-      url: z.string().describe("A Harness UI URL — org, project, resource type, and ID are extracted automatically").optional(),
-      body: z.record(z.string(), z.unknown()).describe("The updated resource definition body"),
-      org_id: z.string().describe("Organization identifier (overrides default)").optional(),
-      project_id: z.string().describe("Project identifier (overrides default)").optional(),
-      params: z.record(z.string(), z.unknown()).describe("Additional identifiers (e.g. pipeline_id for triggers, version_label for templates).").optional(),
+      description: "Update an existing Harness resource. You can pass a Harness URL to auto-extract identifiers. Response includes openInHarness link to the updated resource when applicable.",
+      inputSchema: {
+        resource_type: z.string().describe("The type of resource to update (e.g. pipeline, service, environment, connector, trigger)"),
+        resource_id: z.string().describe("The identifier of the resource to update"),
+        url: z.string().describe("A Harness UI URL — org, project, resource type, and ID are extracted automatically").optional(),
+        body: z.record(z.string(), z.unknown()).describe("The updated resource definition body"),
+        org_id: z.string().describe("Organization identifier (overrides default)").optional(),
+        project_id: z.string().describe("Project identifier (overrides default)").optional(),
+        params: z.record(z.string(), z.unknown()).describe("Additional identifiers (e.g. pipeline_id for triggers, version_label for templates).").optional(),
+      },
+      annotations: {
+        title: "Update Harness Resource",
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
     },
     async (args) => {
       try {

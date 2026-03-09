@@ -69,14 +69,21 @@ export function registerStatusTool(
   client: HarnessClient,
   config: Config,
 ): void {
-  server.tool(
+  server.registerTool(
     "harness_status",
-    "Get a live project health overview: recent failed executions, currently running executions, and recent deployment activity. You can pass a Harness URL to auto-extract org and project. Ideal first question: 'what's happening in my project right now?'",
     {
-      org_id: z.string().describe("Organization identifier (overrides default)").optional(),
-      project_id: z.string().describe("Project identifier (overrides default)").optional(),
-      url: z.string().describe("A Harness UI URL — org and project are extracted automatically").optional(),
-      limit: z.number().describe("Max items per section (default 5, max 20)").default(5).optional(),
+      description: "Get a live project health overview: recent failed executions, currently running executions, and recent deployment activity. You can pass a Harness URL to auto-extract org and project. Ideal first question: 'what's happening in my project right now?'",
+      inputSchema: {
+        org_id: z.string().describe("Organization identifier (overrides default)").optional(),
+        project_id: z.string().describe("Project identifier (overrides default)").optional(),
+        url: z.string().describe("A Harness UI URL — org and project are extracted automatically").optional(),
+        limit: z.number().describe("Max items per section (default 5, max 20)").default(5).optional(),
+      },
+      annotations: {
+        title: "Project Health Status",
+        readOnlyHint: true,
+        openWorldHint: true,
+      },
     },
     async (args, extra) => {
       try {

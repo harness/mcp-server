@@ -2,12 +2,14 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 export function registerSetupGitopsPrompt(server: McpServer): void {
-  server.prompt(
+  server.registerPrompt(
     "setup-gitops-application",
-    "Guide through onboarding a GitOps application — verify agent, cluster, repo, and create the application",
     {
-      agentId: z.string().describe("GitOps agent identifier"),
-      projectId: z.string().describe("Project identifier").optional(),
+      description: "Guide through onboarding a GitOps application — verify agent, cluster, repo, and create the application",
+      argsSchema: {
+        agentId: z.string().describe("GitOps agent identifier"),
+        projectId: z.string().describe("Project identifier").optional(),
+      },
     },
     async ({ agentId, projectId }) => {
       const projectFilter = projectId ? `, project_id="${projectId}"` : "";

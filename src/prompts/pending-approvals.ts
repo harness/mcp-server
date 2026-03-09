@@ -2,13 +2,15 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 export function registerPendingApprovalsPrompt(server: McpServer): void {
-  server.prompt(
+  server.registerPrompt(
     "pending-approvals",
-    "Find pipeline executions waiting for approval and present them for action",
     {
-      projectId: z.string().describe("Project identifier").optional(),
-      orgId: z.string().describe("Organization identifier").optional(),
-      pipelineId: z.string().describe("Filter to a specific pipeline").optional(),
+      description: "Find pipeline executions waiting for approval and present them for action",
+      argsSchema: {
+        projectId: z.string().describe("Project identifier").optional(),
+        orgId: z.string().describe("Organization identifier").optional(),
+        pipelineId: z.string().describe("Filter to a specific pipeline").optional(),
+      },
     },
     async ({ projectId, orgId, pipelineId }) => ({
       messages: [{

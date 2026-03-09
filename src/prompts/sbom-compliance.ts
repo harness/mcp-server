@@ -2,12 +2,14 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 export function registerSbomCompliancePrompt(server: McpServer): void {
-  server.prompt(
+  server.registerPrompt(
     "sbom-compliance-check",
-    "Audit SBOM and compliance posture for artifacts — license risks, policy violations, component vulnerabilities",
     {
-      artifactId: z.string().describe("Specific artifact ID to audit").optional(),
-      projectId: z.string().describe("Project identifier").optional(),
+      description: "Audit SBOM and compliance posture for artifacts — license risks, policy violations, component vulnerabilities",
+      argsSchema: {
+        artifactId: z.string().describe("Specific artifact ID to audit").optional(),
+        projectId: z.string().describe("Project identifier").optional(),
+      },
     },
     async ({ artifactId, projectId }) => {
       const projectFilter = projectId ? `, project_id="${projectId}"` : "";

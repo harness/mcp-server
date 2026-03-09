@@ -2,12 +2,14 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 export function registerBranchCleanupPrompt(server: McpServer): void {
-  server.prompt(
+  server.registerPrompt(
     "branch-cleanup",
-    "Analyze branches in a repository and recommend stale or merged branches to delete",
     {
-      repoId: z.string().describe("Repository identifier"),
-      projectId: z.string().describe("Project identifier").optional(),
+      description: "Analyze branches in a repository and recommend stale or merged branches to delete",
+      argsSchema: {
+        repoId: z.string().describe("Repository identifier"),
+        projectId: z.string().describe("Project identifier").optional(),
+      },
     },
     async ({ repoId, projectId }) => {
       const projectArg = projectId ? `, project_id="${projectId}"` : "";

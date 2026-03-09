@@ -2,11 +2,13 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 export function registerDeveloperScorecardPrompt(server: McpServer): void {
-  server.prompt(
+  server.registerPrompt(
     "developer-portal-scorecard",
-    "Review IDP scorecards for services and identify gaps to improve developer experience",
     {
-      projectId: z.string().describe("Project identifier").optional(),
+      description: "Review IDP scorecards for services and identify gaps to improve developer experience",
+      argsSchema: {
+        projectId: z.string().describe("Project identifier").optional(),
+      },
     },
     async ({ projectId }) => {
       const projectFilter = projectId ? `, project_id="${projectId}"` : "";

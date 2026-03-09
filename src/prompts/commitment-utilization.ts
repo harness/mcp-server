@@ -2,11 +2,13 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 export function registerCommitmentUtilizationPrompt(server: McpServer): void {
-  server.prompt(
+  server.registerPrompt(
     "commitment-utilization-review",
-    "Analyze reserved instance and savings plan utilization to find waste and optimize commitments",
     {
-      projectId: z.string().describe("Project identifier").optional(),
+      description: "Analyze reserved instance and savings plan utilization to find waste and optimize commitments",
+      argsSchema: {
+        projectId: z.string().describe("Project identifier").optional(),
+      },
     },
     async ({ projectId }) => {
       const projectFilter = projectId ? `, project_id="${projectId}"` : "";

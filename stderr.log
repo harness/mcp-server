@@ -1,0 +1,8 @@
+Fatal error: Error: Invalid configuration:
+  HARNESS_API_KEY: Required
+    at loadConfig (file:///Users/rohangupta/code/harness-poc-mcp/build/config.js:31:15)
+    at main (file:///Users/rohangupta/code/harness-poc-mcp/build/index.js:118:20)
+    at file:///Users/rohangupta/code/harness-poc-mcp/build/index.js:136:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:377:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:671:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)

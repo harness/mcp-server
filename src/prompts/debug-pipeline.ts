@@ -2,12 +2,14 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 export function registerDebugPipelinePrompt(server: McpServer): void {
-  server.prompt(
+  server.registerPrompt(
     "debug-pipeline-failure",
-    "Analyze a failed pipeline execution and suggest fixes. Accepts an execution ID, pipeline ID, or Harness URL.",
     {
-      executionId: z.string().describe("The failed execution ID, pipeline ID, or a Harness URL").optional(),
-      projectId: z.string().describe("Project identifier").optional(),
+      description: "Analyze a failed pipeline execution and suggest fixes. Accepts an execution ID, pipeline ID, or Harness URL.",
+      argsSchema: {
+        executionId: z.string().describe("The failed execution ID, pipeline ID, or a Harness URL").optional(),
+        projectId: z.string().describe("Project identifier").optional(),
+      },
     },
     async ({ executionId, projectId }) => {
       // Detect if the input looks like a URL

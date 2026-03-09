@@ -2,12 +2,14 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 export function registerCloudCostBreakdownPrompt(server: McpServer): void {
-  server.prompt(
+  server.registerPrompt(
     "cloud-cost-breakdown",
-    "Deep-dive into cloud costs by service, environment, or cluster with trend analysis",
     {
-      perspectiveId: z.string().describe("Cost perspective ID to analyze").optional(),
-      projectId: z.string().describe("Project identifier").optional(),
+      description: "Deep-dive into cloud costs by service, environment, or cluster with trend analysis",
+      argsSchema: {
+        perspectiveId: z.string().describe("Cost perspective ID to analyze").optional(),
+        projectId: z.string().describe("Project identifier").optional(),
+      },
     },
     async ({ perspectiveId, projectId }) => {
       const projectFilter = projectId ? `, project_id="${projectId}"` : "";

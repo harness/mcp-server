@@ -2,12 +2,14 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 export function registerChaosResiliencePrompt(server: McpServer): void {
-  server.prompt(
+  server.registerPrompt(
     "chaos-resilience-test",
-    "Design and run a chaos experiment to test service resilience",
     {
-      serviceName: z.string().describe("Name of the service to test"),
-      projectId: z.string().describe("Project identifier").optional(),
+      description: "Design and run a chaos experiment to test service resilience",
+      argsSchema: {
+        serviceName: z.string().describe("Name of the service to test"),
+        projectId: z.string().describe("Project identifier").optional(),
+      },
     },
     async ({ serviceName, projectId }) => {
       const projectFilter = projectId ? `, project_id="${projectId}"` : "";

@@ -2,12 +2,14 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 export function registerFeatureFlagRolloutPrompt(server: McpServer): void {
-  server.prompt(
+  server.registerPrompt(
     "feature-flag-rollout",
-    "Plan and execute a progressive feature flag rollout across environments",
     {
-      flagIdentifier: z.string().describe("Feature flag identifier to roll out"),
-      projectId: z.string().describe("Project identifier").optional(),
+      description: "Plan and execute a progressive feature flag rollout across environments",
+      argsSchema: {
+        flagIdentifier: z.string().describe("Feature flag identifier to roll out"),
+        projectId: z.string().describe("Project identifier").optional(),
+      },
     },
     async ({ flagIdentifier, projectId }) => {
       const projectFilter = projectId ? `, project_id="${projectId}"` : "";
