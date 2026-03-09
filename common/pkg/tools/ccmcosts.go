@@ -876,6 +876,10 @@ func buildViewConditionRules(keys []string, values []string) []dto.CCMRule {
 func CreateCostCategoriesCostTargetsEventTool(config *config.McpServerConfig, client *client.CloudCostManagementService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("ccm_create_cost_categories_cost_targets_event",
 			mcp.WithDescription("Create a cost category by defining cost target groupings based on cloud labels. Cost categories let you group cloud costs into buckets (e.g., by environment or team). Returns a UI event for user confirmation."),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    utils.ToBoolPtr(false),
+				DestructiveHint: utils.ToBoolPtr(false),
+			}),
 			mcp.WithString("cost_category_name",
 				mcp.Required(),
 				mcp.Description("Name for the Cost Category"),
@@ -992,20 +996,26 @@ func CreateCostCategoriesCostTargetsEventTool(config *config.McpServerConfig, cl
 				return mcp.NewToolResultError(fmt.Sprintf("Error: cost_target_groupings must be an array. Got type %T with value: %v", costTargetGroupingsInput, costTargetGroupingsInput)), nil
 			}
 
+			if len(costTargetGroupings) == 0 {
+				return mcp.NewToolResultError("Error: cost_target_groupings must contain at least one grouping"), nil
+			}
+
 			slog.Debug("Successfully extracted cost_target_groupings array", "length", len(costTargetGroupings))
 
-			for _, costTargetGrouping := range costTargetGroupings {
-				if costTargetGroupingMap, ok := costTargetGrouping.(map[string]interface{}); ok {
-					title, keys, values, err := extractGroupingFields(costTargetGroupingMap)
-					if err != nil {
-						return mcp.NewToolResultError(err.Error()), nil
-					}
-					rules := buildViewConditionRules(keys, values)
-					costTargets = append(costTargets, dto.CCMCostTarget{
-						Name:  title,
-						Rules: rules,
-					})
+			for i, costTargetGrouping := range costTargetGroupings {
+				costTargetGroupingMap, ok := costTargetGrouping.(map[string]interface{})
+				if !ok {
+					return mcp.NewToolResultError(fmt.Sprintf("Error: cost_target_groupings[%d] must be an object, got %T", i, costTargetGrouping)), nil
 				}
+				title, keys, values, err := extractGroupingFields(costTargetGroupingMap)
+				if err != nil {
+					return mcp.NewToolResultError(err.Error()), nil
+				}
+				rules := buildViewConditionRules(keys, values)
+				costTargets = append(costTargets, dto.CCMCostTarget{
+					Name:  title,
+					Rules: rules,
+				})
 			}
 
 			// Build the wrapper payload

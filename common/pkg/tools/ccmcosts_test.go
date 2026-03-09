@@ -248,17 +248,10 @@ func TestCreateCostCategoriesCostTargetsEventTool(t *testing.T) {
 		result, err := handler(ctx, request)
 		require.NoError(t, err, "Handler should not return error")
 		require.NotNil(t, result, "Result should not be nil")
-		// Should return empty response successfully
-		embeddedResource, ok := result.Content[0].(mcp.EmbeddedResource)
-		require.True(t, ok, "Content should be an embedded resource")
-		textResource, ok := embeddedResource.Resource.(*mcp.TextResourceContents)
-		require.True(t, ok, "Resource should be text content")
-		var eventData event.CustomEvent
-		json.Unmarshal([]byte(textResource.Text), &eventData)
-		var payload dto.CCMCostCategoryEventPayload
-		dataBytes, _ := json.Marshal(eventData.Content)
-		json.Unmarshal(dataBytes, &payload)
-		assert.Empty(t, payload.CostTargets, "Should have no cost targets")
+		assert.True(t, result.IsError, "Result should be an error for empty cost_target_groupings")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "Content should be text content")
+		assert.Contains(t, textContent.Text, "must contain at least one grouping")
 	})
 	t.Run("Rule Structure Validation", func(t *testing.T) {
 		ctx := context.Background()
