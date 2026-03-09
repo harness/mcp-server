@@ -16,22 +16,33 @@ export function registerExecutionSummaryResource(server: McpServer, registry: Re
       mimeType: "application/json",
     },
     async (uri) => {
-      log.info("Fetching recent executions");
+      try {
+        log.info("Fetching recent executions");
 
-      const result = await registry.dispatch(client, "execution", "list", {
-        org_id: config.HARNESS_DEFAULT_ORG_ID,
-        project_id: config.HARNESS_DEFAULT_PROJECT_ID ?? "",
-        size: 10,
-        page: 0,
-      });
+        const result = await registry.dispatch(client, "execution", "list", {
+          org_id: config.HARNESS_DEFAULT_ORG_ID,
+          project_id: config.HARNESS_DEFAULT_PROJECT_ID ?? "",
+          size: 10,
+          page: 0,
+        });
 
-      return {
-        contents: [{
-          uri: uri.href,
-          mimeType: "application/json",
-          text: JSON.stringify(result, null, 2),
-        }],
-      };
+        return {
+          contents: [{
+            uri: uri.href,
+            mimeType: "application/json",
+            text: JSON.stringify(result, null, 2),
+          }],
+        };
+      } catch (err) {
+        log.warn("Failed to fetch recent executions", { error: String(err) });
+        return {
+          contents: [{
+            uri: uri.href,
+            mimeType: "application/json",
+            text: JSON.stringify({ error: String(err), items: [] }, null, 2),
+          }],
+        };
+      }
     },
   );
 }

@@ -1,6 +1,9 @@
 /**
  * Token-bucket rate limiter. Default: 10 requests/second.
  */
+
+const MAX_WAIT_MS = 30_000;
+
 export class RateLimiter {
   private tokens: number;
   private lastRefill: number;
@@ -14,7 +17,9 @@ export class RateLimiter {
   }
 
   async acquire(): Promise<void> {
-    while (true) {
+    const deadline = Date.now() + MAX_WAIT_MS;
+
+    while (Date.now() < deadline) {
       this.refill();
       if (this.tokens >= 1) {
         this.tokens -= 1;
@@ -24,6 +29,8 @@ export class RateLimiter {
       const waitMs = Math.ceil((1 - this.tokens) / this.refillRatePerMs);
       await new Promise((resolve) => setTimeout(resolve, waitMs));
     }
+
+    throw new Error(`Rate limiter: timed out waiting ${MAX_WAIT_MS}ms for a token`);
   }
 
   private refill(): void {

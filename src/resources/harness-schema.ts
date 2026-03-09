@@ -14,7 +14,12 @@ function buildSchemaUrl(name: SchemaName): string {
   return `${SCHEMA_BASE_URL}/${name}.json`;
 }
 
-const schemaCache = new Map<SchemaName, string>();
+let schemaCache = new Map<SchemaName, string>();
+
+/** Clear the schema cache (for testing). */
+function clearSchemaCache(): void {
+  schemaCache = new Map();
+}
 
 async function fetchSchema(name: SchemaName): Promise<string> {
   const cached = schemaCache.get(name);
@@ -89,4 +94,4 @@ export function registerHarnessSchemaResource(server: McpServer): void {
 }
 
 // Exported for testing
-export { VALID_SCHEMAS, buildSchemaUrl, isValidSchemaName, schemaCache };
+export { VALID_SCHEMAS, buildSchemaUrl, isValidSchemaName, clearSchemaCache };

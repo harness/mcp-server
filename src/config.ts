@@ -14,7 +14,7 @@ export function extractAccountIdFromToken(apiKey: string): string | undefined {
   return undefined;
 }
 
-export const ConfigSchema = z.object({
+const RawConfigSchema = z.object({
   HARNESS_API_KEY: z.string().min(1, "HARNESS_API_KEY is required"),
   HARNESS_ACCOUNT_ID: z.string().optional(),
   HARNESS_BASE_URL: z.string().url().default("https://app.harness.io"),
@@ -29,7 +29,17 @@ export const ConfigSchema = z.object({
   HARNESS_READ_ONLY: z.coerce.boolean().default(false),
 });
 
-export type Config = z.infer<typeof ConfigSchema> & { HARNESS_ACCOUNT_ID: string };
+export const ConfigSchema = RawConfigSchema.transform((data) => {
+  const accountId = data.HARNESS_ACCOUNT_ID ?? extractAccountIdFromToken(data.HARNESS_API_KEY);
+  if (!accountId) {
+    throw new Error(
+      "HARNESS_ACCOUNT_ID is required when the API key is not a PAT (pat.<accountId>.<tokenId>.<secret>)",
+    );
+  }
+  return { ...data, HARNESS_ACCOUNT_ID: accountId };
+});
+
+export type Config = z.infer<typeof ConfigSchema>;
 
 export function loadConfig(): Config {
   const result = ConfigSchema.safeParse(process.env);
@@ -38,18 +48,5 @@ export function loadConfig(): Config {
     throw new Error(`Invalid configuration:\n${issues}`);
   }
 
-  const data = result.data;
-
-  // If HARNESS_ACCOUNT_ID not provided, try to extract from the API key
-  if (!data.HARNESS_ACCOUNT_ID) {
-    const extracted = extractAccountIdFromToken(data.HARNESS_API_KEY);
-    if (!extracted) {
-      throw new Error(
-        "HARNESS_ACCOUNT_ID is required when the API key is not a PAT (pat.<accountId>.<tokenId>.<secret>)",
-      );
-    }
-    data.HARNESS_ACCOUNT_ID = extracted;
-  }
-
-  return data as Config;
+  return result.data;
 }

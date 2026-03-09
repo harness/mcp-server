@@ -18,7 +18,14 @@ export function setLogLevel(level: LogLevel): void {
   globalLevel = level;
 }
 
-export function createLogger(module: string) {
+export interface Logger {
+  debug: (msg: string, data?: Record<string, unknown>) => void;
+  info: (msg: string, data?: Record<string, unknown>) => void;
+  warn: (msg: string, data?: Record<string, unknown>) => void;
+  error: (msg: string, data?: Record<string, unknown>) => void;
+}
+
+export function createLogger(module: string): Logger {
   function log(level: LogLevel, message: string, data?: Record<string, unknown>): void {
     if (LOG_LEVELS[level] < LOG_LEVELS[globalLevel]) return;
 

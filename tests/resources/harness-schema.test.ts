@@ -3,12 +3,12 @@ import {
   VALID_SCHEMAS,
   buildSchemaUrl,
   isValidSchemaName,
-  schemaCache,
+  clearSchemaCache,
 } from "../../src/resources/harness-schema.js";
 
 describe("harness-schema resource", () => {
   beforeEach(() => {
-    schemaCache.clear();
+    clearSchemaCache();
   });
 
   describe("VALID_SCHEMAS", () => {
