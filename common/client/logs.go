@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"time"
 
 	"github.com/harness/mcp-server/common/client/dto"
@@ -99,5 +100,42 @@ func (l *LogService) GetDownloadLogsURL(ctx context.Context, scope dto.Scope, pl
 		return "", lastErr
 	}
 
-	return response.Link, nil
+	// Rewrite the download URL host to match the configured base URL.
+	// The API may return a pre-signed URL with a hardcoded host (e.g., app.harness.io)
+	// that differs from HARNESS_BASE_URL, causing TLS failures in environments with
+	// custom domains or corporate proxies.
+	rewrittenLink, err := rewriteDownloadURLHost(response.Link, l.LogServiceClient.BaseURL)
+	if err != nil {
+		slog.WarnContext(ctx, "Failed to rewrite download URL host, using original URL", "error", err)
+		return response.Link, nil
+	}
+
+	return rewrittenLink, nil
+}
+
+// rewriteDownloadURLHost replaces the host of a download URL with the host from the
+// configured base URL, so that the download request routes through the same trusted
+// endpoint as all other API calls.
+func rewriteDownloadURLHost(downloadLink string, baseURL *url.URL) (string, error) {
+	if baseURL == nil {
+		return downloadLink, nil
+	}
+
+	parsed, err := url.Parse(downloadLink)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse download URL: %w", err)
+	}
+
+	// Only rewrite if the hosts actually differ
+	if parsed.Host == baseURL.Host {
+		return downloadLink, nil
+	}
+
+	slog.Info("Rewriting download URL host to match configured base URL",
+		"original_host", parsed.Host,
+		"new_host", baseURL.Host)
+
+	parsed.Scheme = baseURL.Scheme
+	parsed.Host = baseURL.Host
+	return parsed.String(), nil
 }

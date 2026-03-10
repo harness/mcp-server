@@ -56,6 +56,7 @@ func NewExtendedLogService(logService *client.LogService) *ExtendedLogService {
 type DownloadLogsConfig struct {
 	MaxLogLines    int                                                                                               // Enforce max lines (0 = use request parameter)
 	GetDownloadURL func(ctx context.Context, scope dto.Scope, planExecutionID string, logKey string) (string, error) // Custom URL fetching logic
+	HTTPClient     *http.Client                                                                                      // HTTP client for downloading logs (inherits TLS/proxy config)
 }
 
 // DefaultDownloadLogsConfig returns the default configuration for downloading logs
@@ -67,6 +68,7 @@ func (l *ExtendedLogService) DefaultDownloadLogsConfig() *DownloadLogsConfig {
 			headers := map[string]string{}
 			return l.GetDownloadLogsURL(ctx, scope, planExecutionID, logKey, headers)
 		},
+		HTTPClient: l.LogService.LogServiceClient.HTTPClient(),
 	}
 }
 
@@ -451,8 +453,13 @@ func DownloadExecutionLogsTool(config *config.McpServerConfig, client LogService
 				return mcp.NewToolResultError(fmt.Sprintf("failed to fetch log download URL: %v", err)), nil
 			}
 
-			// Download the logs into outputPath
-			resp, err := http.Get(logDownloadURL)
+			// Download the logs using the configured HTTP client (inherits TLS/proxy settings)
+			// instead of http.Get which uses the default client with no TLS customization.
+			httpClient := downloadLogsConfig.HTTPClient
+			if httpClient == nil {
+				httpClient = http.DefaultClient
+			}
+			resp, err := httpClient.Get(logDownloadURL)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to download logs: %v", err)), nil
 			}

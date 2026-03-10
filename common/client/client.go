@@ -567,6 +567,13 @@ func (c *Client) RequestRaw(
 	return nil
 }
 
+// HTTPClient returns the underlying *http.Client used by this Client.
+// This is useful when you need to make HTTP requests that don't require
+// auth header injection but should share the same transport/TLS configuration.
+func (c *Client) HTTPClient() *http.Client {
+	return c.client
+}
+
 // Do is a wrapper of http.Client.Do that injects the auth header in the request.
 func (c *Client) Do(r *http.Request) (*http.Response, error) {
 	slog.DebugContext(r.Context(), "Request", "method", r.Method, "url", r.URL.String())
