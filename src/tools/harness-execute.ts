@@ -18,16 +18,16 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
     {
       description: "Execute an action on a Harness resource: run/retry/interrupt pipelines, toggle feature flags, test connectors, sync GitOps apps, run chaos experiments. You can pass a Harness URL to auto-extract identifiers.",
       inputSchema: {
-        resource_type: z.string().describe("The resource type (e.g. pipeline, execution, feature_flag, connector, gitops_application, chaos_experiment). Auto-detected from url if provided.").optional(),
-        url: z.string().describe("A Harness UI URL — org, project, resource type, and ID are extracted automatically").optional(),
-        action: z.string().describe("The action to execute (e.g. run, retry, interrupt, toggle, test_connection, sync)"),
-        resource_id: z.string().describe("The primary identifier of the resource").optional(),
+        resource_type: z.string().describe("Resource type (e.g. pipeline, execution, feature_flag, connector). Auto-detected from url.").optional(),
+        url: z.string().describe("Harness UI URL — auto-extracts org, project, type, and ID").optional(),
+        action: z.string().describe("Action to execute (e.g. run, retry, interrupt, toggle, test_connection, sync)"),
+        resource_id: z.string().describe("Primary resource identifier").optional(),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
-        inputs: z.union([z.string(), z.record(z.string(), z.unknown())]).describe("Runtime inputs for pipeline execution. For simple variables: pass key-value pairs like {branch: 'main', env: 'prod'} — auto-resolved against the pipeline's input template. For complex pipelines (CI codebase, templates with structural fields): use input_set_ids instead, or provide full runtime input YAML. Check harness_get(resource_type='runtime_input_template', resource_id='PIPELINE_ID') first to see what inputs are needed.").optional(),
-        input_set_ids: z.array(z.string()).describe("Input set identifiers to apply when running a pipeline. Recommended for complex pipelines with structural inputs (CI codebase build config, template inputs). List available sets with harness_list(resource_type='input_set', filters={pipeline_id: 'PIPELINE_ID'}).").optional(),
+        inputs: z.union([z.string(), z.record(z.string(), z.unknown())]).describe("Pipeline runtime inputs: key-value pairs like {branch: 'main'} (auto-resolved), or full YAML string. Check runtime_input_template first via harness_get.").optional(),
+        input_set_ids: z.array(z.string()).describe("Input set IDs for complex pipelines. List available: harness_list(resource_type='input_set', filters={pipeline_id: '...'}).").optional(),
         body: z.record(z.string(), z.unknown()).describe("Additional body payload for the action").optional(),
-        params: z.record(z.string(), z.unknown()).describe("Action-specific parameters (e.g. pipeline_id, execution_id, flag_id, agent_id, interrupt_type, enable, environment, module). Call harness_describe for available actions and fields per resource_type.").optional(),
+        params: z.record(z.string(), z.unknown()).describe("Action-specific parameters. Call harness_describe for available fields per resource_type.").optional(),
       },
       annotations: {
         title: "Execute Harness Action",

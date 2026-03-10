@@ -12,17 +12,17 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
   server.registerTool(
     "harness_list",
     {
-      description: "List Harness resources by type with filtering and pagination. You can pass a Harness URL to auto-extract org, project, and resource type. Call harness_describe to discover available resource_types.",
+      description: "List Harness resources with filtering and pagination. Accepts a Harness URL to auto-extract scope.",
       inputSchema: {
-        resource_type: z.string().describe("The type of resource to list (e.g. pipeline, service, environment, connector). Auto-detected from url if provided.").optional(),
-        url: z.string().describe("A Harness UI URL — org, project, and resource type are extracted automatically").optional(),
+        resource_type: z.string().describe("Resource type (e.g. pipeline, service, environment). Auto-detected from url.").optional(),
+        url: z.string().describe("Harness UI URL — auto-extracts org, project, and type").optional(),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
         page: z.number().describe("Page number, 0-indexed").default(0).optional(),
         size: z.number().min(1).max(100).describe("Page size (1–100)").default(20).optional(),
-        search_term: z.string().describe("Filter results by name or keyword").optional(),
-        compact: z.boolean().describe("Strip verbose metadata from list items, keeping only essential fields (default true)").default(true).optional(),
-        filters: z.record(z.string(), z.unknown()).describe("Additional filter fields passed to the API (e.g. status, module, pipeline_id, environment_id, agent_id). Call harness_describe for available filters per resource_type.").optional(),
+        search_term: z.string().describe("Filter by name or keyword").optional(),
+        compact: z.boolean().describe("Strip verbose metadata (default true)").default(true).optional(),
+        filters: z.record(z.string(), z.unknown()).describe("Additional filters (e.g. status, module, pipeline_id). Call harness_describe for available filters.").optional(),
       },
       annotations: {
         title: "List Harness Resources",

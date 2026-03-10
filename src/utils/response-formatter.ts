@@ -1,5 +1,8 @@
 /**
  * Standard MCP response formatters.
+ *
+ * Uses compact JSON (no indentation) to minimize token count for LLM consumers.
+ * Errors keep minimal formatting for readability in tool-call error surfaces.
  */
 
 export interface ToolResult {
@@ -11,13 +14,13 @@ export interface ToolResult {
 
 export function jsonResult(data: unknown): ToolResult {
   return {
-    content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
+    content: [{ type: "text", text: JSON.stringify(data) }],
   };
 }
 
 export function errorResult(message: string): ToolResult {
   return {
-    content: [{ type: "text", text: JSON.stringify({ error: message }, null, 2) }],
+    content: [{ type: "text", text: JSON.stringify({ error: message }) }],
     isError: true,
   };
 }
