@@ -183,6 +183,34 @@ export const pipelinesToolset: ToolsetDefinition = {
             fields: [],
           },
         },
+        import: {
+          method: "POST",
+          path: "/pipeline/api/pipelines/import",
+          queryParams: {
+            connector_ref: "connectorRef",
+            repo_name: "repoName",
+            branch: "branch",
+            file_path: "filePath",
+            is_force_import: "isForceImport",
+            is_harness_code_repo: "isHarnessCodeRepo",
+          },
+          bodyBuilder: (input) => {
+            const b = input.body as Record<string, unknown> | undefined;
+            return {
+              pipelineName: b?.pipeline_name ?? b?.pipelineName ?? "",
+              pipelineDescription: b?.pipeline_description ?? b?.pipelineDescription ?? "",
+            };
+          },
+          responseExtractor: ngExtract,
+          actionDescription: "Import a pipeline from a Git repository into Harness. Fetches the pipeline YAML from the specified repo/branch/path and creates a Harness pipeline record for it. For external Git: provide connector_ref, repo_name, branch, file_path. For Harness Code repos: provide is_harness_code_repo=true, repo_name, branch, file_path (no connector_ref needed). Use is_force_import=true to overwrite if the pipeline already exists.",
+          bodySchema: {
+            description: "Pipeline import details. Provide the pipeline name and description for the imported pipeline. Git details (connector_ref, repo_name, branch, file_path) go in params.",
+            fields: [
+              { name: "pipelineName", type: "string", required: true, description: "Display name for the imported pipeline" },
+              { name: "pipelineDescription", type: "string", required: false, description: "Description for the imported pipeline" },
+            ],
+          },
+        },
       },
     },
     {

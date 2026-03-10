@@ -650,6 +650,61 @@ describe("harness_execute", () => {
     expect(errText).toContain("build");
     expect(errText).toContain("complex object");
   });
+
+  it("imports pipeline from external Git repo via import action", async () => {
+    mockRequest.mockResolvedValueOnce({ data: { identifier: "imported-pipe" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "import",
+      params: {
+        connector_ref: "my_github",
+        repo_name: "my-repo",
+        branch: "main",
+        file_path: ".harness/my-pipe.yaml",
+      },
+      body: {
+        pipeline_name: "My Imported Pipeline",
+        pipeline_description: "Imported from GitHub",
+      },
+    });
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { method: string; path: string; params: Record<string, unknown>; body: unknown };
+    expect(callArgs.method).toBe("POST");
+    expect(callArgs.path).toContain("/pipeline/api/pipelines/import");
+    expect(callArgs.params.connectorRef).toBe("my_github");
+    expect(callArgs.params.repoName).toBe("my-repo");
+    expect(callArgs.params.branch).toBe("main");
+    expect(callArgs.params.filePath).toBe(".harness/my-pipe.yaml");
+    expect(callArgs.body).toEqual({
+      pipelineName: "My Imported Pipeline",
+      pipelineDescription: "Imported from GitHub",
+    });
+  });
+
+  it("imports pipeline from Harness Code repo via import action", async () => {
+    mockRequest.mockResolvedValueOnce({ data: { identifier: "hc-imported" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "import",
+      params: {
+        is_harness_code_repo: true,
+        repo_name: "product-management",
+        branch: "main",
+        file_path: ".harness/my-pipe.yaml",
+      },
+      body: {
+        pipeline_name: "HC Pipeline",
+      },
+    });
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(callArgs.params.isHarnessCodeRepo).toBe(true);
+    expect(callArgs.params.repoName).toBe("product-management");
+    // No connectorRef for Harness Code
+    expect(callArgs.params.connectorRef).toBeUndefined();
+  });
 });
 
 describe("harness_describe", () => {
