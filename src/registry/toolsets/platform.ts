@@ -151,7 +151,11 @@ export const platformToolset: ToolsetDefinition = {
       toolset: "platform",
       scope: "account",
       identifierFields: ["org_id"],
-      listFilterFields: ["search_term", "sort", "order"],
+      listFilterFields: [
+        { name: "search_term", description: "Filter organizations by name or keyword" },
+        { name: "sort", description: "Sort field" },
+        { name: "order", description: "Sort order (asc/desc)" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/settings/organizations/{org}",
       operations: {
         list: {
@@ -211,7 +215,13 @@ export const platformToolset: ToolsetDefinition = {
       toolset: "platform",
       scope: "account",
       identifierFields: ["project_id"],
-      listFilterFields: ["search_term", "sort", "order", "has_module", "module_type"],
+      listFilterFields: [
+        { name: "search_term", description: "Filter projects by name or keyword" },
+        { name: "sort", description: "Sort field" },
+        { name: "order", description: "Sort order (asc/desc)" },
+        { name: "has_module", description: "Filter by module presence" },
+        { name: "module_type", description: "Module type filter" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{org}/projects/{project}",
       operations: {
         list: {

@@ -44,7 +44,11 @@ export const pipelinesToolset: ToolsetDefinition = {
       identifierFields: ["pipeline_id"],
       diagnosticHint: "Use harness_diagnose with pipeline_id or execution_id to analyze failures — includes step-level error details, log snippets, delegate info, and chained pipeline traversal.",
       executeHint: "Before executing, check required inputs: harness_get(resource_type='runtime_input_template', resource_id='PIPELINE_ID'). For simple variables, pass key-value pairs in inputs. For complex pipelines (CI codebase build, templates), use input_set_ids — list available sets with harness_list(resource_type='input_set', filters={pipeline_id: '...'}).",
-      listFilterFields: ["search_term", "module", "filter_type"],
+      listFilterFields: [
+        { name: "search_term", description: "Filter pipelines by name or keyword" },
+        { name: "module", description: "Harness module filter", enum: ["CD", "CI", "CV", "CF", "CE", "STO"] },
+        { name: "filter_type", description: "Filter type qualifier" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipelineIdentifier}/pipeline-studio",
       operations: {
         list: {
@@ -163,7 +167,11 @@ export const pipelinesToolset: ToolsetDefinition = {
       scope: "project",
       identifierFields: ["execution_id"],
       diagnosticHint: "Use harness_diagnose with execution_id to analyze a failed execution — includes step-level error details, log snippets, delegate info, and chained pipeline traversal.",
-      listFilterFields: ["pipeline_id", "status", "module"],
+      listFilterFields: [
+        { name: "pipeline_id", description: "Pipeline identifier to filter executions" },
+        { name: "status", description: "Execution status filter", enum: ["Success", "Failed", "Running", "Aborted", "Expired", "AbortedByFreeze", "NotStarted", "Paused", "Queued", "Waiting"] },
+        { name: "module", description: "Harness module filter", enum: ["CD", "CI", "CV", "CF", "CE", "STO"] },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipelineIdentifier}/executions/{planExecutionId}/pipeline",
       operations: {
         list: {
@@ -214,7 +222,10 @@ export const pipelinesToolset: ToolsetDefinition = {
       toolset: "pipelines",
       scope: "project",
       identifierFields: ["pipeline_id", "trigger_id"],
-      listFilterFields: ["pipeline_id", "search_term"],
+      listFilterFields: [
+        { name: "pipeline_id", description: "Pipeline identifier to filter triggers" },
+        { name: "search_term", description: "Filter triggers by name or keyword" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipeline_id}/triggers",
       operations: {
         list: {
@@ -329,7 +340,9 @@ export const pipelinesToolset: ToolsetDefinition = {
       toolset: "pipelines",
       scope: "project",
       identifierFields: ["pipeline_id", "input_set_id"],
-      listFilterFields: ["pipeline_id"],
+      listFilterFields: [
+        { name: "pipeline_id", description: "Pipeline identifier to filter input sets" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipeline_id}/input-sets",
       operations: {
         list: {
@@ -392,7 +405,11 @@ export const pipelinesToolset: ToolsetDefinition = {
       toolset: "pipelines",
       scope: "project",
       identifierFields: ["execution_id"],
-      listFilterFields: ["approval_status", "approval_type", "node_execution_id"],
+      listFilterFields: [
+        { name: "approval_status", description: "Approval status filter", enum: ["WAITING", "APPROVED", "REJECTED", "FAILED", "ABORTED", "EXPIRED"] },
+        { name: "approval_type", description: "Approval type filter", enum: ["HarnessApproval", "JiraApproval", "CustomApproval", "ServiceNowApproval"] },
+        { name: "node_execution_id", description: "Node execution ID to filter by step" },
+      ],
       operations: {
         list: {
           method: "GET",

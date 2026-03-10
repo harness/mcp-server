@@ -13,7 +13,10 @@ export const infrastructureToolset: ToolsetDefinition = {
       toolset: "infrastructure",
       scope: "project",
       identifierFields: ["infrastructure_id"],
-      listFilterFields: ["environment_id", "search_term"],
+      listFilterFields: [
+        { name: "environment_id", description: "Environment identifier to filter infrastructure definitions" },
+        { name: "search_term", description: "Search term to filter infrastructure definitions" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/environments",
       operations: {
         list: {

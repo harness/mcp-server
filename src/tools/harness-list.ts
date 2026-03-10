@@ -9,6 +9,12 @@ import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, isRecord } from "../utils/type-guards.js";
 
 export function registerListTool(server: McpServer, registry: Registry, client: HarnessClient): void {
+  // Build a dynamic description for the filters param from all enabled resource definitions
+  const allFilterNames = registry.getAllFilterFields().map((f) => f.name);
+  const filtersDesc = allFilterNames.length > 0
+    ? `Resource-specific filters as key-value pairs. Available keys across enabled resource types: ${allFilterNames.join(", ")}. Call harness_describe for filters available on a specific resource_type.`
+    : "Resource-specific filters as key-value pairs. Call harness_describe for available filters per resource_type.";
+
   server.registerTool(
     "harness_list",
     {
@@ -20,9 +26,9 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
         page: z.number().describe("Page number, 0-indexed").default(0).optional(),
         size: z.number().min(1).max(100).describe("Page size (1–100)").default(20).optional(),
-        search_term: z.string().describe("Filter by name or keyword").optional(),
-        compact: z.boolean().describe("Strip verbose metadata (default true)").default(true).optional(),
-        filters: z.record(z.string(), z.unknown()).describe("Additional filters (e.g. status, module, pipeline_id). Call harness_describe for available filters.").optional(),
+        search_term: z.string().describe("Filter results by name or keyword").optional(),
+        compact: z.boolean().describe("Strip verbose metadata from list items, keeping only essential fields (default true)").default(true).optional(),
+        filters: z.record(z.string(), z.unknown()).describe(filtersDesc).optional(),
       },
       annotations: {
         title: "List Harness Resources",

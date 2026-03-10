@@ -13,7 +13,9 @@ export const dashboardsToolset: ToolsetDefinition = {
       toolset: "dashboards",
       scope: "account",
       identifierFields: ["dashboard_id"],
-      listFilterFields: ["search_term"],
+      listFilterFields: [
+        { name: "search_term", description: "Filter dashboards by name or keyword" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/dashboards",
       operations: {
         list: {
@@ -43,7 +45,9 @@ export const dashboardsToolset: ToolsetDefinition = {
       toolset: "dashboards",
       scope: "account",
       identifierFields: ["dashboard_id"],
-      listFilterFields: ["reporting_timeframe"],
+      listFilterFields: [
+        { name: "reporting_timeframe", description: "Reporting timeframe in days (default 30)" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/dashboards",
       operations: {
         get: {

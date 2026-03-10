@@ -14,7 +14,10 @@ export const repositoriesToolset: ToolsetDefinition = {
       toolset: "repositories",
       scope: "project",
       identifierFields: ["repo_id"],
-      listFilterFields: ["query", "sort"],
+      listFilterFields: [
+        { name: "query", description: "Search repositories by name or keyword" },
+        { name: "sort", description: "Sort field" },
+      ],
       deepLinkTemplate:
         "/ng/account/{accountId}/module/code/orgs/{orgIdentifier}/projects/{projectIdentifier}/repos/{repoIdentifier}",
       operations: {
@@ -84,7 +87,11 @@ export const repositoriesToolset: ToolsetDefinition = {
       toolset: "repositories",
       scope: "project",
       identifierFields: ["repo_id", "branch_name"],
-      listFilterFields: ["query", "sort", "order"],
+      listFilterFields: [
+        { name: "query", description: "Search branches by name or keyword" },
+        { name: "sort", description: "Sort field" },
+        { name: "order", description: "Sort order (asc/desc)" },
+      ],
       deepLinkTemplate:
         "/ng/account/{accountId}/module/code/orgs/{orgIdentifier}/projects/{projectIdentifier}/repos/{repoIdentifier}/files/{branchName}",
       operations: {
@@ -148,7 +155,13 @@ export const repositoriesToolset: ToolsetDefinition = {
       toolset: "repositories",
       scope: "project",
       identifierFields: ["repo_id", "commit_sha"],
-      listFilterFields: ["git_ref", "path", "since", "until", "committer"],
+      listFilterFields: [
+        { name: "git_ref", description: "Git reference (branch/tag) filter" },
+        { name: "path", description: "File path filter" },
+        { name: "since", description: "Filter commits since date" },
+        { name: "until", description: "Filter commits until date" },
+        { name: "committer", description: "Filter by committer" },
+      ],
       operations: {
         list: {
           method: "GET",
@@ -259,7 +272,11 @@ export const repositoriesToolset: ToolsetDefinition = {
       toolset: "repositories",
       scope: "project",
       identifierFields: ["repo_id", "tag_name"],
-      listFilterFields: ["query", "sort", "order"],
+      listFilterFields: [
+        { name: "query", description: "Search tags by name or keyword" },
+        { name: "sort", description: "Sort field" },
+        { name: "order", description: "Sort order (asc/desc)" },
+      ],
       operations: {
         list: {
           method: "GET",

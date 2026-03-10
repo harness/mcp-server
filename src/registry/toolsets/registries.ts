@@ -13,7 +13,10 @@ export const registriesToolset: ToolsetDefinition = {
       toolset: "registries",
       scope: "project",
       identifierFields: ["registry_id"],
-      listFilterFields: ["search", "type"],
+      listFilterFields: [
+        { name: "search", description: "Filter artifact registries by name or keyword" },
+        { name: "type", description: "Registry type filter", enum: ["UPSTREAM", "VIRTUAL"] },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/registries/{registryIdentifier}",
       operations: {
         list: {
@@ -44,7 +47,9 @@ export const registriesToolset: ToolsetDefinition = {
       toolset: "registries",
       scope: "project",
       identifierFields: ["registry_id", "artifact_id"],
-      listFilterFields: ["search"],
+      listFilterFields: [
+        { name: "search", description: "Filter artifacts by name or keyword" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/registries/{registryIdentifier}/artifacts/{artifactIdentifier}",
       operations: {
         list: {

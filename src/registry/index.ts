@@ -1,6 +1,6 @@
 import type { Config } from "../config.js";
 import type { HarnessClient } from "../client/harness-client.js";
-import type { ResourceDefinition, ToolsetDefinition, ToolsetName, OperationName, EndpointSpec } from "./types.js";
+import type { ResourceDefinition, ToolsetDefinition, ToolsetName, OperationName, EndpointSpec, FilterFieldSpec } from "./types.js";
 import { createLogger } from "../utils/logger.js";
 import { buildDeepLink, appendStoreType } from "../utils/deep-links.js";
 
@@ -129,6 +129,21 @@ export class Registry {
   /** Get all enabled resource types. */
   getAllResourceTypes(): string[] {
     return Array.from(this.resourceMap.keys()).sort();
+  }
+
+  /** Get all unique filter fields across all enabled resource definitions. */
+  getAllFilterFields(): FilterFieldSpec[] {
+    const seen = new Set<string>();
+    const fields: FilterFieldSpec[] = [];
+    for (const [, def] of this.resourceMap) {
+      for (const f of def.listFilterFields ?? []) {
+        if (!seen.has(f.name)) {
+          seen.add(f.name);
+          fields.push(f);
+        }
+      }
+    }
+    return fields;
   }
 
   /** Get all enabled toolsets with their resources. */

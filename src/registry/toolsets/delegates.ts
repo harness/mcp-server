@@ -15,7 +15,12 @@ export const delegatesToolset: ToolsetDefinition = {
       identifierFields: ["delegate_id"],
       diagnosticHint: "Use harness_diagnose with resource_type='delegate' to check health across all delegates — reports connectivity, heartbeat staleness, expiring replicas, and legacy mode. Optionally pass resource_id to filter to a specific delegate.",
       deepLinkTemplate: "/ng/account/{accountId}/settings/resources/delegates",
-      listFilterFields: ["all", "status", "delegate_name", "delegate_type"],
+      listFilterFields: [
+        { name: "all", description: "Include all delegates", type: "boolean" },
+        { name: "status", description: "Delegate status filter", enum: ["CONNECTED", "DISCONNECTED", "ENABLED", "WAITING_FOR_APPROVAL", "DISABLED", "DELETED"] },
+        { name: "delegate_name", description: "Filter delegates by name" },
+        { name: "delegate_type", description: "Delegate type filter" },
+      ],
       operations: {
         list: {
           method: "POST",
@@ -39,7 +44,10 @@ export const delegatesToolset: ToolsetDefinition = {
       toolset: "delegates",
       scope: "project",
       identifierFields: ["token_name"],
-      listFilterFields: ["name", "status"],
+      listFilterFields: [
+        { name: "name", description: "Filter delegate tokens by name" },
+        { name: "status", description: "Delegate token status filter", enum: ["ACTIVE", "REVOKED"] },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/settings/resources/delegates/tokens",
       operations: {
         list: {

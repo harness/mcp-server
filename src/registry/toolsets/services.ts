@@ -35,7 +35,10 @@ export const servicesToolset: ToolsetDefinition = {
       toolset: "services",
       scope: "project",
       identifierFields: ["service_id"],
-      listFilterFields: ["search_term", "sort"],
+      listFilterFields: [
+        { name: "search_term", description: "Filter services by name or keyword" },
+        { name: "sort", description: "Sort services by name or identifier" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/services/{serviceIdentifier}",
       operations: {
         list: {
