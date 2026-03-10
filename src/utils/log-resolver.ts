@@ -167,7 +167,7 @@ export async function resolveLogContent(
     log.debug("Requesting log blob", { prefix, attempt });
     blob = await client.request<BlobResponse>({
       method: "POST",
-      path: "/log-service/blob",
+      path: "/gateway/log-service/blob/download",
       params: { prefix },
       signal,
     });

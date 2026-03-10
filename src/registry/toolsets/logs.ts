@@ -19,7 +19,7 @@ export const logsToolset: ToolsetDefinition = {
       operations: {
         get: {
           method: "POST",
-          path: "/log-service/blob",
+          path: "/gateway/log-service/blob/download",
           queryParams: {
             prefix: "prefix",
           },

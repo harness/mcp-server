@@ -49,17 +49,22 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
 
         // execution_log: resolve full log content instead of returning a download URL
         if (resourceType === "execution_log") {
-          let prefix = asString(input.prefix);
-          if (!prefix) {
-            // Auto-build prefix from execution_id if available
-            const executionId = asString(input.execution_id);
-            if (!executionId) {
-              return errorResult("prefix or execution_id is required for execution_log. Provide a log prefix or an execution ID to auto-build it.");
+          try {
+            let prefix = asString(input.prefix);
+            if (!prefix) {
+              // Auto-build prefix from execution_id if available
+              const executionId = asString(input.execution_id);
+              if (!executionId) {
+                return errorResult("prefix or execution_id is required for execution_log. Provide a log prefix or an execution ID to auto-build it.");
+              }
+              prefix = await buildLogPrefixFromExecution(client, registry, executionId, input);
             }
-            prefix = await buildLogPrefixFromExecution(client, registry, executionId, input);
+            const logText = await resolveLogContent(client, prefix);
+            return jsonResult({ log_content: logText });
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return errorResult(`Failed to fetch execution logs: ${msg}. Try harness_diagnose with include_logs=true for better failure analysis.`);
           }
-          const logText = await resolveLogContent(client, prefix);
-          return jsonResult({ log_content: logText });
         }
 
         const result = await registry.dispatch(client, resourceType, "get", input);

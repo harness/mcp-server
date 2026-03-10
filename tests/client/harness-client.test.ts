@@ -73,6 +73,28 @@ describe("HarnessClient", () => {
       expect(url).toContain("https://app.harness.io/ng/api/test?");
     });
 
+    it("deduplicates /gateway when base URL ends with /gateway", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_BASE_URL: "https://myhost.harness.io/gateway" }));
+
+      await client.request({ path: "/gateway/log-service/blob/download", params: { prefix: "test" } });
+
+      const url = fetchSpy.mock.calls[0][0] as string;
+      // Should NOT have double /gateway
+      expect(url).toContain("https://myhost.harness.io/gateway/log-service/blob/download?");
+      expect(url).not.toContain("/gateway/gateway/");
+    });
+
+    it("keeps /gateway path when base URL does not end with /gateway", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_BASE_URL: "https://app.harness.io" }));
+
+      await client.request({ path: "/gateway/log-service/blob/download" });
+
+      const url = fetchSpy.mock.calls[0][0] as string;
+      expect(url).toContain("https://app.harness.io/gateway/log-service/blob/download?");
+    });
+
     it("omits undefined and empty params", async () => {
       fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
       const client = new HarnessClient(makeConfig());
