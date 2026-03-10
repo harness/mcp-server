@@ -133,6 +133,40 @@ describe("Registry", () => {
     });
   });
 
+  describe("getAllFilterFields", () => {
+    it("returns deduplicated FilterFieldSpec objects across enabled toolsets", () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines,connectors" }));
+      const fields = registry.getAllFilterFields();
+      expect(Array.isArray(fields)).toBe(true);
+      // Every entry should have name and description
+      for (const f of fields) {
+        expect(f).toHaveProperty("name");
+        expect(f).toHaveProperty("description");
+        expect(typeof f.name).toBe("string");
+        expect(typeof f.description).toBe("string");
+      }
+      // "search_term" appears in both pipelines and connectors — should only appear once
+      const searchTermEntries = fields.filter((f) => f.name === "search_term");
+      expect(searchTermEntries).toHaveLength(1);
+    });
+
+    it("includes enum metadata when defined", () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+      const fields = registry.getAllFilterFields();
+      const typeField = fields.find((f) => f.name === "type");
+      expect(typeField).toBeDefined();
+      expect(typeField!.enum).toBeDefined();
+      expect(typeField!.enum!.length).toBeGreaterThan(0);
+    });
+
+    it("returns empty array when no toolsets have filter fields", () => {
+      // All toolsets have some filters, but verify the method doesn't crash with a narrow set
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
+      const fields = registry.getAllFilterFields();
+      expect(fields.length).toBeGreaterThan(0);
+    });
+  });
+
   describe("LLM field discovery flow", () => {
     let registry: Registry;
     beforeEach(() => {

@@ -16,6 +16,7 @@ export const stoToolset: ToolsetDefinition = {
       scope: "project",
       identifierFields: ["issue_id"],
       listFilterFields: [
+        { name: "search", description: "Filter security issues by name or keyword" },
         { name: "severity", description: "Security severity filter", enum: ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"] },
       ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/sto/issues/{issueId}",
