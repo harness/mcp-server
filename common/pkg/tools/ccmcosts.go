@@ -882,7 +882,7 @@ func buildViewConditionRules(keys []string, values []string) []dto.CCMRule {
 
 func CreateCostCategoriesCostTargetsEventTool(config *config.McpServerConfig) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("ccm_create_cost_categories_cost_targets_event",
-			mcp.WithDescription("Create a cost category by defining cost target groupings based on cloud labels. Cost categories let you group cloud costs into buckets (e.g., by environment or team). Use ccm_list_labelsv2_keys with the Cost Explorer perspective to get the list of available label keys. This tool does not create the cost category directly — it returns a UI event that will be rendered for the user to review and confirm before the cost category is actually created."),
+			mcp.WithDescription("Create a cost category by defining cost target groupings based on cloud labels. Cost categories let you group cloud costs into buckets (e.g., by environment or team). Use ccm_list_labelsv2_keys with the Cost Explorer perspective to get the list of available label keys. This tool does not create the cost category directly — it returns a UI event that will be rendered for the user to review and confirm before the cost category is actually created. No further agent action is needed after calling this tool — the UI is populated for user confirmation."),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    utils.ToBoolPtr(false),
 				DestructiveHint: utils.ToBoolPtr(false),
