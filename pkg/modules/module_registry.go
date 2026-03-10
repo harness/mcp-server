@@ -10,7 +10,7 @@ import (
 func NewModuleRegistry(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) *commonModules.ModuleRegistry {
 	registry := &commonModules.ModuleRegistry{
 		Modules: []commonModules.Module{
-			commonModules.NewCoreModule(config, tsg),
+			NewExtendedCoreModule(config, tsg),
 			commonModules.NewCIModule(config, tsg),
 			commonModules.NewCDModule(config, tsg),
 			commonModules.NewUnlicensedModule(config, tsg),
