@@ -291,6 +291,30 @@ describe("harness_create", () => {
     expect(result.isError).toBeUndefined();
     expect(mockRequest).toHaveBeenCalledOnce();
   });
+
+  it("passes git params as query parameters for remote pipeline create", async () => {
+    const result = await server.call("harness_create", {
+      resource_type: "pipeline",
+      body: { yamlPipeline: "pipeline:\n  name: Remote Pipe\n  identifier: remote_pipe" },
+      params: {
+        store_type: "REMOTE",
+        connector_ref: "my_github",
+        repo_name: "my-repo",
+        branch: "main",
+        file_path: ".harness/remote-pipe.yaml",
+        commit_msg: "Add pipeline via MCP",
+      },
+    });
+    expect(result.isError).toBeUndefined();
+    // Verify the request was made with git query params
+    const callArgs = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(callArgs.params.storeType).toBe("REMOTE");
+    expect(callArgs.params.connectorRef).toBe("my_github");
+    expect(callArgs.params.repoName).toBe("my-repo");
+    expect(callArgs.params.branch).toBe("main");
+    expect(callArgs.params.filePath).toBe(".harness/remote-pipe.yaml");
+    expect(callArgs.params.commitMsg).toBe("Add pipeline via MCP");
+  });
 });
 
 describe("harness_update", () => {
