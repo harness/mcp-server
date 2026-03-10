@@ -4,12 +4,20 @@
  * Tests input validation and error handling paths with mocked registry/client.
  * Does not test actual API calls — that's covered by registry dispatch tests.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import type { ToolResult } from "../../src/utils/response-formatter.js";
 import { Registry } from "../../src/registry/index.js";
 import { HarnessApiError } from "../../src/utils/errors.js";
+
+// Top-level mocks for execution_log tests — must be before any imports that pull these in
+vi.mock("../../src/utils/log-resolver.js", () => ({
+  resolveLogContent: vi.fn().mockResolvedValue("[2026-03-09T17:01:23Z] info: mvn clean install\n[2026-03-09T17:01:45Z] error: BUILD FAILURE"),
+}));
+vi.mock("../../src/utils/log-prefix.js", () => ({
+  buildLogPrefixFromExecution: vi.fn().mockResolvedValue("acct1/pipeline/my-pipe/42/-exec-123"),
+}));
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -149,6 +157,86 @@ describe("harness_get", () => {
     mockRequest.mockRejectedValueOnce(new HarnessApiError("Not found", 404));
     const result = await server.call("harness_get", { resource_type: "pipeline", resource_id: "missing" });
     expect(result.isError).toBe(true);
+  });
+});
+
+describe("harness_get — execution_log", () => {
+  let server: ReturnType<typeof makeMcpServer>;
+  let registry: Registry;
+  let client: HarnessClient;
+  let mockRequest: ReturnType<typeof vi.fn>;
+  let resolveLogContentMock: ReturnType<typeof vi.fn>;
+  let buildLogPrefixMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    const logResolver = await import("../../src/utils/log-resolver.js");
+    const logPrefix = await import("../../src/utils/log-prefix.js");
+
+    resolveLogContentMock = logResolver.resolveLogContent as ReturnType<typeof vi.fn>;
+    buildLogPrefixMock = logPrefix.buildLogPrefixFromExecution as ReturnType<typeof vi.fn>;
+
+    // Reset to default behavior each test
+    resolveLogContentMock.mockReset().mockResolvedValue("[2026-03-09T17:01:23Z] info: mvn clean install\n[2026-03-09T17:01:45Z] error: BUILD FAILURE");
+    buildLogPrefixMock.mockReset().mockResolvedValue("acct1/pipeline/my-pipe/42/-exec-123");
+
+    server = makeMcpServer();
+    // Include both pipelines (for execution) and logs (for execution_log)
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines,logs" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: {} });
+    client = makeClient(mockRequest);
+    const { registerGetTool } = await import("../../src/tools/harness-get.js");
+    registerGetTool(server, registry, client);
+  });
+
+  it("resolves log content when prefix is provided directly", async () => {
+    const result = await server.call("harness_get", {
+      resource_type: "execution_log",
+      resource_id: "acct1/pipeline/my-pipe/42/-exec-123",
+    });
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as { log_content: string };
+    expect(data.log_content).toContain("mvn clean install");
+    expect(data.log_content).toContain("BUILD FAILURE");
+    expect(resolveLogContentMock).toHaveBeenCalledWith(client, "acct1/pipeline/my-pipe/42/-exec-123");
+    expect(buildLogPrefixMock).not.toHaveBeenCalled();
+  });
+
+  it("auto-builds prefix from execution_id when no prefix given", async () => {
+    const result = await server.call("harness_get", {
+      resource_type: "execution_log",
+      params: { execution_id: "exec-123" },
+    });
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as { log_content: string };
+    expect(data.log_content).toContain("BUILD FAILURE");
+    expect(buildLogPrefixMock).toHaveBeenCalledWith(
+      client,
+      registry,
+      "exec-123",
+      expect.objectContaining({ resource_type: "execution_log" }),
+    );
+    expect(resolveLogContentMock).toHaveBeenCalledWith(client, "acct1/pipeline/my-pipe/42/-exec-123");
+  });
+
+  it("returns error when neither prefix nor execution_id provided", async () => {
+    const result = await server.call("harness_get", {
+      resource_type: "execution_log",
+    });
+    expect(result.isError).toBe(true);
+    const data = parseResult(result) as { error: string };
+    expect(data.error).toContain("prefix or execution_id is required");
+  });
+
+  it("returns errorResult when resolveLogContent throws", async () => {
+    resolveLogContentMock.mockRejectedValueOnce(new Error("Log blob not ready after 3 attempts (status: queued)"));
+    const result = await server.call("harness_get", {
+      resource_type: "execution_log",
+      resource_id: "acct1/pipeline/my-pipe/42/-exec-123",
+    });
+    expect(result.isError).toBe(true);
+    const data = parseResult(result) as { error: string };
+    expect(data.error).toContain("not ready after 3 attempts");
+    expect(data.error).toContain("harness_diagnose");
   });
 });
 

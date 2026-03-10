@@ -6,11 +6,10 @@ import { asRecord, asString, asNumber } from "./type-guards.js";
  * Build a log-service prefix from execution metadata.
  *
  * Fetches the execution, extracts pipelineIdentifier / runSequence / accountId,
- * and returns the simplified prefix format:
- *   {accountId}/pipeline/{pipelineId}/{runSequence}/-{executionId}
+ * and returns the appropriate prefix format based on `shouldUseSimplifiedKey`:
  *
- * The official Harness MCP also supports a legacy format based on
- * `shouldUseSimplifiedBaseKey`, but the simplified format works for most cases.
+ * Simplified: {accountId}/pipeline/{pipelineId}/{runSequence}/-{executionId}
+ * Standard:   accountId:{accountId}/orgId:{orgId}/projectId:{projectId}/pipelineId:{pipelineId}/runSequence:{seq}/level0:pipeline
  */
 export async function buildLogPrefixFromExecution(
   client: HarnessClient,
@@ -35,5 +34,16 @@ export async function buildLogPrefixFromExecution(
     );
   }
 
-  return `${client.account}/pipeline/${pipelineId}/${runSequence}/-${executionId}`;
+  // The Harness API returns `shouldUseSimplifiedKey` on the execution object
+  // to indicate which log prefix format was used when the execution was created.
+  const useSimplified = pes.shouldUseSimplifiedKey !== false;
+
+  if (useSimplified) {
+    return `${client.account}/pipeline/${pipelineId}/${runSequence}/-${executionId}`;
+  }
+
+  // Standard format requires org and project identifiers
+  const orgId = asString(pes.orgIdentifier) ?? asString(input.org_id) ?? "";
+  const projectId = asString(pes.projectIdentifier) ?? asString(input.project_id) ?? "";
+  return `accountId:${client.account}/orgId:${orgId}/projectId:${projectId}/pipelineId:${pipelineId}/runSequence:${runSequence}/level0:pipeline`;
 }
