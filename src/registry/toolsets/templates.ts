@@ -13,7 +13,11 @@ export const templatesToolset: ToolsetDefinition = {
       toolset: "templates",
       scope: "project",
       identifierFields: ["template_id"],
-      listFilterFields: ["search_term", "template_type", "template_list_type"],
+      listFilterFields: [
+        { name: "search_term", description: "Filter templates by name or keyword" },
+        { name: "template_type", description: "Template entity type", enum: ["Pipeline", "Stage", "Step", "CustomDeployment", "MonitoredService", "SecretManager", "ArtifactSource"] },
+        { name: "template_list_type", description: "Template list type", enum: ["Stable", "LastUpdated", "All"] },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/setup/resources/templates/{templateIdentifier}",
       operations: {
         list: {

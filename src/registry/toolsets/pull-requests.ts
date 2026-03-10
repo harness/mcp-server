@@ -15,7 +15,10 @@ export const pullRequestsToolset: ToolsetDefinition = {
       toolset: "pull-requests",
       scope: "project",
       identifierFields: ["repo_id", "pr_number"],
-      listFilterFields: ["state", "query"],
+      listFilterFields: [
+        { name: "state", description: "Pull request state filter", enum: ["open", "closed", "merged"] },
+        { name: "query", description: "Search pull requests by keyword" },
+      ],
       deepLinkTemplate:
         "/ng/account/{accountId}/module/code/orgs/{orgIdentifier}/projects/{projectIdentifier}/repos/{repoIdentifier}/pull-requests/{prNumber}",
       operations: {

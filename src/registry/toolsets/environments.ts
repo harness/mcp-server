@@ -37,7 +37,11 @@ export const environmentsToolset: ToolsetDefinition = {
       toolset: "environments",
       scope: "project",
       identifierFields: ["environment_id"],
-      listFilterFields: ["search_term", "env_type", "sort"],
+      listFilterFields: [
+        { name: "search_term", description: "Filter environments by name or keyword" },
+        { name: "env_type", description: "Environment type filter", enum: ["Production", "PreProduction"] },
+        { name: "sort", description: "Sort environments by name or identifier" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/environments/{environmentIdentifier}",
       operations: {
         list: {

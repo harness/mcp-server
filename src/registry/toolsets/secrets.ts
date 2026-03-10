@@ -13,7 +13,10 @@ export const secretsToolset: ToolsetDefinition = {
       toolset: "secrets",
       scope: "project",
       identifierFields: ["secret_id"],
-      listFilterFields: ["search_term", "type"],
+      listFilterFields: [
+        { name: "search_term", description: "Filter secrets by name or keyword" },
+        { name: "type", description: "Secret type filter", enum: ["SecretFile", "SecretText", "SSHKey", "WinRmCredentials"] },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/setup/resources/secrets/{secretIdentifier}",
       operations: {
         list: {

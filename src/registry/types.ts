@@ -64,6 +64,20 @@ export interface BodySchema {
 }
 
 /**
+ * Descriptor for a filter field that can be used in list operations.
+ */
+export interface FilterFieldSpec {
+  /** Field name as it appears in the API */
+  name: string;
+  /** Human-readable description for LLMs */
+  description: string;
+  /** Value type — defaults to "string" when omitted */
+  type?: "string" | "number" | "boolean";
+  /** Allowed values, if the field is constrained to a known set */
+  enum?: string[];
+}
+
+/**
  * Specifies how a single CRUD operation maps to the Harness API.
  */
 export interface EndpointSpec {
@@ -109,7 +123,7 @@ export interface ResourceDefinition {
   /** Primary identifier field names: ["pipeline_id"], ["service_id"], etc. */
   identifierFields: string[];
   /** Additional filter fields for list operations */
-  listFilterFields?: string[];
+  listFilterFields?: FilterFieldSpec[];
   /** Harness UI deep-link URL template */
   deepLinkTemplate?: string;
   /** Troubleshooting guidance for LLMs. Describes how to diagnose issues with this resource type. */

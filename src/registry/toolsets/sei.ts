@@ -50,7 +50,12 @@ export const seiToolset: ToolsetDefinition = {
       toolset: "sei",
       scope: "account",
       identifierFields: [],
-      listFilterFields: ["team_ref_id", "date_start", "date_end", "granularity"],
+      listFilterFields: [
+        { name: "team_ref_id", description: "Team reference identifier" },
+        { name: "date_start", description: "Start date for metric calculation" },
+        { name: "date_end", description: "End date for metric calculation" },
+        { name: "granularity", description: "Time granularity", enum: ["DAY", "WEEK", "MONTH"] },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/module/sei/insights/dora",
       operations: {
         get: {
@@ -69,7 +74,12 @@ export const seiToolset: ToolsetDefinition = {
       toolset: "sei",
       scope: "account",
       identifierFields: [],
-      listFilterFields: ["team_ref_id", "date_start", "date_end", "granularity"],
+      listFilterFields: [
+        { name: "team_ref_id", description: "Team reference identifier" },
+        { name: "date_start", description: "Start date for metric calculation" },
+        { name: "date_end", description: "End date for metric calculation" },
+        { name: "granularity", description: "Time granularity", enum: ["DAY", "WEEK", "MONTH"] },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/module/sei/insights/dora",
       operations: {
         get: {
@@ -88,7 +98,12 @@ export const seiToolset: ToolsetDefinition = {
       toolset: "sei",
       scope: "account",
       identifierFields: [],
-      listFilterFields: ["team_ref_id", "date_start", "date_end", "granularity"],
+      listFilterFields: [
+        { name: "team_ref_id", description: "Team reference identifier" },
+        { name: "date_start", description: "Start date for metric calculation" },
+        { name: "date_end", description: "End date for metric calculation" },
+        { name: "granularity", description: "Time granularity", enum: ["DAY", "WEEK", "MONTH"] },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/module/sei/insights/dora",
       operations: {
         get: {
@@ -107,7 +122,12 @@ export const seiToolset: ToolsetDefinition = {
       toolset: "sei",
       scope: "account",
       identifierFields: [],
-      listFilterFields: ["team_ref_id", "date_start", "date_end", "granularity"],
+      listFilterFields: [
+        { name: "team_ref_id", description: "Team reference identifier" },
+        { name: "date_start", description: "Start date for metric calculation" },
+        { name: "date_end", description: "End date for metric calculation" },
+        { name: "granularity", description: "Time granularity", enum: ["DAY", "WEEK", "MONTH"] },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/module/sei/insights/dora",
       operations: {
         get: {
@@ -126,7 +146,12 @@ export const seiToolset: ToolsetDefinition = {
       toolset: "sei",
       scope: "account",
       identifierFields: [],
-      listFilterFields: ["team_ref_id", "date_start", "date_end", "granularity"],
+      listFilterFields: [
+        { name: "team_ref_id", description: "Team reference identifier" },
+        { name: "date_start", description: "Start date for metric calculation" },
+        { name: "date_end", description: "End date for metric calculation" },
+        { name: "granularity", description: "Time granularity", enum: ["DAY", "WEEK", "MONTH"] },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/module/sei/insights/dora",
       operations: {
         get: {
@@ -145,7 +170,12 @@ export const seiToolset: ToolsetDefinition = {
       toolset: "sei",
       scope: "account",
       identifierFields: [],
-      listFilterFields: ["team_ref_id", "date_start", "date_end", "granularity"],
+      listFilterFields: [
+        { name: "team_ref_id", description: "Team reference identifier" },
+        { name: "date_start", description: "Start date for metric calculation" },
+        { name: "date_end", description: "End date for metric calculation" },
+        { name: "granularity", description: "Time granularity", enum: ["DAY", "WEEK", "MONTH"] },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/module/sei/insights/dora",
       operations: {
         get: {
@@ -285,7 +315,11 @@ export const seiToolset: ToolsetDefinition = {
       toolset: "sei",
       scope: "account",
       identifierFields: [],
-      listFilterFields: ["team_ref_id", "date_start", "date_end"],
+      listFilterFields: [
+        { name: "team_ref_id", description: "Team reference identifier" },
+        { name: "date_start", description: "Start date for metric calculation" },
+        { name: "date_end", description: "End date for metric calculation" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/module/sei/insights/ai-coding",
       operations: {
         get: {
@@ -308,7 +342,11 @@ export const seiToolset: ToolsetDefinition = {
       toolset: "sei",
       scope: "account",
       identifierFields: [],
-      listFilterFields: ["team_ref_id", "date_start", "date_end"],
+      listFilterFields: [
+        { name: "team_ref_id", description: "Team reference identifier" },
+        { name: "date_start", description: "Start date for metric calculation" },
+        { name: "date_end", description: "End date for metric calculation" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/module/sei/insights/ai-coding",
       operations: {
         list: {
@@ -331,7 +369,11 @@ export const seiToolset: ToolsetDefinition = {
       toolset: "sei",
       scope: "account",
       identifierFields: [],
-      listFilterFields: ["team_ref_id", "date_start", "date_end"],
+      listFilterFields: [
+        { name: "team_ref_id", description: "Team reference identifier" },
+        { name: "date_start", description: "Start date for metric calculation" },
+        { name: "date_end", description: "End date for metric calculation" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/module/sei/insights/ai-coding",
       operations: {
         get: {
@@ -354,7 +396,11 @@ export const seiToolset: ToolsetDefinition = {
       toolset: "sei",
       scope: "account",
       identifierFields: [],
-      listFilterFields: ["team_ref_id", "date_start", "date_end"],
+      listFilterFields: [
+        { name: "team_ref_id", description: "Team reference identifier" },
+        { name: "date_start", description: "Start date for metric calculation" },
+        { name: "date_end", description: "End date for metric calculation" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/module/sei/insights/ai-coding",
       operations: {
         list: {
@@ -377,7 +423,12 @@ export const seiToolset: ToolsetDefinition = {
       toolset: "sei",
       scope: "account",
       identifierFields: [],
-      listFilterFields: ["team_ref_id", "date_start", "date_end", "metric_type"],
+      listFilterFields: [
+        { name: "team_ref_id", description: "Team reference identifier" },
+        { name: "date_start", description: "Start date for metric calculation" },
+        { name: "date_end", description: "End date for metric calculation" },
+        { name: "metric_type", description: "Metric type filter" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/module/sei/insights/ai-coding",
       operations: {
         get: {
@@ -400,7 +451,11 @@ export const seiToolset: ToolsetDefinition = {
       toolset: "sei",
       scope: "account",
       identifierFields: [],
-      listFilterFields: ["team_ref_id", "date_start", "date_end"],
+      listFilterFields: [
+        { name: "team_ref_id", description: "Team reference identifier" },
+        { name: "date_start", description: "Start date for metric calculation" },
+        { name: "date_end", description: "End date for metric calculation" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/module/sei/insights/ai-coding",
       operations: {
         list: {

@@ -13,7 +13,11 @@ export const settingsToolset: ToolsetDefinition = {
       toolset: "settings",
       scope: "project",
       identifierFields: [],
-      listFilterFields: ["category", "group", "include_parent_scopes"],
+      listFilterFields: [
+        { name: "category", description: "Filter settings by category" },
+        { name: "group", description: "Filter settings by group" },
+        { name: "include_parent_scopes", description: "Include parent scopes in settings", type: "boolean" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/settings",
       operations: {
         list: {

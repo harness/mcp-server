@@ -13,7 +13,10 @@ export const idpToolset: ToolsetDefinition = {
       toolset: "idp",
       scope: "account",
       identifierFields: ["entity_id"],
-      listFilterFields: ["kind", "search"],
+      listFilterFields: [
+        { name: "kind", description: "Catalog entity kind filter", enum: ["api", "component", "environment", "environmentblueprint", "group", "resource", "user", "workflow"] },
+        { name: "search", description: "Search catalog entities by name or keyword" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/idp/catalog",
       operations: {
         list: {
@@ -194,7 +197,9 @@ export const idpToolset: ToolsetDefinition = {
       toolset: "idp",
       scope: "account",
       identifierFields: [],
-      listFilterFields: ["query"],
+      listFilterFields: [
+        { name: "query", description: "Search query for scorecards" },
+      ],
       operations: {
         list: {
           method: "GET",

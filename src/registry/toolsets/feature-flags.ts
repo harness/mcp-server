@@ -32,7 +32,9 @@ export const featureFlagsToolset: ToolsetDefinition = {
       toolset: "feature-flags",
       scope: "project",
       identifierFields: ["workspace_id"],
-      listFilterFields: ["offset"],
+      listFilterFields: [
+        { name: "offset", description: "Pagination offset for feature flag workspaces", type: "number" },
+      ],
       operations: {
         list: {
           method: "GET",
@@ -70,7 +72,9 @@ export const featureFlagsToolset: ToolsetDefinition = {
       toolset: "feature-flags",
       scope: "account",
       identifierFields: ["workspace_id", "feature_flag_name"],
-      listFilterFields: ["offset"],
+      listFilterFields: [
+        { name: "offset", description: "Pagination offset for FME feature flags", type: "number" },
+      ],
       operations: {
         list: {
           method: "GET",
@@ -100,7 +104,10 @@ export const featureFlagsToolset: ToolsetDefinition = {
       toolset: "feature-flags",
       scope: "project",
       identifierFields: ["flag_id"],
-      listFilterFields: ["name", "environment"],
+      listFilterFields: [
+        { name: "name", description: "Filter feature flags by name" },
+        { name: "environment", description: "Feature flag environment filter" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/cf/orgs/{orgIdentifier}/projects/{projectIdentifier}/feature-flags/{flagIdentifier}",
       operations: {
         list: {

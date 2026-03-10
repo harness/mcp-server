@@ -356,7 +356,12 @@ Optional: group_by (${VALID_GROUP_BY_FIELDS.join(", ")}), time_filter (${VALID_T
       toolset: "ccm",
       scope: "account",
       identifierFields: ["perspective_id"],
-      listFilterFields: ["group_by", "time_filter", "limit", "offset"],
+      listFilterFields: [
+        { name: "group_by", description: "Group results by field", enum: [...VALID_GROUP_BY_FIELDS] },
+        { name: "time_filter", description: "Time range filter", enum: [...VALID_TIME_FILTERS] },
+        { name: "limit", description: "Result limit", type: "number" },
+        { name: "offset", description: "Pagination offset", type: "number" },
+      ],
       operations: {
         list: {
           method: "POST",
@@ -411,7 +416,12 @@ Optional: time_filter (${VALID_TIME_FILTERS.join(", ")}), time_resolution (DAY, 
       toolset: "ccm",
       scope: "account",
       identifierFields: ["perspective_id"],
-      listFilterFields: ["group_by", "time_filter", "time_resolution", "limit"],
+      listFilterFields: [
+        { name: "group_by", description: "Group results by field", enum: [...VALID_GROUP_BY_FIELDS] },
+        { name: "time_filter", description: "Time range filter", enum: [...VALID_TIME_FILTERS] },
+        { name: "time_resolution", description: "Time resolution for aggregation", enum: ["DAY", "MONTH", "WEEK"] },
+        { name: "limit", description: "Result limit", type: "number" },
+      ],
       operations: {
         list: {
           method: "POST",
@@ -466,7 +476,9 @@ Use with no perspective_id to get CCM metadata (available connectors, default pe
       toolset: "ccm",
       scope: "account",
       identifierFields: ["perspective_id"],
-      listFilterFields: ["time_filter"],
+      listFilterFields: [
+        { name: "time_filter", description: "Time range filter" },
+      ],
       operations: {
         list: {
           method: "POST",
@@ -545,7 +557,12 @@ Replaces the 5 separate resource-type tools from the official server (EC2, Azure
       toolset: "ccm",
       scope: "account",
       identifierFields: ["perspective_id"],
-      listFilterFields: ["min_saving", "time_filter", "limit", "offset"],
+      listFilterFields: [
+        { name: "min_saving", description: "Minimum savings threshold", type: "number" },
+        { name: "time_filter", description: "Time range filter", enum: [...VALID_TIME_FILTERS] },
+        { name: "limit", description: "Result limit", type: "number" },
+        { name: "offset", description: "Pagination offset", type: "number" },
+      ],
       operations: {
         list: {
           method: "POST",
@@ -673,7 +690,14 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
       toolset: "ccm",
       scope: "account",
       identifierFields: ["anomaly_id"],
-      listFilterFields: ["perspective_id", "status", "min_amount", "min_anomalous_spend", "limit", "offset"],
+      listFilterFields: [
+        { name: "perspective_id", description: "Cost perspective identifier" },
+        { name: "status", description: "Anomaly status filter", enum: ["ACTIVE", "IGNORED", "ARCHIVED", "RESOLVED"] },
+        { name: "min_amount", description: "Minimum amount threshold", type: "number" },
+        { name: "min_anomalous_spend", description: "Minimum anomalous spend threshold", type: "number" },
+        { name: "limit", description: "Result limit", type: "number" },
+        { name: "offset", description: "Pagination offset", type: "number" },
+      ],
       operations: {
         list: {
           method: "POST",
@@ -739,7 +763,11 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
       toolset: "ccm",
       scope: "account",
       identifierFields: [],
-      listFilterFields: ["start_time", "end_time", "group_by"],
+      listFilterFields: [
+        { name: "start_time", description: "Start time filter (ISO 8601)" },
+        { name: "end_time", description: "End time filter (ISO 8601)" },
+        { name: "group_by", description: "Group results by field" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/ce/overview",
       operations: {
         get: {
@@ -791,7 +819,11 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
       toolset: "ccm",
       scope: "account",
       identifierFields: [],
-      listFilterFields: ["perspective_id", "field_id", "field_identifier"],
+      listFilterFields: [
+        { name: "perspective_id", description: "Cost perspective identifier" },
+        { name: "field_id", description: "Field identifier" },
+        { name: "field_identifier", description: "Field identifier" },
+      ],
       operations: {
         list: {
           method: "POST",
@@ -890,7 +922,10 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
       toolset: "ccm",
       scope: "account",
       identifierFields: [],
-      listFilterFields: ["limit", "offset"],
+      listFilterFields: [
+        { name: "limit", description: "Result limit" },
+        { name: "offset", description: "Pagination offset" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/ce/anomaly-detection",
       operations: {
         list: {

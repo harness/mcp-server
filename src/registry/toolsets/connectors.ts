@@ -39,7 +39,11 @@ export const connectorsToolset: ToolsetDefinition = {
       scope: "project",
       identifierFields: ["connector_id"],
       diagnosticHint: "Use harness_diagnose with resource_id set to the connector identifier to run a live connectivity test and get auth method, status history, and error details.",
-      listFilterFields: ["search_term", "type", "category"],
+      listFilterFields: [
+        { name: "search_term", description: "Filter connectors by name or keyword" },
+        { name: "type", description: "Connector type filter", enum: ["K8sCluster", "Git", "Splunk", "AppDynamics", "Prometheus", "Dynatrace", "Vault", "AzureKeyVault", "DockerRegistry", "Local", "AwsKms", "GcpKms", "AwsSecretManager", "Gcp", "Aws", "Azure", "Artifactory", "Jira", "Nexus", "Github", "Gitlab", "Bitbucket", "Codecommit", "CEAws", "CEAzure", "GcpCloudCost", "CEK8sCluster", "HttpHelmRepo", "NewRelic", "Datadog", "SumoLogic", "PagerDuty", "CustomHealth", "ServiceNow", "ErrorTracking", "Pdc", "AzureRepo", "Jenkins", "OciHelmRepo", "CustomSecretManager", "ElasticSearch", "GcpSecretManager", "AzureArtifacts", "Tas", "Spot", "Bamboo", "TerraformCloud", "SignalFX", "Harness", "Rancher", "JDBC"] },
+        { name: "category", description: "Connector category filter", enum: ["CLOUD_PROVIDER", "SECRET_MANAGER", "CLOUD_COST", "ARTIFACTORY", "CODE_REPO", "MONITORING", "TICKETING", "DATABASE", "COMMUNICATION", "DOCUMENTATION", "ML_OPS"] },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/setup/connectors/{connectorIdentifier}",
       operations: {
         list: {

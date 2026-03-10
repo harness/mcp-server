@@ -143,16 +143,18 @@ describe("Registry", () => {
       // Simulate what an LLM would get from harness_describe(resource_type="pipeline")
       const def = registry.getResource("pipeline");
       expect(def.listFilterFields).toBeDefined();
-      expect(def.listFilterFields).toContain("search_term");
-      expect(def.listFilterFields).toContain("module");
+      const names = def.listFilterFields!.map((f) => f.name);
+      expect(names).toContain("search_term");
+      expect(names).toContain("module");
     });
 
     it("listFilterFields are accepted by dispatch when passed as flat input", async () => {
       // Simulate: LLM discovers filter fields via describe, then passes them via filters catch-all
       const def = registry.getResource("connector");
-      expect(def.listFilterFields).toContain("search_term");
-      expect(def.listFilterFields).toContain("type");
-      expect(def.listFilterFields).toContain("category");
+      const names = def.listFilterFields!.map((f) => f.name);
+      expect(names).toContain("search_term");
+      expect(names).toContain("type");
+      expect(names).toContain("category");
 
       const mockRequest = vi.fn().mockResolvedValue({
         data: { content: [], totalElements: 0 },

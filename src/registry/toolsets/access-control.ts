@@ -13,7 +13,9 @@ export const accessControlToolset: ToolsetDefinition = {
       toolset: "access_control",
       scope: "account",
       identifierFields: ["user_id"],
-      listFilterFields: ["search_term"],
+      listFilterFields: [
+        { name: "search_term", description: "Filter users by name or email ID" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/settings/access-control/users",
       operations: {
         list: {
@@ -42,7 +44,9 @@ export const accessControlToolset: ToolsetDefinition = {
       toolset: "access_control",
       scope: "project",
       identifierFields: ["user_group_id"],
-      listFilterFields: ["search_term"],
+      listFilterFields: [
+        { name: "search_term", description: "Filter user groups by name or keyword" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/settings/access-control/user-groups/{groupIdentifier}",
       operations: {
         list: {
@@ -95,7 +99,9 @@ export const accessControlToolset: ToolsetDefinition = {
       toolset: "access_control",
       scope: "project",
       identifierFields: ["service_account_id"],
-      listFilterFields: ["search_term"],
+      listFilterFields: [
+        { name: "search_term", description: "Filter service accounts by name or keyword" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/settings/access-control/service-accounts/{serviceAccountIdentifier}",
       operations: {
         list: {
@@ -149,7 +155,9 @@ export const accessControlToolset: ToolsetDefinition = {
       toolset: "access_control",
       scope: "project",
       identifierFields: ["role_id"],
-      listFilterFields: ["search_term"],
+      listFilterFields: [
+        { name: "search_term", description: "Filter roles by name or keyword" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/settings/access-control/roles/{roleIdentifier}",
       operations: {
         list: {
@@ -203,7 +211,11 @@ export const accessControlToolset: ToolsetDefinition = {
       toolset: "access_control",
       scope: "project",
       identifierFields: ["role_assignment_id"],
-      listFilterFields: ["principal_type", "role_identifier", "resource_group_identifier"],
+      listFilterFields: [
+        { name: "principal_type", description: "Principal type filter", enum: ["USER", "USER_GROUP", "SERVICE_ACCOUNT"] },
+        { name: "role_identifier", description: "Role identifier filter" },
+        { name: "resource_group_identifier", description: "Resource group identifier filter" },
+      ],
       operations: {
         list: {
           method: "POST",
@@ -245,7 +257,9 @@ export const accessControlToolset: ToolsetDefinition = {
       toolset: "access_control",
       scope: "project",
       identifierFields: ["resource_group_id"],
-      listFilterFields: ["search_term"],
+      listFilterFields: [
+        { name: "search_term", description: "Filter resource groups by name or keyword" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/settings/access-control/resource-groups/{resourceGroupIdentifier}",
       operations: {
         list: {

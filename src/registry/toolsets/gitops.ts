@@ -14,7 +14,10 @@ export const gitopsToolset: ToolsetDefinition = {
       toolset: "gitops",
       scope: "project",
       identifierFields: ["agent_id"],
-      listFilterFields: ["search_term", "type"],
+      listFilterFields: [
+        { name: "search_term", description: "Filter GitOps agents by name or keyword" },
+        { name: "type", description: "Agent type filter", enum: ["MANAGED_ARGO_PROVIDER", "HOSTED_ARGO_PROVIDER"] },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/gitops/agents/{agentIdentifier}",
       operations: {
         list: {
@@ -47,7 +50,9 @@ export const gitopsToolset: ToolsetDefinition = {
       scope: "project",
       diagnosticHint: "Use harness_diagnose with resource_type='gitops_application', agent_id, and resource_id (app name) to analyze sync failures, health issues, and unhealthy K8s resources. Combines app status, resource tree, and recent events.",
       identifierFields: ["agent_id", "app_name"],
-      listFilterFields: ["search_term"],
+      listFilterFields: [
+        { name: "search_term", description: "Filter GitOps applications by name or keyword" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/gitops/applications/{appName}",
       operations: {
         list: {
@@ -233,7 +238,12 @@ export const gitopsToolset: ToolsetDefinition = {
       toolset: "gitops",
       scope: "project",
       identifierFields: ["agent_id", "app_name"],
-      listFilterFields: ["pod_name", "namespace", "container", "tail_lines"],
+      listFilterFields: [
+        { name: "pod_name", description: "Pod name filter" },
+        { name: "namespace", description: "Kubernetes namespace filter" },
+        { name: "container", description: "Container name filter" },
+        { name: "tail_lines", description: "Number of log lines to tail", type: "number" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/gitops/applications/{appName}",
       operations: {
         get: {
@@ -282,7 +292,11 @@ export const gitopsToolset: ToolsetDefinition = {
       toolset: "gitops",
       scope: "project",
       identifierFields: ["agent_id", "app_name"],
-      listFilterFields: ["namespace", "resource_name", "kind"],
+      listFilterFields: [
+        { name: "namespace", description: "Kubernetes namespace filter" },
+        { name: "resource_name", description: "Resource name filter" },
+        { name: "kind", description: "Kubernetes resource kind filter" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/gitops/applications/{appName}",
       operations: {
         list: {

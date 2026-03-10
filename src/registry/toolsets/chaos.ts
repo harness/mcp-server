@@ -14,7 +14,9 @@ export const chaosToolset: ToolsetDefinition = {
       toolset: "chaos",
       scope: "project",
       identifierFields: ["experiment_id"],
-      listFilterFields: ["search_term"],
+      listFilterFields: [
+        { name: "search_term", description: "Filter chaos experiments by name or keyword" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/chaos/experiments/{experimentId}",
       operations: {
         list: {

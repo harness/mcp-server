@@ -14,7 +14,9 @@ export const scsToolset: ToolsetDefinition = {
       toolset: "scs",
       scope: "project",
       identifierFields: ["artifact_id"],
-      listFilterFields: ["search"],
+      listFilterFields: [
+        { name: "search", description: "Filter by name or keyword" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/supply-chain/artifacts/{artifactId}",
       operations: {
         list: {
@@ -44,7 +46,9 @@ export const scsToolset: ToolsetDefinition = {
       toolset: "scs",
       scope: "project",
       identifierFields: ["repo_id"],
-      listFilterFields: ["search"],
+      listFilterFields: [
+        { name: "search", description: "Filter by name or keyword" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/supply-chain/repositories/{repoId}",
       operations: {
         list: {
@@ -91,7 +95,9 @@ export const scsToolset: ToolsetDefinition = {
       toolset: "scs",
       scope: "project",
       identifierFields: ["artifact_id"],
-      listFilterFields: ["search"],
+      listFilterFields: [
+        { name: "search", description: "Filter by name or keyword" },
+      ],
       operations: {
         list: {
           method: "GET",
