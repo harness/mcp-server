@@ -295,6 +295,19 @@ export class Registry {
     // Extract response
     const result = spec.responseExtractor ? spec.responseExtractor(raw) : raw;
 
+    // Propagate storeType from the request query params into the result when
+    // the API response didn't include one.  Create/update endpoints like
+    // `/pipeline/api/pipelines/v2` return a slim `PipelineSaveResponse` that
+    // omits `storeType`, so the caller's intent (REMOTE vs INLINE) would be
+    // lost without this propagation.  This also ensures the `openInHarness`
+    // deep link gets the correct `?storeType=` suffix.
+    if (result && typeof result === "object" && params.storeType) {
+      const r = result as Record<string, unknown>;
+      if (!r.storeType) {
+        r.storeType = params.storeType;
+      }
+    }
+
     // Attach deep link if available
     if (def.deepLinkTemplate && typeof result === "object" && result !== null) {
       const resultRecord = result as Record<string, unknown>;

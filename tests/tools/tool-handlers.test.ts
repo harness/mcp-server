@@ -314,6 +314,24 @@ describe("harness_create", () => {
     expect(callArgs.params.branch).toBe("main");
     expect(callArgs.params.filePath).toBe(".harness/remote-pipe.yaml");
     expect(callArgs.params.commitMsg).toBe("Add pipeline via MCP");
+    // Verify storeType is propagated to the response (create API doesn't return it)
+    const parsed = parseResult(result);
+    expect(parsed.storeType).toBe("REMOTE");
+    expect(parsed.openInHarness).toContain("storeType=REMOTE");
+  });
+
+  it("defaults storeType to INLINE for inline pipeline create", async () => {
+    const result = await server.call("harness_create", {
+      resource_type: "pipeline",
+      body: { yamlPipeline: "pipeline:\n  name: Inline Pipe\n  identifier: inline_pipe" },
+    });
+    expect(result.isError).toBeUndefined();
+    const parsed = parseResult(result);
+    // No storeType in query params and API doesn't return one → should be absent
+    expect(parsed.storeType).toBeUndefined();
+    // Deep link should still work (without storeType query param)
+    expect(parsed.openInHarness).toBeDefined();
+    expect(parsed.openInHarness).not.toContain("storeType=");
   });
 });
 

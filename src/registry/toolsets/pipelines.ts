@@ -1,14 +1,9 @@
 import type { ToolsetDefinition, BodySchema } from "../types.js";
 import { ngExtract, pageExtract, passthrough, v1ListExtract } from "../extractors.js";
 
-/** Extract response and default storeType to INLINE only if not already set. */
+/** Extract response, preserving storeType if the API returned one. */
 const ngExtractWithStoreType = (raw: unknown) => {
-  const result = ngExtract(raw);
-  if (result && typeof result === "object") {
-    const r = result as Record<string, unknown>;
-    if (!r.storeType) r.storeType = "INLINE";
-  }
-  return result;
+  return ngExtract(raw);
 };
 
 const pipelineCreateSchema: BodySchema = {
