@@ -12,7 +12,7 @@ const ngExtractWithStoreType = (raw: unknown) => {
 };
 
 const pipelineCreateSchema: BodySchema = {
-  description: "Pipeline definition. Prefer yamlPipeline (YAML string) to avoid serialization issues; pipeline (JSON object) is also supported. For git-backed (remote) pipelines, pass store_type='REMOTE' and git details (connector_ref, repo_name, branch, file_path) via params.",
+  description: "Pipeline definition. Prefer yamlPipeline (YAML string) to avoid serialization issues; pipeline (JSON object) is also supported. Storage options via params: (1) Inline (default): no extra params needed. (2) External Git: store_type='REMOTE', connector_ref (Git connector ID), repo_name, branch, file_path. (3) Harness Code: store_type='REMOTE', is_harness_code_repo=true, repo_name, branch, file_path (no connector_ref needed).",
   fields: [
     { name: "yamlPipeline", type: "string", required: false, description: "Full pipeline YAML string including the 'pipeline:' root. Recommended when creating from generated or edited YAML." },
     { name: "pipeline", type: "object", required: false, description: "Pipeline as JSON object (name, identifier, stages, etc.). Use yamlPipeline instead when passing YAML to avoid large nested JSON.", fields: [
@@ -24,7 +24,7 @@ const pipelineCreateSchema: BodySchema = {
 };
 
 const pipelineUpdateSchema: BodySchema = {
-  description: "Pipeline YAML definition (full replacement). Pass either pipeline (JSON object) or yamlPipeline (YAML string). For git-backed (remote) pipelines, pass store_type='REMOTE' and git details (connector_ref, repo_name, branch, file_path, commit_msg) via params. Include last_object_id and last_commit_id from the GET response for conflict detection.",
+  description: "Pipeline YAML definition (full replacement). Pass either pipeline (JSON object) or yamlPipeline (YAML string). For remote pipelines, pass store_type='REMOTE' with git details via params. External Git: connector_ref, repo_name, branch, file_path, commit_msg. Harness Code: is_harness_code_repo=true, repo_name, branch, file_path, commit_msg (no connector_ref). Include last_object_id and last_commit_id from the GET response for conflict detection.",
   fields: [
     { name: "pipeline", type: "object", required: false, description: "Complete pipeline as JSON object (replaces existing)" },
     { name: "yamlPipeline", type: "string", required: false, description: "Complete pipeline as YAML string (replaces existing). Use this when updating from get pipeline response or editing YAML." },
@@ -106,7 +106,7 @@ export const pipelinesToolset: ToolsetDefinition = {
             throw new Error("body must include either yamlPipeline (YAML string) or pipeline (JSON object)");
           },
           responseExtractor: ngExtractWithStoreType,
-          description: "Create a new pipeline from YAML. For git-backed pipelines, pass store_type='REMOTE' with connector_ref, repo_name, branch, and file_path via params.",
+          description: "Create a new pipeline from YAML. For external Git: store_type='REMOTE' + connector_ref, repo_name, branch, file_path. For Harness Code: store_type='REMOTE' + is_harness_code_repo=true, repo_name, branch, file_path.",
           bodySchema: pipelineCreateSchema,
         },
         update: {
@@ -138,7 +138,7 @@ export const pipelinesToolset: ToolsetDefinition = {
             throw new Error("body must include either pipeline (JSON object) or yamlPipeline (YAML string)");
           },
           responseExtractor: ngExtractWithStoreType,
-          description: "Update an existing pipeline YAML. For remote pipelines, pass store_type='REMOTE' with git details and last_object_id/last_commit_id from the GET response.",
+          description: "Update an existing pipeline YAML. For remote pipelines, pass store_type='REMOTE' with git details and last_object_id/last_commit_id from the GET response. For Harness Code: add is_harness_code_repo=true (no connector_ref needed).",
           bodySchema: pipelineUpdateSchema,
         },
         delete: {
