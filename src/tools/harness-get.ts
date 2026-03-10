@@ -6,6 +6,8 @@ import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString } from "../utils/type-guards.js";
+import { resolveLogContent } from "../utils/log-resolver.js";
+import { buildLogPrefixFromExecution } from "../utils/log-prefix.js";
 
 export function registerGetTool(server: McpServer, registry: Registry, client: HarnessClient): void {
   server.registerTool(
@@ -43,6 +45,21 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
         const primaryField = def.identifierFields[0];
         if (primaryField && resourceId) {
           input[primaryField] = resourceId;
+        }
+
+        // execution_log: resolve full log content instead of returning a download URL
+        if (resourceType === "execution_log") {
+          let prefix = asString(input.prefix);
+          if (!prefix) {
+            // Auto-build prefix from execution_id if available
+            const executionId = asString(input.execution_id);
+            if (!executionId) {
+              return errorResult("prefix or execution_id is required for execution_log. Provide a log prefix or an execution ID to auto-build it.");
+            }
+            prefix = await buildLogPrefixFromExecution(client, registry, executionId, input);
+          }
+          const logText = await resolveLogContent(client, prefix);
+          return jsonResult({ log_content: logText });
         }
 
         const result = await registry.dispatch(client, resourceType, "get", input);
