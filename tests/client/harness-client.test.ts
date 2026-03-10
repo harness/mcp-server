@@ -167,6 +167,42 @@ describe("HarnessClient", () => {
       await expect(client.request({ path: "/test" })).rejects.toThrow(/HTTP 502: Bad Gateway/);
     });
 
+    it("returns actionable message for HTML 403 (proxy/WAF block)", async () => {
+      const html = '<!doctype html><meta charset="utf-8"><meta name=viewport content="width=device-width, initial-scale=1"><title>403</title>403 Forbidden';
+      fetchSpy.mockResolvedValue(new Response(html, { status: 403 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      try {
+        await client.request({ path: "/test" });
+        expect.fail("should have thrown");
+      } catch (err) {
+        expect(err).toBeInstanceOf(HarnessApiError);
+        const e = err as HarnessApiError;
+        expect(e.statusCode).toBe(403);
+        expect(e.message).toContain("HTTP 403 Forbidden");
+        expect(e.message).toContain("HARNESS_ACCOUNT_ID");
+        // Should NOT contain raw HTML tags
+        expect(e.message).not.toContain("<");
+      }
+    });
+
+    it("returns actionable message for HTML 401", async () => {
+      const html = "<html><body>Unauthorized</body></html>";
+      fetchSpy.mockResolvedValue(new Response(html, { status: 401 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      try {
+        await client.request({ path: "/test" });
+        expect.fail("should have thrown");
+      } catch (err) {
+        expect(err).toBeInstanceOf(HarnessApiError);
+        const e = err as HarnessApiError;
+        expect(e.statusCode).toBe(401);
+        expect(e.message).toContain("HARNESS_API_KEY");
+        expect(e.message).not.toContain("<");
+      }
+    });
+
     it("does not retry on 400", async () => {
       fetchSpy.mockResolvedValue(new Response(JSON.stringify({ message: "bad" }), { status: 400 }));
       const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 2 }));
