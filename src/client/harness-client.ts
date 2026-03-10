@@ -9,6 +9,28 @@ const log = createLogger("harness-client");
 const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
 const BASE_BACKOFF_MS = 1000;
 
+/** Strip HTML tags and collapse whitespace — used for non-JSON error bodies. */
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/** Produce a clean, actionable error message for non-JSON HTTP error responses. */
+function humanizeHttpError(status: number, rawBody: string): string {
+  const isHtml = /^\s*</.test(rawBody);
+  const hint = isHtml ? stripHtml(rawBody).slice(0, 120) : rawBody.slice(0, 200);
+
+  switch (status) {
+    case 401:
+      return `HTTP 401 Unauthorized — API key is invalid or expired. Verify HARNESS_API_KEY is a valid PAT or Service Account token.${hint ? ` (${hint})` : ""}`;
+    case 403:
+      return `HTTP 403 Forbidden — access denied. Possible causes: wrong HARNESS_ACCOUNT_ID, IP restrictions, missing RBAC permissions, or corporate proxy/WAF blocking the request.${hint ? ` (${hint})` : ""}`;
+    case 404:
+      return `HTTP 404 Not Found — the API endpoint or resource does not exist. Verify the base URL and resource identifiers.${hint ? ` (${hint})` : ""}`;
+    default:
+      return `HTTP ${status}: ${hint || "empty response"}`;
+  }
+}
+
 export class HarnessClient {
   private readonly baseUrl: string;
   private readonly token: string;
@@ -95,11 +117,13 @@ export class HarnessClient {
           try {
             parsed = JSON.parse(body);
           } catch {
-            // raw text error
+            // Non-JSON error (HTML proxy page, WAF block, etc.)
+            // Provide actionable messages instead of leaking raw HTML to the LLM
           }
 
+          const message = parsed.message ?? humanizeHttpError(response.status, body);
           const error = new HarnessApiError(
-            parsed.message ?? `HTTP ${response.status}: ${body.slice(0, 500)}`,
+            message,
             response.status,
             parsed.code,
             parsed.correlationId,
