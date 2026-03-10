@@ -9,12 +9,12 @@ export const logsToolset: ToolsetDefinition = {
     {
       resourceType: "execution_log",
       displayName: "Execution Log",
-      description: "Pipeline execution step logs. Requires a 'prefix' query param in the format: {accountId}/pipeline/{pipelineId}/{runSequence}/-{executionId} (pipeline-level) or appended with /{stageId}/{stepId} (step-level).",
+      description: "Pipeline execution step logs. Returns readable log text (not just a URL). Accepts either a 'prefix' in the format {accountId}/pipeline/{pipelineId}/{runSequence}/-{executionId} (pipeline-level) or appended with /{stageId}/{stepId} (step-level), OR an 'execution_id' to auto-build the prefix. Use harness_diagnose with include_logs=true for the best failure analysis experience.",
       toolset: "logs",
       scope: "project",
       identifierFields: ["prefix"],
       listFilterFields: [
-        { name: "execution_id", description: "Execution identifier to fetch logs for" },
+        { name: "execution_id", description: "Execution identifier — auto-builds log prefix from execution metadata" },
       ],
       operations: {
         get: {
@@ -24,7 +24,7 @@ export const logsToolset: ToolsetDefinition = {
             prefix: "prefix",
           },
           responseExtractor: passthrough,
-          description: "Download execution logs by prefix",
+          description: "Download and return execution log content by prefix",
         },
       },
     },

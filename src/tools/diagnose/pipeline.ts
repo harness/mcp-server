@@ -4,6 +4,7 @@ import type { Config } from "../../config.js";
 import { createLogger } from "../../utils/logger.js";
 import { sendProgress } from "../../utils/progress.js";
 import { isRecord, asRecord, asString, asNumber } from "../../utils/type-guards.js";
+import { resolveLogContent } from "../../utils/log-resolver.js";
 
 const log = createLogger("diagnose:pipeline");
 
@@ -432,9 +433,6 @@ function truncateLog(raw: unknown, maxLines: number): unknown {
     if (!result.truncated) return raw;
     return { log_snippet: result.text, total_lines: result.totalLines, truncated: true };
   }
-  if (raw && typeof raw === "object" && "link" in raw && "status" in raw) {
-    return { logs_unavailable: true, reason: "Logs are archived and not available inline." };
-  }
   return raw;
 }
 
@@ -574,11 +572,8 @@ export const pipelineHandler: DiagnoseHandler = {
           const prefix = fn.log_key;
           if (!prefix) return { key, value: { error: "No log key available for this step" } };
           try {
-            const logData = await registry.dispatch(client, "execution_log", "get", {
-              ...input,
-              prefix,
-            }, signal);
-            return { key, value: truncateLog(logData, logSnippetLines) };
+            const logText = await resolveLogContent(client, prefix, { signal });
+            return { key, value: truncateLog(logText, logSnippetLines) };
           } catch (err) {
             log.warn("Failed to fetch step logs", { step: fn.step, error: String(err) });
             return { key, value: { error: String(err) } };

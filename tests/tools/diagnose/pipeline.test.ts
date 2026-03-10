@@ -4,6 +4,11 @@ import { makeContext, makeConfig, makeExtra } from "./helpers.js";
 import type { HarnessClient } from "../../../src/client/harness-client.js";
 import type { Registry } from "../../../src/registry/index.js";
 
+// Mock resolveLogContent so diagnose tests don't depend on the full log pipeline
+vi.mock("../../../src/utils/log-resolver.js", () => ({
+  resolveLogContent: vi.fn().mockResolvedValue("resolved log line 1\nresolved log line 2"),
+}));
+
 const NOW = 1700000000000;
 
 function makeExecution(overrides: {
@@ -76,7 +81,6 @@ function makeExecution(overrides: {
 
 function makePipelineDispatch(
   executionData: unknown,
-  extras: Record<string, Record<string, unknown>> = {},
 ) {
   return vi.fn(async (_c: unknown, resourceType: string, op: string, input: Record<string, unknown>) => {
     if (resourceType === "execution" && op === "get") return executionData;
@@ -84,9 +88,6 @@ function makePipelineDispatch(
       return { items: [{ planExecutionId: input.execution_id ?? "exec-001" }] };
     }
     if (resourceType === "pipeline" && op === "get") return { yaml: "pipeline: {}" };
-    if (resourceType === "execution_log" && op === "get") {
-      return extras.logs?.[(input.prefix as string)] ?? "line1\nline2\nline3";
-    }
     throw new Error(`Unmocked: ${resourceType}.${op}`);
   });
 }
@@ -296,11 +297,16 @@ describe("pipelineHandler", () => {
 
     expect(result.failed_step_logs).toBeDefined();
     const logs = result.failed_step_logs as Record<string, unknown>;
-    expect(logs["s1/step1"]).toBe("line1\nline2\nline3");
+    // resolveLogContent is mocked to return "resolved log line 1\nresolved log line 2"
+    expect(logs["s1/step1"]).toBe("resolved log line 1\nresolved log line 2");
   });
 
   it("truncates long logs to log_snippet_lines", async () => {
+    // Override resolveLogContent mock to return a long log for this test
+    const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
     const longLog = Array.from({ length: 200 }, (_, i) => `log line ${i + 1}`).join("\n");
+    (resolveLogContent as ReturnType<typeof vi.fn>).mockResolvedValueOnce(longLog);
+
     const exec = makeExecution({
       status: "Failed",
       stages: [{ id: "s1", name: "S1", status: "Failed", steps: [{ id: "st1", name: "ST1", status: "Failed" }] }],
@@ -313,13 +319,7 @@ describe("pipelineHandler", () => {
       },
     });
 
-    const dispatch = vi.fn(async (_c: unknown, resourceType: string, op: string) => {
-      if (resourceType === "execution" && op === "get") return exec;
-      if (resourceType === "execution_log" && op === "get") return longLog;
-      throw new Error(`Unmocked: ${resourceType}.${op}`);
-    });
-
-    const registry = { dispatch, dispatchExecute: vi.fn() } as unknown as Registry;
+    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
     const ctx = makeContext({
       input: { execution_id: "exec-001" },
       registry,
@@ -335,7 +335,13 @@ describe("pipelineHandler", () => {
     expect((entry.log_snippet as string)).toContain("lines omitted");
   });
 
-  it("returns logs_unavailable for archived zip-queued logs", async () => {
+  it("returns error when log resolution fails", async () => {
+    // Override resolveLogContent mock to throw for this test
+    const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
+    (resolveLogContent as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error("Log blob not ready after 3 attempts (status: queued)"),
+    );
+
     const exec = makeExecution({
       status: "Failed",
       stages: [{ id: "s1", name: "S1", status: "Failed", steps: [{ id: "st1", name: "ST1", status: "Failed" }] }],
@@ -348,13 +354,7 @@ describe("pipelineHandler", () => {
       },
     });
 
-    const dispatch = vi.fn(async (_c: unknown, resourceType: string, op: string) => {
-      if (resourceType === "execution" && op === "get") return exec;
-      if (resourceType === "execution_log" && op === "get") return { link: "https://logs.harness.io/zip/123", status: "queued" };
-      throw new Error(`Unmocked: ${resourceType}.${op}`);
-    });
-
-    const registry = { dispatch, dispatchExecute: vi.fn() } as unknown as Registry;
+    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
     const ctx = makeContext({
       input: { execution_id: "exec-001" },
       registry,
@@ -365,7 +365,6 @@ describe("pipelineHandler", () => {
     const logs = result.failed_step_logs as Record<string, unknown>;
     const entry = logs["s1/st1"] as Record<string, unknown>;
 
-    expect(entry.logs_unavailable).toBe(true);
-    expect(entry.reason).toContain("archived");
+    expect(entry.error).toContain("not ready after 3 attempts");
   });
 });
