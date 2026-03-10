@@ -8,9 +8,9 @@
 
 - **Name**: `harness-mcp-server`
 - **Runtime**: TypeScript (Node.js 20+)
-- **SDK**: `@modelcontextprotocol/sdk` (latest v2)
+- **SDK**: `@modelcontextprotocol/sdk` (v1.27+)
 - **Transport**: Stdio (local) + Streamable HTTP (remote)
-- **Schema Validation**: Zod v3
+- **Schema Validation**: Zod v4 (import from `zod/v4`)
 - **Build**: `tsc` with ES2022 target, ESM output
 - **Package Manager**: pnpm
 
@@ -75,7 +75,7 @@
 - **Simplicity First**: Make every change as simple as possible. Impact minimal code.
 - **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
 - **Minimal Impact**: Changes should only touch what's necessary. Avoid introducing bugs.
-- **Type Safety**: Every tool input/output must be fully typed with Zod schemas. No `any`.
+- **Type Safety**: Every tool input/output must be fully typed with Zod 4 schemas. No `any`. Import via `import * as z from "zod/v4"`.
 - **Fail Loudly**: Never swallow errors. Surface Harness API errors with full context.
 - **Idempotent Reads**: All read tools must be safe to call repeatedly with identical results.
 
@@ -231,8 +231,12 @@ interface HarnessScope {
 
 ### Input Schema Rules
 - Every tool MUST have a Zod schema for inputs
+- Import Zod 4: `import * as z from "zod/v4"` — never `import { z } from "zod"`
 - Use `z.string().describe("...")` — descriptions are critical for LLM tool selection
-- Optional params with sensible defaults: `orgIdentifier` defaults to env config
+- **CRITICAL**: Always call `.describe()` LAST in the chain — Zod 4 creates new schema instances per method call, so `.describe()` before `.optional()` or `.default()` will lose the description
+- Correct: `z.string().min(1).describe("Org ID").optional()`
+- Wrong: `z.string().describe("Org ID").min(1).optional()` (description lost)
+- Optional params with sensible defaults: `org_id` defaults to env config
 - Pagination params optional: `page` defaults to 0, `size` defaults to 20
 
 ### Output Rules
@@ -282,17 +286,21 @@ LOG_LEVEL=info                                  # debug | info | warn | error
 
 ### Config Validation (config.ts)
 ```typescript
-import { z } from "zod";
+import * as z from "zod/v4";
 
 export const ConfigSchema = z.object({
-  HARNESS_API_KEY: z.string().min(1, "API key required"),
-  HARNESS_ACCOUNT_ID: z.string().min(1, "Account ID required"),
+  HARNESS_API_KEY: z.string().min(1, "HARNESS_API_KEY is required"),
+  HARNESS_ACCOUNT_ID: z.string().optional(),
   HARNESS_BASE_URL: z.string().url().default("https://app.harness.io"),
-  HARNESS_DEFAULT_ORG: z.string().default("default"),
-  HARNESS_DEFAULT_PROJECT: z.string().optional(),
+  HARNESS_DEFAULT_ORG_ID: z.string().default("default"),
+  HARNESS_DEFAULT_PROJECT_ID: z.string().optional(),
   HARNESS_API_TIMEOUT_MS: z.coerce.number().default(30000),
   HARNESS_MAX_RETRIES: z.coerce.number().default(3),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
+  HARNESS_TOOLSETS: z.string().optional(),
+  HARNESS_MAX_BODY_SIZE_MB: z.coerce.number().default(10),
+  HARNESS_RATE_LIMIT_RPS: z.coerce.number().default(10),
+  HARNESS_READ_ONLY: z.coerce.boolean().default(false),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
@@ -501,6 +509,10 @@ pnpm typecheck
 | Using `return` in tool handlers | MCP SDK expects last expression, not return |
 | Missing tool descriptions | Every param needs `.describe()` — LLMs depend on it |
 | Monolithic tool file | Split by domain (pipelines, connectors, etc.) |
+| `.describe()` before `.optional()` | Zod 4 creates new instances — always call `.describe()` LAST in the chain |
+| `import { z } from "zod"` | Use `import * as z from "zod/v4"` for explicit Zod 4 API |
+| `error.errors` on ZodError | Zod 4 uses `error.issues` (`.errors` is removed) |
+| `message` param for custom errors | Zod 4 uses unified `error` param: `z.string().min(5, { error: "Too short" })` |
 
 ---
 
@@ -508,18 +520,28 @@ pnpm typecheck
 
 ### Register a Tool
 ```typescript
-server.tool(
-  "list_pipelines",
-  "List all pipelines in a Harness project",
+import * as z from "zod/v4";
+
+server.registerTool(
+  "harness_list",
   {
-    orgIdentifier: z.string().describe("Organization ID").optional(),
-    projectIdentifier: z.string().describe("Project ID").optional(),
-    page: z.number().describe("Page number (0-indexed)").default(0),
-    size: z.number().describe("Page size (max 100)").default(20),
-    searchTerm: z.string().describe("Filter by name or tag").optional(),
+    description: "List Harness resources by type with filtering and pagination",
+    inputSchema: {
+      resource_type: z.string().describe("The type of resource to list (e.g. pipeline, service, environment)").optional(),
+      org_id: z.string().describe("Organization identifier (overrides default)").optional(),
+      project_id: z.string().describe("Project identifier (overrides default)").optional(),
+      page: z.number().describe("Page number, 0-indexed").default(0).optional(),
+      size: z.number().min(1).max(100).describe("Page size (1–100)").default(20).optional(),
+      search_term: z.string().describe("Filter results by name or keyword").optional(),
+    },
+    annotations: {
+      title: "List Harness Resources",
+      readOnlyHint: true,
+      openWorldHint: true,
+    },
   },
   async (args) => {
-    const result = await client.listPipelines(args);
+    const result = await registry.dispatch(client, args.resource_type, "list", args);
     return {
       content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
     };
@@ -538,15 +560,22 @@ const server = new McpServer({
   capabilities: { tools: {}, resources: {}, prompts: {} },
 });
 
-// Register all tools, resources, prompts
-registerTools(server, client);
+registerTools(server, registry, client);
 registerResources(server, client);
 registerPrompts(server, client);
 
-// Start
 const transport = new StdioServerTransport();
 await server.connect(transport);
 console.error("[harness-mcp] Server connected via stdio");
+```
+
+### Zod 4 Import Convention
+```typescript
+// ✅ Always use the explicit v4 subpath
+import * as z from "zod/v4";
+
+// ❌ Never use the bare import — ambiguous across Zod versions
+import { z } from "zod";
 ```
 
 ---

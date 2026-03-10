@@ -1,6 +1,6 @@
 {
   "name": "harness-mcp-v2",
-  "version": "0.5.9",
+  "version": "0.6.0",
   "description": "Give AI agents full access to the Harness.io platform — manage pipelines, deployments, feature flags, infrastructure, and 119+ resource types through 10 MCP tools",
   "type": "module",
   "main": "build/index.js",
@@ -42,10 +42,10 @@
   },
   "homepage": "https://github.com/thisrohangupta/harness-mcp-v2#readme",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@modelcontextprotocol/sdk": "^1.27.1",
     "express": "^5.2.1",
     "yaml": "^2.8.2",
-    "zod": "^3.24.2"
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
