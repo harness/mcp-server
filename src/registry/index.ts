@@ -245,10 +245,19 @@ export class Registry {
     // Build body
     const body = spec.bodyBuilder ? spec.bodyBuilder(input) : undefined;
 
-    // Validate required fields if bodySchema is defined
+    // Validate required fields if bodySchema is defined.
+    // When bodyWrapperKey is set, the bodyBuilder wraps user fields inside that
+    // key (e.g. { project: { identifier, name } }), so we validate the inner object.
     if (spec.bodySchema && body && typeof body === "object") {
+      const bodyRecord = body as Record<string, unknown>;
+      const payload =
+        spec.bodyWrapperKey &&
+        bodyRecord[spec.bodyWrapperKey] != null &&
+        typeof bodyRecord[spec.bodyWrapperKey] === "object"
+          ? (bodyRecord[spec.bodyWrapperKey] as Record<string, unknown>)
+          : bodyRecord;
       const missing = spec.bodySchema.fields
-        .filter(f => f.required && (body as Record<string, unknown>)[f.name] === undefined)
+        .filter(f => f.required && payload[f.name] === undefined)
         .map(f => f.name);
       if (missing.length > 0) {
         throw new Error(

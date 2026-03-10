@@ -181,6 +181,7 @@ export const platformToolset: ToolsetDefinition = {
           responseExtractor: v1Unwrap("org"),
           description: "Create a new organization",
           bodySchema: orgCreateSchema,
+          bodyWrapperKey: "org",
         },
         update: {
           method: "PUT",
@@ -190,6 +191,7 @@ export const platformToolset: ToolsetDefinition = {
           responseExtractor: v1Unwrap("org"),
           description: "Update an existing organization",
           bodySchema: orgUpdateSchema,
+          bodyWrapperKey: "org",
         },
         delete: {
           method: "DELETE",
@@ -243,6 +245,7 @@ export const platformToolset: ToolsetDefinition = {
           responseExtractor: v1Unwrap("project"),
           description: "Create a new project in an organization",
           bodySchema: projectCreateSchema,
+          bodyWrapperKey: "project",
         },
         update: {
           method: "PUT",
@@ -252,6 +255,7 @@ export const platformToolset: ToolsetDefinition = {
           responseExtractor: v1Unwrap("project"),
           description: "Update an existing project",
           bodySchema: projectUpdateSchema,
+          bodyWrapperKey: "project",
         },
         delete: {
           method: "DELETE",
