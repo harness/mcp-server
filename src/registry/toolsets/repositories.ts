@@ -321,5 +321,93 @@ export const repositoriesToolset: ToolsetDefinition = {
         },
       },
     },
+    {
+      resourceType: "repo_rule",
+      displayName: "Repository Protection Rule",
+      description:
+        "Branch/tag/push protection rule for a Harness Code repository. Supports list and get. Rules define merge requirements, status checks, and code-owner approvals.",
+      toolset: "repositories",
+      scope: "project",
+      identifierFields: ["repo_id", "rule_id"],
+      listFilterFields: [
+        { name: "query", description: "Filter rules by name or keyword" },
+        { name: "sort", description: "Sort field (created_at, identifier, updated_at)" },
+        { name: "order", description: "Sort order (asc/desc)" },
+        { name: "type", description: "Filter by rule type: branch, tag, or push" },
+        { name: "inherited", description: "Include rules inherited from parent spaces (true/false)" },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "/code/api/v1/repos/{repoIdentifier}/rules",
+          pathParams: { repo_id: "repoIdentifier" },
+          queryParams: {
+            query: "query",
+            sort: "sort",
+            order: "order",
+            type: "type",
+            inherited: "inherited",
+            page: "page",
+            limit: "limit",
+          },
+          responseExtractor: passthrough,
+          description:
+            "List protection rules for a repository. Filter by type (branch/tag/push), sort, or keyword.",
+        },
+        get: {
+          method: "GET",
+          path: "/code/api/v1/repos/{repoIdentifier}/rules/{ruleIdentifier}",
+          pathParams: {
+            repo_id: "repoIdentifier",
+            rule_id: "ruleIdentifier",
+          },
+          responseExtractor: passthrough,
+          description: "Get a specific protection rule by identifier",
+        },
+      },
+    },
+    {
+      resourceType: "space_rule",
+      displayName: "Space Protection Rule",
+      description:
+        "Project/org/account-level protection rule that applies across all repositories in a space. Supports list and get. Use repo_rule for per-repository rules.",
+      toolset: "repositories",
+      scope: "project",
+      identifierFields: ["rule_id"],
+      listFilterFields: [
+        { name: "query", description: "Filter rules by name or keyword" },
+        { name: "sort", description: "Sort field (created_at, identifier, updated_at)" },
+        { name: "order", description: "Sort order (asc/desc)" },
+        { name: "type", description: "Filter by rule type: branch, tag, or push" },
+        { name: "inherited", description: "Include rules inherited from parent spaces (true/false)" },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "/code/api/v1/rules",
+          queryParams: {
+            query: "query",
+            sort: "sort",
+            order: "order",
+            type: "type",
+            inherited: "inherited",
+            page: "page",
+            limit: "limit",
+          },
+          responseExtractor: passthrough,
+          description:
+            "List protection rules at the project/org/account level. These apply across all repos in the space.",
+        },
+        get: {
+          method: "GET",
+          path: "/code/api/v1/rules/{ruleIdentifier}",
+          pathParams: {
+            rule_id: "ruleIdentifier",
+          },
+          responseExtractor: passthrough,
+          description: "Get a specific space-level protection rule by identifier",
+        },
+      },
+    },
   ],
 };
