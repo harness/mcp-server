@@ -455,7 +455,7 @@ export class Registry {
       .map(({ score, ...rest }) => rest);
   }
 
-  /** Get compact summary — one line per resource type, ~30 tokens each. */
+  /** Get compact summary — one line per resource type, ~15 tokens each. */
   describeSummary(): Record<string, unknown> {
     const resource_types = [];
     for (const ts of this.toolsets) {
@@ -469,7 +469,6 @@ export class Registry {
           name: r.displayName,
           toolset: ts.name,
           ops,
-          diagnosticHint: r.diagnosticHint ?? undefined,
         });
       }
     }
@@ -477,7 +476,7 @@ export class Registry {
       total_resource_types: this.resourceMap.size,
       total_toolsets: this.toolsets.length,
       resource_types,
-      hint: "Call harness_describe with resource_type='<type>' for full details, or toolset='<name>' for a toolset overview.",
+      hint: "Call harness_describe(resource_type='<type>') for full details including diagnosticHint and executeHint.",
     };
   }
 }
