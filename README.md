@@ -1,6 +1,6 @@
 # Harness MCP Server 2.0
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 10 consolidated tools and 119+ resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 10 consolidated tools and 122+ resource types.
 
 [![CI](https://github.com/thisrohangupta/harness-mcp-v2/actions/workflows/ci.yml/badge.svg)](https://github.com/thisrohangupta/harness-mcp-v2/actions/workflows/ci.yml)
 
@@ -10,7 +10,7 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **10 tools, 119+ resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 10 tools instead of hundreds.
+- **10 tools, 122+ resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 10 tools instead of hundreds.
 - **Full platform coverage.** 25 toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Internal Developer Portal, Software Supply Chain, and more. Not just pipelines — the entire Harness platform.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **26 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
@@ -689,7 +689,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-119+ resource types organized across 25 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+122+ resource types organized across 25 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -768,6 +768,8 @@ Harness pipelines can be stored in three ways:
 | `commit` | x | x | | | | `diff`, `diff_stats` |
 | `file_content` | | x | | | | `blame` |
 | `tag` | x | | x | | x | |
+| `repo_rule` | x | x | | | | |
+| `space_rule` | x | x | | | | |
 
 ### Artifact Registries
 
@@ -1000,7 +1002,7 @@ Harness pipelines can be stored in three ways:
 
 ## Toolset Filtering
 
-By default, all 25 toolsets (and their 119+ resource types) are enabled. Use `HARNESS_TOOLSETS` to expose only the toolsets you need. This reduces the resource types the LLM sees, improving tool selection accuracy.
+By default, all 25 toolsets (and their 122+ resource types) are enabled. Use `HARNESS_TOOLSETS` to expose only the toolsets you need. This reduces the resource types the LLM sees, improving tool selection accuracy.
 
 ```bash
 # Only expose pipelines, services, and connectors
@@ -1021,7 +1023,7 @@ Available toolset names:
 | `logs` | execution_log |
 | `audit` | audit_event |
 | `delegates` | delegate, delegate_token |
-| `repositories` | repository, branch, commit, file_content, tag |
+| `repositories` | repository, branch, commit, file_content, tag, repo_rule, space_rule |
 | `registries` | registry, artifact, artifact_version, artifact_file |
 | `templates` | template |
 | `dashboards` | dashboard, dashboard_data |
@@ -1053,7 +1055,7 @@ Available toolset names:
                  +--------v---------+
                  |    Registry       |  <-- Declarative resource definitions
                  |  25 Toolsets      |      (data files, not code)
-                 |  119+ Resource Types|
+                 |  122+ Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+
