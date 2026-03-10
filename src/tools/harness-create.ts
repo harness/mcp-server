@@ -11,7 +11,7 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
   server.registerTool(
     "harness_create",
     {
-      description: "Create a new Harness resource. You can pass a Harness URL to auto-extract org and project scope. For pipelines, templates, and triggers — read the schema resource first (e.g. schema:///pipeline) to understand the required body format.",
+      description: "Create a new Harness resource. You can pass a Harness URL to auto-extract org and project scope. For pipelines: pass body as { yamlPipeline: '<full pipeline YAML string>' } (recommended) or { pipeline: { ... } }. For other resource types, use harness_describe(resource_type='...') to see the required body format.",
       inputSchema: {
         resource_type: z.string().describe("The type of resource to create (e.g. pipeline, service, environment, connector, trigger)"),
         body: z.record(z.string(), z.unknown()).describe("The resource definition body (varies by resource type — typically the YAML or JSON spec)"),

@@ -11,9 +11,10 @@ const ngExtractWithInlineStore = (raw: unknown) => {
 };
 
 const pipelineCreateSchema: BodySchema = {
-  description: "Pipeline YAML definition",
+  description: "Pipeline definition. Prefer yamlPipeline (YAML string) to avoid serialization issues; pipeline (JSON object) is also supported.",
   fields: [
-    { name: "pipeline", type: "object", required: true, description: "Pipeline object with name, identifier, and stages", fields: [
+    { name: "yamlPipeline", type: "string", required: false, description: "Full pipeline YAML string including the 'pipeline:' root. Recommended when creating from generated or edited YAML." },
+    { name: "pipeline", type: "object", required: false, description: "Pipeline as JSON object (name, identifier, stages, etc.). Use yamlPipeline instead when passing YAML to avoid large nested JSON.", fields: [
       { name: "name", type: "string", required: true, description: "Pipeline display name" },
       { name: "identifier", type: "string", required: true, description: "Unique pipeline identifier" },
       { name: "stages", type: "array", required: false, description: "Pipeline stages", itemType: "stage object" },
@@ -77,7 +78,10 @@ export const pipelinesToolset: ToolsetDefinition = {
             if (b && typeof b === "object" && typeof b.yamlPipeline === "string") {
               return b.yamlPipeline;
             }
-            return input.body;
+            if (b && typeof b === "object" && b.pipeline !== undefined) {
+              return input.body;
+            }
+            throw new Error("body must include either yamlPipeline (YAML string) or pipeline (JSON object)");
           },
           responseExtractor: ngExtractWithInlineStore,
           description: "Create a new pipeline from YAML",
