@@ -1,17 +1,13 @@
 import type { ToolsetDefinition, BodySchema } from "../types.js";
 import { ngExtract, pageExtract, passthrough, v1ListExtract } from "../extractors.js";
 
-const ngExtractWithInlineStore = (raw: unknown) => {
-  const result = ngExtract(raw);
-  if (result && typeof result === "object") {
-    const r = result as Record<string, unknown>;
-    if (!r.storeType) r.storeType = "INLINE";
-  }
-  return result;
+/** Extract response, preserving storeType if the API returned one. */
+const ngExtractWithStoreType = (raw: unknown) => {
+  return ngExtract(raw);
 };
 
 const pipelineCreateSchema: BodySchema = {
-  description: "Pipeline definition. Prefer yamlPipeline (YAML string) to avoid serialization issues; pipeline (JSON object) is also supported.",
+  description: "Pipeline definition. Prefer yamlPipeline (YAML string) to avoid serialization issues; pipeline (JSON object) is also supported. Storage options via params: (1) Inline (default): no extra params needed. (2) External Git: store_type='REMOTE', connector_ref (Git connector ID), repo_name, branch, file_path. (3) Harness Code: store_type='REMOTE', is_harness_code_repo=true, repo_name, branch, file_path (no connector_ref needed).",
   fields: [
     { name: "yamlPipeline", type: "string", required: false, description: "Full pipeline YAML string including the 'pipeline:' root. Recommended when creating from generated or edited YAML." },
     { name: "pipeline", type: "object", required: false, description: "Pipeline as JSON object (name, identifier, stages, etc.). Use yamlPipeline instead when passing YAML to avoid large nested JSON.", fields: [
@@ -23,7 +19,7 @@ const pipelineCreateSchema: BodySchema = {
 };
 
 const pipelineUpdateSchema: BodySchema = {
-  description: "Pipeline YAML definition (full replacement). Pass either pipeline (JSON object) or yamlPipeline (YAML string).",
+  description: "Pipeline YAML definition (full replacement). Pass either pipeline (JSON object) or yamlPipeline (YAML string). For remote pipelines, pass store_type='REMOTE' with git details via params. External Git: connector_ref, repo_name, branch, file_path, commit_msg. Harness Code: is_harness_code_repo=true, repo_name, branch, file_path, commit_msg (no connector_ref). Include last_object_id and last_commit_id from the GET response for conflict detection.",
   fields: [
     { name: "pipeline", type: "object", required: false, description: "Complete pipeline as JSON object (replaces existing)" },
     { name: "yamlPipeline", type: "string", required: false, description: "Complete pipeline as YAML string (replaces existing). Use this when updating from get pipeline response or editing YAML." },
@@ -70,13 +66,30 @@ export const pipelinesToolset: ToolsetDefinition = {
           method: "GET",
           path: "/pipeline/api/pipelines/{pipelineIdentifier}",
           pathParams: { pipeline_id: "pipelineIdentifier" },
+          queryParams: {
+            branch: "branch",
+            store_type: "storeType",
+            connector_ref: "connectorRef",
+            repo_name: "repoName",
+          },
           responseExtractor: ngExtract,
-          description: "Get pipeline details including YAML definition",
+          description: "Get pipeline details including YAML definition. For remote/git-backed pipelines, pass branch to specify which branch to read from.",
         },
         create: {
           method: "POST",
           path: "/pipeline/api/pipelines/v2",
           headers: { "Content-Type": "application/yaml" },
+          queryParams: {
+            store_type: "storeType",
+            connector_ref: "connectorRef",
+            repo_name: "repoName",
+            branch: "branch",
+            file_path: "filePath",
+            base_branch: "baseBranch",
+            commit_msg: "commitMsg",
+            is_new_branch: "isNewBranch",
+            is_harness_code_repo: "isHarnessCodeRepo",
+          },
           bodyBuilder: (input) => {
             const b = input.body as Record<string, unknown> | undefined;
             if (b && typeof b === "object" && typeof b.yamlPipeline === "string") {
@@ -87,8 +100,8 @@ export const pipelinesToolset: ToolsetDefinition = {
             }
             throw new Error("body must include either yamlPipeline (YAML string) or pipeline (JSON object)");
           },
-          responseExtractor: ngExtractWithInlineStore,
-          description: "Create a new pipeline from YAML",
+          responseExtractor: ngExtractWithStoreType,
+          description: "Create a new pipeline from YAML. For external Git: store_type='REMOTE' + connector_ref, repo_name, branch, file_path. For Harness Code: store_type='REMOTE' + is_harness_code_repo=true, repo_name, branch, file_path.",
           bodySchema: pipelineCreateSchema,
         },
         update: {
@@ -96,6 +109,19 @@ export const pipelinesToolset: ToolsetDefinition = {
           path: "/pipeline/api/pipelines/v2/{pipelineIdentifier}",
           pathParams: { pipeline_id: "pipelineIdentifier" },
           headers: { "Content-Type": "application/yaml" },
+          queryParams: {
+            store_type: "storeType",
+            connector_ref: "connectorRef",
+            repo_name: "repoName",
+            branch: "branch",
+            file_path: "filePath",
+            base_branch: "baseBranch",
+            commit_msg: "commitMsg",
+            is_new_branch: "isNewBranch",
+            is_harness_code_repo: "isHarnessCodeRepo",
+            last_object_id: "lastObjectId",
+            last_commit_id: "lastCommitId",
+          },
           bodyBuilder: (input) => {
             const b = input.body as Record<string, unknown> | undefined;
             if (b && typeof b === "object" && typeof b.yamlPipeline === "string") {
@@ -106,8 +132,8 @@ export const pipelinesToolset: ToolsetDefinition = {
             }
             throw new Error("body must include either pipeline (JSON object) or yamlPipeline (YAML string)");
           },
-          responseExtractor: ngExtractWithInlineStore,
-          description: "Update an existing pipeline YAML. Response includes openInHarness link to the updated pipeline in Pipeline Studio.",
+          responseExtractor: ngExtractWithStoreType,
+          description: "Update an existing pipeline YAML. For remote pipelines, pass store_type='REMOTE' with git details and last_object_id/last_commit_id from the GET response. For Harness Code: add is_harness_code_repo=true (no connector_ref needed).",
           bodySchema: pipelineUpdateSchema,
         },
         delete: {
@@ -155,6 +181,34 @@ export const pipelinesToolset: ToolsetDefinition = {
           bodySchema: {
             description: "No request body required. The retry re-executes the failed pipeline execution identified by execution_id.",
             fields: [],
+          },
+        },
+        import: {
+          method: "POST",
+          path: "/pipeline/api/pipelines/import",
+          queryParams: {
+            connector_ref: "connectorRef",
+            repo_name: "repoName",
+            branch: "branch",
+            file_path: "filePath",
+            is_force_import: "isForceImport",
+            is_harness_code_repo: "isHarnessCodeRepo",
+          },
+          bodyBuilder: (input) => {
+            const b = input.body as Record<string, unknown> | undefined;
+            return {
+              pipelineName: b?.pipeline_name ?? b?.pipelineName ?? "",
+              pipelineDescription: b?.pipeline_description ?? b?.pipelineDescription ?? "",
+            };
+          },
+          responseExtractor: ngExtract,
+          actionDescription: "Import a pipeline from a Git repository into Harness. Fetches the pipeline YAML from the specified repo/branch/path and creates a Harness pipeline record for it. For external Git: provide connector_ref, repo_name, branch, file_path. For Harness Code repos: provide is_harness_code_repo=true, repo_name, branch, file_path (no connector_ref needed). Use is_force_import=true to overwrite if the pipeline already exists.",
+          bodySchema: {
+            description: "Pipeline import details. Provide the pipeline name and description for the imported pipeline. Git details (connector_ref, repo_name, branch, file_path) go in params.",
+            fields: [
+              { name: "pipelineName", type: "string", required: true, description: "Display name for the imported pipeline" },
+              { name: "pipelineDescription", type: "string", required: false, description: "Description for the imported pipeline" },
+            ],
           },
         },
       },

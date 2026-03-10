@@ -4,12 +4,20 @@
  * Tests input validation and error handling paths with mocked registry/client.
  * Does not test actual API calls — that's covered by registry dispatch tests.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import type { ToolResult } from "../../src/utils/response-formatter.js";
 import { Registry } from "../../src/registry/index.js";
 import { HarnessApiError } from "../../src/utils/errors.js";
+
+// Top-level mocks for execution_log tests — must be before any imports that pull these in
+vi.mock("../../src/utils/log-resolver.js", () => ({
+  resolveLogContent: vi.fn().mockResolvedValue("[2026-03-09T17:01:23Z] info: mvn clean install\n[2026-03-09T17:01:45Z] error: BUILD FAILURE"),
+}));
+vi.mock("../../src/utils/log-prefix.js", () => ({
+  buildLogPrefixFromExecution: vi.fn().mockResolvedValue("acct1/pipeline/my-pipe/42/-exec-123"),
+}));
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -152,6 +160,86 @@ describe("harness_get", () => {
   });
 });
 
+describe("harness_get — execution_log", () => {
+  let server: ReturnType<typeof makeMcpServer>;
+  let registry: Registry;
+  let client: HarnessClient;
+  let mockRequest: ReturnType<typeof vi.fn>;
+  let resolveLogContentMock: ReturnType<typeof vi.fn>;
+  let buildLogPrefixMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    const logResolver = await import("../../src/utils/log-resolver.js");
+    const logPrefix = await import("../../src/utils/log-prefix.js");
+
+    resolveLogContentMock = logResolver.resolveLogContent as ReturnType<typeof vi.fn>;
+    buildLogPrefixMock = logPrefix.buildLogPrefixFromExecution as ReturnType<typeof vi.fn>;
+
+    // Reset to default behavior each test
+    resolveLogContentMock.mockReset().mockResolvedValue("[2026-03-09T17:01:23Z] info: mvn clean install\n[2026-03-09T17:01:45Z] error: BUILD FAILURE");
+    buildLogPrefixMock.mockReset().mockResolvedValue("acct1/pipeline/my-pipe/42/-exec-123");
+
+    server = makeMcpServer();
+    // Include both pipelines (for execution) and logs (for execution_log)
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines,logs" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: {} });
+    client = makeClient(mockRequest);
+    const { registerGetTool } = await import("../../src/tools/harness-get.js");
+    registerGetTool(server, registry, client);
+  });
+
+  it("resolves log content when prefix is provided directly", async () => {
+    const result = await server.call("harness_get", {
+      resource_type: "execution_log",
+      resource_id: "acct1/pipeline/my-pipe/42/-exec-123",
+    });
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as { log_content: string };
+    expect(data.log_content).toContain("mvn clean install");
+    expect(data.log_content).toContain("BUILD FAILURE");
+    expect(resolveLogContentMock).toHaveBeenCalledWith(client, "acct1/pipeline/my-pipe/42/-exec-123");
+    expect(buildLogPrefixMock).not.toHaveBeenCalled();
+  });
+
+  it("auto-builds prefix from execution_id when no prefix given", async () => {
+    const result = await server.call("harness_get", {
+      resource_type: "execution_log",
+      params: { execution_id: "exec-123" },
+    });
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as { log_content: string };
+    expect(data.log_content).toContain("BUILD FAILURE");
+    expect(buildLogPrefixMock).toHaveBeenCalledWith(
+      client,
+      registry,
+      "exec-123",
+      expect.objectContaining({ resource_type: "execution_log" }),
+    );
+    expect(resolveLogContentMock).toHaveBeenCalledWith(client, "acct1/pipeline/my-pipe/42/-exec-123");
+  });
+
+  it("returns error when neither prefix nor execution_id provided", async () => {
+    const result = await server.call("harness_get", {
+      resource_type: "execution_log",
+    });
+    expect(result.isError).toBe(true);
+    const data = parseResult(result) as { error: string };
+    expect(data.error).toContain("prefix or execution_id is required");
+  });
+
+  it("returns errorResult when resolveLogContent throws", async () => {
+    resolveLogContentMock.mockRejectedValueOnce(new Error("Log blob not ready after 3 attempts (status: queued)"));
+    const result = await server.call("harness_get", {
+      resource_type: "execution_log",
+      resource_id: "acct1/pipeline/my-pipe/42/-exec-123",
+    });
+    expect(result.isError).toBe(true);
+    const data = parseResult(result) as { error: string };
+    expect(data.error).toContain("not ready after 3 attempts");
+    expect(data.error).toContain("harness_diagnose");
+  });
+});
+
 describe("harness_create", () => {
   let server: ReturnType<typeof makeMcpServer>;
   let registry: Registry;
@@ -202,6 +290,48 @@ describe("harness_create", () => {
     });
     expect(result.isError).toBeUndefined();
     expect(mockRequest).toHaveBeenCalledOnce();
+  });
+
+  it("passes git params as query parameters for remote pipeline create", async () => {
+    const result = await server.call("harness_create", {
+      resource_type: "pipeline",
+      body: { yamlPipeline: "pipeline:\n  name: Remote Pipe\n  identifier: remote_pipe" },
+      params: {
+        store_type: "REMOTE",
+        connector_ref: "my_github",
+        repo_name: "my-repo",
+        branch: "main",
+        file_path: ".harness/remote-pipe.yaml",
+        commit_msg: "Add pipeline via MCP",
+      },
+    });
+    expect(result.isError).toBeUndefined();
+    // Verify the request was made with git query params
+    const callArgs = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(callArgs.params.storeType).toBe("REMOTE");
+    expect(callArgs.params.connectorRef).toBe("my_github");
+    expect(callArgs.params.repoName).toBe("my-repo");
+    expect(callArgs.params.branch).toBe("main");
+    expect(callArgs.params.filePath).toBe(".harness/remote-pipe.yaml");
+    expect(callArgs.params.commitMsg).toBe("Add pipeline via MCP");
+    // Verify storeType is propagated to the response (create API doesn't return it)
+    const parsed = parseResult(result);
+    expect(parsed.storeType).toBe("REMOTE");
+    expect(parsed.openInHarness).toContain("storeType=REMOTE");
+  });
+
+  it("defaults storeType to INLINE for inline pipeline create", async () => {
+    const result = await server.call("harness_create", {
+      resource_type: "pipeline",
+      body: { yamlPipeline: "pipeline:\n  name: Inline Pipe\n  identifier: inline_pipe" },
+    });
+    expect(result.isError).toBeUndefined();
+    const parsed = parseResult(result);
+    // No storeType in query params and API doesn't return one → should be absent
+    expect(parsed.storeType).toBeUndefined();
+    // Deep link should still work (without storeType query param)
+    expect(parsed.openInHarness).toBeDefined();
+    expect(parsed.openInHarness).not.toContain("storeType=");
   });
 });
 
@@ -519,6 +649,61 @@ describe("harness_execute", () => {
     const errText = JSON.stringify(parseResult(result));
     expect(errText).toContain("build");
     expect(errText).toContain("complex object");
+  });
+
+  it("imports pipeline from external Git repo via import action", async () => {
+    mockRequest.mockResolvedValueOnce({ data: { identifier: "imported-pipe" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "import",
+      params: {
+        connector_ref: "my_github",
+        repo_name: "my-repo",
+        branch: "main",
+        file_path: ".harness/my-pipe.yaml",
+      },
+      body: {
+        pipeline_name: "My Imported Pipeline",
+        pipeline_description: "Imported from GitHub",
+      },
+    });
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { method: string; path: string; params: Record<string, unknown>; body: unknown };
+    expect(callArgs.method).toBe("POST");
+    expect(callArgs.path).toContain("/pipeline/api/pipelines/import");
+    expect(callArgs.params.connectorRef).toBe("my_github");
+    expect(callArgs.params.repoName).toBe("my-repo");
+    expect(callArgs.params.branch).toBe("main");
+    expect(callArgs.params.filePath).toBe(".harness/my-pipe.yaml");
+    expect(callArgs.body).toEqual({
+      pipelineName: "My Imported Pipeline",
+      pipelineDescription: "Imported from GitHub",
+    });
+  });
+
+  it("imports pipeline from Harness Code repo via import action", async () => {
+    mockRequest.mockResolvedValueOnce({ data: { identifier: "hc-imported" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "import",
+      params: {
+        is_harness_code_repo: true,
+        repo_name: "product-management",
+        branch: "main",
+        file_path: ".harness/my-pipe.yaml",
+      },
+      body: {
+        pipeline_name: "HC Pipeline",
+      },
+    });
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(callArgs.params.isHarnessCodeRepo).toBe(true);
+    expect(callArgs.params.repoName).toBe("product-management");
+    // No connectorRef for Harness Code
+    expect(callArgs.params.connectorRef).toBeUndefined();
   });
 });
 

@@ -439,10 +439,10 @@ The server exposes 10 MCP tools. Every tool accepts `org_id` and `project_id` as
 | `harness_describe` | Discover available resource types, operations, and fields. No API call — returns local registry metadata. |
 | `harness_list` | List resources of a given type with filtering, search, and pagination. |
 | `harness_get` | Get a single resource by its identifier. |
-| `harness_create` | Create a new resource. Prompts for user confirmation via [elicitation](#elicitation). |
-| `harness_update` | Update an existing resource. Prompts for user confirmation via [elicitation](#elicitation). |
+| `harness_create` | Create a new resource. Supports inline and remote (Git-backed) pipelines. Prompts for user confirmation via [elicitation](#elicitation). |
+| `harness_update` | Update an existing resource. Supports inline and remote (Git-backed) pipelines. Prompts for user confirmation via [elicitation](#elicitation). |
 | `harness_delete` | Delete a resource. Prompts for user confirmation via [elicitation](#elicitation). Destructive. |
-| `harness_execute` | Execute an action on a resource (run pipeline, toggle flag, sync app). Prompts for user confirmation via [elicitation](#elicitation). |
+| `harness_execute` | Execute an action on a resource (run pipeline, import pipeline from Git, toggle flag, sync app). Prompts for user confirmation via [elicitation](#elicitation). |
 | `harness_search` | Search across multiple resource types in parallel with a single query. |
 | `harness_diagnose` | Analyze a pipeline execution — returns a structured report with stage/step breakdown, timing, bottlenecks, and failure details (failed step, error message, delegate). Automatically follows chained (child) pipeline failures. Accepts an execution ID, pipeline ID (auto-fetches latest), or a Harness URL. Set `summary=false` for full diagnostic mode with YAML and execution logs. |
 | `harness_status` | Get a real-time project health dashboard — recent executions, failure rates, and deep links. |
@@ -542,6 +542,130 @@ The server exposes 10 MCP tools. Every tool accepts `org_id` and `project_id` as
 
 ```json
 { "pipeline_id": "my-pipeline", "limit": 5 }
+```
+
+### Pipeline Storage Modes
+
+Harness pipelines can be stored in three ways:
+
+| Mode | Description | When to use |
+|------|-------------|-------------|
+| **Inline** | Pipeline YAML stored in Harness | Default. Simplest setup, no Git required. |
+| **Remote (External Git)** | Pipeline YAML stored in GitHub, GitLab, Bitbucket, etc. | Teams using Git-backed pipeline-as-code with an external provider. |
+| **Remote (Harness Code)** | Pipeline YAML stored in a Harness Code repository | Teams using Harness's built-in Git hosting. |
+
+**Create an inline pipeline (default):**
+
+```json
+// harness_create
+{
+  "resource_type": "pipeline",
+  "body": {
+    "yamlPipeline": "pipeline:\n  name: My Pipeline\n  identifier: my_pipeline\n  stages:\n    - stage:\n        name: Build\n        type: CI\n        spec:\n          execution:\n            steps:\n              - step:\n                  type: Run\n                  name: Echo\n                  spec:\n                    command: echo hello"
+  }
+}
+```
+
+**Create a remote pipeline (External Git — e.g. GitHub):**
+
+```json
+// harness_create
+{
+  "resource_type": "pipeline",
+  "body": {
+    "yamlPipeline": "pipeline:\n  name: Deploy Service\n  identifier: deploy_service\n  stages: []"
+  },
+  "params": {
+    "store_type": "REMOTE",
+    "connector_ref": "my_github_connector",
+    "repo_name": "my-repo",
+    "branch": "main",
+    "file_path": ".harness/deploy-service.yaml",
+    "commit_msg": "Add deploy pipeline via MCP"
+  }
+}
+```
+
+**Create a remote pipeline (Harness Code — no connector needed):**
+
+```json
+// harness_create
+{
+  "resource_type": "pipeline",
+  "body": {
+    "yamlPipeline": "pipeline:\n  name: Build App\n  identifier: build_app\n  stages: []"
+  },
+  "params": {
+    "store_type": "REMOTE",
+    "is_harness_code_repo": true,
+    "repo_name": "product-management",
+    "branch": "main",
+    "file_path": ".harness/build-app.yaml",
+    "commit_msg": "Add build pipeline via MCP"
+  }
+}
+```
+
+**Update a remote pipeline:**
+
+```json
+// harness_update
+{
+  "resource_type": "pipeline",
+  "resource_id": "deploy_service",
+  "body": {
+    "yamlPipeline": "pipeline:\n  name: Deploy Service\n  identifier: deploy_service\n  stages:\n    - stage:\n        name: Deploy\n        type: Deployment"
+  },
+  "params": {
+    "store_type": "REMOTE",
+    "connector_ref": "my_github_connector",
+    "repo_name": "my-repo",
+    "branch": "main",
+    "file_path": ".harness/deploy-service.yaml",
+    "commit_msg": "Update deploy pipeline via MCP",
+    "last_object_id": "abc123",
+    "last_commit_id": "def456"
+  }
+}
+```
+
+**Import a pipeline from an external Git repo:**
+
+```json
+// harness_execute
+{
+  "resource_type": "pipeline",
+  "action": "import",
+  "params": {
+    "connector_ref": "my_github_connector",
+    "repo_name": "my-repo",
+    "branch": "main",
+    "file_path": ".harness/existing-pipeline.yaml"
+  },
+  "body": {
+    "pipeline_name": "Existing Pipeline",
+    "pipeline_description": "Imported from GitHub"
+  }
+}
+```
+
+**Import a pipeline from a Harness Code repo:**
+
+```json
+// harness_execute
+{
+  "resource_type": "pipeline",
+  "action": "import",
+  "params": {
+    "is_harness_code_repo": true,
+    "repo_name": "product-management",
+    "branch": "main",
+    "file_path": ".harness/existing-pipeline.yaml"
+  },
+  "body": {
+    "pipeline_name": "Existing Pipeline"
+  }
+}
 ```
 
 **Create a connector:**

@@ -11,13 +11,14 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
   server.registerTool(
     "harness_create",
     {
-      description: "Create a Harness resource. For pipelines: use body.yamlPipeline (YAML string, recommended) or body.pipeline (JSON). For others: call harness_describe for the body format.",
+      description: "Create a Harness resource. For pipelines: use body.yamlPipeline (YAML string, recommended) or body.pipeline (JSON). For remote pipelines, pass git details in params: external Git (store_type='REMOTE', connector_ref, repo_name, branch, file_path) or Harness Code (store_type='REMOTE', is_harness_code_repo=true, repo_name, branch, file_path). For others: call harness_describe for the body format.",
       inputSchema: {
         resource_type: z.string().describe("The type of resource to create (e.g. pipeline, service, environment, connector, trigger)"),
         body: z.record(z.string(), z.unknown()).describe("The resource definition body (varies by resource type — typically the YAML or JSON spec)"),
         url: z.string().describe("A Harness UI URL — org and project are extracted automatically").optional(),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
+        params: z.record(z.string(), z.unknown()).describe("Additional parameters. For external Git pipelines: store_type='REMOTE', connector_ref, repo_name, branch, file_path, commit_msg. For Harness Code pipelines: store_type='REMOTE', is_harness_code_repo=true, repo_name, branch, file_path.").optional(),
       },
       annotations: {
         title: "Create Harness Resource",
@@ -29,7 +30,9 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
     },
     async (args) => {
       try {
-        const input = applyUrlDefaults(args as Record<string, unknown>, args.url);
+        const { params, ...rest } = args;
+        const input = applyUrlDefaults(rest as Record<string, unknown>, args.url);
+        if (params) Object.assign(input, params);
 
         // Validate resource_type and operation before asking user to confirm
         const def = registry.getResource(args.resource_type);
