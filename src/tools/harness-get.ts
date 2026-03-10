@@ -11,14 +11,14 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
   server.registerTool(
     "harness_get",
     {
-      description: "Get a specific Harness resource by ID. You can pass a Harness URL to auto-extract org, project, resource type, and resource ID. For troubleshooting failures or health issues, prefer harness_diagnose — it combines multiple API calls with domain-specific analysis. Call harness_describe to discover available resource_types and which support diagnosis.",
+      description: "Get a Harness resource by ID. Accepts a Harness URL to auto-extract identifiers. For failure analysis, prefer harness_diagnose.",
       inputSchema: {
-        resource_type: z.string().describe("The type of resource to get (e.g. pipeline, service, environment). Auto-detected from url if provided.").optional(),
-        resource_id: z.string().describe("The primary identifier of the resource. Auto-detected from url if provided.").optional(),
-        url: z.string().describe("A Harness UI URL — org, project, resource type, and ID are extracted automatically").optional(),
+        resource_type: z.string().describe("Resource type (e.g. pipeline, service, environment). Auto-detected from url.").optional(),
+        resource_id: z.string().describe("Primary resource identifier. Auto-detected from url.").optional(),
+        url: z.string().describe("Harness UI URL — auto-extracts org, project, type, and ID").optional(),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
-        params: z.record(z.string(), z.unknown()).describe("Additional identifiers for nested resources (e.g. pipeline_id, environment_id, agent_id, repo_id, version_label). Call harness_describe for required fields per resource_type.").optional(),
+        params: z.record(z.string(), z.unknown()).describe("Additional identifiers for nested resources. Call harness_describe for fields per resource_type.").optional(),
       },
       annotations: {
         title: "Get Harness Resource",

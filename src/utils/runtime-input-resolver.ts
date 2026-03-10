@@ -18,6 +18,32 @@ const log = createLogger("runtime-inputs");
 const INPUT_PLACEHOLDER = /^<\+input>\.?/;
 const HAS_DEFAULT = /^<\+input>\.default\(/;
 
+const TEMPLATE_CACHE_TTL_MS = 5 * 60_000; // 5 minutes
+
+interface CachedTemplate {
+  yaml: string | null;
+  expiresAt: number;
+}
+
+const templateCache = new Map<string, CachedTemplate>();
+
+function templateCacheKey(opts: ResolveOptions): string {
+  return `${opts.pipelineId}|${opts.orgId ?? ""}|${opts.projectId ?? ""}|${opts.branch ?? ""}`;
+}
+
+/** Evict expired entries. Called on cache writes to prevent unbounded growth. */
+function evictExpired(): void {
+  const now = Date.now();
+  for (const [key, entry] of templateCache) {
+    if (now >= entry.expiresAt) templateCache.delete(key);
+  }
+}
+
+/** Clear the template cache (useful for testing). */
+export function clearTemplateCache(): void {
+  templateCache.clear();
+}
+
 export interface ResolveOptions {
   pipelineId: string;
   orgId?: string;
@@ -47,6 +73,13 @@ export async function fetchRuntimeInputTemplate(
   client: HarnessClient,
   options: ResolveOptions,
 ): Promise<string | null> {
+  const cacheKey = templateCacheKey(options);
+  const cached = templateCache.get(cacheKey);
+  if (cached && Date.now() < cached.expiresAt) {
+    log.debug("Runtime input template cache hit", { pipelineId: options.pipelineId });
+    return cached.yaml;
+  }
+
   const params: Record<string, string> = {
     pipelineIdentifier: options.pipelineId,
   };
@@ -58,18 +91,21 @@ export async function fetchRuntimeInputTemplate(
     method: "POST",
     path: "/pipeline/api/inputSets/template",
     params,
-    body: {},  // Empty body — we want the full template, no stage filtering
+    body: {},
   });
 
   const data = asRecord(asRecord(raw)?.data);
   const templateYaml = asString(data?.inputSetTemplateYaml);
 
-  if (!templateYaml || templateYaml.trim() === "") {
+  const result = (templateYaml && templateYaml.trim() !== "") ? templateYaml : null;
+
+  if (!result) {
     log.debug("Pipeline has no runtime inputs");
-    return null;
   }
 
-  return templateYaml;
+  evictExpired();
+  templateCache.set(cacheKey, { yaml: result, expiresAt: Date.now() + TEMPLATE_CACHE_TTL_MS });
+  return result;
 }
 
 /**

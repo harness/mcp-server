@@ -5,13 +5,13 @@ describe("jsonResult", () => {
   it("wraps data as text content", () => {
     const result = jsonResult({ count: 42 });
     expect(result).toEqual({
-      content: [{ type: "text", text: JSON.stringify({ count: 42 }, null, 2) }],
+      content: [{ type: "text", text: JSON.stringify({ count: 42 }) }],
     });
   });
 
   it("handles arrays", () => {
     const result = jsonResult([1, 2, 3]);
-    expect(result.content[0].text).toBe(JSON.stringify([1, 2, 3], null, 2));
+    expect(result.content[0].text).toBe(JSON.stringify([1, 2, 3]));
   });
 
   it("handles null", () => {
@@ -34,7 +34,7 @@ describe("errorResult", () => {
   it("wraps error message with isError flag", () => {
     const result = errorResult("something broke");
     expect(result).toEqual({
-      content: [{ type: "text", text: JSON.stringify({ error: "something broke" }, null, 2) }],
+      content: [{ type: "text", text: JSON.stringify({ error: "something broke" }) }],
       isError: true,
     });
   });

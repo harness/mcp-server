@@ -36,15 +36,15 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
   server.registerTool(
     "harness_search",
     {
-      description: "Search across multiple Harness resource types simultaneously. Returns results ranked by relevance (pipelines/services first, then templates/triggers, then others). You can pass a Harness URL to auto-extract org and project.",
+      description: "Search across multiple Harness resource types. Returns results ranked by relevance. Accepts a Harness URL for scope.",
       inputSchema: {
-        query: z.string().describe("Search term to find across resource types"),
-        resource_types: z.array(z.string()).describe("Resource types to search (defaults to all listable types if empty)").optional(),
-        url: z.string().describe("A Harness UI URL — org and project are extracted automatically").optional(),
+        query: z.string().describe("Search term"),
+        resource_types: z.array(z.string()).describe("Types to search (defaults to all listable)").optional(),
+        url: z.string().describe("Harness UI URL — auto-extracts org and project").optional(),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
-        max_per_type: z.number().describe("Max results per resource type").default(5).optional(),
-        compact: z.boolean().describe("Strip verbose metadata from results (default true)").default(true).optional(),
+        max_per_type: z.number().describe("Max results per type").default(5).optional(),
+        compact: z.boolean().describe("Strip verbose metadata (default true)").default(true).optional(),
       },
       annotations: {
         title: "Search Harness Resources",
