@@ -837,6 +837,9 @@ func extractGroupingFields(groupingMap map[string]interface{}) (title string, ke
 		}
 		keys[i] = keyStr
 	}
+	if len(keys) == 0 {
+		return "", nil, nil, fmt.Errorf("Error: keys must contain at least one entry in grouping '%s'", titleVal)
+	}
 	valuesInterface, ok := groupingMap["values"].([]interface{})
 	if !ok {
 		return "", nil, nil, fmt.Errorf("Error extracting values from cost target grouping")
@@ -848,6 +851,9 @@ func extractGroupingFields(groupingMap map[string]interface{}) (title string, ke
 			return "", nil, nil, fmt.Errorf("Error: values must be an array of strings")
 		}
 		values[i] = valueStr
+	}
+	if len(values) == 0 {
+		return "", nil, nil, fmt.Errorf("Error: values must contain at least one entry in grouping '%s'", titleVal)
 	}
 	return titleVal, keys, values, nil
 }
@@ -916,7 +922,7 @@ func CreateCostCategoriesCostTargetsEventTool(config *config.McpServerConfig) (t
 			),
 			mcp.WithArray(
 				"shared_cost_groupings",
-				mcp.Description("Optional array of shared cost buckets for the cost category"),
+				mcp.Description("Optional array of shared cost buckets for the cost category. When omitted, the cost category will have no shared costs — all costs are attributed exclusively to cost target buckets."),
 				mcp.Items(map[string]any{
 					"type": "object",
 					"properties": map[string]any{
@@ -965,8 +971,9 @@ func CreateCostCategoriesCostTargetsEventTool(config *config.McpServerConfig) (t
 					"required": []string{"title", "keys", "values", "strategy"},
 				}),
 			),
-			mcp.WithObject("unallocated_cost",
-				mcp.Description("Optional unallocated cost configuration"),
+			mcp.WithObject(
+				"unallocated_cost",
+				mcp.Description("Optional unallocated cost configuration. When omitted, unallocated costs (costs not matching any cost target) are hidden by default."),
 				mcp.Properties(map[string]any{
 					"strategy": map[string]any{
 						"type":        "string",
@@ -1020,6 +1027,12 @@ func CreateCostCategoriesCostTargetsEventTool(config *config.McpServerConfig) (t
 					Name:  title,
 					Rules: rules,
 				})
+			}
+
+			// Collect valid cost target names for cross-validation with splits
+			costTargetNames := make(map[string]bool, len(costTargets))
+			for _, ct := range costTargets {
+				costTargetNames[ct.Name] = true
 			}
 
 			// Build the wrapper payload
@@ -1084,6 +1097,13 @@ func CreateCostCategoriesCostTargetsEventTool(config *config.McpServerConfig) (t
 							costTargetName, ok := splitMap["cost_target_name"].(string)
 							if !ok {
 								return mcp.NewToolResultError("Error: cost_target_name is required in each split"), nil
+							}
+							if !costTargetNames[costTargetName] {
+								validNames := make([]string, 0, len(costTargetNames))
+								for name := range costTargetNames {
+									validNames = append(validNames, name)
+								}
+								return mcp.NewToolResultError(fmt.Sprintf("Error: cost_target_name '%s' does not match any cost target title. Valid titles: %v", costTargetName, validNames)), nil
 							}
 							pctContrib, ok := splitMap["percentage_contribution"].(float64)
 							if !ok {

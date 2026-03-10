@@ -404,6 +404,11 @@ func TestCreateCostCategoriesCostTargetsEventTool(t *testing.T) {
 					"keys":   []interface{}{"env"},
 					"values": []interface{}{"prod"},
 				},
+				map[string]interface{}{
+					"title":  "Development",
+					"keys":   []interface{}{"env"},
+					"values": []interface{}{"dev"},
+				},
 			},
 			"shared_cost_groupings": []interface{}{
 				map[string]interface{}{
@@ -807,6 +812,47 @@ func TestCreateCostCategoriesCostTargetsEventTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok)
 		assert.Contains(t, textContent.Text, "split percentage_contribution values must sum to 100")
+	})
+	t.Run("Shared Costs - FIXED With Invalid Cost Target Name Returns Error", func(t *testing.T) {
+		ctx := context.Background()
+		request := mcp.CallToolRequest{}
+		request.Params.Name = "ccm_create_cost_categories_cost_targets_event"
+		request.Params.Arguments = map[string]interface{}{
+			"cost_category_name": "Test Category",
+			"cost_target_groupings": []interface{}{
+				map[string]interface{}{
+					"title":  "Production",
+					"keys":   []interface{}{"env"},
+					"values": []interface{}{"prod"},
+				},
+			},
+			"shared_cost_groupings": []interface{}{
+				map[string]interface{}{
+					"title":    "Shared DB",
+					"keys":     []interface{}{"service"},
+					"values":   []interface{}{"db"},
+					"strategy": "FIXED",
+					"splits": []interface{}{
+						map[string]interface{}{
+							"cost_target_name":        "Production",
+							"percentage_contribution": 60.0,
+						},
+						map[string]interface{}{
+							"cost_target_name":        "NonExistentBucket",
+							"percentage_contribution": 40.0,
+						},
+					},
+				},
+			},
+		}
+		result, err := handler(ctx, request)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.IsError)
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok)
+		assert.Contains(t, textContent.Text, "does not match any cost target title")
+		assert.Contains(t, textContent.Text, "NonExistentBucket")
 	})
 }
 
