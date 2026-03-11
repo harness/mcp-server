@@ -34,7 +34,9 @@ export function registerAskTool(
     "harness_ask",
     {
       description:
-        "Ask the Harness AI DevOps Agent to create or update entities (pipelines, environments, connectors, services, secrets) via natural language. Returns generated YAML with a conversational response. Supports streaming for real-time progress and multi-turn conversations via conversation_id.",
+        "Ask the Harness AI DevOps Agent to create or update entities (pipelines, environments, connectors, services, secrets) via natural language. Returns generated YAML with a conversational response. " +
+        "IMPORTANT: When the response includes available_actions (e.g. ACCEPT, REGENERATE), call this tool again with the SAME conversation_id and set prompt to the action name to continue. " +
+        "ACCEPT persists the entity in Harness — do NOT use harness_create/harness_update to manually save the YAML.",
       inputSchema: {
         prompt: z.string().min(1).describe("The natural language prompt for the AI DevOps agent"),
         action: z.enum(ACTION_VALUES).describe("The action to perform (e.g. CREATE_PIPELINE, UPDATE_SERVICE)"),
@@ -105,11 +107,23 @@ export function registerAskTool(
           return errorResult(result.error);
         }
 
-        return jsonResult({
+        const response: Record<string, unknown> = {
           conversation_id: result.conversation_id,
           response: result.response,
-          capabilities_to_run: result.capabilities_to_run,
-        });
+        };
+
+        // Guide the LLM on how to handle follow-up capabilities
+        if (result.capabilities_to_run?.length) {
+          response.available_actions = result.capabilities_to_run;
+          response.next_step =
+            `To execute an action (e.g. ACCEPT to persist the generated entity in Harness), ` +
+            `call harness_ask again with the SAME conversation_id "${result.conversation_id}", ` +
+            `set prompt to the action name (e.g. "ACCEPT"), and keep the same action parameter. ` +
+            `Do NOT use harness_create or harness_update to manually persist the YAML — ` +
+            `the Intelligence API handles persistence when you ACCEPT.`;
+        }
+
+        return jsonResult(response);
       } catch (err) {
         if (isUserFixableApiError(err)) return errorResult(err.message);
         throw toMcpError(err);

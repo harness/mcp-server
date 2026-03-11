@@ -191,6 +191,56 @@ describe("harness_ask", () => {
     expect(requestCall.body.harness_context.project_id).toBe("custom-project");
   });
 
+  it("includes next_step guidance when capabilities_to_run are present", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      conversation_id: "conv-cap",
+      response: "Here is your pipeline YAML",
+      capabilities_to_run: ["ACCEPT", "REGENERATE"],
+    });
+    client = makeClient(mockRequest);
+
+    const { registerAskTool } = await import("../../src/tools/harness-ask.js");
+    registerAskTool(server, registry, client, makeConfig());
+
+    const result = await server.call("harness_ask", {
+      prompt: "Create a pipeline",
+      action: "CREATE_PIPELINE",
+      stream: false,
+    });
+
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as {
+      conversation_id: string;
+      available_actions: string[];
+      next_step: string;
+    };
+    expect(data.available_actions).toEqual(["ACCEPT", "REGENERATE"]);
+    expect(data.next_step).toContain("conv-cap");
+    expect(data.next_step).toContain("harness_ask");
+    expect(data.next_step).toContain("Do NOT use harness_create");
+  });
+
+  it("omits next_step when no capabilities_to_run", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      conversation_id: "conv-no-cap",
+      response: "Done",
+    });
+    client = makeClient(mockRequest);
+
+    const { registerAskTool } = await import("../../src/tools/harness-ask.js");
+    registerAskTool(server, registry, client, makeConfig());
+
+    const result = await server.call("harness_ask", {
+      prompt: "Test",
+      action: "CREATE_PIPELINE",
+      stream: false,
+    });
+
+    const data = parseResult(result) as Record<string, unknown>;
+    expect(data.available_actions).toBeUndefined();
+    expect(data.next_step).toBeUndefined();
+  });
+
   it("returns errorResult when intelligence service returns an error", async () => {
     const mockRequest = vi.fn().mockResolvedValue({
       conversation_id: "c",
