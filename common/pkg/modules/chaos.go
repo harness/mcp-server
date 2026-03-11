@@ -130,6 +130,7 @@ func RegisterChaos(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) e
 			// Load Testing tools
 			toolsets.NewServerTool(tools.ListLoadTestsTool(config, loadTestService)),
 			toolsets.NewServerTool(tools.GetLoadTestTool(config, loadTestService)),
+			// Linux infrastructures tools
 			toolsets.NewServerTool(tools.ListLinuxInfrastructuresTool(config, chaosClient)),
 		).
 		AddWriteTools(

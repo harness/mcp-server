@@ -8,6 +8,7 @@ import (
 	config "github.com/harness/mcp-server/common"
 	"github.com/harness/mcp-server/common/client"
 	"github.com/harness/mcp-server/common/client/dto"
+	"github.com/harness/mcp-server/common/pkg/chaoscommons"
 	"github.com/harness/mcp-server/common/pkg/common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -15,8 +16,8 @@ import (
 
 // ListLoadTestsTool creates a tool for listing load tests
 func ListLoadTestsTool(config *config.McpServerConfig, client *client.LoadTestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_list_loadtest_instances",
-			mcp.WithDescription("List all load tests in the project"),
+	return mcp.NewTool(chaoscommons.ToolListLoadTestInstances,
+			mcp.WithDescription(chaoscommons.DescToolListLoadTestInstances),
 			common.WithScope(config, false),
 			WithPagination(),
 		),
@@ -52,11 +53,11 @@ func ListLoadTestsTool(config *config.McpServerConfig, client *client.LoadTestSe
 
 // GetLoadTestTool creates a tool for getting details of a specific load test
 func GetLoadTestTool(config *config.McpServerConfig, client *client.LoadTestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_get_loadtest_instance",
-			mcp.WithDescription("Get details of a specific load test, including its configuration, target URL, script content, and recent runs. Use chaos_list_loadtest_instances to find load test IDs."),
+	return mcp.NewTool(chaoscommons.ToolGetLoadTestInstance,
+			mcp.WithDescription(chaoscommons.DescToolGetLoadTestInstance),
 			common.WithScope(config, false),
-			mcp.WithString("load_test_id",
-				mcp.Description("The unique identifier of the load test"),
+			mcp.WithString(chaoscommons.ParamLoadTestID,
+				mcp.Description(chaoscommons.DescLoadTestID),
 				mcp.Required(),
 			),
 		),
@@ -66,7 +67,7 @@ func GetLoadTestTool(config *config.McpServerConfig, client *client.LoadTestServ
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			loadTestID, err := RequiredParam[string](request, "load_test_id")
+			loadTestID, err := RequiredParam[string](request, chaoscommons.ParamLoadTestID)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -87,21 +88,21 @@ func GetLoadTestTool(config *config.McpServerConfig, client *client.LoadTestServ
 
 // RunLoadTestTool creates a tool for running a load test
 func RunLoadTestTool(config *config.McpServerConfig, client *client.LoadTestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_run_loadtest_instance",
-			mcp.WithDescription("Run a load test. If target_users, duration_seconds, or spawn_rate are not provided, the load test's default values will be used. Use chaos_list_loadtest_instances to find load test IDs."),
+	return mcp.NewTool(chaoscommons.ToolRunLoadTestInstance,
+			mcp.WithDescription(chaoscommons.DescToolRunLoadTestInstance),
 			common.WithScope(config, false),
-			mcp.WithString("load_test_id",
-				mcp.Description("The unique identifier of the load test to run"),
+			mcp.WithString(chaoscommons.ParamLoadTestID,
+				mcp.Description(chaoscommons.DescLoadTestIDRun),
 				mcp.Required(),
 			),
-			mcp.WithNumber("target_users",
-				mcp.Description("Number of concurrent users to simulate"),
+			mcp.WithNumber(chaoscommons.ParamTargetUsers,
+				mcp.Description(chaoscommons.DescTargetUsers),
 			),
-			mcp.WithNumber("duration_seconds",
-				mcp.Description("Duration of the load test in seconds"),
+			mcp.WithNumber(chaoscommons.ParamDurationSeconds,
+				mcp.Description(chaoscommons.DescDurationSeconds),
 			),
-			mcp.WithNumber("spawn_rate",
-				mcp.Description("Rate at which users are spawned per second"),
+			mcp.WithNumber(chaoscommons.ParamSpawnRate,
+				mcp.Description(chaoscommons.DescSpawnRate),
 			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -110,22 +111,22 @@ func RunLoadTestTool(config *config.McpServerConfig, client *client.LoadTestServ
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			loadTestID, err := RequiredParam[string](request, "load_test_id")
+			loadTestID, err := RequiredParam[string](request, chaoscommons.ParamLoadTestID)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			targetUsers, err := OptionalIntParam(request, "target_users")
+			targetUsers, err := OptionalIntParam(request, chaoscommons.ParamTargetUsers)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			durationSeconds, err := OptionalIntParam(request, "duration_seconds")
+			durationSeconds, err := OptionalIntParam(request, chaoscommons.ParamDurationSeconds)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			spawnRate, err := OptionalIntParam(request, "spawn_rate")
+			spawnRate, err := OptionalIntParam(request, chaoscommons.ParamSpawnRate)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -153,11 +154,11 @@ func RunLoadTestTool(config *config.McpServerConfig, client *client.LoadTestServ
 
 // StopLoadTestTool creates a tool for stopping a running load test
 func StopLoadTestTool(config *config.McpServerConfig, client *client.LoadTestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_stop_loadtest_run",
-			mcp.WithDescription("Stop a running load test run. Use chaos_get_loadtest_instance to find active run IDs."),
+	return mcp.NewTool(chaoscommons.ToolStopLoadTestRun,
+			mcp.WithDescription(chaoscommons.DescToolStopLoadTestRun),
 			common.WithScope(config, false),
-			mcp.WithString("run_id",
-				mcp.Description("The unique identifier of the load test run to stop"),
+			mcp.WithString(chaoscommons.ParamRunID,
+				mcp.Description(chaoscommons.DescRunID),
 				mcp.Required(),
 			),
 		),
@@ -167,7 +168,7 @@ func StopLoadTestTool(config *config.McpServerConfig, client *client.LoadTestSer
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			runID, err := RequiredParam[string](request, "run_id")
+			runID, err := RequiredParam[string](request, chaoscommons.ParamRunID)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -188,11 +189,11 @@ func StopLoadTestTool(config *config.McpServerConfig, client *client.LoadTestSer
 
 // DeleteLoadTestTool creates a tool for deleting a load test
 func DeleteLoadTestTool(config *config.McpServerConfig, client *client.LoadTestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_delete_loadtest_instance",
-			mcp.WithDescription("Delete a load test. Use chaos_list_loadtest_instances to find load test IDs."),
+	return mcp.NewTool(chaoscommons.ToolDeleteLoadTestInstance,
+			mcp.WithDescription(chaoscommons.DescToolDeleteLoadTestInstance),
 			common.WithScope(config, false),
-			mcp.WithString("load_test_id",
-				mcp.Description("The unique identifier of the load test to delete"),
+			mcp.WithString(chaoscommons.ParamLoadTestID,
+				mcp.Description(chaoscommons.DescLoadTestIDDelete),
 				mcp.Required(),
 			),
 		),
@@ -202,7 +203,7 @@ func DeleteLoadTestTool(config *config.McpServerConfig, client *client.LoadTestS
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			loadTestID, err := RequiredParam[string](request, "load_test_id")
+			loadTestID, err := RequiredParam[string](request, chaoscommons.ParamLoadTestID)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -223,15 +224,15 @@ func DeleteLoadTestTool(config *config.McpServerConfig, client *client.LoadTestS
 
 // CreateSampleLoadTestTool creates a tool for creating a sample load test
 func CreateSampleLoadTestTool(config *config.McpServerConfig, client *client.LoadTestService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_create_sample_loadtest",
-			mcp.WithDescription("Create a sample load test. Requires a name and a Linux infrastructure ID (use chaos_list_linux_infrastructures to find available infrastructure)."),
+	return mcp.NewTool(chaoscommons.ToolCreateSampleLoadTest,
+			mcp.WithDescription(chaoscommons.DescToolCreateSampleLoadTest),
 			common.WithScope(config, false),
-			mcp.WithString("name",
-				mcp.Description("Name for the new sample load test"),
+			mcp.WithString(chaoscommons.ParamName,
+				mcp.Description(chaoscommons.DescLoadTestName),
 				mcp.Required(),
 			),
-			mcp.WithString("infra_id",
-				mcp.Description("The Linux infrastructure ID to use (get from chaos_list_linux_infrastructures)"),
+			mcp.WithString(chaoscommons.ParamInfraIDLoadTest,
+				mcp.Description(chaoscommons.DescLoadTestInfraID),
 				mcp.Required(),
 			),
 		),
@@ -241,12 +242,12 @@ func CreateSampleLoadTestTool(config *config.McpServerConfig, client *client.Loa
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			name, err := RequiredParam[string](request, "name")
+			name, err := RequiredParam[string](request, chaoscommons.ParamName)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			infraID, err := RequiredParam[string](request, "infra_id")
+			infraID, err := RequiredParam[string](request, chaoscommons.ParamInfraIDLoadTest)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
