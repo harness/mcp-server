@@ -59,7 +59,7 @@ export interface ServiceChatRequest {
 /** Response from the intelligence service */
 export interface ServiceChatResponse {
   conversation_id: string;
-  capabilities_to_run?: string[];
+  capabilities_to_run?: Record<string, unknown>[];
   response?: string;
   error?: string;
 }

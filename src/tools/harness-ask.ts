@@ -114,7 +114,9 @@ export function registerAskTool(
           return errorResult(result.error);
         }
 
-        const hasAccept = result.capabilities_to_run?.includes("ACCEPT");
+        const hasAccept = result.capabilities_to_run?.some(
+          (cap) => JSON.stringify(cap).includes("ACCEPT"),
+        );
 
         // Auto-ACCEPT: send a follow-up to persist the entity in Harness
         if (autoAccept && hasAccept) {

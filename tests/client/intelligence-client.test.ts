@@ -98,6 +98,23 @@ describe("IntelligenceClient", () => {
       });
     });
 
+    it("sends orgIdentifier and projectIdentifier as query params", async () => {
+      vi.mocked(harnessClient.request).mockResolvedValue({ conversation_id: "c" });
+
+      await intelligence.sendChat(
+        makeChatRequest({
+          harness_context: { account_id: "a1", org_id: "myorg", project_id: "myproj" },
+          stream: false,
+        }),
+      );
+
+      const call = vi.mocked(harnessClient.request).mock.calls[0]![0] as { params: Record<string, string> };
+      expect(call.params).toEqual({
+        orgIdentifier: "myorg",
+        projectIdentifier: "myproj",
+      });
+    });
+
     it("passes through conversation_id", async () => {
       vi.mocked(harnessClient.request).mockResolvedValue({ conversation_id: "existing-id" });
 

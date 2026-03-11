@@ -197,7 +197,7 @@ describe("harness_ask", () => {
       .mockResolvedValueOnce({
         conversation_id: "conv-gen",
         response: "Here is your pipeline YAML",
-        capabilities_to_run: ["ACCEPT", "REGENERATE"],
+        capabilities_to_run: [{ type: "ACCEPT" }, { type: "REGENERATE" }],
       })
       // Second call: ACCEPT persists
       .mockResolvedValueOnce({
@@ -233,7 +233,7 @@ describe("harness_ask", () => {
       .mockResolvedValueOnce({
         conversation_id: "conv-fail",
         response: "Generated YAML here",
-        capabilities_to_run: ["ACCEPT"],
+        capabilities_to_run: [{ type: "ACCEPT" }],
       })
       .mockResolvedValueOnce({
         conversation_id: "conv-fail",
@@ -261,7 +261,7 @@ describe("harness_ask", () => {
     const mockRequest = vi.fn().mockResolvedValue({
       conversation_id: "conv-noauto",
       response: "Preview YAML",
-      capabilities_to_run: ["ACCEPT", "REGENERATE"],
+      capabilities_to_run: [{ type: "ACCEPT" }, { type: "REGENERATE" }],
     });
     client = makeClient(mockRequest);
 
@@ -279,7 +279,7 @@ describe("harness_ask", () => {
     expect(mockRequest).toHaveBeenCalledTimes(1);
     const data = parseResult(result) as { persisted: boolean; available_actions: string[]; next_step: string };
     expect(data.persisted).toBe(false);
-    expect(data.available_actions).toEqual(["ACCEPT", "REGENERATE"]);
+    expect(data.available_actions).toEqual([{ type: "ACCEPT" }, { type: "REGENERATE" }]);
     expect(data.next_step).toContain("conv-noauto");
   });
 

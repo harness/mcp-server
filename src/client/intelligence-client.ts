@@ -17,6 +17,15 @@ export interface ChatOptions {
   onProgress?: (event: SSEEvent) => void;
 }
 
+/** Build query params matching the Go implementation's scope injection. */
+function buildScopeParams(request: ServiceChatRequest): Record<string, string> {
+  const params: Record<string, string> = {};
+  const ctx = request.harness_context;
+  if (ctx.org_id) params.orgIdentifier = ctx.org_id;
+  if (ctx.project_id) params.projectIdentifier = ctx.project_id;
+  return params;
+}
+
 export class IntelligenceClient {
   static readonly API_PATH = "/gateway/harness-intelligence/api/v1/chat/platform";
   static readonly TIMEOUT_MS = 300_000; // 5 minutes
@@ -42,6 +51,7 @@ export class IntelligenceClient {
     return this.client.request<ServiceChatResponse>({
       method: "POST",
       path: IntelligenceClient.API_PATH,
+      params: buildScopeParams(request),
       body: request,
       signal: options?.signal,
       timeoutMs: IntelligenceClient.TIMEOUT_MS,
@@ -57,6 +67,7 @@ export class IntelligenceClient {
     const response = await this.client.requestStream({
       method: "POST",
       path: IntelligenceClient.API_PATH,
+      params: buildScopeParams(request),
       body: request,
       signal: options?.signal,
       timeoutMs: IntelligenceClient.TIMEOUT_MS,
