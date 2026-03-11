@@ -13,6 +13,7 @@ import (
 	config "github.com/harness/mcp-server/common"
 	"github.com/harness/mcp-server/common/client"
 	"github.com/harness/mcp-server/common/client/dto"
+	"github.com/harness/mcp-server/common/pkg/chaoscommons"
 	"github.com/harness/mcp-server/common/pkg/common"
 	mcputils "github.com/harness/mcp-server/common/pkg/utils"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -23,8 +24,8 @@ var identityRegex = regexp.MustCompile(`[^a-z0-9-]+`)
 
 // ListExperimentsTool creates a tool for listing the experiments
 func ListExperimentsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_experiments_list",
-			mcp.WithDescription("List the chaos experiments"),
+	return mcp.NewTool(chaoscommons.ToolExperimentsList,
+			mcp.WithDescription(chaoscommons.DescToolExperimentsList),
 			common.WithScope(config, false),
 			WithPagination(),
 		),
@@ -60,11 +61,11 @@ func ListExperimentsTool(config *config.McpServerConfig, client *client.ChaosSer
 
 // GetExperimentsTool creates a tool to get the experiment details
 func GetExperimentsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_experiment_describe",
-			mcp.WithDescription("Retrieves information about chaos experiment, allowing users to get an overview and detailed insights for each experiment"),
+	return mcp.NewTool(chaoscommons.ToolExperimentDescribe,
+			mcp.WithDescription(chaoscommons.DescToolExperimentDescribe),
 			common.WithScope(config, false),
-			mcp.WithString("experimentID",
-				mcp.Description("Unique Identifier for an experiment"),
+			mcp.WithString(chaoscommons.ParamExperimentID,
+				mcp.Description(chaoscommons.DescExperimentID),
 				mcp.Required(),
 			),
 		),
@@ -74,7 +75,7 @@ func GetExperimentsTool(config *config.McpServerConfig, client *client.ChaosServ
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			experimentID, err := RequiredParam[string](request, "experimentID")
+			experimentID, err := RequiredParam[string](request, chaoscommons.ParamExperimentID)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -101,15 +102,15 @@ func GetExperimentsTool(config *config.McpServerConfig, client *client.ChaosServ
 
 // GetExperimentRunsTool creates a tool to get the experiment run details
 func GetExperimentRunsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_experiment_run_result",
-			mcp.WithDescription("Retrieves run result of chaos experiment runs, helping to describe and summarize the details of each experiment run"),
+	return mcp.NewTool(chaoscommons.ToolExperimentRunResult,
+			mcp.WithDescription(chaoscommons.DescToolExperimentRunResult),
 			common.WithScope(config, false),
-			mcp.WithString("experimentID",
-				mcp.Description("Unique Identifier for an experiment"),
+			mcp.WithString(chaoscommons.ParamExperimentID,
+				mcp.Description(chaoscommons.DescExperimentID),
 				mcp.Required(),
 			),
-			mcp.WithString("experimentRunID",
-				mcp.Description("Unique Identifier for an experiment run"),
+			mcp.WithString(chaoscommons.ParamExperimentRunID,
+				mcp.Description(chaoscommons.DescExperimentRunID),
 				mcp.Required(),
 			),
 		),
@@ -119,7 +120,7 @@ func GetExperimentRunsTool(config *config.McpServerConfig, client *client.ChaosS
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			experimentID, err := RequiredParam[string](request, "experimentID")
+			experimentID, err := RequiredParam[string](request, chaoscommons.ParamExperimentID)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -130,7 +131,7 @@ func GetExperimentRunsTool(config *config.McpServerConfig, client *client.ChaosS
 				}
 			}
 
-			experimentRunID, err := RequiredParam[string](request, "experimentRunID")
+			experimentRunID, err := RequiredParam[string](request, chaoscommons.ParamExperimentRunID)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -157,18 +158,18 @@ func GetExperimentRunsTool(config *config.McpServerConfig, client *client.ChaosS
 
 // RunExperimentTool creates a tool to run the experiment
 func RunExperimentTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_experiment_run",
-			mcp.WithDescription("Run the chaos experiment"),
+	return mcp.NewTool(chaoscommons.ToolExperimentRun,
+			mcp.WithDescription(chaoscommons.DescToolExperimentRun),
 			common.WithScope(config, false),
-			mcp.WithString("experimentID",
-				mcp.Description("Unique Identifier for an experiment"),
+			mcp.WithString(chaoscommons.ParamExperimentID,
+				mcp.Description(chaoscommons.DescExperimentID),
 				mcp.Required(),
 			),
-			mcp.WithString("inputsetIdentity",
-				mcp.Description("Optional inputset identity to use for the experiment run"),
+			mcp.WithString(chaoscommons.ParamInputsetIdentity,
+				mcp.Description(chaoscommons.DescInputsetIdentity),
 			),
-			mcp.WithArray("experimentVariables",
-				mcp.Description("Optional experiment variables as an array of objects where each object has a name and value"),
+			mcp.WithArray(chaoscommons.ParamExperimentVariables,
+				mcp.Description(chaoscommons.DescExperimentVariables),
 				mcp.Items(map[string]any{
 					"type": "object",
 					"properties": map[string]any{
@@ -184,8 +185,8 @@ func RunExperimentTool(config *config.McpServerConfig, client *client.ChaosServi
 					"required": []string{"name"},
 				}),
 			),
-			mcp.WithObject("tasks",
-				mcp.Description("Optional task-level variables as a map where key is task name and value is an object of variable name-value pairs"),
+			mcp.WithObject(chaoscommons.ParamTasks,
+				mcp.Description(chaoscommons.DescTasks),
 				mcp.Properties(map[string]any{}), // no fixed props
 				mcp.AdditionalProperties(map[string]any{
 					"type":                 "object",
@@ -200,7 +201,7 @@ func RunExperimentTool(config *config.McpServerConfig, client *client.ChaosServi
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			experimentID, err := RequiredParam[string](request, "experimentID")
+			experimentID, err := RequiredParam[string](request, chaoscommons.ParamExperimentID)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -211,17 +212,17 @@ func RunExperimentTool(config *config.McpServerConfig, client *client.ChaosServi
 				}
 			}
 
-			inputsetIdentity, err := OptionalParam[string](request, "inputsetIdentity")
+			inputsetIdentity, err := OptionalParam[string](request, chaoscommons.ParamInputsetIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			experimentVariablesRaw, err := OptionalParam[[]interface{}](request, "experimentVariables")
+			experimentVariablesRaw, err := OptionalParam[[]interface{}](request, chaoscommons.ParamExperimentVariables)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			taskVariablesRaw, err := OptionalParam[map[string]any](request, "tasks")
+			taskVariablesRaw, err := OptionalParam[map[string]any](request, chaoscommons.ParamTasks)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -248,8 +249,8 @@ func RunExperimentTool(config *config.McpServerConfig, client *client.ChaosServi
 
 // ListProbesTool creates a tool for listing the probes
 func ListProbesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_probes_list",
-			mcp.WithDescription("List the chaos probes"),
+	return mcp.NewTool(chaoscommons.ToolProbesList,
+			mcp.WithDescription(chaoscommons.DescToolProbesList),
 			common.WithScope(config, false),
 			WithPagination(),
 		),
@@ -285,11 +286,11 @@ func ListProbesTool(config *config.McpServerConfig, client *client.ChaosService)
 
 // GetProbeTool creates a tool to get the probe details
 func GetProbeTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_probe_describe",
-			mcp.WithDescription("Retrieves information about chaos probe, allowing users to get an overview and detailed insights for each probe"),
+	return mcp.NewTool(chaoscommons.ToolProbeDescribe,
+			mcp.WithDescription(chaoscommons.DescToolProbeDescribe),
 			common.WithScope(config, false),
-			mcp.WithString("probeId",
-				mcp.Description("Unique Identifier for a probe"),
+			mcp.WithString(chaoscommons.ParamProbeID,
+				mcp.Description(chaoscommons.DescProbeID),
 				mcp.Required(),
 			),
 		),
@@ -299,7 +300,7 @@ func GetProbeTool(config *config.McpServerConfig, client *client.ChaosService) (
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			probeID, err := RequiredParam[string](request, "probeId")
+			probeID, err := RequiredParam[string](request, chaoscommons.ParamProbeID)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -320,30 +321,30 @@ func GetProbeTool(config *config.McpServerConfig, client *client.ChaosService) (
 
 // CreateExperimentFromTemplateTool creates a tool to create the experiment from template
 func CreateExperimentFromTemplateTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_create_experiment_from_template",
-			mcp.WithDescription("Create the chaos experiment from template"),
+	return mcp.NewTool(chaoscommons.ToolCreateExperimentFromTemplate,
+			mcp.WithDescription(chaoscommons.DescToolCreateExperimentFromTemplate),
 			common.WithScope(config, false),
-			mcp.WithString("templateId",
-				mcp.Description("Unique Identifier for a experiment template"),
+			mcp.WithString(chaoscommons.ParamTemplateID,
+				mcp.Description(chaoscommons.DescTemplateID),
 				mcp.Required(),
 			),
-			mcp.WithString("infraId",
-				mcp.Description("Unique Identifier for a infrastructure"),
+			mcp.WithString(chaoscommons.ParamInfraID,
+				mcp.Description(chaoscommons.DescInfraID),
 				mcp.Required(),
 			),
-			mcp.WithString("environmentId",
-				mcp.Description("Unique Identifier for a environment"),
+			mcp.WithString(chaoscommons.ParamEnvironmentID,
+				mcp.Description(chaoscommons.DescEnvironmentID),
 				mcp.Required(),
 			),
-			mcp.WithString("hubIdentity",
-				mcp.Description("Unique Identifier for a chaos hub"),
+			mcp.WithString(chaoscommons.ParamHubIdentity,
+				mcp.Description(chaoscommons.DescHubIdentity),
 				mcp.Required(),
 			),
-			mcp.WithString("name",
-				mcp.Description("User defined name of the experiment"),
+			mcp.WithString(chaoscommons.ParamName,
+				mcp.Description(chaoscommons.DescName),
 			),
-			mcp.WithString("identity",
-				mcp.Description("User defined identity of the experiment"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescIdentity),
 			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -352,17 +353,17 @@ func CreateExperimentFromTemplateTool(config *config.McpServerConfig, client *cl
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			templateID, err := RequiredParam[string](request, "templateId")
+			templateID, err := RequiredParam[string](request, chaoscommons.ParamTemplateID)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			infraID, err := RequiredParam[string](request, "infraId")
+			infraID, err := RequiredParam[string](request, chaoscommons.ParamInfraID)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			environmentID, err := RequiredParam[string](request, "environmentId")
+			environmentID, err := RequiredParam[string](request, chaoscommons.ParamEnvironmentID)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -371,12 +372,12 @@ func CreateExperimentFromTemplateTool(config *config.McpServerConfig, client *cl
 				infraID = fmt.Sprintf("%s/%s", environmentID, infraID)
 			}
 
-			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			hubIdentity, err := RequiredParam[string](request, chaoscommons.ParamHubIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			name, err := OptionalParam[string](request, "name")
+			name, err := OptionalParam[string](request, chaoscommons.ParamName)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -385,7 +386,7 @@ func CreateExperimentFromTemplateTool(config *config.McpServerConfig, client *cl
 				name = fmt.Sprintf("%s-%s", templateID, utils.RandStringBytes(3))
 			}
 
-			identity, err := OptionalParam[string](request, "identity")
+			identity, err := OptionalParam[string](request, chaoscommons.ParamIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -421,35 +422,39 @@ func CreateExperimentFromTemplateTool(config *config.McpServerConfig, client *cl
 
 // ListExperimentTemplatesTool creates a tool for listing the experiment templates
 func ListExperimentTemplatesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_list_experiment_templates",
-			mcp.WithDescription("List the chaos experiment templates from chaos hubs."),
+	return mcp.NewTool(chaoscommons.ToolListExperimentTemplates,
+			mcp.WithDescription(chaoscommons.DescToolListExperimentTemplates),
 			common.WithScope(config, false),
 			WithPagination(),
-			mcp.WithString("hubIdentity",
-				mcp.Description("Unique Identifier for a chaos hub"),
+			mcp.WithString(chaoscommons.ParamHubIdentity,
+				mcp.Description(chaoscommons.DescHubIdentity),
 			),
-			mcp.WithString("infrastructureType",
-				mcp.Description("Infrastructure type filter (e.g. Kubernetes)"),
+			mcp.WithString(chaoscommons.ParamInfrastructureType,
+				mcp.Description(chaoscommons.DescInfrastructureType),
 			),
-			mcp.WithString("infrastructure",
-				mcp.Description("Infrastructure filter (e.g. KubernetesV2)"),
+			mcp.WithString(chaoscommons.ParamInfrastructure,
+				mcp.Description(chaoscommons.DescInfrastructure),
 			),
-			mcp.WithString("search",
-				mcp.Description("Search templates by name or identity"),
+			mcp.WithString(chaoscommons.ParamSearch,
+				mcp.Description(chaoscommons.DescSearch),
 			),
-			mcp.WithString("sortField",
-				mcp.Description("Field to sort results by"),
+			mcp.WithString(chaoscommons.ParamSortField,
+				mcp.Description(chaoscommons.DescSortField),
 				mcp.Enum("name", "lastUpdated", "experimentName"),
 			),
-			mcp.WithBoolean("sortAscending",
-				mcp.Description("When true, sort in ascending order. Defaults to false (descending)."),
+			mcp.WithBoolean(chaoscommons.ParamSortAscending,
+				mcp.Description(chaoscommons.DescSortAscending),
 			),
-			mcp.WithBoolean("includeAllScope",
-				mcp.Description("When true, returns templates from all orgs and projects in the account. When false (default), returns only templates in the current org and project."),
+			mcp.WithBoolean(chaoscommons.ParamIncludeAllScope,
+				mcp.Description(chaoscommons.DescIncludeAllScope),
 			),
-			mcp.WithString("tags",
-				mcp.Description("Comma-separated list of tags to filter by. Templates must have ALL specified tags (AND filter)."),
+			mcp.WithString(chaoscommons.ParamTags,
+				mcp.Description(chaoscommons.DescTags),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -457,14 +462,14 @@ func ListExperimentTemplatesTool(config *config.McpServerConfig, client *client.
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			hubIdentity, err := OptionalParam[string](request, "hubIdentity")
-			infrastructureType, _ := OptionalParam[string](request, "infrastructureType")
-			infrastructure, _ := OptionalParam[string](request, "infrastructure")
-			search, _ := OptionalParam[string](request, "search")
-			sortField, _ := OptionalParam[string](request, "sortField")
-			sortAscending, _ := OptionalParam[bool](request, "sortAscending")
-			includeAllScope, _ := OptionalParam[bool](request, "includeAllScope")
-			tags, _ := OptionalParam[string](request, "tags")
+			hubIdentity, _ := OptionalParam[string](request, chaoscommons.ParamHubIdentity)
+			infrastructureType, _ := OptionalParam[string](request, chaoscommons.ParamInfrastructureType)
+			infrastructure, _ := OptionalParam[string](request, chaoscommons.ParamInfrastructure)
+			search, _ := OptionalParam[string](request, chaoscommons.ParamSearch)
+			sortField, _ := OptionalParam[string](request, chaoscommons.ParamSortField)
+			sortAscending, _ := OptionalParam[bool](request, chaoscommons.ParamSortAscending)
+			includeAllScope, _ := OptionalParam[bool](request, chaoscommons.ParamIncludeAllScope)
+			tags, _ := OptionalParam[string](request, chaoscommons.ParamTags)
 
 			page, size, err := FetchPagination(request)
 			if err != nil {
@@ -478,12 +483,12 @@ func ListExperimentTemplatesTool(config *config.McpServerConfig, client *client.
 
 			data, err := client.ListExperimentTemplates(ctx, scope, pagination, hubIdentity, infrastructureType, infrastructure, search, sortField, sortAscending, includeAllScope, tags)
 			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
+				return nil, fmt.Errorf("failed to list experiment templates: %w", err)
 			}
 
 			r, err := json.Marshal(data)
 			if err != nil {
-				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal list chaos experiment templates response: %v", err)), nil
+				return nil, fmt.Errorf("failed to marshal list experiment templates response: %w", err)
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
@@ -491,19 +496,19 @@ func ListExperimentTemplatesTool(config *config.McpServerConfig, client *client.
 }
 
 func GetExperimentTemplateTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_get_experiment_template",
-			mcp.WithDescription("Retrieves detailed information about a specific chaos experiment template by its identity, including its spec, variables, revision, and metadata."),
+	return mcp.NewTool(chaoscommons.ToolGetExperimentTemplate,
+			mcp.WithDescription(chaoscommons.DescToolGetExperimentTemplate),
 			common.WithScope(config, false),
-			mcp.WithString("identity",
-				mcp.Description("Unique identifier for the experiment template"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescIdentityExperimentTemplate),
 				mcp.Required(),
 			),
-			mcp.WithString("hubIdentity",
-				mcp.Description("Unique identifier for the chaos hub that owns the template"),
+			mcp.WithString(chaoscommons.ParamHubIdentity,
+				mcp.Description(chaoscommons.DescHubIdentityOwner),
 				mcp.Required(),
 			),
-			mcp.WithString("revision",
-				mcp.Description("Specific revision of the template to retrieve. If omitted, the latest revision is returned."),
+			mcp.WithString(chaoscommons.ParamRevision,
+				mcp.Description(chaoscommons.DescRevision),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(true),
@@ -516,17 +521,17 @@ func GetExperimentTemplateTool(config *config.McpServerConfig, client *client.Ch
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			identity, err := RequiredParam[string](request, "identity")
+			identity, err := RequiredParam[string](request, chaoscommons.ParamIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			hubIdentity, err := RequiredParam[string](request, chaoscommons.ParamHubIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			revision, _ := OptionalParam[string](request, "revision")
+			revision, _ := OptionalParam[string](request, chaoscommons.ParamRevision)
 
 			data, err := client.GetExperimentTemplate(ctx, scope, identity, hubIdentity, revision)
 			if err != nil {
@@ -543,19 +548,19 @@ func GetExperimentTemplateTool(config *config.McpServerConfig, client *client.Ch
 }
 
 func DeleteExperimentTemplateTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_delete_experiment_template",
-			mcp.WithDescription("Deletes a chaos experiment template by its identity (soft delete). The template must not be referenced by any existing experiment, otherwise the delete will be rejected."),
+	return mcp.NewTool(chaoscommons.ToolDeleteExperimentTemplate,
+			mcp.WithDescription(chaoscommons.DescToolDeleteExperimentTemplate),
 			common.WithScope(config, false),
-			mcp.WithString("identity",
-				mcp.Description("Unique identifier for the experiment template to delete"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescIdentityExperimentTemplateDelete),
 				mcp.Required(),
 			),
-			mcp.WithString("hubIdentity",
-				mcp.Description("Unique identifier for the chaos hub that owns the template"),
+			mcp.WithString(chaoscommons.ParamHubIdentity,
+				mcp.Description(chaoscommons.DescHubIdentityOwner),
 				mcp.Required(),
 			),
-			mcp.WithBoolean("verbose",
-				mcp.Description("When true, enables verbose server-side logging for debugging."),
+			mcp.WithBoolean(chaoscommons.ParamVerbose,
+				mcp.Description(chaoscommons.DescVerbose),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(false),
@@ -568,17 +573,17 @@ func DeleteExperimentTemplateTool(config *config.McpServerConfig, client *client
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			identity, err := RequiredParam[string](request, "identity")
+			identity, err := RequiredParam[string](request, chaoscommons.ParamIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			hubIdentity, err := RequiredParam[string](request, chaoscommons.ParamHubIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			verbose, _ := OptionalParam[bool](request, "verbose")
+			verbose, _ := OptionalParam[bool](request, chaoscommons.ParamVerbose)
 
 			if err := client.DeleteExperimentTemplate(ctx, scope, identity, hubIdentity, verbose); err != nil {
 				return nil, fmt.Errorf("failed to delete experiment template: %w", err)
@@ -589,39 +594,39 @@ func DeleteExperimentTemplateTool(config *config.McpServerConfig, client *client
 }
 
 func GetExperimentTemplateRevisionsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_list_experiment_template_revisions",
-			mcp.WithDescription("Lists all revisions of a specific chaos experiment template by its identity. Supports pagination, search, sort, and filtering."),
+	return mcp.NewTool(chaoscommons.ToolListExperimentTemplateRevisions,
+			mcp.WithDescription(chaoscommons.DescToolListExperimentTemplateRevisions),
 			common.WithScope(config, false),
 			WithPagination(),
-			mcp.WithString("identity",
-				mcp.Description("Unique identifier for the experiment template"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescIdentityExperimentTemplate),
 				mcp.Required(),
 			),
-			mcp.WithString("hubIdentity",
-				mcp.Description("Unique identifier for the chaos hub that owns the template"),
+			mcp.WithString(chaoscommons.ParamHubIdentity,
+				mcp.Description(chaoscommons.DescHubIdentityOwner),
 				mcp.Required(),
 			),
-			mcp.WithString("infrastructureType",
-				mcp.Description("Infrastructure type filter (e.g. Kubernetes)"),
+			mcp.WithString(chaoscommons.ParamInfrastructureType,
+				mcp.Description(chaoscommons.DescInfrastructureType),
 			),
-			mcp.WithString("infrastructure",
-				mcp.Description("Infrastructure filter (e.g. KubernetesV2)"),
+			mcp.WithString(chaoscommons.ParamInfrastructure,
+				mcp.Description(chaoscommons.DescInfrastructure),
 			),
-			mcp.WithString("search",
-				mcp.Description("Search revisions by name or identity"),
+			mcp.WithString(chaoscommons.ParamSearch,
+				mcp.Description(chaoscommons.DescSearch),
 			),
-			mcp.WithString("sortField",
-				mcp.Description("Field to sort results by"),
+			mcp.WithString(chaoscommons.ParamSortField,
+				mcp.Description(chaoscommons.DescSortField),
 				mcp.Enum("name", "lastUpdated", "experimentName"),
 			),
-			mcp.WithBoolean("sortAscending",
-				mcp.Description("When true, sort in ascending order. Defaults to false (descending)."),
+			mcp.WithBoolean(chaoscommons.ParamSortAscending,
+				mcp.Description(chaoscommons.DescSortAscending),
 			),
-			mcp.WithBoolean("includeAllScope",
-				mcp.Description("When true, returns templates from all orgs and projects in the account. When false (default), returns only templates in the current org and project."),
+			mcp.WithBoolean(chaoscommons.ParamIncludeAllScope,
+				mcp.Description(chaoscommons.DescIncludeAllScope),
 			),
-			mcp.WithString("tags",
-				mcp.Description("Comma-separated list of tags to filter by. Templates must have ALL specified tags (AND filter)."),
+			mcp.WithString(chaoscommons.ParamTags,
+				mcp.Description(chaoscommons.DescTags),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(true),
@@ -634,23 +639,23 @@ func GetExperimentTemplateRevisionsTool(config *config.McpServerConfig, client *
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			identity, err := RequiredParam[string](request, "identity")
+			identity, err := RequiredParam[string](request, chaoscommons.ParamIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			hubIdentity, err := RequiredParam[string](request, chaoscommons.ParamHubIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			infrastructureType, _ := OptionalParam[string](request, "infrastructureType")
-			infrastructure, _ := OptionalParam[string](request, "infrastructure")
-			search, _ := OptionalParam[string](request, "search")
-			sortField, _ := OptionalParam[string](request, "sortField")
-			sortAscending, _ := OptionalParam[bool](request, "sortAscending")
-			includeAllScope, _ := OptionalParam[bool](request, "includeAllScope")
-			tags, _ := OptionalParam[string](request, "tags")
+			infrastructureType, _ := OptionalParam[string](request, chaoscommons.ParamInfrastructureType)
+			infrastructure, _ := OptionalParam[string](request, chaoscommons.ParamInfrastructure)
+			search, _ := OptionalParam[string](request, chaoscommons.ParamSearch)
+			sortField, _ := OptionalParam[string](request, chaoscommons.ParamSortField)
+			sortAscending, _ := OptionalParam[bool](request, chaoscommons.ParamSortAscending)
+			includeAllScope, _ := OptionalParam[bool](request, chaoscommons.ParamIncludeAllScope)
+			tags, _ := OptionalParam[string](request, chaoscommons.ParamTags)
 
 			page, size, err := FetchPagination(request)
 			if err != nil {
@@ -677,19 +682,19 @@ func GetExperimentTemplateRevisionsTool(config *config.McpServerConfig, client *
 }
 
 func GetExperimentTemplateVariablesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_get_experiment_template_variables",
-			mcp.WithDescription("Retrieves the input variables (faults, probes, actions) of a specific chaos experiment template. Useful for understanding what inputs are needed before launching an experiment from a template."),
+	return mcp.NewTool(chaoscommons.ToolGetExperimentTemplateVariables,
+			mcp.WithDescription(chaoscommons.DescToolGetExperimentTemplateVariables),
 			common.WithScope(config, false),
-			mcp.WithString("identity",
-				mcp.Description("Unique identifier for the experiment template"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescIdentityExperimentTemplate),
 				mcp.Required(),
 			),
-			mcp.WithString("hubIdentity",
-				mcp.Description("Unique identifier for the chaos hub that owns the template"),
+			mcp.WithString(chaoscommons.ParamHubIdentity,
+				mcp.Description(chaoscommons.DescHubIdentityOwner),
 				mcp.Required(),
 			),
-			mcp.WithString("revision",
-				mcp.Description("Specific revision of the template. If omitted, the latest revision is used."),
+			mcp.WithString(chaoscommons.ParamRevision,
+				mcp.Description(chaoscommons.DescRevisionOptional),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(true),
@@ -702,17 +707,17 @@ func GetExperimentTemplateVariablesTool(config *config.McpServerConfig, client *
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			identity, err := RequiredParam[string](request, "identity")
+			identity, err := RequiredParam[string](request, chaoscommons.ParamIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			hubIdentity, err := RequiredParam[string](request, chaoscommons.ParamHubIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			revision, _ := OptionalParam[string](request, "revision")
+			revision, _ := OptionalParam[string](request, chaoscommons.ParamRevision)
 
 			data, err := client.GetExperimentTemplateVariables(ctx, scope, identity, hubIdentity, revision)
 			if err != nil {
@@ -729,19 +734,19 @@ func GetExperimentTemplateVariablesTool(config *config.McpServerConfig, client *
 }
 
 func GetExperimentTemplateYamlTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_get_experiment_template_yaml",
-			mcp.WithDescription("Retrieves the YAML representation of a specific chaos experiment template. Returns the raw template YAML string for a given revision."),
+	return mcp.NewTool(chaoscommons.ToolGetExperimentTemplateYaml,
+			mcp.WithDescription(chaoscommons.DescToolGetExperimentTemplateYaml),
 			common.WithScope(config, false),
-			mcp.WithString("identity",
-				mcp.Description("Unique identifier for the experiment template"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescIdentityExperimentTemplate),
 				mcp.Required(),
 			),
-			mcp.WithString("hubIdentity",
-				mcp.Description("Unique identifier for the chaos hub that owns the template"),
+			mcp.WithString(chaoscommons.ParamHubIdentity,
+				mcp.Description(chaoscommons.DescHubIdentityOwner),
 				mcp.Required(),
 			),
-			mcp.WithString("revision",
-				mcp.Description("Specific revision of the template. If omitted, the latest revision is used."),
+			mcp.WithString(chaoscommons.ParamRevision,
+				mcp.Description(chaoscommons.DescRevisionOptional),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(true),
@@ -754,17 +759,17 @@ func GetExperimentTemplateYamlTool(config *config.McpServerConfig, client *clien
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			identity, err := RequiredParam[string](request, "identity")
+			identity, err := RequiredParam[string](request, chaoscommons.ParamIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			hubIdentity, err := RequiredParam[string](request, chaoscommons.ParamHubIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			revision, _ := OptionalParam[string](request, "revision")
+			revision, _ := OptionalParam[string](request, chaoscommons.ParamRevision)
 
 			data, err := client.GetExperimentTemplateYaml(ctx, scope, identity, hubIdentity, revision)
 			if err != nil {
@@ -781,23 +786,23 @@ func GetExperimentTemplateYamlTool(config *config.McpServerConfig, client *clien
 }
 
 func CompareExperimentTemplateRevisionsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_compare_experiment_template_revisions",
-			mcp.WithDescription("Compares two revisions of a chaos experiment template, returning the YAML of both revisions for diff comparison. Both revision1 and revision2 are required."),
+	return mcp.NewTool(chaoscommons.ToolCompareExperimentTemplateRevisions,
+			mcp.WithDescription(chaoscommons.DescToolCompareExperimentTemplateRevisions),
 			common.WithScope(config, false),
-			mcp.WithString("identity",
-				mcp.Description("Unique identifier for the experiment template"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescIdentityExperimentTemplate),
 				mcp.Required(),
 			),
-			mcp.WithString("hubIdentity",
-				mcp.Description("Unique identifier for the chaos hub that owns the template"),
+			mcp.WithString(chaoscommons.ParamHubIdentity,
+				mcp.Description(chaoscommons.DescHubIdentityOwner),
 				mcp.Required(),
 			),
-			mcp.WithString("revision1",
-				mcp.Description("First revision identifier for comparison"),
+			mcp.WithString(chaoscommons.ParamRevision1,
+				mcp.Description(chaoscommons.DescRevision1),
 				mcp.Required(),
 			),
-			mcp.WithString("revision2",
-				mcp.Description("Second revision identifier for comparison"),
+			mcp.WithString(chaoscommons.ParamRevision2,
+				mcp.Description(chaoscommons.DescRevision2),
 				mcp.Required(),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
@@ -811,22 +816,22 @@ func CompareExperimentTemplateRevisionsTool(config *config.McpServerConfig, clie
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			identity, err := RequiredParam[string](request, "identity")
+			identity, err := RequiredParam[string](request, chaoscommons.ParamIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			hubIdentity, err := RequiredParam[string](request, chaoscommons.ParamHubIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			revision1, err := RequiredParam[string](request, "revision1")
+			revision1, err := RequiredParam[string](request, chaoscommons.ParamRevision1)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			revision2, err := RequiredParam[string](request, "revision2")
+			revision2, err := RequiredParam[string](request, chaoscommons.ParamRevision2)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -847,11 +852,11 @@ func CompareExperimentTemplateRevisionsTool(config *config.McpServerConfig, clie
 
 // ListExperimentVariablesTool creates a tool for listing the experiment variables
 func ListExperimentVariablesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_experiment_variables_list",
-			mcp.WithDescription("List the chaos experiment variables"),
+	return mcp.NewTool(chaoscommons.ToolExperimentVariablesList,
+			mcp.WithDescription(chaoscommons.DescToolExperimentVariablesList),
 			common.WithScope(config, false),
-			mcp.WithString("experimentID",
-				mcp.Description("Unique Identifier for an experiment"),
+			mcp.WithString(chaoscommons.ParamExperimentID,
+				mcp.Description(chaoscommons.DescExperimentID),
 				mcp.Required(),
 			),
 		),
@@ -861,7 +866,7 @@ func ListExperimentVariablesTool(config *config.McpServerConfig, client *client.
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			experimentID, err := RequiredParam[string](request, "experimentID")
+			experimentID, err := RequiredParam[string](request, chaoscommons.ParamExperimentID)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -1030,11 +1035,11 @@ func getRuntimeVariables(inputsetIdentity string, experimentVariablesRaw []inter
 
 // ListLinuxInfrastructuresTool creates a tool for listing Linux infrastructure (load runners)
 func ListLinuxInfrastructuresTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_list_linux_infrastructures",
-			mcp.WithDescription("List available Linux infrastructure for chaos engineering and load testing. Returns chaos Linux infrastructures (load infrastructures) with their IDs, names, and status. Infra IDs are needed when creating sample load tests via chaos_create_sample_loadtest. By default only active infrastructures are returned; set status to 'All' to list all."),
+	return mcp.NewTool(chaoscommons.ToolListLinuxInfrastructures,
+			mcp.WithDescription(chaoscommons.DescToolListLinuxInfrastructures),
 			common.WithScope(config, false),
-			mcp.WithString("status",
-				mcp.Description("Filter by infra status. Defaults to 'Active'. Use 'All' to list all infras regardless of status."),
+			mcp.WithString(chaoscommons.ParamStatus,
+				mcp.Description(chaoscommons.DescStatus),
 				mcp.Enum("Active", "All"),
 			),
 		),
@@ -1045,7 +1050,7 @@ func ListLinuxInfrastructuresTool(config *config.McpServerConfig, client *client
 			}
 
 			statusFilter := "Active"
-			status, err := OptionalParam[string](request, "status")
+			status, err := OptionalParam[string](request, chaoscommons.ParamStatus)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -1070,46 +1075,46 @@ func ListLinuxInfrastructuresTool(config *config.McpServerConfig, client *client
 }
 
 func ListFaultTemplatesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_list_fault_templates",
-			mcp.WithDescription("List chaos fault templates from chaos hubs. Supports filtering by hub, type, infrastructure, category, tags, and pagination."),
+	return mcp.NewTool(chaoscommons.ToolListFaultTemplates,
+			mcp.WithDescription(chaoscommons.DescToolListFaultTemplates),
 			common.WithScope(config, false),
 			WithPagination(),
-			mcp.WithString("hubIdentity",
-				mcp.Description("Unique identifier for the chaos hub to list fault templates from"),
+			mcp.WithString(chaoscommons.ParamHubIdentity,
+				mcp.Description(chaoscommons.DescHubIdentityList),
 			),
-			mcp.WithString("type",
-				mcp.Description("Fault type filter"),
+			mcp.WithString(chaoscommons.ParamType,
+				mcp.Description(chaoscommons.DescFaultType),
 			),
-			mcp.WithString("infrastructureType",
-				mcp.Description("Infrastructure type filter (e.g. Kubernetes)"),
+			mcp.WithString(chaoscommons.ParamInfrastructureType,
+				mcp.Description(chaoscommons.DescInfrastructureType),
 			),
-			mcp.WithString("infrastructure",
-				mcp.Description("Infrastructure filter (e.g. KubernetesV2)"),
+			mcp.WithString(chaoscommons.ParamInfrastructure,
+				mcp.Description(chaoscommons.DescInfrastructure),
 			),
-			mcp.WithString("search",
-				mcp.Description("Search fault templates by name or identity"),
+			mcp.WithString(chaoscommons.ParamSearch,
+				mcp.Description(chaoscommons.DescSearchFaultTemplates),
 			),
-			mcp.WithString("sortField",
-				mcp.Description("Field to sort results by"),
+			mcp.WithString(chaoscommons.ParamSortField,
+				mcp.Description(chaoscommons.DescSortField),
 				mcp.Enum("name", "lastUpdated"),
 			),
-			mcp.WithBoolean("sortAscending",
-				mcp.Description("When true, sort in ascending order. Defaults to false (descending)."),
+			mcp.WithBoolean(chaoscommons.ParamSortAscending,
+				mcp.Description(chaoscommons.DescSortAscending),
 			),
-			mcp.WithBoolean("includeAllScope",
-				mcp.Description("When true, returns fault templates from all orgs and projects in the account. When false (default), returns only fault templates in the current org and project."),
+			mcp.WithBoolean(chaoscommons.ParamIncludeAllScope,
+				mcp.Description(chaoscommons.DescIncludeAllScopeFault),
 			),
-			mcp.WithBoolean("isEnterprise",
-				mcp.Description("When true, filter for enterprise faults only."),
+			mcp.WithBoolean(chaoscommons.ParamIsEnterprise,
+				mcp.Description(chaoscommons.DescIsEnterprise),
 			),
-			mcp.WithString("tags",
-				mcp.Description("Comma-separated list of tags to filter by. Fault templates must have ALL specified tags (AND filter)."),
+			mcp.WithString(chaoscommons.ParamTags,
+				mcp.Description(chaoscommons.DescTagsFault),
 			),
-			mcp.WithString("category",
-				mcp.Description("Comma-separated list of categories to filter by (e.g. Kubernetes,AWS,Linux)."),
+			mcp.WithString(chaoscommons.ParamCategory,
+				mcp.Description(chaoscommons.DescCategory),
 			),
-			mcp.WithString("permissionsRequired",
-				mcp.Description("Filter by permissions required field"),
+			mcp.WithString(chaoscommons.ParamPermissionsRequired,
+				mcp.Description(chaoscommons.DescPermissionsRequired),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(true),
@@ -1122,18 +1127,18 @@ func ListFaultTemplatesTool(config *config.McpServerConfig, client *client.Chaos
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			hubIdentity, _ := OptionalParam[string](request, "hubIdentity")
-			faultType, _ := OptionalParam[string](request, "type")
-			infrastructureType, _ := OptionalParam[string](request, "infrastructureType")
-			infrastructure, _ := OptionalParam[string](request, "infrastructure")
-			search, _ := OptionalParam[string](request, "search")
-			sortField, _ := OptionalParam[string](request, "sortField")
-			sortAscending, _ := OptionalParam[bool](request, "sortAscending")
-			includeAllScope, _ := OptionalParam[bool](request, "includeAllScope")
-			isEnterprise, _ := OptionalParam[bool](request, "isEnterprise")
-			tags, _ := OptionalParam[string](request, "tags")
-			category, _ := OptionalParam[string](request, "category")
-			permissionsRequired, _ := OptionalParam[string](request, "permissionsRequired")
+			hubIdentity, _ := OptionalParam[string](request, chaoscommons.ParamHubIdentity)
+			faultType, _ := OptionalParam[string](request, chaoscommons.ParamType)
+			infrastructureType, _ := OptionalParam[string](request, chaoscommons.ParamInfrastructureType)
+			infrastructure, _ := OptionalParam[string](request, chaoscommons.ParamInfrastructure)
+			search, _ := OptionalParam[string](request, chaoscommons.ParamSearch)
+			sortField, _ := OptionalParam[string](request, chaoscommons.ParamSortField)
+			sortAscending, _ := OptionalParam[bool](request, chaoscommons.ParamSortAscending)
+			includeAllScope, _ := OptionalParam[bool](request, chaoscommons.ParamIncludeAllScope)
+			isEnterprise, _ := OptionalParam[bool](request, chaoscommons.ParamIsEnterprise)
+			tags, _ := OptionalParam[string](request, chaoscommons.ParamTags)
+			category, _ := OptionalParam[string](request, chaoscommons.ParamCategory)
+			permissionsRequired, _ := OptionalParam[string](request, chaoscommons.ParamPermissionsRequired)
 
 			page, size, err := FetchPagination(request)
 			if err != nil {
@@ -1157,19 +1162,19 @@ func ListFaultTemplatesTool(config *config.McpServerConfig, client *client.Chaos
 }
 
 func GetFaultTemplateTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_get_fault_template",
-			mcp.WithDescription("Retrieves detailed information about a specific chaos fault template by its identity, including its spec, variables, revision, and metadata."),
+	return mcp.NewTool(chaoscommons.ToolGetFaultTemplate,
+			mcp.WithDescription(chaoscommons.DescToolGetFaultTemplate),
 			common.WithScope(config, false),
-			mcp.WithString("identity",
-				mcp.Description("Unique identifier for the fault template"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescIdentityFaultTemplate),
 				mcp.Required(),
 			),
-			mcp.WithString("hubIdentity",
-				mcp.Description("Unique identifier for the chaos hub that owns the fault template"),
+			mcp.WithString(chaoscommons.ParamHubIdentity,
+				mcp.Description(chaoscommons.DescHubIdentityFault),
 				mcp.Required(),
 			),
-			mcp.WithString("revision",
-				mcp.Description("Specific revision of the fault template to retrieve. If omitted, the latest revision is returned."),
+			mcp.WithString(chaoscommons.ParamRevision,
+				mcp.Description(chaoscommons.DescRevisionFault),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(true),
@@ -1182,17 +1187,17 @@ func GetFaultTemplateTool(config *config.McpServerConfig, client *client.ChaosSe
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			identity, err := RequiredParam[string](request, "identity")
+			identity, err := RequiredParam[string](request, chaoscommons.ParamIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			hubIdentity, err := RequiredParam[string](request, chaoscommons.ParamHubIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			revision, _ := OptionalParam[string](request, "revision")
+			revision, _ := OptionalParam[string](request, chaoscommons.ParamRevision)
 
 			data, err := client.GetFaultTemplate(ctx, scope, identity, hubIdentity, revision)
 			if err != nil {
@@ -1209,15 +1214,15 @@ func GetFaultTemplateTool(config *config.McpServerConfig, client *client.ChaosSe
 }
 
 func DeleteFaultTemplateTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_delete_fault_template",
-			mcp.WithDescription("Deletes a chaos fault template by its identity (soft delete)."),
+	return mcp.NewTool(chaoscommons.ToolDeleteFaultTemplate,
+			mcp.WithDescription(chaoscommons.DescToolDeleteFaultTemplate),
 			common.WithScope(config, false),
-			mcp.WithString("identity",
-				mcp.Description("Unique identifier for the fault template to delete"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescIdentityFaultTemplateDelete),
 				mcp.Required(),
 			),
-			mcp.WithString("hubIdentity",
-				mcp.Description("Unique identifier for the chaos hub that owns the fault template"),
+			mcp.WithString(chaoscommons.ParamHubIdentity,
+				mcp.Description(chaoscommons.DescHubIdentityFault),
 				mcp.Required(),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
@@ -1231,12 +1236,12 @@ func DeleteFaultTemplateTool(config *config.McpServerConfig, client *client.Chao
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			identity, err := RequiredParam[string](request, "identity")
+			identity, err := RequiredParam[string](request, chaoscommons.ParamIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			hubIdentity, err := RequiredParam[string](request, chaoscommons.ParamHubIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -1250,16 +1255,16 @@ func DeleteFaultTemplateTool(config *config.McpServerConfig, client *client.Chao
 }
 
 func GetFaultTemplateRevisionsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_list_fault_template_revisions",
-			mcp.WithDescription("Lists all revisions of a specific chaos fault template by its identity. Supports pagination."),
+	return mcp.NewTool(chaoscommons.ToolListFaultTemplateRevisions,
+			mcp.WithDescription(chaoscommons.DescToolListFaultTemplateRevisions),
 			common.WithScope(config, false),
 			WithPagination(),
-			mcp.WithString("identity",
-				mcp.Description("Unique identifier for the fault template"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescIdentityFaultTemplate),
 				mcp.Required(),
 			),
-			mcp.WithString("hubIdentity",
-				mcp.Description("Unique identifier for the chaos hub that owns the fault template"),
+			mcp.WithString(chaoscommons.ParamHubIdentity,
+				mcp.Description(chaoscommons.DescHubIdentityFault),
 				mcp.Required(),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
@@ -1273,12 +1278,12 @@ func GetFaultTemplateRevisionsTool(config *config.McpServerConfig, client *clien
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			identity, err := RequiredParam[string](request, "identity")
+			identity, err := RequiredParam[string](request, chaoscommons.ParamIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			hubIdentity, err := RequiredParam[string](request, chaoscommons.ParamHubIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -1305,19 +1310,19 @@ func GetFaultTemplateRevisionsTool(config *config.McpServerConfig, client *clien
 }
 
 func GetFaultTemplateVariablesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_get_fault_template_variables",
-			mcp.WithDescription("Retrieves the runtime input variables of a specific chaos fault template, grouped into variables, faultTargets, faultTunable, and faultAuthentication."),
+	return mcp.NewTool(chaoscommons.ToolGetFaultTemplateVariables,
+			mcp.WithDescription(chaoscommons.DescToolGetFaultTemplateVariables),
 			common.WithScope(config, false),
-			mcp.WithString("identity",
-				mcp.Description("Unique identifier for the fault template"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescIdentityFaultTemplate),
 				mcp.Required(),
 			),
-			mcp.WithString("hubIdentity",
-				mcp.Description("Unique identifier for the chaos hub that owns the fault template"),
+			mcp.WithString(chaoscommons.ParamHubIdentity,
+				mcp.Description(chaoscommons.DescHubIdentityFault),
 				mcp.Required(),
 			),
-			mcp.WithString("revision",
-				mcp.Description("Specific revision of the fault template. If omitted, the latest revision is used."),
+			mcp.WithString(chaoscommons.ParamRevision,
+				mcp.Description(chaoscommons.DescRevisionFaultOptional),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(true),
@@ -1330,17 +1335,17 @@ func GetFaultTemplateVariablesTool(config *config.McpServerConfig, client *clien
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			identity, err := RequiredParam[string](request, "identity")
+			identity, err := RequiredParam[string](request, chaoscommons.ParamIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			hubIdentity, err := RequiredParam[string](request, chaoscommons.ParamHubIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			revision, _ := OptionalParam[string](request, "revision")
+			revision, _ := OptionalParam[string](request, chaoscommons.ParamRevision)
 
 			data, err := client.GetFaultTemplateVariables(ctx, scope, identity, hubIdentity, revision)
 			if err != nil {
@@ -1357,19 +1362,19 @@ func GetFaultTemplateVariablesTool(config *config.McpServerConfig, client *clien
 }
 
 func GetFaultTemplateYamlTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_get_fault_template_yaml",
-			mcp.WithDescription("Retrieves the YAML representation of a specific chaos fault template. Returns the raw template YAML string for a given revision."),
+	return mcp.NewTool(chaoscommons.ToolGetFaultTemplateYaml,
+			mcp.WithDescription(chaoscommons.DescToolGetFaultTemplateYaml),
 			common.WithScope(config, false),
-			mcp.WithString("identity",
-				mcp.Description("Unique identifier for the fault template"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescIdentityFaultTemplate),
 				mcp.Required(),
 			),
-			mcp.WithString("hubIdentity",
-				mcp.Description("Unique identifier for the chaos hub that owns the fault template"),
+			mcp.WithString(chaoscommons.ParamHubIdentity,
+				mcp.Description(chaoscommons.DescHubIdentityFault),
 				mcp.Required(),
 			),
-			mcp.WithString("revision",
-				mcp.Description("Specific revision of the fault template. If omitted, the latest revision is used."),
+			mcp.WithString(chaoscommons.ParamRevision,
+				mcp.Description(chaoscommons.DescRevisionFaultOptional),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(true),
@@ -1382,17 +1387,17 @@ func GetFaultTemplateYamlTool(config *config.McpServerConfig, client *client.Cha
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			identity, err := RequiredParam[string](request, "identity")
+			identity, err := RequiredParam[string](request, chaoscommons.ParamIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			hubIdentity, err := RequiredParam[string](request, chaoscommons.ParamHubIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			revision, _ := OptionalParam[string](request, "revision")
+			revision, _ := OptionalParam[string](request, chaoscommons.ParamRevision)
 
 			data, err := client.GetFaultTemplateYaml(ctx, scope, identity, hubIdentity, revision)
 			if err != nil {
@@ -1409,23 +1414,23 @@ func GetFaultTemplateYamlTool(config *config.McpServerConfig, client *client.Cha
 }
 
 func CompareFaultTemplateRevisionsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_compare_fault_template_revisions",
-			mcp.WithDescription("Compares two revisions of a chaos fault template, returning the YAML of both revisions for diff comparison. Both revision1 and revision2 are required."),
+	return mcp.NewTool(chaoscommons.ToolCompareFaultTemplateRevisions,
+			mcp.WithDescription(chaoscommons.DescToolCompareFaultTemplateRevisions),
 			common.WithScope(config, false),
-			mcp.WithString("identity",
-				mcp.Description("Unique identifier for the fault template"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescIdentityFaultTemplate),
 				mcp.Required(),
 			),
-			mcp.WithString("hubIdentity",
-				mcp.Description("Unique identifier for the chaos hub that owns the fault template"),
+			mcp.WithString(chaoscommons.ParamHubIdentity,
+				mcp.Description(chaoscommons.DescHubIdentityFault),
 				mcp.Required(),
 			),
-			mcp.WithString("revision1",
-				mcp.Description("First revision identifier for comparison"),
+			mcp.WithString(chaoscommons.ParamRevision1,
+				mcp.Description(chaoscommons.DescRevision1),
 				mcp.Required(),
 			),
-			mcp.WithString("revision2",
-				mcp.Description("Second revision identifier for comparison"),
+			mcp.WithString(chaoscommons.ParamRevision2,
+				mcp.Description(chaoscommons.DescRevision2),
 				mcp.Required(),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
@@ -1439,22 +1444,22 @@ func CompareFaultTemplateRevisionsTool(config *config.McpServerConfig, client *c
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			identity, err := RequiredParam[string](request, "identity")
+			identity, err := RequiredParam[string](request, chaoscommons.ParamIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			hubIdentity, err := RequiredParam[string](request, chaoscommons.ParamHubIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			revision1, err := RequiredParam[string](request, "revision1")
+			revision1, err := RequiredParam[string](request, chaoscommons.ParamRevision1)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			revision2, err := RequiredParam[string](request, "revision2")
+			revision2, err := RequiredParam[string](request, chaoscommons.ParamRevision2)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -1474,24 +1479,24 @@ func CompareFaultTemplateRevisionsTool(config *config.McpServerConfig, client *c
 }
 
 func ListProbeTemplatesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_list_probe_templates",
-			mcp.WithDescription("List chaos probe templates. Supports filtering by hub, infrastructure type, probe entity type, search, and pagination."),
+	return mcp.NewTool(chaoscommons.ToolListProbeTemplates,
+			mcp.WithDescription(chaoscommons.DescToolListProbeTemplates),
 			common.WithScope(config, false),
 			WithPagination(),
-			mcp.WithString("hubIdentity",
-				mcp.Description("Unique identifier for the chaos hub to list probe templates from"),
+			mcp.WithString(chaoscommons.ParamHubIdentity,
+				mcp.Description(chaoscommons.DescHubIdentityListProbe),
 			),
-			mcp.WithString("search",
-				mcp.Description("Search probe templates by name or identity"),
+			mcp.WithString(chaoscommons.ParamSearch,
+				mcp.Description(chaoscommons.DescSearchProbe),
 			),
-			mcp.WithString("infraType",
-				mcp.Description("Infrastructure type filter (e.g. Kubernetes)"),
+			mcp.WithString(chaoscommons.ParamInfraType,
+				mcp.Description(chaoscommons.DescInfraType),
 			),
-			mcp.WithString("entityType",
-				mcp.Description("Probe type filter (e.g. httpProbe, cmdProbe)"),
+			mcp.WithString(chaoscommons.ParamEntityType,
+				mcp.Description(chaoscommons.DescEntityTypeProbe),
 			),
-			mcp.WithBoolean("includeAllScope",
-				mcp.Description("When true, returns probe templates from all orgs and projects in the account. When false (default), returns only probe templates in the current org and project."),
+			mcp.WithBoolean(chaoscommons.ParamIncludeAllScope,
+				mcp.Description(chaoscommons.DescIncludeAllScopeProbe),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(true),
@@ -1504,11 +1509,11 @@ func ListProbeTemplatesTool(config *config.McpServerConfig, client *client.Chaos
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			hubIdentity, _ := OptionalParam[string](request, "hubIdentity")
-			search, _ := OptionalParam[string](request, "search")
-			infraType, _ := OptionalParam[string](request, "infraType")
-			entityType, _ := OptionalParam[string](request, "entityType")
-			includeAllScope, _ := OptionalParam[bool](request, "includeAllScope")
+			hubIdentity, _ := OptionalParam[string](request, chaoscommons.ParamHubIdentity)
+			search, _ := OptionalParam[string](request, chaoscommons.ParamSearch)
+			infraType, _ := OptionalParam[string](request, chaoscommons.ParamInfraType)
+			entityType, _ := OptionalParam[string](request, chaoscommons.ParamEntityType)
+			includeAllScope, _ := OptionalParam[bool](request, chaoscommons.ParamIncludeAllScope)
 
 			page, size, err := FetchPagination(request)
 			if err != nil {
@@ -1530,18 +1535,18 @@ func ListProbeTemplatesTool(config *config.McpServerConfig, client *client.Chaos
 }
 
 func GetProbeTemplateTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_get_probe_template",
-			mcp.WithDescription("Retrieves detailed information about a specific chaos probe template by its identity, including its type, properties, run properties, and metadata."),
+	return mcp.NewTool(chaoscommons.ToolGetProbeTemplate,
+			mcp.WithDescription(chaoscommons.DescToolGetProbeTemplate),
 			common.WithScope(config, false),
-			mcp.WithString("identity",
-				mcp.Description("Unique identifier for the probe template"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescIdentityProbeTemplate),
 				mcp.Required(),
 			),
-			mcp.WithString("hubIdentity",
-				mcp.Description("Unique identifier for the chaos hub the probe template belongs to"),
+			mcp.WithString(chaoscommons.ParamHubIdentity,
+				mcp.Description(chaoscommons.DescHubIdentityProbe),
 			),
-			mcp.WithNumber("revision",
-				mcp.Description("Specific revision number to retrieve. Defaults to the latest revision (0) if not provided."),
+			mcp.WithNumber(chaoscommons.ParamRevision,
+				mcp.Description(chaoscommons.DescRevisionProbe),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(true),
@@ -1554,13 +1559,13 @@ func GetProbeTemplateTool(config *config.McpServerConfig, client *client.ChaosSe
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			identity, err := RequiredParam[string](request, "identity")
+			identity, err := RequiredParam[string](request, chaoscommons.ParamIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			hubIdentity, _ := OptionalParam[string](request, "hubIdentity")
-			revision, _ := OptionalParam[float64](request, "revision")
+			hubIdentity, _ := OptionalParam[string](request, chaoscommons.ParamHubIdentity)
+			revision, _ := OptionalParam[float64](request, chaoscommons.ParamRevision)
 
 			data, err := client.GetProbeTemplate(ctx, scope, identity, hubIdentity, int64(revision))
 			if err != nil {
@@ -1577,19 +1582,19 @@ func GetProbeTemplateTool(config *config.McpServerConfig, client *client.ChaosSe
 }
 
 func DeleteProbeTemplateTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_delete_probe_template",
-			mcp.WithDescription("Deletes a chaos probe template by its identity. Requires hubIdentity. When revision is 0 or not provided, all revisions are deleted. The template must not be referenced by any experiments for deletion to succeed."),
+	return mcp.NewTool(chaoscommons.ToolDeleteProbeTemplate,
+			mcp.WithDescription(chaoscommons.DescToolDeleteProbeTemplate),
 			common.WithScope(config, false),
-			mcp.WithString("identity",
-				mcp.Description("Unique identifier for the probe template to delete"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescIdentityProbeTemplateDelete),
 				mcp.Required(),
 			),
-			mcp.WithString("hubIdentity",
-				mcp.Description("Unique identifier for the chaos hub the probe template belongs to"),
+			mcp.WithString(chaoscommons.ParamHubIdentity,
+				mcp.Description(chaoscommons.DescHubIdentityProbe),
 				mcp.Required(),
 			),
-			mcp.WithNumber("revision",
-				mcp.Description("Specific revision number to delete. When 0 or not provided, all revisions are deleted."),
+			mcp.WithNumber(chaoscommons.ParamRevision,
+				mcp.Description(chaoscommons.DescRevisionProbeDelete),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(false),
@@ -1602,17 +1607,17 @@ func DeleteProbeTemplateTool(config *config.McpServerConfig, client *client.Chao
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			identity, err := RequiredParam[string](request, "identity")
+			identity, err := RequiredParam[string](request, chaoscommons.ParamIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			hubIdentity, err := RequiredParam[string](request, chaoscommons.ParamHubIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			revision, _ := OptionalParam[float64](request, "revision")
+			revision, _ := OptionalParam[float64](request, chaoscommons.ParamRevision)
 
 			deleted, err := client.DeleteProbeTemplate(ctx, scope, identity, hubIdentity, int64(revision))
 			if err != nil {
@@ -1629,18 +1634,18 @@ func DeleteProbeTemplateTool(config *config.McpServerConfig, client *client.Chao
 }
 
 func GetProbeTemplateVariablesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_get_probe_template_variables",
-			mcp.WithDescription("Retrieves the runtime input variables for a chaos probe template, including probe properties and run properties."),
+	return mcp.NewTool(chaoscommons.ToolGetProbeTemplateVariables,
+			mcp.WithDescription(chaoscommons.DescToolGetProbeTemplateVariables),
 			common.WithScope(config, false),
-			mcp.WithString("identity",
-				mcp.Description("Unique identifier for the probe template"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescIdentityProbeTemplate),
 				mcp.Required(),
 			),
-			mcp.WithString("hubIdentity",
-				mcp.Description("Unique identifier for the chaos hub the probe template belongs to"),
+			mcp.WithString(chaoscommons.ParamHubIdentity,
+				mcp.Description(chaoscommons.DescHubIdentityProbe),
 			),
-			mcp.WithNumber("revision",
-				mcp.Description("Revision number to get variables for. Defaults to latest revision (0) if not provided."),
+			mcp.WithNumber(chaoscommons.ParamRevision,
+				mcp.Description(chaoscommons.DescRevisionProbeVars),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(true),
@@ -1653,13 +1658,13 @@ func GetProbeTemplateVariablesTool(config *config.McpServerConfig, client *clien
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			identity, err := RequiredParam[string](request, "identity")
+			identity, err := RequiredParam[string](request, chaoscommons.ParamIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			hubIdentity, _ := OptionalParam[string](request, "hubIdentity")
-			revision, _ := OptionalParam[float64](request, "revision")
+			hubIdentity, _ := OptionalParam[string](request, chaoscommons.ParamHubIdentity)
+			revision, _ := OptionalParam[float64](request, chaoscommons.ParamRevision)
 
 			data, err := client.GetProbeTemplateVariables(ctx, scope, identity, hubIdentity, int64(revision))
 			if err != nil {
@@ -1676,24 +1681,24 @@ func GetProbeTemplateVariablesTool(config *config.McpServerConfig, client *clien
 }
 
 func ListActionTemplatesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_list_action_templates",
-			mcp.WithDescription("List chaos action templates. Supports filtering by hub, infrastructure type, action entity type, search, and pagination."),
+	return mcp.NewTool(chaoscommons.ToolListActionTemplates,
+			mcp.WithDescription(chaoscommons.DescToolListActionTemplates),
 			common.WithScope(config, false),
 			WithPagination(),
-			mcp.WithString("hubIdentity",
-				mcp.Description("Unique identifier for the chaos hub to list action templates from"),
+			mcp.WithString(chaoscommons.ParamHubIdentity,
+				mcp.Description(chaoscommons.DescHubIdentityListAction),
 			),
-			mcp.WithString("search",
-				mcp.Description("Search action templates by name or identity"),
+			mcp.WithString(chaoscommons.ParamSearch,
+				mcp.Description(chaoscommons.DescSearchAction),
 			),
-			mcp.WithString("infraType",
-				mcp.Description("Infrastructure type filter (e.g. Kubernetes)"),
+			mcp.WithString(chaoscommons.ParamInfraType,
+				mcp.Description(chaoscommons.DescInfraType),
 			),
-			mcp.WithString("entityType",
-				mcp.Description("Action type filter"),
+			mcp.WithString(chaoscommons.ParamEntityType,
+				mcp.Description(chaoscommons.DescEntityTypeAction),
 			),
-			mcp.WithBoolean("includeAllScope",
-				mcp.Description("When true, returns action templates from all orgs and projects in the account. When false (default), returns only action templates in the current org and project."),
+			mcp.WithBoolean(chaoscommons.ParamIncludeAllScope,
+				mcp.Description(chaoscommons.DescIncludeAllScopeAction),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(true),
@@ -1706,11 +1711,11 @@ func ListActionTemplatesTool(config *config.McpServerConfig, client *client.Chao
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			hubIdentity, _ := OptionalParam[string](request, "hubIdentity")
-			search, _ := OptionalParam[string](request, "search")
-			infraType, _ := OptionalParam[string](request, "infraType")
-			entityType, _ := OptionalParam[string](request, "entityType")
-			includeAllScope, _ := OptionalParam[bool](request, "includeAllScope")
+			hubIdentity, _ := OptionalParam[string](request, chaoscommons.ParamHubIdentity)
+			search, _ := OptionalParam[string](request, chaoscommons.ParamSearch)
+			infraType, _ := OptionalParam[string](request, chaoscommons.ParamInfraType)
+			entityType, _ := OptionalParam[string](request, chaoscommons.ParamEntityType)
+			includeAllScope, _ := OptionalParam[bool](request, chaoscommons.ParamIncludeAllScope)
 
 			page, size, err := FetchPagination(request)
 			if err != nil {
@@ -1732,18 +1737,18 @@ func ListActionTemplatesTool(config *config.McpServerConfig, client *client.Chao
 }
 
 func GetActionTemplateTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_get_action_template",
-			mcp.WithDescription("Retrieves detailed information about a specific chaos action template by its identity, including its spec, variables, revision, and metadata."),
+	return mcp.NewTool(chaoscommons.ToolGetActionTemplate,
+			mcp.WithDescription(chaoscommons.DescToolGetActionTemplate),
 			common.WithScope(config, false),
-			mcp.WithString("identity",
-				mcp.Description("Unique identifier for the action template"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescIdentityActionTemplate),
 				mcp.Required(),
 			),
-			mcp.WithString("hubIdentity", // is this a required or optional field?
-				mcp.Description("Unique identifier for the chaos hub the action template belongs to"),
+			mcp.WithString(chaoscommons.ParamHubIdentity, // is this a required or optional field?
+				mcp.Description(chaoscommons.DescHubIdentityAction),
 			),
-			mcp.WithNumber("revision",
-				mcp.Description("Specific revision number to retrieve. Defaults to the latest revision (0) if not provided."),
+			mcp.WithNumber(chaoscommons.ParamRevision,
+				mcp.Description(chaoscommons.DescRevisionAction),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(true),
@@ -1756,13 +1761,13 @@ func GetActionTemplateTool(config *config.McpServerConfig, client *client.ChaosS
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			identity, err := RequiredParam[string](request, "identity")
+			identity, err := RequiredParam[string](request, chaoscommons.ParamIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			hubIdentity, _ := OptionalParam[string](request, "hubIdentity")
-			revision, _ := OptionalParam[float64](request, "revision")
+			hubIdentity, _ := OptionalParam[string](request, chaoscommons.ParamHubIdentity)
+			revision, _ := OptionalParam[float64](request, chaoscommons.ParamRevision)
 
 			data, err := client.GetActionTemplate(ctx, scope, identity, hubIdentity, int64(revision))
 			if err != nil {
@@ -1779,19 +1784,19 @@ func GetActionTemplateTool(config *config.McpServerConfig, client *client.ChaosS
 }
 
 func DeleteActionTemplateTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_delete_action_template",
-			mcp.WithDescription("Deletes a chaos action template by its identity. Requires hubIdentity. When revision is 0 or not provided, all revisions are deleted. The template must not be referenced by any experiments for deletion to succeed."),
+	return mcp.NewTool(chaoscommons.ToolDeleteActionTemplate,
+			mcp.WithDescription(chaoscommons.DescToolDeleteActionTemplate),
 			common.WithScope(config, false),
-			mcp.WithString("identity",
-				mcp.Description("Unique identifier for the action template to delete"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescIdentityActionTemplateDelete),
 				mcp.Required(),
 			),
-			mcp.WithString("hubIdentity",
-				mcp.Description("Unique identifier for the chaos hub the action template belongs to"),
+			mcp.WithString(chaoscommons.ParamHubIdentity,
+				mcp.Description(chaoscommons.DescHubIdentityAction),
 				mcp.Required(),
 			),
-			mcp.WithNumber("revision",
-				mcp.Description("Specific revision number to delete. When 0 or not provided, all revisions are deleted."),
+			mcp.WithNumber(chaoscommons.ParamRevision,
+				mcp.Description(chaoscommons.DescRevisionActionDelete),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(false),
@@ -1804,17 +1809,17 @@ func DeleteActionTemplateTool(config *config.McpServerConfig, client *client.Cha
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			identity, err := RequiredParam[string](request, "identity")
+			identity, err := RequiredParam[string](request, chaoscommons.ParamIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			hubIdentity, err := RequiredParam[string](request, chaoscommons.ParamHubIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			revision, _ := OptionalParam[float64](request, "revision")
+			revision, _ := OptionalParam[float64](request, chaoscommons.ParamRevision)
 
 			deleted, err := client.DeleteActionTemplate(ctx, scope, identity, hubIdentity, int64(revision))
 			if err != nil {
@@ -1831,28 +1836,28 @@ func DeleteActionTemplateTool(config *config.McpServerConfig, client *client.Cha
 }
 
 func GetActionTemplateRevisionsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_list_action_template_revisions",
-			mcp.WithDescription("Lists all revisions of a chaos action template by its identity, with pagination and optional filtering support."),
+	return mcp.NewTool(chaoscommons.ToolListActionTemplateRevisions,
+			mcp.WithDescription(chaoscommons.DescToolListActionTemplateRevisions),
 			common.WithScope(config, false),
 			WithPagination(),
-			mcp.WithString("identity",
-				mcp.Description("Unique identifier for the action template"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescIdentityActionTemplate),
 				mcp.Required(),
 			),
-			mcp.WithString("hubIdentity",
-				mcp.Description("Unique identifier for the chaos hub the action template belongs to"),
+			mcp.WithString(chaoscommons.ParamHubIdentity,
+				mcp.Description(chaoscommons.DescHubIdentityAction),
 			),
-			mcp.WithString("search",
-				mcp.Description("Search revisions by name"),
+			mcp.WithString(chaoscommons.ParamSearch,
+				mcp.Description(chaoscommons.DescSearchActionRevisions),
 			),
-			mcp.WithString("infraType",
-				mcp.Description("Infrastructure type filter (e.g. Kubernetes)"),
+			mcp.WithString(chaoscommons.ParamInfraType,
+				mcp.Description(chaoscommons.DescInfraType),
 			),
-			mcp.WithString("entityType",
-				mcp.Description("Action type filter"),
+			mcp.WithString(chaoscommons.ParamEntityType,
+				mcp.Description(chaoscommons.DescEntityTypeAction),
 			),
-			mcp.WithBoolean("includeAllScope",
-				mcp.Description("When true, returns revisions from all orgs and projects in the account. When false (default), returns only revisions in the current org and project."),
+			mcp.WithBoolean(chaoscommons.ParamIncludeAllScope,
+				mcp.Description(chaoscommons.DescIncludeAllScopeRevisions),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(true),
@@ -1865,16 +1870,16 @@ func GetActionTemplateRevisionsTool(config *config.McpServerConfig, client *clie
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			identity, err := RequiredParam[string](request, "identity")
+			identity, err := RequiredParam[string](request, chaoscommons.ParamIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			hubIdentity, _ := OptionalParam[string](request, "hubIdentity")
-			search, _ := OptionalParam[string](request, "search")
-			infraType, _ := OptionalParam[string](request, "infraType")
-			entityType, _ := OptionalParam[string](request, "entityType")
-			includeAllScope, _ := OptionalParam[bool](request, "includeAllScope")
+			hubIdentity, _ := OptionalParam[string](request, chaoscommons.ParamHubIdentity)
+			search, _ := OptionalParam[string](request, chaoscommons.ParamSearch)
+			infraType, _ := OptionalParam[string](request, chaoscommons.ParamInfraType)
+			entityType, _ := OptionalParam[string](request, chaoscommons.ParamEntityType)
+			includeAllScope, _ := OptionalParam[bool](request, chaoscommons.ParamIncludeAllScope)
 
 			page, size, err := FetchPagination(request)
 			if err != nil {
@@ -1896,18 +1901,18 @@ func GetActionTemplateRevisionsTool(config *config.McpServerConfig, client *clie
 }
 
 func GetActionTemplateVariablesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_get_action_template_variables",
-			mcp.WithDescription("Retrieves the runtime input variables for a chaos action template, including action properties and run properties."),
+	return mcp.NewTool(chaoscommons.ToolGetActionTemplateVariables,
+			mcp.WithDescription(chaoscommons.DescToolGetActionTemplateVariables),
 			common.WithScope(config, false),
-			mcp.WithString("identity",
-				mcp.Description("Unique identifier for the action template"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescIdentityActionTemplate),
 				mcp.Required(),
 			),
-			mcp.WithString("hubIdentity",
-				mcp.Description("Unique identifier for the chaos hub the action template belongs to"),
+			mcp.WithString(chaoscommons.ParamHubIdentity,
+				mcp.Description(chaoscommons.DescHubIdentityAction),
 			),
-			mcp.WithNumber("revision",
-				mcp.Description("Revision number to get variables for. Defaults to latest revision (0) if not provided."),
+			mcp.WithNumber(chaoscommons.ParamRevision,
+				mcp.Description(chaoscommons.DescRevisionActionVars),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(true),
@@ -1920,13 +1925,13 @@ func GetActionTemplateVariablesTool(config *config.McpServerConfig, client *clie
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			identity, err := RequiredParam[string](request, "identity")
+			identity, err := RequiredParam[string](request, chaoscommons.ParamIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			hubIdentity, _ := OptionalParam[string](request, "hubIdentity")
-			revision, _ := OptionalParam[float64](request, "revision")
+			hubIdentity, _ := OptionalParam[string](request, chaoscommons.ParamHubIdentity)
+			revision, _ := OptionalParam[float64](request, chaoscommons.ParamRevision)
 
 			data, err := client.GetActionTemplateVariables(ctx, scope, identity, hubIdentity, int64(revision))
 			if err != nil {
@@ -1943,22 +1948,22 @@ func GetActionTemplateVariablesTool(config *config.McpServerConfig, client *clie
 }
 
 func CompareActionTemplateRevisionsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_compare_action_template_revisions",
-			mcp.WithDescription("Compares two revisions of a chaos action template side by side. Requires the template identity, hub identity, and two revision numbers."),
+	return mcp.NewTool(chaoscommons.ToolCompareActionTemplateRevisions,
+			mcp.WithDescription(chaoscommons.DescToolCompareActionTemplateRevisions),
 			common.WithScope(config, false),
-			mcp.WithString("identity",
-				mcp.Description("Unique identifier for the action template"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescIdentityActionTemplate),
 				mcp.Required(),
 			),
-			mcp.WithString("hubIdentity",
-				mcp.Description("Unique identifier for the chaos hub the action template belongs to"),
+			mcp.WithString(chaoscommons.ParamHubIdentity,
+				mcp.Description(chaoscommons.DescHubIdentityAction),
 			),
-			mcp.WithString("revision",
-				mcp.Description("First revision number to compare"),
+			mcp.WithString(chaoscommons.ParamRevision,
+				mcp.Description(chaoscommons.DescRevisionActionCompare),
 				mcp.Required(),
 			),
-			mcp.WithString("revisionToCompare",
-				mcp.Description("Second revision number to compare"),
+			mcp.WithString(chaoscommons.ParamRevisionToCompare,
+				mcp.Description(chaoscommons.DescRevisionToCompare),
 				mcp.Required(),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
@@ -1972,19 +1977,19 @@ func CompareActionTemplateRevisionsTool(config *config.McpServerConfig, client *
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			identity, err := RequiredParam[string](request, "identity")
+			identity, err := RequiredParam[string](request, chaoscommons.ParamIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			hubIdentity, _ := OptionalParam[string](request, "hubIdentity")
+			hubIdentity, _ := OptionalParam[string](request, chaoscommons.ParamHubIdentity)
 
-			revision, err := RequiredParam[string](request, "revision")
+			revision, err := RequiredParam[string](request, chaoscommons.ParamRevision)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			revisionToCompare, err := RequiredParam[string](request, "revisionToCompare")
+			revisionToCompare, err := RequiredParam[string](request, chaoscommons.ParamRevisionToCompare)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -2004,15 +2009,15 @@ func CompareActionTemplateRevisionsTool(config *config.McpServerConfig, client *
 }
 
 func ListChaosHubsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_list_hubs",
-			mcp.WithDescription("List ChaosHubs (Git-connected repositories containing fault, experiment, probe, and action templates). Returns hub details including repository info, connector configuration, template counts, and sync status. Supports search, pagination, and cross-scope inclusion."),
+	return mcp.NewTool(chaoscommons.ToolListHubs,
+			mcp.WithDescription(chaoscommons.DescToolListHubs),
 			common.WithScope(config, false),
 			WithPagination(),
-			mcp.WithString("search",
-				mcp.Description("Search hubs by name (case-insensitive)"),
+			mcp.WithString(chaoscommons.ParamSearch,
+				mcp.Description(chaoscommons.DescSearchHubs),
 			),
-			mcp.WithBoolean("includeAllScope",
-				mcp.Description("When true, returns hubs from all scopes (account, org, project). Defaults to false (project scope only)."),
+			mcp.WithBoolean(chaoscommons.ParamIncludeAllScope,
+				mcp.Description(chaoscommons.DescIncludeAllScopeHubs),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(true),
@@ -2025,8 +2030,8 @@ func ListChaosHubsTool(config *config.McpServerConfig, client *client.ChaosServi
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			search, _ := OptionalParam[string](request, "search")
-			includeAllScope, _ := OptionalParam[bool](request, "includeAllScope")
+			search, _ := OptionalParam[string](request, chaoscommons.ParamSearch)
+			includeAllScope, _ := OptionalParam[bool](request, chaoscommons.ParamIncludeAllScope)
 
 			page, size, err := FetchPagination(request)
 			if err != nil {
@@ -2048,11 +2053,11 @@ func ListChaosHubsTool(config *config.McpServerConfig, client *client.ChaosServi
 }
 
 func GetChaosHubTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_get_hub",
-			mcp.WithDescription("Get a ChaosHub by its identity. Returns full hub details including repository URL, branch, connector info, template counts, sync status, and metadata."),
+	return mcp.NewTool(chaoscommons.ToolGetHub,
+			mcp.WithDescription(chaoscommons.DescToolGetHub),
 			common.WithScope(config, false),
-			mcp.WithString("hubIdentity",
-				mcp.Description("The unique identity of the ChaosHub"),
+			mcp.WithString(chaoscommons.ParamHubIdentity,
+				mcp.Description(chaoscommons.DescHubIdentityExact),
 				mcp.Required(),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
@@ -2066,7 +2071,7 @@ func GetChaosHubTool(config *config.McpServerConfig, client *client.ChaosService
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			hubIdentity, err := RequiredParam[string](request, chaoscommons.ParamHubIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -2086,31 +2091,31 @@ func GetChaosHubTool(config *config.McpServerConfig, client *client.ChaosService
 }
 
 func ListChaosHubFaultsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_list_hub_faults",
-			mcp.WithDescription("List faults available in ChaosHubs. Returns fault details including name, category, infrastructure type, permissions required, and platform support. Also returns fault category counts for each infrastructure type. Supports filtering by hub, infrastructure type, category, permissions, and search."),
+	return mcp.NewTool(chaoscommons.ToolListHubFaults,
+			mcp.WithDescription(chaoscommons.DescToolListHubFaults),
 			common.WithScope(config, false),
 			WithPagination(),
-			mcp.WithString("hubIdentity",
-				mcp.Description("Filter faults by a specific ChaosHub identity"),
+			mcp.WithString(chaoscommons.ParamHubIdentity,
+				mcp.Description(chaoscommons.DescHubIdentityFaultsFilter),
 			),
-			mcp.WithString("search",
-				mcp.Description("Search faults by name (case-insensitive)"),
+			mcp.WithString(chaoscommons.ParamSearch,
+				mcp.Description(chaoscommons.DescSearchFaults),
 			),
-			mcp.WithString("infraType",
-				mcp.Description("Filter by infrastructure type (e.g. Kubernetes, Linux, Windows)"),
+			mcp.WithString(chaoscommons.ParamInfraType,
+				mcp.Description(chaoscommons.DescInfraTypeFilter),
 			),
-			mcp.WithString("entityType",
-				mcp.Description("Filter by fault category (e.g. Kubernetes, AWS, GCP, Azure, Linux, Windows, VMWare, Load)"),
+			mcp.WithString(chaoscommons.ParamEntityType,
+				mcp.Description(chaoscommons.DescEntityTypeFault),
 			),
-			mcp.WithString("permissionsRequired",
-				mcp.Description("Filter by permission level required"),
+			mcp.WithString(chaoscommons.ParamPermissionsRequired,
+				mcp.Description(chaoscommons.DescPermissionsRequiredEnum),
 				mcp.Enum("Basic", "Advanced"),
 			),
-			mcp.WithBoolean("includeAllScope",
-				mcp.Description("When true, returns faults from all scopes. Defaults to false."),
+			mcp.WithBoolean(chaoscommons.ParamIncludeAllScope,
+				mcp.Description(chaoscommons.DescIncludeAllScopeFaults),
 			),
-			mcp.WithBoolean("onlyTemplatisedFaults",
-				mcp.Description("When true, only returns faults that have templates available. Defaults to false."),
+			mcp.WithBoolean(chaoscommons.ParamOnlyTemplatisedFaults,
+				mcp.Description(chaoscommons.DescOnlyTemplatisedFaults),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(true),
@@ -2123,13 +2128,13 @@ func ListChaosHubFaultsTool(config *config.McpServerConfig, client *client.Chaos
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			hubIdentity, _ := OptionalParam[string](request, "hubIdentity")
-			search, _ := OptionalParam[string](request, "search")
-			infraType, _ := OptionalParam[string](request, "infraType")
-			entityType, _ := OptionalParam[string](request, "entityType")
-			permissionsRequired, _ := OptionalParam[string](request, "permissionsRequired")
-			includeAllScope, _ := OptionalParam[bool](request, "includeAllScope")
-			onlyTemplatisedFaults, _ := OptionalParam[bool](request, "onlyTemplatisedFaults")
+			hubIdentity, _ := OptionalParam[string](request, chaoscommons.ParamHubIdentity)
+			search, _ := OptionalParam[string](request, chaoscommons.ParamSearch)
+			infraType, _ := OptionalParam[string](request, chaoscommons.ParamInfraType)
+			entityType, _ := OptionalParam[string](request, chaoscommons.ParamEntityType)
+			permissionsRequired, _ := OptionalParam[string](request, chaoscommons.ParamPermissionsRequired)
+			includeAllScope, _ := OptionalParam[bool](request, chaoscommons.ParamIncludeAllScope)
+			onlyTemplatisedFaults, _ := OptionalParam[bool](request, chaoscommons.ParamOnlyTemplatisedFaults)
 
 			page, size, err := FetchPagination(request)
 			if err != nil {
@@ -2151,11 +2156,11 @@ func ListChaosHubFaultsTool(config *config.McpServerConfig, client *client.Chaos
 }
 
 func DeleteChaosHubTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_delete_hub",
-			mcp.WithDescription("Delete a ChaosHub by its identity. Removes the hub and its associated resources. The default Enterprise ChaosHub cannot be deleted."),
+	return mcp.NewTool(chaoscommons.ToolDeleteHub,
+			mcp.WithDescription(chaoscommons.DescToolDeleteHub),
 			common.WithScope(config, false),
-			mcp.WithString("hubIdentity",
-				mcp.Description("The unique identity of the ChaosHub to delete"),
+			mcp.WithString(chaoscommons.ParamHubIdentity,
+				mcp.Description(chaoscommons.DescHubIdentityDelete),
 				mcp.Required(),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
@@ -2169,7 +2174,7 @@ func DeleteChaosHubTool(config *config.McpServerConfig, client *client.ChaosServ
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			hubIdentity, err := RequiredParam[string](request, chaoscommons.ParamHubIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -2184,31 +2189,31 @@ func DeleteChaosHubTool(config *config.McpServerConfig, client *client.ChaosServ
 }
 
 func CreateChaosHubTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_create_hub",
-			mcp.WithDescription("Create a new ChaosHub in the given Harness scope (account, org, project). The hub record stores a Git repo and connector reference that provides chaos fault, experiment, probe, and action templates. The hub identity cannot be 'enterprise-chaoshub' as that is reserved for the default hub."),
+	return mcp.NewTool(chaoscommons.ToolCreateHub,
+			mcp.WithDescription(chaoscommons.DescToolCreateHub),
 			common.WithScope(config, false),
-			mcp.WithString("identity",
-				mcp.Description("Unique identifier (slug) for the ChaosHub. Must be unique within the project scope. Cannot be 'enterprise-chaoshub'."),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescIdentityChaosHub),
 				mcp.Required(),
 			),
-			mcp.WithString("name",
-				mcp.Description("Display name for the ChaosHub"),
+			mcp.WithString(chaoscommons.ParamName,
+				mcp.Description(chaoscommons.DescHubName),
 				mcp.Required(),
 			),
-			mcp.WithString("description",
-				mcp.Description("Description of the ChaosHub"),
+			mcp.WithString(chaoscommons.ParamDescription,
+				mcp.Description(chaoscommons.DescHubDescription),
 			),
-			mcp.WithString("tags",
-				mcp.Description("Comma-separated list of tags for the ChaosHub"),
+			mcp.WithString(chaoscommons.ParamTags,
+				mcp.Description(chaoscommons.DescTagsHub),
 			),
-			mcp.WithString("connectorRef",
-				mcp.Description("Harness connector reference for Git authentication (e.g. 'account.myConnector' or 'org.myConnector')."),
+			mcp.WithString(chaoscommons.ParamConnectorRef,
+				mcp.Description(chaoscommons.DescConnectorRef),
 			),
-			mcp.WithString("repoName",
-				mcp.Description("Name of the Git repository."),
+			mcp.WithString(chaoscommons.ParamRepoName,
+				mcp.Description(chaoscommons.DescRepoName),
 			),
-			mcp.WithString("repoBranch",
-				mcp.Description("Git branch to use for the ChaosHub."),
+			mcp.WithString(chaoscommons.ParamRepoBranch,
+				mcp.Description(chaoscommons.DescRepoBranch),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(false),
@@ -2221,21 +2226,21 @@ func CreateChaosHubTool(config *config.McpServerConfig, client *client.ChaosServ
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			identity, err := RequiredParam[string](request, "identity")
+			identity, err := RequiredParam[string](request, chaoscommons.ParamIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			name, err := RequiredParam[string](request, "name")
+			name, err := RequiredParam[string](request, chaoscommons.ParamName)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			connectorRef, _ := OptionalParam[string](request, "connectorRef")
-			repoName, _ := OptionalParam[string](request, "repoName")
-			repoBranch, _ := OptionalParam[string](request, "repoBranch")
-			description, _ := OptionalParam[string](request, "description")
-			tagsStr, _ := OptionalParam[string](request, "tags")
+			connectorRef, _ := OptionalParam[string](request, chaoscommons.ParamConnectorRef)
+			repoName, _ := OptionalParam[string](request, chaoscommons.ParamRepoName)
+			repoBranch, _ := OptionalParam[string](request, chaoscommons.ParamRepoBranch)
+			description, _ := OptionalParam[string](request, chaoscommons.ParamDescription)
+			tagsStr, _ := OptionalParam[string](request, chaoscommons.ParamTags)
 
 			var tags []string
 			if tagsStr != "" {
@@ -2272,22 +2277,22 @@ func CreateChaosHubTool(config *config.McpServerConfig, client *client.ChaosServ
 }
 
 func UpdateChaosHubTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_update_hub",
-			mcp.WithDescription("Update the editable fields of a ChaosHub (name, description, tags) by its identity. IMPORTANT: The API uses a replace-all model—all fields are fully replaced, not merged. Omitted or empty values will overwrite and clear existing data. To preserve existing description or tags when changing only some fields, fetch the current hub via chaos_get_hub first and pass through the values you want to keep."),
+	return mcp.NewTool(chaoscommons.ToolUpdateHub,
+			mcp.WithDescription(chaoscommons.DescToolUpdateHub),
 			common.WithScope(config, false),
-			mcp.WithString("hubIdentity",
-				mcp.Description("The unique identity of the ChaosHub to update"),
+			mcp.WithString(chaoscommons.ParamHubIdentity,
+				mcp.Description(chaoscommons.DescHubIdentityUpdate),
 				mcp.Required(),
 			),
-			mcp.WithString("name",
-				mcp.Description("Updated display name for the ChaosHub"),
+			mcp.WithString(chaoscommons.ParamName,
+				mcp.Description(chaoscommons.DescHubNameUpdate),
 				mcp.Required(),
 			),
-			mcp.WithString("description",
-				mcp.Description("Updated description for the ChaosHub. If omitted or empty, the existing description will be cleared. To preserve it, pass the current value from chaos_get_hub."),
+			mcp.WithString(chaoscommons.ParamDescription,
+				mcp.Description(chaoscommons.DescHubDescriptionUpdate),
 			),
-			mcp.WithString("tags",
-				mcp.Description("Comma-separated list of tags for the ChaosHub. Replaces all existing tags; if omitted or empty, all tags will be removed. To preserve tags, pass the current values from chaos_get_hub."),
+			mcp.WithString(chaoscommons.ParamTags,
+				mcp.Description(chaoscommons.DescTagsReplace),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(false),
@@ -2300,18 +2305,18 @@ func UpdateChaosHubTool(config *config.McpServerConfig, client *client.ChaosServ
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			hubIdentity, err := RequiredParam[string](request, "hubIdentity")
+			hubIdentity, err := RequiredParam[string](request, chaoscommons.ParamHubIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			name, err := RequiredParam[string](request, "name")
+			name, err := RequiredParam[string](request, chaoscommons.ParamName)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			description, _ := OptionalParam[string](request, "description")
-			tagsStr, _ := OptionalParam[string](request, "tags")
+			description, _ := OptionalParam[string](request, chaoscommons.ParamDescription)
+			tagsStr, _ := OptionalParam[string](request, chaoscommons.ParamTags)
 
 			var tags []string
 			if tagsStr != "" {
@@ -2344,26 +2349,26 @@ func UpdateChaosHubTool(config *config.McpServerConfig, client *client.ChaosServ
 }
 
 func ListChaosGuardConditionsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_list_chaosguard_conditions",
-			mcp.WithDescription("List ChaosGuard conditions. Conditions define the infrastructure, fault, and application constraints that ChaosGuard rules evaluate against chaos experiments. Supports filtering by infrastructure type, tags, search, sorting, and pagination."),
+	return mcp.NewTool(chaoscommons.ToolListChaosGuardConditions,
+			mcp.WithDescription(chaoscommons.DescToolListChaosGuardConditions),
 			common.WithScope(config, false),
 			WithPagination(),
-			mcp.WithString("search",
-				mcp.Description("Search conditions by name (case-insensitive)"),
+			mcp.WithString(chaoscommons.ParamSearch,
+				mcp.Description(chaoscommons.DescSearchConditions),
 			),
-			mcp.WithString("sortField",
-				mcp.Description("Field to sort results by"),
+			mcp.WithString(chaoscommons.ParamSortField,
+				mcp.Description(chaoscommons.DescSortField),
 				mcp.Enum("name", "lastUpdated"),
 			),
-			mcp.WithBoolean("sortAscending",
-				mcp.Description("When true, sort in ascending order. Defaults to false (descending)."),
+			mcp.WithBoolean(chaoscommons.ParamSortAscending,
+				mcp.Description(chaoscommons.DescSortAscending),
 			),
-			mcp.WithString("infrastructureType",
-				mcp.Description("Filter by infrastructure type"),
+			mcp.WithString(chaoscommons.ParamInfrastructureType,
+				mcp.Description(chaoscommons.DescInfrastructureTypeFilter),
 				mcp.Enum("Kubernetes", "KubernetesV2", "Linux", "Windows"),
 			),
-			mcp.WithString("tags",
-				mcp.Description("Comma-separated list of tags to filter by"),
+			mcp.WithString(chaoscommons.ParamTags,
+				mcp.Description(chaoscommons.DescTagsFilter),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(true),
@@ -2376,11 +2381,11 @@ func ListChaosGuardConditionsTool(config *config.McpServerConfig, client *client
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			search, _ := OptionalParam[string](request, "search")
-			sortField, _ := OptionalParam[string](request, "sortField")
-			sortAscending, _ := OptionalParam[bool](request, "sortAscending")
-			infraType, _ := OptionalParam[string](request, "infrastructureType")
-			tags, _ := OptionalParam[string](request, "tags")
+			search, _ := OptionalParam[string](request, chaoscommons.ParamSearch)
+			sortField, _ := OptionalParam[string](request, chaoscommons.ParamSortField)
+			sortAscending, _ := OptionalParam[bool](request, chaoscommons.ParamSortAscending)
+			infraType, _ := OptionalParam[string](request, chaoscommons.ParamInfrastructureType)
+			tags, _ := OptionalParam[string](request, chaoscommons.ParamTags)
 
 			page, size, err := FetchPagination(request)
 			if err != nil {
@@ -2402,11 +2407,11 @@ func ListChaosGuardConditionsTool(config *config.McpServerConfig, client *client
 }
 
 func GetChaosGuardConditionTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_get_chaosguard_condition",
-			mcp.WithDescription("Get a ChaosGuard condition by its identifier. Returns the full condition details including infrastructure type, fault specifications, K8s/machine specs, associated rules, and tags."),
+	return mcp.NewTool(chaoscommons.ToolGetChaosGuardCondition,
+			mcp.WithDescription(chaoscommons.DescToolGetChaosGuardCondition),
 			common.WithScope(config, false),
-			mcp.WithString("identity",
-				mcp.Description("The unique identifier of the ChaosGuard condition"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescIdentityChaosGuardCondition),
 				mcp.Required(),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
@@ -2420,7 +2425,7 @@ func GetChaosGuardConditionTool(config *config.McpServerConfig, client *client.C
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			identity, err := RequiredParam[string](request, "identity")
+			identity, err := RequiredParam[string](request, chaoscommons.ParamIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -2440,11 +2445,11 @@ func GetChaosGuardConditionTool(config *config.McpServerConfig, client *client.C
 }
 
 func DeleteChaosGuardConditionTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_delete_chaosguard_condition",
-			mcp.WithDescription("Delete (soft-delete) a ChaosGuard condition by its identifier. The condition is marked as removed and will no longer appear in listings or be evaluated by rules, but is not permanently erased from the database."),
+	return mcp.NewTool(chaoscommons.ToolDeleteChaosGuardCondition,
+			mcp.WithDescription(chaoscommons.DescToolDeleteChaosGuardCondition),
 			common.WithScope(config, false),
-			mcp.WithString("identity",
-				mcp.Description("The unique identifier of the ChaosGuard condition to delete"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescIdentityChaosGuardConditionDelete),
 				mcp.Required(),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
@@ -2458,7 +2463,7 @@ func DeleteChaosGuardConditionTool(config *config.McpServerConfig, client *clien
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			identity, err := RequiredParam[string](request, "identity")
+			identity, err := RequiredParam[string](request, chaoscommons.ParamIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -2478,26 +2483,26 @@ func DeleteChaosGuardConditionTool(config *config.McpServerConfig, client *clien
 }
 
 func ListChaosGuardRulesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_list_chaosguard_rules",
-			mcp.WithDescription("List ChaosGuard governance rules. ChaosGuard rules define security policies that control when and how chaos experiments can run, including user group restrictions, time windows, and conditions. Supports filtering by infrastructure type, tags, search, sorting, and pagination."),
+	return mcp.NewTool(chaoscommons.ToolListChaosGuardRules,
+			mcp.WithDescription(chaoscommons.DescToolListChaosGuardRules),
 			common.WithScope(config, false),
 			WithPagination(),
-			mcp.WithString("search",
-				mcp.Description("Search rules by name (case-insensitive)"),
+			mcp.WithString(chaoscommons.ParamSearch,
+				mcp.Description(chaoscommons.DescSearchRules),
 			),
-			mcp.WithString("sortField",
-				mcp.Description("Field to sort results by"),
+			mcp.WithString(chaoscommons.ParamSortField,
+				mcp.Description(chaoscommons.DescSortField),
 				mcp.Enum("name", "lastUpdated"),
 			),
-			mcp.WithBoolean("sortAscending",
-				mcp.Description("When true, sort in ascending order. Defaults to false (descending)."),
+			mcp.WithBoolean(chaoscommons.ParamSortAscending,
+				mcp.Description(chaoscommons.DescSortAscending),
 			),
-			mcp.WithString("infrastructureType",
-				mcp.Description("Filter by infrastructure type"),
+			mcp.WithString(chaoscommons.ParamInfrastructureType,
+				mcp.Description(chaoscommons.DescInfrastructureTypeFilter),
 				mcp.Enum("Kubernetes", "KubernetesV2", "Linux", "Windows"),
 			),
-			mcp.WithString("tags",
-				mcp.Description("Comma-separated list of tags to filter by"),
+			mcp.WithString(chaoscommons.ParamTags,
+				mcp.Description(chaoscommons.DescTagsFilter),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(true),
@@ -2510,11 +2515,11 @@ func ListChaosGuardRulesTool(config *config.McpServerConfig, client *client.Chao
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			search, _ := OptionalParam[string](request, "search")
-			sortField, _ := OptionalParam[string](request, "sortField")
-			sortAscending, _ := OptionalParam[bool](request, "sortAscending")
-			infraType, _ := OptionalParam[string](request, "infrastructureType")
-			tags, _ := OptionalParam[string](request, "tags")
+			search, _ := OptionalParam[string](request, chaoscommons.ParamSearch)
+			sortField, _ := OptionalParam[string](request, chaoscommons.ParamSortField)
+			sortAscending, _ := OptionalParam[bool](request, chaoscommons.ParamSortAscending)
+			infraType, _ := OptionalParam[string](request, chaoscommons.ParamInfrastructureType)
+			tags, _ := OptionalParam[string](request, chaoscommons.ParamTags)
 
 			page, size, err := FetchPagination(request)
 			if err != nil {
@@ -2536,11 +2541,11 @@ func ListChaosGuardRulesTool(config *config.McpServerConfig, client *client.Chao
 }
 
 func GetChaosGuardRuleTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_get_chaosguard_rule",
-			mcp.WithDescription("Get a ChaosGuard rule by its identifier. Returns the full rule details including name, description, conditions, time windows, user group restrictions, and enabled status."),
+	return mcp.NewTool(chaoscommons.ToolGetChaosGuardRule,
+			mcp.WithDescription(chaoscommons.DescToolGetChaosGuardRule),
 			common.WithScope(config, false),
-			mcp.WithString("identity",
-				mcp.Description("The unique identifier of the ChaosGuard rule"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescIdentityChaosGuardRule),
 				mcp.Required(),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
@@ -2554,7 +2559,7 @@ func GetChaosGuardRuleTool(config *config.McpServerConfig, client *client.ChaosS
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			identity, err := RequiredParam[string](request, "identity")
+			identity, err := RequiredParam[string](request, chaoscommons.ParamIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -2574,11 +2579,11 @@ func GetChaosGuardRuleTool(config *config.McpServerConfig, client *client.ChaosS
 }
 
 func DeleteChaosGuardRuleTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_delete_chaosguard_rule",
-			mcp.WithDescription("Delete (soft-delete) a ChaosGuard rule by its identifier. The rule is marked as removed and will no longer appear in listings or be enforced, but is not permanently erased from the database."),
+	return mcp.NewTool(chaoscommons.ToolDeleteChaosGuardRule,
+			mcp.WithDescription(chaoscommons.DescToolDeleteChaosGuardRule),
 			common.WithScope(config, false),
-			mcp.WithString("identity",
-				mcp.Description("The unique identifier of the ChaosGuard rule to delete"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescIdentityChaosGuardRuleDelete),
 				mcp.Required(),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
@@ -2592,7 +2597,7 @@ func DeleteChaosGuardRuleTool(config *config.McpServerConfig, client *client.Cha
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			identity, err := RequiredParam[string](request, "identity")
+			identity, err := RequiredParam[string](request, chaoscommons.ParamIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -2612,15 +2617,15 @@ func DeleteChaosGuardRuleTool(config *config.McpServerConfig, client *client.Cha
 }
 
 func EnableChaosGuardRuleTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_enable_chaosguard_rule",
-			mcp.WithDescription("Enable or disable a ChaosGuard rule. When enabled, the rule actively enforces its governance conditions on chaos experiments. When disabled, the rule is inactive and does not affect experiment execution."),
+	return mcp.NewTool(chaoscommons.ToolEnableChaosGuardRule,
+			mcp.WithDescription(chaoscommons.DescToolEnableChaosGuardRule),
 			common.WithScope(config, false),
-			mcp.WithString("identity",
-				mcp.Description("The unique identifier of the ChaosGuard rule"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescIdentityChaosGuardRule),
 				mcp.Required(),
 			),
-			mcp.WithBoolean("enabled",
-				mcp.Description("Set to true to enable the rule, false to disable it"),
+			mcp.WithBoolean(chaoscommons.ParamEnabled,
+				mcp.Description(chaoscommons.DescEnabled),
 				mcp.Required(),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
@@ -2634,12 +2639,12 @@ func EnableChaosGuardRuleTool(config *config.McpServerConfig, client *client.Cha
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			identity, err := RequiredParam[string](request, "identity")
+			identity, err := RequiredParam[string](request, chaoscommons.ParamIdentity)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			enabled, err := RequiredParam[bool](request, "enabled")
+			enabled, err := RequiredParam[bool](request, chaoscommons.ParamEnabled)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
