@@ -47,4 +47,6 @@ export interface RequestOptions {
   rawPath?: boolean;
   /** External abort signal (e.g. from MCP client disconnect). Merged with timeout. */
   signal?: AbortSignal;
+  /** Override default timeout for this request (milliseconds). */
+  timeoutMs?: number;
 }

@@ -87,7 +87,8 @@ export class HarnessClient {
         }
 
         const timeoutController = new AbortController();
-        const timer = setTimeout(() => timeoutController.abort(), this.timeout);
+        const effectiveTimeout = options.timeoutMs ?? this.timeout;
+        const timer = setTimeout(() => timeoutController.abort(), effectiveTimeout);
         // Merge external signal (client disconnect) with timeout signal
         const signal = options.signal
           ? AbortSignal.any([options.signal, timeoutController.signal])
@@ -176,6 +177,97 @@ export class HarnessClient {
           undefined,
           undefined,
           err,
+        );
+      }
+    }
+
+    throw lastError ?? new HarnessApiError("Max retries exceeded", 500);
+  }
+
+  /**
+   * Make a request and return the raw Response (for streaming).
+   * Reuses auth, URL building, rate limiting, and retry on non-OK status
+   * (before body consumption). Caller is responsible for reading the body.
+   */
+  async requestStream(options: RequestOptions): Promise<Response> {
+    await this.rateLimiter.acquire();
+
+    const method = options.method ?? "POST";
+    const url = this.buildUrl(options);
+    const headers: Record<string, string> = {
+      "x-api-key": this.token,
+      "Harness-Account": this.accountId,
+      ...options.headers,
+    };
+
+    if (options.body) {
+      if (typeof options.body === "string") {
+        headers["Content-Type"] = headers["Content-Type"] ?? "application/yaml";
+      } else {
+        headers["Content-Type"] = headers["Content-Type"] ?? "application/json";
+      }
+    }
+
+    let lastError: Error | undefined;
+
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      if (attempt > 0) {
+        const backoff = BASE_BACKOFF_MS * Math.pow(2, attempt - 1) * (0.5 + Math.random() * 0.5);
+        log.debug(`Stream retry attempt ${attempt}/${this.maxRetries}`, { backoffMs: Math.round(backoff) });
+        await new Promise((r) => setTimeout(r, backoff));
+      }
+
+      try {
+        if (options.signal?.aborted) {
+          throw options.signal.reason ?? new DOMException("The operation was aborted", "AbortError");
+        }
+
+        const timeoutController = new AbortController();
+        const effectiveTimeout = options.timeoutMs ?? this.timeout;
+        const timer = setTimeout(() => timeoutController.abort(), effectiveTimeout);
+        const signal = options.signal
+          ? AbortSignal.any([options.signal, timeoutController.signal])
+          : timeoutController.signal;
+
+        const bodyString = options.body
+          ? (typeof options.body === "string" ? options.body : JSON.stringify(options.body))
+          : undefined;
+
+        log.debug(`STREAM ${method} ${url}`);
+
+        const response = await fetch(url, { method, headers, body: bodyString, signal });
+
+        clearTimeout(timer);
+
+        if (!response.ok) {
+          const body = await response.text();
+          let parsed: { message?: string; code?: string; correlationId?: string } = {};
+          try { parsed = JSON.parse(body); } catch { /* non-JSON */ }
+
+          const message = parsed.message ?? humanizeHttpError(response.status, body);
+          const error = new HarnessApiError(message, response.status, parsed.code, parsed.correlationId);
+
+          if (RETRYABLE_STATUS_CODES.has(response.status) && attempt < this.maxRetries) {
+            lastError = error;
+            continue;
+          }
+          throw error;
+        }
+
+        return response;
+      } catch (err) {
+        if (err instanceof HarnessApiError) throw err;
+        if (err instanceof Error && err.name === "AbortError") {
+          if (options.signal?.aborted) {
+            throw new HarnessApiError("Request cancelled", 499, undefined, undefined, err);
+          }
+          lastError = new HarnessApiError("Request timed out", 408, undefined, undefined, err);
+          if (attempt < this.maxRetries) continue;
+          throw lastError;
+        }
+        throw new HarnessApiError(
+          `Request failed: ${(err as Error).message ?? String(err)}`,
+          502, undefined, undefined, err,
         );
       }
     }
