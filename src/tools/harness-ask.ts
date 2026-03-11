@@ -41,7 +41,7 @@ export function registerAskTool(
       inputSchema: {
         prompt: z.string().min(1).describe("The natural language prompt for the AI DevOps agent"),
         action: z.enum(ACTION_VALUES).describe("The action to perform (e.g. CREATE_PIPELINE, UPDATE_SERVICE)"),
-        stream: z.boolean().describe("Stream the response with real-time progress").default(true).optional(),
+        stream: z.boolean().describe("Stream the response with real-time progress (default: false for reliability)").default(false).optional(),
         auto_accept: z.boolean().describe("Automatically ACCEPT the generated entity to persist it in Harness (default: true). Set to false to only preview the YAML.").default(true).optional(),
         conversation_id: z
           .string()
@@ -117,7 +117,7 @@ export function registerAskTool(
           action: args.action,
           conversation_id: conversationId,
           context: args.context,
-          stream: args.stream ?? true,
+          stream: args.stream ?? false,
         };
 
         log.info("Calling intelligence service", {
