@@ -7,7 +7,7 @@ import { ACTION_VALUES } from "../client/dto/intelligence.js";
 import type { ServiceChatRequest } from "../client/dto/intelligence.js";
 import { IntelligenceClient } from "../client/intelligence-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
-import { isUserFixableApiError, toMcpError } from "../utils/errors.js";
+import { HarnessApiError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
 import { sendProgress, sendLog } from "../utils/progress.js";
 import { createLogger } from "../utils/logger.js";
 
@@ -70,7 +70,6 @@ export function registerAskTool(
     async (args, extra) => {
       try {
         const conversationId = args.conversation_id ?? crypto.randomUUID();
-        const shouldStream = args.stream ?? true;
         const autoAccept = args.auto_accept ?? true;
 
         const harnessContext = {
@@ -79,25 +78,9 @@ export function registerAskTool(
           project_id: args.project_id ?? config.HARNESS_DEFAULT_PROJECT_ID,
         };
 
-        const chatRequest: ServiceChatRequest = {
-          harness_context: harnessContext,
-          prompt: args.prompt,
-          action: args.action,
-          conversation_id: conversationId,
-          context: args.context,
-          stream: shouldStream,
-        };
-
-        log.info("Calling intelligence service", {
-          action: args.action,
-          stream: shouldStream,
-          autoAccept,
-          conversationId,
-        });
-
         let eventCount = 0;
-        const makeOnProgress = () =>
-          shouldStream
+        const makeOnProgress = (streaming: boolean) =>
+          streaming
             ? (event: { type: string; data: string }) => {
                 eventCount++;
                 sendProgress(extra, eventCount, undefined, `SSE: ${event.type}`).catch(() => {});
@@ -105,10 +88,49 @@ export function registerAskTool(
               }
             : undefined;
 
-        const result = await intelligenceClient.sendChat(chatRequest, {
-          signal: extra.signal,
-          onProgress: makeOnProgress(),
+        /**
+         * Send a chat request, falling back to non-streaming if streaming returns 422.
+         */
+        const sendWithFallback = async (req: ServiceChatRequest) => {
+          if (req.stream) {
+            try {
+              return await intelligenceClient.sendChat(req, {
+                signal: extra.signal,
+                onProgress: makeOnProgress(true),
+              });
+            } catch (streamErr) {
+              if (streamErr instanceof HarnessApiError && streamErr.statusCode === 422) {
+                log.warn("Streaming returned 422, falling back to non-streaming");
+                return intelligenceClient.sendChat({ ...req, stream: false }, {
+                  signal: extra.signal,
+                });
+              }
+              throw streamErr;
+            }
+          }
+          return intelligenceClient.sendChat(req, { signal: extra.signal });
+        };
+
+        const chatRequest: ServiceChatRequest = {
+          harness_context: harnessContext,
+          prompt: args.prompt,
+          action: args.action,
+          conversation_id: conversationId,
+          context: args.context,
+          stream: args.stream ?? true,
+        };
+
+        log.info("Calling intelligence service", {
+          action: args.action,
+          stream: chatRequest.stream,
+          autoAccept,
+          conversationId,
         });
+
+        const result = await sendWithFallback(chatRequest);
+
+        // Always use our locally-generated ID as fallback
+        const effectiveConversationId = result.conversation_id || conversationId;
 
         if (result.error) {
           return errorResult(result.error);
@@ -120,26 +142,22 @@ export function registerAskTool(
 
         // Auto-ACCEPT: send a follow-up to persist the entity in Harness
         if (autoAccept && hasAccept) {
-          log.info("Auto-accepting generated entity", { conversationId });
+          log.info("Auto-accepting generated entity", { conversationId: effectiveConversationId });
           sendLog(extra, "info", "intelligence", "Auto-accepting to persist in Harness...").catch(() => {});
 
           const acceptRequest: ServiceChatRequest = {
             harness_context: harnessContext,
             prompt: "ACCEPT",
             action: args.action,
-            conversation_id: result.conversation_id,
-            stream: shouldStream,
+            conversation_id: effectiveConversationId,
+            stream: false, // ACCEPT is a quick operation — no need to stream
           };
 
-          const acceptResult = await intelligenceClient.sendChat(acceptRequest, {
-            signal: extra.signal,
-            onProgress: makeOnProgress(),
-          });
+          const acceptResult = await sendWithFallback(acceptRequest);
 
           if (acceptResult.error) {
-            // ACCEPT failed — return the original YAML so the user still has it
             return jsonResult({
-              conversation_id: result.conversation_id,
+              conversation_id: effectiveConversationId,
               response: result.response,
               accept_error: acceptResult.error,
               persisted: false,
@@ -147,7 +165,7 @@ export function registerAskTool(
           }
 
           return jsonResult({
-            conversation_id: acceptResult.conversation_id,
+            conversation_id: acceptResult.conversation_id || effectiveConversationId,
             response: acceptResult.response ?? result.response,
             persisted: true,
           });
@@ -155,7 +173,7 @@ export function registerAskTool(
 
         // No auto-accept: return YAML with guidance for manual follow-up
         const response: Record<string, unknown> = {
-          conversation_id: result.conversation_id,
+          conversation_id: effectiveConversationId,
           response: result.response,
           persisted: false,
         };
@@ -163,7 +181,7 @@ export function registerAskTool(
         if (result.capabilities_to_run?.length) {
           response.available_actions = result.capabilities_to_run;
           response.next_step =
-            `To persist this entity, call harness_ask again with conversation_id "${result.conversation_id}", ` +
+            `To persist this entity, call harness_ask again with conversation_id "${effectiveConversationId}", ` +
             `prompt "ACCEPT", and the same action. Do NOT use harness_create/harness_update.`;
         }
 
