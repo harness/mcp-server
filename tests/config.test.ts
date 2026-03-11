@@ -93,6 +93,14 @@ describe("ConfigSchema", () => {
     }
   });
 
+  it("treats empty LOG_LEVEL as unset and defaults to info", () => {
+    const result = ConfigSchema.safeParse({ ...validConfig, LOG_LEVEL: "" });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.LOG_LEVEL).toBe("info");
+    }
+  });
+
   it("applies default timeout and retries", () => {
     const result = ConfigSchema.safeParse(validConfig);
     expect(result.success).toBe(true);

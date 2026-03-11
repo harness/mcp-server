@@ -22,7 +22,10 @@ const RawConfigSchema = z.object({
   HARNESS_DEFAULT_PROJECT_ID: z.string().optional(),
   HARNESS_API_TIMEOUT_MS: z.coerce.number().default(30000),
   HARNESS_MAX_RETRIES: z.coerce.number().default(3),
-  LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
+  LOG_LEVEL: z.preprocess(
+    (val) => (val === "" ? undefined : val),
+    z.enum(["debug", "info", "warn", "error"]).default("info"),
+  ),
   HARNESS_TOOLSETS: z.string().optional(),
   HARNESS_MAX_BODY_SIZE_MB: z.coerce.number().default(10),
   HARNESS_RATE_LIMIT_RPS: z.coerce.number().default(10),
