@@ -1,0 +1,1050 @@
+components:
+  parameters:
+    LabelsParam:
+      description: Label.
+      in: query
+      name: label
+      schema:
+        items:
+          type: string
+        type: array
+    RegistryTypeParam:
+      description: Registry Type
+      in: query
+      name: type
+      schema:
+        enum:
+          - VIRTUAL
+          - UPSTREAM
+        type: string
+    artifactPathParam:
+      description: |
+        Name of the artifact.
+
+        The value depends on whether the name contains a slash (`/`):
+
+        - If the artifact name **contains `/`**, append a trailing `/+` at the end.
+          - Example: `mygroup/myartifact/+`
+        - If the artifact name **does not contain `/`**, use the plain name.
+          - Example: `myartifact`
+
+        This is used internally to distinguish between namespaced and flat artifact names.
+      examples:
+        flat:
+          summary: Flat artifact name
+          value: myartifact
+        namespaced:
+          summary: Namespaced artifact
+          value: mygroup/myartifact/+
+      in: path
+      name: artifact
+      required: true
+      schema:
+        type: string
+    artifactTypeParam:
+      description: artifact type.
+      in: query
+      name: artifact_type
+      schema:
+        enum:
+          - model
+          - dataset
+        type: string
+    packageTypeParam:
+      description: Registry Package Type
+      in: query
+      name: package_type
+      schema:
+        items:
+          type: string
+        type: array
+    pageNumber:
+      description: Current page number
+      in: query
+      name: page
+      schema:
+        default: 1
+        format: int64
+        type: integer
+    pageSize:
+      description: Number of items per page
+      in: query
+      name: size
+      schema:
+        default: 20
+        format: int64
+        type: integer
+    recursiveParam:
+      description: |
+        Whether to list registries recursively.
+
+        **Deprecated.** Use the new `scope` parameter.
+
+        * `recursive=true`  → `scope=ancestors`
+        * `recursive=false` → `scope=none`
+      in: query
+      name: recursive
+      schema:
+        default: false
+        type: boolean
+    registryRefPathParam:
+      description: |
+        Reference to the scope in which the registry exists.
+
+        Format depends on the scope:
+
+        - **Account-level**: `account_id/registry_name/+`
+        - **Organization-level**: `account_id/org_id/registry_name/+`
+        - **Project-level**: `account_id/org_id/project_id/registry_name/+`
+
+        The `/+` suffix is used internally to route scoped requests.
+        It must be included **exactly as shown** in the URL.
+      examples:
+        accountLevel:
+          description: Only account ID, scoped at account level
+          summary: Account-level registry
+          value: acc123/registry123/+
+        orgLevel:
+          description: Account and org ID, scoped at org level
+          summary: Organization-level registry
+          value: acc123/org456/registry123/+
+        projectLevel:
+          description: Account, org, and project ID, scoped at project level
+          summary: Project-level registry
+          value: acc123/org456/proj789/registry123/+
+      in: path
+      name: registry_ref
+      required: true
+      schema:
+        type: string
+    scopeParam:
+      description: "**Scope of registries to list**\n* **none** – current space only
+        (default)   * **ancestors** – current space **plus** all parent spaces   *
+        **descendants** – current space **plus** all child spaces  \nIf omitted, `none`
+        is assumed.\n"
+      in: query
+      name: scope
+      schema:
+        enum:
+          - ancestors
+          - descendants
+          - none
+        type: string
+    searchTerm:
+      description: search Term.
+      in: query
+      name: search_term
+      schema:
+        type: string
+    sortField:
+      description: sortField
+      in: query
+      name: sort_field
+      schema:
+        type: string
+    sortOrder:
+      description: sortOrder
+      in: query
+      name: sort_order
+      schema:
+        type: string
+    spaceRefPathParam:
+      description: |
+        Reference to the scope in which the registry exists.
+
+        Format depends on the scope:
+
+        - **Account-level**: `account_id/+`
+        - **Organization-level**: `account_id/org/+`
+        - **Project-level**: `account_id/org/project/+`
+
+        The `/+` suffix is used internally to route scoped requests.
+        It must be included **exactly as shown** in the URL.
+      examples:
+        accountLevel:
+          description: Only account ID, scoped at account level
+          summary: Account-level registry
+          value: acc123/+
+        orgLevel:
+          description: Account and org, scoped at org level
+          summary: Organization-level registry
+          value: acc123/org456/+
+        projectLevel:
+          description: Account, org, and project, scoped at project level
+          summary: Project-level registry
+          value: acc123/org456/proj789/+
+      in: path
+      name: space_ref
+      required: true
+      schema:
+        type: string
+    versionPathParam:
+      description: Name of Artifact Version.
+      in: path
+      name: version
+      required: true
+      schema:
+        type: string
+  responses:
+    BadRequest:
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+      description: The request was invalid or malformed
+    FileDetailResponse:
+      content:
+        application/json:
+          schema:
+            properties:
+              data:
+                $ref: '#/components/schemas/ListFileDetail'
+              status:
+                $ref: '#/components/schemas/Status'
+            required:
+              - status
+              - data
+            type: object
+      description: response to get artifact files
+    InternalServerError:
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+      description: An unexpected server error occurred
+    ListArtifactVersionResponse:
+      content:
+        application/json:
+          schema:
+            properties:
+              data:
+                $ref: '#/components/schemas/ListArtifactVersion'
+              status:
+                $ref: '#/components/schemas/Status'
+            required:
+              - status
+              - data
+            type: object
+      description: response for list versions of artifact
+    ListRegistryArtifactResponse:
+      content:
+        application/json:
+          schema:
+            properties:
+              data:
+                $ref: '#/components/schemas/ListRegistryArtifact'
+              status:
+                $ref: '#/components/schemas/Status'
+            required:
+              - status
+              - data
+            type: object
+      description: response for list artifact
+    ListRegistryResponse:
+      content:
+        application/json:
+          schema:
+            properties:
+              data:
+                $ref: '#/components/schemas/ListRegistry'
+              status:
+                $ref: '#/components/schemas/Status'
+            required:
+              - status
+              - data
+            type: object
+      description: response for list registry
+    NotFound:
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+      description: The requested resource was not found
+    RegistryResponse:
+      content:
+        application/json:
+          schema:
+            properties:
+              data:
+                $ref: '#/components/schemas/Registry'
+              status:
+                $ref: '#/components/schemas/Status'
+            required:
+              - status
+              - data
+            type: object
+      description: response for create, get and update registry
+    Success:
+      content:
+        application/json:
+          schema:
+            properties:
+              status:
+                $ref: '#/components/schemas/Status'
+            required:
+              - status
+            type: object
+      description: Generic success response
+    Unauthenticated:
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+      description: Authentication failed or missing credentials
+    Unauthorized:
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+      description: Access denied due to insufficient permissions
+  schemas:
+    AccessKeySecretKey:
+      properties:
+        accessKey:
+          type: string
+        accessKeySecretIdentifier:
+          type: string
+        accessKeySecretSpaceId:
+          format: int64
+          type: integer
+        accessKeySecretSpacePath:
+          type: string
+        secretKeyIdentifier:
+          type: string
+        secretKeySpaceId:
+          format: int64
+          type: integer
+        secretKeySpacePath:
+          type: string
+      required:
+        - secretKeyIdentifier
+    Anonymous: {}
+    ArtifactEntityMetadata:
+      additionalProperties: true
+      description: Artifact Entity Metadata
+      type: object
+    ArtifactType:
+      description: refers to artifact type
+      enum:
+        - model
+        - dataset
+      type: string
+    ArtifactVersionMetadata:
+      description: Artifact Version Metadata
+      properties:
+        artifactType:
+          $ref: '#/components/schemas/ArtifactType'
+        deletedAt:
+          description: Timestamp in milliseconds when the artifact was soft deleted.
+            Null if not deleted.
+          type: string
+        deploymentMetadata:
+          $ref: '#/components/schemas/DeploymentMetadata'
+        digestCount:
+          format: int64
+          type: integer
+        downloadsCount:
+          format: int64
+          type: integer
+        fileCount:
+          format: int64
+          type: integer
+        firewallMode:
+          enum:
+            - WARN
+            - BLOCK
+            - ALLOW
+          type: string
+        isQuarantined:
+          type: boolean
+        lastModified:
+          type: string
+        lastScannedAt:
+          type: string
+        metadata:
+          $ref: '#/components/schemas/ArtifactEntityMetadata'
+        name:
+          type: string
+        packageType:
+          $ref: '#/components/schemas/PackageType'
+        pullCommand:
+          type: string
+        quarantineReason:
+          type: string
+        registryIdentifier:
+          type: string
+        registryPath:
+          type: string
+        registryType:
+          $ref: '#/components/schemas/RegistryType'
+        registryUUID:
+          type: string
+        scanId:
+          type: string
+        scanStatus:
+          enum:
+            - WARN
+            - BLOCKED
+            - ALLOWED
+          type: string
+        size:
+          type: string
+        uuid:
+          type: string
+      required:
+        - name
+        - registryIdentifier
+        - latestVersion
+        - registryPath
+        - packageType
+        - uuid
+        - registryUUID
+      type: object
+    AuthType:
+      description: Authentication type
+      enum:
+        - UserPassword
+        - AccessKeySecretKey
+        - Anonymous
+      type: string
+    CleanupPolicy:
+      description: Cleanup Policy for Harness Artifact Registries
+      properties:
+        expireDays:
+          type: integer
+        name:
+          type: string
+        packagePrefix:
+          items:
+            type: string
+          type: array
+        versionPrefix:
+          items:
+            type: string
+          type: array
+      type: object
+    DeploymentMetadata:
+      properties:
+        nonProdEnvCount:
+          type: integer
+        prodEnvCount:
+          type: integer
+      required:
+        - prodEnvCount
+        - nonProdEnvCount
+      type: object
+    Error:
+      description: Standard error response with code, message and optional details
+      properties:
+        code:
+          description: The HTTP error code
+          example: "404"
+          type: string
+        details:
+          description: |
+            Additional context and details about the error.
+            May include field-specific validation errors or debugging information.
+          example:
+            field: registry_identifier
+            reason: Registry does not exist in the specified project
+            value: invalid-registry
+          type: object
+        message:
+          description: Human-readable error message explaining what went wrong
+          example: Registry not found
+          type: string
+      required:
+        - code
+        - message
+      type: object
+    FileDetail:
+      description: File Detail
+      properties:
+        checksums:
+          items:
+            type: string
+          type: array
+        createdAt:
+          type: string
+        downloadCommand:
+          type: string
+        name:
+          type: string
+        path:
+          type: string
+        size:
+          type: string
+      required:
+        - name
+        - size
+        - checksums
+        - downloadCommand
+        - createdAt
+        - path
+      type: object
+    ListArtifactVersion:
+      description: A list of Artifact versions
+      properties:
+        artifactVersions:
+          description: A list of Artifact versions
+          items:
+            $ref: '#/components/schemas/ArtifactVersionMetadata'
+          type: array
+        itemCount:
+          description: The total number of items
+          example: 1
+          format: int64
+          type: integer
+        pageCount:
+          description: The total number of pages
+          example: 100
+          format: int64
+          type: integer
+        pageIndex:
+          description: The current page
+          example: 0
+          format: int64
+          type: integer
+        pageSize:
+          description: The number of items per page
+          example: 1
+          type: integer
+      required:
+        - artifacts
+      type: object
+    ListFileDetail:
+      description: A list of Harness Artifact Files
+      properties:
+        files:
+          description: A list of Harness Artifact Files
+          items:
+            $ref: '#/components/schemas/FileDetail'
+          type: array
+        itemCount:
+          description: The total number of items
+          example: 1
+          format: int64
+          type: integer
+        pageCount:
+          description: The total number of pages
+          example: 100
+          format: int64
+          type: integer
+        pageIndex:
+          description: The current page
+          example: 0
+          format: int64
+          type: integer
+        pageSize:
+          description: The number of items per page
+          example: 1
+          type: integer
+      required:
+        - files
+      type: object
+    ListRegistry:
+      description: A list of Harness Artifact Registries
+      properties:
+        itemCount:
+          description: The total number of items
+          example: 1
+          format: int64
+          type: integer
+        meta:
+          $ref: '#/components/schemas/Meta'
+        pageCount:
+          description: The total number of pages
+          example: 100
+          format: int64
+          type: integer
+        pageIndex:
+          description: The current page
+          example: 0
+          format: int64
+          type: integer
+        pageSize:
+          description: The number of items per page
+          example: 1
+          type: integer
+        registries:
+          description: A list of Harness Artifact Registries
+          items:
+            $ref: '#/components/schemas/RegistryMetadata'
+          type: array
+      required:
+        - registries
+        - meta
+      type: object
+    ListRegistryArtifact:
+      description: A list of Artifacts
+      properties:
+        artifacts:
+          description: A list of Artifact
+          items:
+            $ref: '#/components/schemas/RegistryArtifactMetadata'
+          type: array
+        itemCount:
+          description: The total number of items
+          example: 1
+          format: int64
+          type: integer
+        pageCount:
+          description: The total number of pages
+          example: 100
+          format: int64
+          type: integer
+        pageIndex:
+          description: The current page
+          example: 0
+          format: int64
+          type: integer
+        pageSize:
+          description: The number of items per page
+          example: 1
+          type: integer
+      required:
+        - artifacts
+      type: object
+    Meta:
+      description: Metadata about the list response
+      properties:
+        activeCount:
+          description: Count of active (non-deleted) entities
+          example: 95
+          format: int64
+          type: integer
+        deletedCount:
+          description: Count of soft-deleted entities
+          example: 5
+          format: int64
+          type: integer
+      required:
+        - activeCount
+        - deletedCount
+      type: object
+    PackageType:
+      description: refers to package
+      enum:
+        - DOCKER
+        - MAVEN
+        - PYTHON
+        - GENERIC
+        - HELM
+        - NUGET
+        - NPM
+        - RPM
+        - CARGO
+        - COMPOSER
+        - GO
+        - HUGGINGFACE
+        - CONDA
+        - DART
+        - SWIFT
+        - RAW
+      type: string
+    Registry:
+      description: Harness Artifact Registry
+      properties:
+        allowedPattern:
+          items:
+            type: string
+          type: array
+        blockedPattern:
+          items:
+            type: string
+          type: array
+        cleanupPolicy:
+          items:
+            $ref: '#/components/schemas/CleanupPolicy'
+          type: array
+        config:
+          $ref: '#/components/schemas/RegistryConfig'
+        createdAt:
+          type: string
+        deletedAt:
+          description: Timestamp in milliseconds when the artifact was soft deleted.
+            Null if not deleted.
+          type: string
+        description:
+          type: string
+        identifier:
+          type: string
+        isPublic:
+          type: boolean
+        labels:
+          items:
+            type: string
+          type: array
+        modifiedAt:
+          type: string
+        packageType:
+          $ref: '#/components/schemas/PackageType'
+        policyRefs:
+          items:
+            type: string
+          type: array
+        scanners:
+          items:
+            $ref: '#/components/schemas/Scanner'
+          type: array
+        url:
+          type: string
+        uuid:
+          type: string
+      required:
+        - name
+        - identifier
+        - type
+        - url
+        - packageType
+        - isPublic
+        - uuid
+      type: object
+    RegistryArtifactMetadata:
+      description: Artifact Metadata
+      properties:
+        artifactType:
+          $ref: '#/components/schemas/ArtifactType'
+        deletedAt:
+          description: Timestamp in milliseconds when the registry was soft-deleted
+          type: string
+        downloadsCount:
+          format: int64
+          type: integer
+        isDeleted:
+          description: True if the registry is soft-deleted
+          type: boolean
+        isPublic:
+          type: boolean
+        isQuarantined:
+          type: boolean
+        labels:
+          items:
+            type: string
+          type: array
+        lastModified:
+          type: string
+        latestVersion:
+          type: string
+        name:
+          type: string
+        packageType:
+          $ref: '#/components/schemas/PackageType'
+        registryIdentifier:
+          type: string
+        registryPath:
+          type: string
+        registryUUID:
+          type: string
+        uuid:
+          type: string
+      required:
+        - name
+        - registryIdentifier
+        - latestVersion
+        - registryPath
+        - packageType
+        - isPublic
+        - uuid
+        - registryUUID
+        - isDeleted
+      type: object
+    RegistryConfig:
+      description: SubConfig specific for Virtual or Upstream Registry
+      discriminator:
+        mapping:
+          UPSTREAM: '#/components/schemas/UpstreamConfig'
+          VIRTUAL: '#/components/schemas/VirtualConfig'
+        propertyName: type
+      oneOf:
+        - $ref: '#/components/schemas/VirtualConfig'
+        - $ref: '#/components/schemas/UpstreamConfig'
+      properties:
+        type:
+          $ref: '#/components/schemas/RegistryType'
+      required:
+        - type
+      type: object
+    RegistryMetadata:
+      description: Harness Artifact Registry Metadata
+      properties:
+        artifactsCount:
+          format: int64
+          type: integer
+        deletedAt:
+          description: Timestamp in milliseconds when the registry was soft-deleted
+          type: string
+        description:
+          type: string
+        downloadsCount:
+          format: int64
+          type: integer
+        identifier:
+          type: string
+        isDeleted:
+          description: True if the registry is soft-deleted
+          type: boolean
+        isPublic:
+          type: boolean
+        lastModified:
+          type: string
+        packageType:
+          $ref: '#/components/schemas/PackageType'
+        path:
+          type: string
+        registrySize:
+          type: string
+        type:
+          $ref: '#/components/schemas/RegistryType'
+        url:
+          type: string
+        uuid:
+          type: string
+      required:
+        - type
+        - packageType
+        - identifier
+        - url
+        - isPublic
+        - uuid
+        - isDeleted
+      type: object
+    RegistryType:
+      description: refers to type of registry i.e virtual or upstream
+      discriminator:
+        propertyName: type
+      enum:
+        - VIRTUAL
+        - UPSTREAM
+      type: string
+    Scanner:
+      description: Scanner for Harness Artifact Registries
+      properties:
+        name:
+          enum:
+            - AQUA_TRIVY
+            - GRYPE
+          type: string
+      type: object
+    Status:
+      description: Request processing status indicator
+      enum:
+        - SUCCESS
+        - FAILURE
+        - ERROR
+      type: string
+    UpstreamConfig:
+      description: Configuration for Harness Artifact UpstreamProxies
+      properties:
+        auth:
+          oneOf:
+            - $ref: '#/components/schemas/UserPassword'
+            - $ref: '#/components/schemas/Anonymous'
+            - $ref: '#/components/schemas/AccessKeySecretKey'
+        authType:
+          $ref: '#/components/schemas/AuthType'
+        firewallMode:
+          $ref: '#/components/schemas/UpstreamProxyConfigFirewallMode'
+        remoteUrlSuffix:
+          description: |
+            Optional path suffix appended to the remote URL for this registry. For Python upstreams, this allows overriding the default `/simple` path used for PyPI-compatible indexes. Leading and trailing slashes are not required and will be normalized.
+          type: string
+        source:
+          enum:
+            - Dockerhub
+            - Custom
+            - AwsEcr
+            - MavenCentral
+            - PyPi
+            - NpmJs
+            - NugetOrg
+            - Crates
+            - GoProxy
+            - HuggingFace
+            - Anaconda
+            - Pubdev
+            - Packagist
+          type: string
+        url:
+          type: string
+      required:
+        - authType
+      type: object
+      x-discriminator-value: UPSTREAM
+    UpstreamProxyConfigFirewallMode:
+      description: Firewall mode applied to an upstream proxy.
+      enum:
+        - ALLOW
+        - WARN
+        - BLOCK
+      type: string
+    UserPassword:
+      properties:
+        secretIdentifier:
+          type: string
+        secretSpaceId:
+          type: integer
+        secretSpacePath:
+          type: string
+        userName:
+          type: string
+      required:
+        - userName
+        - password
+    VirtualConfig:
+      description: Configuration for Harness Virtual Artifact Registries
+      properties:
+        upstreamProxies:
+          items:
+            type: string
+          type: array
+      type: object
+info:
+  contact:
+    name: Harness Artifact Registry - developers
+    url: https://www.harness.io
+  title: Harness Artifact Registry API
+  version: 1.0.0
+openapi: 3.0.0
+paths:
+  /v1/registry/{registry_ref}/+:
+    get:
+      description: Returns Registry Details in the account for the given key
+      operationId: GetRegistry
+      parameters:
+        - $ref: '#/components/parameters/registryRefPathParam'
+      responses:
+        "200":
+          $ref: '#/components/responses/RegistryResponse'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthenticated'
+        "403":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "500":
+          $ref: '#/components/responses/InternalServerError'
+      summary: Returns Registry Details
+      tags:
+        - Registries
+  /v1/registry/{registry_ref}/+/artifact/{artifact}/+/version/{version}/files:
+    get:
+      description: Get Artifact files
+      operationId: GetArtifactFiles
+      parameters:
+        - $ref: '#/components/parameters/registryRefPathParam'
+        - $ref: '#/components/parameters/artifactPathParam'
+        - $ref: '#/components/parameters/artifactTypeParam'
+        - $ref: '#/components/parameters/versionPathParam'
+        - $ref: '#/components/parameters/pageNumber'
+        - $ref: '#/components/parameters/pageSize'
+        - $ref: '#/components/parameters/sortOrder'
+        - $ref: '#/components/parameters/sortField'
+        - $ref: '#/components/parameters/searchTerm'
+      responses:
+        "200":
+          $ref: '#/components/responses/FileDetailResponse'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthenticated'
+        "403":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "500":
+          $ref: '#/components/responses/InternalServerError'
+      summary: Describe Artifact files
+      tags:
+        - Artifacts
+  /v1/registry/{registry_ref}/+/artifact/{artifact}/+/versions:
+    get:
+      description: Lists all the Artifact Versions.
+      operationId: GetAllArtifactVersions
+      parameters:
+        - $ref: '#/components/parameters/registryRefPathParam'
+        - $ref: '#/components/parameters/artifactPathParam'
+        - $ref: '#/components/parameters/artifactTypeParam'
+        - $ref: '#/components/parameters/pageNumber'
+        - $ref: '#/components/parameters/pageSize'
+        - $ref: '#/components/parameters/sortOrder'
+        - $ref: '#/components/parameters/sortField'
+        - $ref: '#/components/parameters/searchTerm'
+      responses:
+        "200":
+          $ref: '#/components/responses/ListArtifactVersionResponse'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthenticated'
+        "403":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "500":
+          $ref: '#/components/responses/InternalServerError'
+      summary: List Artifact Versions
+      tags:
+        - Artifacts
+  /v1/registry/{registry_ref}/+/artifacts:
+    get:
+      description: Lists all the Artifacts for Registry
+      operationId: GetAllArtifactsByRegistry
+      parameters:
+        - $ref: '#/components/parameters/registryRefPathParam'
+        - $ref: '#/components/parameters/LabelsParam'
+        - $ref: '#/components/parameters/pageNumber'
+        - $ref: '#/components/parameters/pageSize'
+        - $ref: '#/components/parameters/sortOrder'
+        - $ref: '#/components/parameters/sortField'
+        - $ref: '#/components/parameters/searchTerm'
+        - $ref: '#/components/parameters/artifactTypeParam'
+      responses:
+        "200":
+          $ref: '#/components/responses/ListRegistryArtifactResponse'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthenticated'
+        "403":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "500":
+          $ref: '#/components/responses/InternalServerError'
+      summary: List Artifacts for Registry
+      tags:
+        - Registries
+  /v1/spaces/{space_ref}/registries:
+    get:
+      description: Lists all the registries.
+      operationId: GetAllRegistries
+      parameters:
+        - $ref: '#/components/parameters/spaceRefPathParam'
+        - $ref: '#/components/parameters/packageTypeParam'
+        - $ref: '#/components/parameters/RegistryTypeParam'
+        - $ref: '#/components/parameters/pageNumber'
+        - $ref: '#/components/parameters/pageSize'
+        - $ref: '#/components/parameters/sortOrder'
+        - $ref: '#/components/parameters/sortField'
+        - $ref: '#/components/parameters/searchTerm'
+        - $ref: '#/components/parameters/recursiveParam'
+        - $ref: '#/components/parameters/scopeParam'
+      responses:
+        "200":
+          $ref: '#/components/responses/ListRegistryResponse'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthenticated'
+        "403":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "500":
+          $ref: '#/components/responses/InternalServerError'
+      summary: List registries
+      tags:
+        - Spaces
