@@ -21,7 +21,7 @@ export const secretsToolset: ToolsetDefinition = {
       operations: {
         list: {
           method: "POST",
-          path: "/ng/api/v2/secrets/list",
+          path: "/ng/api/v2/secrets/list/secrets",
           queryParams: {
             search_term: "searchTerm",
             page: "page",

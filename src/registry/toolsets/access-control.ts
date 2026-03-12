@@ -162,7 +162,7 @@ export const accessControlToolset: ToolsetDefinition = {
       operations: {
         list: {
           method: "GET",
-          path: "/ng/api/roles",
+          path: "/authz/api/roles",
           queryParams: {
             search_term: "searchTerm",
             page: "pageIndex",
@@ -173,14 +173,14 @@ export const accessControlToolset: ToolsetDefinition = {
         },
         get: {
           method: "GET",
-          path: "/ng/api/roles/{roleIdentifier}",
+          path: "/authz/api/roles/{roleIdentifier}",
           pathParams: { role_id: "roleIdentifier" },
           responseExtractor: ngExtract,
           description: "Get role details",
         },
         create: {
           method: "POST",
-          path: "/ng/api/roles",
+          path: "/authz/api/roles",
           bodyBuilder: (input) => input.body,
           responseExtractor: ngExtract,
           description: "Create a role",
@@ -197,7 +197,7 @@ export const accessControlToolset: ToolsetDefinition = {
         },
         delete: {
           method: "DELETE",
-          path: "/ng/api/roles/{roleIdentifier}",
+          path: "/authz/api/roles/{roleIdentifier}",
           pathParams: { role_id: "roleIdentifier" },
           responseExtractor: ngExtract,
           description: "Delete a role",
@@ -219,7 +219,7 @@ export const accessControlToolset: ToolsetDefinition = {
       operations: {
         list: {
           method: "POST",
-          path: "/ng/api/roleassignments/filter",
+          path: "/authz/api/roleassignments/filter",
           queryParams: { page: "pageIndex", size: "pageSize" },
           bodyBuilder: (input) => ({
             principalTypeFilter: input.principal_type ? [input.principal_type] : undefined,
@@ -231,7 +231,7 @@ export const accessControlToolset: ToolsetDefinition = {
         },
         create: {
           method: "POST",
-          path: "/ng/api/roleassignments",
+          path: "/authz/api/roleassignments",
           bodyBuilder: (input) => input.body,
           responseExtractor: ngExtract,
           description: "Create a role assignment",
@@ -264,7 +264,7 @@ export const accessControlToolset: ToolsetDefinition = {
       operations: {
         list: {
           method: "GET",
-          path: "/ng/api/resourcegroup",
+          path: "/resourcegroup/api/v2/resourcegroup",
           queryParams: {
             search_term: "searchTerm",
             page: "pageIndex",
@@ -275,14 +275,14 @@ export const accessControlToolset: ToolsetDefinition = {
         },
         get: {
           method: "GET",
-          path: "/ng/api/resourcegroup/{resourceGroupIdentifier}",
+          path: "/resourcegroup/api/v2/resourcegroup/{resourceGroupIdentifier}",
           pathParams: { resource_group_id: "resourceGroupIdentifier" },
           responseExtractor: ngExtract,
           description: "Get resource group details",
         },
         create: {
           method: "POST",
-          path: "/ng/api/resourcegroup",
+          path: "/resourcegroup/api/v2/resourcegroup",
           bodyBuilder: (input) => input.body,
           responseExtractor: ngExtract,
           description: "Create a resource group",
@@ -299,7 +299,7 @@ export const accessControlToolset: ToolsetDefinition = {
         },
         delete: {
           method: "DELETE",
-          path: "/ng/api/resourcegroup/{resourceGroupIdentifier}",
+          path: "/resourcegroup/api/v2/resourcegroup/{resourceGroupIdentifier}",
           pathParams: { resource_group_id: "resourceGroupIdentifier" },
           responseExtractor: ngExtract,
           description: "Delete a resource group",

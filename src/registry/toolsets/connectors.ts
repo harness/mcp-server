@@ -47,15 +47,18 @@ export const connectorsToolset: ToolsetDefinition = {
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/setup/connectors/{connectorIdentifier}",
       operations: {
         list: {
-          method: "GET",
-          path: "/ng/api/connectors",
+          method: "POST",
+          path: "/ng/api/connectors/listV2",
           queryParams: {
             search_term: "searchTerm",
-            type: "type",
-            category: "category",
             page: "page",
             size: "size",
           },
+          bodyBuilder: (input) => ({
+            filterType: "Connector",
+            types: input.type ? [input.type] : undefined,
+            categories: input.category ? [input.category] : undefined,
+          }),
           responseExtractor: pageExtract,
           description: "List connectors",
         },
