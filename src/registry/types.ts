@@ -29,7 +29,8 @@ export type ToolsetName =
   | "sto"
   | "access_control"
   | "settings"
-  | "platform";
+  | "platform"
+  | "intelligence";
 
 export type OperationName = "list" | "get" | "create" | "update" | "delete";
 
