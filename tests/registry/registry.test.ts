@@ -205,14 +205,39 @@ describe("Registry", () => {
       });
 
       const call = mockRequest.mock.calls[0][0];
+      // Connector list uses POST listV2 with body-based filtering
+      expect(call.method).toBe("POST");
+      expect(call.path).toBe("/ng/api/connectors/listV2");
       expect(call.params).toMatchObject({
         searchTerm: "docker",
       });
+      // type and category are in the body, not query params
+      expect(call.params).not.toHaveProperty("type");
+      expect(call.params).not.toHaveProperty("category");
       expect(call.body).toMatchObject({
         filterType: "Connector",
         types: ["DockerRegistry"],
         categories: ["CONNECTOR"],
       });
+    });
+
+    it("connector list omits type/category from body when not provided", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: { content: [], totalElements: 0 },
+      });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "connector", "list", {
+        search_term: "aws",
+        page: 0,
+        size: 10,
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("POST");
+      expect(call.body).toMatchObject({ filterType: "Connector" });
+      expect(call.body.types).toBeUndefined();
+      expect(call.body.categories).toBeUndefined();
     });
 
     it("identifierFields include parent IDs for nested resources", () => {
