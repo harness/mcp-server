@@ -123,6 +123,7 @@ export class HarnessClient {
           }
 
           const message = parsed.message ?? humanizeHttpError(response.status, body);
+          log.debug(`HTTP ${response.status} error`, { body: body.slice(0, 1000) });
           const error = new HarnessApiError(
             message,
             response.status,
