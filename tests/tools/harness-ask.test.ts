@@ -108,7 +108,7 @@ describe("harness_ask", () => {
     expect(server._tools.has("harness_ask")).toBe(true);
   });
 
-  it("calls intelligence service with correct request shape", async () => {
+  it("calls intelligence service and returns response", async () => {
     const mockResponse = {
       conversation_id: "conv-1",
       response: "Here is your pipeline YAML",
@@ -129,6 +129,25 @@ describe("harness_ask", () => {
     const data = parseResult(result) as { conversation_id: string; response: string };
     expect(data.conversation_id).toBe("conv-1");
     expect(data.response).toBe("Here is your pipeline YAML");
+  });
+
+  it("makes only one API call per invocation", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      conversation_id: "conv-1",
+      response: "Pipeline YAML",
+    });
+    client = makeClient(mockRequest);
+
+    const { registerAskTool } = await import("../../src/tools/harness-ask.js");
+    registerAskTool(server, registry, client, makeConfig());
+
+    await server.call("harness_ask", {
+      prompt: "Create a pipeline",
+      action: "CREATE_PIPELINE",
+      stream: false,
+    });
+
+    expect(mockRequest).toHaveBeenCalledTimes(1);
   });
 
   it("auto-generates conversation_id when not provided", async () => {
@@ -191,119 +210,6 @@ describe("harness_ask", () => {
     expect(requestCall.body.harness_context.project_id).toBe("custom-project");
   });
 
-  it("auto-accepts when capabilities_to_run includes ACCEPT", async () => {
-    const mockRequest = vi.fn()
-      // First call: generate YAML
-      .mockResolvedValueOnce({
-        conversation_id: "conv-gen",
-        response: "Here is your pipeline YAML",
-        capabilities_to_run: [{ type: "ACCEPT" }, { type: "REGENERATE" }],
-      })
-      // Second call: ACCEPT persists
-      .mockResolvedValueOnce({
-        conversation_id: "conv-gen",
-        response: "Pipeline created successfully",
-      });
-    client = makeClient(mockRequest);
-
-    const { registerAskTool } = await import("../../src/tools/harness-ask.js");
-    registerAskTool(server, registry, client, makeConfig());
-
-    const result = await server.call("harness_ask", {
-      prompt: "Create a pipeline",
-      action: "CREATE_PIPELINE",
-      stream: false,
-    });
-
-    // Should have made 2 API calls
-    expect(mockRequest).toHaveBeenCalledTimes(2);
-    // Second call should be ACCEPT with same conversation_id
-    const acceptCall = mockRequest.mock.calls[1]![0] as { body: { prompt: string; conversation_id: string } };
-    expect(acceptCall.body.prompt).toBe("ACCEPT");
-    expect(acceptCall.body.conversation_id).toBe("conv-gen");
-
-    expect(result.isError).toBeUndefined();
-    const data = parseResult(result) as { persisted: boolean; response: string };
-    expect(data.persisted).toBe(true);
-    expect(data.response).toBe("Pipeline created successfully");
-  });
-
-  it("returns original YAML with accept_error when ACCEPT fails", async () => {
-    const mockRequest = vi.fn()
-      .mockResolvedValueOnce({
-        conversation_id: "conv-fail",
-        response: "Generated YAML here",
-        capabilities_to_run: [{ type: "ACCEPT" }],
-      })
-      .mockResolvedValueOnce({
-        conversation_id: "conv-fail",
-        error: "Permission denied",
-      });
-    client = makeClient(mockRequest);
-
-    const { registerAskTool } = await import("../../src/tools/harness-ask.js");
-    registerAskTool(server, registry, client, makeConfig());
-
-    const result = await server.call("harness_ask", {
-      prompt: "Create a pipeline",
-      action: "CREATE_PIPELINE",
-      stream: false,
-    });
-
-    expect(result.isError).toBeUndefined();
-    const data = parseResult(result) as { persisted: boolean; response: string; accept_error: string };
-    expect(data.persisted).toBe(false);
-    expect(data.response).toBe("Generated YAML here");
-    expect(data.accept_error).toBe("Permission denied");
-  });
-
-  it("skips auto-accept when auto_accept is false", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({
-      conversation_id: "conv-noauto",
-      response: "Preview YAML",
-      capabilities_to_run: [{ type: "ACCEPT" }, { type: "REGENERATE" }],
-    });
-    client = makeClient(mockRequest);
-
-    const { registerAskTool } = await import("../../src/tools/harness-ask.js");
-    registerAskTool(server, registry, client, makeConfig());
-
-    const result = await server.call("harness_ask", {
-      prompt: "Create a pipeline",
-      action: "CREATE_PIPELINE",
-      stream: false,
-      auto_accept: false,
-    });
-
-    // Only 1 API call — no ACCEPT follow-up
-    expect(mockRequest).toHaveBeenCalledTimes(1);
-    const data = parseResult(result) as { persisted: boolean; available_actions: string[]; next_step: string };
-    expect(data.persisted).toBe(false);
-    expect(data.available_actions).toEqual([{ type: "ACCEPT" }, { type: "REGENERATE" }]);
-    expect(data.next_step).toContain("conv-noauto");
-  });
-
-  it("omits available_actions when no capabilities_to_run", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({
-      conversation_id: "conv-no-cap",
-      response: "Done",
-    });
-    client = makeClient(mockRequest);
-
-    const { registerAskTool } = await import("../../src/tools/harness-ask.js");
-    registerAskTool(server, registry, client, makeConfig());
-
-    const result = await server.call("harness_ask", {
-      prompt: "Test",
-      action: "CREATE_PIPELINE",
-      stream: false,
-    });
-
-    const data = parseResult(result) as Record<string, unknown>;
-    expect(data.available_actions).toBeUndefined();
-    expect(data.next_step).toBeUndefined();
-  });
-
   it("returns errorResult when intelligence service returns an error", async () => {
     const mockRequest = vi.fn().mockResolvedValue({
       conversation_id: "c",
@@ -323,5 +229,27 @@ describe("harness_ask", () => {
     expect(result.isError).toBe(true);
     const data = parseResult(result) as { error: string };
     expect(data.error).toBe("Model capacity exceeded");
+  });
+
+  it("falls back to conversation_id from local UUID when API returns empty", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      conversation_id: "",
+      response: "Done",
+    });
+    client = makeClient(mockRequest);
+
+    const { registerAskTool } = await import("../../src/tools/harness-ask.js");
+    registerAskTool(server, registry, client, makeConfig());
+
+    const result = await server.call("harness_ask", {
+      prompt: "Test",
+      action: "CREATE_PIPELINE",
+      stream: false,
+    });
+
+    const data = parseResult(result) as { conversation_id: string };
+    // Should use the locally-generated UUID, not the empty string
+    expect(data.conversation_id).toBeDefined();
+    expect(data.conversation_id.length).toBeGreaterThan(0);
   });
 });

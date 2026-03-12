@@ -9,9 +9,14 @@ import { IntelligenceClient } from "../client/intelligence-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { HarnessApiError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
 import { sendProgress, sendLog } from "../utils/progress.js";
+import { RateLimiter } from "../utils/rate-limiter.js";
 import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("ask");
+
+// 5 requests/minute with burst of 3 — each call triggers LLM inference on Harness's backend
+const ASK_MAX_BURST = 3;
+const ASK_REFILL_RATE_PER_MS = 5 / 60_000; // 5 tokens per 60s
 
 export function registerAskTool(
   server: McpServer,
@@ -29,20 +34,19 @@ export function registerAskTool(
   }
 
   const intelligenceClient = new IntelligenceClient(client);
+  const askRateLimiter = new RateLimiter(ASK_MAX_BURST, ASK_REFILL_RATE_PER_MS);
 
   server.registerTool(
     "harness_ask",
     {
       description:
         "Ask the Harness AI DevOps Agent to create or update entities (pipelines, environments, connectors, services, secrets) via natural language. " +
-        "Returns generated YAML and automatically persists it in Harness (auto-accepts). " +
-        "Set auto_accept to false to review the YAML before persisting. " +
-        "For multi-turn refinement, pass the returned conversation_id back with a REGENERATE prompt.",
+        "The entity is persisted in Harness automatically on the initial call. " +
+        "For multi-turn refinement, pass the returned conversation_id back.",
       inputSchema: {
         prompt: z.string().min(1).describe("The natural language prompt for the AI DevOps agent"),
         action: z.enum(ACTION_VALUES).describe("The action to perform (e.g. CREATE_PIPELINE, UPDATE_SERVICE)"),
         stream: z.boolean().describe("Stream the response with real-time progress (default: false for reliability)").default(false).optional(),
-        auto_accept: z.boolean().describe("Automatically ACCEPT the generated entity to persist it in Harness (default: true). Set to false to only preview the YAML.").default(true).optional(),
         conversation_id: z
           .string()
           .describe("Conversation ID for multi-turn context (auto-generated if omitted)")
@@ -69,8 +73,9 @@ export function registerAskTool(
     },
     async (args, extra) => {
       try {
+        await askRateLimiter.acquire();
+
         const conversationId = args.conversation_id ?? crypto.randomUUID();
-        const autoAccept = args.auto_accept ?? true;
 
         const harnessContext = {
           account_id: client.account,
@@ -79,37 +84,13 @@ export function registerAskTool(
         };
 
         let eventCount = 0;
-        const makeOnProgress = (streaming: boolean) =>
-          streaming
-            ? (event: { type: string; data: string }) => {
-                eventCount++;
-                sendProgress(extra, eventCount, undefined, `SSE: ${event.type}`).catch(() => {});
-                sendLog(extra, "debug", "intelligence", `[${event.type}] ${event.data.slice(0, 200)}`).catch(() => {});
-              }
-            : undefined;
-
-        /**
-         * Send a chat request, falling back to non-streaming if streaming returns 422.
-         */
-        const sendWithFallback = async (req: ServiceChatRequest) => {
-          if (req.stream) {
-            try {
-              return await intelligenceClient.sendChat(req, {
-                signal: extra.signal,
-                onProgress: makeOnProgress(true),
-              });
-            } catch (streamErr) {
-              if (streamErr instanceof HarnessApiError && streamErr.statusCode === 422) {
-                log.warn("Streaming returned 422, falling back to non-streaming");
-                return intelligenceClient.sendChat({ ...req, stream: false }, {
-                  signal: extra.signal,
-                });
-              }
-              throw streamErr;
+        const onProgress = args.stream
+          ? (event: { type: string; data: string }) => {
+              eventCount++;
+              sendProgress(extra, eventCount, undefined, `SSE: ${event.type}`).catch(() => {});
+              sendLog(extra, "debug", "intelligence", `[${event.type}] ${event.data.slice(0, 200)}`).catch(() => {});
             }
-          }
-          return intelligenceClient.sendChat(req, { signal: extra.signal });
-        };
+          : undefined;
 
         const chatRequest: ServiceChatRequest = {
           harness_context: harnessContext,
@@ -123,69 +104,41 @@ export function registerAskTool(
         log.info("Calling intelligence service", {
           action: args.action,
           stream: chatRequest.stream,
-          autoAccept,
           conversationId,
         });
 
-        const result = await sendWithFallback(chatRequest);
+        // Send request, falling back to non-streaming if streaming returns 422
+        let result;
+        if (chatRequest.stream) {
+          try {
+            result = await intelligenceClient.sendChat(chatRequest, {
+              signal: extra.signal,
+              onProgress,
+            });
+          } catch (streamErr) {
+            if (streamErr instanceof HarnessApiError && streamErr.statusCode === 422) {
+              log.warn("Streaming returned 422, falling back to non-streaming");
+              result = await intelligenceClient.sendChat({ ...chatRequest, stream: false }, {
+                signal: extra.signal,
+              });
+            } else {
+              throw streamErr;
+            }
+          }
+        } else {
+          result = await intelligenceClient.sendChat(chatRequest, { signal: extra.signal });
+        }
 
-        // Always use our locally-generated ID as fallback
         const effectiveConversationId = result.conversation_id || conversationId;
 
         if (result.error) {
           return errorResult(result.error);
         }
 
-        const hasAccept = result.capabilities_to_run?.some(
-          (cap) => JSON.stringify(cap).includes("ACCEPT"),
-        );
-
-        // Auto-ACCEPT: send a follow-up to persist the entity in Harness
-        if (autoAccept && hasAccept) {
-          log.info("Auto-accepting generated entity", { conversationId: effectiveConversationId });
-          sendLog(extra, "info", "intelligence", "Auto-accepting to persist in Harness...").catch(() => {});
-
-          const acceptRequest: ServiceChatRequest = {
-            harness_context: harnessContext,
-            prompt: "ACCEPT",
-            action: args.action,
-            conversation_id: effectiveConversationId,
-            stream: false, // ACCEPT is a quick operation — no need to stream
-          };
-
-          const acceptResult = await sendWithFallback(acceptRequest);
-
-          if (acceptResult.error) {
-            return jsonResult({
-              conversation_id: effectiveConversationId,
-              response: result.response,
-              accept_error: acceptResult.error,
-              persisted: false,
-            });
-          }
-
-          return jsonResult({
-            conversation_id: acceptResult.conversation_id || effectiveConversationId,
-            response: acceptResult.response ?? result.response,
-            persisted: true,
-          });
-        }
-
-        // No auto-accept: return YAML with guidance for manual follow-up
-        const response: Record<string, unknown> = {
+        return jsonResult({
           conversation_id: effectiveConversationId,
           response: result.response,
-          persisted: false,
-        };
-
-        if (result.capabilities_to_run?.length) {
-          response.available_actions = result.capabilities_to_run;
-          response.next_step =
-            `To persist this entity, call harness_ask again with conversation_id "${effectiveConversationId}", ` +
-            `prompt "ACCEPT", and the same action. Do NOT use harness_create/harness_update.`;
-        }
-
-        return jsonResult(response);
+        });
       } catch (err) {
         if (isUserFixableApiError(err)) return errorResult(err.message);
         throw toMcpError(err);
