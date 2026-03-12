@@ -52,8 +52,8 @@ func ListArtifactVersionsTool(config *config.McpServerConfig, client *ar.ClientW
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			pageInt64, sizeInt64 := int64(pageInt), int64(sizeInt)
-			params.Page = &pageInt64
-			params.Size = &sizeInt64
+			params.PageNumberV2 = &pageInt64
+			params.PageSizeV2 = &sizeInt64
 
 			// Handle search parameter
 			search, ok, err := OptionalParamOK[string](request, "search")
@@ -61,7 +61,7 @@ func ListArtifactVersionsTool(config *config.McpServerConfig, client *ar.ClientW
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			if ok && search != "" {
-				params.SearchTerm = &search
+				params.SearchTermV2 = &search
 			}
 
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -144,8 +144,8 @@ func ListArtifactFilesTool(config *config.McpServerConfig, client *ar.ClientWith
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			pageInt64, sizeInt64 := int64(pageInt), int64(sizeInt)
-			params.Page = &pageInt64
-			params.Size = &sizeInt64
+			params.PageNumberV2 = &pageInt64
+			params.PageSizeV2 = &sizeInt64
 
 			// Handle sort options
 			sortOrder, ok, err := OptionalParamOK[string](request, "sort_order")
@@ -153,7 +153,7 @@ func ListArtifactFilesTool(config *config.McpServerConfig, client *ar.ClientWith
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			if ok && sortOrder != "" {
-				params.SortOrder = &sortOrder
+				params.SortOrderV2 = &sortOrder
 			}
 
 			sortField, ok, err := OptionalParamOK[string](request, "sort_field")
@@ -161,7 +161,7 @@ func ListArtifactFilesTool(config *config.McpServerConfig, client *ar.ClientWith
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			if ok && sortField != "" {
-				params.SortField = &sortField
+				params.SortFieldV2 = &sortField
 			}
 
 			scope, err := common.FetchScope(ctx, config, request, false)

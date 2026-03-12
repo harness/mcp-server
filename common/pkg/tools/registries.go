@@ -77,8 +77,8 @@ func ListRegistriesTool(config *config.McpServerConfig, client *ar.ClientWithRes
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			pageInt64, sizeInt64 := int64(pageInt), int64(sizeInt)
-			params.Page = &pageInt64
-			params.Size = &sizeInt64
+			params.PageNumberV2 = &pageInt64
+			params.PageSizeV2 = &sizeInt64
 
 			scope, err := common.FetchScope(ctx, config, request, false)
 			if err != nil {
@@ -93,7 +93,7 @@ func ListRegistriesTool(config *config.McpServerConfig, client *ar.ClientWithRes
 			}
 			if ok && len(packageType) > 0 {
 				pkgType := []string{packageType}
-				params.PackageType = &pkgType
+				params.PackageTypeParamV2 = &pkgType
 			}
 
 			// Handle type parameter

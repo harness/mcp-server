@@ -40,8 +40,8 @@ func ListArtifactsTool(config *config.McpServerConfig, client *ar.ClientWithResp
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			pageInt64, sizeInt64 := int64(pageInt), int64(sizeInt)
-			params.Page = &pageInt64
-			params.Size = &sizeInt64
+			params.PageNumberV2 = &pageInt64
+			params.PageSizeV2 = &sizeInt64
 
 			// Handle search parameter
 			search, ok, err := OptionalParamOK[string](request, "search")
@@ -49,7 +49,7 @@ func ListArtifactsTool(config *config.McpServerConfig, client *ar.ClientWithResp
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			if ok && search != "" {
-				params.SearchTerm = &search
+				params.SearchTermV2 = &search
 			}
 
 			scope, err := common.FetchScope(ctx, config, request, false)
