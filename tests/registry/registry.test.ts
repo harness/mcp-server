@@ -207,8 +207,11 @@ describe("Registry", () => {
       const call = mockRequest.mock.calls[0][0];
       expect(call.params).toMatchObject({
         searchTerm: "docker",
-        type: "DockerRegistry",
-        category: "CONNECTOR",
+      });
+      expect(call.body).toMatchObject({
+        filterType: "Connector",
+        types: ["DockerRegistry"],
+        categories: ["CONNECTOR"],
       });
     });
 
