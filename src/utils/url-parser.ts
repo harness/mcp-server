@@ -17,6 +17,9 @@ export interface ParsedHarnessUrl {
   registry_id?: string;
   artifact_id?: string;
   environment_id?: string;
+  step_id?: string;
+  stage_id?: string;
+  stage_execution_id?: string;
 }
 
 /** Union of ParsedHarnessUrl fields that RESOURCE_SEGMENTS can write to. */
@@ -166,6 +169,15 @@ export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
     }
   }
 
+  const stepId = url.searchParams.get("step") ?? url.searchParams.get("stepId");
+  if (stepId) result.step_id = stepId;
+
+  const stageId = url.searchParams.get("stage") ?? url.searchParams.get("stageId");
+  if (stageId) result.stage_id = stageId;
+
+  const stageExecId = url.searchParams.get("stageExecId");
+  if (stageExecId) result.stage_execution_id = stageExecId;
+
   return result;
 }
 
@@ -183,6 +195,9 @@ const MERGEABLE_FIELDS: (keyof ParsedHarnessUrl)[] = [
   "registry_id",
   "artifact_id",
   "environment_id",
+  "step_id",
+  "stage_id",
+  "stage_execution_id",
 ];
 
 /**

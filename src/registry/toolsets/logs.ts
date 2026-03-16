@@ -9,7 +9,7 @@ export const logsToolset: ToolsetDefinition = {
     {
       resourceType: "execution_log",
       displayName: "Execution Log",
-      description: "Pipeline execution step logs. Returns readable log text (not just a URL). Accepts either a 'prefix' in the format {accountId}/pipeline/{pipelineId}/{runSequence}/-{executionId} (pipeline-level) or appended with /{stageId}/{stepId} (step-level), OR an 'execution_id' to auto-build the prefix. Use harness_diagnose with include_logs=true for the best failure analysis experience.",
+      description: "Pipeline execution logs. Returns readable log text (not just a URL). Accepts a raw Harness logBaseKey prefix, or an execution_id to auto-resolve the real log key from the execution graph. When a Harness execution URL includes step/stage query params, the MCP uses them to resolve the matching step log key. Use harness_diagnose with include_logs=true for the best failure analysis experience.",
       toolset: "logs",
       scope: "project",
       identifierFields: ["prefix"],

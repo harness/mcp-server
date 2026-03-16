@@ -82,6 +82,74 @@ describe("buildLogPrefixFromExecution", () => {
     );
   });
 
+  it("uses pipeline node logBaseKey when execution graph provides it", async () => {
+    dispatchMock.mockResolvedValue({
+      pipelineExecutionSummary: {
+        pipelineIdentifier: "my-pipe",
+        runSequence: 42,
+        shouldUseSimplifiedKey: true,
+      },
+      executionGraph: {
+        nodeMap: {
+          pipelineNode: {
+            uuid: "pipelineNode",
+            identifier: "pipeline",
+            baseFqn: "pipeline",
+            logBaseKey: "accountId:acct1/orgId:org1/projectId:proj1/pipelineId:my-pipe/runSequence:42/level0:pipeline",
+          },
+        },
+      },
+    });
+
+    const result = await buildLogPrefixFromExecution(
+      mockClient, mockRegistry, "exec-123", { org_id: "org1", project_id: "proj1" },
+    );
+
+    expect(result).toBe("accountId:acct1/orgId:org1/projectId:proj1/pipelineId:my-pipe/runSequence:42/level0:pipeline");
+  });
+
+  it("uses the matching step logBaseKey when a step target is provided", async () => {
+    dispatchMock.mockResolvedValue({
+      pipelineExecutionSummary: {
+        pipelineIdentifier: "sample-pipeline",
+        runSequence: 931,
+        shouldUseSimplifiedKey: true,
+      },
+      executionGraph: {
+        nodeMap: {
+          stageNode: {
+            uuid: "stage-exec-123",
+            identifier: "build_stage",
+            baseFqn: "pipeline.stages.build_stage",
+            logBaseKey: "accountId:acct1/orgId:test-org/projectId:test-project/pipelineId:sample-pipeline/runSequence:931/level0:pipeline/level1:stages/level2:build_stage",
+          },
+          stepNode: {
+            uuid: "step-uuid-123",
+            identifier: "run_tests",
+            baseFqn: "pipeline.stages.build_stage.spec.execution.steps.run_tests",
+            logBaseKey: "accountId:acct1/orgId:test-org/projectId:test-project/pipelineId:sample-pipeline/runSequence:931/level0:pipeline/level1:stages/level2:build_stage/level3:spec/level4:execution/level5:steps/level6:run_tests",
+          },
+        },
+      },
+    });
+
+    const result = await buildLogPrefixFromExecution(
+      mockClient,
+      mockRegistry,
+      "exec-123",
+      {
+        step_id: "step-uuid-123",
+        stage_execution_id: "stage-exec-123",
+        org_id: "test-org",
+        project_id: "test-project",
+      },
+    );
+
+    expect(result).toBe(
+      "accountId:acct1/orgId:test-org/projectId:test-project/pipelineId:sample-pipeline/runSequence:931/level0:pipeline/level1:stages/level2:build_stage/level3:spec/level4:execution/level5:steps/level6:run_tests",
+    );
+  });
+
   it("throws when pipelineIdentifier is missing", async () => {
     dispatchMock.mockResolvedValue({
       pipelineExecutionSummary: {
