@@ -107,6 +107,17 @@ describe("parseHarnessUrl", () => {
     expect(result.pipeline_id).toBe("stack_build");
   });
 
+  it("extracts execution step query params from execution URL", () => {
+    const result = parseHarnessUrl(
+      "https://app.harness.io/ng/account/acc123/module/ci/orgs/test_org/projects/test_project/pipelines/sample_pipeline/executions/exec_123/pipeline?step=step_uuid_123&stage=stage_uuid_456&stageExecId=stage_exec_456",
+    );
+    expect(result.execution_id).toBe("exec_123");
+    expect(result.pipeline_id).toBe("sample_pipeline");
+    expect(result.step_id).toBe("step_uuid_123");
+    expect(result.stage_id).toBe("stage_uuid_456");
+    expect(result.stage_execution_id).toBe("stage_exec_456");
+  });
+
   it("handles vanity domain URLs", () => {
     const result = parseHarnessUrl(
       "https://ancestry.harness.io/ng/account/cetPGmqTQ22qdnkyMdP_9A/all/orgs/Genomics/projects/ga_ethnicity/services",

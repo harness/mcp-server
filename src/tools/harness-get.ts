@@ -43,7 +43,11 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
 
         // Map resource_id to the primary identifier field
         const primaryField = def.identifierFields[0];
-        if (primaryField && resourceId) {
+        const shouldMapResourceId =
+          primaryField &&
+          resourceId &&
+          !(resourceType === "execution_log" && asString(input.execution_id));
+        if (shouldMapResourceId) {
           input[primaryField] = resourceId;
         }
 

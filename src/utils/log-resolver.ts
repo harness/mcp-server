@@ -21,6 +21,26 @@ interface BlobResponse {
   status?: string;
 }
 
+function rewriteDownloadUrlHost(link: string, baseURL?: string): string {
+  if (!baseURL) return link;
+
+  try {
+    const downloadURL = new URL(link);
+    const harnessURL = new URL(baseURL);
+
+    if (downloadURL.host === harnessURL.host) {
+      return link;
+    }
+
+    downloadURL.protocol = harnessURL.protocol;
+    downloadURL.host = harnessURL.host;
+    return downloadURL.toString();
+  } catch (err) {
+    log.warn("Failed to rewrite log download URL host", { error: String(err) });
+    return link;
+  }
+}
+
 // ─── ANSI / log parsing helpers ─────────────────────────────────────────────
 
 const ANSI_RE = /\x1b\[[0-9;]*[a-zA-Z]/g;
@@ -310,12 +330,25 @@ export async function resolveLogContent(
   }
 
   // Step 3: Download the zip/gzip from the signed URL
-  log.debug("Downloading log blob", { link: blob.link.slice(0, 100) });
+  const rewrittenLink = rewriteDownloadUrlHost(
+    blob.link,
+    (client as HarnessClient & { baseURL?: string }).baseURL,
+  );
+  log.debug("Downloading log blob", { link: rewrittenLink.slice(0, 100) });
   const downloadSignal = signal
     ? AbortSignal.any([signal, AbortSignal.timeout(DEFAULT_DOWNLOAD_TIMEOUT_MS)])
     : AbortSignal.timeout(DEFAULT_DOWNLOAD_TIMEOUT_MS);
 
-  const response = await fetch(blob.link, { signal: downloadSignal });
+  let response: Response;
+  try {
+    response = await fetch(rewrittenLink, { signal: downloadSignal });
+  } catch (err) {
+    const cause =
+      err instanceof Error
+        ? `${err.name}: ${err.message}`
+        : String(err);
+    throw new Error(`Log download fetch failed for ${new URL(rewrittenLink).host}: ${cause}`);
+  }
   if (!response.ok) {
     const errBody = await response.text().catch(() => "");
     throw new Error(`Log download failed: HTTP ${response.status} — ${errBody.slice(0, 300)}`);

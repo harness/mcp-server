@@ -218,6 +218,24 @@ describe("harness_get — execution_log", () => {
     expect(resolveLogContentMock).toHaveBeenCalledWith(client, "acct1/pipeline/my-pipe/42/-exec-123");
   });
 
+  it("passes step query params from the Harness URL into log prefix resolution", async () => {
+    const result = await server.call("harness_get", {
+      resource_type: "execution_log",
+      url: "https://app.harness.io/ng/account/acc123/module/ci/orgs/test_org/projects/test_project/pipelines/sample_pipeline/executions/exec_123/pipeline?step=step_uuid_123&stage=stage_uuid_456&stageExecId=stage_exec_456",
+    });
+    expect(result.isError).toBeUndefined();
+    expect(buildLogPrefixMock).toHaveBeenCalledWith(
+      client,
+      registry,
+      "exec_123",
+      expect.objectContaining({
+        step_id: "step_uuid_123",
+        stage_id: "stage_uuid_456",
+        stage_execution_id: "stage_exec_456",
+      }),
+    );
+  });
+
   it("returns error when neither prefix nor execution_id provided", async () => {
     const result = await server.call("harness_get", {
       resource_type: "execution_log",
