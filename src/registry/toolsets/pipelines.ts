@@ -1,10 +1,6 @@
 import type { ToolsetDefinition, BodySchema } from "../types.js";
-import { ngExtract, pageExtract, passthrough, v1ListExtract } from "../extractors.js";
+import { ngExtract, pageExtract, passthrough, v1ListExtract, runtimeInputExtract } from "../extractors.js";
 
-/** Extract response, preserving storeType if the API returned one. */
-const ngExtractWithStoreType = (raw: unknown) => {
-  return ngExtract(raw);
-};
 
 const pipelineCreateSchema: BodySchema = {
   description: "Pipeline definition. Prefer yamlPipeline (YAML string) to avoid serialization issues; pipeline (JSON object) is also supported. Storage options via params: (1) Inline (default): no extra params needed. (2) External Git: store_type='REMOTE', connector_ref (Git connector ID), repo_name, branch, file_path. (3) Harness Code: store_type='REMOTE', is_harness_code_repo=true, repo_name, branch, file_path (no connector_ref needed).",
@@ -100,7 +96,7 @@ export const pipelinesToolset: ToolsetDefinition = {
             }
             throw new Error("body must include either yamlPipeline (YAML string) or pipeline (JSON object)");
           },
-          responseExtractor: ngExtractWithStoreType,
+          responseExtractor: ngExtract,
           description: "Create a new pipeline from YAML. For external Git: store_type='REMOTE' + connector_ref, repo_name, branch, file_path. For Harness Code: store_type='REMOTE' + is_harness_code_repo=true, repo_name, branch, file_path.",
           bodySchema: pipelineCreateSchema,
         },
@@ -132,7 +128,7 @@ export const pipelinesToolset: ToolsetDefinition = {
             }
             throw new Error("body must include either pipeline (JSON object) or yamlPipeline (YAML string)");
           },
-          responseExtractor: ngExtractWithStoreType,
+          responseExtractor: ngExtract,
           description: "Update an existing pipeline YAML. For remote pipelines, pass store_type='REMOTE' with git details and last_object_id/last_commit_id from the GET response. For Harness Code: add is_harness_code_repo=true (no connector_ref needed).",
           bodySchema: pipelineUpdateSchema,
         },
@@ -436,17 +432,7 @@ export const pipelinesToolset: ToolsetDefinition = {
             branch: "branch",
           },
           bodyBuilder: () => ({}),
-          responseExtractor: (raw: unknown) => {
-            const r = raw as { data?: { inputSetTemplateYaml?: string; hasInputSets?: boolean; modules?: string[] } };
-            return {
-              inputSetTemplateYaml: r.data?.inputSetTemplateYaml ?? null,
-              hasInputSets: r.data?.hasInputSets ?? false,
-              modules: r.data?.modules ?? [],
-              _hint: r.data?.inputSetTemplateYaml
-                ? "This YAML template shows all runtime inputs needed. Fields with '<+input>' are required. Pass matching key-value pairs to harness_execute(action='run', inputs={...})."
-                : "This pipeline has no runtime inputs. You can execute it without providing any inputs.",
-            };
-          },
+          responseExtractor: runtimeInputExtract,
           description: "Fetch the runtime input template for a pipeline. Shows all fields that require values at execution time.",
         },
       },

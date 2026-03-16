@@ -1,5 +1,5 @@
 import type { ToolsetDefinition } from "../types.js";
-import { ngExtract, pageExtract, passthrough, gqlExtract } from "../extractors.js";
+import { ngExtract, pageExtract, passthrough, gqlExtract, ccmBreakdownExtract, ccmTimeseriesExtract, ccmSummaryExtract, ccmRecommendationsExtract } from "../extractors.js";
 
 // ---------------------------------------------------------------------------
 // GraphQL queries — ported from the official Go MCP server
@@ -383,18 +383,7 @@ Optional: group_by (${VALID_GROUP_BY_FIELDS.join(", ")}), time_filter (${VALID_T
               preferences: buildPreferences(),
             },
           }),
-          responseExtractor: (raw) => {
-            const r = raw as {
-              data?: {
-                perspectiveGrid?: { data?: unknown[] };
-                perspectiveTotalCount?: number;
-              };
-            };
-            return {
-              items: r.data?.perspectiveGrid?.data ?? [],
-              total: r.data?.perspectiveTotalCount ?? 0,
-            };
-          },
+          responseExtractor: ccmBreakdownExtract,
           description:
             "Get cost breakdown by dimension for a perspective. Group by region, awsServicecode, product, cloudProvider, etc.",
         },
@@ -446,12 +435,7 @@ Optional: time_filter (${VALID_TIME_FILTERS.join(", ")}), time_resolution (DAY, 
               },
             };
           },
-          responseExtractor: (raw) => {
-            const r = raw as {
-              data?: { perspectiveTimeSeriesStats?: { stats?: unknown[] } };
-            };
-            return r.data?.perspectiveTimeSeriesStats?.stats ?? [];
-          },
+          responseExtractor: ccmTimeseriesExtract,
           description:
             "Get cost time series data for a perspective. Shows cost trends over time grouped by a dimension.",
         },
@@ -510,15 +494,7 @@ Use with no perspective_id to get CCM metadata (available connectors, default pe
               },
             };
           },
-          responseExtractor: (raw) => {
-            const r = raw as { data?: Record<string, unknown> };
-            if (!r.data) return raw;
-            if (r.data.ccmMetaData) return r.data.ccmMetaData;
-            return {
-              trendStats: r.data.perspectiveTrendStats,
-              forecastCost: r.data.perspectiveForecastCost,
-            };
-          },
+          responseExtractor: ccmSummaryExtract,
           description:
             "Get cost summary with trend, forecast, idle/unallocated costs. Omit perspective_id to get CCM metadata.",
         },
@@ -590,18 +566,7 @@ Replaces the 5 separate resource-type tools from the official server (EC2, Azure
               },
             },
           }),
-          responseExtractor: (raw) => {
-            const r = raw as {
-              data?: {
-                recommendationsV2?: { items?: unknown[] };
-                recommendationStatsV2?: unknown;
-              };
-            };
-            return {
-              items: r.data?.recommendationsV2?.items ?? [],
-              stats: r.data?.recommendationStatsV2,
-            };
-          },
+          responseExtractor: ccmRecommendationsExtract,
           description:
             "Get recommendations scoped to a specific perspective, with aggregate savings stats. Filter by min_saving, time_filter.",
         },
