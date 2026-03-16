@@ -16,6 +16,14 @@ export const registriesToolset: ToolsetDefinition = {
       listFilterFields: [
         { name: "search", description: "Filter artifact registries by name or keyword" },
         { name: "type", description: "Registry type filter", enum: ["UPSTREAM", "VIRTUAL"] },
+        {
+          name: "package_type",
+          description: "Filter registries by package type",
+          enum: [
+            "CARGO", "COMPOSER", "CONDA", "DART", "DOCKER", "GENERIC", "GO", "HELM",
+            "HUGGINGFACE", "MAVEN", "NPM", "NUGET", "PYTHON", "RAW", "RPM", "SWIFT",
+          ],
+        },
       ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/registries/{registryIdentifier}",
       operations: {
@@ -25,6 +33,7 @@ export const registriesToolset: ToolsetDefinition = {
           queryParams: {
             search: "search",
             type: "type",
+            package_type: "package_type",
             page: "page",
             size: "size",
           },

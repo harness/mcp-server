@@ -283,11 +283,24 @@ export const ccmToolset: ToolsetDefinition = {
       toolset: "ccm",
       scope: "account",
       identifierFields: ["perspective_id"],
+      listFilterFields: [
+        { name: "search", description: "Filter perspectives by name" },
+        { name: "sort_type", description: "Sort field", enum: ["NAME", "LAST_EDIT", "COST", "CLUSTER_COST"] },
+        { name: "sort_order", description: "Sort direction", enum: ["ASCENDING", "DESCENDING"] },
+        { name: "cloud_filter", description: "Filter by cloud provider", enum: ["AWS", "GCP", "AZURE", "CLUSTER", "DEFAULT"] },
+      ],
       operations: {
         list: {
           method: "GET",
-          path: "/ccm/api/perspectives",
-          queryParams: { page: "page", size: "size" },
+          path: "/ccm/api/perspective/getAllPerspectives",
+          queryParams: {
+            search: "searchKey",
+            sort_type: "sortType",
+            sort_order: "sortOrder",
+            cloud_filter: "cloudFilters",
+            page: "pageNo",
+            size: "pageSize",
+          },
           responseExtractor: pageExtract,
           description: "List all cost perspectives for the account",
         },
@@ -729,6 +742,58 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
             "List cost anomalies. Filter by status (ACTIVE/IGNORED/ARCHIVED/RESOLVED), perspective_id, min_amount, min_anomalous_spend.",
         },
       },
+      executeActions: {
+        report_feedback: {
+          actionDescription:
+            "Report feedback on a cost anomaly — mark it as TRUE_ANOMALY, TRUE_EXPECTED_ANOMALY, FALSE_ANOMALY, or NOT_RESPONDED. Pass anomaly_id and feedback.",
+          description: "Report feedback on a cost anomaly",
+          method: "PUT",
+          path: "/ccm/api/anomaly/feedback",
+          queryParams: {
+            anomaly_id: "anomalyId",
+            feedback: "feedback",
+          },
+          bodyBuilder: () => ({}),
+          bodySchema: {
+            description: "No body required. Feedback is set via anomaly_id and feedback query parameters.",
+            fields: [
+              { name: "anomaly_id", type: "string", required: true, description: "Anomaly ID to report feedback on" },
+              { name: "feedback", type: "string", required: true, description: "Feedback type: TRUE_ANOMALY, TRUE_EXPECTED_ANOMALY, FALSE_ANOMALY, or NOT_RESPONDED" },
+            ],
+          },
+          responseExtractor: ngExtract,
+        },
+      },
+    },
+
+    // ------------------------------------------------------------------
+    // 6b. cost_anomaly_summary — anomaly summary stats
+    // ------------------------------------------------------------------
+    {
+      resourceType: "cost_anomaly_summary",
+      displayName: "Cost Anomaly Summary",
+      description:
+        "Summary statistics for cloud cost anomalies — total count, total anomalous spend, breakdown by cloud provider.",
+      toolset: "ccm",
+      scope: "account",
+      identifierFields: [],
+      deepLinkTemplate: "/ng/account/{accountId}/ce/anomaly-detection",
+      operations: {
+        get: {
+          method: "POST",
+          path: "/ccm/api/anomaly/v2/summary",
+          bodyBuilder: (input) => {
+            const filters: Record<string, unknown> = {
+              filterType: "Anomaly",
+            };
+            if (input.min_amount) filters.minActualAmount = input.min_amount;
+            if (input.min_anomalous_spend) filters.minAnomalousSpend = input.min_anomalous_spend;
+            return { anomalyFilterPropertiesDTO: filters };
+          },
+          responseExtractor: ngExtract,
+          description: "Get anomaly summary statistics — total count and spend by cloud provider",
+        },
+      },
     },
 
     // ------------------------------------------------------------------
@@ -738,17 +803,35 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
       resourceType: "cost_category",
       displayName: "Cost Category",
       description:
-        "Cost categories (business mappings) for organizing cloud costs into business units.",
+        "Cost categories (business mappings) for organizing cloud costs into business units. Use harness_list to see all categories, harness_get with category_id for details.",
       toolset: "ccm",
       scope: "account",
       identifierFields: ["category_id"],
+      listFilterFields: [
+        { name: "search", description: "Filter cost categories by name" },
+        { name: "sort_type", description: "Sort field", enum: ["NAME", "LAST_EDIT"] },
+        { name: "sort_order", description: "Sort direction", enum: ["ASC", "DESC"] },
+      ],
       operations: {
         list: {
           method: "GET",
           path: "/ccm/api/business-mapping",
-          queryParams: { page: "page", size: "size" },
+          queryParams: {
+            search: "searchKey",
+            sort_type: "sortType",
+            sort_order: "sortOrder",
+            page: "pageNo",
+            size: "pageSize",
+          },
           responseExtractor: ngExtract,
           description: "List all cost categories (business mappings)",
+        },
+        get: {
+          method: "GET",
+          path: "/ccm/api/business-mapping/{costCategoryId}",
+          pathParams: { category_id: "costCategoryId" },
+          responseExtractor: ngExtract,
+          description: "Get cost category details by ID",
         },
       },
     },
