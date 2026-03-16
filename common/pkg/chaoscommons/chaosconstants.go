@@ -239,25 +239,31 @@ allowing users to get an overview and detailed insights for each probe.`
 
 	DescToolCreateExperimentFromTemplate = `Create a chaos experiment from a template.`
 
-	DescToolListExperimentTemplates = `List chaos experiment templates from chaos hubs.`
+	DescToolListExperimentTemplates = `List chaos experiment templates from chaos hubs.
+Returns a paginated list of templates with identity, name, description, tags, revision, infraType,
+hub identity, and audit info (createdBy, updatedBy, timestamps).`
 
-	DescToolGetExperimentTemplate = `Retrieves detailed information about a specific chaos experiment template by its identity,
-including its spec, variables, revision, and metadata.`
+	DescToolGetExperimentTemplate = `Retrieves detailed information about a specific chaos experiment template by its identity.
+Returns the full template including name, identity, description, tags, kind, apiVersion, revision, isDefault,
+and spec (infraType, faults, probes, actions, vertices, cleanupPolicy).`
 
 	DescToolDeleteExperimentTemplate = `Deletes a chaos experiment template by its identity (soft delete).
 The template must not be referenced by any existing experiment, otherwise the delete will be rejected.`
 
 	DescToolListExperimentTemplateRevisions = `Lists all revisions of a specific chaos experiment template by its identity.
-Supports pagination, search, sort, and filtering.`
+Returns a paginated list of revisions with identity, name, revision, isDefault, infraType, and audit info.
+Supports pagination, search by name, sort, and filtering by infrastructure type, infrastructure, and tags.`
 
-	DescToolGetExperimentTemplateVariables = `Retrieves the input variables (faults, probes, actions) of a specific chaos experiment template.
+	DescToolGetExperimentTemplateVariables = `Retrieves the input variables of a specific chaos experiment template, grouped by faults, probes, and actions.
+Each group contains a list of variable definitions with name, value, path, category, type, description, required flag, and allowed values.
 Useful for understanding what inputs are needed before launching an experiment from a template.`
 
 	DescToolGetExperimentTemplateYaml = `Retrieves the YAML representation of a specific chaos experiment template.
-Returns the raw template YAML string for a given revision.`
+Returns a JSON object with a 'template' field containing the raw YAML string for the given revision.`
 
-	DescToolCompareExperimentTemplateRevisions = `Compares two revisions of a chaos experiment template,
-returning the YAML of both revisions for diff comparison. Both revision1 and revision2 are required.`
+	DescToolCompareExperimentTemplateRevisions = `Compares two revisions of a chaos experiment template side by side.
+Returns a JSON object with 'template1' and 'template2' fields containing the YAML strings of each revision for diff comparison.
+Both revision1 and revision2 are required.`
 
 	DescToolExperimentVariablesList = `List the chaos experiment variables.`
 
@@ -267,55 +273,70 @@ Infra IDs are needed when creating sample load tests via chaos_create_sample_loa
 By default only active infrastructures are returned; set status to 'All' to list all.`
 
 	DescToolListFaultTemplates = `List chaos fault templates from chaos hubs.
+Returns a paginated list of templates with identity, name, category, infraType, revision, variables, tags, and audit info.
 Supports filtering by hub, type, infrastructure, category, tags, and pagination.`
 
-	DescToolGetFaultTemplate = `Retrieves detailed information about a specific chaos fault template by its identity,
-including its spec, variables, revision, and metadata.`
+	DescToolGetFaultTemplate = `Retrieves detailed information about a specific chaos fault template by its identity.
+Returns the template data (identity, name, category, infraType, revision, variables, tags, template YAML)
+and the parsed fault object with spec details.`
 
-	DescToolDeleteFaultTemplate = `Deletes a chaos fault template by its identity (soft delete).`
+	DescToolDeleteFaultTemplate = `Deletes a chaos fault template by its identity (soft delete).
+The template must not be used by any experiment template, and must not be referenced by any faults, otherwise the delete will be rejected.
+Returns {"deleted":true} on success.`
 
 	DescToolListFaultTemplateRevisions = `Lists all revisions of a specific chaos fault template by its identity.
-Supports pagination.`
+Returns a paginated list of revisions with identity, name, revision, isDefault, category, infraType, and audit info.`
 
-	DescToolGetFaultTemplateVariables = `Retrieves the runtime input variables of a specific chaos fault template,
-grouped into variables, faultTargets, faultTunable, and faultAuthentication.`
+	DescToolGetFaultTemplateVariables = `Retrieves the runtime input variables of a specific chaos fault template.
+Returns variables grouped into: variables, faultTargets, faultTunable, and faultAuthentication.
+Each variable includes name, value, path, category, type, description, required flag, and allowed values.`
 
 	DescToolGetFaultTemplateYaml = `Retrieves the YAML representation of a specific chaos fault template.
-Returns the raw template YAML string for a given revision.`
+Returns a JSON object with a 'template' field containing the raw YAML string for the given revision.`
 
-	DescToolCompareFaultTemplateRevisions = `Compares two revisions of a chaos fault template,
-returning the YAML of both revisions for diff comparison. Both revision1 and revision2 are required.`
+	DescToolCompareFaultTemplateRevisions = `Compares two revisions of a chaos fault template side by side.
+Returns a JSON object with 'template1' and 'template2' fields containing the YAML strings of each revision for diff comparison.
+Both revision1 and revision2 are required.`
 
 	DescToolListProbeTemplates = `List chaos probe templates.
+Returns a paginated list of templates with identity, name, type, infrastructureType, revision, probeProperties, runProperties, and audit info.
 Supports filtering by hub, infrastructure type, probe entity type, search, and pagination.`
 
-	DescToolGetProbeTemplate = `Retrieves detailed information about a specific chaos probe template by its identity,
-including its type, properties, run properties, and metadata.`
+	DescToolGetProbeTemplate = `Retrieves detailed information about a specific chaos probe template by its identity.
+Returns the template data including type, probeProperties, runProperties, variables, revision, and audit info.`
 
 	DescToolDeleteProbeTemplate = `Deletes a chaos probe template by its identity. Requires hubIdentity.
 When revision is 0 or not provided, all revisions are deleted.
-The template must not be referenced by any experiments for deletion to succeed.`
+Cannot delete from the Enterprise ChaosHub. The template must not be referenced by any experiment templates.
+Cannot delete the default revision when targeting a specific revision.
+Returns {"deleted":true} or {"deleted":false} on success.`
 
-	DescToolGetProbeTemplateVariables = `Retrieves the runtime input variables for a chaos probe template,
-including probe properties and run properties.`
+	DescToolGetProbeTemplateVariables = `Retrieves the runtime input variables for a chaos probe template.
+Returns variables grouped into: variables, probeProperties, and probeRunProperty.
+Each variable includes name, value, path, category, type, description, required flag, and allowed values.`
 
 	DescToolListActionTemplates = `List chaos action templates.
+Returns a paginated list of templates with identity, name, type, infrastructureType, revision, actionProperties, runProperties, and audit info.
 Supports filtering by hub, infrastructure type, action entity type, search, and pagination.`
 
-	DescToolGetActionTemplate = `Retrieves detailed information about a specific chaos action template by its identity,
-including its spec, variables, revision, and metadata.`
+	DescToolGetActionTemplate = `Retrieves detailed information about a specific chaos action template by its identity.
+Returns the template data including type, actionProperties, runProperties, variables, revision, and audit info.`
 
 	DescToolDeleteActionTemplate = `Deletes a chaos action template by its identity. Requires hubIdentity.
 When revision is 0 or not provided, all revisions are deleted.
-The template must not be referenced by any experiments for deletion to succeed.`
+The template must not be referenced by any experiment templates. Cannot delete the default revision when targeting a specific revision.
+Returns {"deleted":true} or {"deleted":false} on success.`
 
-	DescToolListActionTemplateRevisions = `Lists all revisions of a chaos action template by its identity,
-with pagination and optional filtering support.`
+	DescToolListActionTemplateRevisions = `Lists all revisions of a chaos action template by its identity.
+Returns a paginated list of revisions with identity, name, type, revision, isDefault, and audit info.
+Supports pagination and search.`
 
-	DescToolGetActionTemplateVariables = `Retrieves the runtime input variables for a chaos action template,
-including action properties and run properties.`
+	DescToolGetActionTemplateVariables = `Retrieves the runtime input variables for a chaos action template.
+Returns variables grouped into: variables, actionProperties, and actionRunProperty.
+Each variable includes name, value, path, category, type, description, required flag, and allowed values.`
 
 	DescToolCompareActionTemplateRevisions = `Compares two revisions of a chaos action template side by side.
+Returns a paginated list containing the two requested revisions for diff comparison.
 Requires the template identity, hub identity, and two revision numbers.`
 
 	DescToolListHubs = `List ChaosHubs (Git-connected repositories containing fault, experiment, probe, and action templates).
@@ -331,20 +352,25 @@ Also returns fault category counts for each infrastructure type.
 Supports filtering by hub, infrastructure type, category, permissions, and search.`
 
 	DescToolDeleteHub = `Delete a ChaosHub by its identity.
-Removes the hub and its associated resources. The default Enterprise ChaosHub cannot be deleted.`
+The hub must have no fault templates, action templates, or probe templates — remove them before deleting.
+At least one hub must remain after deletion. The default Enterprise ChaosHub cannot be deleted.
+Returns a success message on completion.`
 
 	DescToolCreateHub = `Create a new ChaosHub in the given Harness scope (account, org, project).
 The hub record stores a Git repo and connector reference that provides chaos fault, experiment, probe, and action templates.
-The hub identity cannot be 'enterprise-chaoshub' as that is reserved for the default hub.`
+The hub identity cannot be 'enterprise-chaoshub' as that is reserved for the default hub.
+Returns the created hub details including identity, name, repository info, connector configuration, and template counts.`
 
 	DescToolUpdateHub = `Update the editable fields of a ChaosHub (name, description, tags) by its identity.
 IMPORTANT: The API uses a replace-all model — all fields are fully replaced, not merged.
 Omitted or empty values will overwrite and clear existing data.
 To preserve existing description or tags when changing only some fields,
-fetch the current hub via chaos_get_hub first and pass through the values you want to keep.`
+fetch the current hub via chaos_get_hub first and pass through the values you want to keep.
+Returns the updated hub details including identity, name, repository info, and template counts.`
 
 	DescToolListChaosGuardConditions = `List ChaosGuard conditions.
 Conditions define the infrastructure, fault, and application constraints that ChaosGuard rules evaluate against chaos experiments.
+Returns a paginated list of conditions with name, description, infraType, faultSpec, associated rules, tags, and audit info.
 Supports filtering by infrastructure type, tags, search, sorting, and pagination.`
 
 	DescToolGetChaosGuardCondition = `Get a ChaosGuard condition by its identifier.
@@ -352,11 +378,13 @@ Returns the full condition details including infrastructure type, fault specific
 
 	DescToolDeleteChaosGuardCondition = `Delete (soft-delete) a ChaosGuard condition by its identifier.
 The condition is marked as removed and will no longer appear in listings or be evaluated by rules,
-but is not permanently erased from the database.`
+but is not permanently erased from the database.
+Returns a JSON object with success status and message.`
 
 	DescToolListChaosGuardRules = `List ChaosGuard governance rules.
 ChaosGuard rules define security policies that control when and how chaos experiments can run,
 including user group restrictions, time windows, and conditions.
+Returns a paginated list of rules with name, description, conditions, time windows, userGroupIds, isEnabled, and audit info.
 Supports filtering by infrastructure type, tags, search, sorting, and pagination.`
 
 	DescToolGetChaosGuardRule = `Get a ChaosGuard rule by its identifier.
@@ -364,9 +392,11 @@ Returns the full rule details including name, description, conditions, time wind
 
 	DescToolDeleteChaosGuardRule = `Delete (soft-delete) a ChaosGuard rule by its identifier.
 The rule is marked as removed and will no longer appear in listings or be enforced,
-but is not permanently erased from the database.`
+but is not permanently erased from the database.
+Returns a JSON object with success status and message.`
 
 	DescToolEnableChaosGuardRule = `Enable or disable a ChaosGuard rule.
 When enabled, the rule actively enforces its governance conditions on chaos experiments.
-When disabled, the rule is inactive and does not affect experiment execution.`
+When disabled, the rule is inactive and does not affect experiment execution.
+Returns a success message on completion.`
 )
