@@ -3,7 +3,9 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import type { Config } from "../config.js";
-import { jsonResult, errorResult } from "../utils/response-formatter.js";
+import { jsonResult, errorResult, mixedResult } from "../utils/response-formatter.js";
+import { toExecutionSummaryData, renderTimelineSvg, renderStageFlowSvg } from "../utils/svg/index.js";
+import { createLogger } from "../utils/logger.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString } from "../utils/type-guards.js";
@@ -12,6 +14,8 @@ import { pipelineHandler } from "./diagnose/pipeline.js";
 import { connectorHandler } from "./diagnose/connector.js";
 import { delegateHandler } from "./diagnose/delegate.js";
 import { gitopsApplicationHandler } from "./diagnose/gitops-application.js";
+
+const logDiag = createLogger("diagnose");
 
 const ALIASES: Record<string, string> = { execution: "pipeline", gitops_app: "gitops_application" };
 
@@ -35,7 +39,7 @@ export function registerDiagnoseTool(server: McpServer, registry: Registry, clie
         url: z.string().describe("A Harness URL — resource type, org, project, and ID are extracted automatically").optional(),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
-        options: z.record(z.string(), z.unknown()).describe("Resource-specific diagnostic options. Pipeline: execution_id, pipeline_id, summary, include_yaml, include_logs, log_snippet_lines, max_failed_steps. GitOps: agent_id. Call harness_describe for details.").optional(),
+        options: z.record(z.string(), z.unknown()).describe("Resource-specific diagnostic options. Pipeline: execution_id, pipeline_id, summary, include_yaml, include_logs, log_snippet_lines, max_failed_steps, include_visual (boolean, include PNG timeline image inline), visual_type ('timeline'|'flow', default 'timeline'), visual_width (number, default 800). GitOps: agent_id. Call harness_describe for details.").optional(),
       },
       annotations: {
         title: "Diagnose Harness Resource",
@@ -69,6 +73,25 @@ export function registerDiagnoseTool(server: McpServer, registry: Registry, clie
 
         const ctx: DiagnoseContext = { client, registry, config, input, args: mergedArgs, extra, signal: extra.signal };
         const result = await handler.diagnose(ctx);
+
+        // Visual rendering (opt-in)
+        if (mergedArgs.include_visual === true && resourceType === "pipeline") {
+          try {
+            const summaryData = toExecutionSummaryData(result);
+            if (summaryData) {
+              const visualType = mergedArgs.visual_type === "flow" ? "flow" : "timeline";
+              const visualWidth = typeof mergedArgs.visual_width === "number" ? mergedArgs.visual_width : 900;
+              const hasSteps = summaryData.stages.some((s) => s.steps.length > 0);
+              const svg = visualType === "flow"
+                ? renderStageFlowSvg(summaryData, { width: visualWidth })
+                : renderTimelineSvg(summaryData, { width: visualWidth, showSteps: hasSteps });
+              return mixedResult(result, svg);
+            }
+          } catch (err) {
+            logDiag.warn("SVG rendering failed, returning text-only", { error: String(err) });
+          }
+        }
+
         return jsonResult(result);
       } catch (err) {
         if (isUserError(err)) return errorResult(err.message);
