@@ -38,7 +38,7 @@ src/
     index.ts                  # Registry class + dispatch logic
     types.ts                  # ResourceDefinition, ToolsetDefinition, etc.
     toolsets/                  # One file per toolset (declarative data)
-  tools/                      # 10 generic MCP tools (thin dispatch wrappers)
+  tools/                      # 11 generic MCP tools (thin dispatch wrappers)
   resources/                  # MCP resource providers
   prompts/                    # MCP prompt templates
   utils/                      # Errors, logger, rate limiter, deep links, etc.
@@ -254,6 +254,11 @@ console.log("anything");       // NEVER — breaks stdio transport
 3. `pnpm test` must pass — all tests green
 4. Add tests for new logic (custom extractors, bodyBuilders, utilities)
 5. Update README.md if adding user-visible features (new config vars, resource types, prompts)
+
+## Notes on Conditional Tool Registration
+
+- `harness_ask` is intentionally **not** registered when `HARNESS_READ_ONLY=true`.
+- If `HARNESS_TOOLSETS` is set, `harness_ask` is only registered when `intelligence` is included.
 
 ## License
 
