@@ -374,6 +374,12 @@ Toolset Name: `gitops`
 
 ## Quickstart
 
+Install the server using `go install`:
+
+```bash
+go install github.com/harness/mcp-server/cmd/harness-mcp-server@latest
+```
+
 ## Makefile Usage
 
 This project provides a `Makefile` to simplify common development tasks. The main targets are:
