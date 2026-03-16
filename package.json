@@ -43,6 +43,7 @@
   "homepage": "https://github.com/thisrohangupta/harness-mcp-v2#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
+    "@resvg/resvg-js": "^2.6.2",
     "express": "^5.2.1",
     "yaml": "^2.8.2",
     "zod": "^4.0.0"

@@ -15,6 +15,7 @@ import { registerDescribeTool } from "./harness-describe.js";
 import { registerStatusTool } from "./harness-status.js";
 import { registerAskTool } from "./harness-ask.js";
 
+
 export function registerAllTools(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
   registerListTool(server, registry, client);
   registerGetTool(server, registry, client);

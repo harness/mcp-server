@@ -31,6 +31,7 @@ import { accessControlToolset } from "./toolsets/access-control.js";
 import { settingsToolset } from "./toolsets/settings.js";
 import { platformToolset } from "./toolsets/platform.js";
 import { intelligenceToolset } from "./toolsets/intelligence.js";
+import { visualizationsToolset } from "./toolsets/visualizations.js";
 
 const log = createLogger("registry");
 
@@ -62,6 +63,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   settingsToolset,
   platformToolset,
   intelligenceToolset,
+  visualizationsToolset,
 ];
 
 /**
