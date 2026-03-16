@@ -60,3 +60,14 @@
 - [ ] MCP Inspector verification
 - [ ] Real Harness API integration test
 - [ ] README.md
+
+## Documentation Alignment Automation (2026-03-16) ✅
+- [x] Audit docs against current tool registration and registry counts
+- [x] Update README public interface claims to match tool schemas
+- [x] Add pipeline runtime-input execution workflow + troubleshooting notes
+- [x] Align supporting docs (`CONTRIBUTING.md`, `docs/gemini.md`)
+
+### Review
+- Corrected stale inventory references (11 tools / 26 toolsets / 124 resource types).
+- Documented `harness_diagnose` multi-resource support and `harness_ask` conditional availability.
+- Added concrete pipeline run workflow for `runtime_input_template` + `input_set_ids`.
