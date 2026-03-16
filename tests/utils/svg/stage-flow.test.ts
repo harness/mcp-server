@@ -38,12 +38,12 @@ describe("renderStageFlowSvg", () => {
 
   it("shows step count for stages with steps", () => {
     const svg = renderStageFlowSvg(makeData());
-    expect(svg).toContain("1 steps");
+    expect(svg).toContain("1 step");
   });
 
   it("draws arrows between stages", () => {
     const svg = renderStageFlowSvg(makeData());
-    expect(svg).toContain("arrowhead");
+    expect(svg).toContain("arrow");
     expect(svg).toContain("<line");
   });
 
@@ -65,8 +65,8 @@ describe("renderStageFlowSvg", () => {
     expect(svg).toContain("+15 more");
   });
 
-  it("defines arrowhead marker", () => {
+  it("defines arrow marker", () => {
     const svg = renderStageFlowSvg(makeData());
-    expect(svg).toContain('<marker id="arrowhead"');
+    expect(svg).toContain('<marker id="arrow"');
   });
 });

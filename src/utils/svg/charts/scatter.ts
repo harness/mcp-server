@@ -1,9 +1,13 @@
 /**
- * Scatter plot renderer.
+ * Scatter plot — rich version with grid, axes, labels, crosshairs on hover area.
  */
 
 import type { ScatterChartData } from "./types.js";
-import { FONT_FAMILY, BG_COLOR, SURFACE_COLOR, BORDER_COLOR, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED } from "../colors.js";
+import {
+  FONT_FAMILY, SURFACE_COLOR, BORDER_COLOR,
+  TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, GRID_COLOR, CHART_PALETTE,
+  svgDefs,
+} from "../colors.js";
 import { escapeXml, truncateLabel } from "../escape.js";
 
 export interface ScatterChartOptions {
@@ -12,101 +16,96 @@ export interface ScatterChartOptions {
   dotRadius?: number;
 }
 
-const DEFAULT_COLOR = "#3b82f6";
+function fmtAxis(v: number): string {
+  if (Number.isInteger(v)) return String(v);
+  return v.toFixed(1);
+}
 
 export function renderScatterChartSvg(data: ScatterChartData, options?: ScatterChartOptions): string {
-  const width = options?.width ?? 700;
-  const chartAreaHeight = options?.height ?? 350;
+  const W = options?.width ?? 720;
+  const plotH = options?.height ?? 360;
   const dotR = options?.dotRadius ?? 5;
-  const PADDING = 20;
-  const HEADER_HEIGHT = data.subtitle ? 62 : 48;
-  const AXIS_MARGIN_LEFT = 60;
-  const AXIS_MARGIN_BOTTOM = 40;
-  const CHART_LEFT = PADDING + AXIS_MARGIN_LEFT;
-  const CHART_WIDTH = width - CHART_LEFT - PADDING;
-  const CHART_TOP = HEADER_HEIGHT + PADDING;
-  const CHART_HEIGHT = chartAreaHeight - AXIS_MARGIN_BOTTOM;
-  const totalHeight = HEADER_HEIGHT + chartAreaHeight + PADDING * 2;
+  const PAD = 24;
+  const HDR_H = data.subtitle ? 68 : 52;
+  const AXIS_L = 56;
+  const AXIS_B = 48;
+  const CX = PAD + AXIS_L;
+  const CW = W - CX - PAD;
+  const CT = HDR_H + PAD;
+  const CH = plotH - AXIS_B;
+  const H = HDR_H + plotH + PAD * 2;
 
-  const points = data.points;
+  const pts = data.points;
 
-  // Compute data bounds
-  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-  for (const p of points) {
-    if (p.x < minX) minX = p.x;
-    if (p.x > maxX) maxX = p.x;
-    if (p.y < minY) minY = p.y;
-    if (p.y > maxY) maxY = p.y;
+  let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
+  for (const p of pts) {
+    if (p.x < xMin) xMin = p.x; if (p.x > xMax) xMax = p.x;
+    if (p.y < yMin) yMin = p.y; if (p.y > yMax) yMax = p.y;
   }
-  if (!isFinite(minX)) { minX = 0; maxX = 1; minY = 0; maxY = 1; }
-  const rangeX = maxX - minX || 1;
-  const rangeY = maxY - minY || 1;
-  // Add 10% padding
-  const padX = rangeX * 0.1;
-  const padY = rangeY * 0.1;
-  const xMin = minX - padX;
-  const xMax = maxX + padX;
-  const yMin = minY - padY;
-  const yMax = maxY + padY;
-  const rX = xMax - xMin;
-  const rY = yMax - yMin;
+  if (!isFinite(xMin)) { xMin = 0; xMax = 1; yMin = 0; yMax = 1; }
+  const padX = (xMax - xMin || 1) * 0.08, padY = (yMax - yMin || 1) * 0.08;
+  const x0 = xMin - padX, x1 = xMax + padX, y0 = yMin - padY, y1 = yMax + padY;
+  const rX = x1 - x0, rY = y1 - y0;
+  const sx = (v: number) => CX + ((v - x0) / rX) * CW;
+  const sy = (v: number) => CT + CH - ((v - y0) / rY) * CH;
 
-  function scaleX(v: number): number {
-    return CHART_LEFT + ((v - xMin) / rX) * CHART_WIDTH;
+  // Grid
+  const grid: string[] = [];
+  for (let i = 0; i <= 5; i++) {
+    const yVal = y0 + (rY * i) / 5;
+    const py = sy(yVal);
+    grid.push(`<line x1="${CX}" y1="${py}" x2="${CX + CW}" y2="${py}" stroke="${GRID_COLOR}" stroke-width="1"/>`);
+    grid.push(`<text x="${CX - 8}" y="${py + 3}" fill="${TEXT_MUTED}" font-size="9" font-family="${FONT_FAMILY}" text-anchor="end">${fmtAxis(yVal)}</text>`);
   }
-  function scaleY(v: number): number {
-    return CHART_TOP + CHART_HEIGHT - ((v - yMin) / rY) * CHART_HEIGHT;
+  for (let i = 0; i <= 5; i++) {
+    const xVal = x0 + (rX * i) / 5;
+    const px = sx(xVal);
+    grid.push(`<line x1="${px}" y1="${CT}" x2="${px}" y2="${CT + CH}" stroke="${GRID_COLOR}" stroke-width="1"/>`);
+    grid.push(`<text x="${px}" y="${CT + CH + 16}" fill="${TEXT_MUTED}" font-size="9" font-family="${FONT_FAMILY}" text-anchor="middle">${fmtAxis(xVal)}</text>`);
   }
-
-  // Grid lines (5 horizontal)
-  const gridLines: string[] = [];
-  for (let i = 0; i <= 4; i++) {
-    const val = yMin + (rY * i) / 4;
-    const y = scaleY(val);
-    gridLines.push(`<line x1="${CHART_LEFT}" y1="${y}" x2="${CHART_LEFT + CHART_WIDTH}" y2="${y}" stroke="${BORDER_COLOR}" stroke-width="1"/>`);
-    const label = Number.isInteger(val) ? String(val) : val.toFixed(1);
-    gridLines.push(`<text x="${CHART_LEFT - 8}" y="${y + 4}" fill="${TEXT_MUTED}" font-size="9" font-family="${FONT_FAMILY}" text-anchor="end">${label}</text>`);
-  }
-
-  // X-axis labels (5)
-  for (let i = 0; i <= 4; i++) {
-    const val = xMin + (rX * i) / 4;
-    const x = scaleX(val);
-    const label = Number.isInteger(val) ? String(val) : val.toFixed(1);
-    gridLines.push(`<text x="${x}" y="${CHART_TOP + CHART_HEIGHT + 16}" fill="${TEXT_MUTED}" font-size="9" font-family="${FONT_FAMILY}" text-anchor="middle">${label}</text>`);
-  }
-
-  // Dots
-  const dots = points.map((p) => {
-    const x = scaleX(p.x);
-    const y = scaleY(p.y);
-    const color = p.color ?? DEFAULT_COLOR;
-    const tooltip = p.label ? escapeXml(`${p.label}: (${p.x}, ${p.y})`) : escapeXml(`(${p.x}, ${p.y})`);
-    return `<circle cx="${x}" cy="${y}" r="${dotR}" fill="${color}" opacity="0.8"><title>${tooltip}</title></circle>`;
-  }).join("\n");
 
   // Axes
   const axes = `
-    <line x1="${CHART_LEFT}" y1="${CHART_TOP}" x2="${CHART_LEFT}" y2="${CHART_TOP + CHART_HEIGHT}" stroke="${TEXT_MUTED}" stroke-width="1"/>
-    <line x1="${CHART_LEFT}" y1="${CHART_TOP + CHART_HEIGHT}" x2="${CHART_LEFT + CHART_WIDTH}" y2="${CHART_TOP + CHART_HEIGHT}" stroke="${TEXT_MUTED}" stroke-width="1"/>
+    <line x1="${CX}" y1="${CT}" x2="${CX}" y2="${CT + CH}" stroke="${TEXT_MUTED}" stroke-width="1.5"/>
+    <line x1="${CX}" y1="${CT + CH}" x2="${CX + CW}" y2="${CT + CH}" stroke="${TEXT_MUTED}" stroke-width="1.5"/>
   `;
 
   // Axis labels
-  const xAxisLabel = data.xLabel ? `<text x="${CHART_LEFT + CHART_WIDTH / 2}" y="${CHART_TOP + CHART_HEIGHT + 34}" fill="${TEXT_SECONDARY}" font-size="10" font-family="${FONT_FAMILY}" text-anchor="middle">${escapeXml(data.xLabel)}</text>` : "";
-  const yAxisLabel = data.yLabel ? `<text x="${PADDING + 4}" y="${CHART_TOP + CHART_HEIGHT / 2}" fill="${TEXT_SECONDARY}" font-size="10" font-family="${FONT_FAMILY}" text-anchor="middle" transform="rotate(-90, ${PADDING + 4}, ${CHART_TOP + CHART_HEIGHT / 2})">${escapeXml(data.yLabel)}</text>` : "";
+  const xLabel = data.xLabel ? `<text x="${CX + CW / 2}" y="${CT + CH + 38}" fill="${TEXT_SECONDARY}" font-size="11" font-weight="600" font-family="${FONT_FAMILY}" text-anchor="middle">${escapeXml(data.xLabel)}</text>` : "";
+  const yLabel = data.yLabel ? `<text x="${PAD}" y="${CT + CH / 2}" fill="${TEXT_SECONDARY}" font-size="11" font-weight="600" font-family="${FONT_FAMILY}" text-anchor="middle" transform="rotate(-90,${PAD},${CT + CH / 2})">${escapeXml(data.yLabel)}</text>` : "";
 
-  const title = escapeXml(truncateLabel(data.title, 50));
-  const subtitle = data.subtitle ? `<text x="${PADDING + 12}" y="${PADDING + 36}" fill="${TEXT_MUTED}" font-size="11" font-family="${FONT_FAMILY}">${escapeXml(data.subtitle)}</text>` : "";
+  // Dots with glow
+  const dots = pts.map((p, i) => {
+    const px = sx(p.x), py = sy(p.y);
+    const color = p.color ?? CHART_PALETTE[i % CHART_PALETTE.length]!;
+    const tip = p.label ? escapeXml(`${p.label}: (${p.x}, ${p.y})`) : escapeXml(`(${p.x}, ${p.y})`);
+    return `<circle cx="${px}" cy="${py}" r="${dotR + 3}" fill="${color}" opacity="0.2"/>` +
+      `<circle cx="${px}" cy="${py}" r="${dotR}" fill="${color}" stroke="#fff" stroke-width="1" stroke-opacity="0.3"><title>${tip}</title></circle>`;
+  }).join("\n");
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${totalHeight}" viewBox="0 0 ${width} ${totalHeight}">
-  <rect width="${width}" height="${totalHeight}" rx="8" fill="${BG_COLOR}"/>
-  <rect x="${PADDING}" y="${PADDING}" width="${width - PADDING * 2}" height="${HEADER_HEIGHT - PADDING}" rx="6" fill="${SURFACE_COLOR}" stroke="${BORDER_COLOR}" stroke-width="1"/>
-  <text x="${PADDING + 12}" y="${PADDING + 20}" fill="${TEXT_PRIMARY}" font-size="14" font-weight="600" font-family="${FONT_FAMILY}">${title}</text>
+  // Header
+  const title = escapeXml(truncateLabel(data.title, 45));
+  const subtitle = data.subtitle
+    ? `<text x="${PAD + 16}" y="${PAD + 38}" fill="${TEXT_MUTED}" font-size="11" font-family="${FONT_FAMILY}">${escapeXml(data.subtitle)}</text>`
+    : "";
+
+  // Footer stats
+  const avgX = pts.reduce((s, p) => s + p.x, 0) / (pts.length || 1);
+  const avgY = pts.reduce((s, p) => s + p.y, 0) / (pts.length || 1);
+  const footerY = CT + CH + 38 + (data.xLabel ? 14 : 0);
+  const footer = `<text x="${W - PAD}" y="${footerY}" fill="${TEXT_MUTED}" font-size="9" font-family="${FONT_FAMILY}" text-anchor="end">${pts.length} points \u00b7 avg (${fmtAxis(avgX)}, ${fmtAxis(avgY)})</text>`;
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  ${svgDefs(W, H)}
+  <rect width="${W}" height="${H}" rx="12" fill="url(#bgGrad)"/>
+  <rect x="${PAD}" y="${PAD}" width="${W - PAD * 2}" height="${HDR_H - PAD}" rx="8" fill="${SURFACE_COLOR}" stroke="${BORDER_COLOR}" stroke-width="1" filter="url(#shadow)"/>
+  <text x="${PAD + 16}" y="${PAD + 22}" fill="${TEXT_PRIMARY}" font-size="15" font-weight="700" font-family="${FONT_FAMILY}">${title}</text>
   ${subtitle}
-  ${gridLines.join("\n")}
+  ${grid.join("\n")}
   ${axes}
   ${dots}
-  ${xAxisLabel}
-  ${yAxisLabel}
+  ${xLabel}
+  ${yLabel}
+  ${footer}
 </svg>`;
 }

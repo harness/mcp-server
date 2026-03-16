@@ -21,3 +21,4 @@ export { renderBarChartSvg, renderPieChartSvg, renderScatterChartSvg } from "./c
 export type { BarChartData, BarChartItem, PieChartData, PieChartSlice, ScatterChartData, ScatterPoint } from "./charts/index.js";
 export { renderListVisual } from "./list-visuals.js";
 export type { ListVisualType, ListVisualResult } from "./list-visuals.js";
+export { parsePipelineYaml, renderArchitectureSvg } from "./architecture.js";

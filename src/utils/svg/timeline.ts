@@ -1,10 +1,15 @@
 /**
  * Pipeline Execution Timeline — horizontal Gantt chart.
- * Y-axis = stage names, X-axis = time. Color-coded bars by status.
+ * Rich version: gradient bars, grid lines, header badge, duration labels, footer summary.
  */
 
 import type { ExecutionSummaryData } from "./types.js";
-import { getStatusColor, FONT_FAMILY, BG_COLOR, SURFACE_COLOR, BORDER_COLOR, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED } from "./colors.js";
+import {
+  getStatusColor, getStatusLightColor,
+  FONT_FAMILY, SURFACE_COLOR, BORDER_COLOR,
+  TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, GRID_COLOR,
+  svgDefs,
+} from "./colors.js";
 import { escapeXml, truncateLabel } from "./escape.js";
 
 export interface TimelineOptions {
@@ -13,120 +18,144 @@ export interface TimelineOptions {
   maxStages?: number;
 }
 
-function formatDuration(ms: number): string {
+function fmtDur(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
   const s = Math.floor(ms / 1000);
   if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  const rs = s % 60;
+  const m = Math.floor(s / 60), rs = s % 60;
   if (m < 60) return rs > 0 ? `${m}m ${rs}s` : `${m}m`;
-  const h = Math.floor(m / 60);
-  const rm = m % 60;
+  const h = Math.floor(m / 60), rm = m % 60;
   return rm > 0 ? `${h}h ${rm}m` : `${h}h`;
 }
 
 export function renderTimelineSvg(data: ExecutionSummaryData, options?: TimelineOptions): string {
-  const width = options?.width ?? 800;
+  const W = options?.width ?? 800;
   const showSteps = options?.showSteps ?? false;
   const maxStages = options?.maxStages ?? 25;
 
-  const LABEL_WIDTH = 160;
-  const ROW_HEIGHT = 36;
-  const STEP_HEIGHT = 24;
-  const HEADER_HEIGHT = 60;
-  const PADDING = 16;
-  const BAR_AREA_WIDTH = width - LABEL_WIDTH - PADDING * 3;
+  const PAD = 20;
+  const LABEL_W = 150;
+  const ROW_H = 34;
+  const STEP_H = 26;
+  const HDR_H = 70;
+  const FTR_H = 44;
+  const BAR_X = LABEL_W + PAD * 2;
+  const BAR_W = W - BAR_X - PAD - 50; // 50 for duration label
 
   let stages = data.stages;
-  let truncatedCount = 0;
+  let truncated = 0;
   if (stages.length > maxStages) {
-    truncatedCount = stages.length - maxStages;
+    truncated = stages.length - maxStages;
     stages = stages.slice(0, maxStages);
   }
 
-  // Compute row count
-  let totalRows = stages.length;
-  if (showSteps) {
-    for (const stage of stages) {
-      totalRows += stage.steps.length;
-    }
-  }
-  if (truncatedCount > 0) totalRows++;
+  let rowCount = stages.length;
+  if (showSteps) for (const s of stages) rowCount += s.steps.length;
+  if (truncated > 0) rowCount++;
 
-  const chartHeight = totalRows * ROW_HEIGHT;
-  const totalHeight = HEADER_HEIGHT + chartHeight + PADDING * 2;
+  const chartH = rowCount * ROW_H;
+  const H = HDR_H + chartH + FTR_H + PAD * 2;
 
-  // Timeline scale: find min start and max end
-  const minStart = stages.length > 0
-    ? Math.min(...stages.map((s) => s.startMs))
-    : 0;
+  const minStart = stages.length > 0 ? Math.min(...stages.map((s) => s.startMs)) : 0;
   const totalMs = data.totalDurationMs > 0 ? data.totalDurationMs : 1;
+  const xPos = (ms: number) => BAR_X + ((ms - minStart) / totalMs) * BAR_W;
+  const barW = (dur: number) => Math.max(6, (dur / totalMs) * BAR_W);
 
-  function xPos(ms: number): number {
-    const offset = ms - minStart;
-    return LABEL_WIDTH + PADDING * 2 + (offset / totalMs) * BAR_AREA_WIDTH;
+  // Time axis ticks (5 evenly spaced)
+  const ticks: string[] = [];
+  for (let i = 0; i <= 4; i++) {
+    const ms = (totalMs * i) / 4;
+    const x = BAR_X + (i / 4) * BAR_W;
+    ticks.push(`<line x1="${x}" y1="${HDR_H + PAD}" x2="${x}" y2="${HDR_H + PAD + chartH}" stroke="${GRID_COLOR}" stroke-width="1" stroke-dasharray="4,4"/>`);
+    ticks.push(`<text x="${x}" y="${HDR_H + PAD + chartH + 14}" fill="${TEXT_MUTED}" font-size="9" font-family="${FONT_FAMILY}" text-anchor="middle">${fmtDur(ms)}</text>`);
   }
 
-  function barWidth(durationMs: number): number {
-    return Math.max(4, (durationMs / totalMs) * BAR_AREA_WIDTH);
-  }
-
-  // Build SVG rows
+  // Rows
   const rows: string[] = [];
-  let y = HEADER_HEIGHT + PADDING;
+  let y = HDR_H + PAD;
 
-  for (const stage of stages) {
+  for (let si = 0; si < stages.length; si++) {
+    const stage = stages[si]!;
     const color = getStatusColor(stage.status);
-    const label = escapeXml(truncateLabel(stage.name, 22));
+    const light = getStatusLightColor(stage.status);
+    const label = escapeXml(truncateLabel(stage.name, 20));
     const x = xPos(stage.startMs);
-    const w = barWidth(stage.durationMs > 0 ? stage.durationMs : totalMs * 0.01);
-    const dur = stage.durationMs > 0 ? formatDuration(stage.durationMs) : stage.status;
+    const w = barW(stage.durationMs > 0 ? stage.durationMs : totalMs * 0.01);
+    const dur = stage.durationMs > 0 ? fmtDur(stage.durationMs) : stage.status;
+    const gradId = `sg${si}`;
 
-    rows.push(`
-      <text x="${PADDING}" y="${y + ROW_HEIGHT / 2 + 4}" fill="${TEXT_PRIMARY}" font-size="12" font-family="${FONT_FAMILY}">${label}</text>
-      <rect x="${x}" y="${y + 6}" width="${w}" height="${ROW_HEIGHT - 12}" rx="4" fill="${color}" opacity="0.85"/>
-      <text x="${x + w + 6}" y="${y + ROW_HEIGHT / 2 + 4}" fill="${TEXT_SECONDARY}" font-size="10" font-family="${FONT_FAMILY}">${escapeXml(dur)}</text>
-    `);
+    // Stage gradient def
+    rows.push(`<linearGradient id="${gradId}" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="${light}"/><stop offset="100%" stop-color="${color}"/></linearGradient>`);
 
-    // Failure indicator
-    if (stage.status === "Failed" || stage.status === "Errored") {
-      rows.push(`<text x="${x + w + 6 + dur.length * 6 + 8}" y="${y + ROW_HEIGHT / 2 + 4}" fill="${getStatusColor("Failed")}" font-size="10" font-family="${FONT_FAMILY}">\u2716</text>`);
+    // Row stripe
+    if (si % 2 === 0) {
+      rows.push(`<rect x="${PAD}" y="${y}" width="${W - PAD * 2}" height="${ROW_H}" rx="4" fill="${SURFACE_COLOR}" opacity="0.3"/>`);
     }
 
-    y += ROW_HEIGHT;
+    // Status dot + label
+    rows.push(`<circle cx="${PAD + 8}" cy="${y + ROW_H / 2}" r="4" fill="${color}"/>`);
+    rows.push(`<text x="${PAD + 18}" y="${y + ROW_H / 2 + 4}" fill="${TEXT_PRIMARY}" font-size="11" font-weight="500" font-family="${FONT_FAMILY}">${label}</text>`);
+
+    // Bar with gradient + rounded corners
+    rows.push(`<rect x="${x}" y="${y + 7}" width="${w}" height="${ROW_H - 14}" rx="5" fill="url(#${gradId})" filter="url(#shadow)"/>`);
+
+    // Duration label
+    rows.push(`<text x="${x + w + 8}" y="${y + ROW_H / 2 + 4}" fill="${TEXT_SECONDARY}" font-size="10" font-weight="500" font-family="${FONT_FAMILY}">${escapeXml(dur)}</text>`);
+
+    // Failure marker
+    if (stage.status === "Failed" || stage.status === "Errored") {
+      rows.push(`<text x="${x + w / 2}" y="${y + ROW_H / 2 + 3}" fill="#fff" font-size="9" font-weight="700" font-family="${FONT_FAMILY}" text-anchor="middle">\u2716</text>`);
+    }
+
+    y += ROW_H;
 
     if (showSteps) {
       for (const step of stage.steps) {
-        const stepColor = getStatusColor(step.status);
-        const stepLabel = escapeXml(truncateLabel(step.name, 20));
-        const stepDur = step.durationMs > 0 ? formatDuration(step.durationMs) : step.status;
-        const stepW = barWidth(step.durationMs > 0 ? step.durationMs : totalMs * 0.005);
+        const sc = getStatusColor(step.status);
+        const sLabel = escapeXml(truncateLabel(step.name, 18));
+        const sDur = step.durationMs > 0 ? fmtDur(step.durationMs) : step.status;
+        const sW = barW(step.durationMs > 0 ? step.durationMs : totalMs * 0.005);
 
-        rows.push(`
-          <text x="${PADDING + 16}" y="${y + STEP_HEIGHT / 2 + 3}" fill="${TEXT_MUTED}" font-size="10" font-family="${FONT_FAMILY}">${stepLabel}</text>
-          <rect x="${x}" y="${y + 4}" width="${stepW}" height="${STEP_HEIGHT - 8}" rx="3" fill="${stepColor}" opacity="0.65"/>
-          <text x="${x + stepW + 4}" y="${y + STEP_HEIGHT / 2 + 3}" fill="${TEXT_MUTED}" font-size="9" font-family="${FONT_FAMILY}">${escapeXml(stepDur)}</text>
-        `);
-        y += ROW_HEIGHT;
+        rows.push(`<text x="${PAD + 28}" y="${y + STEP_H / 2 + 3}" fill="${TEXT_MUTED}" font-size="9" font-family="${FONT_FAMILY}">${sLabel}</text>`);
+        rows.push(`<rect x="${x}" y="${y + 5}" width="${sW}" height="${STEP_H - 10}" rx="3" fill="${sc}" opacity="0.6"/>`);
+        rows.push(`<text x="${x + sW + 6}" y="${y + STEP_H / 2 + 3}" fill="${TEXT_MUTED}" font-size="8" font-family="${FONT_FAMILY}">${escapeXml(sDur)}</text>`);
+        y += ROW_H;
       }
     }
   }
 
-  if (truncatedCount > 0) {
-    rows.push(`<text x="${PADDING}" y="${y + ROW_HEIGHT / 2 + 4}" fill="${TEXT_MUTED}" font-size="11" font-family="${FONT_FAMILY}" font-style="italic">\u2026 and ${truncatedCount} more stages</text>`);
+  if (truncated > 0) {
+    rows.push(`<text x="${PAD + 18}" y="${y + ROW_H / 2 + 4}" fill="${TEXT_MUTED}" font-size="10" font-family="${FONT_FAMILY}" font-style="italic">\u2026 and ${truncated} more stages</text>`);
   }
 
   // Header
   const statusColor = getStatusColor(data.status);
   const title = escapeXml(truncateLabel(data.pipelineName, 40));
-  const headerDuration = formatDuration(data.totalDurationMs);
+  const hDur = fmtDur(data.totalDurationMs);
+  const statusIcon = data.status === "Success" ? "\u2714" : data.status === "Failed" || data.status === "Errored" ? "\u2716" : "\u25CF";
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${totalHeight}" viewBox="0 0 ${width} ${totalHeight}">
-  <rect width="${width}" height="${totalHeight}" rx="8" fill="${BG_COLOR}"/>
-  <rect x="${PADDING}" y="${PADDING}" width="${width - PADDING * 2}" height="${HEADER_HEIGHT - PADDING}" rx="6" fill="${SURFACE_COLOR}" stroke="${BORDER_COLOR}" stroke-width="1"/>
-  <circle cx="${PADDING + 16}" cy="${PADDING + 16}" r="6" fill="${statusColor}"/>
-  <text x="${PADDING + 30}" y="${PADDING + 20}" fill="${TEXT_PRIMARY}" font-size="14" font-weight="600" font-family="${FONT_FAMILY}">${title}</text>
-  <text x="${PADDING + 30}" y="${PADDING + 36}" fill="${TEXT_SECONDARY}" font-size="11" font-family="${FONT_FAMILY}">${escapeXml(data.executionId)} \u00b7 ${escapeXml(data.status)} \u00b7 ${escapeXml(headerDuration)}</text>
-  ${rows.join("\n")}
+  // Footer summary
+  const succeeded = data.stages.filter((s) => s.status === "Success").length;
+  const failed = data.stages.filter((s) => s.status === "Failed" || s.status === "Errored").length;
+  const running = data.stages.filter((s) => s.status === "Running").length;
+  const footerY = HDR_H + PAD + chartH + 26;
+  const footerParts = [
+    `<circle cx="${PAD + 8}" cy="${footerY}" r="3" fill="#10b981"/><text x="${PAD + 16}" y="${footerY + 4}" fill="${TEXT_MUTED}" font-size="9" font-family="${FONT_FAMILY}">${succeeded} passed</text>`,
+    failed > 0 ? `<circle cx="${PAD + 90}" cy="${footerY}" r="3" fill="#f43f5e"/><text x="${PAD + 98}" y="${footerY + 4}" fill="${TEXT_MUTED}" font-size="9" font-family="${FONT_FAMILY}">${failed} failed</text>` : "",
+    running > 0 ? `<circle cx="${PAD + 170}" cy="${footerY}" r="3" fill="#6366f1"/><text x="${PAD + 178}" y="${footerY + 4}" fill="${TEXT_MUTED}" font-size="9" font-family="${FONT_FAMILY}">${running} running</text>` : "",
+  ].filter(Boolean);
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  ${svgDefs(W, H)}
+  <rect width="${W}" height="${H}" rx="12" fill="url(#bgGrad)"/>
+  <rect x="${PAD}" y="${PAD}" width="${W - PAD * 2}" height="${HDR_H - PAD}" rx="8" fill="${SURFACE_COLOR}" stroke="${BORDER_COLOR}" stroke-width="1" filter="url(#shadow)"/>
+  <rect x="${PAD + 12}" y="${PAD + 10}" width="28" height="28" rx="6" fill="${statusColor}" opacity="0.15"/>
+  <text x="${PAD + 26}" y="${PAD + 30}" fill="${statusColor}" font-size="14" font-family="${FONT_FAMILY}" text-anchor="middle">${statusIcon}</text>
+  <text x="${PAD + 50}" y="${PAD + 22}" fill="${TEXT_PRIMARY}" font-size="15" font-weight="700" font-family="${FONT_FAMILY}">${title}</text>
+  <text x="${PAD + 50}" y="${PAD + 40}" fill="${TEXT_SECONDARY}" font-size="10" font-family="${FONT_FAMILY}">${escapeXml(data.executionId)}  \u00b7  ${escapeXml(data.status)}  \u00b7  ${escapeXml(hDur)}  \u00b7  ${data.stages.length} stages</text>
+  ${rows.map((r) => r.startsWith("<linearGradient") ? "" : r).join("\n")}
+  ${ticks.join("\n")}
+  ${footerParts.join("\n  ")}
+  <defs>${rows.filter((r) => r.startsWith("<linearGradient")).join("")}</defs>
 </svg>`;
 }

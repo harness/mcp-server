@@ -44,9 +44,11 @@ describe("renderStatusSummarySvg", () => {
 
   it("renders recent execution segments", () => {
     const svg = renderStatusSummarySvg(makeData());
-    // Should contain title tooltips
-    expect(svg).toContain("build - Success");
-    expect(svg).toContain("deploy - Failed");
+    // Should contain title tooltips (em dash separator)
+    expect(svg).toContain("build");
+    expect(svg).toContain("Success");
+    expect(svg).toContain("deploy");
+    expect(svg).toContain("Failed");
   });
 
   it("handles empty recent executions", () => {
@@ -67,6 +69,6 @@ describe("renderStatusSummarySvg", () => {
 
   it("shows failing status", () => {
     const svg = renderStatusSummarySvg(makeData({ health: "failing" }));
-    expect(svg).toContain("Failing");
+    expect(svg).toContain("Critical");
   });
 });

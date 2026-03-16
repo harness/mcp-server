@@ -96,5 +96,22 @@ export const visualizationsToolset: ToolsetDefinition = {
         "The response includes JSON data and an inline PNG stacked bar chart.",
       ].join("\n"),
     },
+    {
+      resourceType: "visual_architecture",
+      displayName: "Pipeline Architecture Diagram",
+      description: "Multi-level architecture diagram showing the full pipeline hierarchy: stages → step groups → steps, with deployment strategy, service/environment refs, rollback paths, and failure handling. Parsed from pipeline YAML.",
+      toolset: "visualizations",
+      scope: "project",
+      identifierFields: [],
+      operations: {},
+      diagnosticHint: [
+        "To render: call harness_diagnose with options: { include_visual: true, visual_type: 'architecture', pipeline_id: '<id>', include_yaml: true }",
+        "The include_yaml: true option fetches the pipeline YAML which is parsed into the diagram.",
+        "Shows: Pipeline → Stages (with type badge: CI/Deployment/Approval) → Step Groups → Steps (with type + timeout).",
+        "For Deployment stages: shows strategy (Canary/Rolling/BlueGreen), service ref, environment ref, infrastructure type.",
+        "Rollback steps are shown in a separate red-highlighted section.",
+        "The response includes both JSON diagnosis data and an inline PNG architecture diagram.",
+      ].join("\n"),
+    },
   ],
 };

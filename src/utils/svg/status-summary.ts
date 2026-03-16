@@ -1,9 +1,14 @@
 /**
- * Project Health Dashboard — health badge, metric cards, recent execution bar.
+ * Project Health Dashboard — rich version with gradient cards, status bar, indicators.
  */
 
 import type { ProjectHealthData } from "./types.js";
-import { getStatusColor, FONT_FAMILY, BG_COLOR, SURFACE_COLOR, BORDER_COLOR, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED } from "./colors.js";
+import {
+  getStatusColor,
+  FONT_FAMILY, SURFACE_COLOR, BORDER_COLOR,
+  TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, CHART_PALETTE,
+  svgDefs,
+} from "./colors.js";
 import { escapeXml, truncateLabel } from "./escape.js";
 
 export interface StatusSummaryOptions {
@@ -11,75 +16,78 @@ export interface StatusSummaryOptions {
   maxRecent?: number;
 }
 
-const HEALTH_COLORS: Record<string, string> = {
-  healthy: "#22c55e",
-  degraded: "#eab308",
-  failing: "#ef4444",
+const HEALTH_COLORS: Record<string, { color: string; bg: string; label: string }> = {
+  healthy: { color: "#10b981", bg: "#10b98120", label: "Healthy" },
+  degraded: { color: "#f59e0b", bg: "#f59e0b20", label: "Degraded" },
+  failing: { color: "#f43f5e", bg: "#f43f5e20", label: "Critical" },
 };
 
 export function renderStatusSummarySvg(data: ProjectHealthData, options?: StatusSummaryOptions): string {
-  const width = options?.width ?? 600;
+  const W = options?.width ?? 620;
   const maxRecent = options?.maxRecent ?? 20;
-  const PADDING = 16;
-  const CARD_HEIGHT = 60;
+  const PAD = 24;
+  const HDR_H = 60;
+  const CARD_H = 72;
   const CARD_GAP = 12;
-  const CARD_WIDTH = Math.floor((width - PADDING * 2 - CARD_GAP * 2) / 3);
-  const HEADER_HEIGHT = 56;
-  const RECENT_BAR_HEIGHT = 32;
+  const CARD_W = Math.floor((W - PAD * 2 - CARD_GAP * 2) / 3);
+  const RECENT_H = 42;
 
-  const recentExecs = data.recentExecutions.slice(0, maxRecent);
-  const hasRecent = recentExecs.length > 0;
-  const totalHeight = HEADER_HEIGHT + CARD_HEIGHT + (hasRecent ? RECENT_BAR_HEIGHT + CARD_GAP : 0) + PADDING * 3 + CARD_GAP;
+  const recent = data.recentExecutions.slice(0, maxRecent);
+  const hasRecent = recent.length > 0;
+  const cardsY = HDR_H + CARD_GAP;
+  const recentY = cardsY + CARD_H + CARD_GAP;
+  const H = recentY + (hasRecent ? RECENT_H + CARD_GAP : 0) + PAD;
 
-  const healthColor = HEALTH_COLORS[data.health] ?? "#9ca3af";
-  const healthLabel = data.health.charAt(0).toUpperCase() + data.health.slice(1);
+  const health = HEALTH_COLORS[data.health] ?? HEALTH_COLORS.healthy!;
 
-  // Header
+  // Header with health badge
   const header = `
-    <rect x="${PADDING}" y="${PADDING}" width="${width - PADDING * 2}" height="${HEADER_HEIGHT - PADDING}" rx="6" fill="${SURFACE_COLOR}" stroke="${BORDER_COLOR}" stroke-width="1"/>
-    <circle cx="${PADDING + 16}" cy="${PADDING + 16}" r="6" fill="${healthColor}"/>
-    <text x="${PADDING + 30}" y="${PADDING + 20}" fill="${TEXT_PRIMARY}" font-size="14" font-weight="600" font-family="${FONT_FAMILY}">${escapeXml(data.orgId)} / ${escapeXml(truncateLabel(data.projectId, 30))}</text>
-    <text x="${PADDING + 30}" y="${PADDING + 36}" fill="${TEXT_SECONDARY}" font-size="11" font-family="${FONT_FAMILY}">Health: ${escapeXml(healthLabel)}</text>
+    <rect x="${PAD}" y="${PAD}" width="${W - PAD * 2}" height="${HDR_H - PAD}" rx="8" fill="${SURFACE_COLOR}" stroke="${BORDER_COLOR}" stroke-width="1" filter="url(#shadow)"/>
+    <rect x="${PAD + 14}" y="${PAD + 8}" width="24" height="24" rx="6" fill="${health.bg}"/>
+    <circle cx="${PAD + 26}" cy="${PAD + 20}" r="5" fill="${health.color}"/>
+    <text x="${PAD + 46}" y="${PAD + 18}" fill="${TEXT_PRIMARY}" font-size="15" font-weight="700" font-family="${FONT_FAMILY}">${escapeXml(data.orgId)} / ${escapeXml(truncateLabel(data.projectId, 25))}</text>
+    <rect x="${W - PAD - 90}" y="${PAD + 9}" width="76" height="22" rx="11" fill="${health.bg}" stroke="${health.color}" stroke-width="1"/>
+    <text x="${W - PAD - 52}" y="${PAD + 24}" fill="${health.color}" font-size="10" font-weight="700" font-family="${FONT_FAMILY}" text-anchor="middle">${health.label}</text>
   `;
 
   // Metric cards
-  const cardsY = HEADER_HEIGHT + CARD_GAP;
   const metrics = [
-    { label: "Failed", count: data.counts.failed, color: getStatusColor("Failed") },
-    { label: "Running", count: data.counts.running, color: getStatusColor("Running") },
-    { label: "Recent", count: data.counts.recent, color: TEXT_SECONDARY },
+    { label: "Failed", value: data.counts.failed, color: getStatusColor("Failed"), icon: "\u2716" },
+    { label: "Running", value: data.counts.running, color: getStatusColor("Running"), icon: "\u25B6" },
+    { label: "Recent", value: data.counts.recent, color: TEXT_SECONDARY, icon: "\u25CF" },
   ];
 
   const cards = metrics.map((m, i) => {
-    const cx = PADDING + i * (CARD_WIDTH + CARD_GAP);
+    const cx = PAD + i * (CARD_W + CARD_GAP);
     return `
-      <rect x="${cx}" y="${cardsY}" width="${CARD_WIDTH}" height="${CARD_HEIGHT}" rx="6" fill="${SURFACE_COLOR}" stroke="${BORDER_COLOR}" stroke-width="1"/>
-      <text x="${cx + CARD_WIDTH / 2}" y="${cardsY + 28}" fill="${m.color}" font-size="22" font-weight="700" font-family="${FONT_FAMILY}" text-anchor="middle">${m.count}</text>
-      <text x="${cx + CARD_WIDTH / 2}" y="${cardsY + 46}" fill="${TEXT_MUTED}" font-size="10" font-family="${FONT_FAMILY}" text-anchor="middle">${m.label}</text>
+      <rect x="${cx}" y="${cardsY}" width="${CARD_W}" height="${CARD_H}" rx="8" fill="${SURFACE_COLOR}" stroke="${BORDER_COLOR}" stroke-width="1"/>
+      <text x="${cx + 14}" y="${cardsY + 20}" fill="${m.color}" font-size="11" font-family="${FONT_FAMILY}">${m.icon} ${m.label}</text>
+      <text x="${cx + CARD_W / 2}" y="${cardsY + 52}" fill="${m.color}" font-size="28" font-weight="800" font-family="${FONT_FAMILY}" text-anchor="middle">${m.value}</text>
     `;
   }).join("");
 
   // Recent executions bar
   let recentBar = "";
   if (hasRecent) {
-    const barY = cardsY + CARD_HEIGHT + CARD_GAP;
-    const barWidth = width - PADDING * 2;
-    const segWidth = barWidth / recentExecs.length;
+    const barW = W - PAD * 2;
+    const segW = barW / recent.length;
 
-    const segments = recentExecs.map((e, i) => {
-      const sx = PADDING + i * segWidth;
+    const segments = recent.map((e, i) => {
+      const sx = PAD + i * segW;
       const color = getStatusColor(e.status);
-      return `<rect x="${sx}" y="${barY + 8}" width="${Math.max(segWidth - 1, 2)}" height="16" rx="2" fill="${color}" opacity="0.8"><title>${escapeXml(e.pipeline)} - ${escapeXml(e.status)}</title></rect>`;
+      return `<rect x="${sx}" y="${recentY + 18}" width="${Math.max(segW - 2, 3)}" height="18" rx="3" fill="${color}" opacity="0.85"><title>${escapeXml(e.pipeline)} \u2014 ${escapeXml(e.status)}</title></rect>`;
     }).join("");
 
     recentBar = `
-      <text x="${PADDING}" y="${barY + 4}" fill="${TEXT_MUTED}" font-size="9" font-family="${FONT_FAMILY}">Recent Executions</text>
+      <text x="${PAD}" y="${recentY + 10}" fill="${TEXT_MUTED}" font-size="10" font-weight="600" font-family="${FONT_FAMILY}">RECENT EXECUTIONS</text>
+      <text x="${W - PAD}" y="${recentY + 10}" fill="${TEXT_MUTED}" font-size="9" font-family="${FONT_FAMILY}" text-anchor="end">${recent.length} runs</text>
       ${segments}
     `;
   }
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${totalHeight}" viewBox="0 0 ${width} ${totalHeight}">
-  <rect width="${width}" height="${totalHeight}" rx="8" fill="${BG_COLOR}"/>
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  ${svgDefs(W, H)}
+  <rect width="${W}" height="${H}" rx="12" fill="url(#bgGrad)"/>
   ${header}
   ${cards}
   ${recentBar}
