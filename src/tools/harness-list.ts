@@ -2,11 +2,16 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
-import { jsonResult, errorResult } from "../utils/response-formatter.js";
+import { jsonResult, errorResult, mixedResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
 import { compactItems } from "../utils/compact.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, isRecord } from "../utils/type-guards.js";
+import { renderListVisual } from "../utils/svg/list-visuals.js";
+import type { ListVisualType } from "../utils/svg/list-visuals.js";
+import { createLogger } from "../utils/logger.js";
+
+const log = createLogger("list");
 
 export function registerListTool(server: McpServer, registry: Registry, client: HarnessClient): void {
   // Build a dynamic description for the filters param from all enabled resource definitions
@@ -29,6 +34,8 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
         search_term: z.string().describe("Filter results by name or keyword").optional(),
         compact: z.boolean().describe("Strip verbose metadata from list items, keeping only essential fields (default true)").default(true).optional(),
         filters: z.record(z.string(), z.unknown()).describe(filtersDesc).optional(),
+        include_visual: z.boolean().describe("Include an inline PNG chart of the results (default false). Supported for execution resource_type. Use when user asks for a visualization, chart, or graph.").default(false).optional(),
+        visual_type: z.enum(["timeseries", "bar", "pie"]).describe("Chart type when include_visual=true. 'timeseries' = daily execution counts, 'pie' = breakdown by status, 'bar' = breakdown by pipeline. Default 'pie'.").default("pie").optional(),
       },
       annotations: {
         title: "List Harness Resources",
@@ -56,6 +63,23 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
           const items = result.items;
           if (Array.isArray(items)) {
             result.items = compactItems(items);
+          }
+        }
+
+        // Visual rendering (opt-in)
+        if (args.include_visual && resourceType && isRecord(result)) {
+          const items = result.items;
+          if (Array.isArray(items)) {
+            try {
+              const vt = (args.visual_type ?? "pie") as ListVisualType;
+              const visual = renderListVisual(resourceType, items, vt);
+              if (visual) {
+                (result as Record<string, unknown>).analysis = visual.analysis;
+                return mixedResult(result, visual.svg);
+              }
+            } catch (err) {
+              log.warn("Visual rendering failed, returning text-only", { error: String(err) });
+            }
           }
         }
 

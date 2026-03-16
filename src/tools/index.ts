@@ -14,8 +14,7 @@ import { registerSearchTool } from "./harness-search.js";
 import { registerDescribeTool } from "./harness-describe.js";
 import { registerStatusTool } from "./harness-status.js";
 import { registerAskTool } from "./harness-ask.js";
-import { registerExecutionTimeseriesTool } from "./harness-execution-timeseries.js";
-import { registerChartTool } from "./harness-chart.js";
+
 
 export function registerAllTools(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
   registerListTool(server, registry, client);
@@ -28,7 +27,5 @@ export function registerAllTools(server: McpServer, registry: Registry, client: 
   registerSearchTool(server, registry, client);
   registerDescribeTool(server, registry);
   registerStatusTool(server, registry, client, config);
-  registerExecutionTimeseriesTool(server, registry, client, config);
-  registerChartTool(server, registry, client, config);
   registerAskTool(server, registry, client, config);
 }

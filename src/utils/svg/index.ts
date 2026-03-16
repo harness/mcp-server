@@ -19,3 +19,5 @@ export { toExecutionSummaryData, toProjectHealthData } from "./mappers.js";
 export { svgToPngBase64 } from "./render-png.js";
 export { renderBarChartSvg, renderPieChartSvg, renderScatterChartSvg } from "./charts/index.js";
 export type { BarChartData, BarChartItem, PieChartData, PieChartSlice, ScatterChartData, ScatterPoint } from "./charts/index.js";
+export { renderListVisual } from "./list-visuals.js";
+export type { ListVisualType, ListVisualResult } from "./list-visuals.js";

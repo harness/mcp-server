@@ -30,7 +30,8 @@ export type ToolsetName =
   | "access_control"
   | "settings"
   | "platform"
-  | "intelligence";
+  | "intelligence"
+  | "visualizations";
 
 export type OperationName = "list" | "get" | "create" | "update" | "delete";
 
