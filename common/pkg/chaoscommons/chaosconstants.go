@@ -222,22 +222,34 @@ To preserve it, pass the current value from chaos_get_hub.`
 
 // Tool descriptions for chaos tools.
 var (
-	DescToolExperimentsList = `List the chaos experiments.`
+	DescToolExperimentsList = `List the chaos experiments.
+Returns a paginated list of experiments with experimentID, name, description, infra details (identity, environmentId), timestamps, and workflow type.`
 
-	DescToolExperimentDescribe = `Retrieves information about a chaos experiment,
-allowing users to get an overview and detailed insights for each experiment.`
+	DescToolExperimentDescribe = `Retrieves detailed information about a chaos experiment by its experimentID.
+Returns experiment details including ExperimentID, Identity, InfraID, InfraType, ExperimentType,
+revisions (with manifest YAML), and recent run details (ExperimentRunID, ResiliencyScore, Phase).`
 
-	DescToolExperimentRunResult = `Retrieves run result of chaos experiment runs,
-helping to describe and summarize the details of each experiment run.`
+	DescToolExperimentRunResult = `Retrieves the execution result of a specific chaos experiment run.
+Returns status, resiliencyScore, duration, runSequence, and per-step fault/action/probe nodes
+with their individual status, chaosData, and error details.`
 
-	DescToolExperimentRun = `Run the chaos experiment.`
+	DescToolExperimentRun = `Run a chaos experiment by its experimentID.
+If the experiment has required variables, they must be provided via experimentVariables and tasks parameters;
+use chaos_experiment_variables_list to discover them beforehand.
+Returns the initiated run details including experimentRunId, experimentId, and experimentName.`
 
-	DescToolProbesList = `List the chaos probes.`
+	DescToolProbesList = `List the chaos probes.
+Returns totalNoOfProbes and a list of probes with identity, probeId, name, type, infrastructureType,
+isEnabled, runProperties, recentProbeRuns, and probeReferenceCount.`
 
-	DescToolProbeDescribe = `Retrieves information about a chaos probe,
-allowing users to get an overview and detailed insights for each probe.`
+	DescToolProbeDescribe = `Retrieves detailed information about a chaos probe by its probeId.
+Returns probe details including identity, probeId, name, type, infrastructureType, isEnabled,
+description, tags, runProperties, recentProbeRuns, and probeReferenceCount.`
 
-	DescToolCreateExperimentFromTemplate = `Create a chaos experiment from a template.`
+	DescToolCreateExperimentFromTemplate = `Create a new chaos experiment from an experiment template.
+Requires templateId, infraId, environmentId, and hubIdentity.
+Name and identity are auto-generated if not provided. The infraId is automatically prefixed with environmentId if needed.
+Returns the created experiment details including id, identity, name, infraType, infraId, and manifest.`
 
 	DescToolListExperimentTemplates = `List chaos experiment templates from chaos hubs.
 Returns a paginated list of templates with identity, name, description, tags, revision, infraType,
@@ -265,7 +277,10 @@ Returns a JSON object with a 'template' field containing the raw YAML string for
 Returns a JSON object with 'template1' and 'template2' fields containing the YAML strings of each revision for diff comparison.
 Both revision1 and revision2 are required.`
 
-	DescToolExperimentVariablesList = `List the chaos experiment variables.`
+	DescToolExperimentVariablesList = `List the runtime input variables for a chaos experiment.
+Returns variables grouped into experiment-level variables and per-task variables (keyed by task name).
+Each variable includes name, value, type, description, required flag, and allowed values.
+Useful for understanding what inputs are needed before running an experiment via chaos_experiment_run.`
 
 	DescToolListLinuxInfrastructures = `List available Linux infrastructure for chaos engineering and load testing.
 Returns chaos Linux infrastructures (load infrastructures) with their IDs, names, and status.
