@@ -13,6 +13,7 @@ import (
 	config "github.com/harness/mcp-server/common"
 	"github.com/harness/mcp-server/common/client"
 	"github.com/harness/mcp-server/common/client/dto"
+	"github.com/harness/mcp-server/common/pkg/chaoscommons"
 	"github.com/harness/mcp-server/common/pkg/common"
 	mcputils "github.com/harness/mcp-server/common/pkg/utils"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -23,10 +24,14 @@ var identityRegex = regexp.MustCompile(`[^a-z0-9-]+`)
 
 // ListExperimentsTool creates a tool for listing the experiments
 func ListExperimentsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_experiments_list",
-			mcp.WithDescription("List the chaos experiments"),
+	return mcp.NewTool(chaoscommons.ToolExperimentsList,
+			mcp.WithDescription(chaoscommons.DescToolExperimentsList),
 			common.WithScope(config, false),
 			WithPagination(),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -60,13 +65,17 @@ func ListExperimentsTool(config *config.McpServerConfig, client *client.ChaosSer
 
 // GetExperimentsTool creates a tool to get the experiment details
 func GetExperimentsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_experiment_describe",
-			mcp.WithDescription("Retrieves information about chaos experiment, allowing users to get an overview and detailed insights for each experiment"),
+	return mcp.NewTool(chaoscommons.ToolExperimentDescribe,
+			mcp.WithDescription(chaoscommons.DescToolExperimentDescribe),
 			common.WithScope(config, false),
-			mcp.WithString("experimentID",
-				mcp.Description("Unique Identifier for an experiment"),
+			mcp.WithString(chaoscommons.ParamExperimentID,
+				mcp.Description(chaoscommons.DescExperimentID),
 				mcp.Required(),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -101,17 +110,21 @@ func GetExperimentsTool(config *config.McpServerConfig, client *client.ChaosServ
 
 // GetExperimentRunsTool creates a tool to get the experiment run details
 func GetExperimentRunsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_experiment_run_result",
-			mcp.WithDescription("Retrieves run result of chaos experiment runs, helping to describe and summarize the details of each experiment run"),
+	return mcp.NewTool(chaoscommons.ToolExperimentRunResult,
+			mcp.WithDescription(chaoscommons.DescToolExperimentRunResult),
 			common.WithScope(config, false),
-			mcp.WithString("experimentID",
-				mcp.Description("Unique Identifier for an experiment"),
+			mcp.WithString(chaoscommons.ParamExperimentID,
+				mcp.Description(chaoscommons.DescExperimentID),
 				mcp.Required(),
 			),
-			mcp.WithString("experimentRunID",
-				mcp.Description("Unique Identifier for an experiment run"),
+			mcp.WithString(chaoscommons.ParamExperimentRunID,
+				mcp.Description(chaoscommons.DescExperimentRunID),
 				mcp.Required(),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -157,18 +170,18 @@ func GetExperimentRunsTool(config *config.McpServerConfig, client *client.ChaosS
 
 // RunExperimentTool creates a tool to run the experiment
 func RunExperimentTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_experiment_run",
-			mcp.WithDescription("Run the chaos experiment"),
+	return mcp.NewTool(chaoscommons.ToolExperimentRun,
+			mcp.WithDescription(chaoscommons.DescToolExperimentRun),
 			common.WithScope(config, false),
-			mcp.WithString("experimentID",
-				mcp.Description("Unique Identifier for an experiment"),
+			mcp.WithString(chaoscommons.ParamExperimentID,
+				mcp.Description(chaoscommons.DescExperimentID),
 				mcp.Required(),
 			),
-			mcp.WithString("inputsetIdentity",
-				mcp.Description("Optional inputset identity to use for the experiment run"),
+			mcp.WithString(chaoscommons.ParamInputsetIdentity,
+				mcp.Description(chaoscommons.DescInputsetIdentity),
 			),
-			mcp.WithArray("experimentVariables",
-				mcp.Description("Optional experiment variables as an array of objects where each object has a name and value"),
+			mcp.WithArray(chaoscommons.ParamExperimentVariables,
+				mcp.Description(chaoscommons.DescExperimentVariables),
 				mcp.Items(map[string]any{
 					"type": "object",
 					"properties": map[string]any{
@@ -184,14 +197,18 @@ func RunExperimentTool(config *config.McpServerConfig, client *client.ChaosServi
 					"required": []string{"name"},
 				}),
 			),
-			mcp.WithObject("tasks",
-				mcp.Description("Optional task-level variables as a map where key is task name and value is an object of variable name-value pairs"),
-				mcp.Properties(map[string]any{}), // no fixed props
+			mcp.WithObject(chaoscommons.ParamTasks,
+				mcp.Description(chaoscommons.DescTasks),
+				mcp.Properties(map[string]any{}),
 				mcp.AdditionalProperties(map[string]any{
 					"type":                 "object",
 					"additionalProperties": map[string]any{},
 				}),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(false),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 
@@ -248,21 +265,22 @@ func RunExperimentTool(config *config.McpServerConfig, client *client.ChaosServi
 
 // StopExperimentRunsTool creates a tool for stopping the experiment runs
 func StopExperimentRunsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_stop_experiment",
-			mcp.WithDescription("Stops a chaos experiment run. If notifyId is set, the run is found by notifyId and scope; otherwise by experimentRunID and scope. If both are omitted, all runs for the experiment with phase 'Running' are stopped."),
+	return mcp.NewTool(chaoscommons.ToolStopExperiment,
+			mcp.WithDescription(chaoscommons.DescToolStopExperiment),
 			common.WithScope(config, false),
-			mcp.WithString("experimentID",
-				mcp.Description("Unique Identifier for an experiment"),
+			mcp.WithString(chaoscommons.ParamExperimentID,
+				mcp.Description(chaoscommons.DescExperimentID),
 				mcp.Required(),
 			),
-			mcp.WithString("experimentRunID",
-				mcp.Description("Unique identifier of the experiment run to stop. If omitted, the stop request may apply to the latest or all relevant runs depending on backend behavior."),
+			mcp.WithString(chaoscommons.ParamExperimentRunID,
+				mcp.Description(chaoscommons.DescExperimentRunIDStop),
 			),
-			mcp.WithString("notifyId",
-				mcp.Description("Notification or callback identifier associated with the experiment run; used to correlate the stop request with the run that was started."),
+			mcp.WithString(chaoscommons.ParamNotifyId,
+				mcp.Description(chaoscommons.DescNotifyId),
 			),
-			mcp.WithBoolean("force",
-				mcp.Description("When true, immediately marks the run as Stopped in the database (run, execution nodes, experiment recents). When false (default), only requests stop on cluster/machine; DB is updated later when the delegate or infra reports status."),
+			mcp.WithBoolean(chaoscommons.ParamForce,
+				mcp.Description(chaoscommons.DescForce),
+				mcp.DefaultBool(false),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(false),
@@ -315,10 +333,14 @@ func StopExperimentRunsTool(config *config.McpServerConfig, client *client.Chaos
 
 // ListProbesTool creates a tool for listing down the probes
 func ListProbesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_probes_list",
-			mcp.WithDescription("List the chaos probes"),
+	return mcp.NewTool(chaoscommons.ToolProbesList,
+			mcp.WithDescription(chaoscommons.DescToolProbesList),
 			common.WithScope(config, false),
 			WithPagination(),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -352,13 +374,17 @@ func ListProbesTool(config *config.McpServerConfig, client *client.ChaosService)
 
 // GetProbeTool creates a tool to get the probe details
 func GetProbeTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_probe_describe",
-			mcp.WithDescription("Retrieves information about chaos probe, allowing users to get an overview and detailed insights for each probe"),
+	return mcp.NewTool(chaoscommons.ToolProbeDescribe,
+			mcp.WithDescription(chaoscommons.DescToolProbeDescribe),
 			common.WithScope(config, false),
-			mcp.WithString("probeId",
-				mcp.Description("Unique Identifier for a probe"),
+			mcp.WithString(chaoscommons.ParamProbeId,
+				mcp.Description(chaoscommons.DescProbeId),
 				mcp.Required(),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -387,11 +413,11 @@ func GetProbeTool(config *config.McpServerConfig, client *client.ChaosService) (
 
 // GetProbeManifestTool creates a tool to get the probe YAML manifest (chaos engine compatible).
 func GetProbeManifestTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_get_probe_manifest",
-			mcp.WithDescription("Get the YAML manifest for a chaos probe by its ID (compatible with chaos engine)"),
+	return mcp.NewTool(chaoscommons.ToolGetProbeManifest,
+			mcp.WithDescription(chaoscommons.DescToolGetProbeManifest),
 			common.WithScope(config, false),
-			mcp.WithString("probeId",
-				mcp.Description("Unique Identifier for the probe"),
+			mcp.WithString(chaoscommons.ParamProbeId,
+				mcp.Description(chaoscommons.DescProbeId),
 				mcp.Required(),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
@@ -427,19 +453,20 @@ func GetProbeManifestTool(config *config.McpServerConfig, client *client.ChaosSe
 
 // EnableProbeTool creates a tool to enable or disable a chaos probe.
 func EnableProbeTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_enable_probe",
-			mcp.WithDescription("Enable or disable a chaos probe by ID; optionally bulk-update across all experiments"),
+	return mcp.NewTool(chaoscommons.ToolEnableProbe,
+			mcp.WithDescription(chaoscommons.DescToolEnableProbe),
 			common.WithScope(config, false),
-			mcp.WithString("probeId",
-				mcp.Description("Unique Identifier for the probe"),
+			mcp.WithString(chaoscommons.ParamProbeId,
+				mcp.Description(chaoscommons.DescProbeId),
 				mcp.Required(),
 			),
-			mcp.WithBoolean("isEnabled",
-				mcp.Description("True to enable the probe, false to disable"),
+			mcp.WithBoolean(chaoscommons.ParamIsEnabled,
+				mcp.Description(chaoscommons.DescIsEnabled),
 				mcp.Required(),
 			),
-			mcp.WithBoolean("isBulkUpdate",
-				mcp.Description("When true, enable/disable the probe across all experiments that use it"),
+			mcp.WithBoolean(chaoscommons.ParamIsBulkUpdate,
+				mcp.Description(chaoscommons.DescIsBulkUpdate),
+				mcp.DefaultBool(false),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(false),
@@ -486,11 +513,11 @@ func EnableProbeTool(config *config.McpServerConfig, client *client.ChaosService
 // DeleteProbeTool creates a tool to delete a chaos probe by its ID.
 // The probe must be disabled and not in use by any experiment before deletion.
 func DeleteProbeTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_delete_probe",
-			mcp.WithDescription("Delete a chaos probe by its ID. The probe must be disabled first and must not be in use by any experiment. Default probes cannot be deleted."),
+	return mcp.NewTool(chaoscommons.ToolDeleteProbe,
+			mcp.WithDescription(chaoscommons.DescToolDeleteProbe),
 			common.WithScope(config, false),
-			mcp.WithString("probeId",
-				mcp.Description("Unique Identifier for the probe to delete"),
+			mcp.WithString(chaoscommons.ParamProbeId,
+				mcp.Description(chaoscommons.DescProbeIdDelete),
 				mcp.Required(),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
@@ -526,15 +553,15 @@ func DeleteProbeTool(config *config.McpServerConfig, client *client.ChaosService
 // VerifyProbeTool creates a tool to verify or unverify a chaos probe.
 // Default probes cannot be verified/unverified.
 func VerifyProbeTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_verify_probe",
-			mcp.WithDescription("Verify or unverify a chaos probe by its ID. Default probes cannot be verified or unverified."),
+	return mcp.NewTool(chaoscommons.ToolVerifyProbe,
+			mcp.WithDescription(chaoscommons.DescToolVerifyProbe),
 			common.WithScope(config, false),
-			mcp.WithString("probeId",
-				mcp.Description("Unique Identifier for the probe to verify"),
+			mcp.WithString(chaoscommons.ParamProbeId,
+				mcp.Description(chaoscommons.DescProbeIdVerify),
 				mcp.Required(),
 			),
-			mcp.WithBoolean("verify",
-				mcp.Description("True to verify the probe, false to unverify"),
+			mcp.WithBoolean(chaoscommons.ParamVerify,
+				mcp.Description(chaoscommons.DescVerify),
 				mcp.Required(),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
@@ -576,15 +603,15 @@ func VerifyProbeTool(config *config.McpServerConfig, client *client.ChaosService
 
 // GetProbesInExperimentRunTool creates a tool to get probe execution details for experiment runs.
 func GetProbesInExperimentRunTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_list_probes_in_experiment_run",
-			mcp.WithDescription("Get probe execution details for one or more experiment runs. At least one of experimentRunIds or notifyIds must be provided. Returns probe status, mode, fault association, and configuration for each probe that participated in those runs."),
+	return mcp.NewTool(chaoscommons.ToolListProbesInExperimentRun,
+			mcp.WithDescription(chaoscommons.DescToolListProbesInExperimentRun),
 			common.WithScope(config, false),
-			mcp.WithArray("experimentRunIds",
-				mcp.Description("List of experiment run IDs to fetch probe details for"),
+			mcp.WithArray(chaoscommons.ParamExperimentRunIds,
+				mcp.Description(chaoscommons.DescExperimentRunIds),
 				mcp.Items(map[string]any{"type": "string"}),
 			),
-			mcp.WithArray("notifyIds",
-				mcp.Description("List of notify IDs to fetch probe details for"),
+			mcp.WithArray(chaoscommons.ParamNotifyIds,
+				mcp.Description(chaoscommons.DescNotifyIds),
 				mcp.Items(map[string]any{"type": "string"}),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
@@ -634,12 +661,13 @@ func GetProbesInExperimentRunTool(config *config.McpServerConfig, client *client
 
 // ListFaultsTool creates a tool for listing chaos faults in a project.
 func ListFaultsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_list_faults",
-			mcp.WithDescription("List the chaos faults"),
+	return mcp.NewTool(chaoscommons.ToolListFaults,
+			mcp.WithDescription(chaoscommons.DescToolListFaults),
 			common.WithScope(config, false),
 			WithPagination(),
-			mcp.WithBoolean("isEnterprise",
-				mcp.Description("When true, list only enterprise faults"),
+			mcp.WithBoolean(chaoscommons.ParamIsEnterprise,
+				mcp.Description(chaoscommons.DescIsEnterprise),
+				mcp.DefaultBool(false),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(true),
@@ -680,15 +708,16 @@ func ListFaultsTool(config *config.McpServerConfig, client *client.ChaosService)
 
 // GetFaultVariablesTool creates a tool to get the inputs/variables of a chaos fault.
 func GetFaultVariablesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_get_fault_variables",
-			mcp.WithDescription("Retrieves the list of inputs and variables (variables, faultAuthentication, faultTargets, faultTunable) for a chaos fault by its identity"),
+	return mcp.NewTool(chaoscommons.ToolGetFaultVariables,
+			mcp.WithDescription(chaoscommons.DescToolGetFaultVariables),
 			common.WithScope(config, false),
-			mcp.WithString("identity",
-				mcp.Description("Unique identity of the fault"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescFaultIdentity),
 				mcp.Required(),
 			),
-			mcp.WithBoolean("isEnterprise",
-				mcp.Description("When true, get variables for an enterprise fault"),
+			mcp.WithBoolean(chaoscommons.ParamIsEnterprise,
+				mcp.Description(chaoscommons.DescIsEnterpriseVars),
+				mcp.DefaultBool(false),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(true),
@@ -724,15 +753,16 @@ func GetFaultVariablesTool(config *config.McpServerConfig, client *client.ChaosS
 
 // GetFaultTool creates a tool to get a single chaos fault by identity.
 func GetFaultTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_get_fault",
-			mcp.WithDescription("Get details of a single chaos fault by its identity"),
+	return mcp.NewTool(chaoscommons.ToolGetFault,
+			mcp.WithDescription(chaoscommons.DescToolGetFault),
 			common.WithScope(config, false),
-			mcp.WithString("identity",
-				mcp.Description("Unique identity of the fault"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescFaultIdentity),
 				mcp.Required(),
 			),
-			mcp.WithBoolean("isEnterprise",
-				mcp.Description("When true, get an enterprise fault"),
+			mcp.WithBoolean(chaoscommons.ParamIsEnterprise,
+				mcp.Description(chaoscommons.DescIsEnterpriseGet),
+				mcp.DefaultBool(false),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(true),
@@ -768,15 +798,16 @@ func GetFaultTool(config *config.McpServerConfig, client *client.ChaosService) (
 
 // GetFaultYamlTool creates a tool to get the fault template YAML by identity.
 func GetFaultYamlTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_get_fault_yaml",
-			mcp.WithDescription("Get the fault template YAML for a chaos fault by its identity"),
+	return mcp.NewTool(chaoscommons.ToolGetFaultYaml,
+			mcp.WithDescription(chaoscommons.DescToolGetFaultYaml),
 			common.WithScope(config, false),
-			mcp.WithString("identity",
-				mcp.Description("Unique identity of the fault"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescFaultIdentity),
 				mcp.Required(),
 			),
-			mcp.WithBoolean("isEnterprise",
-				mcp.Description("When true, get YAML for an enterprise fault"),
+			mcp.WithBoolean(chaoscommons.ParamIsEnterprise,
+				mcp.Description(chaoscommons.DescIsEnterpriseYaml),
+				mcp.DefaultBool(false),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(true),
@@ -812,16 +843,17 @@ func GetFaultYamlTool(config *config.McpServerConfig, client *client.ChaosServic
 
 // ListExperimentRunsOfFaultTool creates a tool to list experiment runs for a chaos fault.
 func ListExperimentRunsOfFaultTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_list_fault_experiment_runs",
-			mcp.WithDescription("List experiment runs for a chaos fault by its identity"),
+	return mcp.NewTool(chaoscommons.ToolListFaultExperimentRuns,
+			mcp.WithDescription(chaoscommons.DescToolListFaultExperimentRuns),
 			common.WithScope(config, false),
-			mcp.WithString("identity",
-				mcp.Description("Unique identity of the fault"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescFaultIdentity),
 				mcp.Required(),
 			),
 			WithPagination(),
-			mcp.WithBoolean("isEnterprise",
-				mcp.Description("When true, list runs for an enterprise fault"),
+			mcp.WithBoolean(chaoscommons.ParamIsEnterprise,
+				mcp.Description(chaoscommons.DescIsEnterpriseRuns),
+				mcp.DefaultBool(false),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(true),
@@ -865,11 +897,11 @@ func ListExperimentRunsOfFaultTool(config *config.McpServerConfig, client *clien
 // The upstream API performs a soft-delete and rejects the request if the fault
 // is still referenced by any experiment.
 func DeleteFaultTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_delete_fault",
-			mcp.WithDescription("Delete a chaos fault by its identity. The fault must not be in use by any experiment. This performs a soft-delete."),
+	return mcp.NewTool(chaoscommons.ToolDeleteFault,
+			mcp.WithDescription(chaoscommons.DescToolDeleteFault),
 			common.WithScope(config, false),
-			mcp.WithString("identity",
-				mcp.Description("Unique identity of the fault to delete"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescFaultIdentityDelete),
 				mcp.Required(),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
@@ -904,31 +936,35 @@ func DeleteFaultTool(config *config.McpServerConfig, client *client.ChaosService
 
 // CreateExperimentFromTemplateTool creates a tool to create the experiment from template
 func CreateExperimentFromTemplateTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_create_experiment_from_template",
-			mcp.WithDescription("Create the chaos experiment from template"),
+	return mcp.NewTool(chaoscommons.ToolCreateExperimentFromTemplate,
+			mcp.WithDescription(chaoscommons.DescToolCreateExperimentFromTemplate),
 			common.WithScope(config, false),
-			mcp.WithString("templateId",
-				mcp.Description("Unique Identifier for a experiment template"),
+			mcp.WithString(chaoscommons.ParamTemplateId,
+				mcp.Description(chaoscommons.DescTemplateId),
 				mcp.Required(),
 			),
-			mcp.WithString("infraId",
-				mcp.Description("Unique Identifier for a infrastructure"),
+			mcp.WithString(chaoscommons.ParamInfraId,
+				mcp.Description(chaoscommons.DescInfraId),
 				mcp.Required(),
 			),
-			mcp.WithString("environmentId",
-				mcp.Description("Unique Identifier for a environment"),
+			mcp.WithString(chaoscommons.ParamEnvironmentId,
+				mcp.Description(chaoscommons.DescEnvironmentId),
 				mcp.Required(),
 			),
-			mcp.WithString("hubIdentity",
-				mcp.Description("Unique Identifier for a chaos hub"),
+			mcp.WithString(chaoscommons.ParamHubIdentity,
+				mcp.Description(chaoscommons.DescHubIdentity),
 				mcp.Required(),
 			),
-			mcp.WithString("name",
-				mcp.Description("User defined name of the experiment"),
+			mcp.WithString(chaoscommons.ParamName,
+				mcp.Description(chaoscommons.DescExperimentName),
 			),
-			mcp.WithString("identity",
-				mcp.Description("User defined identity of the experiment"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescExperimentIdentity),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(false),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -1005,17 +1041,21 @@ func CreateExperimentFromTemplateTool(config *config.McpServerConfig, client *cl
 
 // ListExperimentTemplatesTool creates a tool for listing the experiment templates
 func ListExperimentTemplatesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_experiment_template_list",
-			mcp.WithDescription("List the chaos experiment templates"),
+	return mcp.NewTool(chaoscommons.ToolExperimentTemplateList,
+			mcp.WithDescription(chaoscommons.DescToolExperimentTemplateList),
 			common.WithScope(config, false),
 			WithPagination(),
-			mcp.WithString("hubIdentity",
-				mcp.Description("Unique Identifier for a chaos hub"),
+			mcp.WithString(chaoscommons.ParamHubIdentity,
+				mcp.Description(chaoscommons.DescHubIdentity),
 				mcp.Required(),
 			),
-			mcp.WithString("infrastructureType",
-				mcp.Description("infrastructure type filter for the experiment template"),
+			mcp.WithString(chaoscommons.ParamInfrastructureType,
+				mcp.Description(chaoscommons.DescInfrastructureType),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -1059,13 +1099,17 @@ func ListExperimentTemplatesTool(config *config.McpServerConfig, client *client.
 
 // ListExperimentVariablesTool creates a tool for listing the experiment variables
 func ListExperimentVariablesTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_experiment_variables_list",
-			mcp.WithDescription("List the chaos experiment variables"),
+	return mcp.NewTool(chaoscommons.ToolExperimentVariablesList,
+			mcp.WithDescription(chaoscommons.DescToolExperimentVariablesList),
 			common.WithScope(config, false),
-			mcp.WithString("experimentID",
-				mcp.Description("Unique Identifier for an experiment"),
+			mcp.WithString(chaoscommons.ParamExperimentID,
+				mcp.Description(chaoscommons.DescExperimentID),
 				mcp.Required(),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -1242,13 +1286,17 @@ func getRuntimeVariables(inputsetIdentity string, experimentVariablesRaw []inter
 
 // ListLinuxInfrastructuresTool creates a tool for listing Linux infrastructure (load runners)
 func ListLinuxInfrastructuresTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_list_linux_infrastructures",
-			mcp.WithDescription("List available Linux infrastructure for chaos engineering and load testing. Returns chaos Linux infrastructures (load infrastructures) with their IDs, names, and status. Infra IDs are needed when creating sample load tests via chaos_create_sample_loadtest. By default only active infrastructures are returned; set status to 'All' to list all."),
+	return mcp.NewTool(chaoscommons.ToolListLinuxInfrastructures,
+			mcp.WithDescription(chaoscommons.DescToolListLinuxInfrastructures),
 			common.WithScope(config, false),
-			mcp.WithString("status",
-				mcp.Description("Filter by infra status. Defaults to 'Active'. Use 'All' to list all infras regardless of status."),
+			mcp.WithString(chaoscommons.ParamStatus,
+				mcp.Description(chaoscommons.DescStatus),
 				mcp.Enum("Active", "All"),
 			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -1283,26 +1331,27 @@ func ListLinuxInfrastructuresTool(config *config.McpServerConfig, client *client
 
 // ListActionsTool creates a tool for listing chaos actions.
 func ListActionsTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_list_actions",
-			mcp.WithDescription("List chaos actions with optional filtering by name, infrastructure type, and action type. Actions are reusable steps (delay, custom script, container) that can be added to chaos experiments."),
+	return mcp.NewTool(chaoscommons.ToolListActions,
+			mcp.WithDescription(chaoscommons.DescToolListActions),
 			common.WithScope(config, false),
 			WithPagination(),
-			mcp.WithString("hubIdentity",
-				mcp.Description("Filter actions by chaos hub identity"),
+			mcp.WithString(chaoscommons.ParamHubIdentity,
+				mcp.Description(chaoscommons.DescHubIdentityActions),
 			),
-			mcp.WithString("search",
-				mcp.Description("Filter actions by name"),
+			mcp.WithString(chaoscommons.ParamSearch,
+				mcp.Description(chaoscommons.DescSearchActions),
 			),
-			mcp.WithString("infraType",
-				mcp.Description("Filter by infrastructure type"),
+			mcp.WithString(chaoscommons.ParamInfraType,
+				mcp.Description(chaoscommons.DescInfraType),
 				mcp.Enum("Kubernetes", "KubernetesV2", "Windows", "Linux", "CloudFoundry", "Container"),
 			),
-			mcp.WithString("entityType",
-				mcp.Description("Filter by action type"),
+			mcp.WithString(chaoscommons.ParamEntityType,
+				mcp.Description(chaoscommons.DescEntityType),
 				mcp.Enum("delay", "customScript", "container"),
 			),
-			mcp.WithBoolean("includeAllScope",
-				mcp.Description("When true, returns actions from all orgs and projects in the account (filters by account only). When false (default), returns only actions in the current org and project."),
+			mcp.WithBoolean(chaoscommons.ParamIncludeAllScope,
+				mcp.Description(chaoscommons.DescIncludeAllScope),
+				mcp.DefaultBool(false),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    mcputils.ToBoolPtr(true),
@@ -1344,11 +1393,11 @@ func ListActionsTool(config *config.McpServerConfig, client *client.ChaosService
 
 // GetActionTool creates a tool to get a single chaos action by its identity.
 func GetActionTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_get_action",
-			mcp.WithDescription("Get details of a chaos action by its identity. Returns the action configuration, properties, run properties, variables, and recent executions."),
+	return mcp.NewTool(chaoscommons.ToolGetAction,
+			mcp.WithDescription(chaoscommons.DescToolGetAction),
 			common.WithScope(config, false),
-			mcp.WithString("identity",
-				mcp.Description("Unique identity of the action to retrieve"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescActionIdentityGet),
 				mcp.Required(),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
@@ -1383,11 +1432,11 @@ func GetActionTool(config *config.McpServerConfig, client *client.ChaosService) 
 
 // GetActionManifestTool creates a tool to get the YAML manifest for a chaos action.
 func GetActionManifestTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_get_action_manifest",
-			mcp.WithDescription("Get the YAML manifest for a chaos action by its identity"),
+	return mcp.NewTool(chaoscommons.ToolGetActionManifest,
+			mcp.WithDescription(chaoscommons.DescToolGetActionManifest),
 			common.WithScope(config, false),
-			mcp.WithString("identity",
-				mcp.Description("Unique identity of the action"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescActionIdentityManifest),
 				mcp.Required(),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
@@ -1423,11 +1472,11 @@ func GetActionManifestTool(config *config.McpServerConfig, client *client.ChaosS
 // DeleteActionTool creates a tool to delete a chaos action by its identity.
 // The upstream API performs a soft-delete.
 func DeleteActionTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
-	return mcp.NewTool("chaos_delete_action",
-			mcp.WithDescription("Delete a chaos action by its identity. The action must not be in use by any experiment. This performs a soft-delete."),
+	return mcp.NewTool(chaoscommons.ToolDeleteAction,
+			mcp.WithDescription(chaoscommons.DescToolDeleteAction),
 			common.WithScope(config, false),
-			mcp.WithString("identity",
-				mcp.Description("Unique identity of the action to delete"),
+			mcp.WithString(chaoscommons.ParamIdentity,
+				mcp.Description(chaoscommons.DescActionIdentityDelete),
 				mcp.Required(),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
