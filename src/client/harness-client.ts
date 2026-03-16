@@ -52,6 +52,10 @@ export class HarnessClient {
     return this.accountId;
   }
 
+  get baseURL(): string {
+    return this.baseUrl;
+  }
+
   async request<T>(options: RequestOptions): Promise<T> {
     await this.rateLimiter.acquire();
 
