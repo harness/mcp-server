@@ -186,10 +186,10 @@ To preserve tags, pass the current values from chaos_get_hub.`
 	DescRevisionAction        = `Specific revision number to retrieve. Defaults to the latest revision (0) if not provided.`
 	DescRevisionActionDelete  = `Specific revision number to delete. When 0 or not provided, all revisions are deleted.`
 	DescRevisionActionVars    = `Revision number to get variables for. Defaults to latest revision (0) if not provided.`
-	DescRevisionActionCompare = `First revision number to compare.`
-	DescRevisionToCompare     = `Second revision number to compare.`
-	DescRevision1             = `First revision identifier for comparison.`
-	DescRevision2             = `Second revision identifier for comparison.`
+	DescRevisionActionCompare = `First revision number to compare. Use chaos_list_action_template_revisions to find available revisions.`
+	DescRevisionToCompare     = `Second revision number to compare. Use chaos_list_action_template_revisions to find available revisions.`
+	DescRevision1             = `First revision identifier for comparison. Use the corresponding list revisions tool to find available revisions.`
+	DescRevision2             = `Second revision identifier for comparison. Use the corresponding list revisions tool to find available revisions.`
 
 	DescStatus = `Filter by infra status. Defaults to 'Active'. Use 'All' to list all infras regardless of status.`
 
@@ -212,9 +212,9 @@ To preserve it, pass the current value from chaos_get_hub.`
 	DescHubName       = `Display name for the ChaosHub.`
 	DescHubNameUpdate = `Updated display name for the ChaosHub.`
 
-	DescConnectorRef = `Harness connector reference for Git authentication (e.g. 'account.myConnector' or 'org.myConnector').`
-	DescRepoName     = `Name of the Git repository.`
-	DescRepoBranch   = `Git branch to use for the ChaosHub.`
+	DescConnectorRef = `Harness connector reference for Git authentication (e.g. 'account.myConnector' or 'org.myConnector'). Optional at creation, but required before template operations.`
+	DescRepoName     = `Name of the Git repository. Optional at creation, but required before template operations.`
+	DescRepoBranch   = `Git branch to use for the ChaosHub. Optional at creation, but required before template operations.`
 
 	DescEnabled               = `Set to true to enable the rule, false to disable it.`
 	DescOnlyTemplatisedFaults = `When true, only returns faults that have templates available. Defaults to false.`
@@ -271,7 +271,8 @@ Each group contains a list of variable definitions with name, value, path, categ
 Useful for understanding what inputs are needed before launching an experiment from a template.`
 
 	DescToolGetExperimentTemplateYaml = `Retrieves the YAML representation of a specific chaos experiment template.
-Returns a JSON object with a 'template' field containing the raw YAML string for the given revision.`
+Returns a JSON object with a 'template' field containing the raw YAML string for the given revision.
+Use when you need the raw YAML definition; use chaos_get_experiment_template for structured JSON with parsed fields.`
 
 	DescToolCompareExperimentTemplateRevisions = `Compares two revisions of a chaos experiment template side by side.
 Returns a JSON object with 'template1' and 'template2' fields containing the YAML strings of each revision for diff comparison.
@@ -307,7 +308,8 @@ Returns variables grouped into: variables, faultTargets, faultTunable, and fault
 Each variable includes name, value, path, category, type, description, required flag, and allowed values.`
 
 	DescToolGetFaultTemplateYaml = `Retrieves the YAML representation of a specific chaos fault template.
-Returns a JSON object with a 'template' field containing the raw YAML string for the given revision.`
+Returns a JSON object with a 'template' field containing the raw YAML string for the given revision.
+Use when you need the raw YAML definition; use chaos_get_fault_template for structured JSON with parsed fields.`
 
 	DescToolCompareFaultTemplateRevisions = `Compares two revisions of a chaos fault template side by side.
 Returns a JSON object with 'template1' and 'template2' fields containing the YAML strings of each revision for diff comparison.
@@ -373,6 +375,7 @@ Returns a success message on completion.`
 
 	DescToolCreateHub = `Create a new ChaosHub in the given Harness scope (account, org, project).
 The hub record stores a Git repo and connector reference that provides chaos fault, experiment, probe, and action templates.
+connectorRef, repoName, and repoBranch are optional at creation but must be configured (via chaos_update_hub) before template operations can be performed on the hub.
 The hub identity cannot be 'enterprise-chaoshub' as that is reserved for the default hub.
 Returns the created hub details including identity, name, repository info, connector configuration, and template counts.`
 
