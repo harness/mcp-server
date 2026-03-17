@@ -21,25 +21,6 @@ interface BlobResponse {
   status?: string;
 }
 
-function rewriteDownloadUrlHost(link: string, baseURL?: string): string {
-  if (!baseURL) return link;
-
-  try {
-    const downloadURL = new URL(link);
-    const harnessURL = new URL(baseURL);
-
-    if (downloadURL.host === harnessURL.host) {
-      return link;
-    }
-
-    downloadURL.protocol = harnessURL.protocol;
-    downloadURL.host = harnessURL.host;
-    return downloadURL.toString();
-  } catch (err) {
-    log.warn("Failed to rewrite log download URL host", { error: String(err) });
-    return link;
-  }
-}
 
 // ─── ANSI / log parsing helpers ─────────────────────────────────────────────
 
@@ -329,29 +310,26 @@ export async function resolveLogContent(
     );
   }
 
-  // Step 3: Download the zip/gzip from the signed URL
-  const rewrittenLink = rewriteDownloadUrlHost(
-    blob.link,
-    (client as HarnessClient & { baseURL?: string }).baseURL,
-  );
-  log.debug("Downloading log blob", { link: rewrittenLink.slice(0, 100) });
+  // Step 3: Download the zip/gzip from the signed URL (use as-is — no host rewrite)
+  const downloadUrl = blob.link;
+  log.debug("Downloading log blob", { prefix, url: downloadUrl.slice(0, 80) });
   const downloadSignal = signal
     ? AbortSignal.any([signal, AbortSignal.timeout(DEFAULT_DOWNLOAD_TIMEOUT_MS)])
     : AbortSignal.timeout(DEFAULT_DOWNLOAD_TIMEOUT_MS);
 
   let response: Response;
   try {
-    response = await fetch(rewrittenLink, { signal: downloadSignal });
+    response = await fetch(downloadUrl, { signal: downloadSignal });
   } catch (err) {
     const cause =
       err instanceof Error
         ? `${err.name}: ${err.message}`
         : String(err);
-    throw new Error(`Log download fetch failed for ${new URL(rewrittenLink).host}: ${cause}`);
+    throw new Error(`Log download fetch failed for ${new URL(downloadUrl).host}: ${cause}`);
   }
   if (!response.ok) {
     const errBody = await response.text().catch(() => "");
-    throw new Error(`Log download failed: HTTP ${response.status} — ${errBody.slice(0, 300)}`);
+    throw new Error(`Log download failed: HTTP ${response.status} — ${errBody.slice(0, 200)}`);
   }
 
   const contentLength = Number(response.headers.get("content-length") ?? 0);
