@@ -1,5 +1,25 @@
-import type { ToolsetDefinition } from "../types.js";
+import type { ToolsetDefinition, PathBuilderConfig } from "../types.js";
 import { passthrough } from "../extractors.js";
+
+/**
+ * HAR API uses path-based scope refs (not query params).
+ * Space ref = {accountId}/{orgId}/{projectId}
+ * Registry ref = {spaceRef}/{registryName}
+ *
+ * Matches the Go MCP server's utils.GetRef(scope, ...) pattern.
+ */
+
+function harSpaceRef(input: Record<string, unknown>, config: PathBuilderConfig): string {
+  const account = config.HARNESS_ACCOUNT_ID ?? "";
+  const org = (input.org_id as string) || config.HARNESS_DEFAULT_ORG_ID || "";
+  const project = (input.project_id as string) || config.HARNESS_DEFAULT_PROJECT_ID || "";
+  return `${account}/${org}/${project}`;
+}
+
+function harRegistryRef(input: Record<string, unknown>, config: PathBuilderConfig): string {
+  const registry = input.registry_id as string;
+  return `${harSpaceRef(input, config)}/${registry}`;
+}
 
 export const registriesToolset: ToolsetDefinition = {
   name: "registries",
@@ -29,9 +49,11 @@ export const registriesToolset: ToolsetDefinition = {
       operations: {
         list: {
           method: "GET",
-          path: "/har/api/v1/registry",
+          path: "/har/api/v1/spaces",
+          pathBuilder: (input, config) =>
+            `/har/api/v1/spaces/${harSpaceRef(input, config)}/+/registries`,
           queryParams: {
-            search: "search",
+            search: "search_term",
             type: "type",
             package_type: "package_type",
             page: "page",
@@ -42,7 +64,9 @@ export const registriesToolset: ToolsetDefinition = {
         },
         get: {
           method: "GET",
-          path: "/har/api/v1/registry/{registryIdentifier}",
+          path: "/har/api/v1/registry",
+          pathBuilder: (input, config) =>
+            `/har/api/v1/registry/${harRegistryRef(input, config)}/+`,
           pathParams: { registry_id: "registryIdentifier" },
           responseExtractor: passthrough,
           description: "Get registry details",
@@ -63,10 +87,12 @@ export const registriesToolset: ToolsetDefinition = {
       operations: {
         list: {
           method: "GET",
-          path: "/har/api/v1/registry/{registryIdentifier}/artifacts",
+          path: "/har/api/v1/registry",
+          pathBuilder: (input, config) =>
+            `/har/api/v1/registry/${harRegistryRef(input, config)}/+/artifacts`,
           pathParams: { registry_id: "registryIdentifier" },
           queryParams: {
-            search: "search",
+            search: "search_term",
             page: "page",
             size: "size",
           },
@@ -82,13 +108,25 @@ export const registriesToolset: ToolsetDefinition = {
       toolset: "registries",
       scope: "project",
       identifierFields: ["registry_id", "artifact_id", "version"],
+      listFilterFields: [
+        { name: "search", description: "Filter artifact versions by name or keyword" },
+      ],
       operations: {
         list: {
           method: "GET",
-          path: "/har/api/v1/registry/{registryIdentifier}/artifact/{artifactIdentifier}/versions",
+          path: "/har/api/v1/registry",
+          pathBuilder: (input, config) => {
+            const artifact = input.artifact_id as string;
+            return `/har/api/v1/registry/${harRegistryRef(input, config)}/+/artifact/${artifact}/+/versions`;
+          },
           pathParams: {
             registry_id: "registryIdentifier",
             artifact_id: "artifactIdentifier",
+          },
+          queryParams: {
+            search: "search_term",
+            page: "page",
+            size: "size",
           },
           responseExtractor: passthrough,
           description: "List versions of an artifact",
@@ -105,11 +143,23 @@ export const registriesToolset: ToolsetDefinition = {
       operations: {
         list: {
           method: "GET",
-          path: "/har/api/v1/registry/{registryIdentifier}/artifact/{artifactIdentifier}/version/{versionIdentifier}/files",
+          path: "/har/api/v1/registry",
+          pathBuilder: (input, config) => {
+            const artifact = input.artifact_id as string;
+            const version = input.version as string;
+            return `/har/api/v1/registry/${harRegistryRef(input, config)}/+/artifact/${artifact}/+/version/${version}/files`;
+          },
           pathParams: {
             registry_id: "registryIdentifier",
             artifact_id: "artifactIdentifier",
             version: "versionIdentifier",
+          },
+          queryParams: {
+            sort_order: "sort_order",
+            sort_field: "sort_field",
+            search: "search_term",
+            page: "page",
+            size: "size",
           },
           responseExtractor: passthrough,
           description: "List files in an artifact version",
