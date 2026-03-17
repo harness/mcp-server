@@ -80,6 +80,9 @@ describe("Toolset structural validation", () => {
 
         for (const [opName, spec] of allSpecs) {
           if (!spec.pathParams) continue;
+          // When pathBuilder is set, path is not used for URL construction —
+          // pathParams are only retained for deep link resolution.
+          if (spec.pathBuilder) continue;
           const placeholders = new Set(extractPathPlaceholders(spec.path));
 
           for (const [inputKey, pathPlaceholder] of Object.entries(spec.pathParams)) {
