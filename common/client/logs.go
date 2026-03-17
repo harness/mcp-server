@@ -131,6 +131,10 @@ func rewriteDownloadURLHost(downloadLink string, baseURL *url.URL) (string, erro
 		return downloadLink, nil
 	}
 
+	if parsed.Host == "storage.googleapis.com" {
+		return downloadLink, nil
+	}
+
 	slog.Info("Rewriting download URL host to match configured base URL",
 		"original_host", parsed.Host,
 		"new_host", baseURL.Host)
