@@ -412,6 +412,20 @@ export class Registry {
               }
             }
 
+            // Resolve any remaining {placeholder} tokens directly from item fields.
+            // This covers cases like execution items that carry pipelineIdentifier
+            // but it's not in identifierFields (since the resource's identifier is execution_id).
+            const remaining: RegExpMatchArray | null = def.deepLinkTemplate.match(/\{(\w+)\}/g);
+            if (remaining) {
+              for (const token of remaining) {
+                const key = token.slice(1, -1); // strip { }
+                if (key === "accountId" || itemLinkParams[key]) continue;
+                if (itemRecord[key] !== undefined) {
+                  itemLinkParams[key] = String(itemRecord[key]);
+                }
+              }
+            }
+
             let itemLink = buildDeepLink(
               this.config.HARNESS_BASE_URL,
               this.config.HARNESS_ACCOUNT_ID,
