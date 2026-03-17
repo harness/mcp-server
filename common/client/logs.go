@@ -126,12 +126,12 @@ func rewriteDownloadURLHost(downloadLink string, baseURL *url.URL) (string, erro
 		return "", fmt.Errorf("failed to parse download URL: %w", err)
 	}
 
-	// Only rewrite if the hosts actually differ
-	if parsed.Host == baseURL.Host {
+	if parsed.Host == "storage.googleapis.com" {
 		return downloadLink, nil
 	}
 
-	if parsed.Host == "storage.googleapis.com" {
+	// Only rewrite if the hosts actually differ
+	if parsed.Host == baseURL.Host {
 		return downloadLink, nil
 	}
 
