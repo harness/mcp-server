@@ -127,20 +127,15 @@ describe("resolveLogContent", () => {
     await expect(resolveLogContent(client, "prefix")).rejects.toThrow(/HTTP 404/);
   });
 
-  it("rewrites the signed download URL host to the configured Harness host", async () => {
-    const client = makeClient(vi.fn().mockResolvedValue({
-      status: "success",
-      link: "https://app.harness.io/storage/harness-download/comp-log-service/deep/path/logs.zip?X-Amz-Signature=abc123",
-    }));
-    fetchSpy.mockResolvedValue(new Response("rewritten host log content", { status: 200 }));
+  it("uses the signed download URL as-is (no host rewrite)", async () => {
+    const blobLink = "https://storage.googleapis.com/harness-logs/bucket/path/logs.zip?Expires=123";
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link: blobLink }));
+    fetchSpy.mockResolvedValue(new Response('{"out":"log line 1"}', { status: 200 }));
 
     const result = await resolveLogContent(client, "prefix");
 
-    expect(result).toContain("rewritten host log content");
-    expect(fetchSpy).toHaveBeenCalledWith(
-      "https://custom.harness.example/storage/harness-download/comp-log-service/deep/path/logs.zip?X-Amz-Signature=abc123",
-      expect.any(Object),
-    );
+    expect(result).toContain("log line 1");
+    expect(fetchSpy).toHaveBeenCalledWith(blobLink, expect.any(Object));
   });
 
   it("throws when log file exceeds max size", async () => {
