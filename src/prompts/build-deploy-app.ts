@@ -56,12 +56,14 @@ Present the full plan and generated YAML for review before creating anything.
 
 ### Step 4 — Check existing Harness resources
 - Call harness_list with resource_type="connector"${projectId ? ` and project_id="${projectId}"` : ""} to find existing Docker registry and Git connectors
+- Call harness_list with resource_type="registry"${projectId ? ` and project_id="${projectId}"` : ""} to discover existing Harness Artifact Registry (HAR) registries
 - Call harness_list with resource_type="service"${projectId ? ` and project_id="${projectId}"` : ""} to check if this service already exists
 - Call harness_list with resource_type="environment"${projectId ? ` and project_id="${projectId}"` : ""} to see available environments
 - Call harness_describe with resource_type="pipeline" to understand the pipeline schema
 
 ### Step 5 — Ensure connectors exist
-- If no Docker registry connector exists: generate connector YAML for DockerHub (or the registry in "${imageName}") and present it for review
+- **Harness Artifact Registry (HAR)**: If the user mentions "Harness Artifact Registry", "HAR", or a HAR registry was found in Step 4 — no Docker connector is needed. Skip Docker connector creation entirely.
+- **Third-party registry** (DockerHub, ECR, GCR, ACR, etc.): If no Docker registry connector exists, generate connector YAML and present for review.
 - If no Git connector exists for "${repoUrl}": generate a Git connector YAML and present it for review
 - Create any missing connectors using harness_create with resource_type="connector" (only after user confirmation)
 
@@ -69,9 +71,41 @@ Present the full plan and generated YAML for review before creating anything.
 Generate a Harness CI pipeline that:
 - Clones "${repoUrl}" using the Git connector
 - Builds the Docker image from the Dockerfile found in Step 1
-- Tags the image as "${imageName}:<+pipeline.sequenceId>"
-- Pushes to the Docker registry using the Docker connector
+- Tags the image with \`latest\` and \`<+pipeline.sequenceId>\`
 - Includes a build test step if the repo has tests (e.g. npm test, go test, pytest)
+- Uses a \`BuildAndPushDockerRegistry\` step. CRITICAL: The step spec differs based on the registry type. Use EXACTLY one of the two templates below — do not mix fields between them.
+
+**TEMPLATE A — Harness Artifact Registry (default when user says "Harness Artifact Registry" or "HAR"):**
+\`\`\`yaml
+- step:
+    type: BuildAndPushDockerRegistry
+    name: Build and Push to Harness Artifact Registry
+    identifier: build_and_push_har
+    spec:
+      repo: <+input>
+      tags:
+        - latest
+        - <+pipeline.sequenceId>
+      caching: true
+      registryRef: <+input>
+\`\`\`
+Key: uses \`registryRef\`. Does NOT have \`connectorRef\`. No Docker connector needed.
+
+**TEMPLATE B — Third-party registry (DockerHub, ECR, GCR, ACR, etc.):**
+\`\`\`yaml
+- step:
+    type: BuildAndPushDockerRegistry
+    name: Build and Push Docker Image
+    identifier: build_and_push_docker
+    spec:
+      connectorRef: <+input>
+      repo: <+input>
+      tags:
+        - latest
+        - <+pipeline.sequenceId>
+      caching: true
+\`\`\`
+Key: uses \`connectorRef\`. Does NOT have \`registryRef\`.
 
 Present the full pipeline YAML for review. Do NOT create it yet.
 
@@ -121,7 +155,7 @@ If still failing after 5 attempts:
 - Create (or update) a Harness service definition that references the K8s manifests from the repo:
   - Service type: Kubernetes
   - Manifest source: the Git connector from Step 5 pointing to the manifest path in the repo
-  - Artifact source: the Docker registry connector pointing to "${imageName}"
+  - Artifact source: use \`registryRef\` for Harness Artifact Registry or \`connectorRef\` for third-party (same pattern as the BuildAndPush step — never mix both fields)
 - Ensure a target environment exists (or create one) for the ${namespace || "default"} namespace
 - Present the service and environment YAML for review before creating
 
