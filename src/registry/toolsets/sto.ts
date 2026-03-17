@@ -1,101 +1,170 @@
 import type { ToolsetDefinition } from "../types.js";
 import { passthrough } from "../extractors.js";
 
+/**
+ * STO scope override — STO API uses accountId / orgId / projectId
+ * instead of the standard NG accountIdentifier / orgIdentifier / projectIdentifier.
+ *
+ * NOTE: The STO gateway may have auth limitations with x-api-key PATs.
+ * If auth errors occur, this may be a Harness platform limitation,
+ * not an MCP server issue.
+ */
+const STO_SCOPE = { account: "accountId", org: "orgId", project: "projectId" } as const;
+
 export const stoToolset: ToolsetDefinition = {
   name: "sto",
   displayName: "Security Testing Orchestration",
   description:
     "Harness STO — security issues, vulnerabilities, and exemptions",
   resources: [
+    // ── Security Issues ────────────────────────────────────────────────
     {
       resourceType: "security_issue",
       displayName: "Security Issue",
       description:
-        "Security vulnerability/issue from scan results. Supports list and get.",
+        "Security vulnerability/issue from scan results. Supports list with extensive filtering.",
       toolset: "sto",
       scope: "project",
+      scopeParams: STO_SCOPE,
       identifierFields: ["issue_id"],
       listFilterFields: [
-        { name: "search", description: "Filter security issues by name or keyword" },
-        { name: "severity", description: "Security severity filter", enum: ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"] },
+        { name: "search", description: "Free-text search (issue ID, CVE, component name, keyword)" },
+        { name: "severity_codes", description: "Comma-separated severity levels", enum: ["Critical", "High", "Medium", "Low", "Info"] },
+        { name: "issue_types", description: "Comma-separated issue types", enum: ["SAST", "DAST", "SCA", "IAC", "SECRET", "MISCONFIG"] },
+        { name: "target_ids", description: "Comma-separated target IDs" },
+        { name: "target_types", description: "Comma-separated target types", enum: ["configuration", "container", "instance", "repository"] },
+        { name: "pipeline_ids", description: "Comma-separated pipeline IDs" },
+        { name: "scan_tools", description: "Comma-separated scan tools (e.g. aqua-trivy, semgrep)" },
+        { name: "exemption_statuses", description: "Comma-separated statuses", enum: ["None", "Pending", "Approved", "Rejected", "Expired"] },
       ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/sto/issues/{issueId}",
       operations: {
         list: {
           method: "GET",
-          path: "/sto/api/v2/issues",
+          path: "/sto/api/v2/frontend/all-issues/issues",
           queryParams: {
             search: "search",
-            severity: "severity",
+            severity_codes: "severityCodes",
+            issue_types: "issueTypes",
+            target_ids: "targetIds",
+            target_types: "targetTypes",
+            pipeline_ids: "pipelineIds",
+            scan_tools: "scanTools",
+            exemption_statuses: "exemptionStatuses",
             page: "page",
-            size: "size",
+            size: "pageSize",
           },
           responseExtractor: passthrough,
-          description: "List security issues",
-        },
-        get: {
-          method: "GET",
-          path: "/sto/api/v2/issues/{issueId}",
-          pathParams: { issue_id: "issueId" },
-          responseExtractor: passthrough,
-          description: "Get security issue details",
+          description: "List security issues with filtering by severity, type, target, pipeline, and scan tool",
         },
       },
     },
+
+    // ── Security Issue Filters ─────────────────────────────────────────
     {
-      resourceType: "security_exemption",
-      displayName: "Security Exemption",
-      description: "Security issue exemption/waiver. Supports list with approve/reject actions.",
+      resourceType: "security_issue_filter",
+      displayName: "Security Issue Filter",
+      description:
+        "Available filter values (targets, scan tools, pipelines) for security issues. Use this to discover valid filter values before listing issues.",
       toolset: "sto",
       scope: "project",
-      identifierFields: ["exemption_id"],
-      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/sto/exemptions",
+      scopeParams: STO_SCOPE,
+      identifierFields: [],
       operations: {
         list: {
           method: "GET",
-          path: "/sto/api/v2/exemptions",
-          queryParams: {
-            page: "page",
-            size: "size",
-          },
+          path: "/sto/api/v2/frontend/all-issues/filters",
           responseExtractor: passthrough,
-          description: "List security exemptions",
+          description: "Get available filter values for security issues (targets, scan tools, pipelines)",
+        },
+      },
+    },
+
+    // ── Security Exemptions ────────────────────────────────────────────
+    {
+      resourceType: "security_exemption",
+      displayName: "Security Exemption",
+      description: "Security issue exemption/waiver. Supports list (POST with status filter) with approve/reject/promote actions.",
+      toolset: "sto",
+      scope: "project",
+      scopeParams: STO_SCOPE,
+      identifierFields: ["exemption_id"],
+      listFilterFields: [
+        { name: "status", description: "Exemption status filter (required)", enum: ["Pending", "Approved", "Rejected", "Expired", "Canceled"] },
+        { name: "search", description: "Free-text search for issue/exemption titles" },
+      ],
+      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/sto/exemptions",
+      operations: {
+        list: {
+          method: "POST",
+          path: "/sto/api/v2/frontend/exemptions",
+          queryParams: {
+            status: "status",
+            search: "search",
+            page: "page",
+            size: "pageSize",
+          },
+          bodyBuilder: () => ({}),
+          responseExtractor: passthrough,
+          description: "List security exemptions filtered by status",
         },
       },
       executeActions: {
         approve: {
-          method: "POST",
+          method: "PUT",
           path: "/sto/api/v2/exemptions/{exemptionId}/approve",
           pathParams: { exemption_id: "exemptionId" },
-          bodyBuilder: () => ({}),
+          bodyBuilder: (input) => ({
+            approverId: input.approver_id,
+            ...(input.comment ? { comment: input.comment } : {}),
+          }),
           responseExtractor: passthrough,
-          actionDescription: "Approve (promote and approve) a security exemption",
-          bodySchema: { description: "No body required. Exemption is identified by path parameter.", fields: [] },
+          actionDescription: "Approve a security exemption",
+          bodySchema: {
+            description: "Exemption approval details",
+            fields: [
+              { name: "approver_id", type: "string", required: true, description: "User UUID of the approver" },
+              { name: "comment", type: "string", required: false, description: "Optional approval comment" },
+            ],
+          },
         },
         reject: {
-          method: "POST",
+          method: "PUT",
           path: "/sto/api/v2/exemptions/{exemptionId}/reject",
           pathParams: { exemption_id: "exemptionId" },
-          bodyBuilder: () => ({}),
+          bodyBuilder: (input) => ({
+            approverId: input.approver_id,
+            ...(input.comment ? { comment: input.comment } : {}),
+          }),
           responseExtractor: passthrough,
           actionDescription: "Reject a security exemption",
-          bodySchema: { description: "No body required. Exemption is identified by path parameter.", fields: [] },
+          bodySchema: {
+            description: "Exemption rejection details",
+            fields: [
+              { name: "approver_id", type: "string", required: true, description: "User UUID of the rejector" },
+              { name: "comment", type: "string", required: false, description: "Optional rejection comment" },
+            ],
+          },
         },
         promote: {
-          method: "POST",
+          method: "PUT",
           path: "/sto/api/v2/exemptions/{exemptionId}/promote",
           pathParams: { exemption_id: "exemptionId" },
           bodyBuilder: (input) => ({
-            scope: input.scope,
-            comment: input.comment,
+            approverId: input.approver_id,
+            ...(input.comment ? { comment: input.comment } : {}),
+            ...(input.pipeline_id ? { pipelineId: input.pipeline_id } : {}),
+            ...(input.target_id ? { targetId: input.target_id } : {}),
           }),
           responseExtractor: passthrough,
-          actionDescription: "Promote a security exemption to a wider scope. Pass scope and optional comment.",
+          actionDescription: "Promote a security exemption to organization or account level",
           bodySchema: {
             description: "Exemption promotion details",
             fields: [
-              { name: "scope", type: "string", required: false, description: "Target scope for promotion" },
-              { name: "comment", type: "string", required: false, description: "Comment for promotion" },
+              { name: "approver_id", type: "string", required: true, description: "User UUID of the approver" },
+              { name: "comment", type: "string", required: false, description: "Optional comment" },
+              { name: "pipeline_id", type: "string", required: false, description: "Pipeline ID to scope promotion" },
+              { name: "target_id", type: "string", required: false, description: "Target ID to scope promotion" },
             ],
           },
         },

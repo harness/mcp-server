@@ -95,6 +95,20 @@ describe("HarnessClient", () => {
       expect(url).toContain("https://app.harness.io/gateway/log-service/blob/download?");
     });
 
+    it("uses baseUrl override when provided (e.g. FME/Split.io)", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_BASE_URL: "https://app.harness.io" }));
+
+      await client.request({
+        path: "/internal/api/v2/splits/ws/ws-123",
+        baseUrl: "https://api.split.io",
+      });
+
+      const url = fetchSpy.mock.calls[0][0] as string;
+      expect(url).toMatch(/^https:\/\/api\.split\.io\/internal\/api\/v2\/splits\/ws\/ws-123/);
+      expect(url).not.toContain("app.harness.io");
+    });
+
     it("omits undefined and empty params", async () => {
       fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
       const client = new HarnessClient(makeConfig());

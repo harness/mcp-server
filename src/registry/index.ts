@@ -220,35 +220,54 @@ export class Registry {
     input: Record<string, unknown>,
     signal?: AbortSignal,
   ): Promise<unknown> {
-    // Build path with substitutions
-    let path = spec.path;
-    if (spec.pathParams) {
-      for (const [inputKey, pathPlaceholder] of Object.entries(spec.pathParams)) {
-        let value = input[inputKey];
-        if (value === undefined || value === "") {
-          // Default scope placeholders from config for project/org-scoped resources
-          if (pathPlaceholder === "org" && (def.scope === "project" || def.scope === "org")) {
-            value = this.config.HARNESS_DEFAULT_ORG_ID;
-          } else if (pathPlaceholder === "project" && def.scope === "project") {
-            value = this.config.HARNESS_DEFAULT_PROJECT_ID;
+    // Build path with substitutions (or pathBuilder when present)
+    let path: string;
+    if (spec.pathBuilder) {
+      path = spec.pathBuilder(input, this.config);
+    } else {
+      path = spec.path;
+      if (spec.pathParams) {
+        for (const [inputKey, pathPlaceholder] of Object.entries(spec.pathParams)) {
+          let value = input[inputKey];
+          if (value === undefined || value === "") {
+            // Default scope placeholders from config for project/org-scoped resources
+            if (pathPlaceholder === "org" && (def.scope === "project" || def.scope === "org")) {
+              value = this.config.HARNESS_DEFAULT_ORG_ID;
+            } else if (pathPlaceholder === "project" && def.scope === "project") {
+              value = this.config.HARNESS_DEFAULT_PROJECT_ID;
+            }
           }
+          if (value === undefined || value === "") {
+            throw new Error(`Missing required field "${inputKey}" for path parameter "${pathPlaceholder}"`);
+          }
+          path = path.replace(`{${pathPlaceholder}}`, encodeURIComponent(String(value)));
         }
-        if (value === undefined || value === "") {
-          throw new Error(`Missing required field "${inputKey}" for path parameter "${pathPlaceholder}"`);
-        }
-        path = path.replace(`{${pathPlaceholder}}`, encodeURIComponent(String(value)));
       }
     }
 
     // Build query params
     const params: Record<string, string | number | boolean | undefined> = {};
 
-    // Add scope params
+    // Add scope params (allow per-resource override of query param names)
+    const orgParam = def.scopeParams?.org ?? "orgIdentifier";
+    const projectParam = def.scopeParams?.project ?? "projectIdentifier";
     if (def.scope === "project" || def.scope === "org") {
-      params.orgIdentifier = (input.org_id as string) ?? this.config.HARNESS_DEFAULT_ORG_ID;
+      params[orgParam] = (input.org_id as string) ?? this.config.HARNESS_DEFAULT_ORG_ID;
     }
     if (def.scope === "project") {
-      params.projectIdentifier = (input.project_id as string) ?? this.config.HARNESS_DEFAULT_PROJECT_ID;
+      params[projectParam] = (input.project_id as string) ?? this.config.HARNESS_DEFAULT_PROJECT_ID;
+    }
+    // Inject custom account param when scopeParams.account is set
+    // (in addition to the client's default accountIdentifier)
+    if (def.scopeParams?.account) {
+      params[def.scopeParams.account] = this.config.HARNESS_ACCOUNT_ID;
+    }
+
+    // Add static query params (not derived from input)
+    if (spec.staticQueryParams) {
+      for (const [key, value] of Object.entries(spec.staticQueryParams)) {
+        params[key] = value;
+      }
     }
 
     // Map input fields to query params
@@ -286,12 +305,14 @@ export class Registry {
       }
     }
 
-    // Make request
+    // Make request — use FME base URL for Split.io-backed resources
+    const baseUrl = def.baseUrlOverride === "fme" ? this.config.HARNESS_FME_BASE_URL : undefined;
     const raw = await client.request({
       method: spec.method,
       path,
       params,
       body,
+      ...(baseUrl ? { baseUrl } : {}),
       ...(spec.headers ? { headers: spec.headers } : {}),
       signal,
     });
@@ -388,6 +409,20 @@ export class Registry {
               } else if (itemRecord.identifier !== undefined) {
                 // Fall back to the generic "identifier" field for the primary identifier
                 itemLinkParams[pathParamName] = String(itemRecord.identifier);
+              }
+            }
+
+            // Resolve any remaining {placeholder} tokens directly from item fields.
+            // This covers cases like execution items that carry pipelineIdentifier
+            // but it's not in identifierFields (since the resource's identifier is execution_id).
+            const remaining: RegExpMatchArray | null = def.deepLinkTemplate.match(/\{(\w+)\}/g);
+            if (remaining) {
+              for (const token of remaining) {
+                const key = token.slice(1, -1); // strip { }
+                if (key === "accountId" || itemLinkParams[key]) continue;
+                if (itemRecord[key] !== undefined) {
+                  itemLinkParams[key] = String(itemRecord[key]);
+                }
               }
             }
 

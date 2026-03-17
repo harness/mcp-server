@@ -80,16 +80,25 @@ export interface FilterFieldSpec {
 }
 
 /**
+ * Config type for pathBuilder (avoids circular import).
+ */
+export type PathBuilderConfig = { HARNESS_ACCOUNT_ID?: string; HARNESS_DEFAULT_ORG_ID?: string; HARNESS_DEFAULT_PROJECT_ID?: string };
+
+/**
  * Specifies how a single CRUD operation maps to the Harness API.
  */
 export interface EndpointSpec {
   method: HttpMethod;
-  /** Path template, e.g. "/pipeline/api/pipelines/{pipelineIdentifier}" */
+  /** Path template, e.g. "/pipeline/api/pipelines/{pipelineIdentifier}". Ignored when pathBuilder is set. */
   path: string;
+  /** Optional dynamic path builder. When set, used instead of path + pathParams for account-scoped or multi-endpoint resources. */
+  pathBuilder?: (input: Record<string, unknown>, config: PathBuilderConfig) => string;
   /** Maps tool input field names to path param placeholders */
   pathParams?: Record<string, string>;
   /** Maps tool input field names to query param names */
   queryParams?: Record<string, string>;
+  /** Static query parameters always included in the request (not derived from input) */
+  staticQueryParams?: Record<string, string>;
   /** For POST/PUT: how to build the request body from tool input */
   bodyBuilder?: (input: Record<string, unknown>) => unknown;
   /** Static headers to merge into the request (e.g. Content-Type override) */
@@ -122,6 +131,14 @@ export interface ResourceDefinition {
   toolset: ToolsetName;
   /** Scope level: "project" | "org" | "account" */
   scope: "project" | "org" | "account";
+  /**
+   * Override default scope query parameter names.
+   * Standard NG API uses orgIdentifier / projectIdentifier.
+   * Some APIs (e.g., Chaos) use organizationIdentifier instead.
+   * STO uses accountId / orgId / projectId.
+   * When `account` is set, an additional account param is injected from config.
+   */
+  scopeParams?: { account?: string; org?: string; project?: string };
   /** Primary identifier field names: ["pipeline_id"], ["service_id"], etc. */
   identifierFields: string[];
   /** Additional filter fields for list operations */
@@ -136,6 +153,11 @@ export interface ResourceDefinition {
   operations: Partial<Record<OperationName, EndpointSpec>>;
   /** Execute action mappings (e.g. run pipeline, toggle FF) */
   executeActions?: Record<string, EndpointSpec & { actionDescription: string }>;
+  /**
+   * Override base URL for this resource. Set to "fme" to use HARNESS_FME_BASE_URL
+   * (Split.io API at https://api.split.io) instead of HARNESS_BASE_URL.
+   */
+  baseUrlOverride?: "fme";
 }
 
 /**

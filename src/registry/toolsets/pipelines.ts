@@ -221,6 +221,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         { name: "pipeline_id", description: "Pipeline identifier to filter executions" },
         { name: "status", description: "Execution status filter", enum: ["Success", "Failed", "Running", "Aborted", "Expired", "AbortedByFreeze", "NotStarted", "Paused", "Queued", "Waiting"] },
         { name: "module", description: "Harness module filter", enum: ["CD", "CI", "CV", "CF", "CE", "STO"] },
+        { name: "search_term", description: "Search executions by keyword" },
       ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipelineIdentifier}/executions/{planExecutionId}/pipeline",
       operations: {
@@ -231,11 +232,12 @@ export const pipelinesToolset: ToolsetDefinition = {
             page: "page",
             size: "size",
             module: "module",
+            pipeline_id: "pipelineIdentifier",
+            status: "status",
+            search_term: "searchTerm",
           },
-          bodyBuilder: (input) => ({
+          bodyBuilder: () => ({
             filterType: "PipelineExecution",
-            pipelineIdentifier: input.pipeline_id,
-            status: input.status ? [input.status] : undefined,
           }),
           responseExtractor: pageExtract,
           description: "List pipeline execution history",

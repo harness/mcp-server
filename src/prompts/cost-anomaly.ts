@@ -23,7 +23,7 @@ Steps:
 1. **Fetch anomalies**: Call harness_list with resource_type="cost_anomaly"${projectFilter} to get recent cost anomalies
 2. **Get cost timeline**: Call harness_get with resource_type="cost_timeseries"${projectFilter} to see the cost spike in context
 3. **Breakdown analysis**: Call harness_get with resource_type="cost_breakdown"${projectFilter} to identify which services/resources drove the spike
-4. **Check ignored**: Call harness_list with resource_type="cost_ignored_anomaly"${projectFilter} to see if similar anomalies were previously dismissed
+4. **Check ignored**: Call harness_list with resource_type="cost_anomaly"${projectFilter}, filters={status: "IGNORED"} to see if similar anomalies were previously dismissed
 5. **For each anomaly, provide**:
    - **When**: Date and time of the anomaly
    - **What**: Which resource/service saw the cost spike

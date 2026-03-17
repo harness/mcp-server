@@ -1,6 +1,6 @@
 # Harness MCP Server 2.0
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 145 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 140 resource types.
 
 [![CI](https://github.com/thisrohangupta/harness-mcp-v2/actions/workflows/ci.yml/badge.svg)](https://github.com/thisrohangupta/harness-mcp-v2/actions/workflows/ci.yml)
 
@@ -10,7 +10,7 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **11 tools, 145 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **11 tools, 140 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
 - **Full platform coverage.** 27 toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Internal Developer Portal, Software Supply Chain, Visualizations, and more. Not just pipelines — the entire Harness platform.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **26 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
@@ -418,6 +418,7 @@ The deployment runs 2 replicas with readiness/liveness probes, resource limits, 
 | `HARNESS_API_KEY` | Yes | -- | Harness personal access token or service account token |
 | `HARNESS_ACCOUNT_ID` | No | *(from PAT)* | Harness account identifier. Auto-extracted from PAT tokens; only needed for non-PAT API keys |
 | `HARNESS_BASE_URL` | No | `https://app.harness.io` | Base URL (override for self-managed Harness) |
+| `HARNESS_FME_BASE_URL` | No | `https://api.split.io` | Base URL for FME/Split.io API. Used by `fme_workspace`, `fme_environment`, and `fme_feature_flag` resources |
 | `HARNESS_DEFAULT_ORG_ID` | No | `default` | Default organization identifier. Optional convenience — agents can discover orgs dynamically via `harness_list(resource_type="organization")` |
 | `HARNESS_DEFAULT_PROJECT_ID` | No | -- | Default project identifier. Optional convenience — agents can discover projects dynamically via `harness_list(resource_type="project")` |
 | `HARNESS_API_TIMEOUT_MS` | No | `30000` | HTTP request timeout in milliseconds |
@@ -762,7 +763,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-145 resource types organized across 27 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+140 resource types organized across 27 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -942,53 +943,29 @@ Harness pipelines can be stored in three ways:
 | `cost_anomaly` | x | | | | | |
 | `cost_anomaly_summary` | | x | | | | |
 | `cost_category` | x | x | | | | |
-| `cost_overview` | | x | | | | |
-| `cost_metadata` | | x | | | | |
+| `cost_account_overview` | | x | | | | |
 | `cost_filter_value` | x | | | | | |
 | `cost_recommendation_stats` | | x | | | | |
-| `cost_recommendation_by_type` | x | | | | | |
 | `cost_recommendation_detail` | | x | | | | |
-| `cost_ignored_anomaly` | x | | | | | |
-| `cost_commitment_coverage` | | x | | | | |
-| `cost_commitment_savings` | | x | | | | |
-| `cost_commitment_utilisation` | | x | | | | |
-| `cost_commitment_analysis` | | x | | | | |
-| `cost_estimated_savings` | | x | | | | |
+| `cost_commitment` | | x | | | | |
 
 ### Software Engineering Insights (SEI)
+
+SEI resources are consolidated for token efficiency. Use `metric` or `aspect` params for DORA, team/org-tree details, and AI insights.
 
 | Resource Type | List | Get | Create | Update | Delete | Execute Actions |
 |---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
 | `sei_metric` | x | | | | | |
 | `sei_productivity_metric` | | x | | | | |
-| `sei_deployment_frequency` | | x | | | | |
-| `sei_deployment_frequency_drilldown` | | x | | | | |
-| `sei_change_failure_rate` | | x | | | | |
-| `sei_change_failure_rate_drilldown` | | x | | | | |
-| `sei_mttr` | | x | | | | |
-| `sei_lead_time` | | x | | | | |
+| `sei_dora_metric` | | x | | | | Pass `metric`: deployment_frequency, change_failure_rate, mttr, lead_time, or *_drilldown |
 | `sei_team` | x | x | | | | |
-| `sei_team_integration` | x | | | | | |
-| `sei_team_developer` | x | | | | | |
-| `sei_team_integration_filter` | x | | | | | |
+| `sei_team_detail` | x | | | | | Pass `aspect`: integrations, developers, integration_filters |
 | `sei_org_tree` | x | x | | | | |
-| `sei_org_tree_efficiency_profile` | | x | | | | |
-| `sei_org_tree_productivity_profile` | | x | | | | |
-| `sei_org_tree_ba_profile` | | x | | | | |
-| `sei_org_tree_integration` | x | | | | | |
-| `sei_org_tree_team` | x | | | | | |
-| `sei_business_alignment` | x | x | | | | |
-| `sei_ba_summary` | | x | | | | |
-| `sei_ba_drilldown` | | x | | | | |
-| `sei_ai_usage` | | x | | | | |
-| `sei_ai_usage_breakdown` | x | | | | | |
-| `sei_ai_usage_summary` | | x | | | | |
-| `sei_ai_top_language` | x | | | | | |
-| `sei_ai_adoption` | | x | | | | |
-| `sei_ai_adoption_breakdown` | x | | | | | |
-| `sei_ai_adoption_summary` | | x | | | | |
-| `sei_ai_impact` | | x | | | | |
-| `sei_ai_rework` | | x | | | | |
+| `sei_org_tree_detail` | x | x | | | | Pass `aspect`: efficiency_profile, productivity_profile, business_alignment_profile, integrations, teams |
+| `sei_business_alignment` | x | x | | | | Pass `aspect`: feature_metrics, feature_summary, drilldown for get |
+| `sei_ai_usage` | x | x | | | | Pass `aspect`: metrics, breakdown, summary, top_languages |
+| `sei_ai_adoption` | x | x | | | | Pass `aspect`: metrics, breakdown, summary |
+| `sei_ai_impact` | | x | | | | Pass `aspect`: pr_velocity, rework |
 | `sei_ai_raw_metric` | x | | | | | |
 
 ### Software Supply Chain Assurance (SCS)
@@ -1104,7 +1081,7 @@ Inline PNG chart visualizations rendered from Harness data. These are metadata-o
 
 ## Toolset Filtering
 
-By default, all 27 toolsets (and their 145 resource types) are enabled. Use `HARNESS_TOOLSETS` to expose only the toolsets you need. This reduces the resource types the LLM sees, improving tool selection accuracy.
+By default, all 27 toolsets (and their 140 resource types) are enabled. Use `HARNESS_TOOLSETS` to expose only the toolsets you need. This reduces the resource types the LLM sees, improving tool selection accuracy.
 
 ```bash
 # Only expose pipelines, services, and connectors
@@ -1134,8 +1111,8 @@ Available toolset names:
 | `feature-flags` | fme_workspace, fme_environment, fme_feature_flag, feature_flag |
 | `gitops` | gitops_agent, gitops_application, gitops_cluster, gitops_repository, gitops_applicationset, gitops_repo_credential, gitops_app_event, gitops_pod_log, gitops_managed_resource, gitops_resource_action, gitops_dashboard, gitops_app_resource_tree |
 | `chaos` | chaos_experiment, chaos_probe, chaos_experiment_template, chaos_infrastructure, chaos_experiment_variable, chaos_experiment_run, chaos_loadtest |
-| `ccm` | cost_perspective, cost_breakdown, cost_timeseries, cost_summary, cost_recommendation, cost_anomaly, cost_anomaly_summary, cost_category, cost_overview, cost_metadata, cost_filter_value, cost_recommendation_stats, cost_recommendation_by_type, cost_recommendation_detail, cost_ignored_anomaly, cost_commitment_coverage, cost_commitment_savings, cost_commitment_utilisation, cost_commitment_analysis, cost_estimated_savings |
-| `sei` | sei_metric, sei_productivity_metric, sei_deployment_frequency, sei_deployment_frequency_drilldown, sei_change_failure_rate, sei_change_failure_rate_drilldown, sei_mttr, sei_lead_time, sei_team, sei_team_integration, sei_team_developer, sei_team_integration_filter, sei_org_tree, sei_org_tree_efficiency_profile, sei_org_tree_productivity_profile, sei_org_tree_ba_profile, sei_org_tree_integration, sei_org_tree_team, sei_business_alignment, sei_ba_summary, sei_ba_drilldown, sei_ai_usage, sei_ai_usage_breakdown, sei_ai_usage_summary, sei_ai_top_language, sei_ai_adoption, sei_ai_adoption_breakdown, sei_ai_adoption_summary, sei_ai_impact, sei_ai_rework, sei_ai_raw_metric |
+| `ccm` | cost_perspective, cost_breakdown, cost_timeseries, cost_summary, cost_recommendation, cost_anomaly, cost_anomaly_summary, cost_category, cost_account_overview, cost_filter_value, cost_recommendation_stats, cost_recommendation_detail, cost_commitment |
+| `sei` | sei_metric, sei_productivity_metric, sei_dora_metric, sei_team, sei_team_detail, sei_org_tree, sei_org_tree_detail, sei_business_alignment, sei_ai_usage, sei_ai_adoption, sei_ai_impact, sei_ai_raw_metric |
 | `scs` | artifact_security, code_repo_security, scs_sbom, scs_artifact_component, scs_compliance_result, scs_artifact_remediation, scs_chain_of_custody, scs_opa_policy |
 | `sto` | security_issue, security_exemption |
 | `access_control` | user, user_group, service_account, role, role_assignment, resource_group, permission |
@@ -1163,7 +1140,7 @@ Available toolset names:
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
                 |  26 Toolsets      |      (data files, not code)
-                |  124 Resource Types|
+                |  ~108 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+

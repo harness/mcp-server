@@ -1,4 +1,5 @@
 import type { ResourceDefinition, ToolsetDefinition, FilterFieldSpec } from "../types.js";
+import type { PathBuilderConfig } from "../types.js";
 import { passthrough } from "../extractors.js";
 
 /** SEI base path */
@@ -15,16 +16,31 @@ const TEAMS_DEEP_LINK = "/ng/account/{accountId}/module/sei/configuration/teams"
 // ─── Shared filter field sets ─────────────────────────────────────────────────
 
 const DORA_FILTER_FIELDS: FilterFieldSpec[] = [
+  {
+    name: "metric",
+    description: "DORA metric to fetch",
+    enum: ["deployment_frequency", "deployment_frequency_drilldown", "change_failure_rate", "change_failure_rate_drilldown", "mttr", "lead_time"],
+  },
   { name: "team_ref_id", description: "Team reference identifier" },
   { name: "date_start", description: "Start date for metric calculation" },
   { name: "date_end", description: "End date for metric calculation" },
   { name: "granularity", description: "Time granularity", enum: ["DAY", "WEEK", "MONTH"] },
 ];
 
-const BA_FILTER_FIELDS: FilterFieldSpec[] = [
+const BA_LIST_FILTER_FIELDS: FilterFieldSpec[] = [
+  { name: "profile_id", description: "Business alignment profile ID" },
   { name: "team_ref_id", description: "Team reference identifier" },
   { name: "date_start", description: "Start date (YYYY-MM-DD)" },
   { name: "date_end", description: "End date (YYYY-MM-DD)" },
+];
+
+const BA_GET_FILTER_FIELDS: FilterFieldSpec[] = [
+  {
+    name: "aspect",
+    description: "Which BA data to fetch",
+    enum: ["feature_metrics", "feature_summary", "drilldown"],
+  },
+  ...BA_LIST_FILTER_FIELDS,
 ];
 
 const AI_FILTER_FIELDS: FilterFieldSpec[] = [
@@ -79,95 +95,92 @@ function aiInsightBuildBody(input: Record<string, unknown>) {
   };
 }
 
-// ─── Resource factories ───────────────────────────────────────────────────────
+// ─── Path builders for consolidated resources ─────────────────────────────────
 
-/** Factory for DORA metric resources — all POST to /insights/efficiency/{suffix} with doraBuildBody */
-function doraResource(
-  pathSuffix: string,
-  resourceType: string,
-  displayName: string,
-  description: string,
-  opDescription: string,
-): ResourceDefinition {
-  return {
-    resourceType,
-    displayName,
-    description,
-    toolset: "sei",
-    scope: "account",
-    identifierFields: [],
-    listFilterFields: [...DORA_FILTER_FIELDS],
-    deepLinkTemplate: DORA_DEEP_LINK,
-    operations: {
-      get: {
-        method: "POST",
-        path: `${SEI}/v2/insights/efficiency/${pathSuffix}`,
-        bodyBuilder: doraBuildBody,
-        responseExtractor: passthrough,
-        description: opDescription,
-      },
-    },
-  };
+const DORA_METRIC_TO_PATH: Record<string, string> = {
+  deployment_frequency: "deploymentFrequency",
+  deployment_frequency_drilldown: "deploymentFrequency/drilldown",
+  change_failure_rate: "changeFailureRate",
+  change_failure_rate_drilldown: "changeFailureRate/drilldown",
+  mttr: "mttr",
+  lead_time: "leadtime",
+};
+
+function doraPathBuilder(input: Record<string, unknown>, _config: PathBuilderConfig): string {
+  const metric = (input.metric as string) || "deployment_frequency";
+  const suffix = DORA_METRIC_TO_PATH[metric] ?? DORA_METRIC_TO_PATH.deployment_frequency;
+  return `${SEI}/v2/insights/efficiency/${suffix}`;
 }
 
-/** Factory for org tree sub-resources — all GET to /org-trees/{orgTreeId}/{suffix} */
-function orgTreeSubResource(
-  pathSuffix: string,
-  resourceType: string,
-  displayName: string,
-  description: string,
-  op: "get" | "list",
-  opDescription: string,
-): ResourceDefinition {
-  return {
-    resourceType,
-    displayName,
-    description,
-    toolset: "sei",
-    scope: "account",
-    identifierFields: ["org_tree_id"],
-    deepLinkTemplate: ORG_TREE_DEEP_LINK,
-    operations: {
-      [op]: {
-        method: "GET",
-        path: `${SEI}/v2/org-trees/{orgTreeId}/${pathSuffix}`,
-        pathParams: { org_tree_id: "orgTreeId" },
-        responseExtractor: passthrough,
-        description: opDescription,
-      },
-    },
-  };
+function teamDetailPathBuilder(input: Record<string, unknown>, _config: PathBuilderConfig): string {
+  const teamRefId = input.team_ref_id as string;
+  if (!teamRefId) throw new Error("team_ref_id is required for sei_team_detail");
+  const aspect = (input.aspect as string) || "integrations";
+  const suffix =
+    aspect === "integrations"
+      ? "integrations"
+      : aspect === "developers"
+        ? "developers"
+        : "integration_filters";
+  return `${SEI}/v2/teams/${encodeURIComponent(teamRefId)}/${suffix}`;
 }
 
-/** Factory for AI coding insight resources — all POST to /insights/coding-assistant/{suffix} with aiInsightBuildBody */
-function aiResource(
-  pathSuffix: string,
-  resourceType: string,
-  displayName: string,
-  description: string,
-  op: "get" | "list",
-  opDescription: string,
-  filterFields: FilterFieldSpec[] = [...AI_FILTER_FIELDS],
-): ResourceDefinition {
-  return {
-    resourceType,
-    displayName,
-    description,
-    toolset: "sei",
-    scope: "account",
-    identifierFields: [],
-    listFilterFields: filterFields,
-    deepLinkTemplate: AI_DEEP_LINK,
-    operations: {
-      [op]: {
-        method: "POST",
-        path: `${SEI}/v2/insights/coding-assistant/${pathSuffix}`,
-        bodyBuilder: aiInsightBuildBody,
-        responseExtractor: passthrough,
-        description: opDescription,
-      },
-    },
-  };
+function orgTreeDetailPathBuilder(input: Record<string, unknown>, _config: PathBuilderConfig): string {
+  const orgTreeId = input.org_tree_id as string;
+  if (!orgTreeId) throw new Error("org_tree_id is required for sei_org_tree_detail");
+  const aspect = (input.aspect as string) || "efficiency_profile";
+  const suffix =
+    aspect === "efficiency_profile"
+      ? "efficiency_profile"
+      : aspect === "productivity_profile"
+        ? "productivity_profile"
+        : aspect === "business_alignment_profile"
+          ? "businessAlignmentProfile"
+          : aspect === "integrations"
+            ? "integrations"
+            : "teams";
+  return `${SEI}/v2/org-trees/${encodeURIComponent(orgTreeId)}/${suffix}`;
+}
+
+function baPathBuilder(input: Record<string, unknown>, _config: PathBuilderConfig): string {
+  const aspect = (input.aspect as string) || "feature_metrics";
+  const suffix =
+    aspect === "feature_summary"
+      ? "feature_summary"
+      : aspect === "drilldown"
+        ? "drilldown"
+        : "feature_metrics";
+  return `${SEI}/v2/insights/ba/${suffix}`;
+}
+
+function aiUsagePathBuilder(input: Record<string, unknown>, _config: PathBuilderConfig): string {
+  const aspect = (input.aspect as string) || "metrics";
+  const suffix =
+    aspect === "metrics"
+      ? "usage/metrics"
+      : aspect === "breakdown"
+        ? "usage/breakdown"
+        : aspect === "summary"
+          ? "usage/summary"
+          : "usage/top_languages";
+  return `${SEI}/v2/insights/coding-assistant/${suffix}`;
+}
+
+function aiAdoptionPathBuilder(input: Record<string, unknown>, _config: PathBuilderConfig): string {
+  const aspect = (input.aspect as string) || "metrics";
+  const suffix =
+    aspect === "breakdown"
+      ? "adoptions/breakdown"
+      : aspect === "summary"
+        ? "adoptions/summary"
+        : "adoptions";
+  return `${SEI}/v2/insights/coding-assistant/${suffix}`;
+}
+
+function aiImpactPathBuilder(input: Record<string, unknown>, _config: PathBuilderConfig): string {
+  const aspect = (input.aspect as string) || "pr_velocity";
+  const suffix = aspect === "rework" ? "rework/summary" : "pr-velocity/summary";
+  return `${SEI}/v2/insights/coding-assistant/${suffix}`;
 }
 
 // ─── Toolset Definition ───────────────────────────────────────────────────────
@@ -236,37 +249,28 @@ export const seiToolset: ToolsetDefinition = {
       },
     },
 
-    // ─── DORA Metrics ─────────────────────────────────────────────────────────
-    doraResource(
-      "deploymentFrequency", "sei_deployment_frequency", "SEI Deployment Frequency",
-      "DORA deployment frequency metric. Supports get. Pass team_ref_id, date_start, date_end, granularity.",
-      "Get deployment frequency metrics for a team over a date range",
-    ),
-    doraResource(
-      "deploymentFrequency/drilldown", "sei_deployment_frequency_drilldown", "SEI Deployment Frequency Drilldown",
-      "DORA deployment frequency drilldown data. Supports get.",
-      "Get deployment frequency drilldown data",
-    ),
-    doraResource(
-      "changeFailureRate", "sei_change_failure_rate", "SEI Change Failure Rate",
-      "DORA change failure rate metric. Supports get.",
-      "Get change failure rate metrics for a team",
-    ),
-    doraResource(
-      "changeFailureRate/drilldown", "sei_change_failure_rate_drilldown", "SEI Change Failure Rate Drilldown",
-      "DORA change failure rate drilldown data. Supports get.",
-      "Get change failure rate drilldown data",
-    ),
-    doraResource(
-      "mttr", "sei_mttr", "SEI MTTR",
-      "DORA mean time to restore metric. Supports get.",
-      "Get mean time to restore metrics for a team",
-    ),
-    doraResource(
-      "leadtime", "sei_lead_time", "SEI Lead Time",
-      "DORA lead time for changes metric. Supports get.",
-      "Get lead time for changes metrics for a team",
-    ),
+    // ─── DORA Metrics (consolidated: 6 → 1) ─────────────────────────────────────
+    {
+      resourceType: "sei_dora_metric",
+      displayName: "SEI DORA Metric",
+      description:
+        "DORA metrics. harness_get with metric: deployment_frequency | deployment_frequency_drilldown | change_failure_rate | change_failure_rate_drilldown | mttr | lead_time. Pass team_ref_id, date_start, date_end, granularity.",
+      toolset: "sei",
+      scope: "account",
+      identifierFields: [],
+      listFilterFields: [...DORA_FILTER_FIELDS],
+      deepLinkTemplate: DORA_DEEP_LINK,
+      operations: {
+        get: {
+          method: "POST",
+          path: `${SEI}/v2/insights/efficiency/deploymentFrequency`,
+          pathBuilder: doraPathBuilder,
+          bodyBuilder: doraBuildBody,
+          responseExtractor: passthrough,
+          description: "Get DORA metric. Pass metric (deployment_frequency, change_failure_rate, mttr, lead_time, or *_drilldown variants), team_ref_id, date_start, date_end, granularity.",
+        },
+      },
+    },
 
     // ─── Teams ────────────────────────────────────────────────────────────────
     {
@@ -293,62 +297,32 @@ export const seiToolset: ToolsetDefinition = {
         },
       },
     },
+    // Team detail (consolidated: integrations, developers, integration_filters → 1)
     {
-      resourceType: "sei_team_integration",
-      displayName: "SEI Team Integration",
-      description: "Integrations associated with an SEI team. Supports list.",
-      toolset: "sei",
-      scope: "account",
-      identifierFields: ["team_ref_id"],
-      deepLinkTemplate: TEAMS_DEEP_LINK,
-      operations: {
-        list: {
-          method: "GET",
-          path: `${SEI}/v2/teams/{teamRefId}/integrations`,
-          pathParams: { team_ref_id: "teamRefId" },
-          responseExtractor: passthrough,
-          description: "List integrations for an SEI team",
-        },
-      },
-    },
-    {
-      resourceType: "sei_team_developer",
-      displayName: "SEI Team Developer",
-      description: "Developers in an SEI team. Supports list.",
-      toolset: "sei",
-      scope: "account",
-      identifierFields: ["team_ref_id"],
-      deepLinkTemplate: TEAMS_DEEP_LINK,
-      operations: {
-        list: {
-          method: "GET",
-          path: `${SEI}/v2/teams/{teamRefId}/developers`,
-          pathParams: { team_ref_id: "teamRefId" },
-          queryParams: { page: "page", size: "size" },
-          responseExtractor: passthrough,
-          description: "List developers in an SEI team",
-        },
-      },
-    },
-    {
-      resourceType: "sei_team_integration_filter",
-      displayName: "SEI Team Integration Filter",
-      description: "Integration filters for an SEI team. Supports list. Optionally pass integration_type to filter.",
+      resourceType: "sei_team_detail",
+      displayName: "SEI Team Detail",
+      description:
+        "Team sub-resources. harness_list with team_ref_id and aspect: integrations | developers | integration_filters. For integration_filters, optionally pass integration_type.",
       toolset: "sei",
       scope: "account",
       identifierFields: ["team_ref_id"],
       listFilterFields: [
-        { name: "integration_type", description: "Integration type to filter by" },
+        {
+          name: "aspect",
+          description: "Which team detail to fetch",
+          enum: ["integrations", "developers", "integration_filters"],
+        },
+        { name: "integration_type", description: "Filter by integration type (for aspect=integration_filters)" },
       ],
       deepLinkTemplate: TEAMS_DEEP_LINK,
       operations: {
         list: {
           method: "GET",
-          path: `${SEI}/v2/teams/{teamRefId}/integration_filters`,
-          pathParams: { team_ref_id: "teamRefId" },
-          queryParams: { integration_type: "integrationType" },
+          path: `${SEI}/v2/teams`,
+          pathBuilder: teamDetailPathBuilder,
           responseExtractor: passthrough,
-          description: "List integration filters for an SEI team",
+          queryParams: { integration_type: "integrationType" },
+          description: "List team integrations, developers, or integration filters. Pass team_ref_id and aspect.",
         },
       },
     },
@@ -378,42 +352,51 @@ export const seiToolset: ToolsetDefinition = {
         },
       },
     },
-    orgTreeSubResource(
-      "efficiency_profile", "sei_org_tree_efficiency_profile", "SEI Org Tree Efficiency Profile",
-      "Efficiency profile reference for an org tree. Supports get.", "get",
-      "Get efficiency profile for an org tree",
-    ),
-    orgTreeSubResource(
-      "productivity_profile", "sei_org_tree_productivity_profile", "SEI Org Tree Productivity Profile",
-      "Productivity profile reference for an org tree. Supports get.", "get",
-      "Get productivity profile for an org tree",
-    ),
-    orgTreeSubResource(
-      "businessAlignmentProfile", "sei_org_tree_ba_profile", "SEI Org Tree Business Alignment Profile",
-      "Business alignment profile reference for an org tree. Supports get.", "get",
-      "Get business alignment profile for an org tree",
-    ),
-    orgTreeSubResource(
-      "integrations", "sei_org_tree_integration", "SEI Org Tree Integration",
-      "Integrations associated with an org tree. Supports list.", "list",
-      "List integrations for an org tree",
-    ),
-    orgTreeSubResource(
-      "teams", "sei_org_tree_team", "SEI Org Tree Team",
-      "Team hierarchy within an org tree. Supports list.", "list",
-      "List teams in an org tree",
-    ),
+    // Org tree detail (consolidated: 5 sub-resources → 1)
+    {
+      resourceType: "sei_org_tree_detail",
+      displayName: "SEI Org Tree Detail",
+      description:
+        "Org tree sub-resources. harness_get or harness_list with org_tree_id and aspect: efficiency_profile | productivity_profile | business_alignment_profile | integrations | teams.",
+      toolset: "sei",
+      scope: "account",
+      identifierFields: ["org_tree_id"],
+      listFilterFields: [
+        {
+          name: "aspect",
+          description: "Which org tree detail to fetch",
+          enum: ["efficiency_profile", "productivity_profile", "business_alignment_profile", "integrations", "teams"],
+        },
+      ],
+      deepLinkTemplate: ORG_TREE_DEEP_LINK,
+      operations: {
+        get: {
+          method: "GET",
+          path: `${SEI}/v2/org-trees`,
+          pathBuilder: orgTreeDetailPathBuilder,
+          responseExtractor: passthrough,
+          description: "Get org tree efficiency/profile/integrations/teams. Pass org_tree_id and aspect.",
+        },
+        list: {
+          method: "GET",
+          path: `${SEI}/v2/org-trees`,
+          pathBuilder: orgTreeDetailPathBuilder,
+          responseExtractor: passthrough,
+          description: "List org tree integrations or teams. Pass org_tree_id and aspect (integrations or teams).",
+        },
+      },
+    },
 
-    // ─── Business Alignment ───────────────────────────────────────────────────
+    // ─── Business Alignment (consolidated: 3 → 1) ──────────────────────────────
     {
       resourceType: "sei_business_alignment",
       displayName: "SEI Business Alignment",
       description:
-        "Business alignment profiles and insight metrics. harness_list for profiles, harness_get for insight metrics (pass profile_id, team_ref_id, date_start, date_end).",
+        "Business alignment. harness_list for profiles. harness_get for metrics/summary/drilldown (pass aspect: feature_metrics | feature_summary | drilldown, profile_id, team_ref_id, date_start, date_end).",
       toolset: "sei",
       scope: "account",
       identifierFields: ["profile_id"],
-      listFilterFields: [...BA_FILTER_FIELDS],
+      listFilterFields: BA_GET_FILTER_FIELDS,
       deepLinkTemplate: BA_DEEP_LINK,
       operations: {
         list: {
@@ -425,106 +408,142 @@ export const seiToolset: ToolsetDefinition = {
         get: {
           method: "POST",
           path: `${SEI}/v2/insights/ba/feature_metrics`,
+          pathBuilder: baPathBuilder,
           bodyBuilder: baBuildBody,
           responseExtractor: passthrough,
-          description: "Get business alignment insight metrics for a profile",
-        },
-      },
-    },
-    {
-      resourceType: "sei_ba_summary",
-      displayName: "SEI Business Alignment Summary",
-      description: "Business alignment feature summary. Supports get. Pass profile_id, team_ref_id, date_start, date_end.",
-      toolset: "sei",
-      scope: "account",
-      identifierFields: ["profile_id"],
-      listFilterFields: [...BA_FILTER_FIELDS],
-      deepLinkTemplate: BA_DEEP_LINK,
-      operations: {
-        get: {
-          method: "POST",
-          path: `${SEI}/v2/insights/ba/feature_summary`,
-          bodyBuilder: baBuildBody,
-          responseExtractor: passthrough,
-          description: "Get business alignment feature summary for a profile",
-        },
-      },
-    },
-    {
-      resourceType: "sei_ba_drilldown",
-      displayName: "SEI Business Alignment Drilldown",
-      description: "Business alignment drilldown data. Supports get. Pass profile_id, team_ref_id, date_start, date_end.",
-      toolset: "sei",
-      scope: "account",
-      identifierFields: ["profile_id"],
-      listFilterFields: [...BA_FILTER_FIELDS],
-      deepLinkTemplate: BA_DEEP_LINK,
-      operations: {
-        get: {
-          method: "POST",
-          path: `${SEI}/v2/insights/ba/drilldown`,
-          bodyBuilder: baBuildBody,
-          responseExtractor: passthrough,
-          description: "Get business alignment drilldown data for a profile",
+          description: "Get BA feature metrics, feature summary, or drilldown. Pass aspect, profile_id, team_ref_id, date_start, date_end.",
         },
       },
     },
 
-    // ─── AI Coding Insights ───────────────────────────────────────────────────
-    aiResource(
-      "usage/metrics", "sei_ai_usage", "SEI AI Usage",
-      "AI coding assistant usage time-series metrics (lines suggested, accepted, acceptance rate, DAU). Supports get. Pass integration_type (cursor/windsurf/all_assistants), granularity, metric_type.",
-      "get", "Get AI coding assistant usage time-series metrics",
-      [...AI_FILTER_FIELDS, GRANULARITY_FIELD, METRIC_TYPE_FIELD],
-    ),
-    aiResource(
-      "usage/breakdown", "sei_ai_usage_breakdown", "SEI AI Usage Breakdown",
-      "AI coding assistant usage breakdown by child teams. Supports list.",
-      "list", "Get AI coding assistant usage breakdown by team",
-      [...AI_FILTER_FIELDS, GRANULARITY_FIELD, METRIC_TYPE_FIELD],
-    ),
-    aiResource(
-      "usage/summary", "sei_ai_usage_summary", "SEI AI Usage Summary",
-      "Aggregate AI coding assistant usage stats — total users, acceptance rates, lines of code for the period. Supports get.",
-      "get", "Get AI coding assistant usage summary statistics",
-    ),
-    aiResource(
-      "usage/top_languages", "sei_ai_top_language", "SEI AI Top Language",
-      "Top programming languages used with AI coding assistants, ranked by usage. Supports list.",
-      "list", "List top programming languages used with AI coding assistants",
-    ),
-    aiResource(
-      "adoptions", "sei_ai_adoption", "SEI AI Adoption",
-      "AI coding assistant adoption metrics over time. Supports get.",
-      "get", "Get AI coding assistant adoption metrics over time",
-      [...AI_FILTER_FIELDS, GRANULARITY_FIELD],
-    ),
-    aiResource(
-      "adoptions/breakdown", "sei_ai_adoption_breakdown", "SEI AI Adoption Breakdown",
-      "AI coding assistant adoption breakdown by child teams. Supports list.",
-      "list", "Get AI coding assistant adoption breakdown by team",
-    ),
-    aiResource(
-      "adoptions/summary", "sei_ai_adoption_summary", "SEI AI Adoption Summary",
-      "AI coding assistant adoption summary with current vs previous period comparison. Supports get.",
-      "get", "Get AI coding assistant adoption summary with period comparison",
-    ),
-    aiResource(
-      "pr-velocity/summary", "sei_ai_impact", "SEI AI Impact (PR Velocity)",
-      "AI impact on PR velocity — compares cycle time for AI-assisted vs non-AI-assisted PRs. Supports get.",
-      "get", "Get AI impact on PR velocity (AI-assisted vs non-AI-assisted)",
-      [...AI_FILTER_FIELDS, GRANULARITY_FIELD],
-    ),
-    aiResource(
-      "rework/summary", "sei_ai_rework", "SEI AI Impact (Rework)",
-      "AI impact on code rework — compares rework rates for AI-assisted vs non-AI-assisted code. Supports get.",
-      "get", "Get AI impact on code rework rates (AI-assisted vs non-AI-assisted)",
-      [...AI_FILTER_FIELDS, GRANULARITY_FIELD],
-    ),
-    aiResource(
-      "raw_metrics/v2", "sei_ai_raw_metric", "SEI AI Raw Metric",
-      "Per-developer raw AI coding assistant metrics — lines suggested, accepted, acceptance rates per individual. Supports list.",
-      "list", "Get per-developer raw AI coding assistant metrics",
-    ),
+    // ─── AI Coding Insights (consolidated: 11 → 4) ─────────────────────────────
+    // sei_ai_usage: metrics | breakdown | summary | top_languages
+    {
+      resourceType: "sei_ai_usage",
+      displayName: "SEI AI Usage",
+      description:
+        "AI coding assistant usage. harness_get or harness_list with aspect: metrics | breakdown | summary | top_languages. Pass team_ref_id, date_start, date_end, integration_type. For metrics: granularity, metric_type.",
+      toolset: "sei",
+      scope: "account",
+      identifierFields: [],
+      listFilterFields: [
+        {
+          name: "aspect",
+          description: "Which usage data to fetch",
+          enum: ["metrics", "breakdown", "summary", "top_languages"],
+        },
+        ...AI_FILTER_FIELDS,
+        GRANULARITY_FIELD,
+        METRIC_TYPE_FIELD,
+      ],
+      deepLinkTemplate: AI_DEEP_LINK,
+      operations: {
+        get: {
+          method: "POST",
+          path: `${SEI}/v2/insights/coding-assistant/usage/metrics`,
+          pathBuilder: aiUsagePathBuilder,
+          bodyBuilder: aiInsightBuildBody,
+          responseExtractor: passthrough,
+          description: "Get AI usage metrics or summary. Pass aspect (metrics|summary), team_ref_id, date_start, date_end.",
+        },
+        list: {
+          method: "POST",
+          path: `${SEI}/v2/insights/coding-assistant/usage/metrics`,
+          pathBuilder: aiUsagePathBuilder,
+          bodyBuilder: aiInsightBuildBody,
+          responseExtractor: passthrough,
+          description: "List AI usage breakdown or top languages. Pass aspect (breakdown|top_languages), team_ref_id, date_start, date_end.",
+        },
+      },
+    },
+    // sei_ai_adoption: metrics | breakdown | summary
+    {
+      resourceType: "sei_ai_adoption",
+      displayName: "SEI AI Adoption",
+      description:
+        "AI coding assistant adoption. harness_get or harness_list with aspect: metrics | breakdown | summary. Pass team_ref_id, date_start, date_end, integration_type, granularity.",
+      toolset: "sei",
+      scope: "account",
+      identifierFields: [],
+      listFilterFields: [
+        {
+          name: "aspect",
+          description: "Which adoption data to fetch",
+          enum: ["metrics", "breakdown", "summary"],
+        },
+        ...AI_FILTER_FIELDS,
+        GRANULARITY_FIELD,
+      ],
+      deepLinkTemplate: AI_DEEP_LINK,
+      operations: {
+        get: {
+          method: "POST",
+          path: `${SEI}/v2/insights/coding-assistant/adoptions`,
+          pathBuilder: aiAdoptionPathBuilder,
+          bodyBuilder: aiInsightBuildBody,
+          responseExtractor: passthrough,
+          description: "Get AI adoption metrics or summary. Pass aspect (metrics|summary), team_ref_id, date_start, date_end.",
+        },
+        list: {
+          method: "POST",
+          path: `${SEI}/v2/insights/coding-assistant/adoptions`,
+          pathBuilder: aiAdoptionPathBuilder,
+          bodyBuilder: aiInsightBuildBody,
+          responseExtractor: passthrough,
+          description: "List AI adoption breakdown. Pass aspect=breakdown, team_ref_id, date_start, date_end.",
+        },
+      },
+    },
+    // sei_ai_impact: pr_velocity | rework
+    {
+      resourceType: "sei_ai_impact",
+      displayName: "SEI AI Impact",
+      description:
+        "AI impact on PR velocity or rework. harness_get with aspect: pr_velocity | rework. Pass team_ref_id, date_start, date_end, integration_type, granularity.",
+      toolset: "sei",
+      scope: "account",
+      identifierFields: [],
+      listFilterFields: [
+        {
+          name: "aspect",
+          description: "Which impact metric to fetch",
+          enum: ["pr_velocity", "rework"],
+        },
+        ...AI_FILTER_FIELDS,
+        GRANULARITY_FIELD,
+      ],
+      deepLinkTemplate: AI_DEEP_LINK,
+      operations: {
+        get: {
+          method: "POST",
+          path: `${SEI}/v2/insights/coding-assistant/pr-velocity/summary`,
+          pathBuilder: aiImpactPathBuilder,
+          bodyBuilder: aiInsightBuildBody,
+          responseExtractor: passthrough,
+          description: "Get AI impact on PR velocity or rework. Pass aspect (pr_velocity|rework), team_ref_id, date_start, date_end.",
+        },
+      },
+    },
+    // sei_ai_raw_metric: per-developer raw metrics (unchanged)
+    {
+      resourceType: "sei_ai_raw_metric",
+      displayName: "SEI AI Raw Metric",
+      description:
+        "Per-developer raw AI coding assistant metrics — lines suggested, accepted, acceptance rates per individual. Supports list.",
+      toolset: "sei",
+      scope: "account",
+      identifierFields: [],
+      listFilterFields: [...AI_FILTER_FIELDS],
+      deepLinkTemplate: AI_DEEP_LINK,
+      operations: {
+        list: {
+          method: "POST",
+          path: `${SEI}/v2/insights/coding-assistant/raw_metrics/v2`,
+          bodyBuilder: aiInsightBuildBody,
+          responseExtractor: passthrough,
+          description: "Get per-developer raw AI coding assistant metrics",
+        },
+      },
+    },
   ],
 };
