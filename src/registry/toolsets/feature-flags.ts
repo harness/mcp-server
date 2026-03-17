@@ -25,12 +25,15 @@ export const featureFlagsToolset: ToolsetDefinition = {
   displayName: "Feature Management & Experimentation",
   description: "Harness FME — feature flags, workspaces, and environments",
   resources: [
+    // ── FME Resources (Split.io API at https://api.split.io) ───────────
+    // These use account scope to avoid injecting orgIdentifier/projectIdentifier
+    // which Split.io does not use. Auth is via x-api-key header only.
     {
       resourceType: "fme_workspace",
       displayName: "FME Workspace",
       description: "Feature Management workspace. Supports list with pagination (offset/size, default 20, max 1000).",
       toolset: "feature-flags",
-      scope: "project",
+      scope: "account",
       identifierFields: ["workspace_id"],
       baseUrlOverride: "fme",
       listFilterFields: [
@@ -39,7 +42,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       operations: {
         list: {
           method: "GET",
-          path: "/cf/admin/workspaces",
+          path: "/internal/api/v2/workspaces",
           queryParams: {
             offset: "offset",
             size: "limit",
@@ -52,17 +55,18 @@ export const featureFlagsToolset: ToolsetDefinition = {
     {
       resourceType: "fme_environment",
       displayName: "FME Environment",
-      description: "Feature Management environment. Supports list.",
+      description: "Feature Management environment. Supports list. Requires a workspace_id.",
       toolset: "feature-flags",
-      scope: "project",
-      identifierFields: ["environment_id"],
+      scope: "account",
+      identifierFields: ["workspace_id", "environment_id"],
       baseUrlOverride: "fme",
       operations: {
         list: {
           method: "GET",
-          path: "/cf/admin/environments",
+          path: "/internal/api/v2/environments/ws/{wsId}",
+          pathParams: { workspace_id: "wsId" },
           responseExtractor: passthrough,
-          description: "List FME environments",
+          description: "List FME environments for a workspace",
         },
       },
     },
@@ -99,6 +103,31 @@ export const featureFlagsToolset: ToolsetDefinition = {
         },
       },
     },
+    {
+      resourceType: "fme_feature_flag_definition",
+      displayName: "FME Feature Flag Definition",
+      description:
+        "Detailed definition of a feature flag in a specific environment, including treatments, rules, targeting, and traffic allocation.",
+      toolset: "feature-flags",
+      scope: "account",
+      identifierFields: ["workspace_id", "feature_flag_name", "environment_id"],
+      baseUrlOverride: "fme",
+      operations: {
+        get: {
+          method: "GET",
+          path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/environments/{environmentId}",
+          pathParams: {
+            workspace_id: "wsId",
+            feature_flag_name: "featureFlagName",
+            environment_id: "environmentId",
+          },
+          responseExtractor: passthrough,
+          description: "Get feature flag definition in a specific environment (treatments, rules, default rule, traffic allocation)",
+        },
+      },
+    },
+
+    // ── Standard Harness Feature Flags (Harness API at app.harness.io) ─
     {
       resourceType: "feature_flag",
       displayName: "Feature Flag",
