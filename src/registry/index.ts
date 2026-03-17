@@ -257,6 +257,11 @@ export class Registry {
     if (def.scope === "project") {
       params[projectParam] = (input.project_id as string) ?? this.config.HARNESS_DEFAULT_PROJECT_ID;
     }
+    // Inject custom account param when scopeParams.account is set
+    // (in addition to the client's default accountIdentifier)
+    if (def.scopeParams?.account) {
+      params[def.scopeParams.account] = this.config.HARNESS_ACCOUNT_ID;
+    }
 
     // Add static query params (not derived from input)
     if (spec.staticQueryParams) {

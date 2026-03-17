@@ -135,8 +135,10 @@ export interface ResourceDefinition {
    * Override default scope query parameter names.
    * Standard NG API uses orgIdentifier / projectIdentifier.
    * Some APIs (e.g., Chaos) use organizationIdentifier instead.
+   * STO uses accountId / orgId / projectId.
+   * When `account` is set, an additional account param is injected from config.
    */
-  scopeParams?: { org?: string; project?: string };
+  scopeParams?: { account?: string; org?: string; project?: string };
   /** Primary identifier field names: ["pipeline_id"], ["service_id"], etc. */
   identifierFields: string[];
   /** Additional filter fields for list operations */
