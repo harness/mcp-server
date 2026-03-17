@@ -7,7 +7,7 @@ import type { ExecutionTimeseriesData, DayCounts } from "./types.js";
 import { renderExecutionsTimeseriesSvg } from "./executions-timeseries.js";
 import { renderBarChartSvg } from "./charts/bar.js";
 import { renderPieChartSvg } from "./charts/pie.js";
-import { getStatusColor } from "./colors.js";
+import { getStatusColor, CHART_PALETTE } from "./colors.js";
 
 // ─── Execution item shape (minimal, from list result) ────────────────────────
 
@@ -84,7 +84,7 @@ function aggregateByPipeline(items: ExecutionItem[]): StatusCount[] {
   }
   return Array.from(counts.entries())
     .sort((a, b) => b[1] - a[1])
-    .map(([label, value]) => ({ label, value, color: getStatusColor("Unknown") }));
+    .map(([label, value], i) => ({ label, value, color: CHART_PALETTE[i % CHART_PALETTE.length]! }));
 }
 
 // ─── Analysis text ───────────────────────────────────────────────────────────
