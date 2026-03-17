@@ -39,10 +39,12 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
           return errorResult(`Resource "${args.resource_type}" does not support "update". Supported: ${Object.keys(def.operations).join(", ")}`);
         }
 
+        const blockWithoutConfirmation = !!def.operations.update?.blockWithoutConfirmation;
         const elicit = await confirmViaElicitation({
           server,
           toolName: "harness_update",
           message: `Update ${args.resource_type} "${args.resource_id}"?\n\n${JSON.stringify(args.body, null, 2)}`,
+          destructive: blockWithoutConfirmation,
         });
         if (!elicit.proceed) {
           return errorResult(`Operation ${elicit.reason} by user.`);

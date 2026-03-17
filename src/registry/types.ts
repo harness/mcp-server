@@ -115,6 +115,12 @@ export interface EndpointSpec {
    * so required-field validation checks the inner object, not the wrapper.
    */
   bodyWrapperKey?: string;
+  /**
+   * When true, block the operation if user confirmation cannot be obtained
+   * (e.g. elicitation unavailable). Used for high-risk operations like
+   * protection rules. Default: false (create/update proceed without confirmation).
+   */
+  blockWithoutConfirmation?: boolean;
 }
 
 /**
