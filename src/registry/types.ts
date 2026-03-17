@@ -143,6 +143,11 @@ export interface ResourceDefinition {
   operations: Partial<Record<OperationName, EndpointSpec>>;
   /** Execute action mappings (e.g. run pipeline, toggle FF) */
   executeActions?: Record<string, EndpointSpec & { actionDescription: string }>;
+  /**
+   * Override base URL for this resource. Set to "fme" to use HARNESS_FME_BASE_URL
+   * (Split.io API at https://api.split.io) instead of HARNESS_BASE_URL.
+   */
+  baseUrlOverride?: "fme";
 }
 
 /**

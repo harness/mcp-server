@@ -281,11 +281,12 @@ export class HarnessClient {
   }
 
   private buildUrl(options: RequestOptions): string {
+    const baseUrl = (options.baseUrl ?? this.baseUrl).replace(/\/$/, "");
     let path = options.path;
 
-    // Prevent double /gateway when HARNESS_BASE_URL already ends with /gateway
+    // Prevent double /gateway when base URL already ends with /gateway
     // (common with self-managed Harness installations)
-    if (this.baseUrl.endsWith("/gateway") && path.startsWith("/gateway/")) {
+    if (baseUrl.endsWith("/gateway") && path.startsWith("/gateway/")) {
       path = path.slice("/gateway".length);
     }
 
@@ -306,6 +307,6 @@ export class HarnessClient {
       }
     }
 
-    return `${this.baseUrl}${path}?${params.toString()}`;
+    return `${baseUrl}${path}?${params.toString()}`;
   }
 }

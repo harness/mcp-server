@@ -32,6 +32,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       toolset: "feature-flags",
       scope: "project",
       identifierFields: ["workspace_id"],
+      baseUrlOverride: "fme",
       listFilterFields: [
         { name: "offset", description: "Pagination offset for feature flag workspaces", type: "number" },
       ],
@@ -55,6 +56,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       toolset: "feature-flags",
       scope: "project",
       identifierFields: ["environment_id"],
+      baseUrlOverride: "fme",
       operations: {
         list: {
           method: "GET",
@@ -72,6 +74,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       toolset: "feature-flags",
       scope: "account",
       identifierFields: ["workspace_id", "feature_flag_name"],
+      baseUrlOverride: "fme",
       listFilterFields: [
         { name: "offset", description: "Pagination offset for FME feature flags", type: "number" },
       ],
