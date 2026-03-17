@@ -80,12 +80,19 @@ export interface FilterFieldSpec {
 }
 
 /**
+ * Config type for pathBuilder (avoids circular import).
+ */
+export type PathBuilderConfig = { HARNESS_ACCOUNT_ID?: string; HARNESS_DEFAULT_ORG_ID?: string; HARNESS_DEFAULT_PROJECT_ID?: string };
+
+/**
  * Specifies how a single CRUD operation maps to the Harness API.
  */
 export interface EndpointSpec {
   method: HttpMethod;
-  /** Path template, e.g. "/pipeline/api/pipelines/{pipelineIdentifier}" */
+  /** Path template, e.g. "/pipeline/api/pipelines/{pipelineIdentifier}". Ignored when pathBuilder is set. */
   path: string;
+  /** Optional dynamic path builder. When set, used instead of path + pathParams for account-scoped or multi-endpoint resources. */
+  pathBuilder?: (input: Record<string, unknown>, config: PathBuilderConfig) => string;
   /** Maps tool input field names to path param placeholders */
   pathParams?: Record<string, string>;
   /** Maps tool input field names to query param names */
