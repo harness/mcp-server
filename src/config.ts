@@ -31,6 +31,7 @@ const RawConfigSchema = z.object({
   HARNESS_RATE_LIMIT_RPS: z.coerce.number().default(10),
   HARNESS_READ_ONLY: z.coerce.boolean().default(false),
   HARNESS_ALLOW_HTTP: z.coerce.boolean().default(false),
+  HARNESS_FME_BASE_URL: z.string().url().default("https://api.split.io"),
 });
 
 export const ConfigSchema = RawConfigSchema.transform((data) => {

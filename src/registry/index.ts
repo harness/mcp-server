@@ -291,12 +291,14 @@ export class Registry {
       }
     }
 
-    // Make request
+    // Make request — use FME base URL for Split.io-backed resources
+    const baseUrl = def.baseUrlOverride === "fme" ? this.config.HARNESS_FME_BASE_URL : undefined;
     const raw = await client.request({
       method: spec.method,
       path,
       params,
       body,
+      ...(baseUrl ? { baseUrl } : {}),
       ...(spec.headers ? { headers: spec.headers } : {}),
       signal,
     });
