@@ -248,12 +248,21 @@ export class Registry {
     // Build query params
     const params: Record<string, string | number | boolean | undefined> = {};
 
-    // Add scope params
+    // Add scope params (allow per-resource override of query param names)
+    const orgParam = def.scopeParams?.org ?? "orgIdentifier";
+    const projectParam = def.scopeParams?.project ?? "projectIdentifier";
     if (def.scope === "project" || def.scope === "org") {
-      params.orgIdentifier = (input.org_id as string) ?? this.config.HARNESS_DEFAULT_ORG_ID;
+      params[orgParam] = (input.org_id as string) ?? this.config.HARNESS_DEFAULT_ORG_ID;
     }
     if (def.scope === "project") {
-      params.projectIdentifier = (input.project_id as string) ?? this.config.HARNESS_DEFAULT_PROJECT_ID;
+      params[projectParam] = (input.project_id as string) ?? this.config.HARNESS_DEFAULT_PROJECT_ID;
+    }
+
+    // Add static query params (not derived from input)
+    if (spec.staticQueryParams) {
+      for (const [key, value] of Object.entries(spec.staticQueryParams)) {
+        params[key] = value;
+      }
     }
 
     // Map input fields to query params

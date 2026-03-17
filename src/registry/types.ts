@@ -97,6 +97,8 @@ export interface EndpointSpec {
   pathParams?: Record<string, string>;
   /** Maps tool input field names to query param names */
   queryParams?: Record<string, string>;
+  /** Static query parameters always included in the request (not derived from input) */
+  staticQueryParams?: Record<string, string>;
   /** For POST/PUT: how to build the request body from tool input */
   bodyBuilder?: (input: Record<string, unknown>) => unknown;
   /** Static headers to merge into the request (e.g. Content-Type override) */
@@ -129,6 +131,12 @@ export interface ResourceDefinition {
   toolset: ToolsetName;
   /** Scope level: "project" | "org" | "account" */
   scope: "project" | "org" | "account";
+  /**
+   * Override default scope query parameter names.
+   * Standard NG API uses orgIdentifier / projectIdentifier.
+   * Some APIs (e.g., Chaos) use organizationIdentifier instead.
+   */
+  scopeParams?: { org?: string; project?: string };
   /** Primary identifier field names: ["pipeline_id"], ["service_id"], etc. */
   identifierFields: string[];
   /** Additional filter fields for list operations */
