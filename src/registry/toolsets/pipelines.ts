@@ -145,7 +145,14 @@ export const pipelinesToolset: ToolsetDefinition = {
           method: "POST",
           path: "/pipeline/api/pipeline/execute/{pipelineIdentifier}",
           pathParams: { pipeline_id: "pipelineIdentifier" },
-          queryParams: { module: "module", input_set_ids: "inputSetIdentifiers" },
+          queryParams: {
+            module: "module",
+            input_set_ids: "inputSetIdentifiers",
+            branch: "branch",
+            store_type: "storeType",
+            connector_ref: "connectorRef",
+            repo_name: "repoName",
+          },
           headers: { "Content-Type": "application/yaml" },
           bodyBuilder: (input) => {
             const inputs = input.inputs;

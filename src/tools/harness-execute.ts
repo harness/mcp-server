@@ -93,6 +93,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
               pipelineId,
               orgId: asString(input.org_id) || registry.defaultOrgId,
               projectId: asString(input.project_id) || registry.defaultProjectId,
+              branch: asString(input.branch),
             });
 
             // Smart pre-flight: only block on required unmatched fields when no input sets cover them
