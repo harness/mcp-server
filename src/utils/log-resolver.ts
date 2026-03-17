@@ -21,6 +21,55 @@ interface BlobResponse {
   status?: string;
 }
 
+/** Hosts that serve blob content directly — never rewrite. */
+const EXTERNAL_STORAGE_HOSTS = new Set([
+  "storage.googleapis.com",
+  "storage.cloud.google.com",
+  "s3.amazonaws.com",
+  "s3.us-east-1.amazonaws.com",
+  "s3.us-east-2.amazonaws.com",
+  "s3.us-west-1.amazonaws.com",
+  "s3.us-west-2.amazonaws.com",
+  "s3.eu-west-1.amazonaws.com",
+  "s3.eu-central-1.amazonaws.com",
+  "s3.ap-southeast-1.amazonaws.com",
+  "s3.ap-northeast-1.amazonaws.com",
+]);
+
+/** S3-style host pattern: bucket.s3.amazonaws.com or bucket.s3.region.amazonaws.com */
+const S3_BUCKET_HOST_RE = /^[a-z0-9][a-z0-9.-]*\.s3([.-][a-z0-9-]+)?\.amazonaws\.com$/i;
+
+function isExternalStorageHost(host: string): boolean {
+  const h = host.toLowerCase();
+  if (EXTERNAL_STORAGE_HOSTS.has(h)) return true;
+  if (S3_BUCKET_HOST_RE.test(h)) return true;
+  if (h.endsWith(".storage.googleapis.com")) return true;
+  return false;
+}
+
+/**
+ * Resolve the final download URL for a blob link.
+ * - External storage (GCS, S3): use as-is — blob is served directly.
+ * - Harness-hosted: rewrite host to configured base URL when self-managed.
+ */
+function resolveDownloadUrl(blobLink: string, harnessBaseUrl: string): string {
+  let url: URL;
+  try {
+    url = new URL(blobLink);
+  } catch {
+    return blobLink;
+  }
+  if (isExternalStorageHost(url.host)) {
+    return blobLink;
+  }
+  const base = new URL(harnessBaseUrl.replace(/\/$/, "") + "/");
+  if (url.host === base.host) {
+    return blobLink;
+  }
+  url.host = base.host;
+  url.protocol = base.protocol;
+  return url.toString();
+}
 
 // ─── ANSI / log parsing helpers ─────────────────────────────────────────────
 
@@ -310,8 +359,9 @@ export async function resolveLogContent(
     );
   }
 
-  // Step 3: Download the zip/gzip from the signed URL (use as-is — no host rewrite)
-  const downloadUrl = blob.link;
+  // Step 3: Download the zip/gzip from the signed URL
+  // External storage (GCS, S3): use as-is. Harness-hosted: rewrite host when self-managed.
+  const downloadUrl = resolveDownloadUrl(blob.link, client.baseURL);
   log.debug("Downloading log blob", { prefix, url: downloadUrl.slice(0, 80) });
   const downloadSignal = signal
     ? AbortSignal.any([signal, AbortSignal.timeout(DEFAULT_DOWNLOAD_TIMEOUT_MS)])

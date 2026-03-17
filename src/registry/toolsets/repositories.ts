@@ -325,7 +325,7 @@ export const repositoriesToolset: ToolsetDefinition = {
       resourceType: "repo_rule",
       displayName: "Repository Protection Rule",
       description:
-        "Branch/tag/push protection rule for a Harness Code repository. Supports list, get, create, update, and delete. Rules define merge requirements, status checks, and code-owner approvals.",
+        "Branch/tag/push protection rule for a Harness Code repository. Supports list and get. Rules define merge requirements, status checks, and code-owner approvals.",
       toolset: "repositories",
       scope: "project",
       identifierFields: ["repo_id", "rule_id"],
@@ -364,64 +364,13 @@ export const repositoriesToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           description: "Get a specific protection rule by identifier",
         },
-        create: {
-          method: "POST",
-          path: "/code/api/v1/repos/{repoIdentifier}/rules",
-          pathParams: { repo_id: "repoIdentifier" },
-          bodyBuilder: (input) => input.body,
-          responseExtractor: passthrough,
-          description:
-            "Create a protection rule for a repository.",
-          bodySchema: {
-            description: "Protection rule definition. The 'definition' field is a nested object — use harness_get on an existing rule to see the full structure.",
-            fields: [
-              { name: "identifier", type: "string", required: true, description: "Rule identifier (alphanumeric, hyphens, underscores, dots)" },
-              { name: "type", type: "string", required: true, description: "Rule type: branch, tag, or push" },
-              { name: "state", type: "string", required: true, description: "Rule state: active, disabled, or monitor" },
-              { name: "description", type: "string", required: false, description: "Rule description" },
-              { name: "pattern", type: "object", required: false, description: "Branch/tag pattern. Use {default: true} for default branch, or {include: ['pattern'], exclude: ['pattern']} with globstar patterns" },
-              { name: "definition", type: "object", required: true, description: "Rule definition with bypass, pullreq, and lifecycle sections. bypass: {user_ids: [numeric IDs]}. pullreq: {approvals: {require_minimum_count, require_no_change_request}, comments: {require_resolve_all}, status_checks: {require_identifiers: [...]}, merge: {strategies_allowed, delete_branch}, reviewers: {request_code_owners, default_reviewer_ids}}. lifecycle: {create_forbidden, delete_forbidden, update_forbidden}" },
-            ],
-          },
-        },
-        update: {
-          method: "PATCH",
-          path: "/code/api/v1/repos/{repoIdentifier}/rules/{ruleIdentifier}",
-          pathParams: {
-            repo_id: "repoIdentifier",
-            rule_id: "ruleIdentifier",
-          },
-          bodyBuilder: (input) => input.body,
-          responseExtractor: passthrough,
-          description:
-            "Update a protection rule. Only include fields you want to change.",
-          bodySchema: {
-            description: "Partial rule update. Only provided fields are changed.",
-            fields: [
-              { name: "state", type: "string", required: false, description: "Rule state: active, disabled, or monitor" },
-              { name: "description", type: "string", required: false, description: "Rule description" },
-              { name: "pattern", type: "object", required: false, description: "Branch/tag pattern. Use {default: true} for default branch, or {include: ['pattern'], exclude: ['pattern']}" },
-              { name: "definition", type: "object", required: false, description: "Rule definition — see create operation for full structure" },
-            ],
-          },
-        },
-        delete: {
-          method: "DELETE",
-          path: "/code/api/v1/repos/{repoIdentifier}/rules/{ruleIdentifier}",
-          pathParams: {
-            repo_id: "repoIdentifier",
-            rule_id: "ruleIdentifier",
-          },
-          responseExtractor: passthrough,
-          description: "Delete a protection rule from the repository",
-        },
       },
     },
     {
       resourceType: "space_rule",
       displayName: "Space Protection Rule",
       description:
-        "Project/org/account-level protection rule that applies across all repositories in a space. Supports list, get, create, update, and delete. Use repo_rule for per-repository rules.",
+        "Project/org/account-level protection rule that applies across all repositories in a space. Supports list and get. Use repo_rule for per-repository rules.",
       toolset: "repositories",
       scope: "project",
       identifierFields: ["rule_id"],
@@ -457,54 +406,6 @@ export const repositoriesToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           description: "Get a specific space-level protection rule by identifier",
-        },
-        create: {
-          method: "POST",
-          path: "/code/api/v1/rules",
-          bodyBuilder: (input) => input.body,
-          responseExtractor: passthrough,
-          description:
-            "Create a project/org/account-level protection rule that applies across all repos.",
-          bodySchema: {
-            description: "Protection rule definition. The 'definition' field is a nested object — use harness_get on an existing rule to see the full structure.",
-            fields: [
-              { name: "identifier", type: "string", required: true, description: "Rule identifier (alphanumeric, hyphens, underscores, dots)" },
-              { name: "type", type: "string", required: true, description: "Rule type: branch, tag, or push" },
-              { name: "state", type: "string", required: true, description: "Rule state: active, disabled, or monitor" },
-              { name: "description", type: "string", required: false, description: "Rule description" },
-              { name: "pattern", type: "object", required: false, description: "Branch/tag pattern. Use {default: true} for default branch, or {include: ['pattern'], exclude: ['pattern']} with globstar patterns" },
-              { name: "definition", type: "object", required: true, description: "Rule definition with bypass, pullreq, and lifecycle sections. bypass: {user_ids: [numeric IDs]}. pullreq: {approvals: {require_minimum_count, require_no_change_request}, comments: {require_resolve_all}, status_checks: {require_identifiers: [...]}, merge: {strategies_allowed, delete_branch}, reviewers: {request_code_owners, default_reviewer_ids}}. lifecycle: {create_forbidden, delete_forbidden, update_forbidden}" },
-            ],
-          },
-        },
-        update: {
-          method: "PATCH",
-          path: "/code/api/v1/rules/{ruleIdentifier}",
-          pathParams: {
-            rule_id: "ruleIdentifier",
-          },
-          bodyBuilder: (input) => input.body,
-          responseExtractor: passthrough,
-          description:
-            "Update a space-level protection rule. Only include fields you want to change.",
-          bodySchema: {
-            description: "Partial rule update. Only provided fields are changed.",
-            fields: [
-              { name: "state", type: "string", required: false, description: "Rule state: active, disabled, or monitor" },
-              { name: "description", type: "string", required: false, description: "Rule description" },
-              { name: "pattern", type: "object", required: false, description: "Branch/tag pattern. Use {default: true} for default branch, or {include: ['pattern'], exclude: ['pattern']}" },
-              { name: "definition", type: "object", required: false, description: "Rule definition — see create operation for full structure" },
-            ],
-          },
-        },
-        delete: {
-          method: "DELETE",
-          path: "/code/api/v1/rules/{ruleIdentifier}",
-          pathParams: {
-            rule_id: "ruleIdentifier",
-          },
-          responseExtractor: passthrough,
-          description: "Delete a space-level protection rule",
         },
       },
     },

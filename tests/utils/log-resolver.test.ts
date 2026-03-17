@@ -3,11 +3,15 @@ import { resolveLogContent } from "../../src/utils/log-resolver.js";
 import { gzipSync, deflateRawSync } from "node:zlib";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 
-function makeClient(requestFn: (...args: unknown[]) => unknown): HarnessClient {
+function makeClient(
+  requestFn: (...args: unknown[]) => unknown,
+  overrides?: Partial<Pick<HarnessClient, "baseURL">>,
+): HarnessClient {
   return {
     request: requestFn,
     account: "test-account",
     baseURL: "https://custom.harness.example/gateway",
+    ...overrides,
   } as unknown as HarnessClient;
 }
 
@@ -127,7 +131,7 @@ describe("resolveLogContent", () => {
     await expect(resolveLogContent(client, "prefix")).rejects.toThrow(/HTTP 404/);
   });
 
-  it("uses the signed download URL as-is (no host rewrite)", async () => {
+  it("uses external storage URL as-is (GCS — no host rewrite)", async () => {
     const blobLink = "https://storage.googleapis.com/harness-logs/bucket/path/logs.zip?Expires=123";
     const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link: blobLink }));
     fetchSpy.mockResolvedValue(new Response('{"out":"log line 1"}', { status: 200 }));
@@ -136,6 +140,23 @@ describe("resolveLogContent", () => {
 
     expect(result).toContain("log line 1");
     expect(fetchSpy).toHaveBeenCalledWith(blobLink, expect.any(Object));
+  });
+
+  it("rewrites Harness-hosted blob URL to configured base when self-managed", async () => {
+    const blobLink = "https://harness0.harness.io/some/blob/path?token=abc";
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://myhost.harness.io/gateway" },
+    );
+    fetchSpy.mockResolvedValue(new Response('{"out":"log line 1"}', { status: 200 }));
+
+    const result = await resolveLogContent(client, "prefix");
+
+    expect(result).toContain("log line 1");
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "https://myhost.harness.io/some/blob/path?token=abc",
+      expect.any(Object),
+    );
   });
 
   it("throws when log file exceeds max size", async () => {
