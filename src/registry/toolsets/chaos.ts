@@ -1,6 +1,9 @@
 import type { ToolsetDefinition } from "../types.js";
 import { passthrough } from "../extractors.js";
 
+/** Chaos API base path — requires /gateway prefix per Harness API docs. */
+const CHAOS = "/gateway/chaos/manager/api";
+
 export const chaosToolset: ToolsetDefinition = {
   name: "chaos",
   displayName: "Chaos Engineering",
@@ -21,7 +24,7 @@ export const chaosToolset: ToolsetDefinition = {
       operations: {
         list: {
           method: "POST",
-          path: "/chaos/manager/api/experiments",
+          path: `${CHAOS}/experiments`,
           queryParams: {
             page: "page",
             limit: "limit",
@@ -34,7 +37,7 @@ export const chaosToolset: ToolsetDefinition = {
         },
         get: {
           method: "GET",
-          path: "/chaos/manager/api/experiments/{experimentId}",
+          path: `${CHAOS}/experiments/{experimentId}`,
           pathParams: { experiment_id: "experimentId" },
           responseExtractor: passthrough,
           description: "Get chaos experiment details",
@@ -43,7 +46,7 @@ export const chaosToolset: ToolsetDefinition = {
       executeActions: {
         run: {
           method: "POST",
-          path: "/chaos/manager/api/experiments/{experimentId}/run",
+          path: `${CHAOS}/experiments/{experimentId}/run`,
           pathParams: { experiment_id: "experimentId" },
           bodyBuilder: () => ({}),
           responseExtractor: passthrough,
@@ -62,14 +65,14 @@ export const chaosToolset: ToolsetDefinition = {
       operations: {
         list: {
           method: "POST",
-          path: "/chaos/manager/api/probes",
+          path: `${CHAOS}/probes`,
           bodyBuilder: () => ({}),
           responseExtractor: passthrough,
           description: "List chaos probes",
         },
         get: {
           method: "GET",
-          path: "/chaos/manager/api/probes/{probeId}",
+          path: `${CHAOS}/probes/{probeId}`,
           pathParams: { probe_id: "probeId" },
           responseExtractor: passthrough,
           description: "Get chaos probe details",
@@ -86,7 +89,7 @@ export const chaosToolset: ToolsetDefinition = {
       operations: {
         list: {
           method: "GET",
-          path: "/chaos/manager/api/experiments/templates",
+          path: `${CHAOS}/experiments/templates`,
           responseExtractor: passthrough,
           description: "List chaos experiment templates",
         },
@@ -94,7 +97,7 @@ export const chaosToolset: ToolsetDefinition = {
       executeActions: {
         create_from_template: {
           method: "POST",
-          path: "/chaos/manager/api/experiments/template",
+          path: `${CHAOS}/experiments/template`,
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
           actionDescription: "Create a chaos experiment from a template",
@@ -119,7 +122,7 @@ export const chaosToolset: ToolsetDefinition = {
       operations: {
         list: {
           method: "GET",
-          path: "/chaos/manager/api/infrastructures",
+          path: `${CHAOS}/infrastructures`,
           responseExtractor: passthrough,
           description: "List chaos Linux infrastructures",
         },
@@ -136,7 +139,7 @@ export const chaosToolset: ToolsetDefinition = {
       operations: {
         list: {
           method: "GET",
-          path: "/chaos/manager/api/experiments/{experimentId}/variables",
+          path: `${CHAOS}/experiments/{experimentId}/variables`,
           pathParams: { experiment_id: "experimentId" },
           responseExtractor: passthrough,
           description: "List variables for a chaos experiment",
@@ -154,7 +157,7 @@ export const chaosToolset: ToolsetDefinition = {
       operations: {
         list: {
           method: "POST",
-          path: "/chaos/manager/api/experiments/{experimentId}/runs",
+          path: `${CHAOS}/experiments/{experimentId}/runs`,
           pathParams: { experiment_id: "experimentId" },
           queryParams: {
             page: "page",
@@ -166,7 +169,7 @@ export const chaosToolset: ToolsetDefinition = {
         },
         get: {
           method: "GET",
-          path: "/chaos/manager/api/experiments/{experimentId}/runs/{runId}",
+          path: `${CHAOS}/experiments/{experimentId}/runs/{runId}`,
           pathParams: {
             experiment_id: "experimentId",
             run_id: "runId",
@@ -186,20 +189,20 @@ export const chaosToolset: ToolsetDefinition = {
       operations: {
         list: {
           method: "GET",
-          path: "/chaos/manager/api/loadtest/instances",
+          path: `${CHAOS}/loadtest/instances`,
           responseExtractor: passthrough,
           description: "List load test instances",
         },
         get: {
           method: "GET",
-          path: "/chaos/manager/api/loadtest/instances/{loadtestId}",
+          path: `${CHAOS}/loadtest/instances/{loadtestId}`,
           pathParams: { loadtest_id: "loadtestId" },
           responseExtractor: passthrough,
           description: "Get load test instance details",
         },
         create: {
           method: "POST",
-          path: "/chaos/manager/api/loadtest/instances/sample",
+          path: `${CHAOS}/loadtest/instances/sample`,
           bodyBuilder: (input) => input.body ?? {},
           responseExtractor: passthrough,
           description: "Create a sample load test instance",
@@ -213,7 +216,7 @@ export const chaosToolset: ToolsetDefinition = {
         },
         delete: {
           method: "DELETE",
-          path: "/chaos/manager/api/loadtest/instances/{loadtestId}",
+          path: `${CHAOS}/loadtest/instances/{loadtestId}`,
           pathParams: { loadtest_id: "loadtestId" },
           responseExtractor: passthrough,
           description: "Delete a load test instance",
@@ -222,7 +225,7 @@ export const chaosToolset: ToolsetDefinition = {
       executeActions: {
         run: {
           method: "POST",
-          path: "/chaos/manager/api/loadtest/instances/{loadtestId}/run",
+          path: `${CHAOS}/loadtest/instances/{loadtestId}/run`,
           pathParams: { loadtest_id: "loadtestId" },
           bodyBuilder: () => ({}),
           responseExtractor: passthrough,
@@ -231,7 +234,7 @@ export const chaosToolset: ToolsetDefinition = {
         },
         stop: {
           method: "POST",
-          path: "/chaos/manager/api/loadtest/instances/{loadtestId}/stop",
+          path: `${CHAOS}/loadtest/instances/{loadtestId}/stop`,
           pathParams: { loadtest_id: "loadtestId" },
           bodyBuilder: () => ({}),
           responseExtractor: passthrough,
