@@ -220,23 +220,28 @@ export class Registry {
     input: Record<string, unknown>,
     signal?: AbortSignal,
   ): Promise<unknown> {
-    // Build path with substitutions
-    let path = spec.path;
-    if (spec.pathParams) {
-      for (const [inputKey, pathPlaceholder] of Object.entries(spec.pathParams)) {
-        let value = input[inputKey];
-        if (value === undefined || value === "") {
-          // Default scope placeholders from config for project/org-scoped resources
-          if (pathPlaceholder === "org" && (def.scope === "project" || def.scope === "org")) {
-            value = this.config.HARNESS_DEFAULT_ORG_ID;
-          } else if (pathPlaceholder === "project" && def.scope === "project") {
-            value = this.config.HARNESS_DEFAULT_PROJECT_ID;
+    // Build path with substitutions (or pathBuilder when present)
+    let path: string;
+    if (spec.pathBuilder) {
+      path = spec.pathBuilder(input, this.config);
+    } else {
+      path = spec.path;
+      if (spec.pathParams) {
+        for (const [inputKey, pathPlaceholder] of Object.entries(spec.pathParams)) {
+          let value = input[inputKey];
+          if (value === undefined || value === "") {
+            // Default scope placeholders from config for project/org-scoped resources
+            if (pathPlaceholder === "org" && (def.scope === "project" || def.scope === "org")) {
+              value = this.config.HARNESS_DEFAULT_ORG_ID;
+            } else if (pathPlaceholder === "project" && def.scope === "project") {
+              value = this.config.HARNESS_DEFAULT_PROJECT_ID;
+            }
           }
+          if (value === undefined || value === "") {
+            throw new Error(`Missing required field "${inputKey}" for path parameter "${pathPlaceholder}"`);
+          }
+          path = path.replace(`{${pathPlaceholder}}`, encodeURIComponent(String(value)));
         }
-        if (value === undefined || value === "") {
-          throw new Error(`Missing required field "${inputKey}" for path parameter "${pathPlaceholder}"`);
-        }
-        path = path.replace(`{${pathPlaceholder}}`, encodeURIComponent(String(value)));
       }
     }
 

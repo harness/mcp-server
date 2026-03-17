@@ -20,11 +20,11 @@ export function registerCommitmentUtilizationPrompt(server: McpServer): void {
             text: `Analyze commitment utilization (reserved instances, savings plans) and recommend optimizations.
 
 Steps:
-1. **Coverage analysis**: Call harness_get with resource_type="cost_commitment_coverage"${projectFilter} to see what percentage of compute is covered by commitments
-2. **Utilization check**: Call harness_get with resource_type="cost_commitment_utilisation"${projectFilter} to see how well existing commitments are being used
-3. **Savings realized**: Call harness_get with resource_type="cost_commitment_savings"${projectFilter} to quantify actual savings from commitments
-4. **Detailed analysis**: Call harness_get with resource_type="cost_commitment_analysis"${projectFilter} for detailed breakdown by commitment type
-5. **Estimated savings**: Call harness_get with resource_type="cost_estimated_savings"${projectFilter} to see potential additional savings
+1. **Coverage analysis**: Call harness_get with resource_type="cost_commitment"${projectFilter}, params={aspect: "coverage"} to see what percentage of compute is covered by commitments
+2. **Utilization check**: Call harness_get with resource_type="cost_commitment"${projectFilter}, params={aspect: "utilisation"} to see how well existing commitments are being used
+3. **Savings realized**: Call harness_get with resource_type="cost_commitment"${projectFilter}, params={aspect: "savings"} to quantify actual savings from commitments
+4. **Detailed analysis**: Call harness_get with resource_type="cost_commitment"${projectFilter}, params={aspect: "analysis"} for detailed breakdown by commitment type
+5. **Estimated savings**: Call harness_get with resource_type="cost_commitment"${projectFilter}, params={aspect: "estimated_savings", cloud_account_id: "<cloud_account_id>"} to see potential additional savings (pass cloud_account_id for a specific cloud account)
 6. **Present findings**:
    - **Utilization rate**: Percentage of commitments being used (target >80%)
    - **Coverage rate**: Percentage of eligible compute covered (identify gaps)

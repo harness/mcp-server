@@ -23,7 +23,7 @@ export function registerRightsizingPrompt(server: McpServer): void {
 
 Steps:
 1. **Get stats**: Call harness_get with resource_type="cost_recommendation_stats"${projectFilter} to get overall recommendation summary
-2. **By type**: Call harness_list with resource_type="cost_recommendation_by_type"${projectFilter} to see recommendations grouped by type (resize, terminate, etc.)
+2. **By type**: Call harness_get with resource_type="cost_recommendation_stats"${projectFilter}, params={group_by: "type"} to see recommendations grouped by type (resize, terminate, etc.)
 3. **Full list**: Call harness_list with resource_type="cost_recommendation"${projectFilter} to get all individual recommendations
 4. **Rank and present**: Create a prioritized table sorted by monthly savings:
    - **Resource**: Name and type of the over-provisioned resource
