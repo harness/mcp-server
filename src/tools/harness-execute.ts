@@ -5,7 +5,7 @@ import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError, HarnessApiError } from "../utils/errors.js";
 import { confirmViaElicitation } from "../utils/elicitation.js";
-import { createLogger } from "../utils/logger.js";
+import { createLogger, logAudit } from "../utils/logger.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asRecord, asString } from "../utils/type-guards.js";
 import { isFlatKeyValueInputs, resolveRuntimeInputs, type ResolutionResult } from "../utils/runtime-input-resolver.js";
@@ -131,6 +131,8 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           }
         }
 
+        const auditBase = { operation: "execute", resource_type: resourceType, resource_id: resourceId, action: args.action, org_id: input.org_id as string, project_id: input.project_id as string };
+
         let result: unknown;
         try {
           result = await registry.dispatchExecute(client, resourceType, args.action, input);
@@ -161,10 +163,13 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
 
             input.pipeline_id = pipelineId;
             result = await registry.dispatchExecute(client, "pipeline", "run", input);
+            logAudit({ ...auditBase, action: "run (retry fallback)", outcome: "success" });
             return jsonResult({ ...(asRecord(result) ?? {}), _note: "Retry was not available (405). Executed a fresh pipeline run instead." });
           }
           throw err;
         }
+
+        logAudit({ ...auditBase, outcome: "success" });
 
         if (resolved) {
           return jsonResult({
@@ -179,6 +184,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
 
         return jsonResult(result);
       } catch (err) {
+        logAudit({ operation: "execute", resource_type: args.resource_type ?? "unknown", resource_id: args.resource_id, action: args.action, outcome: "error", error: String(err) });
         if (isUserError(err)) return errorResult(err.message);
         if (isUserFixableApiError(err)) return errorResult(err.message);
         throw toMcpError(err);

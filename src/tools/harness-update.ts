@@ -4,6 +4,7 @@ import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
+import { logAudit } from "../utils/logger.js";
 import { confirmViaElicitation } from "../utils/elicitation.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, isRecord } from "../utils/type-guards.js";
@@ -62,8 +63,10 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
         }
 
         const result = await registry.dispatch(client, args.resource_type, "update", input);
+        logAudit({ operation: "update", resource_type: args.resource_type, resource_id: args.resource_id, org_id: input.org_id as string, project_id: input.project_id as string, outcome: "success" });
         return jsonResult(result);
       } catch (err) {
+        logAudit({ operation: "update", resource_type: args.resource_type, resource_id: args.resource_id, outcome: "error", error: String(err) });
         if (isUserError(err)) return errorResult(err.message);
         if (isUserFixableApiError(err)) return errorResult(err.message);
         throw toMcpError(err);

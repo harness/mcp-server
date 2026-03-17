@@ -140,6 +140,45 @@ describe("ConfigSchema", () => {
   });
 });
 
+describe("ConfigSchema — HTTPS enforcement", () => {
+  const validConfig = {
+    HARNESS_API_KEY: "pat.acct123.tokenId.secret",
+    HARNESS_ACCOUNT_ID: "acct123",
+  };
+
+  it("rejects http:// base URL by default", () => {
+    expect(() =>
+      ConfigSchema.parse({
+        ...validConfig,
+        HARNESS_BASE_URL: "http://localhost:8080",
+      }),
+    ).toThrow("HARNESS_BASE_URL must use HTTPS");
+  });
+
+  it("accepts http:// base URL when HARNESS_ALLOW_HTTP=true", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      HARNESS_BASE_URL: "http://localhost:8080",
+      HARNESS_ALLOW_HTTP: "true",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_BASE_URL).toBe("http://localhost:8080");
+    }
+  });
+
+  it("always accepts https:// base URL", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      HARNESS_BASE_URL: "https://custom.harness.io",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_BASE_URL).toBe("https://custom.harness.io");
+    }
+  });
+});
+
 describe("loadConfig — account ID extraction", () => {
   const originalEnv = process.env;
 

@@ -25,6 +25,36 @@ export interface Logger {
   error: (msg: string, data?: Record<string, unknown>) => void;
 }
 
+export interface AuditEntry {
+  operation: string;
+  resource_type: string;
+  resource_id?: string;
+  action?: string;
+  org_id?: string;
+  project_id?: string;
+  outcome: "success" | "error";
+  error?: string;
+}
+
+const auditLogger = {
+  _log: null as Logger | null,
+  get(): Logger {
+    if (!this._log) this._log = createLogger("audit");
+    return this._log;
+  },
+};
+
+export function logAudit(entry: AuditEntry): void {
+  const { outcome, error, ...rest } = entry;
+  const data: Record<string, unknown> = { ...rest, outcome };
+  if (error) data.error = error;
+  if (outcome === "error") {
+    auditLogger.get().warn("audit", data);
+  } else {
+    auditLogger.get().info("audit", data);
+  }
+}
+
 export function createLogger(module: string): Logger {
   function log(level: LogLevel, message: string, data?: Record<string, unknown>): void {
     if (LOG_LEVELS[level] < LOG_LEVELS[globalLevel]) return;

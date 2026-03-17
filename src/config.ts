@@ -30,6 +30,7 @@ const RawConfigSchema = z.object({
   HARNESS_MAX_BODY_SIZE_MB: z.coerce.number().default(10),
   HARNESS_RATE_LIMIT_RPS: z.coerce.number().default(10),
   HARNESS_READ_ONLY: z.coerce.boolean().default(false),
+  HARNESS_ALLOW_HTTP: z.coerce.boolean().default(false),
 });
 
 export const ConfigSchema = RawConfigSchema.transform((data) => {
@@ -39,6 +40,14 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
       "HARNESS_ACCOUNT_ID is required when the API key is not a PAT (pat.<accountId>.<tokenId>.<secret>)",
     );
   }
+
+  if (!data.HARNESS_BASE_URL.startsWith("https://") && !data.HARNESS_ALLOW_HTTP) {
+    throw new Error(
+      `HARNESS_BASE_URL must use HTTPS (got "${data.HARNESS_BASE_URL}"). ` +
+      "If you need HTTP for local development, set HARNESS_ALLOW_HTTP=true.",
+    );
+  }
+
   return { ...data, HARNESS_ACCOUNT_ID: accountId };
 });
 
