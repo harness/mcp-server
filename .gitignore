@@ -10,3 +10,4 @@ pipelines/
 # Reference OpenAPI specs (too large for repo)
 index (1).json
 index (2).yaml
+stderr.log
