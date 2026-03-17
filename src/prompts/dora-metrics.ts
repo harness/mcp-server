@@ -26,10 +26,10 @@ export function registerDoraMetricsPrompt(server: McpServer): void {
             text: `Review DORA metrics and provide actionable improvement recommendations.
 
 Steps:
-1. Call harness_get with resource_type="sei_deployment_frequency"${teamFilter}${dateFilter} to get deployment frequency data
-2. Call harness_get with resource_type="sei_change_failure_rate"${teamFilter}${dateFilter} to get change failure rate
-3. Call harness_get with resource_type="sei_mttr"${teamFilter}${dateFilter} to get mean time to recovery
-4. Call harness_get with resource_type="sei_lead_time"${teamFilter}${dateFilter} to get lead time for changes
+1. Call harness_get with resource_type="sei_dora_metric", metric="deployment_frequency"${teamFilter}${dateFilter} to get deployment frequency data
+2. Call harness_get with resource_type="sei_dora_metric", metric="change_failure_rate"${teamFilter}${dateFilter} to get change failure rate
+3. Call harness_get with resource_type="sei_dora_metric", metric="mttr"${teamFilter}${dateFilter} to get mean time to recovery
+4. Call harness_get with resource_type="sei_dora_metric", metric="lead_time"${teamFilter}${dateFilter} to get lead time for changes
 5. Classify each metric as Elite / High / Medium / Low per the DORA benchmarks:
    - Deployment Frequency: Elite (on-demand/multiple per day), High (weekly-monthly), Medium (monthly-6mo), Low (>6mo)
    - Change Failure Rate: Elite (<5%), High (5-10%), Medium (10-15%), Low (>15%)
