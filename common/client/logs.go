@@ -20,6 +20,25 @@ type LogService struct {
 	PipelineClient   *Client
 }
 
+var cloudStorageHosts = map[string]struct{}{
+	"storage.googleapis.com":          {},
+	"storage.cloud.google.com":        {},
+	"s3.amazonaws.com":                {},
+	"s3.us-east-1.amazonaws.com":      {},
+	"s3.us-east-2.amazonaws.com":      {},
+	"s3.us-west-1.amazonaws.com":      {},
+	"s3.us-west-2.amazonaws.com":      {},
+	"s3.eu-west-1.amazonaws.com":      {},
+	"s3.eu-central-1.amazonaws.com":   {},
+	"s3.ap-southeast-1.amazonaws.com": {},
+	"s3.ap-northeast-1.amazonaws.com": {},
+}
+
+func isCloudStorageHost(host string) bool {
+	_, ok := cloudStorageHosts[host]
+	return ok
+}
+
 // GetDownloadLogsURL fetches a download URL for pipeline execution logs
 // If logKey is not empty, it will use that log key to fetch logs instead of building one from execution details
 func (l *LogService) GetDownloadLogsURL(ctx context.Context, scope dto.Scope, planExecutionID string, logKey string, headers map[string]string) (string, error) {
@@ -124,6 +143,11 @@ func rewriteDownloadURLHost(downloadLink string, baseURL *url.URL) (string, erro
 	parsed, err := url.Parse(downloadLink)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse download URL: %w", err)
+	}
+
+	// Skip rewriting for known cloud storage hosts that serve pre-signed URLs directly
+	if isCloudStorageHost(parsed.Host) {
+		return downloadLink, nil
 	}
 
 	// Only rewrite if the hosts actually differ
