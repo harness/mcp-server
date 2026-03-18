@@ -21,24 +21,54 @@ interface BlobResponse {
   status?: string;
 }
 
-function rewriteDownloadUrlHost(link: string, baseURL?: string): string {
-  if (!baseURL) return link;
+/** Hosts that serve blob content directly — never rewrite. */
+const EXTERNAL_STORAGE_HOSTS = new Set([
+  "storage.googleapis.com",
+  "storage.cloud.google.com",
+  "s3.amazonaws.com",
+  "s3.us-east-1.amazonaws.com",
+  "s3.us-east-2.amazonaws.com",
+  "s3.us-west-1.amazonaws.com",
+  "s3.us-west-2.amazonaws.com",
+  "s3.eu-west-1.amazonaws.com",
+  "s3.eu-central-1.amazonaws.com",
+  "s3.ap-southeast-1.amazonaws.com",
+  "s3.ap-northeast-1.amazonaws.com",
+]);
 
+/** S3-style host pattern: bucket.s3.amazonaws.com or bucket.s3.region.amazonaws.com */
+const S3_BUCKET_HOST_RE = /^[a-z0-9][a-z0-9.-]*\.s3([.-][a-z0-9-]+)?\.amazonaws\.com$/i;
+
+function isExternalStorageHost(host: string): boolean {
+  const h = host.toLowerCase();
+  if (EXTERNAL_STORAGE_HOSTS.has(h)) return true;
+  if (S3_BUCKET_HOST_RE.test(h)) return true;
+  if (h.endsWith(".storage.googleapis.com")) return true;
+  return false;
+}
+
+/**
+ * Resolve the final download URL for a blob link.
+ * - External storage (GCS, S3): use as-is — blob is served directly.
+ * - Harness-hosted: rewrite host to configured base URL when self-managed.
+ */
+function resolveDownloadUrl(blobLink: string, harnessBaseUrl: string): string {
+  let url: URL;
   try {
-    const downloadURL = new URL(link);
-    const harnessURL = new URL(baseURL);
-
-    if (downloadURL.host === harnessURL.host) {
-      return link;
-    }
-
-    downloadURL.protocol = harnessURL.protocol;
-    downloadURL.host = harnessURL.host;
-    return downloadURL.toString();
-  } catch (err) {
-    log.warn("Failed to rewrite log download URL host", { error: String(err) });
-    return link;
+    url = new URL(blobLink);
+  } catch {
+    return blobLink;
   }
+  if (isExternalStorageHost(url.host)) {
+    return blobLink;
+  }
+  const base = new URL(harnessBaseUrl.replace(/\/$/, "") + "/");
+  if (url.host === base.host) {
+    return blobLink;
+  }
+  url.host = base.host;
+  url.protocol = base.protocol;
+  return url.toString();
 }
 
 // ─── ANSI / log parsing helpers ─────────────────────────────────────────────
@@ -330,28 +360,26 @@ export async function resolveLogContent(
   }
 
   // Step 3: Download the zip/gzip from the signed URL
-  const rewrittenLink = rewriteDownloadUrlHost(
-    blob.link,
-    (client as HarnessClient & { baseURL?: string }).baseURL,
-  );
-  log.debug("Downloading log blob", { link: rewrittenLink.slice(0, 100) });
+  // External storage (GCS, S3): use as-is. Harness-hosted: rewrite host when self-managed.
+  const downloadUrl = resolveDownloadUrl(blob.link, client.baseURL);
+  log.debug("Downloading log blob", { prefix, url: downloadUrl.slice(0, 80) });
   const downloadSignal = signal
     ? AbortSignal.any([signal, AbortSignal.timeout(DEFAULT_DOWNLOAD_TIMEOUT_MS)])
     : AbortSignal.timeout(DEFAULT_DOWNLOAD_TIMEOUT_MS);
 
   let response: Response;
   try {
-    response = await fetch(rewrittenLink, { signal: downloadSignal });
+    response = await fetch(downloadUrl, { signal: downloadSignal });
   } catch (err) {
     const cause =
       err instanceof Error
         ? `${err.name}: ${err.message}`
         : String(err);
-    throw new Error(`Log download fetch failed for ${new URL(rewrittenLink).host}: ${cause}`);
+    throw new Error(`Log download fetch failed for ${new URL(downloadUrl).host}: ${cause}`);
   }
   if (!response.ok) {
     const errBody = await response.text().catch(() => "");
-    throw new Error(`Log download failed: HTTP ${response.status} — ${errBody.slice(0, 300)}`);
+    throw new Error(`Log download failed: HTTP ${response.status} — ${errBody.slice(0, 200)}`);
   }
 
   const contentLength = Number(response.headers.get("content-length") ?? 0);
