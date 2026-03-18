@@ -413,6 +413,8 @@ The deployment runs 2 replicas with readiness/liveness probes, resource limits, 
 
 ## Configuration
 
+The server automatically loads environment variables from a `.env` file in the project root if one exists. Copy `.env.example` to `.env` and fill in your values. Environment variables can also be set via your shell or MCP client config.
+
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `HARNESS_API_KEY` | Yes | -- | Harness personal access token or service account token |

@@ -44,12 +44,15 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@resvg/resvg-js": "^2.6.2",
+    "dotenv": "^17.3.1",
     "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
     "yaml": "^2.8.2",
     "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.13.5",
     "typescript": "^5.7.3",
     "vitest": "^3.0.6"
