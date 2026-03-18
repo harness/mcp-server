@@ -21,15 +21,15 @@ type LogService struct {
 }
 
 var cloudStorageHosts = map[string]struct{}{
-	"storage.googleapis.com":        {},
-	"storage.cloud.google.com":      {},
-	"s3.amazonaws.com":              {},
-	"s3.us-east-1.amazonaws.com":    {},
-	"s3.us-east-2.amazonaws.com":    {},
-	"s3.us-west-1.amazonaws.com":    {},
-	"s3.us-west-2.amazonaws.com":    {},
-	"s3.eu-west-1.amazonaws.com":    {},
-	"s3.eu-central-1.amazonaws.com": {},
+	"storage.googleapis.com":          {},
+	"storage.cloud.google.com":        {},
+	"s3.amazonaws.com":                {},
+	"s3.us-east-1.amazonaws.com":      {},
+	"s3.us-east-2.amazonaws.com":      {},
+	"s3.us-west-1.amazonaws.com":      {},
+	"s3.us-west-2.amazonaws.com":      {},
+	"s3.eu-west-1.amazonaws.com":      {},
+	"s3.eu-central-1.amazonaws.com":   {},
 	"s3.ap-southeast-1.amazonaws.com": {},
 	"s3.ap-northeast-1.amazonaws.com": {},
 }

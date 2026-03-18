@@ -1,6 +1,6 @@
 module github.com/harness/mcp-server
 
-go 1.25.1
+go 1.25
 
 require (
 	github.com/cenkalti/backoff/v4 v4.3.0
