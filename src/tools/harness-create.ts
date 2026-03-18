@@ -41,10 +41,12 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
           return errorResult(`Resource "${args.resource_type}" does not support "create". Supported: ${Object.keys(def.operations).join(", ")}`);
         }
 
+        const blockWithoutConfirmation = !!def.operations.create?.blockWithoutConfirmation;
         const elicit = await confirmViaElicitation({
           server,
           toolName: "harness_create",
           message: `Create ${args.resource_type}?\n\n${JSON.stringify(args.body, null, 2)}`,
+          destructive: blockWithoutConfirmation,
         });
         if (!elicit.proceed) {
           return errorResult(`Operation ${elicit.reason} by user.`);
