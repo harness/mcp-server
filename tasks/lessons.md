@@ -26,3 +26,9 @@
 - **Root cause**: Harness Chaos Engineering API is routed through the gateway. Paths like `/chaos/manager/api/experiments` resolve to `https://app.harness.io/chaos/...` but the correct base is `https://app.harness.io/gateway/chaos/manager/api/...`.
 - **Fix**: Use `/gateway/chaos/manager/api` as the chaos API base path (see apidocs.harness.io/chaos.html).
 - **Rule**: When adding new Harness module toolsets, verify the API base path. Modules such as chaos, SEI, and log-service use `/gateway/` prefix; ng, pipeline, code, cf, etc. do not.
+
+## Pagination Parity Testing (v1 vs v2)
+- **Methodology**: Use the same scope for both v1 and v2 (either both account-level OR both project-level). Compare the first element of page 2 from v1 with the first element of page 2 from v2.
+- **Pass criteria**: If the first element of page 2 matches across both servers → pagination parity ✓
+- **Fail criteria**: If they differ (same scope) → investigate (API params, sort order, date filters, etc.)
+- **Rule**: Apply this pattern to all tools when testing pagination across MCP v1 and v2.

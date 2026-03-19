@@ -3,6 +3,7 @@
  * Used across all toolset definitions — eliminates per-file duplication.
  */
 import { isRecord } from "../utils/type-guards.js";
+import { parseZipCsv } from "../utils/zip-csv.js";
 
 /** Extract `data` from standard NG API responses: `{ status, data, ... }` */
 export const ngExtract = (raw: unknown): unknown => {
@@ -21,6 +22,28 @@ export const pageExtract = (raw: unknown): { items: unknown[]; total: number } =
 
 /** Pass-through extractor — returns raw response unchanged. Used for APIs that don't wrap in `data`. */
 export const passthrough = (raw: unknown): unknown => raw;
+
+/**
+ * Factory for HAR (Artifact Registry) list responses.
+ * HAR wraps lists as `{ data: { <arrayKey>: [...], itemCount, pageIndex, ... }, status }`.
+ * Normalizes to `{ items, total, pageIndex, pageSize, pageCount }` so the deep link
+ * code can find the list via `LIST_ARRAY_KEYS`.
+ */
+export const harListExtract = (arrayKey: string) => (raw: unknown): unknown => {
+  const r = raw as { data?: Record<string, unknown> };
+  const data = r.data;
+  if (data && typeof data === "object" && !Array.isArray(data)) {
+    const d = data as Record<string, unknown>;
+    return {
+      items: (d[arrayKey] as unknown[]) ?? [],
+      total: (d.itemCount as number) ?? 0,
+      pageIndex: d.pageIndex,
+      pageSize: d.pageSize,
+      pageCount: d.pageCount,
+    };
+  }
+  return raw;
+};
 
 /**
  * Factory for v1 list responses (bare arrays).
@@ -133,4 +156,15 @@ export const dashboardListExtract = (raw: unknown): { items: unknown[]; total: n
     items: r.resource ?? [],
     total: r.items ?? 0,
   };
+};
+
+/**
+ * Extracts dashboard data from a ZIP ArrayBuffer containing CSVs.
+ * Matches v1 `get_dashboard_data` behavior: ZIP → CSV → structured JSON tables.
+ */
+export const dashboardDataExtract = (raw: unknown): unknown => {
+  if (raw instanceof ArrayBuffer) {
+    return parseZipCsv(raw);
+  }
+  return raw;
 };

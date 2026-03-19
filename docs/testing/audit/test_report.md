@@ -14,8 +14,8 @@
 
 | Check | v1 | v2 | Match |
 |-------|----|----|-------|
-| List / filter | `list_user_audits` | `harness_list` (`audit_event`) | ✅ Both return results; v2 ignores page/size |
-| Get YAML diff | `get_audit_yaml` | `harness_get` (`audit_event`) | ❌ v2 returns internal error |
+| List / filter | `list_user_audits` | `harness_list` (`audit_event`) | ✅ Both return results; v2 honors page/size (pageIndex/pageSize fix) |
+| Get YAML diff | `get_audit_yaml` | `harness_get` (`audit_event`) | ✅ Both return oldYaml/newYaml (v2 fix: path /audit/api/auditYaml + routingId) |
 
 _Re-run: use the same scope as [`test_plan.md`](./test_plan.md); then update the **Test Results** table below if any row changed._
 
@@ -24,8 +24,8 @@ _Re-run: use the same scope as [`test_plan.md`](./test_plan.md); then update the
 | Metric | Count |
 |--------|-------|
 | Total Tests | 5 |
-| ✅ Passed | 3 |
-| ❌ Failed | 2 |
+| ✅ Passed | 5 |
+| ❌ Failed | 0 |
 | ⏭️ Skipped | 0 |
 
 ---
@@ -34,11 +34,11 @@ _Re-run: use the same scope as [`test_plan.md`](./test_plan.md); then update the
 
 | Test ID | Test | v1 Result | v2 Result | Notes |
 |---------|------|-----------|-----------|-------|
-| AUD-001 | List audit events | ✅ 61 events (5/page, 13 pages) — rich metadata (resource type/identifier, action, module, principal, timestamp) | ✅ 5,236,190 events (50/page) — compact metadata (auditId, module, openInHarness) | Both work; v1 requires explicit start_time/end_time; v1 returns richer per-event metadata |
-| AUD-002 | Page 1, size 5 | ✅ 5 items returned on page 0, totalItems=61, 13 pages | ❌ size param ignored — returned 50 items instead of 5; total=5,236,190 | v2 does not honor `size` param for `audit_event` resource type |
-| AUD-003 | Page 2, size 5 | ✅ 5 different items on page 1 (correct offset from page 0) | ❌ Returned identical items as page 0 — pagination not effective | v2 `page` param has no visible effect on `audit_event` results |
-| AUD-004 | Filter by action (CREATE) | ✅ 32 CREATE events filtered correctly (5/page, 7 pages) | ✅ 1,809,486 CREATE events via `filters.action` | Both correctly filter by action; v2 uses `filters: {"action": "CREATE"}` |
-| AUD-005 | Get YAML diff | ✅ oldYaml/newYaml returned showing connector update diff (description field added) | ❌ Internal server error: "Oops, something went wrong on our end" | v2 `harness_get` does not support `audit_event` resource type for YAML diffs |
+| AUD-001 | List audit events | ✅ 61 events (5/page, 13 pages) — rich metadata (resource type/identifier, action, module, principal, timestamp) | ✅ 5,233,114 events (20/page default) — compact metadata (auditId, module, openInHarness) | Both work; v1 requires explicit start_time/end_time; v1 returns richer per-event metadata |
+| AUD-002 | Page 1, size 5 | ✅ 5 items returned on page 0, totalItems=61, 13 pages | ✅ 5 items on page 0, total=5,233,114 | v2 pagination fix (pageIndex/pageSize) — size now honored |
+| AUD-003 | Page 2, size 5 | ✅ 5 different items on page 1 (correct offset from page 0) | ✅ 5 different items on page 2 (correct offset from page 0) | v2 pagination fix — page param now effective |
+| AUD-004 | Filter by action (CREATE) | ✅ 32 CREATE events filtered correctly (5/page, 7 pages) | ✅ 1,808,182 CREATE events via `filters.action` | Both correctly filter by action; v2 uses `filters: {"action": "CREATE"}` |
+| AUD-005 | Get YAML diff | ✅ oldYaml/newYaml returned showing connector update diff (description field added) | ✅ oldYaml/newYaml returned — connector update diff (name, description) | v2 fix: path `/audit/api/auditYaml`, `auditId` as query param, `routingId` required |
 
 > **Legend:** ✅ Pass | ❌ Fail | ⏭️ Skipped | N/T = Not Tested | N/A = Not Applicable
 
@@ -49,19 +49,8 @@ _Re-run: use the same scope as [`test_plan.md`](./test_plan.md); then update the
 | # | Test ID | Severity | Description | Status |
 |---|---------|----------|-------------|--------|
 | 1 | AUD-001 | Low | v1 `list_user_audits` panics when called with empty start_time/end_time defaults. Works correctly when explicit ISO 8601 times are provided. | Workaround — always pass time params |
-| 2 | AUD-002 | Medium | v2 `harness_list` ignores `size` param for `audit_event` — always returns ~50 items regardless of requested page size. | Open |
-| 3 | AUD-003 | Medium | v2 `harness_list` ignores `page` param for `audit_event` — page 0 and page 1 return identical results. | Open |
-| 4 | AUD-005 | High | v2 `harness_get` with `resource_type=audit_event` returns internal server error (-32603). No way to retrieve YAML diffs in v2. | Open |
+| 2 | AUD-002 | Medium | v2 `harness_list` ignores `size` param for `audit_event` — always returns ~50 items regardless of requested page size. | **Fixed** — queryParams now use pageIndex/pageSize (2026-03-19) |
+| 3 | AUD-003 | Medium | v2 `harness_list` ignores `page` param for `audit_event` — page 0 and page 1 return identical results. | **Fixed** — queryParams now use pageIndex/pageSize (2026-03-19) |
+| 4 | AUD-005 | High | v2 `harness_get` with `resource_type=audit_event` returned internal server error. | **Fixed** — use path `/audit/api/auditYaml`, auditId as query param, routingId (2026-03-19) |
 
 ---
-
-### Notes
-
-- v2 uses resource type `audit_event` (not `audit`). Using `audit` returns an error listing available types.
-- v1 works when explicit `start_time` and `end_time` are provided (ISO 8601). Panics only on empty defaults.
-- v1 returned 61 audit events (7-day window) with rich metadata (resource type/identifier, action, module, principal, timestamp).
-- v2 returns 5.2M+ audit events across all time with compact metadata (auditId, module, openInHarness link).
-- v2 pagination (`page`, `size`) is non-functional for `audit_event` — always returns the same ~50 items.
-- v2 action filtering works via `filters: {"action": "CREATE"}` — correctly narrowed to 1.8M CREATE events.
-- v2 does not support `harness_get` for `audit_event` — returns internal server error. No YAML diff capability in v2.
-- **Re-tested 2026-03-19:** All 5 test IDs from test_plan.md executed against both servers.

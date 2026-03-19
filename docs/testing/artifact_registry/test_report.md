@@ -3,57 +3,159 @@
 ## ARTIFACT REGISTRY — Test Report
 
 **Date:** 2026-03-19
-**Tester:** Cascade AI
 **Account:** px7xd_BFRCi-pfWPYXVjvw | **Org:** AI_Devops | **Project:** Sanity
 
 ---
 
-### MCP v1 vs v2 — Prompt parity run (2026-03-19)
-
-**Date:** 2026-03-19 · **Master log:** [`MCP_PROMPT_PARITY_RUN_2026-03-19.md`](../MCP_PROMPT_PARITY_RUN_2026-03-19.md)
+### Tool Parity
 
 | Check | v1 | v2 | Match |
-|-------|----|----|-------|
-| List | *(not in v1 Cursor MCP list)* | `harness_list` (`registry`) | ✅ v2 only |
-| Get | *(not in v1 Cursor MCP list)* | `harness_get` (`registry`) | ✅ v2 only |
+| ----- | -- | -- | ----- |
+| List registries | `list_registries` | `harness_list` (`registry`) | ✅ |
+| Get registry | `get_registry` | `harness_get` (`registry`) | ✅ |
+| List artifacts | `list_artifacts` | `harness_list` (`artifact`) | ✅ |
+| List artifact versions | `list_artifact_versions` | `harness_list` (`artifact_version`) | ✅ |
+| List artifact files | `list_artifact_files` | `harness_list` (`artifact_file`) | ✅ |
 
-_Re-run: use the same scope as [`test_plan.md`](./test_plan.md); then update the **Test Results** table below if any row changed._
+> v1 tools exist in source but are not exposed — `registries` toolset missing from `--toolsets` in `mcp.json` and may require HAR license.
 
 ### Summary
 
 | Metric | Count |
-|--------|-------|
-| Total Tests | 3 |
-| ✅ Passed | 3 |
-| ❌ Failed | 0 |
-| ⏭️ Skipped | 0 |
-
----
+| ------ | ----- |
+| Total  | 6     |
+| ✅ Pass | 4     |
+| ⏭️ Skip | 2     |
 
 ### Test Results
 
-| Test ID | Test | v1 Result | v2 Result | Notes |
-|---------|------|-----------|-----------|-------|
-| REG-001 | List registries | N/A | ✅ 1 registry (`test232213`), VIRTUAL, DOCKER, pageSize=20, itemCount=1 | v2-only; no v1 artifact registry tool |
-| REG-002 | Page 1, size 5 | N/A | ✅ 1 registry returned, pageSize correctly set to 5 | Pagination size param honoured |
-| REG-003 | Get by ID (`test232213`) | N/A | ✅ Full details: config (VIRTUAL, upstreamProxies=[]), createdAt, modifiedAt, packageType=DOCKER, url, uuid | Deep link resolves correctly to `/registries/test232213` |
+| ID | Test | v1 | v2 | Notes |
+| -- | ---- | -- | -- | ----- |
+| REG-001 | List registries | ⏭️ | ✅ 2 registries, per-item deep links resolve | |
+| REG-002 | Pagination (size=5) | ⏭️ | ✅ pageSize=5 honoured | |
+| REG-003 | Get `test232213` | ⏭️ | ✅ Full details, deep link → `/registries/test232213` | |
+| REG-004 | List artifacts | ⏭️ | ✅ Empty list (no artifacts in registry) | |
+| REG-005 | List artifact versions | ⏭️ | ⏭️ No test data | |
+| REG-006 | List artifact files | ⏭️ | ⏭️ No test data | |
 
-> **Legend:** ✅ Pass | ❌ Fail | ⏭️ Skipped | N/T = Not Tested | N/A = Not Applicable
+### Issues
+
+| # | ID | Severity | Description | Status |
+| - | -- | -------- | ----------- | ------ |
+| 1 | REG-001 | Low | List deep links had unresolved `{registryIdentifier}` placeholder. Fixed via `harListExtract` extractor. | ✅ Fixed |
+| 2 | ALL | Info | v1 tools not exposed — `registries` missing from `--toolsets`, HAR license may be inactive. | ℹ️ Info |
 
 ---
 
-### Issues Found
+### Raw Responses
 
-| # | Test ID | Severity | Description | Status |
-|---|---------|----------|-------------|--------|
-| 1 | REG-003 | Low | `openInHarness` deep link previously contained `{registryIdentifier}` placeholder in list responses. Get response resolves correctly. | ✅ Fixed |
+<details>
+<summary>REG-001 — harness_list registry</summary>
 
----
+```json
+{
+  "items": [
+    {
+      "description": "",
+      "identifier": "test232213",
+      "type": "VIRTUAL",
+      "openInHarness": "https://qa.harness.io/ng/account/px7xd_BFRCi-pfWPYXVjvw/all/orgs/AI_Devops/projects/Sanity/registries/test232213"
+    },
+    {
+      "description": "",
+      "identifier": "test-mcp",
+      "type": "VIRTUAL",
+      "openInHarness": "https://qa.harness.io/ng/account/px7xd_BFRCi-pfWPYXVjvw/all/orgs/AI_Devops/projects/Sanity/registries/test-mcp"
+    }
+  ],
+  "total": 2,
+  "pageIndex": 0,
+  "pageSize": 20,
+  "pageCount": 1
+}
+```
+</details>
 
-### Notes
+<details>
+<summary>REG-002 — harness_list registry (size=5)</summary>
 
-- v2-only resource; no v1 equivalent tool for artifact registry.
-- REG-001: Returns 1 VIRTUAL DOCKER registry with pagination metadata: `itemCount: 1, pageCount: 1, pageIndex: 0, pageSize: 20`.
-- REG-002: Pagination `size=5` correctly applied (`pageSize: 5` in response).
-- REG-003: `harness_get` returns full config including `cleanupPolicy`, `allowedPattern`, `blockedPattern`, `upstreamProxies`. Deep link now correctly resolves: `https://qa.harness.io/ng/account/.../registries/test232213`.
-- List endpoint `openInHarness` still contains unresolved `{registryIdentifier}` placeholder — cosmetic only, does not affect functionality.
+```json
+{
+  "items": [
+    {
+      "description": "",
+      "identifier": "test232213",
+      "type": "VIRTUAL",
+      "openInHarness": "https://qa.harness.io/ng/account/px7xd_BFRCi-pfWPYXVjvw/all/orgs/AI_Devops/projects/Sanity/registries/test232213"
+    },
+    {
+      "description": "",
+      "identifier": "test-mcp",
+      "type": "VIRTUAL",
+      "openInHarness": "https://qa.harness.io/ng/account/px7xd_BFRCi-pfWPYXVjvw/all/orgs/AI_Devops/projects/Sanity/registries/test-mcp"
+    }
+  ],
+  "total": 2,
+  "pageIndex": 0,
+  "pageSize": 5,
+  "pageCount": 1
+}
+```
+</details>
+
+<details>
+<summary>REG-003 — harness_get registry test232213</summary>
+
+```json
+{
+  "data": {
+    "allowedPattern": null,
+    "blockedPattern": null,
+    "cleanupPolicy": [],
+    "config": { "type": "VIRTUAL", "upstreamProxies": [] },
+    "createdAt": "1756467212605",
+    "description": "",
+    "identifier": "test232213",
+    "isPublic": false,
+    "labels": null,
+    "modifiedAt": "1756467212605",
+    "packageType": "DOCKER",
+    "policyRefs": null,
+    "url": "https://pkg.qa.harness.io/px7xd_bfrci-pfwpyxvjvw/test232213",
+    "uuid": "189b870d-7526-4379-8e3f-fcdb15c37521"
+  },
+  "status": "SUCCESS",
+  "openInHarness": "https://qa.harness.io/ng/account/px7xd_BFRCi-pfWPYXVjvw/all/orgs/AI_Devops/projects/Sanity/registries/test232213"
+}
+```
+</details>
+
+<details>
+<summary>REG-004 — harness_list artifact</summary>
+
+```json
+{
+  "items": [],
+  "total": 0,
+  "pageIndex": 0,
+  "pageSize": 20,
+  "pageCount": 0
+}
+```
+</details>
+
+<details>
+<summary>REG-005 — harness_list artifact_version</summary>
+
+```json
+{ "error": "Failed to get image: resource not found" }
+```
+</details>
+
+<details>
+<summary>REG-006 — harness_list artifact_file</summary>
+
+```json
+{ "error": "Artifact not found" }
+```
+</details>

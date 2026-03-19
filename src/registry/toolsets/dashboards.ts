@@ -1,5 +1,5 @@
 import type { ToolsetDefinition } from "../types.js";
-import { ngExtract, dashboardListExtract, passthrough } from "../extractors.js";
+import { dashboardListExtract, dashboardDataExtract } from "../extractors.js";
 
 export const dashboardsToolset: ToolsetDefinition = {
   name: "dashboards",
@@ -9,7 +9,7 @@ export const dashboardsToolset: ToolsetDefinition = {
     {
       resourceType: "dashboard",
       displayName: "Dashboard",
-      description: "Custom analytics dashboard. Supports list and get.",
+      description: "Custom analytics dashboard. Supports list. Use dashboard_data to fetch content.",
       toolset: "dashboards",
       scope: "account",
       identifierFields: ["dashboard_id"],
@@ -27,6 +27,7 @@ export const dashboardsToolset: ToolsetDefinition = {
             search_term: "searchTerm",
             folder_id: "folderId",
             tags: "tags",
+            page: "page",
             size: "pageSize",
           },
           defaultQueryParams: {
@@ -35,13 +36,6 @@ export const dashboardsToolset: ToolsetDefinition = {
           },
           responseExtractor: dashboardListExtract,
           description: "List dashboards",
-        },
-        get: {
-          method: "GET",
-          path: "/dashboard/api/dashboards/{dashboardId}",
-          pathParams: { dashboard_id: "dashboardId" },
-          responseExtractor: ngExtract,
-          description: "Get dashboard details",
         },
       },
     },
@@ -65,8 +59,9 @@ export const dashboardsToolset: ToolsetDefinition = {
             reporting_timeframe: "filters",
             expanded_tables: "expanded_tables",
           },
-          responseExtractor: passthrough,
-          description: "Download dashboard data as CSV. Pass reporting_timeframe in days (default 30).",
+          responseType: "buffer",
+          responseExtractor: dashboardDataExtract,
+          description: "Download dashboard data as structured tables. Pass reporting_timeframe in days (default 30).",
         },
       },
     },

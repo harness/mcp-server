@@ -112,6 +112,8 @@ export interface EndpointSpec {
   headers?: Record<string, string>;
   /** For GET: extract the useful part from the raw response */
   responseExtractor?: (raw: unknown) => unknown;
+  /** Request binary (ArrayBuffer) response instead of JSON. Used for ZIP download endpoints. */
+  responseType?: "json" | "buffer";
   /** Description shown in harness_describe output */
   description?: string;
   /** Optional body schema for write operations — exposed via harness_describe */
@@ -144,6 +146,13 @@ export interface ResourceDefinition {
   toolset: ToolsetName;
   /** Scope level: "project" | "org" | "account" */
   scope: "project" | "org" | "account";
+  /**
+   * When true, org/project params are only added if explicitly provided in input.
+   * Use for resources that support multiple scopes (e.g., Harness Code repos/PRs
+   * which can be account, org, or project scoped depending on where they live).
+   * Default: false (scope params always added based on `scope` field).
+   */
+  scopeOptional?: boolean;
   /**
    * Override default scope query parameter names.
    * Standard NG API uses orgIdentifier / projectIdentifier.

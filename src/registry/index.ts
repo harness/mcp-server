@@ -258,13 +258,14 @@ export class Registry {
     const params: Record<string, string | number | boolean | undefined> = {};
 
     // Add scope params (allow per-resource override of query param names)
+    // Only add org/project when they're present in the input
     const orgParam = def.scopeParams?.org ?? "orgIdentifier";
     const projectParam = def.scopeParams?.project ?? "projectIdentifier";
-    if (def.scope === "project" || def.scope === "org") {
-      params[orgParam] = (input.org_id as string) ?? this.config.HARNESS_DEFAULT_ORG_ID;
+    if (input.org_id) {
+      params[orgParam] = input.org_id as string;
     }
-    if (def.scope === "project") {
-      params[projectParam] = (input.project_id as string) ?? this.config.HARNESS_DEFAULT_PROJECT_ID;
+    if (input.project_id) {
+      params[projectParam] = input.project_id as string;
     }
     // Inject custom account param when scopeParams.account is set
     // (in addition to the client's default accountIdentifier)
@@ -349,6 +350,7 @@ export class Registry {
       body,
       ...(baseUrl ? { baseUrl } : {}),
       ...(spec.headers ? { headers: spec.headers } : {}),
+      ...(spec.responseType ? { responseType: spec.responseType } : {}),
       signal,
     });
 

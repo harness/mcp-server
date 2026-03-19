@@ -31,7 +31,7 @@ export const delegatesToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: "/ng/api/delegate-setup/listDelegates",
-          queryParams: { all: "all" },
+          queryParams: { all: "all", org_id: "orgIdentifier", project_id: "projectIdentifier" },
           bodyBuilder: (input) => ({
             filterType: "Delegate",
             ...(input.status ? { status: input.status } : {}),

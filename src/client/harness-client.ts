@@ -156,6 +156,13 @@ export class HarnessClient {
           return { status: "SUCCESS", message: "No content" } as T;
         }
 
+        // Binary response mode — return raw ArrayBuffer (used for ZIP downloads)
+        if (options.responseType === "buffer") {
+          const buffer = await response.arrayBuffer();
+          log.debug("Binary response", { bytes: buffer.byteLength });
+          return buffer as T;
+        }
+
         const text = await response.text();
         if (!text) {
           throw new HarnessApiError(

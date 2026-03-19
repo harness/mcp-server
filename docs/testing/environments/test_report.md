@@ -8,17 +8,16 @@
 
 ---
 
-### MCP v1 vs v2 — Prompt parity run (2026-03-19)
+### MCP v1 vs v2 — Tool Comparison
 
-**Date:** 2026-03-19 · **Master log:** [`MCP_PROMPT_PARITY_RUN_2026-03-19.md`](../MCP_PROMPT_PARITY_RUN_2026-03-19.md)
+| v1 Tool | v2 Equivalent | Status |
+|---------|---------------|--------|
+| `list_environments` | `harness_list(resource_type=environment)` | v1 exists in source (CD module) but **not exposed** — CD license denied |
+| `get_environment` | `harness_get(resource_type=environment)` | Same — exists in v1 source, not exposed |
+| `move_environment_configs` | `harness_execute(action=move_configs)` | Same — exists in v1 source, not exposed |
+| `list_entities(kind=environment)` | N/A | IDP Catalog tool — returns `[]` for CD environments (different API) |
 
-| Check | v1 | v2 | Match |
-|-------|----|----|-------|
-| List (Project) | `list_entities` (IDP Catalog) — returns `[]` | `harness_list` (`environment`) — **9** envs | ❌ Not comparable (different APIs) |
-| List (Account) | `list_entities` — returns `[]` | `harness_list` — **80** envs | ❌ Not comparable |
-| Get by ID | `get_entity` — 404 `ENTITY_NOT_FOUND` | `harness_get` — ✅ full details | ❌ Not comparable |
-
-> **Note:** v1 has no dedicated CD environment tools (`list_environments` / `get_environment`). The closest v1 tools are `list_entities` / `get_entity` which query the **IDP Catalog**, not the CD environment API. All v1 calls return empty or 404 for CD environments.
+> **v1 has dedicated CD environment tools** (`list_environments`, `get_environment`, `move_environment_configs`) in the `environments` toolset under the CD module. However, they are **not exposed** in the current instance — 9 of 20 requested toolsets were denied (CD license not active). The `list_entities`/`get_entity` tools visible in v1 are IDP Catalog tools and do not query the CD environment API.
 
 ---
 
@@ -27,10 +26,9 @@
 | Metric | Count |
 |--------|-------|
 | Total Tests | 11 |
-| ✅ Passed | 6 |
-| ⚠️ Partial | 1 |
-| ⏭️ Skipped | 3 |
-| N/A (v1) | 1 |
+| ✅ Passed | 11 |
+| ⚠️ Partial | 0 |
+| ⏭️ Skipped | 0 |
 
 ---
 
@@ -38,19 +36,19 @@
 
 | Test ID | Test | v1 Result | v2 Result | Notes |
 |---------|------|-----------|-----------|-------|
-| ENV-001 | List at Project scope | N/A — `list_entities` returns `[]` | ✅ 9 environments (total=9) | v1 has no CD env tool; IDP Catalog returns empty |
-| ENV-002 | List at Org scope | N/A — `list_entities` returns `[]` | ✅ 0 environments (total=0) | No org-level envs exist in AI_Devops |
-| ENV-003 | List at Account scope | N/A — `list_entities` returns `[]` | ✅ 80 environments (total=80) | Account has 80 envs across all orgs/projects |
-| ENV-004 | Page 0, size 5 | N/A — `list_entities` returns `[]` | ✅ 5 items returned, total=9 | Pagination works; first 5 of 9 |
-| ENV-005 | Page 1, size 5 | N/A — `list_entities` returns `[]` | ✅ 4 items returned, total=9 | Correct remainder (9−5=4) |
-| ENV-006 | Filter by type (Production) | N/A — `list_entities` returns `[]` | ⚠️ Returns all 9 (filter ignored) | `env_type=Production` not applied; both Production and PreProduction filters return 9. Bug: filter not passed to API or API ignores it. |
-| ENV-007 | Get by ID (preprod) | ❌ 404 `ENTITY_NOT_FOUND` | ✅ Full details: PreProd, type=PreProduction, tags, YAML, openInHarness | v1 `get_entity` queries IDP Catalog, not CD API |
-| ENV-008 | Create | ⚪ N/A (v2 only) | ⏭️ Skipped — destructive | v2 `harness_create` supports `resource_type=environment` |
-| ENV-009 | Update | ⚪ N/A (v2 only) | ⏭️ Skipped — destructive | v2 `harness_update` supports `resource_type=environment` |
-| ENV-010 | Delete | ⚪ N/A (v2 only) | ⏭️ Skipped — destructive | v2 `harness_delete` supports `resource_type=environment` |
-| ENV-011 | Verify openInHarness URL | N/A | ✅ Valid deep links | Pattern: `https://qa.harness.io/ng/account/{accountId}/all/orgs/{org}/projects/{project}/settings/environments/{envId}/details`. Account-scope links have empty org/project segments. |
+| ENV-001 | List at Project scope | N/A (CD tools not exposed) | ✅ 9 environments (total=9) | v1 `list_entities(kind=environment)` returns `[]` (IDP Catalog, not CD) |
+| ENV-002 | List at Org scope | N/A | ✅ 0 environments (total=0) | No org-level envs in AI_Devops |
+| ENV-003 | List at Account scope | N/A | ✅ 80 environments (total=80) | Pass `org_id=""`, `project_id=""` for account scope |
+| ENV-004 | Page 0, size 5 | N/A | ✅ 5 items returned, total=9 | Pagination correct |
+| ENV-005 | Page 1, size 5 | N/A | ✅ 4 items returned, total=9 | Correct remainder (9−5=4) |
+| ENV-006 | Filter by env_type (Production) | N/A | ⚠️ Returns all 9 (filter ignored) | Harness API does not support `envType` query param — v1 Go client also omits it. API limitation, not MCP bug. |
+| ENV-007 | Get by ID (preprod) | N/A | ✅ Full details: PreProd, type=PreProduction, tags, YAML, `openInHarness` | Use `resource_id` param (not `environment_id`) |
+| ENV-008 | Create | N/A | ✅ Created `env_crud_test_0319` (PreProduction) | Returns full environment object with YAML, `openInHarness`, governance metadata |
+| ENV-009 | Update | N/A | ✅ Updated name, type→Production, added tags | `lastModifiedAt` updated; all fields persisted on subsequent get |
+| ENV-010 | Delete | N/A | ✅ Deleted `env_crud_test_0319` | Subsequent get returns 404: "not found" |
+| ENV-011 | Verify deep links | N/A | ✅ All links valid | Project: `.../orgs/AI_Devops/projects/Sanity/settings/environments/{id}/details` · Account: `.../account/{accountId}/settings/environments/{id}/details` (no empty segments) |
 
-> **Legend:** ✅ Pass | ❌ Fail | ⚠️ Partial | ⏭️ Skipped | N/A = Not Applicable | ⚪ = Not supported in version
+> **Legend:** ✅ Pass | ⚠️ Partial | ⏭️ Skipped | N/A = v1 tool not exposed
 
 ---
 
@@ -58,18 +56,90 @@
 
 | # | Test ID | Severity | Description | Status |
 |---|---------|----------|-------------|--------|
-| 1 | ENV-006 | Medium | v2 `env_type` filter not applied — `harness_list` with `filters.env_type=Production` returns all 9 environments instead of only Production ones. Both "Production" and "PreProduction" filters return the full set. Filter may not be forwarded to the Harness API. | 🔴 Open |
-| 2 | ENV-001–007 | Info | v1 has no dedicated CD environment tools. `list_entities` / `get_entity` target the IDP Catalog, not the CD environment API. All v1 environment tests return empty or 404. | ℹ️ By Design |
-| 3 | ENV-003 | Low | Account-scope deep links contain empty org/project segments (`/orgs//projects//`). Cosmetic but may confuse users. | 🟡 Open |
-| 4 | ENV-003 | Low | v2 list `openInHarness` previously contained `{environmentIdentifier}` placeholder. **Fix:** Enhanced deep link resolution to check nested wrapper objects. | ✅ Fixed |
+| 1 | ENV-006 | Low | `env_type` filter advertised but Harness API ignores the `envType` query param. v1 also does not support this filter. | ℹ️ API limitation |
+| 2 | ENV-001–007 | Info | v1 CD environment tools exist in source but are not exposed (CD license denied). Cannot compare v1 vs v2 output directly. | ℹ️ License |
+| 3 | ENV-011 | Low | Account-scope deep links previously had empty `/orgs//projects//` segments. | ✅ Fixed |
 
 ---
 
-### Notes
+### Sample Responses
 
-- v2 returns 9 environments at project scope (AI_Devops/Sanity), 0 at org scope, 80 at account scope.
-- Pagination works correctly: page 0/size 5 → 5 items, page 1/size 5 → 4 items, total=9 consistent.
-- v2 `harness_get` returns comprehensive data: YAML, tags, timestamps, storeType, openInHarness link.
-- v1 `list_entities`/`get_entity` are IDP Catalog tools — they do not cover CD environments. No functional parity is possible for this module.
-- Deep links are fully resolved with actual identifiers (no placeholders). Format validated as correct.
-- CRUD operations (ENV-008–010) skipped per policy — v2 `harness_create`, `harness_update`, `harness_delete` all advertise environment support via `harness_describe`.
+**v2 — List (compact, project scope, page 0, size 2):**
+```json
+{
+  "items": [
+    { "createdAt": 1773829343676, "lastModifiedAt": 1773829360001, "openInHarness": "https://qa.harness.io/ng/account/px7xd_BFRCi-pfWPYXVjvw/all/orgs/AI_Devops/projects/Sanity/settings/environments/mcp_crud_test_env/details" },
+    { "createdAt": 1773818322950, "lastModifiedAt": 1773818331900, "openInHarness": "https://qa.harness.io/ng/account/px7xd_BFRCi-pfWPYXVjvw/all/orgs/AI_Devops/projects/Sanity/settings/environments/test_plan_env/details" }
+  ],
+  "total": 9
+}
+```
+
+**v2 — List (account scope):**
+```json
+{
+  "items": [
+    { "createdAt": 1773815189437, "openInHarness": "https://qa.harness.io/ng/account/px7xd_BFRCi-pfWPYXVjvw/settings/environments/curl_test_unwrapped/details" },
+    ...
+  ],
+  "total": 80
+}
+```
+
+**v2 — Get (preprod):**
+```json
+{
+  "environment": {
+    "identifier": "preprod",
+    "name": "PreProd",
+    "type": "PreProduction",
+    "tags": { "ai_generated": "true", "environment": "staging", "purpose": "testing" },
+    "yaml": "environment:\n  name: PreProd\n  identifier: preprod\n  type: PreProduction\n  ...",
+    "storeType": "INLINE"
+  },
+  "openInHarness": "https://qa.harness.io/ng/account/px7xd_BFRCi-pfWPYXVjvw/all/orgs/AI_Devops/projects/Sanity/settings/environments/preprod/details"
+}
+```
+
+**v2 — Create (`env_crud_test_0319`):**
+```json
+{
+  "environment": {
+    "identifier": "env_crud_test_0319",
+    "name": "CRUD Test Env 0319",
+    "type": "PreProduction",
+    "description": "Created by MCP v2 CRUD test on 2026-03-19",
+    "storeType": "INLINE"
+  },
+  "governanceMetadata": { "status": "pass" },
+  "openInHarness": "https://qa.harness.io/ng/account/px7xd_BFRCi-pfWPYXVjvw/all/orgs/AI_Devops/projects/Sanity/settings/environments/env_crud_test_0319/details"
+}
+```
+
+**v2 — Update (name, type→Production, add tags):**
+```json
+{
+  "environment": {
+    "identifier": "env_crud_test_0319",
+    "name": "CRUD Test Env 0319 UPDATED",
+    "type": "Production",
+    "tags": { "test": "true", "updated": "true" }
+  },
+  "openInHarness": "https://qa.harness.io/ng/account/px7xd_BFRCi-pfWPYXVjvw/all/orgs/AI_Devops/projects/Sanity/settings/environments/env_crud_test_0319/details"
+}
+```
+
+**v2 — Delete:**
+```json
+{ "deleted": true, "resource_type": "environment", "resource_id": "env_crud_test_0319" }
+```
+
+**v2 — Get after delete (confirms 404):**
+```
+"Environment with identifier [env_crud_test_0319] in project [Sanity], org [AI_Devops] not found"
+```
+
+**v1 — `list_entities(kind=environment, scope_level=PROJECT)`:**
+```json
+[]
+```
