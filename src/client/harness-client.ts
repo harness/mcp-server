@@ -63,16 +63,20 @@ export class HarnessClient {
 
     const method = options.method ?? "GET";
     const url = this.buildUrl(options);
+    const isFme = options.product === "fme";
     const headers: Record<string, string> = {
-      "Harness-Account": this.accountId,
+      ...(isFme ? {} : { "Harness-Account": this.accountId }),
       ...options.headers,
     };
 
-    // Inject authentication header — JWT takes precedence over API key
-    if (this.authHeader) {
-      headers["Authorization"] = this.authHeader;
-    } else if (this.token) {
-      headers["x-api-key"] = this.token;
+    // FME uses its own Authorization header (passed via options.headers).
+    // Harness uses JWT passthrough or x-api-key.
+    if (!isFme) {
+      if (this.authHeader) {
+        headers["Authorization"] = this.authHeader;
+      } else if (this.token) {
+        headers["x-api-key"] = this.token;
+      }
     }
 
     if (options.body) {
@@ -219,16 +223,20 @@ export class HarnessClient {
 
     const method = options.method ?? "POST";
     const url = this.buildUrl(options);
+    const isFme = options.product === "fme";
     const headers: Record<string, string> = {
-      "Harness-Account": this.accountId,
+      ...(isFme ? {} : { "Harness-Account": this.accountId }),
       ...options.headers,
     };
 
-    // Inject authentication header — JWT takes precedence over API key
-    if (this.authHeader) {
-      headers["Authorization"] = this.authHeader;
-    } else if (this.token) {
-      headers["x-api-key"] = this.token;
+    // FME uses its own Authorization header (passed via options.headers).
+    // Harness uses JWT passthrough or x-api-key.
+    if (!isFme) {
+      if (this.authHeader) {
+        headers["Authorization"] = this.authHeader;
+      } else if (this.token) {
+        headers["x-api-key"] = this.token;
+      }
     }
 
     if (options.body) {
@@ -316,13 +324,16 @@ export class HarnessClient {
       path = path.slice("/gateway".length);
     }
 
-    // Inject accountIdentifier into query params (used by most Harness APIs)
+    // Inject accountIdentifier into query params (used by most Harness APIs).
+    // FME (Split.io) API doesn't use Harness-style account params.
     const params = new URLSearchParams();
-    params.set("accountIdentifier", this.accountId);
+    if (options.product !== "fme") {
+      params.set("accountIdentifier", this.accountId);
 
-    // Log-service gateway expects accountID (capital ID) in query params
-    if (path.includes("/log-service/")) {
-      params.set("accountID", this.accountId);
+      // Log-service gateway expects accountID (capital ID) in query params
+      if (path.includes("/log-service/")) {
+        params.set("accountID", this.accountId);
+      }
     }
 
     if (options.params) {

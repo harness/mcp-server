@@ -1,6 +1,44 @@
 import type { ToolsetDefinition, BodySchema } from "../types.js";
 import { passthrough } from "../extractors.js";
 
+/**
+ * FME response extractor that flattens `trafficType.id` → `trafficTypeId`
+ * at the top level so deep link templates can reference it.
+ */
+function flattenTrafficType(item: Record<string, unknown>): void {
+  const tt = item.trafficType;
+  if (tt && typeof tt === "object" && !Array.isArray(tt)) {
+    const ttRecord = tt as Record<string, unknown>;
+    if (ttRecord.id !== undefined && item.trafficTypeId === undefined) {
+      item.trafficTypeId = ttRecord.id;
+    }
+  }
+}
+
+/** Extract FME feature flag list — passthrough with trafficType.id flattened on each item. */
+const fmeListExtract = (raw: unknown): unknown => {
+  if (raw && typeof raw === "object") {
+    const r = raw as Record<string, unknown>;
+    const objects = r.objects;
+    if (Array.isArray(objects)) {
+      for (const item of objects) {
+        if (item && typeof item === "object") {
+          flattenTrafficType(item as Record<string, unknown>);
+        }
+      }
+    }
+  }
+  return raw;
+};
+
+/** Extract FME feature flag single item — passthrough with trafficType.id flattened. */
+const fmeGetExtract = (raw: unknown): unknown => {
+  if (raw && typeof raw === "object") {
+    flattenTrafficType(raw as Record<string, unknown>);
+  }
+  return raw;
+};
+
 const fmeFeatureFlagUpdateSchema: BodySchema = {
   description: "Partial update for an FME feature flag's metadata",
   fields: [
@@ -69,9 +107,16 @@ export const featureFlagsToolset: ToolsetDefinition = {
       scope: "account",
       identifierFields: ["workspace_id", "feature_flag_name"],
       product: "fme",
+      deepLinkTemplate: "/ng/account/{accountId}/module/fme/orgs/{orgIdentifier}/projects/{projectIdentifier}/setup/resources/targets/{trafficTypeId}/splits/{id}",
       listFilterFields: [
         { name: "offset", description: "Pagination offset for FME feature flags", type: "number" },
-        { name: "status", description: "Filter by flag status", type: "string", enum: ["ACTIVE", "ARCHIVED"] },
+        {
+          name: "status",
+          description:
+            "Filter by Split lifecycle status on each flag (`ACTIVE`, `ARCHIVED`, etc.). The list API does not support this as a query parameter; the MCP server paginates through all flags and returns only matches.",
+          type: "string",
+          enum: ["ACTIVE", "ARCHIVED"],
+        },
         { name: "rollout_status_id", description: "Filter by rollout status UUID (use fme_rollout_status to discover valid IDs)", type: "string" },
         { name: "name", description: "Filter flags by name (partial match)", type: "string" },
         { name: "tags", description: "Filter flags by tag", type: "string" },
@@ -84,19 +129,20 @@ export const featureFlagsToolset: ToolsetDefinition = {
           queryParams: {
             offset: "offset",
             size: "limit",
-            status: "status",
+            // `status` is not a documented Split list query param; Registry applies it client-side after paging.
             rollout_status_id: "rolloutStatus",
             name: "name",
             tags: "tag",
           },
-          responseExtractor: passthrough,
-          description: "List feature flags for a workspace with filtering and pagination (offset and size params, max 50). Use status=ARCHIVED to find archived flags.",
+          responseExtractor: fmeListExtract,
+          description:
+            "List feature flags for a workspace with filtering and pagination (offset and size params, max 50). Pass filters.status=ARCHIVED (or ACTIVE) to return only flags with that lifecycle status (full workspace scan).",
         },
         get: {
           method: "GET",
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}",
           pathParams: { workspace_id: "wsId", feature_flag_name: "featureFlagName" },
-          responseExtractor: passthrough,
+          responseExtractor: fmeGetExtract,
           description: "Get a specific feature flag's metadata without requiring an environment",
         },
         delete: {

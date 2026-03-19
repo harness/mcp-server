@@ -421,6 +421,7 @@ The server automatically loads environment variables from a `.env` file in the p
 | `HARNESS_ACCOUNT_ID` | No | *(from PAT)* | Harness account identifier. Auto-extracted from PAT tokens; only needed for non-PAT API keys |
 | `HARNESS_BASE_URL` | No | `https://app.harness.io` | Base URL (override for self-managed Harness) |
 | `HARNESS_FME_BASE_URL` | No | `https://api.split.io` | Base URL for FME/Split.io API. Used by `fme_workspace`, `fme_environment`, and `fme_feature_flag` resources |
+| `HARNESS_FME_API_KEY` | No | -- | Split.io Admin API key for FME resources. Required only when using `fme_*` resource types. Generate at `app.split.io` → Admin Settings → API Keys |
 | `HARNESS_DEFAULT_ORG_ID` | No | `default` | Default organization identifier. Optional convenience — agents can discover orgs dynamically via `harness_list(resource_type="organization")` |
 | `HARNESS_DEFAULT_PROJECT_ID` | No | -- | Default project identifier. Optional convenience — agents can discover projects dynamically via `harness_list(resource_type="project")` |
 | `HARNESS_API_TIMEOUT_MS` | No | `30000` | HTTP request timeout in milliseconds |

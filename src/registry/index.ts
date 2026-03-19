@@ -39,7 +39,7 @@ import { overridesToolset } from "./toolsets/overrides.js";
 const log = createLogger("registry");
 
 /** Keys under which different Harness APIs return list arrays. */
-const LIST_ARRAY_KEYS = ["items", "features", "content", "data"];
+const LIST_ARRAY_KEYS = ["items", "features", "content", "data", "objects"];
 
 /** All available toolsets */
 const ALL_TOOLSETS: ToolsetDefinition[] = [
@@ -222,6 +222,87 @@ export class Registry {
     return this.executeSpec(client, def, actionSpec, input, signal);
   }
 
+  /**
+   * Split's documented GET /splits/ws/{workspace-id} list API does not include a `status` query
+   * parameter. Callers still pass `status` to mean Split lifecycle (`ACTIVE`, `ARCHIVED`, …) on
+   * each flag object; we page through the workspace and filter client-side.
+   */
+  private async fmeListAllPagesFilterBySplitStatus(
+    client: HarnessClient,
+    def: ResourceDefinition,
+    spec: EndpointSpec,
+    input: Record<string, unknown>,
+    firstPage: unknown,
+    path: string,
+    requestParams: Record<string, string | number | boolean | undefined>,
+    baseUrl: string | undefined,
+    productHeaders: Record<string, string>,
+    product: "harness" | "fme",
+    signal?: AbortSignal,
+  ): Promise<unknown> {
+    const want = String(input.status).trim().toUpperCase();
+    if (!want) {
+      return firstPage;
+    }
+
+    const first = firstPage as Record<string, unknown>;
+    const cleanParams: Record<string, string | number | boolean | undefined> = { ...requestParams };
+    delete cleanParams.status;
+
+    const pageLimit = Math.min(
+      50,
+      Math.max(1, Number(cleanParams.limit ?? first.limit ?? 20)),
+    );
+    cleanParams.limit = pageLimit;
+
+    const matches: unknown[] = [];
+
+    const collect = (p: Record<string, unknown>) => {
+      const objs = p.objects;
+      if (!Array.isArray(objs)) return;
+      for (const o of objs) {
+        if (o && typeof o === "object") {
+          const st = (o as Record<string, unknown>).status;
+          if (String(st).toUpperCase() === want) {
+            matches.push(o);
+          }
+        }
+      }
+    };
+
+    collect(first);
+
+    const total = Number(first.totalCount ?? 0);
+    let offset = Number(first.offset ?? 0) + (Array.isArray(first.objects) ? first.objects.length : 0);
+
+    while (offset < total) {
+      cleanParams.offset = offset;
+      const next = (await client.request({
+        method: spec.method,
+        path,
+        params: { ...cleanParams },
+        ...(baseUrl ? { baseUrl } : {}),
+        ...(Object.keys(productHeaders).length > 0 ? { headers: productHeaders } : {}),
+        ...(spec.responseType ? { responseType: spec.responseType } : {}),
+        ...(product !== "harness" ? { product } : {}),
+        signal,
+      })) as Record<string, unknown>;
+
+      collect(next);
+      const got = Array.isArray(next.objects) ? next.objects.length : 0;
+      if (got === 0) break;
+      offset += got;
+    }
+
+    return {
+      ...first,
+      objects: matches,
+      offset: 0,
+      limit: matches.length,
+      totalCount: matches.length,
+    };
+  }
+
   private async executeSpec(
     client: HarnessClient,
     def: ResourceDefinition,
@@ -353,22 +434,56 @@ export class Registry {
       }
     }
 
-    // Make request — resolve base URL from product backend
+    // Make request — resolve base URL and auth from product backend
     const product = def.product ?? "harness";
     const baseUrl = resolveProductBaseUrl(this.config, product);
+    const productHeaders: Record<string, string> = { ...spec.headers };
+    if (product === "fme") {
+      const fmeApiKey = this.config.HARNESS_FME_API_KEY;
+      if (!fmeApiKey) {
+        throw new Error(
+          "HARNESS_FME_API_KEY is required for FME resources. " +
+          "Set this environment variable to your Split.io Admin API key.",
+        );
+      }
+      productHeaders["Authorization"] = `Bearer ${fmeApiKey}`;
+    }
     const raw = await client.request({
       method: spec.method,
       path,
       params,
       body,
       ...(baseUrl ? { baseUrl } : {}),
-      ...(spec.headers ? { headers: spec.headers } : {}),
+      ...(Object.keys(productHeaders).length > 0 ? { headers: productHeaders } : {}),
       ...(spec.responseType ? { responseType: spec.responseType } : {}),
+      ...(product !== "harness" ? { product } : {}),
       signal,
     });
 
+    let listRaw: unknown = raw;
+    if (
+      def.resourceType === "fme_feature_flag" &&
+      def.operations.list === spec &&
+      input.status !== undefined &&
+      String(input.status).trim() !== ""
+    ) {
+      listRaw = await this.fmeListAllPagesFilterBySplitStatus(
+        client,
+        def,
+        spec,
+        input,
+        raw,
+        path,
+        { ...params },
+        baseUrl,
+        productHeaders,
+        product === "fme" ? "fme" : "harness",
+        signal,
+      );
+    }
+
     // Extract response
-    const result = spec.responseExtractor ? spec.responseExtractor(raw) : raw;
+    const result = spec.responseExtractor ? spec.responseExtractor(listRaw) : listRaw;
 
     // Propagate storeType from the request query params into the result when
     // the API response didn't include one.  Create/update endpoints like

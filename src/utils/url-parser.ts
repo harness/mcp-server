@@ -34,7 +34,7 @@ type ContextField =
   | "environment_id";
 
 /** Known Harness module identifiers that appear in URL paths */
-const MODULES = new Set(["cd", "ci", "cf", "ce", "cv", "sto", "chaos", "idp", "sei"]);
+const MODULES = new Set(["cd", "ci", "ce", "cv", "sto", "chaos", "idp", "sei", "fme"]);
 
 /**
  * Maps URL path segments (plural resource names) to registry resource types
@@ -56,6 +56,7 @@ const RESOURCE_SEGMENTS: Record<string, { type: string; contextField: ContextFie
   "applications":     { type: "gitops_application",  contextField: "resource_id" },
   "clusters":         { type: "gitops_cluster",      contextField: "resource_id" },
   "feature-flags":    { type: "fme_feature_flag",     contextField: "resource_id" },
+  "splits":           { type: "fme_feature_flag",     contextField: "resource_id" },
   "experiments":      { type: "chaos_experiment",    contextField: "resource_id" },
   "registries":       { type: "registry",            contextField: "registry_id" },
   "artifacts":        { type: "artifact",            contextField: "artifact_id" },
