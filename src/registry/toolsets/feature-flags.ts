@@ -48,15 +48,6 @@ const fmeFeatureFlagUpdateSchema: BodySchema = {
   ],
 };
 
-const fmeArchiveBodySchema: BodySchema = {
-  description: "Archive a feature flag via the Change Request API",
-  fields: [
-    { name: "title", type: "string", required: true, description: "Title of the archive change request" },
-    { name: "comment", type: "string", required: false, description: "Optional comment for the change request" },
-    { name: "approvers", type: "array", required: false, description: "Email(s) of approver(s)", itemType: "string" },
-  ],
-};
-
 const fmeRbsCreateSchema: BodySchema = {
   description: "Create a new rule-based segment in a workspace",
   fields: [
@@ -150,7 +141,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_feature_flag",
       displayName: "FME Feature Flag",
       description:
-        "Feature flag via the Split.io API. List flags by workspace with filtering (name, tags, rollout_status_id) and pagination (offset/size, default 20, max 50). Supports get, delete, update, and kill/restore/archive execute actions.",
+        "Feature flag via the Split.io API. List flags by workspace with filtering (name, tags, rollout_status_id) and pagination (offset/size, default 20, max 50). Supports get, delete, update, and kill/restore/archive/unarchive execute actions.",
       toolset: "feature-flags",
       scope: "account",
       identifierFields: ["workspace_id", "feature_flag_name"],
@@ -227,18 +218,17 @@ export const featureFlagsToolset: ToolsetDefinition = {
         },
         archive: {
           method: "POST",
-          path: "/internal/api/v2/changeRequests/ws/{wsId}",
-          pathParams: { workspace_id: "wsId" },
-          bodyBuilder: (input) => ({
-            split: { name: input.feature_flag_name },
-            operationType: "ARCHIVE",
-            title: input.title,
-            ...(input.comment ? { comment: input.comment } : {}),
-            ...(input.approvers ? { approvers: input.approvers } : {}),
-          }),
+          path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/archive",
+          pathParams: { workspace_id: "wsId", feature_flag_name: "featureFlagName" },
           responseExtractor: passthrough,
-          bodySchema: fmeArchiveBodySchema,
-          actionDescription: "Archive a feature flag via the Change Request (approval flow) API. Requires workspace_id, feature_flag_name, and title. Subject to governance rules (OPA policies).",
+          actionDescription: "Archive a feature flag. Requires workspace_id and feature_flag_name. Subject to OPA policy checks (409 on failure).",
+        },
+        unarchive: {
+          method: "POST",
+          path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/unarchive",
+          pathParams: { workspace_id: "wsId", feature_flag_name: "featureFlagName" },
+          responseExtractor: passthrough,
+          actionDescription: "Unarchive a previously archived feature flag. Requires workspace_id and feature_flag_name. Returns 409 if the flag has dependent objects.",
         },
       },
     },
