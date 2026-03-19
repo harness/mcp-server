@@ -151,6 +151,11 @@ export class HarnessClient {
           throw error;
         }
 
+        // 204 No Content — valid success response (e.g. PATCH/DELETE on PM API)
+        if (response.status === 204) {
+          return { status: "SUCCESS", message: "No content" } as T;
+        }
+
         const text = await response.text();
         if (!text) {
           throw new HarnessApiError(

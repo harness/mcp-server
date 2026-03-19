@@ -136,7 +136,7 @@ export const governanceToolset: ToolsetDefinition = {
       toolset: "governance",
       scope: "project",
       identifierFields: ["policy_set_id"],
-      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/setup/governance/policy-sets/{identifier}",
+      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/governance/policy-sets/{identifier}",
       listFilterFields: [
         { name: "search_term", description: "Filter policy sets by name or keyword" },
         { name: "type", description: "Filter by entity type (pipeline, connector, service, environment, etc.)" },
@@ -202,7 +202,7 @@ export const governanceToolset: ToolsetDefinition = {
       toolset: "governance",
       scope: "project",
       identifierFields: ["evaluation_id"],
-      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/setup/governance/evaluation/{id}",
+      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/governance/evaluation/{id}",
       listFilterFields: [
         { name: "entity", description: "Filter by entity identifier" },
         { name: "type", description: "Filter by entity type (pipeline, connector, service, etc.)" },
