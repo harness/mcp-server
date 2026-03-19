@@ -36,6 +36,8 @@ export type ToolsetName =
   | "freeze"
   | "overrides";
 
+export type ProductName = "harness" | "fme";
+
 export type OperationName = "list" | "get" | "create" | "update" | "delete";
 
 /**
@@ -163,10 +165,10 @@ export interface ResourceDefinition {
   /** Execute action mappings (e.g. run pipeline, toggle FF) */
   executeActions?: Record<string, EndpointSpec & { actionDescription: string }>;
   /**
-   * Override base URL for this resource. Set to "fme" to use HARNESS_FME_BASE_URL
-   * (Split.io API at https://api.split.io) instead of HARNESS_BASE_URL.
+   * Product backend for this resource. Defaults to "harness" (uses HARNESS_BASE_URL).
+   * Set to "fme" to use HARNESS_FME_BASE_URL (Split.io API at https://api.split.io).
    */
-  baseUrlOverride?: "fme";
+  product?: ProductName;
 }
 
 /**

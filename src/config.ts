@@ -110,6 +110,16 @@ export const ConfigSchema = RawConfigSchema.superRefine((data, ctx) => {
 
 export type Config = z.infer<typeof ConfigSchema>;
 
+/**
+ * Resolve the base URL for a given product backend.
+ * - "harness" → undefined (uses the default client base URL)
+ * - "fme"     → config.HARNESS_FME_BASE_URL
+ */
+export function resolveProductBaseUrl(config: Config, product: "harness" | "fme"): string | undefined {
+  if (product === "fme") return config.HARNESS_FME_BASE_URL;
+  return undefined;
+}
+
 export function loadConfig(): Config {
   const result = ConfigSchema.safeParse(process.env);
   if (!result.success) {

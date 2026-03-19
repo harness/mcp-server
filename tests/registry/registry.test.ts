@@ -467,13 +467,14 @@ describe("Registry", () => {
       expect(missing, `Missing bodySchema on update: ${missing.join(", ")}`).toEqual([]);
     });
 
-    it("every executeAction has a bodySchema", () => {
+    it("every executeAction with a bodyBuilder has a bodySchema", () => {
       const missing: string[] = [];
       for (const type of registry.getAllResourceTypes()) {
         const def = registry.getResource(type);
         if (def.executeActions) {
           for (const [action, spec] of Object.entries(def.executeActions)) {
-            if (!spec.bodySchema) {
+            // Only require bodySchema when the action accepts a body
+            if (spec.bodyBuilder && !spec.bodySchema) {
               missing.push(`${type}.${action}`);
             }
           }

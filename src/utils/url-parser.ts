@@ -55,7 +55,7 @@ const RESOURCE_SEGMENTS: Record<string, { type: string; contextField: ContextFie
   "agents":           { type: "gitops_agent",        contextField: "agent_id" },
   "applications":     { type: "gitops_application",  contextField: "resource_id" },
   "clusters":         { type: "gitops_cluster",      contextField: "resource_id" },
-  "feature-flags":    { type: "feature_flag",        contextField: "resource_id" },
+  "feature-flags":    { type: "fme_feature_flag",     contextField: "resource_id" },
   "experiments":      { type: "chaos_experiment",    contextField: "resource_id" },
   "registries":       { type: "registry",            contextField: "registry_id" },
   "artifacts":        { type: "artifact",            contextField: "artifact_id" },
