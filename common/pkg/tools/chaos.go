@@ -1127,57 +1127,57 @@ func ListKubernetesInfrastructuresTool(config *config.McpServerConfig, client *c
 				mcp.Description(chaoscommons.DescStatusK8sInfra),
 				mcp.Enum("ACTIVE", "INACTIVE", "PENDING", "All"),
 			),
-		mcp.WithBoolean(chaoscommons.ParamIncludeLegacyInfra,
-			mcp.Description(chaoscommons.DescIncludeLegacyInfra),
-			mcp.DefaultBool(false),
+			mcp.WithBoolean(chaoscommons.ParamIncludeLegacyInfra,
+				mcp.Description(chaoscommons.DescIncludeLegacyInfra),
+				mcp.DefaultBool(false),
+			),
+			mcp.WithString(chaoscommons.ParamSearch,
+				mcp.Description(chaoscommons.DescSearchK8sInfra),
+			),
+			WithPagination(),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
 		),
-		mcp.WithString(chaoscommons.ParamSearch,
-			mcp.Description(chaoscommons.DescSearchK8sInfra),
-		),
-		WithPagination(),
-		mcp.WithToolAnnotation(mcp.ToolAnnotation{
-			ReadOnlyHint:    mcputils.ToBoolPtr(true),
-			DestructiveHint: mcputils.ToBoolPtr(false),
-		}),
-	),
-	func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		scope, err := common.FetchScope(ctx, config, request, false)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
-		environmentID, err := OptionalParam[string](request, chaoscommons.ParamEnvironmentID)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
+			environmentID, err := OptionalParam[string](request, chaoscommons.ParamEnvironmentID)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
-		statusRaw, err := OptionalParam[string](request, chaoscommons.ParamStatus)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
-		statusFilter := "ACTIVE"
-		if statusRaw == "All" {
-			statusFilter = ""
-		} else if statusRaw != "" {
-			statusFilter = statusRaw
-		}
+			statusRaw, err := OptionalParam[string](request, chaoscommons.ParamStatus)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			statusFilter := "ACTIVE"
+			if statusRaw == "All" {
+				statusFilter = ""
+			} else if statusRaw != "" {
+				statusFilter = statusRaw
+			}
 
-		includeLegacyInfra, err := OptionalParam[bool](request, chaoscommons.ParamIncludeLegacyInfra)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
+			includeLegacyInfra, err := OptionalParam[bool](request, chaoscommons.ParamIncludeLegacyInfra)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
-		search, err := OptionalParam[string](request, chaoscommons.ParamSearch)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
+			search, err := OptionalParam[string](request, chaoscommons.ParamSearch)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
-		page, size, err := FetchPagination(request)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
+			page, size, err := FetchPagination(request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
-		data, err := client.ListKubernetesInfrastructures(ctx, scope, environmentID, page, size, statusFilter, includeLegacyInfra, search)
+			data, err := client.ListKubernetesInfrastructures(ctx, scope, environmentID, page, size, statusFilter, includeLegacyInfra, search)
 			if err != nil {
 				return nil, fmt.Errorf("failed to list kubernetes infrastructures: %w", err)
 			}
