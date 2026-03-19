@@ -1,6 +1,6 @@
 # Harness MCP Server 2.0
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 140 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 124 resource types.
 
 [![CI](https://github.com/thisrohangupta/harness-mcp-v2/actions/workflows/ci.yml/badge.svg)](https://github.com/thisrohangupta/harness-mcp-v2/actions/workflows/ci.yml)
 
@@ -10,8 +10,8 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **11 tools, 140 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
-- **Full platform coverage.** 27 toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Internal Developer Portal, Software Supply Chain, Visualizations, and more. Not just pipelines — the entire Harness platform.
+- **11 tools, 124 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **Full platform coverage.** 28 toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Internal Developer Portal, Software Supply Chain, Governance, Visualizations, and more. Not just pipelines — the entire Harness platform.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **26 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
 - **Works everywhere.** Stdio transport for local clients (Claude Desktop, Cursor, Windsurf), HTTP transport for remote/shared deployments, Docker and Kubernetes ready.
@@ -765,7 +765,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-140 resource types organized across 27 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+124 resource types organized across 28 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -900,6 +900,7 @@ Harness pipelines can be stored in three ways:
 | `fme_workspace` | x | | | | | |
 | `fme_environment` | x | | | | | |
 | `fme_feature_flag` | x | x | | | | |
+| `fme_feature_flag_definition` | | x | | | | |
 | `feature_flag` | x | x | x | | x | `toggle` |
 
 **FME (Split.io) resources** — `fme_workspace`, `fme_environment`, and `fme_feature_flag` use the Split.io internal API and are scoped by workspace ID rather than org/project. `fme_feature_flag` returns basic flag metadata (name, description, traffic type, tags, rollout status) without requiring an environment. Use `feature_flag` for the Harness CF admin API which supports environment-specific definitions, create, delete, and toggle.
@@ -974,20 +975,21 @@ SEI resources are consolidated for token efficiency. Use `metric` or `aspect` pa
 
 | Resource Type | List | Get | Create | Update | Delete | Execute Actions |
 |---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
+| `scs_artifact_source` | x | | | | | |
 | `artifact_security` | x | x | | | | |
-| `code_repo_security` | x | x | | | | |
-| `scs_sbom` | | x | | | | |
 | `scs_artifact_component` | x | | | | | |
-| `scs_compliance_result` | x | | | | | |
 | `scs_artifact_remediation` | | x | | | | |
 | `scs_chain_of_custody` | | x | | | | |
-| `scs_opa_policy` | | | x | | | |
+| `scs_compliance_result` | x | | | | | |
+| `code_repo_security` | x | x | | | | |
+| `scs_sbom` | | x | | | | |
 
 ### Security Testing Orchestration (STO)
 
 | Resource Type | List | Get | Create | Update | Delete | Execute Actions |
 |---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `security_issue` | x | x | | | | |
+| `security_issue` | x | | | | | |
+| `security_issue_filter` | x | | | | | |
 | `security_exemption` | x | | | | | `approve`, `reject`, `promote` |
 
 ### Access Control
@@ -1001,6 +1003,14 @@ SEI resources are consolidated for token efficiency. Use `metric` or `aspect` pa
 | `role_assignment` | x | | x | | | |
 | `resource_group` | x | x | x | | x | |
 | `permission` | x | | | | | |
+
+### Governance
+
+| Resource Type | List | Get | Create | Update | Delete | Execute Actions |
+|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
+| `policy` | x | x | x | x | x | |
+| `policy_set` | x | x | x | x | x | |
+| `policy_evaluation` | x | x | | | | |
 
 ### Settings
 
@@ -1083,7 +1093,7 @@ Inline PNG chart visualizations rendered from Harness data. These are metadata-o
 
 ## Toolset Filtering
 
-By default, all 27 toolsets (and their 140 resource types) are enabled. Use `HARNESS_TOOLSETS` to expose only the toolsets you need. This reduces the resource types the LLM sees, improving tool selection accuracy.
+By default, all 28 toolsets (and their 124 resource types) are enabled. Use `HARNESS_TOOLSETS` to expose only the toolsets you need. This reduces the resource types the LLM sees, improving tool selection accuracy.
 
 ```bash
 # Only expose pipelines, services, and connectors
@@ -1110,14 +1120,15 @@ Available toolset names:
 | `dashboards` | dashboard, dashboard_data |
 | `idp` | idp_entity, scorecard, scorecard_check, scorecard_stats, scorecard_check_stats, idp_score, idp_workflow, idp_tech_doc |
 | `pull-requests` | pull_request, pr_reviewer, pr_comment, pr_check, pr_activity |
-| `feature-flags` | fme_workspace, fme_environment, fme_feature_flag, feature_flag |
+| `feature-flags` | fme_workspace, fme_environment, fme_feature_flag, fme_feature_flag_definition, feature_flag |
 | `gitops` | gitops_agent, gitops_application, gitops_cluster, gitops_repository, gitops_applicationset, gitops_repo_credential, gitops_app_event, gitops_pod_log, gitops_managed_resource, gitops_resource_action, gitops_dashboard, gitops_app_resource_tree |
 | `chaos` | chaos_experiment, chaos_probe, chaos_experiment_template, chaos_infrastructure, chaos_experiment_variable, chaos_experiment_run, chaos_loadtest |
 | `ccm` | cost_perspective, cost_breakdown, cost_timeseries, cost_summary, cost_recommendation, cost_anomaly, cost_anomaly_summary, cost_category, cost_account_overview, cost_filter_value, cost_recommendation_stats, cost_recommendation_detail, cost_commitment |
 | `sei` | sei_metric, sei_productivity_metric, sei_dora_metric, sei_team, sei_team_detail, sei_org_tree, sei_org_tree_detail, sei_business_alignment, sei_ai_usage, sei_ai_adoption, sei_ai_impact, sei_ai_raw_metric |
-| `scs` | artifact_security, code_repo_security, scs_sbom, scs_artifact_component, scs_compliance_result, scs_artifact_remediation, scs_chain_of_custody, scs_opa_policy |
-| `sto` | security_issue, security_exemption |
+| `scs` | scs_artifact_source, artifact_security, scs_artifact_component, scs_artifact_remediation, scs_chain_of_custody, scs_compliance_result, code_repo_security, scs_sbom |
+| `sto` | security_issue, security_issue_filter, security_exemption |
 | `access_control` | user, user_group, service_account, role, role_assignment, resource_group, permission |
+| `governance` | policy, policy_set, policy_evaluation |
 | `settings` | setting |
 | `intelligence` | *(standalone `harness_ask` tool — no registry resource types)* |
 | `visualizations` | visual_timeline, visual_stage_flow, visual_health_dashboard, visual_pie_chart, visual_bar_chart, visual_timeseries, visual_architecture |
@@ -1141,8 +1152,8 @@ Available toolset names:
                           |
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
-                |  26 Toolsets      |      (data files, not code)
-                |  ~108 Resource Types|
+                |  28 Toolsets      |      (data files, not code)
+                |  124 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+
