@@ -149,7 +149,7 @@ describe("parseHarnessUrl", () => {
     const result = parseHarnessUrl(
       "https://app.harness.io/ng/account/abc123/cf/orgs/default/projects/myProject/feature-flags/my_flag",
     );
-    expect(result.resource_type).toBe("feature_flag");
+    expect(result.resource_type).toBe("fme_feature_flag");
     expect(result.resource_id).toBe("my_flag");
   });
 

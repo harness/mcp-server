@@ -1,29 +1,19 @@
 import type { ToolsetDefinition, BodySchema } from "../types.js";
 import { passthrough } from "../extractors.js";
 
-const featureFlagCreateSchema: BodySchema = {
-  description: "Feature flag definition",
+const fmeFeatureFlagUpdateSchema: BodySchema = {
+  description: "Partial update for an FME feature flag's metadata",
   fields: [
-    { name: "identifier", type: "string", required: true, description: "Flag key/identifier (unique within project)" },
-    { name: "name", type: "string", required: true, description: "Display name" },
-    { name: "kind", type: "string", required: true, description: "Flag kind: boolean or multivariate" },
-    { name: "permanent", type: "boolean", required: false, description: "Whether the flag is permanent (won't be cleaned up)" },
-    { name: "description", type: "string", required: false, description: "Optional description" },
-  ],
-};
-
-const featureFlagToggleSchema: BodySchema = {
-  description: "Toggle instructions (built automatically from enable field)",
-  fields: [
-    { name: "enable", type: "boolean", required: true, description: "true to turn on, false to turn off" },
-    { name: "environment", type: "string", required: true, description: "Target environment identifier" },
+    { name: "description", type: "string", required: false, description: "Updated description" },
+    { name: "tags", type: "array", required: false, description: "Updated tags list", itemType: "string" },
+    { name: "rolloutStatus", type: "object", required: false, description: "Rollout status to assign (use fme_rollout_status to discover valid values)" },
   ],
 };
 
 export const featureFlagsToolset: ToolsetDefinition = {
   name: "feature-flags",
   displayName: "Feature Management & Experimentation",
-  description: "Harness FME — feature flags, workspaces, and environments",
+  description: "Harness FME — feature flags, workspaces, environments, and rollout statuses via the Split.io API",
   resources: [
     // ── FME Resources (Split.io API at https://api.split.io) ───────────
     // These use account scope to avoid injecting orgIdentifier/projectIdentifier
@@ -35,7 +25,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       toolset: "feature-flags",
       scope: "account",
       identifierFields: ["workspace_id"],
-      baseUrlOverride: "fme",
+      product: "fme",
       listFilterFields: [
         { name: "offset", description: "Pagination offset for feature flag workspaces", type: "number" },
       ],
@@ -59,7 +49,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       toolset: "feature-flags",
       scope: "account",
       identifierFields: ["workspace_id", "environment_id"],
-      baseUrlOverride: "fme",
+      product: "fme",
       operations: {
         list: {
           method: "GET",
@@ -74,13 +64,17 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_feature_flag",
       displayName: "FME Feature Flag",
       description:
-        "Feature flag via the Split.io API. List flags by workspace with pagination (offset/size, default 20, max 50), or get a single flag's metadata. Does not require an environment.",
+        "Feature flag via the Split.io API. List flags by workspace with filtering (status, name, tags, rollout_status_id) and pagination (offset/size, default 20, max 50). Supports get, delete, update, and kill/restore execute actions.",
       toolset: "feature-flags",
       scope: "account",
       identifierFields: ["workspace_id", "feature_flag_name"],
-      baseUrlOverride: "fme",
+      product: "fme",
       listFilterFields: [
         { name: "offset", description: "Pagination offset for FME feature flags", type: "number" },
+        { name: "status", description: "Filter by flag status", type: "string", enum: ["ACTIVE", "ARCHIVED"] },
+        { name: "rollout_status_id", description: "Filter by rollout status UUID (use fme_rollout_status to discover valid IDs)", type: "string" },
+        { name: "name", description: "Filter flags by name (partial match)", type: "string" },
+        { name: "tags", description: "Filter flags by tag", type: "string" },
       ],
       operations: {
         list: {
@@ -90,9 +84,13 @@ export const featureFlagsToolset: ToolsetDefinition = {
           queryParams: {
             offset: "offset",
             size: "limit",
+            status: "status",
+            rollout_status_id: "rolloutStatus",
+            name: "name",
+            tags: "tag",
           },
           responseExtractor: passthrough,
-          description: "List feature flags for a workspace with pagination (offset and size params, max 50)",
+          description: "List feature flags for a workspace with filtering and pagination (offset and size params, max 50). Use status=ARCHIVED to find archived flags.",
         },
         get: {
           method: "GET",
@@ -100,6 +98,46 @@ export const featureFlagsToolset: ToolsetDefinition = {
           pathParams: { workspace_id: "wsId", feature_flag_name: "featureFlagName" },
           responseExtractor: passthrough,
           description: "Get a specific feature flag's metadata without requiring an environment",
+        },
+        delete: {
+          method: "DELETE",
+          path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}",
+          pathParams: { workspace_id: "wsId", feature_flag_name: "featureFlagName" },
+          responseExtractor: passthrough,
+          description: "Delete a feature flag from a workspace",
+        },
+        update: {
+          method: "PATCH",
+          path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}",
+          pathParams: { workspace_id: "wsId", feature_flag_name: "featureFlagName" },
+          bodyBuilder: (input) => input.body,
+          responseExtractor: passthrough,
+          description: "Update a feature flag's metadata (description, tags, rolloutStatus)",
+          bodySchema: fmeFeatureFlagUpdateSchema,
+        },
+      },
+      executeActions: {
+        kill: {
+          method: "PUT",
+          path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/environments/{environmentId}/kill",
+          pathParams: {
+            workspace_id: "wsId",
+            feature_flag_name: "featureFlagName",
+            environment_id: "environmentId",
+          },
+          responseExtractor: passthrough,
+          actionDescription: "Kill (turn off) a feature flag in a specific environment. Requires workspace_id, feature_flag_name, and environment_id.",
+        },
+        restore: {
+          method: "PUT",
+          path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/environments/{environmentId}/restore",
+          pathParams: {
+            workspace_id: "wsId",
+            feature_flag_name: "featureFlagName",
+            environment_id: "environmentId",
+          },
+          responseExtractor: passthrough,
+          actionDescription: "Restore (re-enable) a killed feature flag in a specific environment. Requires workspace_id, feature_flag_name, and environment_id.",
         },
       },
     },
@@ -111,7 +149,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       toolset: "feature-flags",
       scope: "account",
       identifierFields: ["workspace_id", "feature_flag_name", "environment_id"],
-      baseUrlOverride: "fme",
+      product: "fme",
       operations: {
         get: {
           method: "GET",
@@ -126,78 +164,22 @@ export const featureFlagsToolset: ToolsetDefinition = {
         },
       },
     },
-
-    // ── Standard Harness Feature Flags (Harness API at app.harness.io) ─
     {
-      resourceType: "feature_flag",
-      displayName: "Feature Flag",
+      resourceType: "fme_rollout_status",
+      displayName: "FME Rollout Status",
       description:
-        "Feature flag. Supports list, get, create, delete, and toggle action.",
+        "Rollout status definitions for a workspace (e.g. Killed, Permanent, Ramping). Use to discover valid rollout_status_id UUIDs for filtering fme_feature_flag lists.",
       toolset: "feature-flags",
-      scope: "project",
-      identifierFields: ["flag_id"],
-      listFilterFields: [
-        { name: "name", description: "Filter feature flags by name" },
-        { name: "environment", description: "Feature flag environment filter" },
-      ],
-      deepLinkTemplate: "/ng/account/{accountId}/cf/orgs/{orgIdentifier}/projects/{projectIdentifier}/feature-flags/{flagIdentifier}",
+      scope: "account",
+      identifierFields: ["workspace_id"],
+      product: "fme",
       operations: {
         list: {
           method: "GET",
-          path: "/cf/admin/features",
-          queryParams: {
-            name: "name",
-            environment: "environment",
-            page: "pageNumber",
-            size: "pageSize",
-          },
+          path: "/internal/api/v2/rolloutStatuses/ws/{wsId}",
+          pathParams: { workspace_id: "wsId" },
           responseExtractor: passthrough,
-          description: "List feature flags",
-        },
-        get: {
-          method: "GET",
-          path: "/cf/admin/features/{flagIdentifier}",
-          pathParams: { flag_id: "flagIdentifier" },
-          queryParams: { environment: "environment" },
-          responseExtractor: passthrough,
-          description: "Get feature flag details",
-        },
-        create: {
-          method: "POST",
-          path: "/cf/admin/features",
-          bodyBuilder: (input) => input.body,
-          responseExtractor: passthrough,
-          description: "Create a new feature flag",
-          bodySchema: featureFlagCreateSchema,
-        },
-        delete: {
-          method: "DELETE",
-          path: "/cf/admin/features/{flagIdentifier}",
-          pathParams: { flag_id: "flagIdentifier" },
-          responseExtractor: passthrough,
-          description: "Delete a feature flag",
-        },
-      },
-      executeActions: {
-        toggle: {
-          method: "PATCH",
-          path: "/cf/admin/features/{flagIdentifier}",
-          pathParams: { flag_id: "flagIdentifier" },
-          queryParams: { environment: "environment" },
-          bodyBuilder: (input) => {
-            if (input.enable === undefined || input.enable === null) {
-              throw new Error("'enable' field is required for toggle action — set to true (on) or false (off)");
-            }
-            return {
-              instructions: [
-                { kind: input.enable ? "turnFlagOn" : "turnFlagOff" },
-              ],
-            };
-          },
-          responseExtractor: passthrough,
-          actionDescription:
-            "Toggle a feature flag on/off. Set 'enable' to true/false and specify 'environment'.",
-          bodySchema: featureFlagToggleSchema,
+          description: "List rollout status definitions for a workspace (Killed, Permanent, Ramping, etc.)",
         },
       },
     },

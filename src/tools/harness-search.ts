@@ -14,7 +14,7 @@ const log = createLogger("search");
 /** Relevance tiers — lower number = more relevant. */
 const RELEVANCE_TIERS: Record<string, number> = {
   pipeline: 1, service: 1, environment: 1, connector: 1, execution: 1,
-  template: 2, trigger: 2, input_set: 2, secret: 2, feature_flag: 2,
+  template: 2, trigger: 2, input_set: 2, secret: 2, fme_feature_flag: 2,
   repository: 2, infrastructure: 2,
   // Everything else defaults to tier 3
 };

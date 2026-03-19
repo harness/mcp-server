@@ -171,9 +171,9 @@ const WAVE1_LIST_TYPES = [
   { type: "delegate", toolset: "delegates", domain: "Delegate", skipIfUnavailable: true },
   { type: "repository", toolset: "repositories", domain: "Code" },
 
-  // Feature Flags
-  { type: "feature_flag", toolset: "feature-flags", domain: "Feature Flags", skipIfUnavailable: true },
+  // Feature Flags (FME only — FF Classic removed)
   { type: "fme_workspace", toolset: "feature-flags", domain: "Feature Flags", skipIfUnavailable: true },
+  { type: "fme_feature_flag", toolset: "feature-flags", domain: "Feature Flags", skipIfUnavailable: true },
 
   // GitOps
   { type: "gitops_agent", toolset: "gitops", domain: "GitOps", skipIfUnavailable: true },
@@ -217,7 +217,7 @@ const WAVE1_LIST_TYPES = [
 /** Resources that support get (used in Tier 3) */
 const GET_SUPPORTED = new Set([
   "pipeline", "service", "environment", "connector", "secret", "template",
-  "repository", "feature_flag", "gitops_agent", "gitops_application",
+  "repository", "fme_feature_flag", "gitops_agent", "gitops_application",
   "gitops_cluster", "gitops_repository", "chaos_experiment",
   "user", "user_group", "role", "security_issue",
   "dashboard", "audit_event", "idp_entity", "scorecard",
@@ -824,7 +824,7 @@ async function main() {
       { type: "environment", toolset: "environments", domain: "Schema" },
       { type: "connector", toolset: "connectors", domain: "Schema" },
       { type: "pipeline", toolset: "pipelines", domain: "Schema" },
-      { type: "feature_flag", toolset: "feature-flags", domain: "Schema" },
+      // FF Classic removed — FME has no bodySchema-based create
     ];
 
     for (const st of SCHEMA_TYPES) {
@@ -1033,50 +1033,57 @@ async function main() {
       await runCase(tc);
     }
 
-    // Feature flag toggle (on then off to restore)
-    if (discovered.feature_flag && shouldRunToolset("feature-flags")) {
-      // Get current state
-      let currentState = null;
+    // FME feature flag kill/restore (requires workspace_id + environment_id)
+    if (discovered.fme_feature_flag && discovered.fme_workspace && shouldRunToolset("feature-flags")) {
+      // Discover an environment for this workspace
+      let fmeEnvId = null;
       try {
-        const getResult = await callTool(client, "harness_get", {
-          resource_type: "feature_flag", resource_id: discovered.feature_flag, project_id: PROJECT_ID,
+        const envResult = await callTool(client, "harness_list", {
+          resource_type: "fme_environment", workspace_id: discovered.fme_workspace, size: 1,
         });
-        const d = parse(getResult);
-        currentState = d?.envProperties?.state === "on" || d?.enabled === true;
-      } catch { /* unknown state */ }
+        const envData = parse(envResult);
+        const envItems = envData?.items || (Array.isArray(envData) ? envData : []);
+        if (envItems.length > 0) {
+          fmeEnvId = envItems[0]?.id || envItems[0]?.name || null;
+        }
+      } catch { /* no env available */ }
 
-      const toggleOnCase = {
-        id: "ff_toggle_on", tier: 5, domain: "Execute", tool: "harness_execute",
-        args: {
-          resource_type: "feature_flag",
-          action: "toggle",
-          flag_id: discovered.feature_flag,
-          enable: true,
-          environment: "production",
-          confirmation: true,
-          project_id: PROJECT_ID,
-        },
-        check: (r) => !r?.isError,
-        desc: `Toggle FF on (${truncate(discovered.feature_flag, 20)})`,
-      };
-      await runCase(toggleOnCase);
+      if (fmeEnvId) {
+        const killCase = {
+          id: "fme_ff_kill", tier: 5, domain: "Execute", tool: "harness_execute",
+          args: {
+            resource_type: "fme_feature_flag",
+            action: "kill",
+            feature_flag_name: discovered.fme_feature_flag,
+            workspace_id: discovered.fme_workspace,
+            environment_id: fmeEnvId,
+            confirmation: true,
+          },
+          skipIfUnavailable: true,
+          check: (r) => !r?.isError,
+          desc: `Kill FME FF (${truncate(discovered.fme_feature_flag, 20)})`,
+        };
+        await runCase(killCase);
 
-      // Restore state
-      const toggleOffCase = {
-        id: "ff_toggle_off", tier: 5, domain: "Execute", tool: "harness_execute",
-        args: {
-          resource_type: "feature_flag",
-          action: "toggle",
-          flag_id: discovered.feature_flag,
-          enable: currentState ?? false,
-          environment: "production",
-          confirmation: true,
-          project_id: PROJECT_ID,
-        },
-        check: (r) => !r?.isError,
-        desc: `Toggle FF restore (${truncate(discovered.feature_flag, 20)})`,
-      };
-      await runCase(toggleOffCase);
+        const restoreCase = {
+          id: "fme_ff_restore", tier: 5, domain: "Execute", tool: "harness_execute",
+          args: {
+            resource_type: "fme_feature_flag",
+            action: "restore",
+            feature_flag_name: discovered.fme_feature_flag,
+            workspace_id: discovered.fme_workspace,
+            environment_id: fmeEnvId,
+            confirmation: true,
+          },
+          skipIfUnavailable: true,
+          check: (r) => !r?.isError,
+          desc: `Restore FME FF (${truncate(discovered.fme_feature_flag, 20)})`,
+        };
+        await runCase(restoreCase);
+      } else {
+        skipCase({ id: "fme_ff_kill", tier: 5, domain: "Execute", desc: "Kill FME FF" }, "no FME environment discovered");
+        skipCase({ id: "fme_ff_restore", tier: 5, domain: "Execute", desc: "Restore FME FF" }, "no FME environment discovered");
+      }
     }
 
     if (!opts.json) console.log("");

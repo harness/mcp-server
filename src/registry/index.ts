@@ -1,4 +1,4 @@
-import type { Config } from "../config.js";
+import { type Config, resolveProductBaseUrl } from "../config.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import type { ResourceDefinition, ToolsetDefinition, ToolsetName, OperationName, EndpointSpec, FilterFieldSpec } from "./types.js";
 import { createLogger } from "../utils/logger.js";
@@ -353,8 +353,9 @@ export class Registry {
       }
     }
 
-    // Make request — use FME base URL for Split.io-backed resources
-    const baseUrl = def.baseUrlOverride === "fme" ? this.config.HARNESS_FME_BASE_URL : undefined;
+    // Make request — resolve base URL from product backend
+    const product = def.product ?? "harness";
+    const baseUrl = resolveProductBaseUrl(this.config, product);
     const raw = await client.request({
       method: spec.method,
       path,

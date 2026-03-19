@@ -5,36 +5,34 @@ export function registerFeatureFlagRolloutPrompt(server: McpServer): void {
   server.registerPrompt(
     "feature-flag-rollout",
     {
-      description: "Plan and execute a progressive feature flag rollout across environments",
+      description: "Plan and execute a progressive FME feature flag rollout across environments",
       argsSchema: {
-        flagIdentifier: z.string().describe("Feature flag identifier to roll out"),
-        projectId: z.string().describe("Project identifier").optional(),
+        featureFlagName: z.string().describe("Feature flag name to roll out"),
+        workspaceId: z.string().describe("FME workspace ID"),
       },
     },
-    async ({ flagIdentifier, projectId }) => {
-      const projectFilter = projectId ? `, project_id="${projectId}"` : "";
+    async ({ featureFlagName, workspaceId }) => {
       return {
         messages: [{
           role: "user" as const,
           content: {
             type: "text" as const,
-            text: `Plan a progressive rollout for feature flag "${flagIdentifier}".
+            text: `Plan a progressive rollout for FME feature flag "${featureFlagName}" in workspace "${workspaceId}".
 
 Steps:
-1. **Get flag details**: Call harness_get with resource_type="feature_flag", resource_id="${flagIdentifier}"${projectFilter} to see the current flag state and variations
-2. **List environments**: Call harness_list with resource_type="fme_environment"${projectFilter} to see available feature flag environments
-3. **Check workspaces**: Call harness_list with resource_type="fme_workspace"${projectFilter} for workspace context
-4. **Assess current state**: Determine which environments the flag is currently on/off in
+1. **Get flag details**: Call harness_get with resource_type="fme_feature_flag", feature_flag_name="${featureFlagName}", workspace_id="${workspaceId}" to see the current flag state
+2. **List environments**: Call harness_list with resource_type="fme_environment", workspace_id="${workspaceId}" to see available environments
+3. **Get flag definition per environment**: For each environment, call harness_get with resource_type="fme_feature_flag_definition", feature_flag_name="${featureFlagName}", workspace_id="${workspaceId}", environment_id=<env_id> to see treatments and rules
+4. **Check rollout statuses**: Call harness_list with resource_type="fme_rollout_status", workspace_id="${workspaceId}" for rollout status context
 5. **Propose rollout plan**: Recommend a progressive rollout strategy:
-   - Phase 1: Enable in dev/test environments
-   - Phase 2: Enable in staging with percentage rollout (e.g., 10%)
-   - Phase 3: Increase staging to 50%, then 100%
-   - Phase 4: Enable in production with percentage rollout
-   - Phase 5: Full production rollout
+   - Phase 1: Restore flag in dev/test environments
+   - Phase 2: Restore in staging, verify treatments
+   - Phase 3: Restore in production
+   - Phase 4: Full production rollout
 6. **Safety gates**: Identify metrics or health checks between each phase
-7. **Rollback plan**: Define conditions that trigger automatic rollback
+7. **Rollback plan**: Use kill action to immediately turn off the flag if issues arise
 
-Present the rollout plan for review. Use harness_execute with resource_type="feature_flag", action="toggle" to execute each phase after user approval.`,
+Present the rollout plan for review. Use harness_execute with resource_type="fme_feature_flag", action="kill" or action="restore", workspace_id="${workspaceId}", feature_flag_name="${featureFlagName}", environment_id=<env_id> to execute each phase after user approval.`,
           },
         }],
       };
