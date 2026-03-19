@@ -1,6 +1,6 @@
 # Harness MCP Server 2.0
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 126 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 127 resource types.
 
 [![CI](https://github.com/thisrohangupta/harness-mcp-v2/actions/workflows/ci.yml/badge.svg)](https://github.com/thisrohangupta/harness-mcp-v2/actions/workflows/ci.yml)
 
@@ -10,8 +10,8 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **11 tools, 126 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
-- **Full platform coverage.** 29 toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Internal Developer Portal, Software Supply Chain, Governance, Visualizations, and more. Not just pipelines — the entire Harness platform.
+- **11 tools, 127 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **Full platform coverage.** 30 toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Internal Developer Portal, Software Supply Chain, Governance, Service Overrides, Visualizations, and more. Not just pipelines — the entire Harness platform.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **26 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
 - **Works everywhere.** Stdio transport for local clients (Claude Desktop, Cursor, Windsurf), HTTP transport for remote/shared deployments, Docker and Kubernetes ready.
@@ -765,7 +765,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-126 resource types organized across 29 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+127 resource types organized across 30 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -1019,6 +1019,12 @@ SEI resources are consolidated for token efficiency. Use `metric` or `aspect` pa
 | `freeze_window` | x | x | x | x | x | `toggle_status` |
 | `global_freeze` | | x | | | | `manage` |
 
+### Service Overrides
+
+| Resource Type | List | Get | Create | Update | Delete | Execute Actions |
+|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
+| `service_override` | x | x | x | x | x | |
+
 ### Settings
 
 | Resource Type | List | Get | Create | Update | Delete | Execute Actions |
@@ -1100,7 +1106,7 @@ Inline PNG chart visualizations rendered from Harness data. These are metadata-o
 
 ## Toolset Filtering
 
-By default, all 29 toolsets (and their 126 resource types) are enabled. Use `HARNESS_TOOLSETS` to expose only the toolsets you need. This reduces the resource types the LLM sees, improving tool selection accuracy.
+By default, all 30 toolsets (and their 127 resource types) are enabled. Use `HARNESS_TOOLSETS` to expose only the toolsets you need. This reduces the resource types the LLM sees, improving tool selection accuracy.
 
 ```bash
 # Only expose pipelines, services, and connectors
@@ -1137,6 +1143,7 @@ Available toolset names:
 | `access_control` | user, user_group, service_account, role, role_assignment, resource_group, permission |
 | `governance` | policy, policy_set, policy_evaluation |
 | `freeze` | freeze_window, global_freeze |
+| `overrides` | service_override |
 | `settings` | setting |
 | `intelligence` | *(standalone `harness_ask` tool — no registry resource types)* |
 | `visualizations` | visual_timeline, visual_stage_flow, visual_health_dashboard, visual_pie_chart, visual_bar_chart, visual_timeseries, visual_architecture |
@@ -1160,8 +1167,8 @@ Available toolset names:
                           |
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
-                |  28 Toolsets      |      (data files, not code)
-                |  124 Resource Types|
+                |  30 Toolsets      |      (data files, not code)
+                |  127 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+
