@@ -123,6 +123,42 @@ export function isFlatKeyValueInputs(inputs: unknown): inputs is Record<string, 
 }
 
 /**
+ * Check if inputs can be resolved through the template system.
+ * Returns true for any object that isn't already a full pipeline YAML structure.
+ * Broader than isFlatKeyValueInputs — also accepts structural/nested inputs
+ * (e.g. codebase build objects with nested type/spec).
+ */
+export function isResolvableInputs(inputs: unknown): inputs is Record<string, unknown> {
+  if (!isRecord(inputs)) return false;
+  if ("pipeline" in inputs) return false;
+  return true;
+}
+
+/**
+ * Flatten nested object inputs into dot-separated keys for template matching.
+ * Preserves intermediate object values at each level for whole-subtree matching.
+ *
+ * Example: { build: { type: "branch", spec: { branch: "main" } } }
+ * → { "build": { type: "branch", ... }, "build.type": "branch", "build.spec.branch": "main" }
+ */
+export function flattenInputs(inputs: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+
+  function recurse(obj: Record<string, unknown>, prefix: string): void {
+    for (const [key, value] of Object.entries(obj)) {
+      const fullKey = prefix ? `${prefix}.${key}` : key;
+      result[fullKey] = value;
+      if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+        recurse(value as Record<string, unknown>, fullKey);
+      }
+    }
+  }
+
+  recurse(inputs, "");
+  return result;
+}
+
+/**
  * Given a template YAML with `<+input>` placeholders and a flat key-value map,
  * substitute matching fields and return the filled YAML string.
  *
@@ -164,15 +200,15 @@ export function substituteInputs(
     return undefined;
   }
 
-  function walk(node: unknown, path: string[], parentMap?: YAML.YAMLMap): void {
+  function walk(node: unknown, path: string[], parentMap?: YAML.YAMLMap, parentPair?: YAML.Pair): void {
     if (YAML.isMap(node)) {
       for (const pair of node.items) {
         const key = YAML.isScalar(pair.key) ? String(pair.key.value) : String(pair.key);
-        walk(pair.value, [...path, key], node);
+        walk(pair.value, [...path, key], node, pair);
       }
     } else if (YAML.isSeq(node)) {
       for (let i = 0; i < node.items.length; i++) {
-        walk(node.items[i], [...path, String(i)], undefined);
+        walk(node.items[i], [...path, String(i)], undefined, undefined);
       }
     } else if (YAML.isScalar(node)) {
       const val = String(node.value);
@@ -206,9 +242,27 @@ export function substituteInputs(
           matchedAs = fullPath;
         }
 
+        // Suffix matching: try progressively shorter path suffixes for dot-separated
+        // flattened keys (e.g. "build.type" matches "...codebase.build.type")
+        if (replacement === undefined) {
+          for (let i = 1; i < path.length - 1; i++) {
+            const suffix = path.slice(i).join(".").toLowerCase();
+            if (normalizedInputs.has(suffix)) {
+              replacement = normalizedInputs.get(suffix);
+              matchedAs = suffix;
+              break;
+            }
+          }
+        }
+
         const displayName = variableNameRaw ?? rawLeafKey ?? path.join(".");
         if (replacement !== undefined) {
-          node.value = replacement;
+          if (typeof replacement === "object" && replacement !== null && parentPair) {
+            // Replace scalar <+input> placeholder with a structured YAML node
+            parentPair.value = doc.createNode(replacement);
+          } else {
+            node.value = replacement;
+          }
           matched.push(matchedAs ?? displayName);
         } else if (isOptional) {
           unmatchedOptional.push(displayName);
@@ -219,7 +273,7 @@ export function substituteInputs(
     }
   }
 
-  walk(doc.contents, [], undefined);
+  walk(doc.contents, [], undefined, undefined);
 
   return {
     yaml: doc.toString(),

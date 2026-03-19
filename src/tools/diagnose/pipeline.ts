@@ -408,7 +408,7 @@ function buildExecutionSummary(
   const execId = asString(pes.planExecutionId);
   if (pipelineIdentifier && execId && orgId && projectId) {
     const base = config.HARNESS_BASE_URL.replace(/\/$/, "");
-    summary.openInHarness = `${base}/ng/account/${config.HARNESS_ACCOUNT_ID}/all/orgs/${orgId}/projects/${projectId}/pipelines/${pipelineIdentifier}/executions/${execId}/pipeline`;
+    summary.openInHarness = `${base}/ng/account/${config.HARNESS_ACCOUNT_ID}/all/orgs/${orgId}/projects/${projectId}/pipelines/${pipelineIdentifier}/deployments/${execId}/pipeline`;
   } else if (execution.openInHarness) {
     summary.openInHarness = execution.openInHarness;
   }
