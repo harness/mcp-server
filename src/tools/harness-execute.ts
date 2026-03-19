@@ -8,7 +8,7 @@ import { confirmViaElicitation } from "../utils/elicitation.js";
 import { createLogger, logAudit } from "../utils/logger.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asRecord, asString } from "../utils/type-guards.js";
-import { isFlatKeyValueInputs, resolveRuntimeInputs, type ResolutionResult } from "../utils/runtime-input-resolver.js";
+import { isFlatKeyValueInputs, isResolvableInputs, flattenInputs, resolveRuntimeInputs, type ResolutionResult } from "../utils/runtime-input-resolver.js";
 
 const log = createLogger("execute");
 
@@ -82,14 +82,19 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         if (
           resourceType === "pipeline" &&
           args.action === "run" &&
-          isFlatKeyValueInputs(args.inputs)
+          isResolvableInputs(args.inputs)
         ) {
           const pipelineId = asString(input.pipeline_id);
           if (!pipelineId) {
             return errorResult("pipeline_id is required to auto-resolve runtime inputs. Provide it via resource_id, params.pipeline_id, or a Harness URL.");
           }
           try {
-            resolved = await resolveRuntimeInputs(client, args.inputs, {
+            // Flatten nested inputs (e.g. codebase build objects) into dot-path keys
+            // for template matching. Flat inputs pass through unchanged.
+            const inputsToResolve = isFlatKeyValueInputs(args.inputs)
+              ? args.inputs
+              : flattenInputs(args.inputs);
+            resolved = await resolveRuntimeInputs(client, inputsToResolve, {
               pipelineId,
               orgId: asString(input.org_id) || registry.defaultOrgId,
               projectId: asString(input.project_id) || registry.defaultProjectId,

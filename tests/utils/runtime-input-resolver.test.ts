@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   isFlatKeyValueInputs,
+  isResolvableInputs,
+  flattenInputs,
   substituteInputs,
   fetchRuntimeInputTemplate,
   resolveRuntimeInputs,
@@ -550,5 +552,169 @@ describe("fetchRuntimeInputTemplate — caching", () => {
     expect(first).toBeNull();
     expect(second).toBeNull();
     expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("isResolvableInputs", () => {
+  it("returns true for flat key-value pairs", () => {
+    expect(isResolvableInputs({ branch: "main" })).toBe(true);
+  });
+
+  it("returns true for structural/nested inputs", () => {
+    expect(isResolvableInputs({ build: { type: "branch", spec: { branch: "main" } } })).toBe(true);
+  });
+
+  it("returns true for mixed flat and nested inputs", () => {
+    expect(isResolvableInputs({ repoName: "my-repo", build: { type: "branch" } })).toBe(true);
+  });
+
+  it("returns false for full pipeline YAML structure", () => {
+    expect(isResolvableInputs({ pipeline: { identifier: "foo" } })).toBe(false);
+  });
+
+  it("returns false for strings", () => {
+    expect(isResolvableInputs("pipeline:\n  identifier: foo")).toBe(false);
+  });
+
+  it("returns false for null/undefined", () => {
+    expect(isResolvableInputs(null)).toBe(false);
+    expect(isResolvableInputs(undefined)).toBe(false);
+  });
+
+  it("returns true for empty object", () => {
+    expect(isResolvableInputs({})).toBe(true);
+  });
+});
+
+describe("flattenInputs", () => {
+  it("returns flat inputs unchanged", () => {
+    const result = flattenInputs({ branch: "main", env: "prod" });
+    expect(result).toEqual({ branch: "main", env: "prod" });
+  });
+
+  it("flattens nested objects into dot-separated keys", () => {
+    const result = flattenInputs({
+      build: { type: "branch", spec: { branch: "main" } },
+    });
+    expect(result["build"]).toEqual({ type: "branch", spec: { branch: "main" } });
+    expect(result["build.type"]).toBe("branch");
+    expect(result["build.spec"]).toEqual({ branch: "main" });
+    expect(result["build.spec.branch"]).toBe("main");
+  });
+
+  it("preserves top-level primitives alongside nested objects", () => {
+    const result = flattenInputs({
+      repoName: "schema-service",
+      build: { type: "branch", spec: { branch: "main" } },
+    });
+    expect(result["repoName"]).toBe("schema-service");
+    expect(result["build.type"]).toBe("branch");
+    expect(result["build.spec.branch"]).toBe("main");
+  });
+
+  it("treats arrays as leaf values", () => {
+    const result = flattenInputs({ tags: ["a", "b"] });
+    expect(result["tags"]).toEqual(["a", "b"]);
+    expect(result["tags.0"]).toBeUndefined();
+  });
+});
+
+describe("substituteInputs — structural inputs", () => {
+  it("substitutes a whole-object <+input> placeholder with a structural value", () => {
+    const result = substituteInputs(MIXED_TEMPLATE_YAML, {
+      reponame: "schema-service",
+      build: { type: "branch", spec: { branch: "main" } },
+      service_list: "my-svc",
+    });
+
+    expect(result.matched).toContain("reponame");
+    expect(result.matched).toContain("build");
+    expect(result.matched).toContain("service_list");
+    expect(result.unmatchedRequired).toHaveLength(0);
+    // The YAML should contain the expanded build structure
+    expect(result.yaml).toContain("schema-service");
+    expect(result.yaml).toContain("branch");
+    // Optional fields (DEPLOY, HAR_REGISTRY) still have <+input>.default(...) — that's expected
+  });
+
+  it("produces valid YAML when replacing scalar with object", () => {
+    const template = `pipeline:
+  properties:
+    ci:
+      codebase:
+        build: "<+input>"
+`;
+    const result = substituteInputs(template, {
+      build: { type: "branch", spec: { branch: "develop" } },
+    });
+
+    expect(result.matched).toContain("build");
+    expect(result.unmatchedRequired).toHaveLength(0);
+    // Parse the output to verify it's valid YAML with the correct structure
+    const YAML = require("yaml");
+    const parsed = YAML.parse(result.yaml);
+    expect(parsed.pipeline.properties.ci.codebase.build).toEqual({
+      type: "branch",
+      spec: { branch: "develop" },
+    });
+  });
+
+  it("handles suffix matching for flattened structural inputs", () => {
+    // Template with individual <+input> placeholders nested under build
+    const template = `pipeline:
+  properties:
+    ci:
+      codebase:
+        repoName: "<+input>"
+        build:
+          type: "<+input>"
+          spec:
+            branch: "<+input>"
+`;
+    // Flattened inputs (as produced by flattenInputs)
+    const result = substituteInputs(template, {
+      reponame: "my-repo",
+      "build.type": "branch",
+      "build.spec.branch": "main",
+    });
+
+    expect(result.matched).toContain("reponame");
+    expect(result.matched).toContain("build.type");
+    expect(result.matched).toContain("build.spec.branch");
+    expect(result.unmatchedRequired).toHaveLength(0);
+
+    const YAML = require("yaml");
+    const parsed = YAML.parse(result.yaml);
+    expect(parsed.pipeline.properties.ci.codebase.repoName).toBe("my-repo");
+    expect(parsed.pipeline.properties.ci.codebase.build.type).toBe("branch");
+    expect(parsed.pipeline.properties.ci.codebase.build.spec.branch).toBe("main");
+  });
+
+  it("end-to-end: flattenInputs + substituteInputs for codebase build", () => {
+    // This simulates the actual user scenario: passing codebase inputs
+    const userInputs = {
+      repoName: "schema-service",
+      build: { type: "branch", spec: { branch: "main" } },
+    };
+
+    // The MIXED_TEMPLATE_YAML has repoName: <+input> and build: <+input>
+    const flattened = flattenInputs(userInputs);
+    const result = substituteInputs(MIXED_TEMPLATE_YAML, {
+      ...flattened,
+      service_list: "my-svc",
+    });
+
+    expect(result.matched).toContain("reponame");
+    expect(result.matched).toContain("build");
+    expect(result.matched).toContain("service_list");
+    expect(result.unmatchedRequired).toHaveLength(0);
+
+    const YAML = require("yaml");
+    const parsed = YAML.parse(result.yaml);
+    expect(parsed.pipeline.properties.ci.codebase.repoName).toBe("schema-service");
+    expect(parsed.pipeline.properties.ci.codebase.build).toEqual({
+      type: "branch",
+      spec: { branch: "main" },
+    });
   });
 });
