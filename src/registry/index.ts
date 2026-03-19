@@ -258,14 +258,26 @@ export class Registry {
     const params: Record<string, string | number | boolean | undefined> = {};
 
     // Add scope params (allow per-resource override of query param names)
-    // Only add org/project when they're present in the input
+    // When scopeOptional is true, only add org/project if explicitly provided in input.
+    // Otherwise, fall back to config defaults based on the resource's scope level.
     const orgParam = def.scopeParams?.org ?? "orgIdentifier";
     const projectParam = def.scopeParams?.project ?? "projectIdentifier";
-    if (input.org_id) {
-      params[orgParam] = input.org_id as string;
-    }
-    if (input.project_id) {
-      params[projectParam] = input.project_id as string;
+    if (def.scopeOptional) {
+      // Dynamic scoping: only inject when caller explicitly provides them
+      if (input.org_id) {
+        params[orgParam] = input.org_id as string;
+      }
+      if (input.project_id) {
+        params[projectParam] = input.project_id as string;
+      }
+    } else {
+      // Standard scoping: always inject based on scope level, falling back to config defaults
+      if (def.scope === "project" || def.scope === "org") {
+        params[orgParam] = (input.org_id as string) ?? this.config.HARNESS_DEFAULT_ORG_ID;
+      }
+      if (def.scope === "project") {
+        params[projectParam] = (input.project_id as string) ?? this.config.HARNESS_DEFAULT_PROJECT_ID;
+      }
     }
     // Inject custom account param when scopeParams.account is set
     // (in addition to the client's default accountIdentifier)

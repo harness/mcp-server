@@ -231,7 +231,6 @@ export const pipelinesToolset: ToolsetDefinition = {
         { name: "branch", description: "Branch to filter executions" },
         { name: "my_deployments", description: "Show only my deployments", type: "boolean" },
         { name: "module", description: "Harness module filter", enum: ["CD", "CI", "CV", "CF", "CE", "STO"] },
-        { name: "search_term", description: "Search executions by keyword" },
       ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipelineIdentifier}/executions/{planExecutionId}/pipeline",
       operations: {
