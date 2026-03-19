@@ -1152,7 +1152,6 @@ Available toolset names:
 | `freeze` | freeze_window, global_freeze |
 | `overrides` | service_override |
 | `settings` | setting |
-
 | `visualizations` | visual_timeline, visual_stage_flow, visual_health_dashboard, visual_pie_chart, visual_bar_chart, visual_timeseries, visual_architecture |
 
 ## Architecture
@@ -1397,7 +1396,6 @@ The Harness MCP server pairs well with **[Harness Skills](https://github.com/thi
 | `HARNESS_ACCOUNT_ID is required when the API key is not a PAT...` | API key is not in PAT format (`pat.<accountId>.<tokenId>.<secret>`) so account ID cannot be inferred | Set `HARNESS_ACCOUNT_ID` explicitly |
 | `Unknown transport: "..."` on startup | Unsupported CLI transport arg | Use `stdio` or `http` only |
 | `Invalid HARNESS_TOOLSETS: ...` on startup | One or more toolset names are not recognized | Use only names from [Toolset Filtering](#toolset-filtering) (exact match) |
-
 | HTTP `mcp-session-id header is required...` | A session request was sent without session header | Send `initialize` first, then include `mcp-session-id` on `POST/GET/DELETE /mcp` |
 | HTTP `Session not found...` | Session expired (30 min idle TTL) or already closed | Re-run `initialize` to create a new session, then retry with new header |
 | HTTP `405 Method Not Allowed` on `/mcp` | Unsupported method for MCP endpoint | Use `POST`, `GET`, `DELETE`, or `OPTIONS` only |
