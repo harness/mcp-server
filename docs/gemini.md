@@ -23,7 +23,6 @@ Unlike traditional MCP servers with one tool per API endpoint, this server uses 
 - `harness_search` — Search across multiple resource types at once
 - `harness_diagnose` — Diagnose pipelines, connectors, delegates, and GitOps applications
 - `harness_status` — Project health overview: failed, running, and recent executions
-- `harness_ask` — Ask Harness AI DevOps Agent to create/update entities via natural language
 
 ## Available Capabilities
 
@@ -114,10 +113,6 @@ Write operations (`harness_create`, `harness_update`, `harness_delete`, `harness
   - `harness_delete` is blocked (fail-closed for destructive operations).
 
 Secret values are never exposed — only metadata (name, type, scope).
-
-`harness_ask` registration is conditional:
-- Not registered when `HARNESS_READ_ONLY=true`
-- If `HARNESS_TOOLSETS` is set, `intelligence` must be included
 
 ## Setup
 
