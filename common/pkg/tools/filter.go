@@ -3,11 +3,31 @@ package tools
 import (
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/harness/mcp-server/common/client/scs"
 	generated "github.com/harness/mcp-server/common/client/scs/generated"
 	"github.com/mark3labs/mcp-go/mcp"
 )
+
+// normalizeArrayParam converts a plain string value to a JSON array string so that
+// array-typed parameters accept both "CIS" and '["CIS"]'. This avoids the retry pattern
+// observed in LLM smoke tests where the model first sends a bare string, gets a parse
+// error, and retries with the array format.
+func normalizeArrayParam(r mcp.CallToolRequest, key string) {
+	raw, ok := r.GetArguments()[key]
+	if !ok {
+		return
+	}
+	s, ok := raw.(string)
+	if !ok || s == "" {
+		return
+	}
+	s = strings.TrimSpace(s)
+	if !strings.HasPrefix(s, "[") {
+		r.GetArguments()[key] = fmt.Sprintf(`["%s"]`, s)
+	}
+}
 
 func bindParam[T any](
 	r mcp.CallToolRequest,
@@ -41,6 +61,8 @@ func ParseArtifactListParams(request mcp.CallToolRequest) (order string, sort st
 // BuildArtifactListingBody builds the request body for listing artifact sources using bindParam and the builder pattern.
 func BuildArtifactListingBody(request mcp.CallToolRequest) (generated.ArtifactListingRequestBody, error) {
 	bb := scs.ArtifactListingRequestBodyBuilder()
+	// Normalize artifact_type: accept plain string "DOCKER" in addition to array format ["DOCKER"].
+	normalizeArrayParam(request, "artifact_type")
 	if err := bindParam(request, "artifact_type", func(v []generated.ArtifactType) { bb.WithArtifactType(v) }); err != nil {
 		return generated.ArtifactListingRequestBody{}, err
 	}
@@ -92,9 +114,14 @@ func BuildComplianceResultByArtifactFilter(request mcp.CallToolRequest) (generat
 	if err := bindParam(request, "severity", func(v generated.ComplianceCheckSeverity) { bb.WithSeverity(v) }); err != nil {
 		return generated.ComplianceResultByArtifactFilter{}, err
 	}
+	// Normalize standards: accept plain string "CIS" in addition to array format ["CIS"].
+	// LLMs often pass a bare string instead of a JSON array, causing a parse error and retry.
+	normalizeArrayParam(request, "standards")
 	if err := bindParam(request, "standards", func(v []generated.ComplianceStandardType) { bb.WithStandards(v) }); err != nil {
 		return generated.ComplianceResultByArtifactFilter{}, err
 	}
+	// Normalize status the same way for consistency.
+	normalizeArrayParam(request, "status")
 	if err := bindParam(request, "status", func(v []generated.ComplianceResultStatus) { bb.WithStatus(v) }); err != nil {
 		return generated.ComplianceResultByArtifactFilter{}, err
 	}

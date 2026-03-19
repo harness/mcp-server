@@ -314,7 +314,7 @@ func ArtifactListV2Tool(config *config.McpServerConfig, client *generated.Client
 			- Use the 'scs_list_artifact_sources' tool with a relevant search_term (e.g., image name like 'alpine' or 'docker.io/library/alpine:latest') to find the artifact source.
 			- Then use the sourceId from the response as the input to this tool.
 
-			Tip: Once you have the list of artifacts, you can use the sourceId from the results with other tools such as 'get_artifact_overview' or 'get_artifact_chain_of_custody' for further analysis.
+			Tip: Once you have the list of artifacts, you can use the sourceId from the results with other tools such as 'scs_get_artifact_component_view' or 'scs_get_artifact_chain_of_custody' for further analysis.
 			`),
 			mcp.WithString("source",
 				mcp.Required(),
@@ -679,6 +679,10 @@ func GetArtifactComponentRemediationByPurlTool(config *config.McpServerConfig, c
 				- pkg:maven/org.apache.logging.log4j/log4j-core@2.14.1
 				- pkg:pypi/requests@2.25.1
 
+				Important limitation:
+				- Remediation guidance is currently only available for code repository components, not artifact components.
+				- For artifact components, the tool will return a stub response with no actionable remediation data.
+
 				The response includes:
 				- Current and recommended versions
 				- Summary of the remediation
@@ -827,7 +831,7 @@ func FetchComplianceResultsByArtifactTool(config *config.McpServerConfig, client
 				- order (ASC, DESC)
 				- sort (severity, title)
 
-				Tip: Use the artifactId with the 'get_artifact_overview' tool to retrieve detailed information about the artifact.
+				Tip: Use the artifactId with the 'scs_get_code_repository_overview' tool to retrieve detailed information about the repository.
 				`),
 			mcp.WithString("artifact_identifier",
 				mcp.Required(),
@@ -839,7 +843,7 @@ func FetchComplianceResultsByArtifactTool(config *config.McpServerConfig, client
 				1. Use the 'scs_list_code_repos' tool with a relevant search_term (such as an repository name like 'github.com/harness/harness-mcp').Id in the response is the artifactId.
 				2. Select the desired artifact and use its artifactId as the input to this tool.
 
-				Tip: Use the artifactId with the 'get_artifact_overview' tool to retrieve detailed information about the artifact.
+				Tip: Use the artifactId with the 'scs_get_code_repository_overview' tool to retrieve detailed information about the repository.
 				`),
 			),
 			mcp.WithString("compliance_id",
@@ -1075,7 +1079,7 @@ func DownloadSbomTool(cfg *config.McpServerConfig, client *generated.ClientWithR
 		How to obtain orchestration_id:
 
 		1. If you do not know the orchestration_id:
-		- For artifact orchestration, use the 'list_artifact_scs' tool with a relevant search_term (e.g., image name
+		- For artifact orchestration, use the 'scs_list_artifact_sources' tool with a relevant search_term (e.g., image name
 			like 'alpine'). Then look for orchestration object which contains id in json response eg:
 			"orchestration": {
             "id": <id>,
@@ -1143,9 +1147,10 @@ func DownloadSbomTool(cfg *config.McpServerConfig, client *generated.ClientWithR
 func ListSCSCodeReposTool(config *config.McpServerConfig, client *generated.ClientWithResponses) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("scs_list_code_repos",
 			mcp.WithDescription(`
-			Lists all code repositories that have been scanned by Harness SCS (Supply Chain Security).Show in data table format unless otherwise specified.
+			Lists all code repositories that have been scanned by Harness SCS (Supply Chain Security).
 
-			NOTE: Don't show any table format for the results . Just summarize the final results in the following format:
+			Output Format:
+			Summarize the final results in the following format:
 			
 			## Summary
 			[Provide a 2-3 sentence summary of the key information]
