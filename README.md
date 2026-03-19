@@ -25,7 +25,7 @@ This server is built differently:
 No install required — just run it:
 
 ```bash
-npx harness-mcp-v2
+npx harness-mcp-v2@latest 
 ```
 
 That's it. Pass your Harness API key via environment variable or configure it in your AI client (see [Client Configuration](#client-configuration) below).
