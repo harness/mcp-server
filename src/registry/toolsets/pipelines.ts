@@ -232,7 +232,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         { name: "my_deployments", description: "Show only my deployments", type: "boolean" },
         { name: "module", description: "Harness module filter", enum: ["CD", "CI", "CV", "CF", "CE", "STO"] },
       ],
-      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipelineIdentifier}/executions/{planExecutionId}/pipeline",
+      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipelineIdentifier}/deployments/{planExecutionId}/pipeline",
       operations: {
         list: {
           method: "POST",

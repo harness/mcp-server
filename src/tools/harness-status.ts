@@ -47,7 +47,7 @@ function summarizeExecution(
   if (exec.planExecutionId && exec.pipelineIdentifier) {
     try {
       summary.openInHarness = buildDeepLink(baseUrl, accountId,
-        "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipelineIdentifier}/executions/{planExecutionId}/pipeline",
+        "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipelineIdentifier}/deployments/{planExecutionId}/pipeline",
         {
           orgIdentifier: orgId,
           projectIdentifier: projectId,
