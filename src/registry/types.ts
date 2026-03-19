@@ -31,7 +31,8 @@ export type ToolsetName =
   | "settings"
   | "platform"
   | "intelligence"
-  | "visualizations";
+  | "visualizations"
+  | "governance";
 
 export type OperationName = "list" | "get" | "create" | "update" | "delete";
 
