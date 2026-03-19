@@ -33,7 +33,8 @@ export type ToolsetName =
   | "intelligence"
   | "visualizations"
   | "governance"
-  | "freeze";
+  | "freeze"
+  | "overrides";
 
 export type OperationName = "list" | "get" | "create" | "update" | "delete";
 
