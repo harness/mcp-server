@@ -24,7 +24,7 @@ export const auditToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: "/audit/api/audits/list",
-          queryParams: { page: "page", size: "size" },
+          queryParams: { page: "pageIndex", size: "pageSize" },
           bodyBuilder: (input) => ({
             filterType: "Audit",
             modules: input.module ? [input.module] : undefined,
