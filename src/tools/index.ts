@@ -13,7 +13,6 @@ import { registerDiagnoseTool } from "./harness-diagnose.js";
 import { registerSearchTool } from "./harness-search.js";
 import { registerDescribeTool } from "./harness-describe.js";
 import { registerStatusTool } from "./harness-status.js";
-import { registerAskTool } from "./harness-ask.js";
 
 
 export function registerAllTools(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
@@ -27,5 +26,4 @@ export function registerAllTools(server: McpServer, registry: Registry, client: 
   registerSearchTool(server, registry, client);
   registerDescribeTool(server, registry);
   registerStatusTool(server, registry, client, config);
-  registerAskTool(server, registry, client, config);
 }

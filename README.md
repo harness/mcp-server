@@ -446,9 +446,9 @@ All write operations (`harness_create`, `harness_update`, `harness_delete`, `har
 
 ## Tools Reference
 
-The server exposes 11 MCP tools. Most API tools accept `org_id` and `project_id` as optional overrides — if omitted, they fall back to `HARNESS_DEFAULT_ORG_ID` and `HARNESS_DEFAULT_PROJECT_ID`. `harness_describe` is local metadata only and does not use org/project scope.
+The server exposes 10 MCP tools. Most API tools accept `org_id` and `project_id` as optional overrides — if omitted, they fall back to `HARNESS_DEFAULT_ORG_ID` and `HARNESS_DEFAULT_PROJECT_ID`. `harness_describe` is local metadata only and does not use org/project scope.
 
-**URL support:** Most API-facing tools accept a `url` parameter — paste a Harness UI URL and the server auto-extracts org, project, resource type, resource ID, pipeline ID, and execution ID. `harness_describe` and `harness_ask` do not accept `url`.
+**URL support:** Most API-facing tools accept a `url` parameter — paste a Harness UI URL and the server auto-extracts org, project, resource type, resource ID, pipeline ID, and execution ID. `harness_describe` does not accept `url`.
 
 | Tool | Description |
 |------|-------------|
@@ -462,7 +462,6 @@ The server exposes 11 MCP tools. Most API tools accept `org_id` and `project_id`
 | `harness_search` | Search across multiple resource types in parallel with a single query. |
 | `harness_diagnose` | Diagnose `pipeline`, `connector`, `delegate`, and `gitops_application` resources (aliases: `execution` -> `pipeline`, `gitops_app` -> `gitops_application`). For pipelines, returns stage/step timing and failure details; for connectors/delegates/GitOps apps, returns targeted health and troubleshooting signals. |
 | `harness_status` | Get a real-time project health dashboard — recent executions, failure rates, and deep links. |
-| `harness_ask` | Ask the Harness AI DevOps Agent to create or update entities (pipelines, environments, connectors, services, secrets) via natural language. Rate limited to 5 requests/minute with burst of 3. Requires `intelligence` toolset. |
 
 ### Tool Examples
 
@@ -1145,12 +1144,8 @@ Available toolset names:
 | `freeze` | freeze_window, global_freeze |
 | `overrides` | service_override |
 | `settings` | setting |
-| `intelligence` | *(standalone `harness_ask` tool — no registry resource types)* |
-| `visualizations` | visual_timeline, visual_stage_flow, visual_health_dashboard, visual_pie_chart, visual_bar_chart, visual_timeseries, visual_architecture |
 
-`harness_ask` is only registered when:
-- `HARNESS_READ_ONLY=false`, and
-- `HARNESS_TOOLSETS` is unset or includes `intelligence`.
+| `visualizations` | visual_timeline, visual_stage_flow, visual_health_dashboard, visual_pie_chart, visual_bar_chart, visual_timeseries, visual_architecture |
 
 ## Architecture
 
@@ -1290,7 +1285,7 @@ src/
     harness-diagnose.ts
     harness-describe.ts
     harness-status.ts
-    harness-ask.ts
+
   resources/                        # MCP resource providers
     pipeline-yaml.ts
     execution-summary.ts
@@ -1377,7 +1372,7 @@ If elicitation fails at runtime, the same rules apply: non-destructive writes co
 - **CORS restricted to same-origin.** The HTTP transport only allows same-origin requests, preventing CSRF attacks from malicious websites targeting the MCP server on localhost.
 - **HTTP rate limiting.** The HTTP transport enforces 60 requests per minute per IP to prevent request flooding.
 - **API rate limiting.** The Harness API client enforces a 10 requests/second limit to avoid hitting upstream rate limits.
-- **AI agent rate limiting.** The `harness_ask` tool is rate limited to 5 requests/minute with a burst of 3. Each call triggers LLM inference on the Harness backend, so this prevents runaway token costs from agent loops or abuse.
+
 - **Pagination bounds enforced.** List queries are capped at 10,000 items total and 100 per page to prevent memory exhaustion.
 - **Retries with backoff.** Transient failures (HTTP 429, 5xx) are retried with exponential backoff and jitter.
 - **Localhost binding.** The HTTP transport binds to `127.0.0.1` by default — not accessible from the network.
@@ -1394,7 +1389,7 @@ The Harness MCP server pairs well with **[Harness Skills](https://github.com/thi
 | `HARNESS_ACCOUNT_ID is required when the API key is not a PAT...` | API key is not in PAT format (`pat.<accountId>.<tokenId>.<secret>`) so account ID cannot be inferred | Set `HARNESS_ACCOUNT_ID` explicitly |
 | `Unknown transport: "..."` on startup | Unsupported CLI transport arg | Use `stdio` or `http` only |
 | `Invalid HARNESS_TOOLSETS: ...` on startup | One or more toolset names are not recognized | Use only names from [Toolset Filtering](#toolset-filtering) (exact match) |
-| `Unknown tool "harness_ask"` in MCP client | `HARNESS_READ_ONLY=true` or `HARNESS_TOOLSETS` excludes `intelligence` | Disable read-only mode for mutating/AI agent operations, and include `intelligence` in `HARNESS_TOOLSETS` |
+
 | HTTP `mcp-session-id header is required...` | A session request was sent without session header | Send `initialize` first, then include `mcp-session-id` on `POST/GET/DELETE /mcp` |
 | HTTP `Session not found...` | Session expired (30 min idle TTL) or already closed | Re-run `initialize` to create a new session, then retry with new header |
 | HTTP `405 Method Not Allowed` on `/mcp` | Unsupported method for MCP endpoint | Use `POST`, `GET`, `DELETE`, or `OPTIONS` only |

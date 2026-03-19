@@ -30,7 +30,7 @@ import { stoToolset } from "./toolsets/sto.js";
 import { accessControlToolset } from "./toolsets/access-control.js";
 import { settingsToolset } from "./toolsets/settings.js";
 import { platformToolset } from "./toolsets/platform.js";
-import { intelligenceToolset } from "./toolsets/intelligence.js";
+
 import { visualizationsToolset } from "./toolsets/visualizations.js";
 import { governanceToolset } from "./toolsets/governance.js";
 import { freezeToolset } from "./toolsets/freeze.js";
@@ -65,7 +65,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   accessControlToolset,
   settingsToolset,
   platformToolset,
-  intelligenceToolset,
+
   visualizationsToolset,
   governanceToolset,
   freezeToolset,

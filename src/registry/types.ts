@@ -30,7 +30,7 @@ export type ToolsetName =
   | "access_control"
   | "settings"
   | "platform"
-  | "intelligence"
+
   | "visualizations"
   | "governance"
   | "freeze"
