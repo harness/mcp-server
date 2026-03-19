@@ -256,20 +256,43 @@ Returns probe details including identity, probeId, name, type, infrastructureTyp
 description, tags, runProperties, recentProbeRuns, and probeReferenceCount.`
 
 	DescToolCreateExperimentFromTemplate = `Create a new chaos experiment from an experiment template.
-Recommended workflow:
-(1) Use chaos_list_hubs to fetch available hubs and ask the user to select one (hubIdentity).
-(2) Use chaos_list_experiment_templates filtered by the selected hubIdentity to fetch available templates
-    and ask the user to select one (templateId). Note the template's infraType for the next step.
-(3) Use chaos_list_environments to fetch available environments and ask the user to select one (environmentId).
-(4) Use chaos_list_k8s_infrastructures with the selected environmentId (and optionally filter by the
-    template's infraType) to fetch available infrastructures and ask the user to select one (infraId).
-    Only infrastructures where status is 'ACTIVE' AND isChaosEnabled is true can be used.
-    If the user selects one that is inactive or has isChaosEnabled: false, inform them it cannot be used
-    and ask them to pick a different one.
-(5) Ask the user for a name and optionally an identity for the new experiment.
-Name and identity are auto-generated if not provided; both must match the pattern ^[a-z][a-z0-9-]*[a-z0-9]$.
+
+IMPORTANT: You MUST NOT auto-select, assume, or pre-fill any value on behalf of the user.
+At every step below, you MUST display the available options to the user and wait for their explicit
+choice before proceeding to the next step. Do NOT proceed without explicit user confirmation.
+
+Required workflow — follow in order, pausing for user input after each step:
+
+Step 1 — Select a hub:
+  If the user has already specified a hubIdentity, confirm with them that they want to proceed with it.
+  Otherwise call chaos_list_hubs, show the list to the user, and wait for them to pick one.
+
+Step 2 — Select an experiment template:
+  If the user has already specified a templateId, confirm with them that they want to proceed with it.
+  Otherwise call chaos_list_experiment_templates filtered by the hubIdentity from Step 1,
+  show the list to the user, and wait for them to pick one. Note the template's infraType.
+
+Step 3 — Select an environment:
+  Call chaos_list_environments. Show the full list to the user and ask them to pick one.
+  Wait for the user to select an environmentId before continuing.
+  Do NOT choose an environment yourself even if only one exists.
+
+Step 4 — Select an infrastructure:
+  Call chaos_list_k8s_infrastructures with the environmentId from Step 3 (optionally filter by infraType from Step 2).
+  Show the list to the user and ask them to pick one.
+  Wait for the user to select an infraId before continuing.
+  Only infrastructures where status is ACTIVE AND isChaosEnabled is true are valid.
+  If the user picks one that is inactive or has isChaosEnabled: false, tell them it cannot be used and ask them to choose again.
+  Do NOT choose an infrastructure yourself.
+
+Step 5 — Collect experiment details:
+  Ask the user for a name and optionally an identity for the new experiment.
+  Do NOT generate or assume a name without asking.
+  Name and identity are auto-generated server-side if not provided; both must match ^[a-z][a-z0-9-]*[a-z0-9]$.
+
+Only after all five steps are confirmed by the user should you call this tool to create the experiment.
 The infraId is automatically prefixed with environmentId if needed.
-Use importType to control how the experiment is linked: 'LOCAL' (copy into project, default) or 'REFERENCE' (keep a reference to the template hub).
+Use importType to control linking: 'LOCAL' (copy into project, default) or 'REFERENCE' (keep reference to hub).
 Returns the created experiment details including id, identity, name, infraType, infraId, and manifest.`
 
 	DescToolListExperimentTemplates = `List chaos experiment templates from chaos hubs.
