@@ -11,11 +11,11 @@
             "env": {
                 "HARNESS_LOG_FORMAT": "json",
                 "HARNESS_DEBUG": "true",
-                "HARNESS_BASE_URL": "<HARNESS_BASE_URL>",
-                "HARNESS_API_KEY": "<HARNESS_API_KEY>",
-                "HARNESS_DEFAULT_ORG_ID": "<HARNESS_DEFAULT_ORG_ID>",
-                "HARNESS_DEFAULT_PROJECT_ID": "<HARNESS_DEFAULT_PROJECT_ID>",
-                "HARNESS_TOOLSETS": "<TOOLSETS_TO_ENABLE>"
+                "HARNESS_BASE_URL": "https://qa.harness.io",
+                "HARNESS_API_KEY": "pat.DSzI0EehTMqGVdfsfG3a5g.699d80f4fe8d003c9b124873.WrlEoaDFBmbzzAjQMz5H",
+                "HARNESS_DEFAULT_ORG_ID": "default",
+                "HARNESS_DEFAULT_PROJECT_ID": "ChaosDev1",
+                "HARNESS_TOOLSETS": "chaos"
             }
         },
         {

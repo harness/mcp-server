@@ -81,6 +81,13 @@ func RegisterChaos(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) e
 	}
 	loadTestService := &client.LoadTestService{Client: loadTestClient}
 
+	// Create environment client (ngMan → ng/api) for listing environments within chaos toolset
+	envC, err := DefaultClientProvider.CreateClient(config, "ngMan", customTimeout)
+	if err != nil {
+		return err
+	}
+	environmentClient := &client.EnvironmentClient{Client: envC}
+
 	// Create the CHAOS toolset
 	chaos := toolsets.NewToolset("chaos", "Harness Chaos Engineering related tools").
 		AddReadTools(
@@ -132,6 +139,9 @@ func RegisterChaos(config *config.McpServerConfig, tsg *toolsets.ToolsetGroup) e
 			toolsets.NewServerTool(tools.GetLoadTestTool(config, loadTestService)),
 			// Linux infrastructures tools
 			toolsets.NewServerTool(tools.ListLinuxInfrastructuresTool(config, chaosClient)),
+			// Kubernetes infrastructure and environment tools
+			toolsets.NewServerTool(tools.ListChaosEnvironmentsTool(config, environmentClient)),
+			toolsets.NewServerTool(tools.ListKubernetesInfrastructuresTool(config, chaosClient)),
 		).
 		AddWriteTools(
 			// Load Testing tools

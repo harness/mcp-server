@@ -8,7 +8,9 @@ import (
 	config "github.com/harness/mcp-server/common"
 	"github.com/harness/mcp-server/common/client"
 	"github.com/harness/mcp-server/common/client/dto"
+	"github.com/harness/mcp-server/common/pkg/chaoscommons"
 	"github.com/harness/mcp-server/common/pkg/common"
+	mcputils "github.com/harness/mcp-server/common/pkg/utils"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -299,6 +301,102 @@ func MoveEnvironmentConfigsTool(config *config.McpServerConfig, client *client.E
 			r, err := json.Marshal(result)
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+// ListChaosEnvironmentsTool creates a tool for listing environments within the chaos toolset.
+// It uses the V2 list API (POST /environmentsV2/listV2) which supports search and lastModifiedAt sorting.
+// Use the returned environment identifier with chaos_list_k8s_infrastructures to find available infrastructure.
+func ListChaosEnvironmentsTool(config *config.McpServerConfig, envClient *client.EnvironmentClient) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool(chaoscommons.ToolListChaosEnvironments,
+			mcp.WithDescription(chaoscommons.DescToolListChaosEnvironments),
+			common.WithScope(config, false),
+			mcp.WithString(chaoscommons.ParamSearchTerm,
+				mcp.Description(chaoscommons.DescSearchTermEnv),
+			),
+			mcp.WithString(chaoscommons.ParamSortField,
+				mcp.Description(chaoscommons.DescSortEnv),
+			),
+			mcp.WithString(chaoscommons.ParamEnvironmentType,
+				mcp.Description(chaoscommons.DescEnvironmentType),
+				mcp.Enum("PreProduction", "Production"),
+			),
+			mcp.WithNumber("page",
+				mcp.DefaultNumber(0),
+				mcp.Description("Page number for pagination (0-based)."),
+			),
+			mcp.WithNumber("limit",
+				mcp.DefaultNumber(5),
+				mcp.Max(20),
+				mcp.Description("Number of environments per page (max 20)."),
+			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    mcputils.ToBoolPtr(true),
+				DestructiveHint: mcputils.ToBoolPtr(false),
+			}),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			scope, err := common.FetchScope(ctx, config, request, false)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			searchTerm, err := OptionalParam[string](request, chaoscommons.ParamSearchTerm)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			sortField, err := OptionalParam[string](request, chaoscommons.ParamSortField)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			environmentType, err := OptionalParam[string](request, chaoscommons.ParamEnvironmentType)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			page, err := OptionalParam[float64](request, "page")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			limit, err := OptionalParam[float64](request, "limit")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			var envTypes []string
+			if environmentType != "" {
+				envTypes = []string{environmentType}
+			}
+
+			opts := &dto.EnvironmentListV2Options{
+				Page:             int(page),
+				Limit:            int(limit),
+				SearchTerm:       searchTerm,
+				Sort:             sortField,
+				EnvironmentTypes: envTypes,
+			}
+
+			environments, totalCount, err := envClient.ListV2(ctx, scope, opts)
+			if err != nil {
+				return nil, fmt.Errorf("failed to list environments: %w", err)
+			}
+
+			response := map[string]interface{}{
+				"environments": environments,
+				"totalCount":   totalCount,
+				"pageSize":     opts.Limit,
+				"pageNumber":   opts.Page,
+			}
+
+			r, err := json.Marshal(response)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal environment list: %w", err)
 			}
 
 			return mcp.NewToolResultText(string(r)), nil

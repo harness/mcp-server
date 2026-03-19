@@ -41,6 +41,41 @@ type EnvironmentOptions struct {
 	Order string `json:"order,omitempty"`
 }
 
+// EnvironmentSummary wraps an Environment with timestamps returned by the V2 list API
+type EnvironmentSummary struct {
+	Environment    Environment `json:"environment"`
+	CreatedAt      int64       `json:"createdAt"`
+	LastModifiedAt int64       `json:"lastModifiedAt"`
+}
+
+// EnvironmentListV2Response represents the response from the environmentsV2/listV2 API
+type EnvironmentListV2Response struct {
+	Data struct {
+		Content    []EnvironmentSummary `json:"content"`
+		TotalPages int                  `json:"totalPages"`
+		TotalItems int                  `json:"totalItems"`
+		PageSize   int                  `json:"pageSize"`
+		PageIndex  int                  `json:"pageIndex"`
+	} `json:"data"`
+}
+
+// EnvironmentListV2Options holds parameters for the V2 list endpoint
+type EnvironmentListV2Options struct {
+	Page       int
+	Limit      int
+	SearchTerm string
+	// Sort is a combined "field,DIRECTION" string, e.g. "lastModifiedAt,DESC"
+	Sort             string
+	EnvironmentTypes []string
+}
+
+// EnvironmentListV2Request is the POST body for the environmentsV2/listV2 endpoint.
+type EnvironmentListV2Request struct {
+	FilterType       string   `json:"filterType"`
+	EnvIdentifiers   []string `json:"envIdentifiers,omitempty"`
+	EnvironmentTypes []string `json:"environmentTypes,omitempty"`
+}
+
 type MoveConfigType string
 
 const (

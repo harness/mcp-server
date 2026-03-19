@@ -9,6 +9,7 @@ import (
 
 const (
 	environmentListPath        = "/environments"
+	environmentListV2Path      = "/environmentsV2/listV2"
 	environmentGetPath         = "/environments/%s"
 	environmentMoveConfigsPath = "/environments/V2/move-config/%s"
 )
@@ -80,6 +81,51 @@ func (e *EnvironmentClient) List(ctx context.Context, scope dto.Scope, opts *dto
 	}
 
 	return response.Data.Content, response.Data.TotalElements, nil
+}
+
+// ListV2 retrieves a list of environments using the V2 list API (POST /environmentsV2/listV2).
+// Supports searchTerm and combined sort string (e.g. "lastModifiedAt,DESC").
+func (e *EnvironmentClient) ListV2(ctx context.Context, scope dto.Scope, opts *dto.EnvironmentListV2Options) ([]dto.EnvironmentSummary, int, error) {
+	path := environmentListV2Path
+	params := make(map[string]string)
+	addScope(ctx, scope, params)
+
+	if opts == nil {
+		opts = &dto.EnvironmentListV2Options{}
+	}
+
+	page := opts.Page
+	limit := opts.Limit
+	if limit <= 0 {
+		limit = defaultPageSize
+	} else if limit > maxPageSize {
+		limit = maxPageSize
+	}
+
+	if opts.Sort == "" {
+		opts.Sort = "lastModifiedAt,DESC"
+	}
+
+	params["page"] = fmt.Sprintf("%d", page)
+	params["size"] = fmt.Sprintf("%d", limit)
+
+	if opts.SearchTerm != "" {
+		params["searchTerm"] = opts.SearchTerm
+	}
+	params["sort"] = opts.Sort
+
+	body := dto.EnvironmentListV2Request{
+		FilterType:       "Environment",
+		EnvironmentTypes: opts.EnvironmentTypes,
+	}
+
+	var response dto.EnvironmentListV2Response
+	err := e.Client.Post(ctx, path, params, body, nil, &response)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to list environments v2: %w", err)
+	}
+
+	return response.Data.Content, response.Data.TotalItems, nil
 }
 
 // MoveConfigs moves environment YAML from inline to remote

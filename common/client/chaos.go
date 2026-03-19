@@ -51,6 +51,8 @@ const (
 	chaosDeleteHubPath     = "rest/hubs/%s"
 	chaosListHubFaultsPath = "rest/hubs/faults"
 
+	chaosListKubernetesInfrasPath = "rest/v2/infrastructures"
+
 	chaosListChaosGuardConditionsPath  = "v3/chaosguard-conditions"
 	chaosGetChaosGuardConditionPath    = "v3/chaosguard-conditions/%s"
 	chaosDeleteChaosGuardConditionPath = "v3/chaosguard-conditions/%s"
@@ -431,6 +433,76 @@ func (c *ChaosService) ListLinuxInfrastructures(ctx context.Context, scope dto.S
 	err := c.Client.Post(ctx, path, params, body, nil, result)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list linux infras: %w", err)
+	}
+
+	return result, nil
+}
+
+// ListKubernetesInfrastructures lists Kubernetes chaos infrastructures using the V2 REST API.
+// environmentID filters results to a specific environment (passed as a query param per hce-saas handler).
+// statusFilter filters by infrastructure status (e.g. "ACTIVE"); empty string omits the filter.
+// includeLegacyInfra when true also returns V1 (legacy) infrastructures.
+// search filters by infrastructure name (case-insensitive).
+func (c *ChaosService) ListKubernetesInfrastructures(ctx context.Context, scope dto.Scope, environmentID string, page, limit int, statusFilter string, includeLegacyInfra bool, search string) (*dto.ListKubernetesInfraV2Response, error) {
+	var (
+		path   = chaosListKubernetesInfrasPath
+		params = make(map[string]string)
+	)
+
+	params = addIdentifierParams(params, scope)
+
+	if environmentID != "" {
+		params["environmentIdentifier"] = environmentID
+	}
+	if includeLegacyInfra {
+		params["includeLegacyInfra"] = "true"
+	}
+
+	if limit <= 0 {
+		limit = defaultPageSize
+	} else if limit > maxPageSize {
+		limit = maxPageSize
+	}
+
+	// page and limit are read from query params by the hce-saas handler (body pagination is overwritten)
+	params["page"] = fmt.Sprintf("%d", page)
+	params["limit"] = fmt.Sprintf("%d", limit)
+	if search != "" {
+		params["search"] = search
+	}
+
+	ascending := false
+	body := dto.ListKubernetesInfraV2Request{
+		Identifier: dto.KubernetesInfraV2Identifiers{
+			AccountIdentifier: scope.AccountID,
+			OrgIdentifier:     scope.OrgID,
+			ProjectIdentifier: scope.ProjectID,
+		},
+		Pagination: &dto.KubernetesInfraV2Pagination{
+			Page:  page,
+			Limit: limit,
+		},
+		Sort: &dto.KubernetesInfraV2Sort{
+			Field:     "LAST_MODIFIED",
+			Ascending: &ascending,
+		},
+	}
+
+	filter := &dto.KubernetesInfraV2Filter{}
+	if statusFilter != "" {
+		filter.Status = statusFilter
+	}
+	if search != "" {
+		filter.Name = search
+	}
+	if filter.Status != "" || filter.Name != "" {
+		body.Filter = filter
+	}
+
+	result := new(dto.ListKubernetesInfraV2Response)
+	err := c.Client.Post(ctx, path, params, body, nil, result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list kubernetes infrastructures: %w", err)
 	}
 
 	return result, nil

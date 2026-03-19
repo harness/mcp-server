@@ -48,6 +48,8 @@ const (
 	ToolGetChaosGuardRule                  = "chaos_get_chaosguard_rule"
 	ToolDeleteChaosGuardRule               = "chaos_delete_chaosguard_rule"
 	ToolEnableChaosGuardRule               = "chaos_enable_chaosguard_rule"
+	ToolListChaosEnvironments              = "chaos_list_environments"
+	ToolListKubernetesInfrastructures      = "chaos_list_k8s_infrastructures"
 )
 
 // Parameter names used across chaos tool definitions.
@@ -64,6 +66,7 @@ const (
 	ParamHubIdentity           = "hubIdentity"
 	ParamName                  = "name"
 	ParamIdentity              = "identity"
+	ParamImportType            = "importType"
 	ParamInfrastructureType    = "infrastructureType"
 	ParamInfrastructure        = "infrastructure"
 	ParamSearch                = "search"
@@ -89,6 +92,9 @@ const (
 	ParamRepoBranch            = "repoBranch"
 	ParamEnabled               = "enabled"
 	ParamOnlyTemplatisedFaults = "onlyTemplatisedFaults"
+	ParamSearchTerm            = "searchTerm"
+	ParamIncludeLegacyInfra    = "includeLegacyInfra"
+	ParamEnvironmentType       = "environmentType"
 )
 
 // Parameter descriptions for chaos tool parameters.
@@ -102,8 +108,8 @@ var (
 
 	DescProbeID       = `Unique Identifier for a probe.`
 	DescTemplateID    = `Unique Identifier for a experiment template.`
-	DescInfraID       = `Unique Identifier for a infrastructure.`
-	DescEnvironmentID = `Unique Identifier for a environment.`
+	DescInfraID       = `Unique Identifier for a infrastructure. Use chaos_list_k8s_infrastructures to find available infrastructure IDs for the selected environment.`
+	DescEnvironmentID = `Unique Identifier for a environment. Use chaos_list_environments to find available environment IDs.`
 
 	DescHubIdentity             = `Unique Identifier for a chaos hub. Use chaos_list_hubs to find hub identities.`
 	DescHubIdentityExact        = `The unique identity of the ChaosHub. Use chaos_list_hubs to find hub identities.`
@@ -118,8 +124,11 @@ var (
 	DescHubIdentityListAction   = `Unique identifier for the chaos hub to list action templates from. Use chaos_list_hubs to find hub identities.`
 	DescHubIdentityFaultsFilter = `Filter faults by a specific ChaosHub identity. Use chaos_list_hubs to find hub identities.`
 
-	DescName     = `User defined name of the experiment.`
-	DescIdentity = `User defined identity of the experiment.`
+	DescName           = `User defined name of the experiment.`
+	DescIdentity       = `User defined identity of the experiment.`
+	DescExperimentDesc = `Optional description for the experiment.`
+	DescExperimentTags = `Optional tags for the experiment as an array of strings.`
+	DescImportType     = `How to link the experiment to its template source: 'LOCAL' copies the template into the project (default), 'REFERENCE' keeps a live reference to the hub template.`
 
 	DescIdentityExperimentTemplate       = `Unique identifier for the experiment template. Use chaos_list_experiment_templates to find template identities.`
 	DescIdentityExperimentTemplateDelete = `Unique identifier for the experiment template to delete. Use chaos_list_experiment_templates to find template identities.`
@@ -247,8 +256,20 @@ Returns probe details including identity, probeId, name, type, infrastructureTyp
 description, tags, runProperties, recentProbeRuns, and probeReferenceCount.`
 
 	DescToolCreateExperimentFromTemplate = `Create a new chaos experiment from an experiment template.
-Requires templateId, infraId, environmentId, and hubIdentity.
-Name and identity are auto-generated if not provided. The infraId is automatically prefixed with environmentId if needed.
+Recommended workflow:
+(1) Use chaos_list_hubs to fetch available hubs and ask the user to select one (hubIdentity).
+(2) Use chaos_list_experiment_templates filtered by the selected hubIdentity to fetch available templates
+    and ask the user to select one (templateId). Note the template's infraType for the next step.
+(3) Use chaos_list_environments to fetch available environments and ask the user to select one (environmentId).
+(4) Use chaos_list_k8s_infrastructures with the selected environmentId (and optionally filter by the
+    template's infraType) to fetch available infrastructures and ask the user to select one (infraId).
+    Only infrastructures where status is 'ACTIVE' AND isChaosEnabled is true can be used.
+    If the user selects one that is inactive or has isChaosEnabled: false, inform them it cannot be used
+    and ask them to pick a different one.
+(5) Ask the user for a name and optionally an identity for the new experiment.
+Name and identity are auto-generated if not provided; both must match the pattern ^[a-z][a-z0-9-]*[a-z0-9]$.
+The infraId is automatically prefixed with environmentId if needed.
+Use importType to control how the experiment is linked: 'LOCAL' (copy into project, default) or 'REFERENCE' (keep a reference to the template hub).
 Returns the created experiment details including id, identity, name, infraType, infraId, and manifest.`
 
 	DescToolListExperimentTemplates = `List chaos experiment templates from chaos hubs.
@@ -417,4 +438,22 @@ Returns a JSON object with success status and message.`
 When enabled, the rule actively enforces its governance conditions on chaos experiments.
 When disabled, the rule is inactive and does not affect experiment execution.
 Returns a success message on completion.`
+
+	DescToolListChaosEnvironments = `List Harness environments available for chaos experiments.
+Returns a paginated list of environments with their identifier, name, type (Production/PreProduction), and timestamps.
+Use the environment identifier with chaos_list_k8s_infrastructures to find available infrastructure within that environment.
+Supports search by name and sort by lastModifiedAt or name.`
+
+	DescToolListKubernetesInfrastructures = `List Kubernetes chaos infrastructures available for running experiments.
+Use chaos_list_environments first to get an environmentId, then pass it here to filter infrastructures for that environment.
+Returns infrastructure details including identity, infraID, name, environmentID, status, infraType, and infraScope.
+The infraID is used as the infraId parameter in chaos_create_experiment_from_template.
+Supports filtering by status (ACTIVE, INACTIVE, PENDING) and optional inclusion of legacy V1 infrastructures.`
+
+	DescSearchTermEnv      = `Search environments by name (case-insensitive).`
+	DescSortEnv            = `Sort field and direction as a combined string (e.g. "lastModifiedAt,DESC" or "name,ASC"). Defaults to lastModifiedAt,DESC.`
+	DescStatusK8sInfra     = `Filter by infrastructure status. Use 'ACTIVE' (default), 'INACTIVE', 'PENDING', or 'All' for no filter.`
+	DescIncludeLegacyInfra = `When true, also includes V1 (legacy) Kubernetes infrastructures alongside V2 ones. Defaults to false.`
+	DescEnvironmentType    = `Filter environments by type: 'PreProduction' or 'Production'. Leave empty to return all types.`
+	DescSearchK8sInfra     = `Search infrastructures by name (case-insensitive).`
 )

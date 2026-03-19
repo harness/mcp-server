@@ -372,9 +372,12 @@ type VariableMinimum struct {
 
 type CreateExperimentFromTemplateRequest struct {
 	IdentifiersQuery `json:",inline"`
-	Name             string `json:"name"`
-	Identity         string `json:"identity"`
-	InfraRef         string `json:"infraRef"`
+	Name             string   `json:"name"`
+	Identity         string   `json:"identity"`
+	InfraRef         string   `json:"infraRef"`
+	Description      string   `json:"description,omitempty"`
+	Tags             []string `json:"tags,omitempty"`
+	ImportType       string   `json:"importType,omitempty"`
 }
 
 type IdentifiersQuery struct {
@@ -456,6 +459,68 @@ type UserDetail struct {
 	UserID   string `json:"userID"`
 	Username string `json:"username"`
 	Email    string `json:"email"`
+}
+
+// KubernetesInfraV2Identifiers holds account/org/project scope for K8s infra V2 requests
+type KubernetesInfraV2Identifiers struct {
+	AccountIdentifier string `json:"accountIdentifier"`
+	OrgIdentifier     string `json:"orgIdentifier,omitempty"`
+	ProjectIdentifier string `json:"projectIdentifier,omitempty"`
+}
+
+// KubernetesInfraV2Filter holds filter fields for listing K8s infrastructures
+type KubernetesInfraV2Filter struct {
+	Name            string   `json:"name,omitempty"`
+	InfraScope      string   `json:"infraScope,omitempty"`
+	Status          string   `json:"status,omitempty"`
+	InfraTypeFilter string   `json:"infraTypeFilter,omitempty"`
+	EnvironmentIDs  []string `json:"environmentIDs,omitempty"`
+	Tags            []string `json:"tags,omitempty"`
+}
+
+// KubernetesInfraV2Pagination holds pagination fields for K8s infra V2 requests
+type KubernetesInfraV2Pagination struct {
+	Page  int `json:"page"`
+	Limit int `json:"limit"`
+}
+
+// KubernetesInfraV2Sort holds sort options for K8s infra V2 requests
+type KubernetesInfraV2Sort struct {
+	Field     string `json:"field"`
+	Ascending *bool  `json:"ascending,omitempty"`
+}
+
+// ListKubernetesInfraV2Request is the POST body for the rest/v2/infrastructures endpoint
+type ListKubernetesInfraV2Request struct {
+	Identifier KubernetesInfraV2Identifiers `json:"identifier"`
+	Filter     *KubernetesInfraV2Filter     `json:"filter,omitempty"`
+	Pagination *KubernetesInfraV2Pagination `json:"pagination,omitempty"`
+	Sort       *KubernetesInfraV2Sort       `json:"sort,omitempty"`
+}
+
+// KubernetesInfraV2 represents a single Kubernetes chaos infrastructure from the V2 API
+type KubernetesInfraV2 struct {
+	Identity       string   `json:"identity"`
+	Name           string   `json:"name"`
+	Description    string   `json:"description,omitempty"`
+	EnvironmentID  string   `json:"environmentID,omitempty"`
+	InfraID        string   `json:"infraID,omitempty"`
+	InfraType      string   `json:"infraType"`
+	InfraScope     string   `json:"infraScope"`
+	Status         string   `json:"status"`
+	Version        string   `json:"version,omitempty"`
+	Tags           []string `json:"tags,omitempty"`
+	CreatedAt      string   `json:"createdAt,omitempty"`
+	UpdatedAt      string   `json:"updatedAt,omitempty"`
+	IsChaosEnabled bool     `json:"isChaosEnabled"`
+	IsAIEnabled    bool     `json:"isAIEnabled"`
+}
+
+// ListKubernetesInfraV2Response is the response from the rest/v2/infrastructures endpoint
+type ListKubernetesInfraV2Response struct {
+	Infras                   []KubernetesInfraV2         `json:"infras,omitempty"`
+	Pagination               KubernetesInfraV2Pagination `json:"pagination,omitempty"`
+	TotalNoOfInfrastructures int32                       `json:"totalNoOfInfrastructures"`
 }
 
 // ChaosFaultTemplate mirrors the MongoDB schema chaosfaulttemplate.ChaosFaultTemplate.

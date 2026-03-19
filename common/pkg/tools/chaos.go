@@ -346,6 +346,18 @@ func CreateExperimentFromTemplateTool(config *config.McpServerConfig, client *cl
 			mcp.WithString(chaoscommons.ParamIdentity,
 				mcp.Description(chaoscommons.DescIdentity),
 			),
+			mcp.WithString(chaoscommons.ParamDescription,
+				mcp.Description(chaoscommons.DescExperimentDesc),
+			),
+			mcp.WithArray(chaoscommons.ParamTags,
+				mcp.Description(chaoscommons.DescExperimentTags),
+				mcp.Items(map[string]any{"type": "string"}),
+			),
+			mcp.WithString(chaoscommons.ParamImportType,
+				mcp.Description(chaoscommons.DescImportType),
+				mcp.Enum("LOCAL", "REFERENCE"),
+				mcp.DefaultString("LOCAL"),
+			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			scope, err := common.FetchScope(ctx, config, request, false)
@@ -395,6 +407,27 @@ func CreateExperimentFromTemplateTool(config *config.McpServerConfig, client *cl
 				identity = generateIdentity(name)
 			}
 
+			description, err := OptionalParam[string](request, chaoscommons.ParamDescription)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			tagsRaw, err := OptionalParam[[]any](request, chaoscommons.ParamTags)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			var tags []string
+			for _, t := range tagsRaw {
+				if s, ok := t.(string); ok {
+					tags = append(tags, s)
+				}
+			}
+
+			importType, err := OptionalParam[string](request, chaoscommons.ParamImportType)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
 			requestPayload := dto.CreateExperimentFromTemplateRequest{
 				InfraRef: infraID,
 				IdentifiersQuery: dto.IdentifiersQuery{
@@ -402,8 +435,11 @@ func CreateExperimentFromTemplateTool(config *config.McpServerConfig, client *cl
 					OrganizationIdentifier: scope.OrgID,
 					ProjectIdentifier:      scope.ProjectID,
 				},
-				Name:     name,
-				Identity: identity,
+				Name:        name,
+				Identity:    identity,
+				Description: description,
+				Tags:        tags,
+				ImportType:  importType,
 			}
 
 			data, err := client.CreateExperimentFromTemplateRequest(ctx, scope, templateID, hubIdentity, requestPayload)
@@ -1072,6 +1108,83 @@ func ListLinuxInfrastructuresTool(config *config.McpServerConfig, client *client
 			r, err := json.Marshal(data)
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal list linux infras response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+// ListKubernetesInfrastructuresTool creates a tool for listing Kubernetes chaos infrastructures.
+// Use chaos_list_environments first to obtain an environmentId, then pass it to this tool to filter infrastructures.
+func ListKubernetesInfrastructuresTool(config *config.McpServerConfig, client *client.ChaosService) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool(chaoscommons.ToolListKubernetesInfrastructures,
+			mcp.WithDescription(chaoscommons.DescToolListKubernetesInfrastructures),
+			common.WithScope(config, false),
+			mcp.WithString(chaoscommons.ParamEnvironmentID,
+				mcp.Description(chaoscommons.DescEnvironmentID),
+			),
+			mcp.WithString(chaoscommons.ParamStatus,
+				mcp.Description(chaoscommons.DescStatusK8sInfra),
+				mcp.Enum("ACTIVE", "INACTIVE", "PENDING", "All"),
+			),
+		mcp.WithBoolean(chaoscommons.ParamIncludeLegacyInfra,
+			mcp.Description(chaoscommons.DescIncludeLegacyInfra),
+			mcp.DefaultBool(false),
+		),
+		mcp.WithString(chaoscommons.ParamSearch,
+			mcp.Description(chaoscommons.DescSearchK8sInfra),
+		),
+		WithPagination(),
+		mcp.WithToolAnnotation(mcp.ToolAnnotation{
+			ReadOnlyHint:    mcputils.ToBoolPtr(true),
+			DestructiveHint: mcputils.ToBoolPtr(false),
+		}),
+	),
+	func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		scope, err := common.FetchScope(ctx, config, request, false)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		environmentID, err := OptionalParam[string](request, chaoscommons.ParamEnvironmentID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		statusRaw, err := OptionalParam[string](request, chaoscommons.ParamStatus)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		statusFilter := "ACTIVE"
+		if statusRaw == "All" {
+			statusFilter = ""
+		} else if statusRaw != "" {
+			statusFilter = statusRaw
+		}
+
+		includeLegacyInfra, err := OptionalParam[bool](request, chaoscommons.ParamIncludeLegacyInfra)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		search, err := OptionalParam[string](request, chaoscommons.ParamSearch)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		page, size, err := FetchPagination(request)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		data, err := client.ListKubernetesInfrastructures(ctx, scope, environmentID, page, size, statusFilter, includeLegacyInfra, search)
+			if err != nil {
+				return nil, fmt.Errorf("failed to list kubernetes infrastructures: %w", err)
+			}
+
+			r, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal list kubernetes infrastructures response: %w", err)
 			}
 
 			return mcp.NewToolResultText(string(r)), nil
