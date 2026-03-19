@@ -102,6 +102,10 @@ export interface EndpointSpec {
   queryParams?: Record<string, string>;
   /** Static query parameters always included in the request (not derived from input) */
   staticQueryParams?: Record<string, string>;
+  /** Default query params to include if not overridden by input */
+  defaultQueryParams?: Record<string, string>;
+  /** Override default scope query param names (e.g. for APIs using snake_case) */
+  scopeParams?: { account?: string; org?: string; project?: string };
   /** For POST/PUT: how to build the request body from tool input */
   bodyBuilder?: (input: Record<string, unknown>) => unknown;
   /** Static headers to merge into the request (e.g. Content-Type override) */

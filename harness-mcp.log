@@ -1,0 +1,22 @@
+time=2026-03-17T17:17:19.372+05:30 level=INFO msg="Starting server (runStdioServer)" transport=""
+time=2026-03-17T17:17:19.372+05:30 level=INFO msg="Using config (runStdioServer)" config="{AccountID:px7xd_BFRCi-pfWPYXVjvw APIKey:pat.px7xd_BFRCi-pfWPYXVjvw.69afeafeaeeb0734905f137d.MxOy6SAbhSUBOzZoKzTy BaseURL:https://qa.harness.io Debug:false DefaultOrgID:AI_Devops DefaultProjectID:Sanity HTTP:{Port:0 Path:} LogFilePath:harness-mcp.log LogFormat:text OutputDir: ReadOnly:false Toolsets:[] Transport: Version:0.1.0}"
+time=2026-03-17T17:17:19.372+05:30 level=INFO msg="Successfully created license client"
+time=2026-03-17T17:17:19.372+05:30 level=INFO msg=Request method=GET url="https://qa.harness.io/ng/api/licenses/account?accountIdentifier=px7xd_BFRCi-pfWPYXVjvw"
+time=2026-03-17T17:17:20.455+05:30 level=INFO msg=Response status="200 OK"
+time=2026-03-17T17:17:20.456+05:30 level=INFO msg="Successfully retrieved account licenses" status="200 OK" accountId=px7xd_BFRCi-pfWPYXVjvw
+time=2026-03-17T17:17:20.456+05:30 level=INFO msg="License accountLicense data" hasData=true status=SUCCESS
+time=2026-03-17T17:17:20.456+05:30 level=INFO msg="Account license details" accountId=px7xd_BFRCi-pfWPYXVjvw licenseCount=16
+time=2026-03-17T17:17:20.456+05:30 level=INFO msg="Tool enabled" toolset=default tool=get_connector_details
+time=2026-03-17T17:17:20.456+05:30 level=INFO msg="Tool enabled" toolset=default tool=list_connector_catalogue
+time=2026-03-17T17:17:20.456+05:30 level=INFO msg="Tool enabled" toolset=default tool=list_connectors
+time=2026-03-17T17:17:20.456+05:30 level=INFO msg="Tool enabled" toolset=default tool=list_pipelines
+time=2026-03-17T17:17:20.456+05:30 level=INFO msg="Tool enabled" toolset=default tool=get_pipeline
+time=2026-03-17T17:17:20.456+05:30 level=INFO msg="Tool enabled" toolset=default tool=fetch_execution_url
+time=2026-03-17T17:17:20.456+05:30 level=INFO msg="Tool enabled" toolset=default tool=get_execution
+time=2026-03-17T17:17:20.456+05:30 level=INFO msg="Tool enabled" toolset=default tool=list_executions
+time=2026-03-17T17:17:20.456+05:30 level=INFO msg="Tool enabled" toolset=default tool=list_dashboards
+time=2026-03-17T17:17:20.456+05:30 level=INFO msg="Tool enabled" toolset=default tool=get_dashboard_data
+time=2026-03-17T17:17:20.456+05:30 level=INFO msg="Registered toolsets with tracker" count=1
+time=2026-03-17T17:17:20.456+05:30 level=INFO msg="Harness MCP Server running on stdio" version=0.1.0
+time=2026-03-17T18:07:52.357+05:30 level=ERROR msg="Error reading input: read /dev/stdin: input/output error"
+time=2026-03-17T18:07:52.357+05:30 level=ERROR msg="error running server" error="read /dev/stdin: input/output error"

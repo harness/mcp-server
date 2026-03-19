@@ -16,6 +16,11 @@ export const secretsToolset: ToolsetDefinition = {
       listFilterFields: [
         { name: "search_term", description: "Filter secrets by name or keyword" },
         { name: "type", description: "Secret type filter", enum: ["SecretFile", "SecretText", "SSHKey", "WinRmCredentials"] },
+        { name: "secret_identifier", description: "Filter by secret identifier" },
+        { name: "secret_name", description: "Filter by secret name" },
+        { name: "secret_manager_identifiers", description: "Filter by secret manager identifiers (comma-separated)" },
+        { name: "description", description: "Filter by description" },
+        { name: "tags", description: "Filter by tags as key:value pairs (JSON object)" },
       ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/setup/resources/secrets/{secretIdentifier}",
       operations: {
@@ -24,13 +29,25 @@ export const secretsToolset: ToolsetDefinition = {
           path: "/ng/api/v2/secrets/list/secrets",
           queryParams: {
             search_term: "searchTerm",
-            page: "page",
-            size: "size",
+            page: "pageIndex",
+            size: "pageSize",
           },
-          bodyBuilder: (input) => ({
-            filterType: "Secret",
-            secretTypes: input.type ? [input.type] : undefined,
-          }),
+          bodyBuilder: (input) => {
+            const csv = (v: unknown): string[] | undefined => {
+              if (!v) return undefined;
+              return String(v).split(",").map((s) => s.trim()).filter(Boolean);
+            };
+            return {
+              filterType: "Secret",
+              secretTypes: input.type ? [input.type] : undefined,
+              secretIdentifier: input.secret_identifier || undefined,
+              secretName: input.secret_name || undefined,
+              secretManagerIdentifiers: csv(input.secret_manager_identifiers),
+              description: input.description || undefined,
+              searchTerm: input.search_term || undefined,
+              tags: input.tags,
+            };
+          },
           responseExtractor: pageExtract,
           description: "List secret metadata (values never exposed)",
         },

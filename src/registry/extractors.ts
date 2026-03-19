@@ -10,12 +10,12 @@ export const ngExtract = (raw: unknown): unknown => {
   return r.data ?? raw;
 };
 
-/** Extract paginated content from NG API responses: `{ data: { content, totalElements } }` */
+/** Extract paginated content from NG API responses: `{ data: { content, totalElements|totalItems } }` */
 export const pageExtract = (raw: unknown): { items: unknown[]; total: number } => {
-  const r = raw as { data?: { content?: unknown[]; totalElements?: number } };
+  const r = raw as { data?: { content?: unknown[]; totalElements?: number; totalItems?: number } };
   return {
     items: r.data?.content ?? [],
-    total: r.data?.totalElements ?? 0,
+    total: r.data?.totalElements ?? r.data?.totalItems ?? 0,
   };
 };
 
@@ -123,5 +123,14 @@ export const ccmRecommendationsExtract = (raw: unknown): { items: unknown[]; sta
   return {
     items: r.data?.recommendationsV2?.items ?? [],
     stats: r.data?.recommendationStatsV2,
+  };
+};
+
+/** Extract dashboard list response: `{ items, pages, resource }` */
+export const dashboardListExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { items?: number; pages?: number; resource?: unknown[] };
+  return {
+    items: r.resource ?? [],
+    total: r.items ?? 0,
   };
 };

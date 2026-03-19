@@ -37,9 +37,10 @@ export const servicesToolset: ToolsetDefinition = {
       identifierFields: ["service_id"],
       listFilterFields: [
         { name: "search_term", description: "Filter services by name or keyword" },
-        { name: "sort", description: "Sort services by name or identifier" },
+        { name: "sort", description: "Field to sort by (e.g. name, identifier)" },
+        { name: "order", description: "Sort order", enum: ["asc", "desc"] },
       ],
-      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/services/{serviceIdentifier}",
+      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/services/{serviceIdentifier}",
       operations: {
         list: {
           method: "GET",
@@ -47,6 +48,7 @@ export const servicesToolset: ToolsetDefinition = {
           queryParams: {
             search_term: "searchTerm",
             sort: "sort",
+            order: "order",
             page: "page",
             size: "size",
           },

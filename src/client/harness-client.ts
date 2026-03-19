@@ -326,6 +326,9 @@ export class HarnessClient {
       }
     }
 
-    return `${baseUrl}${path}?${params.toString()}`;
+    const queryString = params.toString();
+    const url = queryString ? `${baseUrl}${path}?${queryString}` : `${baseUrl}${path}`;
+    log.debug(`Built URL: ${url}`);
+    return url;
   }
 }

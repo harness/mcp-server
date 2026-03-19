@@ -1,5 +1,5 @@
 import type { ToolsetDefinition } from "../types.js";
-import { ngExtract, pageExtract } from "../extractors.js";
+import { ngExtract, pageExtract, v1ListExtract } from "../extractors.js";
 
 export const idpToolset: ToolsetDefinition = {
   name: "idp",
@@ -21,19 +21,21 @@ export const idpToolset: ToolsetDefinition = {
       operations: {
         list: {
           method: "GET",
-          path: "/idp/api/catalog/entities",
+          path: "/v1/entities",
           queryParams: {
             kind: "kind",
-            search: "search",
+            search: "search_term",
             page: "page",
-            size: "size",
+            size: "limit",
+            scope_level: "scope_level",
           },
-          responseExtractor: pageExtract,
+          defaultQueryParams: { scope_level: "ACCOUNT" },
+          responseExtractor: v1ListExtract(),
           description: "List IDP catalog entities",
         },
         get: {
           method: "GET",
-          path: "/idp/api/catalog/entities/{entityId}",
+          path: "/v1/entities/{entityId}",
           pathParams: { entity_id: "entityId" },
           responseExtractor: ngExtract,
           description: "Get IDP catalog entity details",
@@ -51,17 +53,17 @@ export const idpToolset: ToolsetDefinition = {
       operations: {
         list: {
           method: "GET",
-          path: "/idp/api/scorecards",
+          path: "/v1/scorecards",
           queryParams: {
             page: "page",
-            size: "size",
+            size: "limit",
           },
-          responseExtractor: pageExtract,
+          responseExtractor: v1ListExtract("scorecard"),
           description: "List IDP scorecards",
         },
         get: {
           method: "GET",
-          path: "/idp/api/scorecards/{scorecardIdentifier}",
+          path: "/v1/scorecards/{scorecardIdentifier}",
           pathParams: { scorecard_id: "scorecardIdentifier" },
           responseExtractor: ngExtract,
           description: "Get scorecard details",
@@ -78,18 +80,19 @@ export const idpToolset: ToolsetDefinition = {
       operations: {
         list: {
           method: "GET",
-          path: "/idp/api/scorecards/checks",
+          path: "/v1/checks",
           queryParams: {
             page: "page",
-            size: "size",
+            size: "limit",
           },
-          responseExtractor: pageExtract,
+          responseExtractor: v1ListExtract("check"),
           description: "List scorecard checks",
         },
         get: {
           method: "GET",
-          path: "/idp/api/scorecards/checks/{checkIdentifier}",
+          path: "/v1/checks/{checkIdentifier}",
           pathParams: { check_id: "checkIdentifier" },
+          queryParams: { is_custom: "custom" },
           responseExtractor: ngExtract,
           description: "Get scorecard check details",
         },
@@ -106,7 +109,7 @@ export const idpToolset: ToolsetDefinition = {
       operations: {
         get: {
           method: "GET",
-          path: "/idp/api/scorecards/{scorecardIdentifier}/stats",
+          path: "/v1/scorecards/{scorecardIdentifier}/stats",
           pathParams: { scorecard_id: "scorecardIdentifier" },
           responseExtractor: ngExtract,
           description: "Get aggregate statistics for a scorecard",
@@ -124,8 +127,9 @@ export const idpToolset: ToolsetDefinition = {
       operations: {
         get: {
           method: "GET",
-          path: "/idp/api/scorecards/checks/{checkIdentifier}/stats",
+          path: "/v1/checks/{checkIdentifier}/stats",
           pathParams: { check_id: "checkIdentifier" },
+          queryParams: { is_custom: "custom" },
           responseExtractor: ngExtract,
           description: "Get statistics for a specific scorecard check",
         },
@@ -141,17 +145,17 @@ export const idpToolset: ToolsetDefinition = {
       operations: {
         list: {
           method: "GET",
-          path: "/idp/api/scorecards/scores",
+          path: "/v1/scores",
           queryParams: {
             page: "page",
-            size: "size",
+            size: "limit",
           },
-          responseExtractor: pageExtract,
+          responseExtractor: v1ListExtract(),
           description: "List entity scores",
         },
         get: {
           method: "GET",
-          path: "/idp/api/scorecards/scores/{entityId}",
+          path: "/v1/scores/{entityId}",
           pathParams: { entity_id: "entityId" },
           responseExtractor: ngExtract,
           description: "Get score summary for an entity",
@@ -165,19 +169,25 @@ export const idpToolset: ToolsetDefinition = {
       toolset: "idp",
       scope: "account",
       identifierFields: ["workflow_id"],
+      listFilterFields: [
+        { name: "scope_level", description: "Scope level filter (ACCOUNT, ORG, PROJECT, ALL)", enum: ["ACCOUNT", "ORG", "PROJECT", "ALL"] },
+      ],
       operations: {
         list: {
           method: "GET",
-          path: "/idp/api/workflows",
-          responseExtractor: pageExtract,
+          path: "/v1/entities",
+          queryParams: {
+            scope_level: "scope_level",
+          },
+          defaultQueryParams: { kind: "workflow", scope_level: "ACCOUNT" },
+          responseExtractor: v1ListExtract(),
           description: "List IDP workflows",
         },
       },
       executeActions: {
         execute: {
           method: "POST",
-          path: "/idp/api/workflows/{workflowId}/execute",
-          pathParams: { workflow_id: "workflowId" },
+          path: "/v1/scaffolder/tasks",
           bodyBuilder: (input) => input.body ?? {},
           responseExtractor: ngExtract,
           actionDescription: "Execute an IDP self-service workflow",
@@ -203,7 +213,7 @@ export const idpToolset: ToolsetDefinition = {
       operations: {
         list: {
           method: "GET",
-          path: "/idp/api/techdocs/search",
+          path: "/v1/techdocs/search",
           queryParams: {
             query: "term",
           },

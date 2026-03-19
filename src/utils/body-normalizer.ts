@@ -33,6 +33,8 @@ export function unwrapBody(body: unknown, wrapperKey: string): unknown {
 export interface BodyBuilderOptions {
   /** Unwrap a wrapper key (e.g., "service", "connector", "environment") */
   unwrapKey?: string;
+  /** Wrap the body under a key (e.g., "service" → {"service": {...}}). Use when API expects wrapped bodies. */
+  wrapKey?: string;
   /** Auto-inject identifier from input field if missing from body */
   injectIdentifier?: { inputField: string; bodyField: string };
   /** Auto-inject additional fields if missing */
@@ -47,9 +49,17 @@ export function buildBodyNormalized(opts: BodyBuilderOptions = {}): (input: Reco
   return (input: Record<string, unknown>) => {
     let body = input.body;
 
-    // Step 1: Unwrap wrapper key if configured
+    // Step 1a: Unwrap wrapper key if configured
     if (opts.unwrapKey) {
       body = unwrapBody(body, opts.unwrapKey) ?? body;
+    }
+
+    // Step 1b: Wrap body under key if configured (e.g., {"environment": {...}})
+    if (opts.wrapKey && typeof body === "object" && body !== null) {
+      // Only wrap if the body is NOT already wrapped with the key
+      if (!(opts.wrapKey in (body as Record<string, unknown>))) {
+        body = { [opts.wrapKey]: body };
+      }
     }
 
     // Step 2: Inject identifier if configured and missing
