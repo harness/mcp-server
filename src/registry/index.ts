@@ -38,6 +38,9 @@ import { overridesToolset } from "./toolsets/overrides.js";
 
 const log = createLogger("registry");
 
+/** Keys under which different Harness APIs return list arrays. */
+const LIST_ARRAY_KEYS = ["items", "features", "content", "data"];
+
 /** All available toolsets */
 const ALL_TOOLSETS: ToolsetDefinition[] = [
   pipelinesToolset,
@@ -255,13 +258,26 @@ export class Registry {
     const params: Record<string, string | number | boolean | undefined> = {};
 
     // Add scope params (allow per-resource override of query param names)
+    // When scopeOptional is true, only add org/project if explicitly provided in input.
+    // Otherwise, fall back to config defaults based on the resource's scope level.
     const orgParam = def.scopeParams?.org ?? "orgIdentifier";
     const projectParam = def.scopeParams?.project ?? "projectIdentifier";
-    if (def.scope === "project" || def.scope === "org") {
-      params[orgParam] = (input.org_id as string) ?? this.config.HARNESS_DEFAULT_ORG_ID;
-    }
-    if (def.scope === "project") {
-      params[projectParam] = (input.project_id as string) ?? this.config.HARNESS_DEFAULT_PROJECT_ID;
+    if (def.scopeOptional) {
+      // Dynamic scoping: only inject when caller explicitly provides them
+      if (input.org_id) {
+        params[orgParam] = input.org_id as string;
+      }
+      if (input.project_id) {
+        params[projectParam] = input.project_id as string;
+      }
+    } else {
+      // Standard scoping: always inject based on scope level, falling back to config defaults
+      if (def.scope === "project" || def.scope === "org") {
+        params[orgParam] = (input.org_id as string) ?? this.config.HARNESS_DEFAULT_ORG_ID;
+      }
+      if (def.scope === "project") {
+        params[projectParam] = (input.project_id as string) ?? this.config.HARNESS_DEFAULT_PROJECT_ID;
+      }
     }
     // Inject custom account param when scopeParams.account is set
     // (in addition to the client's default accountIdentifier)
@@ -276,7 +292,14 @@ export class Registry {
       }
     }
 
-    // Map input fields to query params
+    // Apply default query params first (can be overridden by input)
+    if (spec.defaultQueryParams) {
+      for (const [queryKey, defaultValue] of Object.entries(spec.defaultQueryParams)) {
+        params[queryKey] = defaultValue;
+      }
+    }
+
+    // Map input fields to query params (overrides defaults)
     if (spec.queryParams) {
       for (const [inputKey, queryKey] of Object.entries(spec.queryParams)) {
         const value = input[inputKey];
@@ -288,6 +311,25 @@ export class Registry {
 
     // Build body
     const body = spec.bodyBuilder ? spec.bodyBuilder(input) : undefined;
+
+    // Inject orgIdentifier/projectIdentifier into the body for mutating operations (POST/PUT).
+    // Harness NG APIs require these in the body (not just query params) to scope the resource correctly.
+    // If bodyWrapperKey is set (e.g., "connector"), inject inside the wrapper object.
+    if (body && typeof body === "object" && (spec.method === "POST" || spec.method === "PUT")) {
+      const bodyRecord = body as Record<string, unknown>;
+      // Determine where to inject: inside wrapper if present, otherwise at top level
+      const targetRecord = spec.bodyWrapperKey && 
+        bodyRecord[spec.bodyWrapperKey] && 
+        typeof bodyRecord[spec.bodyWrapperKey] === "object"
+          ? (bodyRecord[spec.bodyWrapperKey] as Record<string, unknown>)
+          : bodyRecord;
+      if (params.orgIdentifier && !targetRecord.orgIdentifier) {
+        targetRecord.orgIdentifier = params.orgIdentifier;
+      }
+      if (params.projectIdentifier && !targetRecord.projectIdentifier) {
+        targetRecord.projectIdentifier = params.projectIdentifier;
+      }
+    }
 
     // Validate required fields if bodySchema is defined.
     // When bodyWrapperKey is set, the bodyBuilder wraps user fields inside that
@@ -320,6 +362,7 @@ export class Registry {
       body,
       ...(baseUrl ? { baseUrl } : {}),
       ...(spec.headers ? { headers: spec.headers } : {}),
+      ...(spec.responseType ? { responseType: spec.responseType } : {}),
       signal,
     });
 
@@ -373,7 +416,22 @@ export class Registry {
         const pathParamName = spec.pathParams?.[field] ?? getPathParam?.[field] ?? field;
         let value = input[field];
         if (!value && resultRecord) {
+          // Check top-level first
           value = resultRecord[pathParamName] ?? resultRecord.identifier;
+          if (!value) {
+            // Look for identifier in any nested object that has an 'identifier' field
+            // This handles wrapped responses like {service: {identifier: "..."}}, {environment: {...}}, etc.
+            for (const key of Object.keys(resultRecord)) {
+              const nested = resultRecord[key];
+              if (nested && typeof nested === "object" && !Array.isArray(nested)) {
+                const nestedObj = nested as Record<string, unknown>;
+                if ("identifier" in nestedObj) {
+                  value = nestedObj[pathParamName] ?? nestedObj.identifier;
+                  if (value) break;
+                }
+              }
+            }
+          }
         }
         if (value) {
           baseLinkParams[pathParamName] = String(value);
@@ -381,8 +439,10 @@ export class Registry {
       }
       // Only attach top-level openInHarness for single-item results (get/create/update),
       // not for list results where there's no single entity to link to.
-      const r = result as { items?: unknown[] };
-      const isList = r.items && Array.isArray(r.items);
+      const r = result as Record<string, unknown>;
+      const isList = LIST_ARRAY_KEYS.some(
+        (key) => Array.isArray(r[key])
+      );
       if (!isList) {
         try {
           let link = buildDeepLink(
@@ -397,8 +457,17 @@ export class Registry {
           // Deep link construction failed — non-critical
         }
       }
-      if (r.items && Array.isArray(r.items)) {
-        for (const item of r.items) {
+      // Handle various list array keys used by different APIs
+      let listArray: unknown[] | undefined;
+      for (const key of LIST_ARRAY_KEYS) {
+        const arr = (result as Record<string, unknown>)[key];
+        if (Array.isArray(arr)) {
+          listArray = arr;
+          break;
+        }
+      }
+      if (listArray) {
+        for (const item of listArray) {
           if (typeof item !== "object" || item === null) continue;
           try {
             const itemRecord = item as Record<string, unknown>;
@@ -415,6 +484,37 @@ export class Registry {
               } else if (itemRecord.identifier !== undefined) {
                 // Fall back to the generic "identifier" field for the primary identifier
                 itemLinkParams[pathParamName] = String(itemRecord.identifier);
+              } else if (itemRecord.name !== undefined) {
+                // Some APIs use "name" as the identifier (e.g., registry)
+                itemLinkParams[pathParamName] = String(itemRecord.name);
+              } else {
+                // Check for nested wrapper objects (e.g., connector.identifier, service.identifier)
+                // Common wrapper keys used by Harness NG APIs
+                const wrapperKeys = ["connector", "service", "environment", "secret", "role", "resourceGroup", "pipeline", "template", "artifact"];
+                for (const wrapperKey of wrapperKeys) {
+                  const nested = itemRecord[wrapperKey];
+                  if (nested && typeof nested === "object") {
+                    const nestedRecord = nested as Record<string, unknown>;
+                    if (nestedRecord[pathParamName] !== undefined) {
+                      itemLinkParams[pathParamName] = String(nestedRecord[pathParamName]);
+                      break;
+                    } else if (nestedRecord.identifier !== undefined) {
+                      itemLinkParams[pathParamName] = String(nestedRecord.identifier);
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+
+            // Also resolve any remaining placeholders directly from item fields
+            // (e.g., pipelineIdentifier, registryIdentifier that aren't in identifierFields)
+            const placeholderRegex = /\{(\w+)\}/g;
+            let match;
+            while ((match = placeholderRegex.exec(def.deepLinkTemplate)) !== null) {
+              const placeholder = match[1];
+              if (placeholder && !itemLinkParams[placeholder] && itemRecord[placeholder] !== undefined) {
+                itemLinkParams[placeholder] = String(itemRecord[placeholder]);
               }
             }
 

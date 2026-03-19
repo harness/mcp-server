@@ -1,5 +1,5 @@
 import type { ToolsetDefinition, PathBuilderConfig } from "../types.js";
-import { passthrough } from "../extractors.js";
+import { passthrough, harListExtract } from "../extractors.js";
 
 /**
  * HAR API uses path-based scope refs (not query params).
@@ -59,7 +59,7 @@ export const registriesToolset: ToolsetDefinition = {
             page: "page",
             size: "size",
           },
-          responseExtractor: passthrough,
+          responseExtractor: harListExtract("registries"),
           description: "List artifact registries",
         },
         get: {
@@ -96,7 +96,7 @@ export const registriesToolset: ToolsetDefinition = {
             page: "page",
             size: "size",
           },
-          responseExtractor: passthrough,
+          responseExtractor: harListExtract("artifacts"),
           description: "List artifacts in a registry",
         },
       },
@@ -128,7 +128,7 @@ export const registriesToolset: ToolsetDefinition = {
             page: "page",
             size: "size",
           },
-          responseExtractor: passthrough,
+          responseExtractor: harListExtract("artifactVersions"),
           description: "List versions of an artifact",
         },
       },
@@ -161,7 +161,7 @@ export const registriesToolset: ToolsetDefinition = {
             page: "page",
             size: "size",
           },
-          responseExtractor: passthrough,
+          responseExtractor: harListExtract("files"),
           description: "List files in an artifact version",
         },
       },

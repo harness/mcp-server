@@ -9,12 +9,12 @@ export const accessControlToolset: ToolsetDefinition = {
     {
       resourceType: "user",
       displayName: "User",
-      description: "Platform user. Supports list and get.",
+      description: "Get details of all the USERS in the account. Supports list, get, and invite.",
       toolset: "access_control",
       scope: "account",
       identifierFields: ["user_id"],
       listFilterFields: [
-        { name: "search_term", description: "Filter users by name or email ID" },
+        { name: "search_term", description: "Optional search term to filter users. Search by email ID or name." },
       ],
       deepLinkTemplate: "/ng/account/{accountId}/settings/access-control/users",
       operations: {
@@ -26,7 +26,7 @@ export const accessControlToolset: ToolsetDefinition = {
             searchTerm: input.search_term ?? "",
           }),
           responseExtractor: pageExtract,
-          description: "List all users in the account",
+          description: "Get details of all the USERS in the account",
         },
         get: {
           method: "GET",
@@ -34,6 +34,40 @@ export const accessControlToolset: ToolsetDefinition = {
           pathParams: { user_id: "userId" },
           responseExtractor: ngExtract,
           description: "Get user details by ID",
+        },
+      },
+      executeActions: {
+        invite: {
+          method: "POST",
+          path: "/ng/api/user/users",
+          bodyBuilder: (input) => {
+            const b = input.body as Record<string, unknown> | undefined;
+            const emails = b?.emails ?? b?.email_ids;
+            const userGroups = b?.user_groups ?? b?.user_group_ids;
+            const roleBindings = b?.role_bindings;
+            return {
+              emails: Array.isArray(emails) ? emails : typeof emails === "string" ? emails.split(",").map((s: string) => s.trim()) : [],
+              userGroups: Array.isArray(userGroups) ? userGroups : typeof userGroups === "string" ? userGroups.split(",").map((s: string) => s.trim()) : [],
+              roleBindings: Array.isArray(roleBindings) ? roleBindings : [],
+            };
+          },
+          responseExtractor: ngExtract,
+          actionDescription: "Invite users to Harness with specified role bindings and user groups.",
+          bodySchema: {
+            description: "User invitation request",
+            fields: [
+              { name: "emails", type: "array", required: true, description: "Email addresses of users to invite (array or comma-separated string)", itemType: "string" },
+              { name: "user_groups", type: "array", required: false, description: "User group identifiers to add invited users to", itemType: "string" },
+              { name: "role_bindings", type: "array", required: false, description: "Role bindings for invited users", itemType: "object", fields: [
+                { name: "roleIdentifier", type: "string", required: true, description: "Role identifier" },
+                { name: "resourceGroupIdentifier", type: "string", required: true, description: "Resource group identifier" },
+                { name: "roleScopeLevel", type: "string", required: true, description: "Role scope level" },
+                { name: "roleName", type: "string", required: true, description: "Role name" },
+                { name: "resourceGroupName", type: "string", required: true, description: "Resource group name" },
+                { name: "managedRole", type: "string", required: true, description: "Whether this is a managed role ('true' or 'false')" },
+              ]},
+            ],
+          },
         },
       },
     },
@@ -207,7 +241,7 @@ export const accessControlToolset: ToolsetDefinition = {
     {
       resourceType: "role_assignment",
       displayName: "Role Assignment",
-      description: "Role assignment binding a principal to a role. Supports list and create.",
+      description: "Role assignment binding a principal to a role. Supports list, create, and delete.",
       toolset: "access_control",
       scope: "project",
       identifierFields: ["role_assignment_id"],
@@ -247,6 +281,13 @@ export const accessControlToolset: ToolsetDefinition = {
               { name: "disabled", type: "boolean", required: false, description: "Whether the assignment is disabled" },
             ],
           },
+        },
+        delete: {
+          method: "DELETE",
+          path: "/authz/api/roleassignments/{roleAssignmentIdentifier}",
+          pathParams: { role_assignment_id: "roleAssignmentIdentifier" },
+          responseExtractor: ngExtract,
+          description: "Delete a role assignment",
         },
       },
     },

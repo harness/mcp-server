@@ -11,9 +11,9 @@ export const pullRequestsToolset: ToolsetDefinition = {
       resourceType: "pull_request",
       displayName: "Pull Request",
       description:
-        "Code pull request. Supports list, get, create, and update. Use execute actions for merge.",
+        "Code pull request. Supports list, get, create, and update. Use execute actions for merge. Scope is determined by input: omit org_id/project_id for account-scoped repos, or provide them for org/project-scoped repos.",
       toolset: "pull-requests",
-      scope: "project",
+      scope: "account",
       identifierFields: ["repo_id", "pr_number"],
       listFilterFields: [
         { name: "state", description: "Pull request state filter", enum: ["open", "closed", "merged"] },
@@ -114,7 +114,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
       description:
         "Reviewers on a pull request. Supports list and create (add reviewer). Use execute action 'submit_review' to approve or request changes.",
       toolset: "pull-requests",
-      scope: "project",
+      scope: "account",
       identifierFields: ["repo_id", "pr_number"],
       operations: {
         list: {
@@ -174,7 +174,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
       description:
         "Comments on a pull request. Supports list and create.",
       toolset: "pull-requests",
-      scope: "project",
+      scope: "account",
       identifierFields: ["repo_id", "pr_number"],
       operations: {
         list: {
@@ -217,7 +217,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
       displayName: "PR Check",
       description: "Status checks on a pull request. Supports list.",
       toolset: "pull-requests",
-      scope: "project",
+      scope: "account",
       identifierFields: ["repo_id", "pr_number"],
       operations: {
         list: {
@@ -238,7 +238,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
       description:
         "Activity timeline on a pull request (comments, reviews, status changes). Supports list.",
       toolset: "pull-requests",
-      scope: "project",
+      scope: "account",
       identifierFields: ["repo_id", "pr_number"],
       operations: {
         list: {

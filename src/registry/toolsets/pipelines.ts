@@ -225,10 +225,12 @@ export const pipelinesToolset: ToolsetDefinition = {
       identifierFields: ["execution_id"],
       diagnosticHint: "Use harness_diagnose with execution_id to analyze a failed execution — includes step-level error details, log snippets, delegate info, and chained pipeline traversal.",
       listFilterFields: [
+        { name: "search_term", description: "Filter executions by name or keyword" },
         { name: "pipeline_id", description: "Pipeline identifier to filter executions" },
         { name: "status", description: "Execution status filter", enum: ["Success", "Failed", "Running", "Aborted", "Expired", "AbortedByFreeze", "NotStarted", "Paused", "Queued", "Waiting"] },
+        { name: "branch", description: "Branch to filter executions" },
+        { name: "my_deployments", description: "Show only my deployments", type: "boolean" },
         { name: "module", description: "Harness module filter", enum: ["CD", "CI", "CV", "CF", "CE", "STO"] },
-        { name: "search_term", description: "Search executions by keyword" },
       ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipelineIdentifier}/executions/{planExecutionId}/pipeline",
       operations: {
@@ -236,12 +238,14 @@ export const pipelinesToolset: ToolsetDefinition = {
           method: "POST",
           path: "/pipeline/api/pipelines/execution/summary",
           queryParams: {
-            page: "page",
-            size: "size",
-            module: "module",
+            search_term: "searchTerm",
             pipeline_id: "pipelineIdentifier",
             status: "status",
-            search_term: "searchTerm",
+            branch: "branch",
+            my_deployments: "myDeployments",
+            module: "module",
+            page: "page",
+            size: "size",
           },
           bodyBuilder: () => ({
             filterType: "PipelineExecution",

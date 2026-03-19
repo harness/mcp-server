@@ -51,4 +51,6 @@ export interface RequestOptions {
   signal?: AbortSignal;
   /** Override default timeout for this request (milliseconds). */
   timeoutMs?: number;
+  /** Return raw ArrayBuffer instead of parsing JSON. Used for binary endpoints (ZIP downloads). */
+  responseType?: "json" | "buffer";
 }

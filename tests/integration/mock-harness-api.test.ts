@@ -64,6 +64,8 @@ describe("Integration: Registry → HarnessClient → fetch", () => {
       const registry = new Registry(config);
 
       const result = (await registry.dispatch(client, "pipeline", "list", {
+        org_id: "default",
+        project_id: "test-project",
         search_term: "deploy",
         page: 0,
         size: 10,
@@ -114,6 +116,8 @@ describe("Integration: Registry → HarnessClient → fetch", () => {
       const registry = new Registry(config);
 
       const result = (await registry.dispatch(client, "pipeline", "get", {
+        org_id: "default",
+        project_id: "test-project",
         pipeline_id: "my-pipeline",
       })) as Record<string, unknown>;
 
@@ -133,17 +137,14 @@ describe("Integration: Registry → HarnessClient → fetch", () => {
 
   describe("error handling", () => {
     it("throws HarnessApiError for 401 unauthorized", async () => {
-      fetchSpy.mockResolvedValueOnce(
-        mockFetchResponse(
-          {
-            status: "ERROR",
-            code: "INVALID_TOKEN",
-            message: "Token is invalid or expired",
-            correlationId: "corr-123",
-          },
-          401,
-        ),
-      );
+      const mock401Body = {
+        status: "ERROR",
+        code: "INVALID_TOKEN",
+        message: "Token is invalid or expired",
+        correlationId: "corr-123",
+      };
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse(mock401Body, 401));
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse(mock401Body, 401));
 
       const config = makeConfig();
       const client = new HarnessClient(config);
@@ -208,7 +209,7 @@ describe("Integration: Registry → HarnessClient → fetch", () => {
   });
 
   describe("scope injection", () => {
-    it("injects org and project for project-scoped resources", async () => {
+    it("injects org and project for project-scoped resources when provided in input", async () => {
       fetchSpy.mockResolvedValueOnce(
         mockFetchResponse({ status: "SUCCESS", data: { content: [], totalElements: 0 } }),
       );
@@ -220,7 +221,10 @@ describe("Integration: Registry → HarnessClient → fetch", () => {
       const client = new HarnessClient(config);
       const registry = new Registry(config);
 
-      await registry.dispatch(client, "pipeline", "list", {});
+      await registry.dispatch(client, "pipeline", "list", {
+        org_id: "my-org",
+        project_id: "my-project",
+      });
 
       const [url] = fetchSpy.mock.calls[0]!;
       const urlStr = String(url);

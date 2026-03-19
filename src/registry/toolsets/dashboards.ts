@@ -1,5 +1,5 @@
 import type { ToolsetDefinition } from "../types.js";
-import { ngExtract, pageExtract, passthrough } from "../extractors.js";
+import { dashboardListExtract, dashboardDataExtract } from "../extractors.js";
 
 export const dashboardsToolset: ToolsetDefinition = {
   name: "dashboards",
@@ -9,32 +9,33 @@ export const dashboardsToolset: ToolsetDefinition = {
     {
       resourceType: "dashboard",
       displayName: "Dashboard",
-      description: "Custom analytics dashboard. Supports list and get.",
+      description: "Custom analytics dashboard. Supports list. Use dashboard_data to fetch content.",
       toolset: "dashboards",
       scope: "account",
       identifierFields: ["dashboard_id"],
       listFilterFields: [
         { name: "search_term", description: "Filter dashboards by name or keyword" },
+        { name: "folder_id", description: "Filter dashboards by folder ID" },
+        { name: "tags", description: "Filter dashboards by tags" },
       ],
       deepLinkTemplate: "/ng/account/{accountId}/dashboards",
       operations: {
         list: {
           method: "GET",
-          path: "/dashboard/api/dashboards",
+          path: "/dashboard/v1/search",
           queryParams: {
             search_term: "searchTerm",
+            folder_id: "folderId",
+            tags: "tags",
             page: "page",
-            size: "size",
+            size: "pageSize",
           },
-          responseExtractor: pageExtract,
+          defaultQueryParams: {
+            tags: "HARNESS=true&CD=true&CE=true&CET=true&CF=true&CHAOS=true&CI=true&DBOPS=true&IACM=true&IDP=true&SSCA=true&STO=true&SRM=true",
+            page: "1",
+          },
+          responseExtractor: dashboardListExtract,
           description: "List dashboards",
-        },
-        get: {
-          method: "GET",
-          path: "/dashboard/api/dashboards/{dashboardId}",
-          pathParams: { dashboard_id: "dashboardId" },
-          responseExtractor: ngExtract,
-          description: "Get dashboard details",
         },
       },
     },
@@ -58,8 +59,9 @@ export const dashboardsToolset: ToolsetDefinition = {
             reporting_timeframe: "filters",
             expanded_tables: "expanded_tables",
           },
-          responseExtractor: passthrough,
-          description: "Download dashboard data as CSV. Pass reporting_timeframe in days (default 30).",
+          responseType: "buffer",
+          responseExtractor: dashboardDataExtract,
+          description: "Download dashboard data as structured tables. Pass reporting_timeframe in days (default 30).",
         },
       },
     },

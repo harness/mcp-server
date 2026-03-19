@@ -74,6 +74,10 @@ export const stoToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/sto/api/v2/frontend/all-issues/filters",
+          queryParams: {
+            page: "page",
+            size: "pageSize",
+          },
           responseExtractor: passthrough,
           description: "Get available filter values for security issues (targets, scan tools, pipelines)",
         },

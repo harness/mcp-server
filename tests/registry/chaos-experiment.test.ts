@@ -121,11 +121,13 @@ describe("chaos_experiment list/get", () => {
     expect(result.workflowManifest).toBeDefined();
   });
 
-  it("get: uses default org and project when not provided", async () => {
+  it("get: uses org and project when provided in input", async () => {
     const mockRequest = vi.fn().mockResolvedValue({ experimentID: "e1", name: "E1" });
     const client = makeClient(mockRequest);
 
     await registry.dispatch(client, "chaos_experiment", "get", {
+      org_id: "default",
+      project_id: "test-project",
       experiment_id: "e1",
     });
 

@@ -12,6 +12,14 @@ export function buildDeepLink(
   for (const [key, value] of Object.entries(params)) {
     url = url.replace(`{${key}}`, encodeURIComponent(value));
   }
+  // Strip empty scope segments (e.g. "orgs//projects//" when listing at account level,
+  // or "projects//" when listing at org level). The Harness UI uses shorter URL patterns
+  // for higher scopes: /ng/account/{id}/settings/... (account) vs
+  // /ng/account/{id}/all/orgs/{org}/settings/... (org).
+  url = url.replace(/\/orgs\/\/projects\/\//, "/");
+  url = url.replace(/\/projects\/\//, "/");
+  // Also strip the /all prefix when it immediately precedes /settings (account scope)
+  url = url.replace(/\/all\/settings\//, "/settings/");
   // Ensure base URL doesn't double-slash
   const base = baseUrl.replace(/\/$/, "");
   return `${base}${url}`;
