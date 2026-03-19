@@ -53,4 +53,6 @@ export interface RequestOptions {
   timeoutMs?: number;
   /** Return raw ArrayBuffer instead of parsing JSON. Used for binary endpoints (ZIP downloads). */
   responseType?: "json" | "buffer";
+  /** Product backend — when "fme", skips Harness-specific auth/headers/params. */
+  product?: "harness" | "fme";
 }

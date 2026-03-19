@@ -31,7 +31,6 @@ const RawConfigSchema = z.object({
   HARNESS_RATE_LIMIT_RPS: z.coerce.number().default(10),
   HARNESS_READ_ONLY: z.coerce.boolean().default(false),
   HARNESS_ALLOW_HTTP: z.coerce.boolean().default(false),
-  HARNESS_FME_BASE_URL: z.string().url().default("https://api.split.io"),
   // JWT authentication (optional — enables Bearer token auth in HTTP mode)
   JWT_SECRET: z.string().min(1).optional(),
   JWT_ISSUER: z.string().optional(),
@@ -110,13 +109,16 @@ export const ConfigSchema = RawConfigSchema.superRefine((data, ctx) => {
 
 export type Config = z.infer<typeof ConfigSchema>;
 
+/** FME (Split.io) API base URL — always api.split.io, not configurable. */
+const FME_BASE_URL = "https://api.split.io";
+
 /**
  * Resolve the base URL for a given product backend.
  * - "harness" → undefined (uses the default client base URL)
- * - "fme"     → config.HARNESS_FME_BASE_URL
+ * - "fme"     → https://api.split.io
  */
-export function resolveProductBaseUrl(config: Config, product: "harness" | "fme"): string | undefined {
-  if (product === "fme") return config.HARNESS_FME_BASE_URL;
+export function resolveProductBaseUrl(_config: Config, product: "harness" | "fme"): string | undefined {
+  if (product === "fme") return FME_BASE_URL;
   return undefined;
 }
 

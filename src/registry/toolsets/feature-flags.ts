@@ -1,6 +1,44 @@
 import type { ToolsetDefinition, BodySchema } from "../types.js";
 import { passthrough } from "../extractors.js";
 
+/**
+ * FME response extractor that flattens `trafficType.id` → `trafficTypeId`
+ * at the top level so deep link templates can reference it.
+ */
+function flattenTrafficType(item: Record<string, unknown>): void {
+  const tt = item.trafficType;
+  if (tt && typeof tt === "object" && !Array.isArray(tt)) {
+    const ttRecord = tt as Record<string, unknown>;
+    if (ttRecord.id !== undefined && item.trafficTypeId === undefined) {
+      item.trafficTypeId = ttRecord.id;
+    }
+  }
+}
+
+/** Extract FME feature flag list — passthrough with trafficType.id flattened on each item. */
+const fmeListExtract = (raw: unknown): unknown => {
+  if (raw && typeof raw === "object") {
+    const r = raw as Record<string, unknown>;
+    const objects = r.objects;
+    if (Array.isArray(objects)) {
+      for (const item of objects) {
+        if (item && typeof item === "object") {
+          flattenTrafficType(item as Record<string, unknown>);
+        }
+      }
+    }
+  }
+  return raw;
+};
+
+/** Extract FME feature flag single item — passthrough with trafficType.id flattened. */
+const fmeGetExtract = (raw: unknown): unknown => {
+  if (raw && typeof raw === "object") {
+    flattenTrafficType(raw as Record<string, unknown>);
+  }
+  return raw;
+};
+
 const fmeFeatureFlagUpdateSchema: BodySchema = {
   description: "Partial update for an FME feature flag's metadata",
   fields: [
@@ -10,14 +48,53 @@ const fmeFeatureFlagUpdateSchema: BodySchema = {
   ],
 };
 
+const fmeRbsCreateSchema: BodySchema = {
+  description: "Create a new rule-based segment in a workspace",
+  fields: [
+    { name: "name", type: "string", required: true, description: "Segment name" },
+    { name: "description", type: "string", required: false, description: "Optional segment description" },
+  ],
+};
+
+const fmeRbsUpdateDefinitionSchema: BodySchema = {
+  description: "Update a rule-based segment definition in an environment",
+  fields: [
+    { name: "title", type: "string", required: false, description: "Segment title" },
+    { name: "comment", type: "string", required: false, description: "Comment about the segment" },
+    { name: "rules", type: "array", required: false, description: "Targeting rules with conditions and matchers", itemType: "object" },
+    { name: "excludedKeys", type: "array", required: false, description: "User keys to exclude from the segment", itemType: "string" },
+    { name: "excludedSegments", type: "array", required: false, description: "Segments to exclude (objects with name and type)", itemType: "object" },
+  ],
+};
+
+const fmeRbsChangeRequestSchema: BodySchema = {
+  description: "Create a change request for a rule-based segment definition",
+  fields: [
+    { name: "title", type: "string", required: true, description: "Change request title" },
+    { name: "operationType", type: "string", required: true, description: "Change operation type (e.g. UPDATE)" },
+    { name: "comment", type: "string", required: false, description: "Optional comment for the change request" },
+    { name: "approvers", type: "array", required: false, description: "Email(s) of approver(s)", itemType: "string" },
+    {
+      name: "ruleBasedSegment", type: "object", required: true, description: "The segment definition to apply",
+      fields: [
+        { name: "title", type: "string", required: false, description: "Segment title" },
+        { name: "rules", type: "array", required: false, description: "Targeting rules", itemType: "object" },
+        { name: "excludedKeys", type: "array", required: false, description: "Keys to exclude", itemType: "string" },
+        { name: "excludedSegments", type: "array", required: false, description: "Segments to exclude", itemType: "object" },
+        { name: "comment", type: "string", required: false, description: "Segment comment" },
+      ],
+    },
+  ],
+};
+
 export const featureFlagsToolset: ToolsetDefinition = {
   name: "feature-flags",
   displayName: "Feature Management & Experimentation",
-  description: "Harness FME — feature flags, workspaces, environments, and rollout statuses via the Split.io API",
+  description: "Harness FME — feature flags, rule-based segments, workspaces, environments, and rollout statuses via the Split.io API",
   resources: [
     // ── FME Resources (Split.io API at https://api.split.io) ───────────
     // These use account scope to avoid injecting orgIdentifier/projectIdentifier
-    // which Split.io does not use. Auth is via x-api-key header only.
+    // which Split.io does not use. Auth is via Bearer token (HARNESS_API_KEY).
     {
       resourceType: "fme_workspace",
       displayName: "FME Workspace",
@@ -64,14 +141,14 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_feature_flag",
       displayName: "FME Feature Flag",
       description:
-        "Feature flag via the Split.io API. List flags by workspace with filtering (status, name, tags, rollout_status_id) and pagination (offset/size, default 20, max 50). Supports get, delete, update, and kill/restore execute actions.",
+        "Feature flag via the Split.io API. List flags by workspace with filtering (name, tags, rollout_status_id) and pagination (offset/size, default 20, max 50). Supports get, delete, update, and kill/restore/archive/unarchive execute actions.",
       toolset: "feature-flags",
       scope: "account",
       identifierFields: ["workspace_id", "feature_flag_name"],
       product: "fme",
+      deepLinkTemplate: "/ng/account/{accountId}/module/fme/orgs/{orgIdentifier}/projects/{projectIdentifier}/setup/resources/targets/{trafficTypeId}/splits/{id}",
       listFilterFields: [
         { name: "offset", description: "Pagination offset for FME feature flags", type: "number" },
-        { name: "status", description: "Filter by flag status", type: "string", enum: ["ACTIVE", "ARCHIVED"] },
         { name: "rollout_status_id", description: "Filter by rollout status UUID (use fme_rollout_status to discover valid IDs)", type: "string" },
         { name: "name", description: "Filter flags by name (partial match)", type: "string" },
         { name: "tags", description: "Filter flags by tag", type: "string" },
@@ -84,19 +161,19 @@ export const featureFlagsToolset: ToolsetDefinition = {
           queryParams: {
             offset: "offset",
             size: "limit",
-            status: "status",
             rollout_status_id: "rolloutStatus",
             name: "name",
             tags: "tag",
           },
-          responseExtractor: passthrough,
-          description: "List feature flags for a workspace with filtering and pagination (offset and size params, max 50). Use status=ARCHIVED to find archived flags.",
+          responseExtractor: fmeListExtract,
+          description:
+            "List feature flags for a workspace with filtering and pagination (offset and size params, max 50).",
         },
         get: {
           method: "GET",
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}",
           pathParams: { workspace_id: "wsId", feature_flag_name: "featureFlagName" },
-          responseExtractor: passthrough,
+          responseExtractor: fmeGetExtract,
           description: "Get a specific feature flag's metadata without requiring an environment",
         },
         delete: {
@@ -139,6 +216,20 @@ export const featureFlagsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           actionDescription: "Restore (re-enable) a killed feature flag in a specific environment. Requires workspace_id, feature_flag_name, and environment_id.",
         },
+        archive: {
+          method: "POST",
+          path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/archive",
+          pathParams: { workspace_id: "wsId", feature_flag_name: "featureFlagName" },
+          responseExtractor: passthrough,
+          actionDescription: "Archive a feature flag. Requires workspace_id and feature_flag_name. Subject to OPA policy checks (409 on failure).",
+        },
+        unarchive: {
+          method: "POST",
+          path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/unarchive",
+          pathParams: { workspace_id: "wsId", feature_flag_name: "featureFlagName" },
+          responseExtractor: passthrough,
+          actionDescription: "Unarchive a previously archived feature flag. Requires workspace_id and feature_flag_name. Returns 409 if the flag has dependent objects.",
+        },
       },
     },
     {
@@ -180,6 +271,116 @@ export const featureFlagsToolset: ToolsetDefinition = {
           pathParams: { workspace_id: "wsId" },
           responseExtractor: passthrough,
           description: "List rollout status definitions for a workspace (Killed, Permanent, Ramping, etc.)",
+        },
+      },
+    },
+    // ── FME Rule-Based Segments ───────────────────────────────────────────
+    {
+      resourceType: "fme_rule_based_segment",
+      displayName: "FME Rule-Based Segment",
+      description:
+        "Rule-based segment in a workspace. Supports list, get, create (requires traffic_type_id), and delete. Create requires traffic_type_id passed via params.",
+      toolset: "feature-flags",
+      scope: "account",
+      identifierFields: ["workspace_id", "segment_name"],
+      product: "fme",
+      operations: {
+        list: {
+          method: "GET",
+          path: "/internal/api/v2/rule-based-segments/ws/{wsId}",
+          pathParams: { workspace_id: "wsId" },
+          responseExtractor: passthrough,
+          description: "List all rule-based segments in a workspace",
+        },
+        get: {
+          method: "GET",
+          path: "/internal/api/v2/rule-based-segments/ws/{wsId}/{rbSegmentName}",
+          pathParams: { workspace_id: "wsId", segment_name: "rbSegmentName" },
+          responseExtractor: passthrough,
+          description: "Get a rule-based segment by name (workspace-level metadata)",
+        },
+        create: {
+          method: "POST",
+          path: "/internal/api/v2/rule-based-segments/ws/{wsId}/trafficTypes/{trafficTypeId}",
+          pathParams: { workspace_id: "wsId", traffic_type_id: "trafficTypeId" },
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            return {
+              name: body?.name ?? input.name,
+              ...(body?.description || input.description ? { description: body?.description ?? input.description } : {}),
+            };
+          },
+          responseExtractor: passthrough,
+          bodySchema: fmeRbsCreateSchema,
+          description: "Create a rule-based segment. Pass traffic_type_id via params. Body requires name, optional description.",
+        },
+        delete: {
+          method: "DELETE",
+          path: "/internal/api/v2/rule-based-segments/ws/{wsId}/{rbSegmentName}",
+          pathParams: { workspace_id: "wsId", segment_name: "rbSegmentName" },
+          responseExtractor: passthrough,
+          description: "Delete a rule-based segment from a workspace. Environment-level configs must be removed separately.",
+        },
+      },
+    },
+    {
+      resourceType: "fme_rule_based_segment_definition",
+      displayName: "FME Rule-Based Segment Definition",
+      description:
+        "Environment-specific definition of a rule-based segment, including targeting rules, exclusions, and matchers. Supports list (by environment), update, and enable/disable/change_request execute actions.",
+      toolset: "feature-flags",
+      scope: "account",
+      identifierFields: ["workspace_id", "segment_name", "environment_id"],
+      product: "fme",
+      operations: {
+        list: {
+          method: "GET",
+          path: "/internal/api/v2/rule-based-segments/ws/{wsId}/environments/{environmentId}",
+          pathParams: { workspace_id: "wsId", environment_id: "environmentId" },
+          responseExtractor: passthrough,
+          description: "List rule-based segment definitions in a specific environment",
+        },
+        update: {
+          method: "PUT",
+          path: "/internal/api/v2/rule-based-segments/ws/{wsId}/{rbSegmentName}/environments/{environmentId}",
+          pathParams: { workspace_id: "wsId", segment_name: "rbSegmentName", environment_id: "environmentId" },
+          bodyBuilder: (input) => input.body,
+          responseExtractor: passthrough,
+          bodySchema: fmeRbsUpdateDefinitionSchema,
+          description: "Update a rule-based segment definition in an environment (rules, exclusions, matchers)",
+        },
+      },
+      executeActions: {
+        enable: {
+          method: "POST",
+          path: "/internal/api/v2/rule-based-segments/{environmentId}/{rbSegmentName}",
+          pathParams: { environment_id: "environmentId", segment_name: "rbSegmentName" },
+          bodyBuilder: () => ({}),
+          responseExtractor: passthrough,
+          bodySchema: { description: "No body fields required — sends an empty object to activate the segment", fields: [] },
+          actionDescription: "Enable (activate) a rule-based segment in a specific environment. Creates an empty definition that can then be configured via update.",
+        },
+        disable: {
+          method: "DELETE",
+          path: "/internal/api/v2/rule-based-segments/{environmentId}/{rbSegmentName}",
+          pathParams: { environment_id: "environmentId", segment_name: "rbSegmentName" },
+          responseExtractor: passthrough,
+          actionDescription: "Disable (remove) a rule-based segment from a specific environment. Workspace-level metadata is preserved.",
+        },
+        change_request: {
+          method: "POST",
+          path: "/internal/api/v2/changeRequests/ws/{wsId}/environments/{environmentId}",
+          pathParams: { workspace_id: "wsId", environment_id: "environmentId" },
+          bodyBuilder: (input) => ({
+            ruleBasedSegment: input.ruleBasedSegment ?? input.rule_based_segment,
+            operationType: input.operationType ?? input.operation_type,
+            title: input.title,
+            ...(input.comment ? { comment: input.comment } : {}),
+            ...(input.approvers ? { approvers: input.approvers } : {}),
+          }),
+          responseExtractor: passthrough,
+          bodySchema: fmeRbsChangeRequestSchema,
+          actionDescription: "Submit a change request for a rule-based segment definition. Requires title, operationType, and ruleBasedSegment. Supports approvers for approval flow. Subject to governance rules (OPA policies).",
         },
       },
     },

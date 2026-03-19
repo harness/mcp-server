@@ -420,7 +420,6 @@ The server automatically loads environment variables from a `.env` file in the p
 | `HARNESS_API_KEY` | Yes | -- | Harness personal access token or service account token |
 | `HARNESS_ACCOUNT_ID` | No | *(from PAT)* | Harness account identifier. Auto-extracted from PAT tokens; only needed for non-PAT API keys |
 | `HARNESS_BASE_URL` | No | `https://app.harness.io` | Base URL (override for self-managed Harness) |
-| `HARNESS_FME_BASE_URL` | No | `https://api.split.io` | Base URL for FME/Split.io API. Used by `fme_workspace`, `fme_environment`, and `fme_feature_flag` resources |
 | `HARNESS_DEFAULT_ORG_ID` | No | `default` | Default organization identifier. Optional convenience — agents can discover orgs dynamically via `harness_list(resource_type="organization")` |
 | `HARNESS_DEFAULT_PROJECT_ID` | No | -- | Default project identifier. Optional convenience — agents can discover projects dynamically via `harness_list(resource_type="project")` |
 | `HARNESS_API_TIMEOUT_MS` | No | `30000` | HTTP request timeout in milliseconds |
@@ -898,11 +897,14 @@ Harness pipelines can be stored in three ways:
 |---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
 | `fme_workspace` | x | | | | | |
 | `fme_environment` | x | | | | | |
-| `fme_feature_flag` | x | x | | | | |
+| `fme_feature_flag` | x | x | | x | x | `kill`, `restore`, `archive`, `unarchive` |
 | `fme_feature_flag_definition` | | x | | | | |
+| `fme_rollout_status` | x | | | | | |
+| `fme_rule_based_segment` | x | x | x | | x | |
+| `fme_rule_based_segment_definition` | x | | | x | | `enable`, `disable`, `change_request` |
 | `feature_flag` | x | x | x | | x | `toggle` |
 
-**FME (Split.io) resources** — `fme_workspace`, `fme_environment`, and `fme_feature_flag` use the Split.io internal API and are scoped by workspace ID rather than org/project. `fme_feature_flag` returns basic flag metadata (name, description, traffic type, tags, rollout status) without requiring an environment. Use `feature_flag` for the Harness CF admin API which supports environment-specific definitions, create, delete, and toggle.
+**FME (Split.io) resources** — `fme_*` resources use the Split.io API (`api.split.io`) and are scoped by workspace ID rather than org/project. Auth uses `HARNESS_API_KEY` as a Bearer token. `fme_feature_flag` supports full lifecycle management: list, get, update metadata, delete, and kill/restore/archive/unarchive execute actions. `fme_rule_based_segment` provides CRUD for targeting segments, while `fme_rule_based_segment_definition` manages environment-specific segment rules with enable/disable and change request approval flows. Use `feature_flag` for the Harness CF admin API which supports environment-specific definitions, create, delete, and toggle.
 
 ### GitOps
 
@@ -1140,7 +1142,7 @@ Available toolset names:
 | `dashboards` | dashboard, dashboard_data |
 | `idp` | idp_entity, scorecard, scorecard_check, scorecard_stats, scorecard_check_stats, idp_score, idp_workflow, idp_tech_doc |
 | `pull-requests` | pull_request, pr_reviewer, pr_comment, pr_check, pr_activity |
-| `feature-flags` | fme_workspace, fme_environment, fme_feature_flag, fme_feature_flag_definition, feature_flag |
+| `feature-flags` | fme_workspace, fme_environment, fme_feature_flag, fme_feature_flag_definition, fme_rollout_status, fme_rule_based_segment, fme_rule_based_segment_definition, feature_flag |
 | `gitops` | gitops_agent, gitops_application, gitops_cluster, gitops_repository, gitops_applicationset, gitops_repo_credential, gitops_app_event, gitops_pod_log, gitops_managed_resource, gitops_resource_action, gitops_dashboard, gitops_app_resource_tree |
 | `chaos` | chaos_experiment, chaos_probe, chaos_experiment_template, chaos_infrastructure, chaos_experiment_variable, chaos_experiment_run, chaos_loadtest, chaos_k8s_infrastructure, chaos_hub, chaos_fault, chaos_network_map, chaos_guard_condition, chaos_guard_rule, chaos_recommendation, chaos_risk |
 | `ccm` | cost_perspective, cost_breakdown, cost_timeseries, cost_summary, cost_recommendation, cost_anomaly, cost_anomaly_summary, cost_category, cost_account_overview, cost_filter_value, cost_recommendation_stats, cost_recommendation_detail, cost_commitment |

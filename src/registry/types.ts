@@ -179,7 +179,7 @@ export interface ResourceDefinition {
   executeActions?: Record<string, EndpointSpec & { actionDescription: string }>;
   /**
    * Product backend for this resource. Defaults to "harness" (uses HARNESS_BASE_URL).
-   * Set to "fme" to use HARNESS_FME_BASE_URL (Split.io API at https://api.split.io).
+   * Set to "fme" to use the Split.io API at https://api.split.io.
    */
   product?: ProductName;
 }

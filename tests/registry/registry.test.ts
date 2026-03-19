@@ -508,4 +508,5 @@ describe("Registry", () => {
       expect(invalid, `Invalid bodySchema fields: ${invalid.join("; ")}`).toEqual([]);
     });
   });
+
 });

@@ -39,7 +39,7 @@ import { overridesToolset } from "./toolsets/overrides.js";
 const log = createLogger("registry");
 
 /** Keys under which different Harness APIs return list arrays. */
-const LIST_ARRAY_KEYS = ["items", "features", "content", "data"];
+const LIST_ARRAY_KEYS = ["items", "features", "content", "data", "objects"];
 
 /** All available toolsets */
 const ALL_TOOLSETS: ToolsetDefinition[] = [
@@ -353,17 +353,22 @@ export class Registry {
       }
     }
 
-    // Make request — resolve base URL from product backend
+    // Make request — resolve base URL and auth from product backend
     const product = def.product ?? "harness";
     const baseUrl = resolveProductBaseUrl(this.config, product);
+    const productHeaders: Record<string, string> = { ...spec.headers };
+    if (product === "fme") {
+      productHeaders["Authorization"] = `Bearer ${this.config.HARNESS_API_KEY}`;
+    }
     const raw = await client.request({
       method: spec.method,
       path,
       params,
       body,
       ...(baseUrl ? { baseUrl } : {}),
-      ...(spec.headers ? { headers: spec.headers } : {}),
+      ...(Object.keys(productHeaders).length > 0 ? { headers: productHeaders } : {}),
       ...(spec.responseType ? { responseType: spec.responseType } : {}),
+      ...(product !== "harness" ? { product } : {}),
       signal,
     });
 
