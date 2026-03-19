@@ -48,14 +48,14 @@ const chaosInfraListExtract = (raw: unknown): { items: unknown[]; total: number 
 export const chaosToolset: ToolsetDefinition = {
   name: "chaos",
   displayName: "Chaos Engineering",
-  description: "Harness Chaos Engineering — experiments, probes, infrastructure, and load tests",
+  description: "Harness Chaos Engineering — experiments, probes, hubs, faults, ChaosGuard rules/conditions, Kubernetes and Linux infrastructure, network maps, recommendations, risks, and load tests",
   resources: [
     // ── Chaos Experiments ──────────────────────────────────────────────
     {
       resourceType: "chaos_experiment",
       displayName: "Chaos Experiment",
       description:
-        "Chaos experiment definition. Supports list, get, and run action.",
+        "Chaos experiment definition. Supports list, get, and run action. Use chaos_experiment_variable list to discover required runtime inputs before running.",
       toolset: "chaos",
       scope: "project",
       scopeParams: CHAOS_SCOPE,
@@ -135,7 +135,7 @@ export const chaosToolset: ToolsetDefinition = {
     {
       resourceType: "chaos_probe",
       displayName: "Chaos Probe",
-      description: "Chaos resilience probe. Supports list and get.",
+      description: "Chaos resilience probe. Supports list, get, enable, and verify actions.",
       toolset: "chaos",
       scope: "project",
       scopeParams: CHAOS_SCOPE,
@@ -157,6 +157,26 @@ export const chaosToolset: ToolsetDefinition = {
           pathParams: { probe_id: "probeId" },
           responseExtractor: passthrough,
           description: "Get chaos probe details",
+        },
+      },
+      executeActions: {
+        enable: {
+          method: "POST",
+          path: `${CHAOS}/rest/v2/probes/enable/{probeId}`,
+          pathParams: { probe_id: "probeId" },
+          bodyBuilder: () => ({}),
+          responseExtractor: passthrough,
+          actionDescription: "Enable a chaos probe",
+          bodySchema: { description: "No body required. Probe is identified by path parameter.", fields: [] },
+        },
+        verify: {
+          method: "POST",
+          path: `${CHAOS}/rest/v2/probes/verify/{probeId}`,
+          pathParams: { probe_id: "probeId" },
+          bodyBuilder: () => ({}),
+          responseExtractor: passthrough,
+          actionDescription: "Verify a chaos probe configuration",
+          bodySchema: { description: "No body required. Probe is identified by path parameter.", fields: [] },
         },
       },
     },
@@ -239,11 +259,11 @@ export const chaosToolset: ToolsetDefinition = {
       },
     },
 
-    // ── Chaos Infrastructure (Linux / Load Runners) ────────────────────
+    // ── Chaos Infrastructure — Linux / Machine ─────────────────────────
     {
       resourceType: "chaos_infrastructure",
-      displayName: "Chaos Infrastructure",
-      description: "Linux infrastructure registered for chaos experiments and load testing. Supports list.",
+      displayName: "Chaos Infrastructure (Linux)",
+      description: "Linux/machine infrastructure registered for chaos experiments and load testing. For Kubernetes infrastructure, use chaos_k8s_infrastructure. Supports list.",
       toolset: "chaos",
       scope: "project",
       scopeParams: CHAOS_SCOPE,
@@ -342,6 +362,265 @@ export const chaosToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           actionDescription: "Stop a running load test",
           bodySchema: { description: "No body required. Run is identified by path parameter.", fields: [] },
+        },
+      },
+    },
+
+    // ── Chaos Kubernetes Infrastructure ──────────────────────────────
+    {
+      resourceType: "chaos_k8s_infrastructure",
+      displayName: "Chaos K8s Infrastructure",
+      description: "Kubernetes infrastructure registered for chaos experiments. List uses POST with filter/sort body. Supports list, get, and check_health action.",
+      toolset: "chaos",
+      scope: "project",
+      identifierFields: ["infra_id"],
+      operations: {
+        list: {
+          method: "POST",
+          path: `${CHAOS}/rest/kubernetes/infras`,
+          staticQueryParams: { page: "0", limit: "15" },
+          bodyBuilder: (input) => {
+            const filter: Record<string, unknown> = {};
+            const statusInput = input.status as string | undefined;
+            if (statusInput && statusInput !== "All") {
+              filter.status = statusInput;
+            } else if (!statusInput) {
+              filter.status = "Active";
+            }
+            return {
+              filter,
+              sort: { field: "NAME", ascending: true },
+            };
+          },
+          responseExtractor: chaosInfraListExtract,
+          description: "List Kubernetes chaos infrastructures",
+        },
+        get: {
+          method: "GET",
+          path: `${CHAOS}/rest/kubernetes/infra/{infraId}`,
+          pathParams: { infra_id: "infraId" },
+          responseExtractor: passthrough,
+          description: "Get Kubernetes chaos infrastructure details",
+        },
+      },
+      executeActions: {
+        check_health: {
+          method: "GET",
+          path: `${CHAOS}/rest/kubernetes/infra/health/{infraId}`,
+          pathParams: { infra_id: "infraId" },
+          responseExtractor: passthrough,
+          actionDescription: "Check health of a Kubernetes chaos infrastructure",
+          bodySchema: { description: "No body required. Infrastructure is identified by path parameter.", fields: [] },
+        },
+      },
+    },
+
+    // ── Chaos Hubs ──────────────────────────────────────────────────
+    {
+      resourceType: "chaos_hub",
+      displayName: "Chaos Hub",
+      description: "Chaos hub for sharing experiment templates and faults. Supports list and get.",
+      toolset: "chaos",
+      scope: "project",
+      scopeParams: CHAOS_SCOPE,
+      identifierFields: ["hub_id"],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${CHAOS}/rest/hubs`,
+          queryParams: {
+            page: "page",
+            limit: "limit",
+          },
+          responseExtractor: chaosPageExtract,
+          description: "List chaos hubs",
+        },
+        get: {
+          method: "GET",
+          path: `${CHAOS}/rest/hubs/{hubId}`,
+          pathParams: { hub_id: "hubId" },
+          responseExtractor: passthrough,
+          description: "Get chaos hub details",
+        },
+      },
+    },
+
+    // ── Chaos Faults ────────────────────────────────────────────────
+    {
+      resourceType: "chaos_fault",
+      displayName: "Chaos Fault",
+      description: "Chaos fault definition (e.g. pod-delete, network-loss, CPU stress). Supports list and get.",
+      toolset: "chaos",
+      scope: "project",
+      scopeParams: CHAOS_SCOPE,
+      identifierFields: ["fault_id"],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${CHAOS}/rest/faults`,
+          queryParams: {
+            page: "page",
+            limit: "limit",
+          },
+          responseExtractor: chaosPageExtract,
+          description: "List chaos faults",
+        },
+        get: {
+          method: "GET",
+          path: `${CHAOS}/rest/faults/{faultId}`,
+          pathParams: { fault_id: "faultId" },
+          responseExtractor: passthrough,
+          description: "Get chaos fault details",
+        },
+      },
+    },
+
+    // ── Chaos Network Maps ──────────────────────────────────────────
+    {
+      resourceType: "chaos_network_map",
+      displayName: "Chaos Network Map",
+      description: "Network map (application map) for chaos blast radius visualization. Supports list and get.",
+      toolset: "chaos",
+      scope: "project",
+      scopeParams: CHAOS_SCOPE,
+      identifierFields: ["map_id"],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${CHAOS}/rest/v2/applicationmaps`,
+          queryParams: {
+            page: "page",
+            limit: "limit",
+          },
+          responseExtractor: chaosPageExtract,
+          description: "List chaos network maps",
+        },
+        get: {
+          method: "GET",
+          path: `${CHAOS}/rest/v2/applicationmaps/{mapId}`,
+          pathParams: { map_id: "mapId" },
+          responseExtractor: passthrough,
+          description: "Get chaos network map details",
+        },
+      },
+    },
+
+    // ── ChaosGuard Conditions ───────────────────────────────────────
+    {
+      resourceType: "chaos_guard_condition",
+      displayName: "ChaosGuard Condition",
+      description: "ChaosGuard condition that defines criteria for experiment execution governance. Supports list and get.",
+      toolset: "chaos",
+      scope: "project",
+      scopeParams: CHAOS_SCOPE,
+      identifierFields: ["condition_id"],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${CHAOS}/rest/v2/conditions`,
+          queryParams: {
+            page: "page",
+            limit: "limit",
+          },
+          responseExtractor: chaosPageExtract,
+          description: "List ChaosGuard conditions",
+        },
+        get: {
+          method: "GET",
+          path: `${CHAOS}/rest/v2/conditions/{conditionId}`,
+          pathParams: { condition_id: "conditionId" },
+          responseExtractor: passthrough,
+          description: "Get ChaosGuard condition details",
+        },
+      },
+    },
+
+    // ── ChaosGuard Rules ────────────────────────────────────────────
+    {
+      resourceType: "chaos_guard_rule",
+      displayName: "ChaosGuard Rule",
+      description: "ChaosGuard rule that enforces governance policies on chaos experiment execution. Supports list and get.",
+      toolset: "chaos",
+      scope: "project",
+      scopeParams: CHAOS_SCOPE,
+      identifierFields: ["rule_id"],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${CHAOS}/rest/v2/rules`,
+          queryParams: {
+            page: "page",
+            limit: "limit",
+          },
+          responseExtractor: chaosPageExtract,
+          description: "List ChaosGuard rules",
+        },
+        get: {
+          method: "GET",
+          path: `${CHAOS}/rest/v2/rules/{ruleId}`,
+          pathParams: { rule_id: "ruleId" },
+          responseExtractor: passthrough,
+          description: "Get ChaosGuard rule details",
+        },
+      },
+    },
+
+    // ── Chaos Recommendations ───────────────────────────────────────
+    {
+      resourceType: "chaos_recommendation",
+      displayName: "Chaos Recommendation",
+      description: "Chaos resilience recommendation based on experiment results. Supports list and get.",
+      toolset: "chaos",
+      scope: "project",
+      scopeParams: CHAOS_SCOPE,
+      identifierFields: ["recommendation_id"],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${CHAOS}/rest/recommendations`,
+          queryParams: {
+            page: "page",
+            limit: "limit",
+          },
+          responseExtractor: chaosPageExtract,
+          description: "List chaos recommendations",
+        },
+        get: {
+          method: "GET",
+          path: `${CHAOS}/rest/recommendations/{recommendationId}`,
+          pathParams: { recommendation_id: "recommendationId" },
+          responseExtractor: passthrough,
+          description: "Get chaos recommendation details",
+        },
+      },
+    },
+
+    // ── Chaos Risks ─────────────────────────────────────────────────
+    {
+      resourceType: "chaos_risk",
+      displayName: "Chaos Risk",
+      description: "Chaos risk assessment for services and infrastructure. Supports list and get.",
+      toolset: "chaos",
+      scope: "project",
+      scopeParams: CHAOS_SCOPE,
+      identifierFields: ["risk_id"],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${CHAOS}/rest/v2/risks`,
+          queryParams: {
+            page: "page",
+            limit: "limit",
+          },
+          responseExtractor: chaosPageExtract,
+          description: "List chaos risks",
+        },
+        get: {
+          method: "GET",
+          path: `${CHAOS}/rest/v2/risks/{riskId}`,
+          pathParams: { risk_id: "riskId" },
+          responseExtractor: passthrough,
+          description: "Get chaos risk details",
         },
       },
     },

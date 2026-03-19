@@ -134,3 +134,100 @@ describe("chaos_experiment list/get", () => {
     expect(call.params.projectIdentifier).toBe("test-project");
   });
 });
+
+describe("chaos_probe enable execute action", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("enable: uses corrected path with static segment before param", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ success: true });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "chaos_probe", "enable", {
+      probe_id: "probe-http-check",
+      project_id: "PM_Signoff",
+      org_id: "default",
+    });
+
+    expect(mockRequest).toHaveBeenCalledOnce();
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/gateway/chaos/manager/api/rest/v2/probes/enable/probe-http-check");
+    expect(call.params).toMatchObject({
+      organizationIdentifier: "default",
+      projectIdentifier: "PM_Signoff",
+    });
+  });
+});
+
+describe("chaos_k8s_infrastructure list", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("list: uses POST with filter body and standard scope params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      infras: [
+        { infraID: "k8s-1", name: "prod-cluster" },
+      ],
+      totalNoOfInfras: 1,
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "chaos_k8s_infrastructure", "list", {
+      project_id: "PM_Signoff",
+      org_id: "default",
+    })) as { items: unknown[]; total: number };
+
+    expect(mockRequest).toHaveBeenCalledOnce();
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/gateway/chaos/manager/api/rest/kubernetes/infras");
+    // K8s infra uses standard orgIdentifier, not organizationIdentifier
+    expect(call.params).toMatchObject({
+      orgIdentifier: "default",
+      projectIdentifier: "PM_Signoff",
+    });
+    expect(result.items).toHaveLength(1);
+    expect(result.total).toBe(1);
+  });
+});
+
+describe("chaos_hub list", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("list: builds correct path with chaos scope params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      data: [
+        { hubID: "enterprise-hub", name: "Enterprise ChaosHub" },
+      ],
+      pagination: { totalItems: 1 },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "chaos_hub", "list", {
+      project_id: "PM_Signoff",
+      org_id: "default",
+    })) as { items: unknown[]; total: number };
+
+    expect(mockRequest).toHaveBeenCalledOnce();
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("GET");
+    expect(call.path).toBe("/gateway/chaos/manager/api/rest/hubs");
+    expect(call.params).toMatchObject({
+      organizationIdentifier: "default",
+      projectIdentifier: "PM_Signoff",
+    });
+    expect(result.items).toHaveLength(1);
+    expect(result.total).toBe(1);
+  });
+});
