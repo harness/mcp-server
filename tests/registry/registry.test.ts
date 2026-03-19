@@ -284,6 +284,8 @@ describe("Registry", () => {
       const client = makeClient(mockRequest);
 
       await registry.dispatch(client, "pipeline", "list", {
+        org_id: "default",
+        project_id: "test-project",
         search_term: "deploy",
         page: 0,
         size: 10,

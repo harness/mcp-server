@@ -697,8 +697,6 @@ describe("harness_execute", () => {
     expect(callArgs.body).toEqual({
       pipelineName: "My Imported Pipeline",
       pipelineDescription: "Imported from GitHub",
-      orgIdentifier: "default",
-      projectIdentifier: "test-project",
     });
   });
 
