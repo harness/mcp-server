@@ -43,7 +43,26 @@ function createHarnessServer(config: Config, authContext?: AuthContext): McpServ
       icons: [{ src: "https://app.harness.io/favicon.ico" }],
       websiteUrl: "https://harness.io",
     },
-    { capabilities: { logging: {} } },
+    {
+      capabilities: { logging: {} },
+      instructions: [
+        "Harness MCP server — manage CI/CD pipelines, code repos, PRs, services, environments, and more.",
+        "",
+        "URL SHORTCUT: All harness_ tools accept a `url` parameter. Paste any Harness UI URL and identifiers (org, project, resource type, ID) are auto-extracted. This works for nested resources too — a PR URL auto-extracts repo_id and pr_number.",
+        "",
+        "COMMON PATTERNS:",
+        "• Get PR details: harness_get(url='<Harness PR URL>')",
+        "• List PR comments: harness_list(url='<Harness PR URL>', resource_type='pr_comment')",
+        "• List PR activity: harness_list(url='<Harness PR URL>', resource_type='pr_activity') — returns all comments, reviews, status changes",
+        "• Get pipeline: harness_get(url='<Harness pipeline URL>')",
+        "• Run pipeline: harness_execute(url='<Harness pipeline URL>', action='run', inputs={branch: 'main'})",
+        "• Diagnose failure: harness_diagnose(url='<Harness execution URL>')",
+        "",
+        "DISCOVERY: Use harness_describe() to list all resource types, or harness_describe(resource_type='<type>') for operations and fields.",
+        "",
+        "PR RESOURCES: pull_request, pr_comment, pr_activity, pr_reviewer, pr_check — all accept URL or explicit repo_id + pr_number.",
+      ].join("\n"),
+    },
   );
 
   registerAllTools(server, registry, client, effectiveConfig);
