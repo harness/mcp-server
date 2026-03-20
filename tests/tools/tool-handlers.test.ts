@@ -666,7 +666,7 @@ describe("harness_execute", () => {
     expect(result.isError).toBe(true);
     const errText = JSON.stringify(parseResult(result));
     expect(errText).toContain("build");
-    expect(errText).toContain("complex object");
+    expect(errText).toContain("repoName");
   });
 
   it("imports pipeline from external Git repo via import action", async () => {

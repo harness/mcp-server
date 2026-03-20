@@ -9,6 +9,7 @@ import { createLogger, logAudit } from "../utils/logger.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asRecord, asString } from "../utils/type-guards.js";
 import { isFlatKeyValueInputs, isResolvableInputs, flattenInputs, resolveRuntimeInputs, type ResolutionResult } from "../utils/runtime-input-resolver.js";
+import { applyInputExpansions } from "../utils/input-expander.js";
 
 const log = createLogger("execute");
 
@@ -84,6 +85,15 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           args.action === "run" &&
           isResolvableInputs(args.inputs)
         ) {
+          // Apply declarative input expansions (e.g. {branch: "main"} -> full build structure)
+          const actionSpec = registry.getExecuteActions(resourceType)?.[args.action];
+          if (actionSpec?.inputExpansions?.length) {
+            args.inputs = applyInputExpansions(
+              args.inputs as Record<string, unknown>,
+              actionSpec.inputExpansions,
+            );
+          }
+
           const pipelineId = asString(input.pipeline_id);
           if (!pipelineId) {
             return errorResult("pipeline_id is required to auto-resolve runtime inputs. Provide it via resource_id, params.pipeline_id, or a Harness URL.");
@@ -200,7 +210,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
 }
 
 const STRUCTURAL_FIELDS = new Set([
-  "build", "infrastructure", "execution", "spec", "template",
+  "infrastructure", "execution", "spec", "template",
   "templateinputs", "servicedefinition", "artifacts", "manifests",
 ]);
 

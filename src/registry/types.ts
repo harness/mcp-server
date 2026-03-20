@@ -85,6 +85,19 @@ export interface FilterFieldSpec {
 }
 
 /**
+ * Declarative rule for expanding shorthand input keys into full nested structures.
+ * Applied before runtime input resolution so the template matcher sees the expanded form.
+ */
+export interface InputExpansionRule {
+  /** Input key that triggers the expansion (e.g. "branch", "tag") */
+  triggerKey: string;
+  /** Structure to merge into inputs. Use "$value" as placeholder for the trigger key's value. */
+  expand: Record<string, unknown>;
+  /** If set, skip expansion when user already provided this key (prevents double-expand). */
+  skipIfPresent?: string;
+}
+
+/**
  * Config type for pathBuilder (avoids circular import).
  */
 export type PathBuilderConfig = { HARNESS_ACCOUNT_ID?: string; HARNESS_DEFAULT_ORG_ID?: string; HARNESS_DEFAULT_PROJECT_ID?: string };
@@ -132,6 +145,11 @@ export interface EndpointSpec {
    * protection rules. Default: false (create/update proceed without confirmation).
    */
   blockWithoutConfirmation?: boolean;
+  /**
+   * Declarative input expansion rules. When present, matching shorthand keys
+   * in user input are expanded into full nested structures before resolution.
+   */
+  inputExpansions?: InputExpansionRule[];
 }
 
 /**

@@ -35,7 +35,7 @@ export const pipelinesToolset: ToolsetDefinition = {
       scope: "project",
       identifierFields: ["pipeline_id"],
       diagnosticHint: "Use harness_diagnose with pipeline_id or execution_id to analyze failures — includes step-level error details, log snippets, delegate info, and chained pipeline traversal.",
-      executeHint: "Before executing, check required inputs: harness_get(resource_type='runtime_input_template', resource_id='PIPELINE_ID'). For simple variables, pass key-value pairs in inputs. For complex pipelines (CI codebase build, templates), use input_set_ids — list available sets with harness_list(resource_type='input_set', filters={pipeline_id: '...'}).",
+      executeHint: "Before executing, check required inputs: harness_get(resource_type='runtime_input_template', resource_id='PIPELINE_ID'). For simple variables, pass key-value pairs in inputs. For CI pipelines with codebase: pass {branch: 'main'}, {tag: 'v1.0'}, {pr_number: '42'}, or {commit_sha: 'abc123'} — auto-expanded to the full build structure. For complex template inputs, use input_set_ids — list available sets with harness_list(resource_type='input_set', filters={pipeline_id: '...'}).",
       listFilterFields: [
         { name: "search_term", description: "Filter pipelines by name or keyword" },
         { name: "module", description: "Harness module filter", enum: ["CD", "CI", "CV", "CF", "CE", "STO"] },
@@ -164,12 +164,34 @@ export const pipelinesToolset: ToolsetDefinition = {
             return JSON.stringify(inputs);
           },
           responseExtractor: ngExtract,
-          actionDescription: "Execute/run a pipeline. RECOMMENDED: first check harness_get(resource_type='runtime_input_template', resource_id='PIPELINE_ID') to see required inputs. For simple variable inputs: pass key-value pairs in inputs (e.g. {branch: 'main'}) — auto-resolved. For complex pipelines with structural inputs (CI codebase build, template inputs): use input_set_ids to reference a saved input set. List available sets with harness_list(resource_type='input_set', filters={pipeline_id: '...'}).",
+          inputExpansions: [
+            {
+              triggerKey: "branch",
+              expand: { build: { type: "branch", spec: { branch: "$value" } } },
+              skipIfPresent: "build",
+            },
+            {
+              triggerKey: "tag",
+              expand: { build: { type: "tag", spec: { tag: "$value" } } },
+              skipIfPresent: "build",
+            },
+            {
+              triggerKey: "pr_number",
+              expand: { build: { type: "PR", spec: { number: "$value" } } },
+              skipIfPresent: "build",
+            },
+            {
+              triggerKey: "commit_sha",
+              expand: { build: { type: "commitSha", spec: { commitSha: "$value" } } },
+              skipIfPresent: "build",
+            },
+          ],
+          actionDescription: "Execute/run a pipeline. RECOMMENDED: first check harness_get(resource_type='runtime_input_template', resource_id='PIPELINE_ID') to see required inputs. For simple variable inputs: pass key-value pairs in inputs (e.g. {branch: 'main'}) — auto-resolved. For CI pipelines with codebase: pass {branch: 'main'}, {tag: 'v1.0'}, {pr_number: '42'}, or {commit_sha: 'abc123'} — auto-expanded to the full build structure. For complex pipelines with template inputs: use input_set_ids to reference a saved input set. List available sets with harness_list(resource_type='input_set', filters={pipeline_id: '...'}).",
           bodySchema: {
-            description: "Runtime inputs for pipeline execution. Two strategies: (1) For simple variables — pass key-value pairs in inputs like {branch: 'main', env: 'prod'}, auto-resolved against the pipeline's runtime input template. (2) For complex pipelines with structural fields (CI codebase build config, template inputs) — use input_set_ids to reference saved input sets. You can combine both: input_set_ids for the base config + inputs for simple overrides. Check runtime_input_template first to see what the pipeline expects.",
+            description: "Runtime inputs for pipeline execution. For simple variables: pass key-value pairs in inputs like {branch: 'main', env: 'prod'}, auto-resolved against the pipeline's runtime input template. CI codebase shorthands (branch, tag, pr_number, commit_sha) are auto-expanded to full build structures. For complex pipelines with template inputs, use input_set_ids to reference saved input sets. You can combine both: input_set_ids for the base config + inputs for simple overrides. Check runtime_input_template first to see what the pipeline expects.",
             fields: [
-              { name: "inputs", type: "yaml", required: false, description: "Simple key-value pairs (e.g. {branch: 'main', env: 'prod'}) — auto-resolved to full YAML. Works best for pipeline variables. For structural fields like CI codebase build, use input_set_ids instead." },
-              { name: "input_set_ids", type: "array", required: false, description: "Input set identifiers to apply. Recommended for complex pipelines with structural inputs. List available: harness_list(resource_type='input_set', filters={pipeline_id: '...'})." },
+              { name: "inputs", type: "yaml", required: false, description: "Key-value pairs (e.g. {branch: 'main', env: 'prod'}) — auto-resolved to full YAML. CI codebase shorthands (branch, tag, pr_number, commit_sha) are auto-expanded. For template inputs, use input_set_ids instead." },
+              { name: "input_set_ids", type: "array", required: false, description: "Input set identifiers to apply. Recommended for complex pipelines with template inputs. List available: harness_list(resource_type='input_set', filters={pipeline_id: '...'})." },
             ],
           },
         },

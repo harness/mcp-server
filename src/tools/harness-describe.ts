@@ -1,6 +1,7 @@
 import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
+import type { InputExpansionRule } from "../registry/types.js";
 import { jsonResult } from "../utils/response-formatter.js";
 
 export function registerDescribeTool(server: McpServer, registry: Registry): void {
@@ -43,6 +44,9 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
                   method: spec.method,
                   description: spec.actionDescription,
                   bodySchema: spec.bodySchema ?? undefined,
+                  ...(spec.inputExpansions?.length
+                    ? { inputShorthands: buildShorthands(spec.inputExpansions) }
+                    : {}),
                 }))
               : undefined,
             diagnosticHint: def.diagnosticHint ?? undefined,
@@ -89,4 +93,28 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
       return jsonResult(registry.describeSummary());
     },
   );
+}
+
+/** Generate human-readable shorthand descriptions from expansion rules. */
+function buildShorthands(rules: InputExpansionRule[]): Array<{ shorthand: string; expands_to: string }> {
+  return rules.map((rule) => ({
+    shorthand: rule.triggerKey,
+    expands_to: summarizeExpansion(rule.expand),
+  }));
+}
+
+/** Flatten an expand template into a readable dot-path summary. */
+function summarizeExpansion(obj: Record<string, unknown>, prefix = ""): string {
+  const parts: string[] = [];
+  for (const [key, value] of Object.entries(obj)) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (value === "$value") {
+      parts.push(path);
+    } else if (typeof value === "string") {
+      parts.push(`${path}=${value}`);
+    } else if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+      parts.push(summarizeExpansion(value as Record<string, unknown>, path));
+    }
+  }
+  return parts.join(", ");
 }
