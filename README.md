@@ -125,6 +125,30 @@ curl -X DELETE http://localhost:3000/mcp \
 
 > **Note:** `HARNESS_DEFAULT_ORG_ID` and `HARNESS_DEFAULT_PROJECT_ID` are optional. Agents can discover orgs and projects dynamically using `harness_list(resource_type="organization")` and `harness_list(resource_type="project")`. Set them only if you want to pin a default scope for convenience.
 
+> **Troubleshooting `npx ENOENT` or `node: No such file or directory`**
+>
+> GUI apps (Cursor, Claude Desktop, Windsurf, VS Code) don't inherit your shell's `PATH`, so they often can't find `npx` or `node`. Fix this by using absolute paths and explicitly setting `PATH` in the `env` block:
+>
+> ```json
+> {
+>   "mcpServers": {
+>     "harness": {
+>       "command": "/absolute/path/to/npx",
+>       "args": ["-y", "harness-mcp-v2"],
+>       "env": {
+>         "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
+>         "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+>       }
+>     }
+>   }
+> }
+> ```
+>
+> Find your paths with `which npx` and `which node` in a terminal, then make sure the directory containing `node` is included in the `PATH` value above. Common locations:
+> - **Homebrew (macOS):** `/opt/homebrew/bin/npx`
+> - **nvm:** `~/.nvm/versions/node/v20.x.x/bin/npx` (run `nvm which current` to find the exact path)
+> - **System Node:** `/usr/local/bin/npx`
+
 #### Claude Desktop (`claude_desktop_config.json`)
 
 <details open>
