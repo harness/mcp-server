@@ -153,6 +153,30 @@ describe("parseHarnessUrl", () => {
     expect(result.resource_id).toBe("my_flag");
   });
 
+  it("extracts repo_id and pr_number from Harness Code PR URL", () => {
+    const result = parseHarnessUrl(
+      "https://harness0.harness.io/ng/account/l7B_kbSEQD2wjrM7PShm5w/module/code/orgs/PROD/projects/Data_Platform/repos/query-service/pulls/166/conversation",
+    );
+    expect(result.account_id).toBe("l7B_kbSEQD2wjrM7PShm5w");
+    expect(result.module).toBe("code");
+    expect(result.org_id).toBe("PROD");
+    expect(result.project_id).toBe("Data_Platform");
+    expect(result.repo_id).toBe("query-service");
+    expect(result.pr_number).toBe("166");
+    expect(result.resource_type).toBe("pull_request");
+    expect(result.resource_id).toBe("166");
+  });
+
+  it("extracts repo_id and pr_number from pull-requests deep link URL", () => {
+    const result = parseHarnessUrl(
+      "https://app.harness.io/ng/account/abc123/module/code/orgs/default/projects/myProject/repos/my-repo/pull-requests/42",
+    );
+    expect(result.repo_id).toBe("my-repo");
+    expect(result.pr_number).toBe("42");
+    expect(result.resource_type).toBe("pull_request");
+    expect(result.resource_id).toBe("42");
+  });
+
   it("handles URL-encoded segments", () => {
     const result = parseHarnessUrl(
       "https://app.harness.io/ng/account/abc123/all/orgs/default/projects/My%20Project/pipelines/My%20Pipeline/pipeline-studio",

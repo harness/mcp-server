@@ -41,8 +41,14 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
 
         const def = registry.getResource(resourceType);
 
-        // Map resource_id to the primary identifier field
-        const primaryField = def.identifierFields[0];
+        // Map resource_id to the resource's own identifier field.
+        // For multi-identifier resources (e.g. pull_request: ["repo_id", "pr_number"]),
+        // the last field is the resource-specific ID; earlier fields are parent context
+        // (like repo_id) that come from URL parsing or explicit params.
+        const identFields = def.identifierFields;
+        const primaryField = identFields.length > 1
+          ? identFields[identFields.length - 1]!
+          : identFields[0];
         const shouldMapResourceId =
           primaryField &&
           resourceId &&

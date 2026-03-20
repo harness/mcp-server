@@ -14,6 +14,7 @@ export interface ParsedHarnessUrl {
   execution_id?: string;
   agent_id?: string;
   repo_id?: string;
+  pr_number?: string;
   registry_id?: string;
   artifact_id?: string;
   environment_id?: string;
@@ -29,6 +30,7 @@ type ContextField =
   | "resource_id"
   | "agent_id"
   | "repo_id"
+  | "pr_number"
   | "registry_id"
   | "artifact_id"
   | "environment_id";
@@ -61,6 +63,7 @@ const RESOURCE_SEGMENTS: Record<string, { type: string; contextField: ContextFie
   "registries":       { type: "registry",            contextField: "registry_id" },
   "artifacts":        { type: "artifact",            contextField: "artifact_id" },
   "repositories":     { type: "repository",          contextField: "repo_id" },
+  "repos":            { type: "repository",          contextField: "repo_id" },
   "issues":           { type: "sto_issue",           contextField: "resource_id" },
   "exemptions":       { type: "sto_exemption",       contextField: "resource_id" },
   "scorecards":       { type: "idp_scorecard",       contextField: "resource_id" },
@@ -72,7 +75,9 @@ const RESOURCE_SEGMENTS: Record<string, { type: string; contextField: ContextFie
   "resource-groups":  { type: "resource_group",      contextField: "resource_id" },
   "audit-trail":      { type: "audit_log",           contextField: "resource_id" },
   "dashboards":       { type: "dashboard",           contextField: "resource_id" },
-  "pullrequests":     { type: "pull_request",        contextField: "resource_id" },
+  "pullrequests":     { type: "pull_request",        contextField: "pr_number" },
+  "pulls":            { type: "pull_request",        contextField: "pr_number" },
+  "pull-requests":    { type: "pull_request",        contextField: "pr_number" },
 };
 
 /** Structural segments that should never be treated as resource IDs */
@@ -193,6 +198,7 @@ const MERGEABLE_FIELDS: (keyof ParsedHarnessUrl)[] = [
   "execution_id",
   "agent_id",
   "repo_id",
+  "pr_number",
   "registry_id",
   "artifact_id",
   "environment_id",
