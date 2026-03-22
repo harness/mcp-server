@@ -445,13 +445,14 @@ All write operations (`harness_create`, `harness_update`, `harness_delete`, `har
 
 ## Tools Reference
 
-The server exposes 10 MCP tools. Most API tools accept `org_id` and `project_id` as optional overrides — if omitted, they fall back to `HARNESS_DEFAULT_ORG_ID` and `HARNESS_DEFAULT_PROJECT_ID`. `harness_describe` is local metadata only and does not use org/project scope.
+The server exposes 11 MCP tools. Most API tools accept `org_id` and `project_id` as optional overrides — if omitted, they fall back to `HARNESS_DEFAULT_ORG_ID` and `HARNESS_DEFAULT_PROJECT_ID`. `harness_describe` is local metadata only and does not use org/project scope.
 
 **URL support:** Most API-facing tools accept a `url` parameter — paste a Harness UI URL and the server auto-extracts org, project, resource type, resource ID, pipeline ID, and execution ID. `harness_describe` does not accept `url`.
 
 | Tool | Description |
 |------|-------------|
 | `harness_describe` | Discover available resource types, operations, and fields. No API call — returns local registry metadata. |
+| `harness_schema` | Fetch exact JSON Schema definitions for creating/updating resources. Supports deep drilling via `path` parameter. |
 | `harness_list` | List resources of a given type with filtering, search, and pagination. |
 | `harness_get` | Get a single resource by its identifier. |
 | `harness_create` | Create a new resource. Supports inline and remote (Git-backed) pipelines. Prompts for user confirmation via [elicitation](#elicitation). |
