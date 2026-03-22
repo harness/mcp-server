@@ -17,6 +17,7 @@
     "start:http": "node build/index.js http",
     "inspect": "npx @modelcontextprotocol/inspector node build/index.js stdio",
     "typecheck": "tsc --noEmit",
+    "sync-schemas": "node scripts/sync-schemas.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "docker:build": "docker build -t harness-mcp-server .",
