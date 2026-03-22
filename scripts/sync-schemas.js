@@ -26,6 +26,22 @@ async function main() {
     fs.writeFileSync(filePath, fileContent);
     console.log(`Saved ${filePath}`);
   }
+
+  // Generate index.ts
+  const indexContent = `// Auto-generated index of schemas
+${SCHEMAS.map(name => `import ${name} from "./${name}.js";`).join("\n")}
+
+export const SCHEMAS = {
+${SCHEMAS.map(name => `  ${name},`).join("\n")}
+} as const;
+
+export const VALID_SCHEMAS = Object.keys(SCHEMAS) as (keyof typeof SCHEMAS)[];
+export type SchemaName = keyof typeof SCHEMAS;
+`;
+  
+  const indexFilePath = path.join(targetDir, "index.ts");
+  fs.writeFileSync(indexFilePath, indexContent);
+  console.log(`Saved ${indexFilePath}`);
 }
 
 main().catch(console.error);

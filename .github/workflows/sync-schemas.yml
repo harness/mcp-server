@@ -1,0 +1,35 @@
+name: Sync Harness Schemas
+
+on:
+  schedule:
+    # Run weekly on Sunday at midnight
+    - cron: '0 0 * * 0'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  sync-schemas:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run sync script
+        run: node scripts/sync-schemas.js
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore: auto-sync harness schemas"
+          title: "chore: auto-sync harness schemas"
+          body: |
+            Automated schema synchronization from `harness/harness-schema`.
+
+            This PR updates the local static JSON schemas used by the MCP server to match the latest API definitions.
+          branch: chore/sync-schemas
+          delete-branch: true
+          labels: dependencies, schemas
