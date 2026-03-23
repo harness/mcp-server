@@ -12,6 +12,7 @@ export const delegatesToolset: ToolsetDefinition = {
       description: "Harness delegate agent for executing tasks. List-only.",
       toolset: "delegates",
       scope: "account",
+      scopeOptional: true,
       identifierFields: ["delegate_id"],
       diagnosticHint: "Use harness_diagnose with resource_type='delegate' to check health across all delegates — reports connectivity, heartbeat staleness, expiring replicas, and legacy mode. Optionally pass resource_id to filter to a specific delegate.",
       deepLinkTemplate: "/ng/account/{accountId}/settings/resources/delegates",
@@ -31,7 +32,7 @@ export const delegatesToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: "/ng/api/delegate-setup/listDelegates",
-          queryParams: { all: "all", org_id: "orgIdentifier", project_id: "projectIdentifier" },
+          queryParams: { all: "all" },
           bodyBuilder: (input) => ({
             filterType: "Delegate",
             ...(input.status ? { status: input.status } : {}),
