@@ -44,6 +44,9 @@ describe("Toolset structural validation", () => {
         ];
 
         for (const [opName, spec] of allSpecs) {
+          // pathBuilder dynamically constructs the URL — static path placeholders don't apply
+          if (spec.pathBuilder) continue;
+
           const placeholders = extractPathPlaceholders(spec.path);
           if (placeholders.length === 0) continue;
 
