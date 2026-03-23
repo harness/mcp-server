@@ -299,6 +299,11 @@ export class Registry {
       }
     }
 
+    // Build body BEFORE mapping input→queryParams so that bodyBuilders that
+    // hoist fields onto input (e.g. trigger's pipelineIdentifier → pipeline_id)
+    // take effect before query params are resolved.
+    const body = spec.bodyBuilder ? spec.bodyBuilder(input) : undefined;
+
     // Map input fields to query params (overrides defaults)
     if (spec.queryParams) {
       for (const [inputKey, queryKey] of Object.entries(spec.queryParams)) {
@@ -308,9 +313,6 @@ export class Registry {
         }
       }
     }
-
-    // Build body
-    const body = spec.bodyBuilder ? spec.bodyBuilder(input) : undefined;
 
     // Inject orgIdentifier/projectIdentifier into the body for mutating operations (POST/PUT).
     // Harness NG APIs require these in the body (not just query params) to scope the resource correctly.
