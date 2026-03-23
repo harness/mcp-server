@@ -85,7 +85,7 @@ export const overridesToolset: ToolsetDefinition = {
       scope: "project",
       identifierFields: ["override_id"],
       listFilterFields: [
-        { name: "environment_id", description: "Environment identifier to list overrides for (required for listing)" },
+        { name: "environment_id", description: "Environment identifier to list overrides for", required: true },
         { name: "service_id", description: "Optional service identifier to filter overrides for a specific service" },
         { name: "sort", description: "Sort criteria (e.g. lastModifiedAt,desc)" },
       ],

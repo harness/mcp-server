@@ -325,9 +325,9 @@ export class HarnessClient {
     }
 
     // Inject accountIdentifier into query params (used by most Harness APIs).
-    // FME (Split.io) API doesn't use Harness-style account params.
+    // Some APIs (e.g. SEI) use only the Harness-Account header — skip when told.
     const params = new URLSearchParams();
-    if (options.product !== "fme") {
+    if (!options.headerBasedScoping) {
       params.set("accountIdentifier", this.accountId);
 
       // Log-service gateway expects accountID (capital ID) in query params

@@ -8,6 +8,9 @@ import { passthrough } from "../extractors.js";
  */
 const CHAOS = "/gateway/chaos/manager/api";
 
+/** Load test API uses a separate service path per v1 Go server. */
+const CHAOS_LOADTEST = "/loadTest/manager/api";
+
 /** Chaos scope override — Chaos REST API uses organizationIdentifier (not orgIdentifier). */
 const CHAOS_SCOPE = { org: "organizationIdentifier" } as const;
 
@@ -246,6 +249,9 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["experiment_id"],
+      listFilterFields: [
+        { name: "experiment_id", description: "Chaos experiment ID to list variables for", required: true },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/chaos/experiments/{experimentId}",
       operations: {
         list: {
@@ -296,7 +302,9 @@ export const chaosToolset: ToolsetDefinition = {
     },
 
     // ── Load Tests ─────────────────────────────────────────────────────
-    // Note: Load test API uses standard orgIdentifier (no scopeParams override)
+    // Note: Load test API uses a different service path (loadTest/manager/api)
+    // than the chaos manager (gateway/chaos/manager/api), per v1 Go code.
+    // Also uses standard orgIdentifier (no scopeParams override).
     {
       resourceType: "chaos_loadtest",
       displayName: "Chaos Load Test",
@@ -307,7 +315,7 @@ export const chaosToolset: ToolsetDefinition = {
       operations: {
         list: {
           method: "GET",
-          path: `${CHAOS}/v1/load-tests`,
+          path: `${CHAOS_LOADTEST}/v1/load-tests`,
           queryParams: {
             page: "page",
             limit: "limit",
@@ -317,14 +325,14 @@ export const chaosToolset: ToolsetDefinition = {
         },
         get: {
           method: "GET",
-          path: `${CHAOS}/v1/load-tests/{loadtestId}`,
+          path: `${CHAOS_LOADTEST}/v1/load-tests/{loadtestId}`,
           pathParams: { loadtest_id: "loadtestId" },
           responseExtractor: passthrough,
           description: "Get load test instance details",
         },
         create: {
           method: "POST",
-          path: `${CHAOS}/v1/load-tests`,
+          path: `${CHAOS_LOADTEST}/v1/load-tests`,
           bodyBuilder: (input) => input.body ?? {},
           responseExtractor: passthrough,
           description: "Create a sample load test instance",
@@ -338,7 +346,7 @@ export const chaosToolset: ToolsetDefinition = {
         },
         delete: {
           method: "DELETE",
-          path: `${CHAOS}/v1/load-tests/{loadtestId}`,
+          path: `${CHAOS_LOADTEST}/v1/load-tests/{loadtestId}`,
           pathParams: { loadtest_id: "loadtestId" },
           responseExtractor: passthrough,
           description: "Delete a load test instance",
@@ -347,7 +355,7 @@ export const chaosToolset: ToolsetDefinition = {
       executeActions: {
         run: {
           method: "POST",
-          path: `${CHAOS}/v1/load-tests/{loadtestId}/runs`,
+          path: `${CHAOS_LOADTEST}/v1/load-tests/{loadtestId}/runs`,
           pathParams: { loadtest_id: "loadtestId" },
           bodyBuilder: () => ({}),
           responseExtractor: passthrough,
@@ -356,7 +364,7 @@ export const chaosToolset: ToolsetDefinition = {
         },
         stop: {
           method: "POST",
-          path: `${CHAOS}/v1/runs/{runId}/stop`,
+          path: `${CHAOS_LOADTEST}/v1/runs/{runId}/stop`,
           pathParams: { run_id: "runId" },
           bodyBuilder: () => ({}),
           responseExtractor: passthrough,

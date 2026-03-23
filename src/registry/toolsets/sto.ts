@@ -94,7 +94,7 @@ export const stoToolset: ToolsetDefinition = {
       scopeParams: STO_SCOPE,
       identifierFields: ["exemption_id"],
       listFilterFields: [
-        { name: "status", description: "Exemption status filter (required)", enum: ["Pending", "Approved", "Rejected", "Expired", "Canceled"] },
+        { name: "status", description: "Exemption status filter", enum: ["Pending", "Approved", "Rejected", "Expired", "Canceled"], required: true },
         { name: "search", description: "Free-text search for issue/exemption titles" },
       ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/sto/exemptions",

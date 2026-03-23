@@ -24,7 +24,7 @@ const DORA_FILTER_FIELDS: FilterFieldSpec[] = [
   { name: "team_ref_id", description: "Team reference identifier" },
   { name: "date_start", description: "Start date for metric calculation" },
   { name: "date_end", description: "End date for metric calculation" },
-  { name: "granularity", description: "Time granularity", enum: ["DAY", "WEEK", "MONTH"] },
+  { name: "granularity", description: "Time granularity", enum: ["weekly", "monthly", "yearly", "quarterly"] },
 ];
 
 const BA_LIST_FILTER_FIELDS: FilterFieldSpec[] = [
@@ -80,12 +80,18 @@ function baBuildBody(input: Record<string, unknown>) {
   };
 }
 
+function parseTeamRefId(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  const n = typeof value === "string" ? parseInt(value, 10) : Number(value);
+  return isNaN(n) ? undefined : n;
+}
+
 function aiInsightBuildBody(input: Record<string, unknown>) {
   const integrationType = input.integration_type ?? "all_assistants";
   return {
-    teamRefId: input.team_ref_id,
-    dateStart: input.date_start,
-    dateEnd: input.date_end,
+    teamRefId: parseTeamRefId(input.team_ref_id),
+    startDate: input.date_start,
+    endDate: input.date_end,
     integrationType:
       integrationType === "all_assistants"
         ? ["cursor", "windsurf"]
@@ -198,6 +204,7 @@ export const seiToolset: ToolsetDefinition = {
       description: "Software engineering insight metric. Supports list.",
       toolset: "sei",
       scope: "account",
+      headerBasedScoping: true,
       identifierFields: [],
       operations: {
         list: {
@@ -217,7 +224,8 @@ export const seiToolset: ToolsetDefinition = {
       description:
         "Productivity feature metrics (e.g. PR velocity). Supports get. Pass team_ref_id or developer IDs, date_start, date_end, feature_type.",
       toolset: "sei",
-      scope: "account",
+      scope: "project",
+      headerBasedScoping: true,
       identifierFields: [],
       listFilterFields: [
         { name: "team_ref_id", description: "Team reference identifier" },
@@ -231,18 +239,21 @@ export const seiToolset: ToolsetDefinition = {
         get: {
           method: "POST",
           path: `${SEI}/v2/productivityv3/feature_metrics`,
-          bodyBuilder: (input) => ({
-            teamRefId: input.team_ref_id,
-            dateStart: input.date_start,
-            dateEnd: input.date_end,
-            featureType: input.feature_type ?? "PR_VELOCITY",
-            granularity: input.granularity ?? "WEEKLY",
-            ...(input.developer_ids ? { developerIds: input.developer_ids } : {}),
-            ...(input.team_ids ? { teamIds: input.team_ids } : {}),
-            ...(input.stack_by ? { stackBy: input.stack_by } : {}),
-            ...(input.page !== undefined ? { page: input.page } : {}),
-            ...(input.page_size !== undefined ? { pageSize: input.page_size } : {}),
-          }),
+          bodyBuilder: (input) => {
+            const refId = parseTeamRefId(input.team_ref_id);
+            return {
+              startDate: input.date_start,
+              endDate: input.date_end,
+              featureType: input.feature_type ?? "PR_VELOCITY",
+              granularity: input.granularity ?? "WEEKLY",
+              ...(refId !== undefined ? { teamRefIds: [refId] } : {}),
+              ...(input.developer_ids ? { developerIds: input.developer_ids } : {}),
+              ...(input.team_ids ? { teamIds: input.team_ids } : {}),
+              ...(input.stack_by ? { stackBy: input.stack_by } : {}),
+              ...(input.page !== undefined ? { page: input.page } : {}),
+              ...(input.page_size !== undefined ? { pageSize: input.page_size } : {}),
+            };
+          },
           responseExtractor: passthrough,
           description: "Get productivity feature metrics (e.g. PR velocity) for a team",
         },
@@ -256,7 +267,8 @@ export const seiToolset: ToolsetDefinition = {
       description:
         "DORA metrics. harness_get with metric: deployment_frequency | deployment_frequency_drilldown | change_failure_rate | change_failure_rate_drilldown | mttr | lead_time. Pass team_ref_id, date_start, date_end, granularity.",
       toolset: "sei",
-      scope: "account",
+      scope: "project",
+      headerBasedScoping: true,
       identifierFields: [],
       listFilterFields: [...DORA_FILTER_FIELDS],
       deepLinkTemplate: DORA_DEEP_LINK,
@@ -279,6 +291,7 @@ export const seiToolset: ToolsetDefinition = {
       description: "SEI team entity. Supports list and get.",
       toolset: "sei",
       scope: "account",
+      headerBasedScoping: true,
       identifierFields: ["team_ref_id"],
       deepLinkTemplate: TEAMS_DEEP_LINK,
       operations: {
@@ -304,7 +317,8 @@ export const seiToolset: ToolsetDefinition = {
       description:
         "Team sub-resources. harness_list with team_ref_id and aspect: integrations | developers | integration_filters. For integration_filters, optionally pass integration_type.",
       toolset: "sei",
-      scope: "account",
+      scope: "project",
+      headerBasedScoping: true,
       identifierFields: ["team_ref_id"],
       listFilterFields: [
         {
@@ -333,7 +347,8 @@ export const seiToolset: ToolsetDefinition = {
       displayName: "SEI Org Tree",
       description: "SEI organizational tree. Supports list and get.",
       toolset: "sei",
-      scope: "account",
+      scope: "project",
+      headerBasedScoping: true,
       identifierFields: ["org_tree_id"],
       deepLinkTemplate: ORG_TREE_DEEP_LINK,
       operations: {
@@ -359,7 +374,8 @@ export const seiToolset: ToolsetDefinition = {
       description:
         "Org tree sub-resources. harness_get or harness_list with org_tree_id and aspect: efficiency_profile | productivity_profile | business_alignment_profile | integrations | teams.",
       toolset: "sei",
-      scope: "account",
+      scope: "project",
+      headerBasedScoping: true,
       identifierFields: ["org_tree_id"],
       listFilterFields: [
         {
@@ -394,7 +410,8 @@ export const seiToolset: ToolsetDefinition = {
       description:
         "Business alignment. harness_list for profiles. harness_get for metrics/summary/drilldown (pass aspect: feature_metrics | feature_summary | drilldown, profile_id, team_ref_id, date_start, date_end).",
       toolset: "sei",
-      scope: "account",
+      scope: "project",
+      headerBasedScoping: true,
       identifierFields: ["profile_id"],
       listFilterFields: BA_GET_FILTER_FIELDS,
       deepLinkTemplate: BA_DEEP_LINK,
@@ -424,7 +441,8 @@ export const seiToolset: ToolsetDefinition = {
       description:
         "AI coding assistant usage. harness_get or harness_list with aspect: metrics | breakdown | summary | top_languages. Pass team_ref_id, date_start, date_end, integration_type. For metrics: granularity, metric_type.",
       toolset: "sei",
-      scope: "account",
+      scope: "project",
+      headerBasedScoping: true,
       identifierFields: [],
       listFilterFields: [
         {
@@ -463,7 +481,8 @@ export const seiToolset: ToolsetDefinition = {
       description:
         "AI coding assistant adoption. harness_get or harness_list with aspect: metrics | breakdown | summary. Pass team_ref_id, date_start, date_end, integration_type, granularity.",
       toolset: "sei",
-      scope: "account",
+      scope: "project",
+      headerBasedScoping: true,
       identifierFields: [],
       listFilterFields: [
         {
@@ -501,7 +520,8 @@ export const seiToolset: ToolsetDefinition = {
       description:
         "AI impact on PR velocity or rework. harness_get with aspect: pr_velocity | rework. Pass team_ref_id, date_start, date_end, integration_type, granularity.",
       toolset: "sei",
-      scope: "account",
+      scope: "project",
+      headerBasedScoping: true,
       identifierFields: [],
       listFilterFields: [
         {
@@ -531,7 +551,8 @@ export const seiToolset: ToolsetDefinition = {
       description:
         "Per-developer raw AI coding assistant metrics — lines suggested, accepted, acceptance rates per individual. Supports list.",
       toolset: "sei",
-      scope: "account",
+      scope: "project",
+      headerBasedScoping: true,
       identifierFields: [],
       listFilterFields: [...AI_FILTER_FIELDS],
       deepLinkTemplate: AI_DEEP_LINK,
@@ -539,7 +560,13 @@ export const seiToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: `${SEI}/v2/insights/coding-assistant/raw_metrics/v2`,
-          bodyBuilder: aiInsightBuildBody,
+          bodyBuilder: (input) => ({
+            ...aiInsightBuildBody(input),
+            pagination: {
+              pageNumber: typeof input.page === "number" ? input.page : 0,
+              maxPageSize: typeof input.size === "number" ? input.size : 10,
+            },
+          }),
           responseExtractor: passthrough,
           description: "Get per-developer raw AI coding assistant metrics",
         },

@@ -43,6 +43,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         const { params, ...rest } = args;
         const input = applyUrlDefaults(rest as Record<string, unknown>, args.url);
         if (params) Object.assign(input, params);
+        log.debug("Execute input after params merge", { input: JSON.stringify(input), params: JSON.stringify(params) });
         const resourceType = asString(input.resource_type);
         if (!resourceType) {
           return errorResult("resource_type is required. Provide it explicitly or via a Harness URL.");
