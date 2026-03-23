@@ -52,6 +52,7 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
         const shouldMapResourceId =
           primaryField &&
           resourceId &&
+          !input[primaryField] &&
           !(resourceType === "execution_log" && asString(input.execution_id));
         if (shouldMapResourceId) {
           input[primaryField] = resourceId;

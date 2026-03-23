@@ -15,6 +15,7 @@ export interface ParsedHarnessUrl {
   agent_id?: string;
   repo_id?: string;
   pr_number?: string;
+  comment_id?: string;
   registry_id?: string;
   artifact_id?: string;
   environment_id?: string;
@@ -31,6 +32,7 @@ type ContextField =
   | "agent_id"
   | "repo_id"
   | "pr_number"
+  | "comment_id"
   | "registry_id"
   | "artifact_id"
   | "environment_id";
@@ -78,6 +80,7 @@ const RESOURCE_SEGMENTS: Record<string, { type: string; contextField: ContextFie
   "pullrequests":     { type: "pull_request",        contextField: "pr_number" },
   "pulls":            { type: "pull_request",        contextField: "pr_number" },
   "pull-requests":    { type: "pull_request",        contextField: "pr_number" },
+  "conversation":     { type: "pr_activity",          contextField: "comment_id" },
 };
 
 /** Structural segments that should never be treated as resource IDs */
@@ -184,6 +187,9 @@ export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
   const stageExecId = url.searchParams.get("stageExecId");
   if (stageExecId) result.stage_execution_id = stageExecId;
 
+  const commentId = url.searchParams.get("commentId");
+  if (commentId) result.comment_id = commentId;
+
   return result;
 }
 
@@ -199,6 +205,7 @@ const MERGEABLE_FIELDS: (keyof ParsedHarnessUrl)[] = [
   "agent_id",
   "repo_id",
   "pr_number",
+  "comment_id",
   "registry_id",
   "artifact_id",
   "environment_id",
