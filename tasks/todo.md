@@ -71,3 +71,15 @@
 - Corrected stale inventory references (11 tools / 26 toolsets / 124 resource types).
 - Documented `harness_diagnose` multi-resource support and `harness_ask` conditional availability.
 - Added concrete pipeline run workflow for `runtime_input_template` + `input_set_ids`.
+
+## Documentation Alignment Automation (2026-03-23)
+- [x] Audit live tool/toolset/resource counts from source
+- [x] Update stale public docs (`README.md`, `docs/gemini.md`, `CONTRIBUTING.md`)
+- [x] Add/refresh pipeline run guidance for runtime-input shorthand expansions
+- [x] Run docs consistency verification
+- [ ] Commit, push, and open docs-only PR
+
+### Review
+- Aligned public inventory claims with current source of truth: 10 tools, 29 toolsets, 137 resource types.
+- Added concrete pipeline runtime-input shorthand mapping (`branch`, `tag`, `pr_number`, `commit_sha`) and documented the `inputs.build` precedence constraint.
+- Added troubleshooting guidance for shorthand non-application and linked shorthand discovery to `harness_describe(resource_type="pipeline")`.

@@ -1,6 +1,6 @@
 # Harness MCP Server — Gemini CLI Context
 
-This extension connects Gemini CLI to the Harness Platform through 11 consolidated MCP tools that cover 124 resource types across 26 toolsets.
+This extension connects Gemini CLI to the Harness Platform through 10 consolidated MCP tools that cover 137 resource types across 29 toolsets.
 
 ## How This Server Works
 
@@ -31,6 +31,7 @@ Unlike traditional MCP servers with one tool per API endpoint, this server uses 
 - Execute pipelines with runtime inputs, retry failed executions, interrupt running ones
 - View execution history and download execution logs
 - Manage pipeline triggers and input sets
+- Pipeline run shorthand support: `branch`, `tag`, `pr_number`, and `commit_sha` auto-expand into CI build input structures (unless `inputs.build` is already provided explicitly)
 
 ### Services & Environments
 - CRUD operations on services and environments
@@ -145,4 +146,4 @@ Secret values are never exposed — only metadata (name, type, scope).
 
 **Toolset filtering:**
 - Set `HARNESS_TOOLSETS=pipelines,services,connectors` in `.env` to limit which resource types are available
-- Leave empty to enable all 26 toolsets
+- Leave empty to enable all 29 toolsets

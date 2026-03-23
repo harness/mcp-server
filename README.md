@@ -1,6 +1,6 @@
 # Harness MCP Server 2.0
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 135 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 10 consolidated tools and 137 resource types.
 
 [![CI](https://github.com/thisrohangupta/harness-mcp-v2/actions/workflows/ci.yml/badge.svg)](https://github.com/thisrohangupta/harness-mcp-v2/actions/workflows/ci.yml)
 
@@ -10,8 +10,8 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **11 tools, 135 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
-- **Full platform coverage.** 30 toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Internal Developer Portal, Software Supply Chain, Governance, Service Overrides, Visualizations, and more. Not just pipelines — the entire Harness platform.
+- **10 tools, 137 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 10 tools instead of hundreds.
+- **Full platform coverage.** 29 toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Internal Developer Portal, Software Supply Chain, Governance, Service Overrides, Visualizations, and more. Not just pipelines — the entire Harness platform.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **26 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
 - **Works everywhere.** Stdio transport for local clients (Claude Desktop, Cursor, Windsurf), HTTP transport for remote/shared deployments, Docker and Kubernetes ready.
@@ -481,7 +481,7 @@ The server exposes 10 MCP tools. Most API tools accept `org_id` and `project_id`
 | `harness_create` | Create a new resource. Supports inline and remote (Git-backed) pipelines. Prompts for user confirmation via [elicitation](#elicitation). |
 | `harness_update` | Update an existing resource. Supports inline and remote (Git-backed) pipelines. Prompts for user confirmation via [elicitation](#elicitation). |
 | `harness_delete` | Delete a resource. Prompts for user confirmation via [elicitation](#elicitation). Destructive. |
-| `harness_execute` | Execute an action on a resource (run/retry pipeline, import pipeline from Git, toggle flag, sync app). Prompts for user confirmation via [elicitation](#elicitation). For pipeline runs, use the runtime-input workflow below. |
+| `harness_execute` | Execute an action on a resource (run/retry pipeline, import pipeline from Git, toggle flag, sync app). Prompts for user confirmation via [elicitation](#elicitation). For pipeline runs, use the runtime-input workflow below (supports `branch`/`tag`/`pr_number`/`commit_sha` shorthand expansion). |
 | `harness_search` | Search across multiple resource types in parallel with a single query. |
 | `harness_diagnose` | Diagnose `pipeline`, `connector`, `delegate`, and `gitops_application` resources (aliases: `execution` -> `pipeline`, `gitops_app` -> `gitops_application`). For pipelines, returns stage/step timing and failure details; for connectors/delegates/GitOps apps, returns targeted health and troubleshooting signals. |
 | `harness_status` | Get a real-time project health dashboard — recent executions, failure rates, and deep links. |
@@ -615,12 +615,22 @@ Use this sequence to reduce execution-time input errors:
 2. **Choose input strategy**
    - **Simple variables:** pass flat key-value `inputs` (for example `{"branch":"main","env":"prod"}`).
    - **Complex/structural inputs:** use `input_set_ids` (CI codebase/build blocks and nested template inputs are best handled this way).
+   - **CI codebase shorthand keys (pipeline run only):**
+
+     | Shorthand key | Expanded structure |
+     |---|---|
+     | `branch` | `build.type=branch`, `build.spec.branch=<value>` |
+     | `tag` | `build.type=tag`, `build.spec.tag=<value>` |
+     | `pr_number` | `build.type=PR`, `build.spec.number=<value>` |
+     | `commit_sha` | `build.type=commitSha`, `build.spec.commitSha=<value>` |
+
+   - **Constraint:** shorthand expansion is skipped when `inputs.build` is already present (explicit `build` wins).
 3. **Execute the run**
    - `harness_execute(resource_type="pipeline", action="run", resource_id="<pipeline_id>", ...)`
 4. **Optional: combine both**
    - Use `input_set_ids` for the base shape and `inputs` for simple overrides.
 
-If required fields are unresolved, the tool returns a pre-flight error with expected keys and suggested input sets.
+If required fields are unresolved, the tool returns a pre-flight error with expected keys and suggested input sets. You can inspect available shorthand mappings with `harness_describe(resource_type="pipeline")` (`executeActions.run.inputShorthands`).
 
 **Ask the AI DevOps Agent to create a pipeline:**
 
@@ -787,7 +797,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-135 resource types organized across 30 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+137 resource types organized across 29 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -1139,7 +1149,7 @@ Inline PNG chart visualizations rendered from Harness data. These are metadata-o
 
 ## Toolset Filtering
 
-By default, all 30 toolsets (and their 135 resource types) are enabled. Use `HARNESS_TOOLSETS` to expose only the toolsets you need. This reduces the resource types the LLM sees, improving tool selection accuracy.
+By default, all 29 toolsets (and their 137 resource types) are enabled. Use `HARNESS_TOOLSETS` to expose only the toolsets you need. This reduces the resource types the LLM sees, improving tool selection accuracy.
 
 ```bash
 # Only expose pipelines, services, and connectors
@@ -1190,13 +1200,13 @@ Available toolset names:
                           |  MCP (stdio or HTTP)
                  +--------v---------+
                 |    MCP Server     |
-                | 11 Generic Tools  |
+                | 10 Generic Tools  |
                  +--------+---------+
                           |
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
-                |  30 Toolsets      |      (data files, not code)
-                |  127 Resource Types|
+                |  29 Toolsets      |      (data files, not code)
+                |  137 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+
@@ -1307,7 +1317,7 @@ src/
       ccm.ts
       access-control.ts
       ...
-  tools/                            # 11 generic MCP tools
+  tools/                            # 10 generic MCP tools
     harness-list.ts
     harness-get.ts
     harness-create.ts
@@ -1430,6 +1440,7 @@ The Harness MCP server pairs well with **[Harness Skills](https://github.com/thi
 | `Missing required field "... for path parameter ..."` | A project/org scoped call is missing identifiers | Set `HARNESS_DEFAULT_ORG_ID`/`HARNESS_DEFAULT_PROJECT_ID` or pass `org_id`/`project_id` per tool call |
 | `Read-only mode is enabled ... operations are not allowed` | `HARNESS_READ_ONLY=true` blocks create/update/delete/execute | Set `HARNESS_READ_ONLY=false` if write operations are intended |
 | Pipeline run fails pre-flight with unresolved required inputs | Provided `inputs` did not cover required runtime placeholders | Fetch `runtime_input_template`, supply missing simple keys, or use `input_set_ids` for structural inputs |
+| Pipeline CI shorthand (`branch`, `tag`, `pr_number`, `commit_sha`) did not apply | `inputs.build` was already provided, so shorthand expansion was intentionally skipped | Remove `inputs.build` to use shorthand expansion, or keep full explicit `build` structure |
 | `Operation declined by user` | User declined the elicitation confirmation dialog | The user chose not to proceed — verify the operation details and retry if intended |
 | `body.template_yaml (or body.yaml) is required` for template create/update | Template APIs expect full YAML payload | Provide full `template_yaml` string in `body`; for deletes, pass `version_label` to delete one version (omit to delete all versions) |
 | `HARNESS_BASE_URL must use HTTPS` on startup | `HARNESS_BASE_URL` is set to an HTTP URL | Use HTTPS, or set `HARNESS_ALLOW_HTTP=true` for local development |
