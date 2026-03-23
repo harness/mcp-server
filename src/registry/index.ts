@@ -445,6 +445,20 @@ export class Registry {
           baseLinkParams[pathParamName] = String(value);
         }
       }
+      // Resolve remaining {placeholder} tokens directly from response fields.
+      // This covers cases where the API response field name differs from the
+      // pathParams mapping (e.g. PR responses return "number" not "prNumber").
+      const remaining = def.deepLinkTemplate.match(/\{(\w+)\}/g);
+      if (remaining) {
+        for (const token of remaining) {
+          const key = token.slice(1, -1);
+          if (key === "accountId" || baseLinkParams[key]) continue;
+          if (resultRecord[key] !== undefined) {
+            baseLinkParams[key] = String(resultRecord[key]);
+          }
+        }
+      }
+
       // Only attach top-level openInHarness for single-item results (get/create/update),
       // not for list results where there's no single entity to link to.
       const r = result as Record<string, unknown>;
