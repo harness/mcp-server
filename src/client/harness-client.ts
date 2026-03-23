@@ -329,7 +329,6 @@ export class HarnessClient {
     const params = new URLSearchParams();
     if (!options.headerBasedScoping) {
       params.set("accountIdentifier", this.accountId);
-    }
 
       // Log-service gateway expects accountID (capital ID) in query params
       if (path.includes("/log-service/")) {
