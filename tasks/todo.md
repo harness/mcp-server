@@ -77,7 +77,7 @@
 - [x] Update stale public docs (`README.md`, `docs/gemini.md`, `CONTRIBUTING.md`)
 - [x] Add/refresh pipeline run guidance for runtime-input shorthand expansions
 - [x] Run docs consistency verification
-- [ ] Commit, push, and open docs-only PR
+- [x] Commit, push, and open docs-only PR
 
 ### Review
 - Aligned public inventory claims with current source of truth: 10 tools, 29 toolsets, 137 resource types.
