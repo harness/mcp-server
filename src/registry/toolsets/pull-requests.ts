@@ -21,7 +21,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
         { name: "query", description: "Search pull requests by keyword" },
       ],
       deepLinkTemplate:
-        "/ng/account/{accountId}/module/code/orgs/{orgIdentifier}/projects/{projectIdentifier}/repos/{repoIdentifier}/pull-requests/{prNumber}",
+        "/ng/account/{accountId}/module/code/orgs/{orgIdentifier}/projects/{projectIdentifier}/repos/{repoIdentifier}/pulls/{number}",
       operations: {
         list: {
           method: "GET",
