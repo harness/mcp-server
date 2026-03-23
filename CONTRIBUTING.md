@@ -38,7 +38,7 @@ src/
     index.ts                  # Registry class + dispatch logic
     types.ts                  # ResourceDefinition, ToolsetDefinition, etc.
     toolsets/                  # One file per toolset (declarative data)
-  tools/                      # 11 generic MCP tools (thin dispatch wrappers)
+  tools/                      # 10 generic MCP tools (thin dispatch wrappers)
   resources/                  # MCP resource providers
   prompts/                    # MCP prompt templates
   utils/                      # Errors, logger, rate limiter, deep links, etc.
