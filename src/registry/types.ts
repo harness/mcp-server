@@ -82,6 +82,9 @@ export interface FilterFieldSpec {
   type?: "string" | "number" | "boolean";
   /** Allowed values, if the field is constrained to a known set */
   enum?: string[];
+  /** When true, this filter is mandatory for the list operation to succeed.
+   *  The registry validates required filters before making the API call. */
+  required?: boolean;
 }
 
 /**
@@ -150,6 +153,16 @@ export interface EndpointSpec {
    * in user input are expanded into full nested structures before resolution.
    */
   inputExpansions?: InputExpansionRule[];
+  /** When true, the API uses 1-based pagination. The registry adds 1 to the
+   *  0-based `page` value from harness_list before sending the request. */
+  pageOneIndexed?: boolean;
+  /** When an API error message matches one of these patterns, return an empty
+   *  list/result instead of throwing. Useful for backends that return 500 for
+   *  "no data" scenarios (e.g. disconnected GitOps agent). */
+  emptyOnErrorPatterns?: RegExp[];
+  /** When true, omit the automatic `accountIdentifier` query param from the
+   *  request URL. Some APIs (e.g. SEI) use only the `Harness-Account` header. */
+  headerBasedScoping?: boolean;
 }
 
 /**
@@ -200,6 +213,14 @@ export interface ResourceDefinition {
    * Set to "fme" to use the Split.io API at https://api.split.io.
    */
   product?: ProductName;
+  baseUrlOverride?: "fme";
+  /**
+   * When true, this resource uses header-based scoping (Harness-Account header)
+   * instead of the standard `accountIdentifier` query param. Also prevents
+   * automatic org/project injection into POST/PUT request bodies.
+   * Used by SEI APIs which scope entirely via headers and query params.
+   */
+  headerBasedScoping?: boolean;
 }
 
 /**

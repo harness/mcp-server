@@ -45,7 +45,7 @@ export const gitopsToolset: ToolsetDefinition = {
       resourceType: "gitops_application",
       displayName: "GitOps Application",
       description:
-        "GitOps application managed by an agent. Supports list, get, and sync action.",
+        "GitOps application managed by an agent. List returns all apps in project (no agent required). Get/sync require agent_id.",
       toolset: "gitops",
       scope: "project",
       diagnosticHint: "Use harness_diagnose with resource_type='gitops_application', agent_id, and resource_id (app name) to analyze sync failures, health issues, and unhealthy K8s resources. Combines app status, resource tree, and recent events.",
@@ -56,16 +56,16 @@ export const gitopsToolset: ToolsetDefinition = {
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/gitops/applications/{appName}",
       operations: {
         list: {
-          method: "GET",
-          path: "/gitops/api/v1/agents/{agentIdentifier}/applications",
-          pathParams: { agent_id: "agentIdentifier" },
-          queryParams: {
-            search_term: "searchTerm",
-            page: "page",
-            size: "size",
-          },
+          method: "POST",
+          path: "/gitops/api/v1/applications",
+          bodyBuilder: (input) => ({
+            pageIndex: typeof input.page === "number" ? input.page : 0,
+            pageSize: typeof input.size === "number" ? input.size : 20,
+            searchTerm: input.search_term ?? "",
+            metadataOnly: true,
+          }),
           responseExtractor: passthrough,
-          description: "List GitOps applications for an agent",
+          description: "List all GitOps applications in the project",
         },
         get: {
           method: "GET",
@@ -75,7 +75,7 @@ export const gitopsToolset: ToolsetDefinition = {
             app_name: "appName",
           },
           responseExtractor: passthrough,
-          description: "Get GitOps application details",
+          description: "Get GitOps application details (requires agent_id)",
         },
       },
       executeActions: {
@@ -103,18 +103,26 @@ export const gitopsToolset: ToolsetDefinition = {
     {
       resourceType: "gitops_cluster",
       displayName: "GitOps Cluster",
-      description: "Kubernetes cluster registered with a GitOps agent. Supports list and get.",
+      description:
+        "Kubernetes cluster registered with GitOps. List returns all clusters in project (no agent required). Get requires agent_id.",
       toolset: "gitops",
       scope: "project",
       identifierFields: ["agent_id", "cluster_id"],
+      listFilterFields: [
+        { name: "search_term", description: "Filter clusters by name or keyword" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/gitops/clusters",
       operations: {
         list: {
-          method: "GET",
-          path: "/gitops/api/v1/agents/{agentIdentifier}/clusters",
-          pathParams: { agent_id: "agentIdentifier" },
+          method: "POST",
+          path: "/gitops/api/v1/clusters",
+          bodyBuilder: (input) => ({
+            pageIndex: typeof input.page === "number" ? input.page : 0,
+            pageSize: typeof input.size === "number" ? input.size : 20,
+            searchTerm: input.search_term ?? "",
+          }),
           responseExtractor: passthrough,
-          description: "List clusters for a GitOps agent",
+          description: "List all GitOps clusters in the project",
         },
         get: {
           method: "GET",
@@ -124,7 +132,7 @@ export const gitopsToolset: ToolsetDefinition = {
             cluster_id: "clusterIdentifier",
           },
           responseExtractor: passthrough,
-          description: "Get GitOps cluster details",
+          description: "Get GitOps cluster details (requires agent_id)",
         },
       },
     },
@@ -132,17 +140,26 @@ export const gitopsToolset: ToolsetDefinition = {
       resourceType: "gitops_repository",
       displayName: "GitOps Repository",
       description:
-        "Git repository registered with a GitOps agent. Supports list and get.",
+        "Git repository registered with GitOps. List returns all repositories in project (no agent required). Get requires agent_id.",
       toolset: "gitops",
       scope: "project",
       identifierFields: ["agent_id", "repo_id"],
+      listFilterFields: [
+        { name: "search_term", description: "Filter repositories by name or URL" },
+        { name: "repo_creds_id", description: "Filter by repository credentials ID" },
+      ],
       operations: {
         list: {
-          method: "GET",
-          path: "/gitops/api/v1/agents/{agentIdentifier}/repositories",
-          pathParams: { agent_id: "agentIdentifier" },
+          method: "POST",
+          path: "/gitops/api/v1/repositories",
+          bodyBuilder: (input) => ({
+            pageIndex: typeof input.page === "number" ? input.page : 0,
+            pageSize: typeof input.size === "number" ? input.size : 20,
+            searchTerm: input.search_term ?? "",
+            repoCredsId: input.repo_creds_id ?? "",
+          }),
           responseExtractor: passthrough,
-          description: "List repositories for a GitOps agent",
+          description: "List all GitOps repositories in the project",
         },
         get: {
           method: "GET",
@@ -152,7 +169,7 @@ export const gitopsToolset: ToolsetDefinition = {
             repo_id: "repoIdentifier",
           },
           responseExtractor: passthrough,
-          description: "Get GitOps repository details",
+          description: "Get GitOps repository details (requires agent_id)",
         },
       },
     },
@@ -169,6 +186,7 @@ export const gitopsToolset: ToolsetDefinition = {
           path: "/gitops/api/v1/agents/{agentIdentifier}/applicationsets",
           pathParams: { agent_id: "agentIdentifier" },
           responseExtractor: passthrough,
+          emptyOnErrorPatterns: [/agent is not registered/, /never connected/, /Not Implemented/],
           description: "List GitOps ApplicationSets",
         },
         get: {
@@ -196,6 +214,7 @@ export const gitopsToolset: ToolsetDefinition = {
           path: "/gitops/api/v1/agents/{agentIdentifier}/repocreds",
           pathParams: { agent_id: "agentIdentifier" },
           responseExtractor: passthrough,
+          emptyOnErrorPatterns: [/agent is not registered/, /never connected/, /Not Implemented/],
           description: "List GitOps repository credentials",
         },
         get: {
@@ -217,6 +236,10 @@ export const gitopsToolset: ToolsetDefinition = {
       toolset: "gitops",
       scope: "project",
       identifierFields: ["agent_id", "app_name"],
+      listFilterFields: [
+        { name: "agent_id", description: "GitOps agent identifier", required: true },
+        { name: "app_name", description: "GitOps application name", required: true },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/gitops/applications/{appName}",
       operations: {
         list: {
@@ -271,6 +294,10 @@ export const gitopsToolset: ToolsetDefinition = {
       toolset: "gitops",
       scope: "project",
       identifierFields: ["agent_id", "app_name"],
+      listFilterFields: [
+        { name: "agent_id", description: "GitOps agent identifier", required: true },
+        { name: "app_name", description: "GitOps application name", required: true },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/gitops/applications/{appName}",
       operations: {
         list: {

@@ -557,7 +557,13 @@ Replaces the 5 separate resource-type tools from the official server (EC2, Azure
         list: {
           method: "POST",
           path: "/ccm/api/recommendation/overview/list",
-          bodyBuilder: () => ({}),
+          bodyBuilder: (input) => ({
+            filterType: "CCMRecommendation",
+            minSaving: (input.min_saving as number) ?? 0,
+            daysBack: 7,
+            offset: (input.offset as number) ?? 0,
+            limit: (input.limit as number) ?? 20,
+          }),
           responseExtractor: ngExtract,
           description:
             "List all cost optimization recommendations across the account. Returns recommendations for all resource types (EC2, Azure VM, ECS, Node Pool, Workload) in a single response.",
@@ -822,6 +828,19 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
         get: {
           method: "GET",
           path: "/ccm/api/overview",
+          pathBuilder: (input) => {
+            const toMillis = (v: unknown, fallbackDaysAgo: number): string => {
+              if (v && typeof v === "string") {
+                const ms = new Date(v).getTime();
+                if (!isNaN(ms)) return String(ms);
+              }
+              return String(Date.now() - fallbackDaysAgo * 86_400_000);
+            };
+            input.start_time = toMillis(input.start_time, 60);
+            input.end_time = toMillis(input.end_time, 0);
+            if (!input.group_by) input.group_by = "DAY";
+            return "/ccm/api/overview";
+          },
           queryParams: {
             start_time: "startTime",
             end_time: "endTime",
@@ -844,7 +863,7 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
       scope: "account",
       identifierFields: [],
       listFilterFields: [
-        { name: "perspective_id", description: "Cost perspective identifier" },
+        { name: "perspective_id", description: "Cost perspective identifier", required: true },
         { name: "field_id", description: "Field identifier" },
         { name: "field_identifier", description: "Field identifier" },
       ],
@@ -853,15 +872,14 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
           method: "POST",
           path: "/ccm/api/graphql",
           bodyBuilder: (input) => ({
-            query: `query FetchPerspectiveFilters($filters: [QLCEViewFilterWrapperInput], $values: [String]) {
-  perspectiveFilters(filters: $filters, values: $values) { values { name id __typename } __typename }
+            query: `query FetchPerspectiveFilters($filters: [QLCEViewFilterWrapperInput]) {
+  perspectiveFilters(filters: $filters) { values __typename }
 }`,
             operationName: "FetchPerspectiveFilters",
             variables: {
               filters: input.perspective_id
                 ? buildViewFilter(input.perspective_id as string)
                 : [],
-              values: input.field_id ? [input.field_id] : [],
             },
           }),
           responseExtractor: gqlExtract("perspectiveFilters"),
@@ -893,7 +911,11 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
             input.group_by === "type"
               ? "/ccm/api/recommendation/overview/resource-type/stats"
               : "/ccm/api/recommendation/overview/stats",
-          bodyBuilder: () => ({}),
+          bodyBuilder: () => ({
+            filterType: "CCMRecommendation",
+            minSaving: 0,
+            daysBack: 7,
+          }),
           responseExtractor: ngExtract,
           description:
             "Get aggregate stats, or stats by resource type when group_by=type",
@@ -907,18 +929,19 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
     {
       resourceType: "cost_recommendation_detail",
       displayName: "Cost Recommendation Detail",
-      description: "Detailed cost recommendation for a specific resource type. Supports get. Pass type_path: ec2-instance, azure-vm, ecs-service, node-pool, or workload.",
+      description: "Detailed cost recommendation for a specific resource. Supports get. Pass type_path (ec2-instance, azure-vm, ecs-service, node-pool, workload) and recommendation_id.",
       toolset: "ccm",
       scope: "account",
-      identifierFields: ["type_path"],
+      identifierFields: ["type_path", "recommendation_id"],
       deepLinkTemplate: "/ng/account/{accountId}/ce/recommendations",
       operations: {
         get: {
           method: "GET",
           path: "/ccm/api/recommendation/details/{typePath}",
           pathParams: { type_path: "typePath" },
+          queryParams: { recommendation_id: "id" },
           responseExtractor: ngExtract,
-          description: "Get detailed recommendation for a resource type (ec2-instance, azure-vm, ecs-service, node-pool, workload)",
+          description: "Get detailed recommendation. Requires type_path (ec2-instance, azure-vm, ecs-service, node-pool, workload) and recommendation_id.",
         },
       },
     },
@@ -939,6 +962,8 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
       listFilterFields: [
         { name: "aspect", description: "Which commitment aspect to fetch", enum: ["coverage", "savings", "utilisation", "analysis", "estimated_savings"] },
         { name: "cloud_account_id", description: "Required for aspect=estimated_savings", type: "string" },
+        { name: "start_date", description: "Start date for commitment data (YYYY-MM-DD)", required: true },
+        { name: "end_date", description: "End date for commitment data (YYYY-MM-DD)", required: true },
       ],
       deepLinkTemplate: "/ng/account/{accountId}/ce/commitment-orchestration",
       operations: {
@@ -947,6 +972,7 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
           path: "/lw/co/api/accounts/{accountId}/v1/detail/compute_coverage",
           pathBuilder: (input, config) => {
             const accountId = (input.account_id as string) ?? config.HARNESS_ACCOUNT_ID ?? "";
+            input.account_id = accountId;
             const aspect = (input.aspect as string) || "coverage";
             const base = `/lw/co/api/accounts/${accountId}`;
             switch (aspect) {
@@ -964,10 +990,18 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
               default: return `${base}/v1/detail/compute_coverage`;
             }
           },
-          bodyBuilder: (input) => input.body ?? {},
+          queryParams: {
+            start_date: "start_date",
+            end_date: "end_date",
+          },
+          bodyBuilder: (input) => {
+            const body = (input.body as Record<string, unknown>) ?? {};
+            if (!body.Service) body.Service = "Amazon Elastic Compute Cloud - Compute";
+            return body;
+          },
           responseExtractor: passthrough,
           description:
-            "Get commitment data. Pass aspect: coverage, savings, utilisation, analysis, or estimated_savings. For estimated_savings, cloud_account_id is required.",
+            "Get commitment data. Pass aspect: coverage, savings, utilisation, analysis, or estimated_savings. Requires start_date and end_date (YYYY-MM-DD). For estimated_savings, cloud_account_id is required.",
         },
       },
     },

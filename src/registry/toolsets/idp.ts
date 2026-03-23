@@ -12,10 +12,11 @@ export const idpToolset: ToolsetDefinition = {
       description: "Internal Developer Portal catalog entity. Supports list and get.",
       toolset: "idp",
       scope: "account",
-      identifierFields: ["entity_id"],
+      identifierFields: ["entity_id", "kind"],
       listFilterFields: [
         { name: "kind", description: "Catalog entity kind filter", enum: ["api", "component", "environment", "environmentblueprint", "group", "resource", "user", "workflow"] },
         { name: "search", description: "Search catalog entities by name or keyword" },
+        { name: "namespace", description: "Entity namespace (defaults to 'account' for account scope)" },
       ],
       deepLinkTemplate: "/ng/account/{accountId}/idp/catalog",
       operations: {
@@ -35,10 +36,24 @@ export const idpToolset: ToolsetDefinition = {
         },
         get: {
           method: "GET",
-          path: "/v1/entities/{entityId}",
-          pathParams: { entity_id: "entityId" },
+          path: "/v1/entities/{scope}/{kind}/{namespace}/{entityId}",
+          pathBuilder: (input) => {
+            let scope = "account";
+            const orgId = input.org_id as string | undefined;
+            const projectId = input.project_id as string | undefined;
+            if (orgId) {
+              scope += `.${orgId}`;
+              if (projectId) {
+                scope += `.${projectId}`;
+              }
+            }
+            const kind = (input.kind as string) || "component";
+            const namespace = (input.namespace as string) || scope;
+            const entityId = input.entity_id as string;
+            return `/v1/entities/${encodeURIComponent(scope)}/${encodeURIComponent(kind)}/${encodeURIComponent(namespace)}/${encodeURIComponent(entityId)}`;
+          },
           responseExtractor: ngExtract,
-          description: "Get IDP catalog entity details",
+          description: "Get IDP catalog entity details by scope, kind, namespace, and name (entity_ref format: kind:namespace/name)",
         },
       },
     },
@@ -130,8 +145,9 @@ export const idpToolset: ToolsetDefinition = {
           path: "/v1/checks/{checkIdentifier}/stats",
           pathParams: { check_id: "checkIdentifier" },
           queryParams: { is_custom: "custom" },
+          defaultQueryParams: { custom: "false" },
           responseExtractor: ngExtract,
-          description: "Get statistics for a specific scorecard check",
+          description: "Get statistics for a specific scorecard check. Pass is_custom=true for custom checks.",
         },
       },
     },
@@ -203,22 +219,20 @@ export const idpToolset: ToolsetDefinition = {
     {
       resourceType: "idp_tech_doc",
       displayName: "IDP Tech Doc",
-      description: "Search IDP TechDocs documentation. Supports list (search).",
+      description: "Search IDP TechDocs documentation via semantic search. Supports list (search).",
       toolset: "idp",
       scope: "account",
       identifierFields: [],
       listFilterFields: [
-        { name: "query", description: "Search query for scorecards" },
+        { name: "query", description: "Search query for TechDocs" },
       ],
       operations: {
         list: {
-          method: "GET",
-          path: "/v1/techdocs/search",
-          queryParams: {
-            query: "term",
-          },
+          method: "POST",
+          path: "/v1/tech-docs/semantic-search",
+          bodyBuilder: (input) => ({ query: input.query ?? input.search_term ?? "" }),
           responseExtractor: ngExtract,
-          description: "Search IDP TechDocs",
+          description: "Search IDP TechDocs via semantic search",
         },
       },
     },

@@ -32,8 +32,8 @@ export const dashboardsToolset: ToolsetDefinition = {
           },
           defaultQueryParams: {
             tags: "HARNESS=true&CD=true&CE=true&CET=true&CF=true&CHAOS=true&CI=true&DBOPS=true&IACM=true&IDP=true&SSCA=true&STO=true&SRM=true",
-            page: "1",
           },
+          pageOneIndexed: true,
           responseExtractor: dashboardListExtract,
           description: "List dashboards",
         },

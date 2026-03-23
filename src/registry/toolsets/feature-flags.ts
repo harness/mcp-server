@@ -127,6 +127,10 @@ export const featureFlagsToolset: ToolsetDefinition = {
       scope: "account",
       identifierFields: ["workspace_id", "environment_id"],
       product: "fme",
+      baseUrlOverride: "fme",
+      listFilterFields: [
+        { name: "workspace_id", description: "FME workspace ID (get from harness_list resource_type=fme_workspace)", required: true },
+      ],
       operations: {
         list: {
           method: "GET",
@@ -148,6 +152,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       product: "fme",
       deepLinkTemplate: "/ng/account/{accountId}/module/fme/orgs/{orgIdentifier}/projects/{projectIdentifier}/setup/resources/targets/{trafficTypeId}/splits/{id}",
       listFilterFields: [
+        { name: "workspace_id", description: "FME workspace ID (get from harness_list resource_type=fme_workspace)", required: true },
         { name: "offset", description: "Pagination offset for FME feature flags", type: "number" },
         { name: "rollout_status_id", description: "Filter by rollout status UUID (use fme_rollout_status to discover valid IDs)", type: "string" },
         { name: "name", description: "Filter flags by name (partial match)", type: "string" },

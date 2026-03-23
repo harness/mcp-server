@@ -55,4 +55,7 @@ export interface RequestOptions {
   responseType?: "json" | "buffer";
   /** Product backend — when "fme", skips Harness-specific auth/headers/params. */
   product?: "harness" | "fme";
+  /** When true, omit the automatic `accountIdentifier` query param.
+   *  Some APIs (e.g. SEI) use only the `Harness-Account` header for account scoping. */
+  headerBasedScoping?: boolean;
 }

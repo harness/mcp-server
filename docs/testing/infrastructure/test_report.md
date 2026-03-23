@@ -1,55 +1,58 @@
-# Module: CD/CI
+# Test Report: Infrastructure Definition (`infrastructure`)
 
-## INFRASTRUCTURE — Test Report
+| Field | Value |
+|-------|-------|
+| **Resource Type** | `infrastructure` |
+| **Date** | 2026-03-23 |
+| **Tester** | MCP Automated Test |
+| **Account ID** | px7xd_BFRCi-pfWPYXVjvw |
+| **Org** | AI_Devops |
+| **Project** | Sanity |
 
-**Date:** 2026-03-19 (Updated: 2026-03-19)
-**Tester:** Cascade AI
-**Account:** px7xd_BFRCi-pfWPYXVjvw | **Org:** AI_Devops | **Project:** Sanity
+## Test Results
 
----
+| Test ID | Description | Prompt | Expected Result | Status | Actual Result | Notes |
+|---------|-------------|--------|-----------------|--------|---------------|-------|
+| TC-infra-001 | List infrastructure for an environment | `harness_list(resource_type="infrastructure", environment_id="my_env")` | Returns paginated list scoped to environment | ✅ Passed | Returns 1 infrastructure definition (requires environment_id filter) | Requires environment_id filter |
+| TC-infra-002 | List with pagination | `harness_list(resource_type="infrastructure", environment_id="my_env", page=1, size=5)` | Returns page 1 with up to 5 items | ⬜ Pending | | |
+| TC-infra-003 | Filter by search_term | `harness_list(resource_type="infrastructure", environment_id="my_env", search_term="k8s")` | Returns matching infrastructure | ⬜ Pending | | |
+| TC-infra-004 | Filter by deployment_type | `harness_list(resource_type="infrastructure", environment_id="my_env", deployment_type="Kubernetes")` | Returns Kubernetes infrastructure only | ⬜ Pending | | |
+| TC-infra-005 | Sort by name descending | `harness_list(resource_type="infrastructure", environment_id="my_env", sort="name", order="desc")` | Returns sorted results | ⬜ Pending | | |
+| TC-infra-006 | Combined filters | `harness_list(resource_type="infrastructure", environment_id="my_env", search_term="prod", deployment_type="Kubernetes", page=0, size=10)` | Returns filtered results | ⬜ Pending | | |
+| TC-infra-007 | List without environment_id | `harness_list(resource_type="infrastructure")` | Error or empty: environment_id required | ⬜ Pending | | |
+| TC-infra-008 | Get infrastructure by identifier | `harness_get(resource_type="infrastructure", infrastructure_id="my_infra", environment_id="my_env")` | Returns full details | ⬜ Pending | | |
+| TC-infra-009 | Get with scope overrides | `harness_get(resource_type="infrastructure", infrastructure_id="my_infra", environment_id="my_env", org_id="other_org", project_id="other_project")` | Returns from specified scope | ⬜ Pending | | |
+| TC-infra-010 | Create with required fields | `harness_create(resource_type="infrastructure", identifier="test_infra", name="Test Infra", type="KubernetesDirect", environmentRef="my_env")` | Infrastructure created | ⬜ Pending | | |
+| TC-infra-011 | Create with all fields | `harness_create(resource_type="infrastructure", identifier="full_infra", name="Full Infra", type="KubernetesDirect", environmentRef="my_env", deploymentType="Kubernetes", yaml="...")` | Infrastructure created with all fields | ⬜ Pending | | |
+| TC-infra-012 | Create with missing type | `harness_create(resource_type="infrastructure", identifier="bad_infra", name="Bad Infra", environmentRef="my_env")` | Error: type is required | ⬜ Pending | | |
+| TC-infra-013 | Create with missing environmentRef | `harness_create(resource_type="infrastructure", identifier="bad_infra", name="Bad Infra", type="KubernetesDirect")` | Error: environmentRef required | ⬜ Pending | | |
+| TC-infra-014 | Update name and type | `harness_update(resource_type="infrastructure", infrastructure_id="my_infra", identifier="my_infra", name="Updated Infra", type="KubernetesGcp", environmentRef="my_env")` | Infrastructure updated | ⬜ Pending | | |
+| TC-infra-015 | Update with YAML | `harness_update(resource_type="infrastructure", infrastructure_id="my_infra", identifier="my_infra", name="My Infra", type="KubernetesDirect", environmentRef="my_env", yaml="...")` | Updated with YAML | ⬜ Pending | | |
+| TC-infra-016 | Update with missing required fields | `harness_update(resource_type="infrastructure", infrastructure_id="my_infra", name="My Infra")` | Error: type, environmentRef required | ⬜ Pending | | |
+| TC-infra-017 | Delete by identifier | `harness_delete(resource_type="infrastructure", infrastructure_id="my_infra", environment_id="my_env")` | Infrastructure deleted | ⬜ Pending | | |
+| TC-infra-018 | Move config inline to remote | `harness_execute(resource_type="infrastructure", action="move_configs", infrastructure_id="my_infra", environment_id="my_env", move_config_type="INLINE_TO_REMOTE", ...)` | Config moved to remote | ⬜ Pending | | |
+| TC-infra-019 | Move config remote to inline | `harness_execute(resource_type="infrastructure", action="move_configs", infrastructure_id="my_infra", environment_id="my_env", move_config_type="REMOTE_TO_INLINE")` | Config moved to inline | ⬜ Pending | | |
+| TC-infra-020 | List with different org_id | `harness_list(resource_type="infrastructure", environment_id="my_env", org_id="custom_org")` | Returns from specified org | ⬜ Pending | | |
+| TC-infra-021 | Get non-existent infrastructure | `harness_get(resource_type="infrastructure", infrastructure_id="nonexistent_xyz", environment_id="my_env")` | Error: not found (404) | ⬜ Pending | | |
+| TC-infra-022 | Delete non-existent infrastructure | `harness_delete(resource_type="infrastructure", infrastructure_id="nonexistent_xyz", environment_id="my_env")` | Error: not found (404) | ⬜ Pending | | |
+| TC-infra-023 | List with empty results | `harness_list(resource_type="infrastructure", environment_id="my_env", search_term="zzz_no_match")` | Empty items, total=0 | ⬜ Pending | | |
+| TC-infra-024 | List with max pagination | `harness_list(resource_type="infrastructure", environment_id="my_env", page=0, size=100)` | Returns up to 100 items | ⬜ Pending | | |
+| TC-infra-025 | Verify deep link in response | `harness_get(resource_type="infrastructure", infrastructure_id="my_infra", environment_id="my_env")` | Response includes valid deep link | ⬜ Pending | | |
 
-### MCP v1 vs v2 — Prompt parity run (2026-03-19)
+## Summary
 
-**Date:** 2026-03-19 · **Master log:** `[MCP_PROMPT_PARITY_RUN_2026-03-19.md](../MCP_PROMPT_PARITY_RUN_2026-03-19.md)`
+| Metric | Count |
+|--------|-------|
+| Total Tests | 25 |
+| ✅ Passed | 1 |
+| ❌ Failed | 0 |
+| ⚠️ Blocked | 0 |
+| ⬜ Not Run | 24 |
 
+## Issues Found
 
-| Check             | v1                                 | v2                                                                    | Match      |
-| ----------------- | ---------------------------------- | --------------------------------------------------------------------- | ---------- |
-| List + env filter | N/A — no infrastructure tool in v1 | `harness_list` (`infrastructure`, `environment_id=aws_sam`) → 3 items | ⚠️ v2 only |
-| Get by ID         | N/A — no infrastructure tool in v1 | `harness_get` (`infrastructure`, `azure_fu`) → AzureFunction detail   | ⚠️ v2 only |
+| Issue ID | Severity | Description | Test ID | Status |
+|----------|----------|-------------|---------|--------|
 
-
-*v1 MCP server has no `list_infrastructure` or `get_infrastructure` tool. All infrastructure tests are v2-only.*
-
-### Summary
-
-
-| Metric      | Count |
-| ----------- | ----- |
-| Total Tests | 9     |
-| ✅ Passed    | 6     |
-| ❌ Failed    | 0     |
-| ⏭️ Skipped  | 3     |
-
-
----
-
-### Test Results
-
-
-| Test ID | Test                          | v1 Result                 | v2 Result                                             | Notes                                                                       |
-| ------- | ----------------------------- | ------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------- |
-| INF-001 | List at Project scope (+ env) | N/A — no infra tool in v1 | ✅ 3 items (`azure_fu`, `google_cloud_run`, `aws_sam`) | `environment_id=aws_sam`, org=AI_Devops, project=Sanity                     |
-| INF-002 | List at Org scope (+ env)     | N/A — no infra tool in v1 | ✅ 3 items (same set)                                  | Omitted `project_id`; server returned project-level infra (default project) |
-| INF-003 | Page 1, size 5                | N/A — no infra tool in v1 | ✅ 3 items (page 0, size 5)                            | All 3 fit in first page                                                     |
-| INF-004 | Page 2, size 5                | N/A — no infra tool in v1 | ✅ 0 items (page 1, size 5, total=3)                   | Correct empty second page                                                   |
-| INF-005 | Get by ID                     | N/A — no infra tool in v1 | ✅ `azure_fu` — AzureFunction, env `aws_sam`           | Returns full YAML, connectorRef, deploymentType                             |
-| INF-006 | Create                        | N/A                       | ⏭️ Skipped — destructive                              | v2 only (`harness_create`)                                                  |
-| INF-007 | Update                        | N/A                       | ⏭️ Skipped — destructive                              | v2 only (`harness_update`)                                                  |
-| INF-008 | Delete                        | N/A                       | ⏭️ Skipped — destructive                              | v2 only (`harness_delete`)                                                  |
-| INF-009 | Required field validation     | N/A — no infra tool in v1 | ✅ Returns validation error without `environment_id`   | Fix verified: `Missing required filter fields for infrastructure list: environment_id` |
-
-
-> **Legend:** ✅ Pass | ❌ Fail | ⏭️ Skipped | N/A = Not Applicable | N/T = Not Tested
-
----
+## Sample Responses
+_(To be filled during testing)_

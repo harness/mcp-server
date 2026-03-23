@@ -49,6 +49,7 @@ export const scsToolset: ToolsetDefinition = {
       scope: "project",
       identifierFields: ["source_id", "artifact_id"],
       listFilterFields: [
+        { name: "source_id", description: "Artifact source ID (get from harness_list resource_type=scs_artifact_source)", required: true },
         { name: "search_term", description: "Filter artifacts by name or keyword" },
       ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/supply-chain/artifacts/{artifactId}",
@@ -93,6 +94,7 @@ export const scsToolset: ToolsetDefinition = {
       scope: "project",
       identifierFields: ["artifact_id"],
       listFilterFields: [
+        { name: "artifact_id", description: "Artifact ID to list components for", required: true },
         { name: "search_term", description: "Filter components by name or keyword" },
       ],
       operations: {
@@ -119,10 +121,13 @@ export const scsToolset: ToolsetDefinition = {
     {
       resourceType: "scs_artifact_remediation",
       displayName: "SCS Artifact Remediation",
-      description: "Remediation advice for a component identified by its package URL (purl). Supports get.",
+      description: "Remediation advice for a component identified by its package URL (purl). Supports get. Pass artifact_id as resource_id and purl via params.",
       toolset: "scs",
       scope: "project",
       identifierFields: ["artifact_id"],
+      listFilterFields: [
+        { name: "purl", description: "Package URL of the component (e.g. pkg:npm/express@4.18.0) — required for remediation lookup", required: true },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/supply-chain/artifacts/{artifactId}",
       operations: {
         get: {
@@ -167,6 +172,9 @@ export const scsToolset: ToolsetDefinition = {
       toolset: "scs",
       scope: "project",
       identifierFields: ["artifact_id"],
+      listFilterFields: [
+        { name: "artifact_id", description: "Artifact ID to list compliance results for", required: true },
+      ],
       operations: {
         list: {
           method: "POST",

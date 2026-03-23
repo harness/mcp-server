@@ -294,8 +294,10 @@ export const pipelinesToolset: ToolsetDefinition = {
           responseExtractor: ngExtract,
           actionDescription: "Interrupt a running execution. Set interrupt_type to AbortAll, Pause, etc.",
           bodySchema: {
-            description: "No request body required. The interrupt type is specified via the interrupt_type query parameter (e.g. AbortAll, Pause, Resume, StageRollback).",
-            fields: [],
+            description: "Interrupt a running execution. The interrupt_type is passed as a query parameter.",
+            fields: [
+              { name: "interrupt_type", type: "string", required: true, description: "Interrupt type: AbortAll, Pause, Resume, StageRollback, Abort, ExpireAll, Retry" },
+            ],
           },
         },
       },
@@ -308,7 +310,7 @@ export const pipelinesToolset: ToolsetDefinition = {
       scope: "project",
       identifierFields: ["pipeline_id", "trigger_id"],
       listFilterFields: [
-        { name: "pipeline_id", description: "Pipeline identifier to filter triggers" },
+        { name: "pipeline_id", description: "Pipeline identifier to filter triggers", required: true },
         { name: "search_term", description: "Filter triggers by name or keyword" },
       ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipeline_id}/triggers",
@@ -481,6 +483,7 @@ export const pipelinesToolset: ToolsetDefinition = {
       scope: "project",
       identifierFields: ["execution_id"],
       listFilterFields: [
+        { name: "execution_id", description: "Pipeline execution ID (required — approvals are scoped to an execution)", required: true },
         { name: "approval_status", description: "Approval status filter", enum: ["WAITING", "APPROVED", "REJECTED", "FAILED", "ABORTED", "EXPIRED"] },
         { name: "approval_type", description: "Approval type filter", enum: ["HarnessApproval", "JiraApproval", "CustomApproval", "ServiceNowApproval"] },
         { name: "node_execution_id", description: "Node execution ID to filter by step" },
