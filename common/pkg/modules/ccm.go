@@ -9,6 +9,17 @@ import (
 	"github.com/harness/mcp-server/common/pkg/toolsets"
 )
 
+// CommOrchClientFactory is a function type for creating CommitmentOrchestrator clients.
+// This allows different implementations in internal vs external modes.
+type CommOrchClientFactory func(config *config.McpServerConfig) (*client.Client, error)
+
+// DefaultCommOrchClientFactory is the default implementation for creating CommitmentOrchestrator clients.
+// This can be overridden by consuming code to provide custom implementations.
+var DefaultCommOrchClientFactory CommOrchClientFactory = func(config *config.McpServerConfig) (*client.Client, error) {
+	customTimeout := 30 * time.Second
+	return DefaultClientProvider.CreateClient(config, "commOrch", customTimeout)
+}
+
 // CCMModule implements the Module interface for Cloud Cost Management
 type CCMModule struct {
 	config *config.McpServerConfig
@@ -84,8 +95,7 @@ func RegisterCloudCostManagement(config *config.McpServerConfig, tsg *toolsets.T
 		NgManClient: ngManCli,
 	}
 
-	// Create base client for CCM
-	commOrchClient, err := DefaultClientProvider.CreateClient(config, "commOrch", customTimeout)
+	commOrchClient, err := DefaultCommOrchClientFactory(config)
 	if err != nil {
 		return err
 	}
