@@ -16,6 +16,7 @@ import { registerAllResources } from "./resources/index.js";
 import { registerAllPrompts } from "./prompts/index.js";
 import type { AuthContext } from "./auth/principal.js";
 import { parseArgs } from "./utils/cli.js";
+import { configureElicitation } from "./utils/elicitation.js";
 
 const log = createLogger("main");
 
@@ -66,6 +67,7 @@ function createHarnessServer(config: Config, authContext?: AuthContext): McpServ
     },
   );
 
+  configureElicitation({ skip: effectiveConfig.HARNESS_SKIP_ELICITATION });
   registerAllTools(server, registry, client, effectiveConfig);
   registerAllResources(server, registry, client, effectiveConfig);
   registerAllPrompts(server);
