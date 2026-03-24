@@ -30,6 +30,7 @@ const RawConfigSchema = z.object({
   HARNESS_MAX_BODY_SIZE_MB: z.coerce.number().default(10),
   HARNESS_RATE_LIMIT_RPS: z.coerce.number().default(10),
   HARNESS_READ_ONLY: z.coerce.boolean().default(false),
+  HARNESS_SKIP_ELICITATION: z.coerce.boolean().default(false),
   HARNESS_ALLOW_HTTP: z.coerce.boolean().default(false),
   // JWT authentication (optional — enables Bearer token auth in HTTP mode)
   JWT_SECRET: z.string().min(1).optional(),

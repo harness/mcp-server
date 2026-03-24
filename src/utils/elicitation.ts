@@ -11,6 +11,16 @@ export interface ElicitationResult {
   reason?: "declined" | "cancelled";
 }
 
+/** Module-level flag to skip elicitation entirely (set via HARNESS_SKIP_ELICITATION). */
+let _skipElicitation = false;
+
+/**
+ * Configure the elicitation module. Call once at startup.
+ */
+export function configureElicitation(opts: { skip?: boolean }): void {
+  if (opts.skip !== undefined) _skipElicitation = opts.skip;
+}
+
 /**
  * Check whether the connected client advertises form elicitation support.
  */
@@ -28,6 +38,9 @@ export function clientSupportsElicitation(server: Server): boolean {
  * When `destructive` is true (e.g. deletes), the operation is **blocked** if
  * the client doesn't support elicitation or the elicitation call fails.
  * Non-destructive writes proceed silently in those cases.
+ *
+ * When `HARNESS_SKIP_ELICITATION` is true, all elicitation is bypassed and
+ * operations proceed immediately — including destructive ones.
  */
 export async function confirmViaElicitation({
   server,
@@ -41,6 +54,11 @@ export async function confirmViaElicitation({
   /** When true, block the operation if confirmation cannot be obtained. */
   destructive?: boolean;
 }): Promise<ElicitationResult> {
+  if (_skipElicitation) {
+    log.debug("Elicitation skipped (HARNESS_SKIP_ELICITATION=true), proceeding", { toolName });
+    return { proceed: true };
+  }
+
   if (!clientSupportsElicitation(server.server)) {
     if (destructive) {
       log.warn("Client does not support elicitation, blocking destructive operation", { toolName });

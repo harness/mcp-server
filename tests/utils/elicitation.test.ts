@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from "vitest";
-import { clientSupportsElicitation, confirmViaElicitation } from "../../src/utils/elicitation.js";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { clientSupportsElicitation, confirmViaElicitation, configureElicitation } from "../../src/utils/elicitation.js";
 
 /** Minimal stub of the Server class (only the methods we use). */
 function makeServerStub(capabilities: unknown, elicitResult?: unknown) {
@@ -33,6 +33,11 @@ describe("clientSupportsElicitation", () => {
 });
 
 describe("confirmViaElicitation", () => {
+  afterEach(() => {
+    // Reset skip flag after each test
+    configureElicitation({ skip: false });
+  });
+
   it("proceeds when client does not support elicitation (non-destructive)", async () => {
     const mcpServer = makeServerStub(undefined);
     const result = await confirmViaElicitation({
@@ -133,5 +138,33 @@ describe("confirmViaElicitation", () => {
     expect(call.mode).toBe("form");
     expect(call.message).toBe("Delete pipeline 'my-pipe'?");
     expect(call.requestedSchema.properties).toEqual({});
+  });
+
+  it("skips elicitation entirely when HARNESS_SKIP_ELICITATION is set", async () => {
+    configureElicitation({ skip: true });
+    const mcpServer = makeServerStub(
+      { elicitation: { form: {} } },
+      { action: "decline" },
+    );
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_delete",
+      message: "Delete pipeline?",
+      destructive: true,
+    });
+    expect(result).toEqual({ proceed: true });
+    expect(mcpServer.server.elicitInput).not.toHaveBeenCalled();
+  });
+
+  it("skips elicitation for non-destructive ops when HARNESS_SKIP_ELICITATION is set", async () => {
+    configureElicitation({ skip: true });
+    const mcpServer = makeServerStub(undefined);
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_create",
+      message: "Create service?",
+    });
+    expect(result).toEqual({ proceed: true });
+    expect(mcpServer.server.elicitInput).not.toHaveBeenCalled();
   });
 });
