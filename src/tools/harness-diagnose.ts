@@ -28,14 +28,17 @@ const handlers: Record<string, DiagnoseHandler> = {
 };
 
 const SUPPORTED_TYPES = Object.keys(handlers).join(", ");
+// Enum built from handler keys + aliases (e.g. "execution" → "pipeline") so the
+// agent sees only the resource types that actually have diagnostic logic.
+const DIAGNOSE_TYPES = [...Object.keys(handlers), ...Object.keys(ALIASES)] as [string, ...string[]];
 
 export function registerDiagnoseTool(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
   server.registerTool(
     "harness_diagnose",
     {
-      description: `Diagnose a Harness resource — analyze failures, test connectivity, check health, or troubleshoot GitOps sync issues. Supported resource_types: ${SUPPORTED_TYPES}. Defaults to pipeline execution diagnosis. Accepts a Harness URL to auto-detect the resource type.`,
+      description: `Diagnose a Harness resource — analyze failures, test connectivity, check health, or troubleshoot GitOps sync issues. Defaults to pipeline execution diagnosis. Accepts a Harness URL to auto-detect the resource type.`,
       inputSchema: {
-        resource_type: z.string().describe(`Resource type to diagnose: ${SUPPORTED_TYPES}. Auto-detected from url if provided. Defaults to pipeline.`).optional(),
+        resource_type: z.enum(DIAGNOSE_TYPES).describe("Resource type to diagnose. Auto-detected from url if provided. Defaults to pipeline.").optional(),
         resource_id: z.string().describe("Primary identifier of the resource (connector ID, delegate name). Auto-detected from url if provided.").optional(),
         url: z.string().describe("A Harness URL — resource type, org, project, and ID are extracted automatically").optional(),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),

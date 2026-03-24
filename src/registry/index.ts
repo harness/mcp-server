@@ -144,6 +144,19 @@ export class Registry {
     return Array.from(this.resourceMap.keys()).sort();
   }
 
+  /** Get resource types that support a specific CRUD operation. */
+  getTypesForOperation(operation: OperationName): string[] {
+    return this.getAllResourceTypes().filter(rt => this.supportsOperation(rt, operation));
+  }
+
+  /** Get resource types that have at least one execute action. */
+  getTypesWithExecuteActions(): string[] {
+    return this.getAllResourceTypes().filter(rt => {
+      const actions = this.getExecuteActions(rt);
+      return actions !== undefined && Object.keys(actions).length > 0;
+    });
+  }
+
   /** Get all unique filter fields across all enabled resource definitions. */
   getAllFilterFields(): FilterFieldSpec[] {
     const seen = new Set<string>();

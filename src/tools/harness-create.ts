@@ -9,12 +9,14 @@ import { confirmViaElicitation } from "../utils/elicitation.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 
 export function registerCreateTool(server: McpServer, registry: Registry, client: HarnessClient): void {
+  const creatableTypes = registry.getTypesForOperation("create") as [string, ...string[]];
+
   server.registerTool(
     "harness_create",
     {
       description: "Create a Harness resource. For pipelines: use body.yamlPipeline (YAML string, recommended) or body.pipeline (JSON). For remote pipelines, pass git details in params: external Git (store_type='REMOTE', connector_ref, repo_name, branch, file_path) or Harness Code (store_type='REMOTE', is_harness_code_repo=true, repo_name, branch, file_path). For others: call harness_describe for the body format.",
       inputSchema: {
-        resource_type: z.string().describe("The type of resource to create (e.g. pipeline, service, environment, connector, trigger)"),
+        resource_type: z.enum(creatableTypes).describe("The type of resource to create"),
         body: z.record(z.string(), z.unknown()).describe("The resource definition body (varies by resource type — typically the YAML or JSON spec)"),
         url: z.string().describe("A Harness UI URL — org and project are extracted automatically").optional(),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),

@@ -10,12 +10,14 @@ import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, isRecord } from "../utils/type-guards.js";
 
 export function registerUpdateTool(server: McpServer, registry: Registry, client: HarnessClient): void {
+  const updatableTypes = registry.getTypesForOperation("update") as [string, ...string[]];
+
   server.registerTool(
     "harness_update",
     {
       description: "Update an existing Harness resource. You can pass a Harness URL to auto-extract identifiers. Response includes openInHarness link to the updated resource when applicable.",
       inputSchema: {
-        resource_type: z.string().describe("The type of resource to update (e.g. pipeline, service, environment, connector, trigger)"),
+        resource_type: z.enum(updatableTypes).describe("The type of resource to update"),
         resource_id: z.string().describe("The identifier of the resource to update"),
         url: z.string().describe("A Harness UI URL — org, project, resource type, and ID are extracted automatically").optional(),
         body: z.record(z.string(), z.unknown()).describe("The updated resource definition body"),
