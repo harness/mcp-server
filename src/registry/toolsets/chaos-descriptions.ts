@@ -20,7 +20,10 @@ export const DESC_CHAOS_LOADTEST = `Load test instance. Supports list, get, crea
 
 export const DESC_CHAOS_K8S_INFRASTRUCTURE = `Kubernetes infrastructure registered for chaos experiments. List uses POST with filter/sort body. Supports list, get, and check_health action.`;
 
-export const DESC_CHAOS_HUB = `Chaos hub for sharing experiment templates and faults. Supports list and get.`;
+export const DESC_CHAOS_HUB = `ChaosHub — a Git-backed repository that provides version-controlled chaos fault, experiment, probe, and action templates.
+Every project includes a default Enterprise ChaosHub with pre-built templates; custom hubs can be created to bring in organization-specific chaos artifacts.
+Supports list, get, create, update, and delete.
+Returns hub details including repository URL, branch, connector configuration, template counts, sync status, and metadata.`;
 
 export const DESC_CHAOS_FAULT = `Chaos fault definition (e.g. pod-delete, network-loss, CPU stress). Supports list and get.`;
 
@@ -63,8 +66,29 @@ export const DESC_OP_DELETE_LOADTEST = `Delete a load test instance`;
 export const DESC_OP_LIST_K8S_INFRA = `List Kubernetes chaos infrastructures`;
 export const DESC_OP_GET_K8S_INFRA = `Get Kubernetes chaos infrastructure details`;
 
-export const DESC_OP_LIST_HUBS = `List chaos hubs`;
-export const DESC_OP_GET_HUB = `Get chaos hub details`;
+export const DESC_OP_LIST_HUBS = `List ChaosHubs (Git-connected repositories containing fault, experiment, probe, and action templates).
+Returns hub details including repository info, connector configuration, template counts, and sync status.
+Supports search, pagination, and cross-scope inclusion.`;
+export const DESC_OP_GET_HUB = `Get a ChaosHub by its identity.
+Returns full hub details including repository URL, branch, connector info, template counts, sync status, and metadata.`;
+
+export const DESC_OP_CREATE_HUB = `Create a new ChaosHub in the given Harness scope (account, org, project).
+The hub record stores a Git repo and connector reference that provides chaos fault, experiment, probe, and action templates.
+connectorRef, repoName, and repoBranch are optional at creation but must be configured (via harness_update) before template operations can be performed on the hub.
+The hub identity cannot be 'enterprise-chaoshub' as that is reserved for the default hub.
+The target Git repository should contain experiments/ and faults/ directories for template storage.
+Returns the created hub details including identity, name, repository info, connector configuration, and template counts.`;
+
+export const DESC_OP_UPDATE_HUB = `Update the editable fields of a ChaosHub (name, description, tags) by its identity.
+IMPORTANT: The API uses a replace-all model — all fields are fully replaced, not merged.
+Omitted or empty values will overwrite and clear existing data.
+To preserve existing description or tags when changing only some fields, fetch the current hub via harness_get first and pass through the values you want to keep.
+Returns the updated hub details including identity, name, repository info, and template counts.`;
+
+export const DESC_OP_DELETE_HUB = `Delete a ChaosHub by its identity.
+The hub must have no fault templates, action templates, or probe templates — remove them before deleting.
+At least one hub must remain after deletion. The default Enterprise ChaosHub cannot be deleted.
+Returns a success message on completion.`;
 
 export const DESC_OP_LIST_FAULTS = `List chaos faults`;
 export const DESC_OP_GET_FAULT = `Get chaos fault details`;
@@ -118,3 +142,17 @@ export const DESC_FIELD_EXPERIMENT_ID = `Chaos experiment ID to list variables f
 export const DESC_FIELD_INFRA_STATUS = `Filter by infra status: Active (default) or All`;
 export const DESC_FIELD_LOADTEST_NAME = `Load test name`;
 export const DESC_FIELD_LOADTEST_TYPE = `Load test type`;
+
+export const DESC_FIELD_HUB_IDENTITY_EXACT = `The unique identity of the ChaosHub. Use harness_list with resource_type=chaos_hub to find hub identities.`;
+export const DESC_FIELD_HUB_NAME = `Display name for the ChaosHub.`;
+export const DESC_FIELD_HUB_NAME_UPDATE = `Updated display name for the ChaosHub.`;
+export const DESC_FIELD_HUB_DESCRIPTION = `Description of the ChaosHub.`;
+export const DESC_FIELD_HUB_DESCRIPTION_UPDATE = `Updated description. If omitted/empty, existing description is cleared. Pass current value from harness_get to preserve.`;
+export const DESC_FIELD_HUB_TAGS = `Comma-separated list of tags for the ChaosHub.`;
+export const DESC_FIELD_HUB_TAGS_REPLACE = `Comma-separated list of tags. Replaces all existing tags; omit to remove all. Pass current values from harness_get to preserve.`;
+export const DESC_FIELD_CONNECTOR_REF = `Harness Git connector reference for repository authentication (e.g. 'account.myGitHubConnector'). Supports GitHub, GitLab, and Bitbucket connectors. Optional at creation, required before template operations.`;
+export const DESC_FIELD_REPO_NAME = `Name of the Git repository. Optional at creation, required before template operations.`;
+export const DESC_FIELD_REPO_BRANCH = `Git branch for the ChaosHub. Optional at creation, required before template operations.`;
+export const DESC_FIELD_SEARCH_HUBS = `Search hubs by name (case-insensitive).`;
+export const DESC_FIELD_INCLUDE_ALL_SCOPE_HUBS = `When true, returns hubs from all scopes (account, org, project). Defaults to false (project scope only).`;
+

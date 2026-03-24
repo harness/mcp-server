@@ -5,7 +5,8 @@ import {
   DESC_CHAOS_EXPERIMENT, DESC_CHAOS_EXPERIMENT_RUN, DESC_CHAOS_PROBE,
   DESC_CHAOS_EXPERIMENT_TEMPLATE, DESC_CHAOS_EXPERIMENT_VARIABLE,
   DESC_CHAOS_INFRASTRUCTURE, DESC_CHAOS_LOADTEST, DESC_CHAOS_K8S_INFRASTRUCTURE,
-  DESC_CHAOS_HUB, DESC_CHAOS_FAULT, DESC_CHAOS_NETWORK_MAP,
+  DESC_CHAOS_HUB, DESC_CHAOS_FAULT,
+  DESC_CHAOS_NETWORK_MAP,
   DESC_CHAOS_GUARD_CONDITION, DESC_CHAOS_GUARD_RULE,
   DESC_CHAOS_RECOMMENDATION, DESC_CHAOS_RISK,
   DESC_OP_LIST_EXPERIMENTS, DESC_OP_GET_EXPERIMENT,
@@ -17,6 +18,7 @@ import {
   DESC_OP_LIST_LOADTESTS, DESC_OP_GET_LOADTEST, DESC_OP_CREATE_LOADTEST, DESC_OP_DELETE_LOADTEST,
   DESC_OP_LIST_K8S_INFRA, DESC_OP_GET_K8S_INFRA,
   DESC_OP_LIST_HUBS, DESC_OP_GET_HUB,
+  DESC_OP_CREATE_HUB, DESC_OP_UPDATE_HUB, DESC_OP_DELETE_HUB,
   DESC_OP_LIST_FAULTS, DESC_OP_GET_FAULT,
   DESC_OP_LIST_NETWORK_MAPS, DESC_OP_GET_NETWORK_MAP,
   DESC_OP_LIST_GUARD_CONDITIONS, DESC_OP_GET_GUARD_CONDITION,
@@ -34,6 +36,11 @@ import {
   DESC_FIELD_EXPERIMENT_NAME, DESC_FIELD_EXPERIMENT_IDENTITY, DESC_FIELD_INFRA_REF,
   DESC_FIELD_EXPERIMENT_ID, DESC_FIELD_INFRA_STATUS,
   DESC_FIELD_LOADTEST_NAME, DESC_FIELD_LOADTEST_TYPE,
+  DESC_FIELD_HUB_IDENTITY_EXACT, DESC_FIELD_HUB_NAME, DESC_FIELD_HUB_NAME_UPDATE,
+  DESC_FIELD_HUB_DESCRIPTION, DESC_FIELD_HUB_DESCRIPTION_UPDATE,
+  DESC_FIELD_HUB_TAGS, DESC_FIELD_HUB_TAGS_REPLACE,
+  DESC_FIELD_CONNECTOR_REF, DESC_FIELD_REPO_NAME, DESC_FIELD_REPO_BRANCH,
+  DESC_FIELD_SEARCH_HUBS, DESC_FIELD_INCLUDE_ALL_SCOPE_HUBS,
 } from "./chaos-descriptions.js";
 
 /**
@@ -472,11 +479,15 @@ export const chaosToolset: ToolsetDefinition = {
     {
       resourceType: "chaos_hub",
       displayName: "Chaos Hub",
-      description: DESC_CHAOS_HUB,
+      description: DESC_CHAOS_HUB, // can also refer to other tools like exp, fault templates, etc
       toolset: "chaos",
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["hub_id"],
+      listFilterFields: [
+        { name: "search", description: DESC_FIELD_SEARCH_HUBS },
+        { name: "include_all_scope", description: DESC_FIELD_INCLUDE_ALL_SCOPE_HUBS, type: "boolean" },
+      ],
       operations: {
         list: {
           method: "GET",
@@ -484,6 +495,8 @@ export const chaosToolset: ToolsetDefinition = {
           queryParams: {
             page: "page",
             limit: "limit",
+            search: "search",
+            include_all_scope: "includeAllScope",
           },
           responseExtractor: chaosPageExtract,
           description: DESC_OP_LIST_HUBS,
@@ -494,6 +507,60 @@ export const chaosToolset: ToolsetDefinition = {
           pathParams: { hub_id: "hubId" },
           responseExtractor: passthrough,
           description: DESC_OP_GET_HUB,
+        },
+        create: {
+          method: "POST",
+          path: `${CHAOS}/rest/hubs`,
+          bodyBuilder: (input) => ({
+            identity: input.identity,
+            name: input.name,
+            ...(input.description ? { description: input.description } : {}),
+            ...(input.tags ? { tags: (input.tags as string).split(",").map((t: string) => t.trim()).filter(Boolean) } : {}),
+            ...(input.connector_ref ? { connectorRef: input.connector_ref } : {}),
+            ...(input.repo_name ? { repoName: input.repo_name } : {}),
+            ...(input.repo_branch ? { repoBranch: input.repo_branch } : {}),
+          }),
+          responseExtractor: passthrough,
+          description: DESC_OP_CREATE_HUB,
+          bodySchema: {
+            description: "ChaosHub creation payload",
+            fields: [
+              { name: "identity", type: "string", required: true, description: DESC_FIELD_HUB_IDENTITY_EXACT },
+              { name: "name", type: "string", required: true, description: DESC_FIELD_HUB_NAME },
+              { name: "description", type: "string", required: false, description: DESC_FIELD_HUB_DESCRIPTION },
+              { name: "tags", type: "string", required: false, description: DESC_FIELD_HUB_TAGS },
+              { name: "connector_ref", type: "string", required: false, description: DESC_FIELD_CONNECTOR_REF },
+              { name: "repo_name", type: "string", required: false, description: DESC_FIELD_REPO_NAME },
+              { name: "repo_branch", type: "string", required: false, description: DESC_FIELD_REPO_BRANCH },
+            ],
+          },
+        },
+        update: {
+          method: "PUT",
+          path: `${CHAOS}/rest/hubs/{hubId}`,
+          pathParams: { hub_id: "hubId" },
+          bodyBuilder: (input) => ({
+            name: input.name,
+            ...(input.description !== undefined ? { description: input.description } : {}),
+            ...(input.tags ? { tags: (input.tags as string).split(",").map((t: string) => t.trim()).filter(Boolean) } : {}),
+          }),
+          responseExtractor: passthrough,
+          description: DESC_OP_UPDATE_HUB,
+          bodySchema: {
+            description: "ChaosHub update payload (replace-all model)",
+            fields: [
+              { name: "name", type: "string", required: true, description: DESC_FIELD_HUB_NAME_UPDATE },
+              { name: "description", type: "string", required: false, description: DESC_FIELD_HUB_DESCRIPTION_UPDATE },
+              { name: "tags", type: "string", required: false, description: DESC_FIELD_HUB_TAGS_REPLACE },
+            ],
+          },
+        },
+        delete: {
+          method: "DELETE",
+          path: `${CHAOS}/rest/hubs/{hubId}`,
+          pathParams: { hub_id: "hubId" },
+          responseExtractor: passthrough,
+          description: DESC_OP_DELETE_HUB,
         },
       },
     },
