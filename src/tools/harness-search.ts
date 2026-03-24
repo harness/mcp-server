@@ -33,13 +33,15 @@ interface SearchResultEntry {
 }
 
 export function registerSearchTool(server: McpServer, registry: Registry, client: HarnessClient): void {
+  const listableTypes = registry.getTypesForOperation("list") as [string, ...string[]];
+
   server.registerTool(
     "harness_search",
     {
       description: "Search across multiple Harness resource types. Returns results ranked by relevance. Accepts a Harness URL for scope.",
       inputSchema: {
         query: z.string().describe("Search term"),
-        resource_types: z.array(z.string()).describe("Types to search (defaults to all listable)").optional(),
+        resource_types: z.array(z.enum(listableTypes)).describe("Types to search (defaults to all listable)").optional(),
         url: z.string().describe("Harness UI URL — auto-extracts org and project").optional(),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
