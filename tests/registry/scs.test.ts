@@ -9,6 +9,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { scsCleanExtract } from "../../src/registry/extractors.js";
+import { compactItems } from "../../src/utils/compact.js";
 import { scsToolset } from "../../src/registry/toolsets/scs.js";
 import type { ResourceDefinition, EndpointSpec } from "../../src/registry/types.js";
 
@@ -259,5 +260,49 @@ describe("T13-v2: all SCS resources use scsCleanExtract", () => {
         ).toBeDefined();
       }
     }
+  });
+});
+
+// ── T9-v2: Compact mode analysis ──────────────────────────────────────────
+describe("T9-v2: compactItems effectiveness for SCS", () => {
+  it("scsCleanExtract returns raw arrays (not {items:[]}), bypassing compactItems", () => {
+    // SCS API responses are arrays. scsCleanExtract preserves this structure.
+    // harness-list.ts applies compactItems only when isRecord(result) && result.items.
+    // Arrays fail isRecord, so compact mode is structurally bypassed for SCS.
+    // This is INTENTIONAL — compactItems drops critical SCS domain fields.
+    const scsResponse = [
+      { id: "abc", name: "test", scorecard: { avg_score: "7.5" }, orchestration: { id: "orch1" } },
+    ];
+    const cleaned = scsCleanExtract(scsResponse);
+    expect(Array.isArray(cleaned)).toBe(true);
+    // isRecord check (same logic as harness-list.ts)
+    const wouldApplyCompact = typeof cleaned === "object" && cleaned !== null && !Array.isArray(cleaned);
+    expect(wouldApplyCompact).toBe(false);
+  });
+
+  it("compactItems drops critical SCS fields — too aggressive for SCS domain", () => {
+    const scsArtifact = {
+      id: "6799da3b", name: "gcr.io/test", tags: ["v1"],
+      digest: "sha256:abc", url: "https://gcr.io",
+      components_count: 67, updated: "1741726410383",
+      scorecard: { avg_score: "7.5" },
+      policy_enforcement: { allow_list_violation_count: "5" },
+      orchestration: { id: "E5-Dyu80" },
+    };
+
+    const [compacted] = compactItems([scsArtifact]) as Record<string, unknown>[];
+
+    // Only name and tags survive the generic whitelist
+    expect(compacted.name).toBeDefined();
+    expect(compacted.tags).toBeDefined();
+
+    // All these critical SCS fields are dropped
+    expect(compacted.id).toBeUndefined();
+    expect(compacted.digest).toBeUndefined();
+    expect(compacted.url).toBeUndefined();
+    expect(compacted.components_count).toBeUndefined();
+    expect(compacted.scorecard).toBeUndefined();
+    expect(compacted.policy_enforcement).toBeUndefined();
+    expect(compacted.orchestration).toBeUndefined();
   });
 });
