@@ -1,7 +1,5 @@
 #!/usr/bin/env node
 
-import "dotenv/config";
-
 import { randomUUID } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -14,7 +12,6 @@ import { Registry } from "./registry/index.js";
 import { registerAllTools } from "./tools/index.js";
 import { registerAllResources } from "./resources/index.js";
 import { registerAllPrompts } from "./prompts/index.js";
-import type { AuthContext } from "./auth/principal.js";
 import { parseArgs } from "./utils/cli.js";
 import { configureElicitation } from "./utils/elicitation.js";
 
@@ -23,19 +20,9 @@ const log = createLogger("main");
 /**
  * Create a fully-configured MCP server instance with all tools, resources, and prompts.
  */
-function createHarnessServer(config: Config, authContext?: AuthContext): McpServer {
-  // In JWT-only mode, override placeholder account ID with real one from authContext
-  let effectiveConfig = config;
-  if (authContext && authContext.accountId && authContext.accountId !== "jwt-mode") {
-    effectiveConfig = {
-      ...config,
-      HARNESS_ACCOUNT_ID: authContext.accountId,
-    };
-  }
-
-  // Pass authHeader to client for JWT passthrough to Harness API
-  const client = new HarnessClient(effectiveConfig, authContext?.authHeader);
-  const registry = new Registry(effectiveConfig);
+function createHarnessServer(config: Config): McpServer {
+  const client = new HarnessClient(config);
+  const registry = new Registry(config);
 
   const server = new McpServer(
     {
@@ -67,9 +54,9 @@ function createHarnessServer(config: Config, authContext?: AuthContext): McpServ
     },
   );
 
-  configureElicitation({ skip: effectiveConfig.HARNESS_SKIP_ELICITATION });
-  registerAllTools(server, registry, client, effectiveConfig);
-  registerAllResources(server, registry, client, effectiveConfig);
+  configureElicitation({ skip: config.HARNESS_SKIP_ELICITATION });
+  registerAllTools(server, registry, client, config);
+  registerAllResources(server, registry, client, config);
   registerAllPrompts(server);
 
   return server;
@@ -103,7 +90,6 @@ interface Session {
   server: McpServer;
   transport: StreamableHTTPServerTransport;
   lastActivity: number;
-  authContext?: import("./auth/index.js").AuthContext;
 }
 
 const SESSION_TTL_MS = 30 * 60_000; // 30 minutes
@@ -126,33 +112,11 @@ async function startHttp(config: Config, port: number): Promise<void> {
   const { json } = await import("express");
   app.use(json({ limit: maxBodySize }));
 
-  // JWT authentication middleware (if JWT_SECRET is configured)
-  if (config.JWT_SECRET) {
-    const { JwtValidator, createJwtAuthMiddleware } = await import("./auth/index.js");
-    const validator = new JwtValidator(
-      config.JWT_SECRET,
-      config.JWT_ISSUER,
-      config.JWT_AUDIENCE,
-      config.JWT_ALGORITHM,
-    );
-    const jwtMiddleware = createJwtAuthMiddleware(
-      validator,
-      !!config.HARNESS_API_KEY,  // Allow API key fallback if HARNESS_API_KEY is set
-      config.HARNESS_ACCOUNT_ID,
-    );
-    app.use(jwtMiddleware);
-    log.info("JWT authentication enabled", {
-      issuer: config.JWT_ISSUER,
-      audience: config.JWT_AUDIENCE,
-      fallback: !!config.HARNESS_API_KEY,
-    });
-  }
-
   // CORS — allow GET, POST, DELETE for session-based MCP
   app.use((_req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", `http://${host}:${port}`);
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, mcp-session-id, Authorization, x-api-key");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, mcp-session-id");
     res.setHeader("Access-Control-Expose-Headers", "mcp-session-id");
     next();
   });
@@ -254,26 +218,12 @@ async function startHttp(config: Config, port: number): Promise<void> {
     let server: McpServer | undefined;
     let transport: StreamableHTTPServerTransport | undefined;
     try {
-      // Pass authContext to server so it can use real account ID from JWT (if present)
-      const authContext = req.authContext;  // Attached by JWT middleware (if enabled)
-      server = createHarnessServer(config, authContext);
+      server = createHarnessServer(config);
       transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (id) => {
-          const authContext = req.authContext;  // Attached by JWT middleware (if enabled)
-          sessions.set(id, {
-            server: server!,
-            transport: transport!,
-            lastActivity: Date.now(),
-            authContext,
-          });
-          log.info("Session created", {
-            sessionId: id,
-            authMode: authContext?.authMode,
-            principal: authContext?.principal?.email,
-            accountId: authContext?.accountId,
-            total: sessions.size,
-          });
+          sessions.set(id, { server: server!, transport: transport!, lastActivity: Date.now() });
+          log.info("Session created", { sessionId: id, total: sessions.size });
         },
       });
 
@@ -442,7 +392,6 @@ async function main(): Promise<void> {
 
   const config = loadConfig();
   setLogLevel(config.LOG_LEVEL);
-  log.info(".env file loaded successfully");
 
   const { transport, port } = parseArgs();
 

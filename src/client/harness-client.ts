@@ -33,21 +33,19 @@ function humanizeHttpError(status: number, rawBody: string): string {
 
 export class HarnessClient {
   private readonly baseUrl: string;
-  private readonly token?: string;  // Optional — may be undefined in JWT-only mode
+  private readonly token: string;
   private readonly accountId: string;
   private readonly timeout: number;
   private readonly maxRetries: number;
   private readonly rateLimiter: RateLimiter;
-  private readonly authHeader?: string;  // Authorization header for JWT passthrough
 
-  constructor(config: Config, authHeader?: string) {
+  constructor(config: Config) {
     this.baseUrl = config.HARNESS_BASE_URL.replace(/\/$/, "");
     this.token = config.HARNESS_API_KEY;
     this.accountId = config.HARNESS_ACCOUNT_ID;
     this.timeout = config.HARNESS_API_TIMEOUT_MS;
     this.maxRetries = config.HARNESS_MAX_RETRIES;
     this.rateLimiter = new RateLimiter(config.HARNESS_RATE_LIMIT_RPS);
-    this.authHeader = authHeader;
   }
 
   get account(): string {
@@ -65,19 +63,10 @@ export class HarnessClient {
     const url = this.buildUrl(options);
     const isFme = options.product === "fme";
     const headers: Record<string, string> = {
-      ...(isFme ? {} : { "Harness-Account": this.accountId }),
+      "x-api-key": this.token,
+      "Harness-Account": this.accountId,
       ...options.headers,
     };
-
-    // FME uses its own Authorization header (passed via options.headers).
-    // Harness uses JWT passthrough or x-api-key.
-    if (!isFme) {
-      if (this.authHeader) {
-        headers["Authorization"] = this.authHeader;
-      } else if (this.token) {
-        headers["x-api-key"] = this.token;
-      }
-    }
 
     if (options.body) {
       if (typeof options.body === "string") {
@@ -225,19 +214,10 @@ export class HarnessClient {
     const url = this.buildUrl(options);
     const isFme = options.product === "fme";
     const headers: Record<string, string> = {
-      ...(isFme ? {} : { "Harness-Account": this.accountId }),
+      "x-api-key": this.token,
+      "Harness-Account": this.accountId,
       ...options.headers,
     };
-
-    // FME uses its own Authorization header (passed via options.headers).
-    // Harness uses JWT passthrough or x-api-key.
-    if (!isFme) {
-      if (this.authHeader) {
-        headers["Authorization"] = this.authHeader;
-      } else if (this.token) {
-        headers["x-api-key"] = this.token;
-      }
-    }
 
     if (options.body) {
       if (typeof options.body === "string") {
