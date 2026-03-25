@@ -181,6 +181,7 @@ Returns a paginated list of templates with identity, name, type, infrastructureT
 Supports filtering by hub, infrastructure type, probe entity type, search, and pagination.`;
 export const descGetProbeTemplate = `Get detailed info about a chaos probe template by identity.
 Returns the template data including type, probeProperties, runProperties, variables, revision, and audit info.`;
+
 export const descDeleteProbeTemplate = `Delete a chaos probe template by its identity. Requires hub_identity.
 When revision is 0 or not provided, all revisions are deleted.
 Cannot delete from the Enterprise ChaosHub. The template must not be referenced by any experiment templates.
@@ -218,9 +219,45 @@ export const descRunExperiment = `Run a chaos experiment`;
 export const descEnableProbe = `Enable a chaos probe`;
 export const descVerifyProbe = `Verify a chaos probe configuration`;
 
-export const descCreateFromTemplate = `Create a chaos experiment from an experiment template.
-Workflow: 1) harness_list resource_type=chaos_experiment_template to find templates, 2) harness_execute action=get_variables to discover template inputs, 3) harness_execute action=create_from_template with experiment_name, infra_ref, hub_identity, and template_identity.
-Optionally set import_type ('LOCAL' copies template, 'REFERENCE' keeps live link), description, and tags.`;
+export const descCreateFromTemplate = `Create a new chaos experiment from an experiment template.
+
+IMPORTANT: You MUST NOT auto-select, assume, or pre-fill any value on behalf of the user.
+At every step below, you MUST display the available options and wait for explicit user confirmation before proceeding.
+
+Required workflow — follow in order, pausing for user input after each step:
+
+Step 1 — Select a hub:
+  If the user has already specified a hub_identity, confirm before proceeding.
+  Otherwise call harness_list resource_type=chaos_hub, show the list, and wait for them to pick one.
+
+Step 2 — Select an experiment template:
+  If the user has already specified a template_id, confirm before proceeding.
+  Otherwise call harness_list resource_type=chaos_experiment_template filtered by hub_identity from Step 1,
+  show the list, and wait for them to pick one. Note the template's infraType.
+
+Step 2.5 — Discover template inputs (optional but recommended):
+  Call harness_execute resource_type=chaos_experiment_template action=get_variables to surface required runtime inputs.
+
+Step 3 — Select an environment:
+  Call harness_list resource_type=chaos_environment. Show the full list and wait for the user to pick one.
+  Do NOT choose an environment yourself even if only one exists.
+
+Step 4 — Select an infrastructure:
+  Call harness_list resource_type=chaos_k8s_infrastructure filtered by the environmentId from Step 3
+  (optionally filter by infraType from Step 2). Show the list and wait for the user to pick one.
+  Only infrastructures where status=ACTIVE AND isChaosEnabled=true are valid.
+  If the user picks one that is inactive or has isChaosEnabled=false, tell them it cannot be used and ask them to choose again.
+  Do NOT choose an infrastructure yourself.
+
+Step 5 — Collect experiment details:
+  Ask the user for a name and optionally an identity for the new experiment.
+  Do NOT generate or assume a name without asking.
+  Both must match ^[a-z][a-z0-9-]*[a-z0-9]$.
+
+Only after all five steps are confirmed by the user should you call harness_execute action=create_from_template.
+The infraId is automatically prefixed with environmentId if needed (pass infra_id + environment_id separately).
+Use import_type to control linking: 'LOCAL' (copy into project, default) or 'REFERENCE' (keep live link to hub).
+Returns the created experiment details including id, identity, name, infraType, infraId, and manifest.`;
 
 export const descListRevisions = `List revision history for a template.
 Returns all revisions with their identifiers, timestamps, and change descriptions. Use to track template evolution or find a specific revision for comparison.`;

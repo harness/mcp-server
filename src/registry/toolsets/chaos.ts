@@ -274,7 +274,7 @@ export const chaosToolset: ToolsetDefinition = {
           bodySchema: {
             description: descBodyProbeEnable,
             fields: [
-              { name: "is_enabled", type: "boolean", required: true, description: descIsEnabledFlag },
+              { name: "is_enabled", type: "boolean", required: false, description: descIsEnabledFlag },
               { name: "is_bulk_update", type: "boolean", required: false, description: descIsBulkUpdate },
             ],
           },
@@ -1389,7 +1389,7 @@ export const chaosToolset: ToolsetDefinition = {
       description: descChaosEnvironment,
       toolset: "chaos",
       scope: "project",
-      identifierFields: ["environment_id"],
+      identifierFields: [],
       listFilterFields: [
         { name: "search_term", description: descSearchTermEnv },
         { name: "sort", description: descSortEnv },
