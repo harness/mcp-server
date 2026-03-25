@@ -84,7 +84,7 @@ export const gitopsToolset: ToolsetDefinition = {
           injectAccountInBody: true,
           bodyBuilder: (input) => gitopsListBody(input, { metadataOnly: true }),
           responseExtractor: passthrough,
-          description: "List all GitOps applications in the project",
+          description: "List GitOps applications in the project",
         },
         get: {
           method: "GET",
@@ -148,7 +148,7 @@ export const gitopsToolset: ToolsetDefinition = {
           injectAccountInBody: true,
           bodyBuilder: (input) => gitopsListBody(input),
           responseExtractor: passthrough,
-          description: "List all GitOps clusters in the project",
+          description: "List GitOps clusters (scope depends on org_id/project_id presence)",
         },
         get: {
           method: "GET",
@@ -191,7 +191,7 @@ export const gitopsToolset: ToolsetDefinition = {
           injectAccountInBody: true,
           bodyBuilder: (input) => gitopsListBody(input, { repoCredsId: input.repo_creds_id ?? "" }),
           responseExtractor: passthrough,
-          description: "List all GitOps repositories in the project",
+          description: "List GitOps repositories (scope depends on org_id/project_id presence)",
         },
         get: {
           method: "GET",
@@ -429,8 +429,7 @@ export const gitopsToolset: ToolsetDefinition = {
     {
       resourceType: "gitops_dashboard",
       displayName: "GitOps Dashboard",
-      description:
-        "GitOps dashboard overview with summary metrics. Supports get.",
+      description: "GitOps dashboard overview with summary metrics. Supports get.",
       toolset: "gitops",
       scope: "project",
       identifierFields: [],
