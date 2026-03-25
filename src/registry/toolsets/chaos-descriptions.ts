@@ -4,11 +4,11 @@ export const descToolsetChaos = `Harness Chaos Engineering — experiments, prob
 
 // ── Resource Descriptions ────────────────────────────────────────────
 
-export const descChaosExperiment = `Chaos experiment definition. Supports list, get, and run action. Use chaos_experiment_variable list to discover required runtime inputs before running.`;
+export const descChaosExperiment = `Chaos experiment definition. Supports list, get, and execute actions: run, stop. Use chaos_experiment_variable list to discover required runtime inputs before running.`;
 
 export const descChaosExperimentRun = `Result of a chaos experiment run. Supports get.`;
 
-export const descChaosProbe = `Chaos resilience probe. Supports list, get, enable, and verify actions.`;
+export const descChaosProbe = `Chaos resilience probe. Supports list, get, delete, and execute actions: enable, verify, get_manifest.`;
 
 export const descChaosExperimentTemplate = `Reusable, versioned chaos experiment template stored in a ChaosHub (Git-backed repository).
 Templates are pre-configured experiment blueprints that standardize chaos practices across teams — they support version control, revision history, typed input variables, and rendered YAML.
@@ -33,7 +33,7 @@ Every project includes a default Enterprise ChaosHub with pre-built templates; c
 Supports list, get, create, update, and delete.
 Returns hub details including repository URL, branch, connector configuration, template counts, sync status, and metadata.`;
 
-export const descChaosFault = `Chaos fault definition (e.g. pod-delete, network-loss, CPU stress). Supports list and get.`;
+export const descChaosFault = `Chaos fault definition (e.g. pod-delete, network-loss, CPU stress). Supports list, get, delete, plus get_variables, get_yaml, and list_experiment_runs execute actions.`;
 
 export const descChaosNetworkMap = `Network map (application map) for chaos blast radius visualization. Supports list and get.`;
 
@@ -350,3 +350,92 @@ export const descGuardSearch = `Search conditions/rules by name (case-insensitiv
 export const descGuardInfraType = `Filter by infrastructure type (e.g. Kubernetes, KubernetesV2, Linux, Windows).`;
 export const descGuardTags = `Comma-separated list of tags to filter conditions/rules by.`;
 export const descGuardEnabled = `Set to true to enable the rule, false to disable it. Required.`;
+
+// ── Chaos Action Resource ────────────────────────────────────────────
+
+export const descChaosAction = `Chaos action — a reusable step (delay, custom script, container) that can be embedded in chaos experiment workflows.
+Supports list, get, delete, and get_manifest execute action.
+Returns identity, name, type, infrastructureType, actionProperties, variables, and audit info.`;
+
+export const descChaosProbeInRun = `Probe execution details within one or more chaos experiment runs.
+Returns probe status, mode, fault association, and configuration for each probe that participated in the specified runs.
+Requires at least one of experiment_run_ids or notify_ids. Supports list (POST) only.`;
+
+// ── New Operation Descriptions ───────────────────────────────────────
+
+export const descStopExperiment = `Stop a chaos experiment run.
+If notify_id is set, the run is found by notify_id and scope; otherwise by experiment_run_id and scope.
+If both are omitted, all runs for the experiment with phase 'Running' are stopped.
+Returns isStopped, experimentId, and experimentName.`;
+
+export const descGetProbeManifest = `Get the YAML manifest for a chaos probe by its ID (compatible with chaos engine).
+Returns a JSON object with a 'manifest' field containing the raw YAML string.
+Use when you need the engine-compatible YAML definition; use get for structured JSON with parsed fields.`;
+
+export const descDeleteProbe = `Delete a chaos probe by its ID.
+The probe must be disabled first (use enable action) and must not be in use by any experiment. Default probes cannot be deleted.
+Returns {"response": true} on success.`;
+
+export const descListProbesInRun = `Get probe execution details for one or more experiment runs.
+At least one of experiment_run_ids or notify_ids must be provided.
+Returns probe status, mode, fault association, and configuration for each probe that participated in those runs.`;
+
+export const descGetFaultVariables = `Get the list of inputs and variables for a chaos fault by its identity.
+Returns four groups: variables, faultAuthentication, faultTargets, and faultTunable — each containing name, value, type, description, and whether it is required.`;
+
+export const descGetFaultYaml = `Get the fault template YAML for a chaos fault by its identity.
+Returns a JSON object with a 'template' field containing the raw YAML string.
+Use when you need the raw YAML definition; use get for structured JSON with parsed fields.`;
+
+export const descListFaultExperimentRuns = `List experiment runs that used a specific chaos fault.
+Returns a paginated list of runs with experimentRunID, experimentID, experimentName, resiliencyScore, phase, faultIDs, runSequence, and timestamps.`;
+
+export const descDeleteFault = `Delete a chaos fault by its identity (soft delete).
+The fault must not be in use by any experiment, otherwise the delete will be rejected.
+Returns an empty object on success.`;
+
+export const descListActions = `List chaos actions with optional filtering by name, infrastructure type, and action type.
+Actions are reusable steps (delay, custom script, container) that can be added to chaos experiments.
+Returns a paginated list of actions with identity, name, type, infrastructureType, variables, actionReferenceCount, and timestamps.`;
+
+export const descGetAction = `Get details of a chaos action by its identity.
+Returns the action configuration including identity, name, type, infrastructureType, actionProperties, runProperties, variables, and recentExecutions.
+Use when you need structured JSON fields; use get_manifest for the raw YAML manifest.`;
+
+export const descGetActionManifest = `Get the YAML manifest for a chaos action by its identity.
+Returns a JSON object with a 'manifest' field containing the raw YAML string.
+Use when you need the raw YAML definition; use get for structured JSON with parsed fields.`;
+
+export const descDeleteAction = `Delete a chaos action by its identity (soft delete).
+The action must not be in use by any experiment, otherwise the delete will be rejected.
+Returns {"deleted": true} on success.`;
+
+// ── New Body Schema Descriptions ─────────────────────────────────────
+
+export const descBodyProbeEnable = `Probe enable/disable request body.`;
+export const descBodyProbeVerify = `Probe verify/unverify request body.`;
+export const descBodyProbesInRun = `Probe details request body. At least one of experiment_run_ids or notify_ids must be provided.`;
+
+// ── New Field Descriptions ───────────────────────────────────────────
+
+export const descExperimentRunIdStop = `Unique identifier of the experiment run to stop. If omitted, the stop request may apply to the latest or all relevant runs depending on backend behavior.`;
+export const descNotifyId = `Notification or callback identifier associated with the experiment run; used to correlate the stop request with the run.`;
+export const descForce = `When true, immediately marks the run as Stopped in the database. When false (default), only requests stop on cluster/machine.`;
+export const descIsEnabledFlag = `True to enable the probe, false to disable.`;
+export const descIsBulkUpdate = `When true, enable/disable the probe across all experiments that use it. Defaults to false.`;
+export const descVerifyFlag = `True to verify the probe, false to unverify. Default probes cannot be verified or unverified.`;
+export const descExperimentRunIds = `List of experiment run IDs to fetch probe details for.`;
+export const descNotifyIds = `List of notify IDs to fetch probe details for.`;
+export const descFaultIdentityParam = `Unique identity of the fault. Use chaos_fault list to find fault identities.`;
+export const descIsEnterpriseFilter = `When true, filter for enterprise faults only. Defaults to false.`;
+export const descIsEnterpriseGet = `When true, get an enterprise fault. Defaults to false.`;
+export const descIsEnterpriseYaml = `When true, get YAML for an enterprise fault. Defaults to false.`;
+export const descIsEnterpriseVars = `When true, get variables for an enterprise fault. Defaults to false.`;
+export const descIsEnterpriseRuns = `When true, list runs for an enterprise fault. Defaults to false.`;
+export const descActionIdentityParam = `Unique identity of the action. Use chaos_action list to find action identities.`;
+export const descSearchActionsParam = `Filter actions by name.`;
+export const descHubIdentityActions = `Filter actions by chaos hub identity.`;
+export const descExperimentVariablesParam = `Optional experiment variables as an array of objects where each object has a name and value.`;
+export const descTasksParam = `Optional task-level variables as an object where each key is a task name and the value is an object with variable name-value pairs.`;
+export const descEnvironmentIdCreate = `Unique identifier for an environment. Use chaos_environment list to find environment IDs.`;
+export const descInfraIdCreate = `Unique identifier for an infrastructure. Use chaos_k8s_infrastructure or chaos_infrastructure list to find infra IDs.`;

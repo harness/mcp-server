@@ -17,6 +17,7 @@ import {
   descChaosNetworkMap,
   descChaosGuardCondition, descChaosGuardRule,
   descChaosRecommendation, descChaosRisk,
+  descChaosAction, descChaosProbeInRun,
   // Operation descriptions
   descListExperiments, descGetExperiment,
   descGetExperimentRun,
@@ -37,8 +38,13 @@ import {
   descListGuardRules, descGetGuardRule, descDeleteGuardRule,
   descListRecommendations, descGetRecommendation,
   descListRisks, descGetRisk,
+  descDeleteProbe, descGetProbeManifest,
+  descListProbesInRun,
+  descGetFaultVariables, descGetFaultYaml, descListFaultExperimentRuns, descDeleteFault,
+  descListActions, descGetAction, descGetActionManifest, descDeleteAction,
   // Action descriptions
-  descRunExperiment, descEnableProbe, descVerifyProbe,
+  descRunExperiment, descStopExperiment,
+  descEnableProbe, descVerifyProbe,
   descCreateFromTemplate,
   descListRevisions, descGetVariables, descGetYaml, descCompareRevisions,
   descRunLoadtest, descStopLoadtest, descCheckK8sHealth,
@@ -48,6 +54,7 @@ import {
   // Body schema descriptions
   descBodyExperimentRun, descBodyNoBody,
   descBodyCreateFromTemplate, descBodyLoadtestDefinition,
+  descBodyProbeEnable, descBodyProbeVerify, descBodyProbesInRun,
   // Field descriptions
   descInputsetIdentity, descRuntimeInputs,
   descHubIdentity, descInfraType,
@@ -69,6 +76,14 @@ import {
   descEnvironmentId, descK8sInfraStatus, descIncludeLegacyInfra, descSearchK8sInfra,
   descSearchTermEnv, descSortEnv, descEnvironmentType,
   descGuardSearch, descGuardInfraType, descGuardTags, descGuardEnabled,
+  descExperimentRunIdStop, descNotifyId, descForce,
+  descIsEnabledFlag, descIsBulkUpdate, descVerifyFlag,
+  descExperimentRunIds, descNotifyIds,
+  descFaultIdentityParam, descIsEnterpriseFilter, descIsEnterpriseGet,
+  descIsEnterpriseYaml, descIsEnterpriseVars, descIsEnterpriseRuns,
+  descActionIdentityParam, descSearchActionsParam, descHubIdentityActions,
+  descExperimentVariablesParam, descTasksParam,
+  descEnvironmentIdCreate, descInfraIdCreate,
 } from "./chaos-descriptions.js";
 
 /**
@@ -132,6 +147,23 @@ export const chaosToolset: ToolsetDefinition = {
             if (input.runtime_inputs) {
               body.runtimeInputs = input.runtime_inputs;
             }
+            // Build runtimeInputs from experiment_variables and tasks if provided
+            const expVars = input.experiment_variables as Array<{ name: string; value?: unknown }> | undefined;
+            const taskVars = input.tasks as Record<string, Record<string, unknown>> | undefined;
+            if ((expVars && expVars.length > 0) || (taskVars && Object.keys(taskVars).length > 0)) {
+              const runtimeInputs: Record<string, unknown> = {};
+              if (expVars && expVars.length > 0) {
+                runtimeInputs.experiment = expVars.map(v => ({ name: v.name, value: v.value }));
+              }
+              if (taskVars && Object.keys(taskVars).length > 0) {
+                const tasks: Record<string, Array<{ name: string; value: unknown }>> = {};
+                for (const [taskName, vars] of Object.entries(taskVars)) {
+                  tasks[taskName] = Object.entries(vars as Record<string, unknown>).map(([n, v]) => ({ name: n, value: v }));
+                }
+                runtimeInputs.tasks = tasks;
+              }
+              body.runtimeInputs = runtimeInputs;
+            }
             return Object.keys(body).length > 0 ? body : {};
           },
           responseExtractor: passthrough,
@@ -141,6 +173,30 @@ export const chaosToolset: ToolsetDefinition = {
             fields: [
               { name: "inputset_identity", type: "string", required: false, description: descInputsetIdentity },
               { name: "runtime_inputs", type: "object", required: false, description: descRuntimeInputs },
+              { name: "experiment_variables", type: "array", required: false, description: descExperimentVariablesParam },
+              { name: "tasks", type: "object", required: false, description: descTasksParam },
+            ],
+          },
+        },
+        stop: {
+          method: "POST",
+          path: `${CHAOS}/rest/v2/experiment/{experimentId}/stop`,
+          pathParams: { experiment_id: "experimentId" },
+          queryParams: {
+            experiment_run_id: "experimentRunId",
+            notify_id: "notifyId",
+            force: "force",
+          },
+          bodyBuilder: () => ({}),
+          responseExtractor: passthrough,
+          actionDescription: descStopExperiment,
+          bodySchema: {
+            description: "No body required. Experiment identified by path parameter; optional run/notify IDs and force flag via query params.",
+            fields: [
+              { name: "experiment_id", type: "string", required: true, description: descExperimentId },
+              { name: "experiment_run_id", type: "string", required: false, description: descExperimentRunIdStop },
+              { name: "notify_id", type: "string", required: false, description: descNotifyId },
+              { name: "force", type: "boolean", required: false, description: descForce },
             ],
           },
         },
@@ -196,25 +252,106 @@ export const chaosToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           description: descGetProbe,
         },
+        delete: {
+          method: "DELETE",
+          path: `${CHAOS}/rest/v2/probes/{probeId}`,
+          pathParams: { probe_id: "probeId" },
+          responseExtractor: passthrough,
+          description: descDeleteProbe,
+        },
       },
       executeActions: {
         enable: {
           method: "POST",
           path: `${CHAOS}/rest/v2/probes/enable/{probeId}`,
           pathParams: { probe_id: "probeId" },
-          bodyBuilder: () => ({}),
+          bodyBuilder: (input) => ({
+            isEnabled: input.is_enabled ?? true,
+            ...(input.is_bulk_update !== undefined ? { isBulkUpdate: input.is_bulk_update } : {}),
+          }),
           responseExtractor: passthrough,
           actionDescription: descEnableProbe,
-          bodySchema: { description: descBodyNoBody, fields: [] },
+          bodySchema: {
+            description: descBodyProbeEnable,
+            fields: [
+              { name: "is_enabled", type: "boolean", required: true, description: descIsEnabledFlag },
+              { name: "is_bulk_update", type: "boolean", required: false, description: descIsBulkUpdate },
+            ],
+          },
         },
         verify: {
           method: "POST",
           path: `${CHAOS}/rest/v2/probes/verify/{probeId}`,
           pathParams: { probe_id: "probeId" },
-          bodyBuilder: () => ({}),
+          bodyBuilder: (input) => ({
+            verify: input.verify ?? true,
+          }),
           responseExtractor: passthrough,
           actionDescription: descVerifyProbe,
+          bodySchema: {
+            description: descBodyProbeVerify,
+            fields: [
+              { name: "verify", type: "boolean", required: true, description: descVerifyFlag },
+            ],
+          },
+        },
+        get_manifest: {
+          method: "GET",
+          path: `${CHAOS}/rest/v2/probes/manifest/{probeId}`,
+          pathParams: { probe_id: "probeId" },
+          responseExtractor: passthrough,
+          actionDescription: descGetProbeManifest,
           bodySchema: { description: descBodyNoBody, fields: [] },
+        },
+      },
+    },
+
+    // ── Chaos Probes in Experiment Run ─────────────────────────────────
+    {
+      resourceType: "chaos_probe_in_run",
+      displayName: "Chaos Probe in Experiment Run",
+      description: descChaosProbeInRun,
+      toolset: "chaos",
+      scope: "project",
+      scopeParams: CHAOS_SCOPE,
+      identifierFields: [],
+      listFilterFields: [
+        { name: "experiment_run_ids", description: descExperimentRunIds },
+        { name: "notify_ids", description: descNotifyIds },
+      ],
+      operations: {
+        list: {
+          method: "POST",
+          path: `${CHAOS}/rest/v2/probes/experiment-run`,
+          bodyBuilder: (input) => {
+            const body: Record<string, unknown> = {};
+            if (input.experiment_run_ids) {
+              body.experimentRunIds = Array.isArray(input.experiment_run_ids)
+                ? input.experiment_run_ids
+                : [input.experiment_run_ids];
+            }
+            if (input.notify_ids) {
+              body.notifyIds = Array.isArray(input.notify_ids)
+                ? input.notify_ids
+                : [input.notify_ids];
+            }
+            return body;
+          },
+          responseExtractor: (raw: unknown): { items: unknown[]; total: number } => {
+            const r = raw as { data?: unknown[] };
+            return {
+              items: r.data ?? (Array.isArray(raw) ? raw : []),
+              total: Array.isArray(r.data) ? r.data.length : (Array.isArray(raw) ? (raw as unknown[]).length : 0),
+            };
+          },
+          description: descListProbesInRun,
+          bodySchema: {
+            description: descBodyProbesInRun,
+            fields: [
+              { name: "experiment_run_ids", type: "array", required: false, description: descExperimentRunIds },
+              { name: "notify_ids", type: "array", required: false, description: descNotifyIds },
+            ],
+          },
         },
       },
     },
@@ -283,17 +420,30 @@ export const chaosToolset: ToolsetDefinition = {
           path: `${CHAOS}/rest/experimenttemplates/{templateId}/launch`,
           pathParams: { template_id: "templateId" },
           queryParams: { hub_identity: "hubIdentity" },
-          bodyBuilder: (input) => ({
-            name: input.name,
-            identity: input.identity,
-            infraRef: input.infra_ref,
-            ...(input.description ? { description: input.description } : {}),
-            ...(input.tags ? { tags: input.tags } : {}),
-            ...(input.import_type ? { importType: input.import_type } : {}),
-            accountIdentifier: input.account_id,
-            organizationIdentifier: input.org_id,
-            projectIdentifier: input.project_id,
-          }),
+          bodyBuilder: (input) => {
+            // Compute infraRef: accept infra_ref directly, or build from environment_id + infra_id
+            let infraRef = input.infra_ref as string | undefined;
+            if (!infraRef && input.infra_id) {
+              const envId = input.environment_id as string | undefined;
+              const infraId = input.infra_id as string;
+              if (envId && !infraId.startsWith(`${envId}/`)) {
+                infraRef = `${envId}/${infraId}`;
+              } else {
+                infraRef = infraId;
+              }
+            }
+            return {
+              name: input.name,
+              identity: input.identity,
+              infraRef,
+              ...(input.description ? { description: input.description } : {}),
+              ...(input.tags ? { tags: input.tags } : {}),
+              ...(input.import_type ? { importType: input.import_type } : {}),
+              accountIdentifier: input.account_id,
+              organizationIdentifier: input.org_id,
+              projectIdentifier: input.project_id,
+            };
+          },
           responseExtractor: passthrough,
           actionDescription: descCreateFromTemplate,
           bodySchema: {
@@ -301,7 +451,9 @@ export const chaosToolset: ToolsetDefinition = {
             fields: [
               { name: "name", type: "string", required: true, description: descExperimentName },
               { name: "identity", type: "string", required: false, description: descExperimentIdentity },
-              { name: "infra_ref", type: "string", required: true, description: descInfraRef },
+              { name: "infra_ref", type: "string", required: false, description: descInfraRef },
+              { name: "infra_id", type: "string", required: false, description: descInfraIdCreate },
+              { name: "environment_id", type: "string", required: false, description: descEnvironmentIdCreate },
               { name: "hub_identity", type: "string", required: true, description: descHubIdentity },
               { name: "description", type: "string", required: false, description: descExperimentDescription },
               { name: "tags", type: "array", required: false, description: descExperimentTags },
@@ -689,6 +841,9 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["fault_id"],
+      listFilterFields: [
+        { name: "is_enterprise", description: descIsEnterpriseFilter, type: "boolean" },
+      ],
       operations: {
         list: {
           method: "GET",
@@ -696,6 +851,7 @@ export const chaosToolset: ToolsetDefinition = {
           queryParams: {
             page: "page",
             limit: "limit",
+            is_enterprise: "isEnterprise",
           },
           responseExtractor: chaosPageExtract,
           description: descListFaults,
@@ -704,8 +860,73 @@ export const chaosToolset: ToolsetDefinition = {
           method: "GET",
           path: `${CHAOS}/rest/faults/{faultId}`,
           pathParams: { fault_id: "faultId" },
+          queryParams: {
+            is_enterprise: "isEnterprise",
+          },
           responseExtractor: passthrough,
           description: descGetFault,
+        },
+        delete: {
+          method: "DELETE",
+          path: `${CHAOS}/rest/faults/{faultId}`,
+          pathParams: { fault_id: "faultId" },
+          responseExtractor: passthrough,
+          description: descDeleteFault,
+        },
+      },
+      executeActions: {
+        get_variables: {
+          method: "GET",
+          path: `${CHAOS}/rest/faults/{faultId}/variables`,
+          pathParams: { fault_id: "faultId" },
+          queryParams: {
+            is_enterprise: "isEnterprise",
+          },
+          responseExtractor: passthrough,
+          actionDescription: descGetFaultVariables,
+          bodySchema: {
+            description: "No body required. Fault identified by path parameter.",
+            fields: [
+              { name: "fault_id", type: "string", required: true, description: descFaultIdentityParam },
+              { name: "is_enterprise", type: "boolean", required: false, description: descIsEnterpriseVars },
+            ],
+          },
+        },
+        get_yaml: {
+          method: "GET",
+          path: `${CHAOS}/rest/faults/{faultId}/yaml`,
+          pathParams: { fault_id: "faultId" },
+          queryParams: {
+            is_enterprise: "isEnterprise",
+          },
+          responseExtractor: passthrough,
+          actionDescription: descGetFaultYaml,
+          bodySchema: {
+            description: "No body required. Fault identified by path parameter.",
+            fields: [
+              { name: "fault_id", type: "string", required: true, description: descFaultIdentityParam },
+              { name: "is_enterprise", type: "boolean", required: false, description: descIsEnterpriseYaml },
+            ],
+          },
+        },
+        list_experiment_runs: {
+          method: "GET",
+          path: `${CHAOS}/rest/faults/{faultId}/experimentruns`,
+          pathParams: { fault_id: "faultId" },
+          queryParams: {
+            page: "page",
+            limit: "limit",
+            is_enterprise: "isEnterprise",
+          },
+          responseExtractor: chaosPageExtract,
+          actionDescription: descListFaultExperimentRuns,
+          bodySchema: {
+            description: "No body required. Fault identified by path parameter.",
+            fields: [
+              { name: "fault_id", type: "string", required: true, description: descFaultIdentityParam },
+              { name: "is_enterprise", type: "boolean", required: false, description: descIsEnterpriseRuns },
+            ],
+          },
         },
       },
     },
@@ -1052,6 +1273,70 @@ export const chaosToolset: ToolsetDefinition = {
               { name: "hub_identity", type: "string", required: false, description: descHubIdentity },
               { name: "revision", type: "string", required: true, description: descRevision1 },
               { name: "revision_to_compare", type: "string", required: true, description: descRevisionToCompare },
+            ],
+          },
+        },
+      },
+    },
+
+    // ── Chaos Actions ─────────────────────────────────────────────────
+    {
+      resourceType: "chaos_action",
+      displayName: "Chaos Action",
+      description: descChaosAction,
+      toolset: "chaos",
+      scope: "project",
+      scopeParams: CHAOS_SCOPE,
+      identifierFields: ["action_id"],
+      listFilterFields: [
+        { name: "hub_identity", description: descHubIdentityActions },
+        { name: "search", description: descSearchActionsParam },
+        { name: "infra_type", description: descInfraType, enum: ["Kubernetes", "KubernetesV2", "Linux", "Windows", "CloudFoundry", "Container"] },
+        { name: "entity_type", description: descEntityTypeAction, enum: ["delay", "customScript", "container"] },
+        { name: "include_all_scope", description: descIncludeAllScope, type: "boolean" },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${CHAOS}/rest/actions`,
+          queryParams: {
+            page: "page",
+            limit: "limit",
+            hub_identity: "hubIdentity",
+            search: "search",
+            infra_type: "infraType",
+            entity_type: "entityType",
+            include_all_scope: "includeAllScope",
+          },
+          responseExtractor: chaosPageExtract,
+          description: descListActions,
+        },
+        get: {
+          method: "GET",
+          path: `${CHAOS}/rest/actions/{actionId}`,
+          pathParams: { action_id: "actionId" },
+          responseExtractor: passthrough,
+          description: descGetAction,
+        },
+        delete: {
+          method: "DELETE",
+          path: `${CHAOS}/rest/actions/{actionId}`,
+          pathParams: { action_id: "actionId" },
+          responseExtractor: passthrough,
+          description: descDeleteAction,
+        },
+      },
+      executeActions: {
+        get_manifest: {
+          method: "GET",
+          path: `${CHAOS}/rest/actions/manifest/{actionId}`,
+          pathParams: { action_id: "actionId" },
+          responseExtractor: passthrough,
+          actionDescription: descGetActionManifest,
+          bodySchema: {
+            description: "No body required. Action identified by path parameter.",
+            fields: [
+              { name: "action_id", type: "string", required: true, description: descActionIdentityParam },
             ],
           },
         },
