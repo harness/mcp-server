@@ -31,6 +31,13 @@ function humanizeHttpError(status: number, rawBody: string): string {
   }
 }
 
+/**
+ * Optional per-request account ID resolver. When provided, HarnessClient
+ * calls this to get the real account ID (e.g. from JWT claims stored in
+ * AsyncLocalStorage) instead of using the static config value.
+ */
+export type AccountIdResolver = () => string | undefined;
+
 export class HarnessClient {
   private readonly baseUrl: string;
   private readonly token: string;
@@ -38,6 +45,7 @@ export class HarnessClient {
   private readonly timeout: number;
   private readonly maxRetries: number;
   private readonly rateLimiter: RateLimiter;
+  private accountIdResolver?: AccountIdResolver;
 
   constructor(config: Config) {
     this.baseUrl = config.HARNESS_BASE_URL.replace(/\/$/, "");
@@ -46,6 +54,19 @@ export class HarnessClient {
     this.timeout = config.HARNESS_API_TIMEOUT_MS;
     this.maxRetries = config.HARNESS_MAX_RETRIES;
     this.rateLimiter = new RateLimiter(config.HARNESS_RATE_LIMIT_RPS);
+  }
+
+  /**
+   * Set a per-request account ID resolver. When set, resolveAccountId()
+   * calls this first, falling back to the static config value.
+   */
+  setAccountIdResolver(resolver: AccountIdResolver): void {
+    this.accountIdResolver = resolver;
+  }
+
+  /** Resolve the account ID: per-request override → static config fallback. */
+  private resolveAccountId(): string {
+    return this.accountIdResolver?.() ?? this.accountId;
   }
 
   get account(): string {
@@ -64,7 +85,7 @@ export class HarnessClient {
     const isFme = options.product === "fme";
     const headers: Record<string, string> = {
       "x-api-key": this.token,
-      "Harness-Account": this.accountId,
+      "Harness-Account": this.resolveAccountId(),
       ...options.headers,
     };
 
@@ -215,7 +236,7 @@ export class HarnessClient {
     const isFme = options.product === "fme";
     const headers: Record<string, string> = {
       "x-api-key": this.token,
-      "Harness-Account": this.accountId,
+      "Harness-Account": this.resolveAccountId(),
       ...options.headers,
     };
 
@@ -308,11 +329,12 @@ export class HarnessClient {
     // Some APIs (e.g. SEI) use only the Harness-Account header — skip when told.
     const params = new URLSearchParams();
     if (!options.headerBasedScoping) {
-      params.set("accountIdentifier", this.accountId);
+      const accountId = this.resolveAccountId();
+      params.set("accountIdentifier", accountId);
 
       // Log-service gateway expects accountID (capital ID) in query params
       if (path.includes("/log-service/")) {
-        params.set("accountID", this.accountId);
+        params.set("accountID", accountId);
       }
     }
 
