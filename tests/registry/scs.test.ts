@@ -8,7 +8,7 @@
  * - T14-v2: artifact_type, status, standards filter enrichment
  */
 import { describe, it, expect } from "vitest";
-import { scsCleanExtract } from "../../src/registry/extractors.js";
+import { scsCleanExtract, scsListExtract } from "../../src/registry/extractors.js";
 import { compactItems } from "../../src/utils/compact.js";
 import { scsToolset } from "../../src/registry/toolsets/scs.js";
 import type { ResourceDefinition, EndpointSpec } from "../../src/registry/types.js";
@@ -275,6 +275,166 @@ describe("T13-v2: all SCS resources use scsCleanExtract", () => {
         ).toBeDefined();
       }
     }
+  });
+});
+
+// ─── P2-2: scsListExtract field selection ──────────────────────────────────
+
+describe("P2-2: scsListExtract field selection", () => {
+  it("selects only specified fields from array items", () => {
+    const extract = scsListExtract(["id", "name"]);
+    const result = extract([
+      { id: "1", name: "test", extra: "noise", deep: { nested: true } },
+      { id: "2", name: "other", foo: "bar" },
+    ]);
+    expect(result).toEqual([
+      { id: "1", name: "test" },
+      { id: "2", name: "other" },
+    ]);
+  });
+
+  it("strips null/empty fields before selecting", () => {
+    const extract = scsListExtract(["id", "name", "count"]);
+    const result = extract([
+      { id: "1", name: null, count: 0, extra: "" },
+    ]);
+    // null name stripped, empty extra stripped, count=0 preserved
+    expect(result).toEqual([{ id: "1", count: 0 }]);
+  });
+
+  it("passes through non-array responses unchanged", () => {
+    const extract = scsListExtract(["id"]);
+    const obj = { id: "1", name: "test" };
+    // Non-array cleaned but not field-selected
+    expect(extract(obj)).toEqual({ id: "1", name: "test" });
+  });
+
+  it("handles empty arrays", () => {
+    const extract = scsListExtract(["id"]);
+    expect(extract([])).toEqual([]);
+  });
+
+  it("skips fields that don't exist in the item", () => {
+    const extract = scsListExtract(["id", "nonexistent", "also_missing"]);
+    expect(extract([{ id: "1", other: "value" }])).toEqual([{ id: "1" }]);
+  });
+
+  it("preserves nested objects in selected fields", () => {
+    const extract = scsListExtract(["id", "orchestration"]);
+    const result = extract([
+      { id: "1", orchestration: { id: "orch1", status: "done" }, extra: "noise" },
+    ]);
+    expect(result).toEqual([
+      { id: "1", orchestration: { id: "orch1", status: "done" } },
+    ]);
+  });
+
+  it("scs_artifact_source list uses scsListExtract", () => {
+    const spec = getOp("scs_artifact_source", "list");
+    // scsListExtract returns a closure — verify it's not scsCleanExtract directly
+    expect(spec.responseExtractor).toBeDefined();
+    // Verify field selection works by testing with a mock response
+    const result = spec.responseExtractor!([
+      { id: "src1", name: "ECR", artifact_type: "CONTAINER", registry_url: "https://ecr.aws", extra_field: "dropped" },
+    ]) as Record<string, unknown>[];
+    expect(result).toHaveLength(1);
+    expect(result[0]).toHaveProperty("id");
+    expect(result[0]).toHaveProperty("name");
+    expect(result[0]).toHaveProperty("artifact_type");
+    expect(result[0]).not.toHaveProperty("extra_field");
+  });
+
+  it("artifact_security list preserves orchestration for ID capture", () => {
+    const spec = getOp("artifact_security", "list");
+    const result = spec.responseExtractor!([
+      { id: "art1", name: "nginx", tag: "latest", orchestration: { id: "orch1" }, internal_metadata: "dropped" },
+    ]) as Record<string, unknown>[];
+    expect(result[0]).toHaveProperty("orchestration");
+    expect(result[0]).not.toHaveProperty("internal_metadata");
+  });
+
+  it("scs_artifact_component list preserves purl for remediation", () => {
+    const spec = getOp("scs_artifact_component", "list");
+    const result = spec.responseExtractor!([
+      { purl: "pkg:npm/express@4.18.0", package_name: "express", dependency_type: "DIRECT", internal: "dropped" },
+    ]) as Record<string, unknown>[];
+    expect(result[0]).toHaveProperty("purl");
+    expect(result[0]).toHaveProperty("package_name");
+    expect(result[0]).toHaveProperty("dependency_type");
+    expect(result[0]).not.toHaveProperty("internal");
+  });
+
+  it("code_repo_security list uses scsListExtract", () => {
+    const spec = getOp("code_repo_security", "list");
+    const result = spec.responseExtractor!([
+      { id: "repo1", name: "my-repo", branch: "main", internal: "dropped" },
+    ]) as Record<string, unknown>[];
+    expect(result[0]).toHaveProperty("id");
+    expect(result[0]).toHaveProperty("name");
+    expect(result[0]).not.toHaveProperty("internal");
+  });
+});
+
+// ─── P2-3A: Pagination default cap ─────────────────────────────────────────
+
+describe("P2-3A: SCS list pagination defaults", () => {
+  const listResources = [
+    "scs_artifact_source",
+    "artifact_security",
+    "scs_artifact_component",
+    "scs_compliance_result",
+    "code_repo_security",
+  ];
+
+  for (const rt of listResources) {
+    it(`${rt} list has defaultQueryParams with limit=10`, () => {
+      const spec = getOp(rt, "list");
+      expect(spec.defaultQueryParams).toBeDefined();
+      expect(spec.defaultQueryParams!.limit).toBe("10");
+    });
+  }
+});
+
+// ─── P2-6: diagnosticHint on SCS resources ─────────────────────────────────
+
+describe("P2-6: SCS resource diagnosticHints", () => {
+  const resourcesWithHints = [
+    "scs_artifact_source",
+    "artifact_security",
+    "scs_artifact_component",
+    "scs_artifact_remediation",
+    "scs_chain_of_custody",
+    "scs_compliance_result",
+    "code_repo_security",
+    "scs_sbom",
+  ];
+
+  for (const rt of resourcesWithHints) {
+    it(`${rt} has a diagnosticHint`, () => {
+      const res = findResource(rt);
+      expect(res.diagnosticHint).toBeDefined();
+      expect(res.diagnosticHint!.length).toBeGreaterThan(20);
+    });
+
+    it(`${rt} diagnosticHint mentions recovery action`, () => {
+      const res = findResource(rt);
+      expect(res.diagnosticHint).toMatch(/harness_(list|get)/);
+    });
+  }
+});
+
+// ─── P2-12: Two-step artifact listing guidance ─────────────────────────────
+
+describe("P2-12: Two-step artifact listing guidance", () => {
+  it("scs_artifact_source description mentions two-step flow", () => {
+    const res = findResource("scs_artifact_source");
+    expect(res.description).toMatch(/[Tt]wo-step/);
+  });
+
+  it("artifact_security description mentions source_id requirement", () => {
+    const res = findResource("artifact_security");
+    expect(res.description).toContain("source_id is required");
+    expect(res.description).toContain("scs_artifact_source");
   });
 });
 

@@ -3,7 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult, mixedResult } from "../utils/response-formatter.js";
-import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
+import { isUserError, isUserFixableApiError, toMcpError, enrichErrorWithHint, HarnessApiError } from "../utils/errors.js";
 import { compactItems } from "../utils/compact.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, isRecord } from "../utils/type-guards.js";
@@ -90,7 +90,14 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
         return jsonResult(result);
       } catch (err) {
         if (isUserError(err)) return errorResult(err.message);
-        if (isUserFixableApiError(err)) return errorResult(err.message);
+        if (isUserFixableApiError(err)) {
+          const rt = asString(args.resource_type);
+          let hint: string | undefined;
+          if (err instanceof HarnessApiError && err.statusCode === 404 && rt) {
+            try { hint = registry.getResource(rt).diagnosticHint; } catch { /* unknown type */ }
+          }
+          return errorResult(enrichErrorWithHint(err.message, hint));
+        }
         throw toMcpError(err);
       }
     },

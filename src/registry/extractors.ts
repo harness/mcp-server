@@ -32,6 +32,34 @@ export const scsCleanExtract = (raw: unknown): unknown => {
   return stripEmptyFields(raw);
 };
 
+/**
+ * Factory: SCS list extractor that strips empty fields AND selects only specified
+ * fields from each item. Builds on scsCleanExtract to further reduce token usage
+ * for list responses by keeping only actionable fields (IDs, names, counts, scores).
+ *
+ * @param fields - field names to retain from each list item
+ */
+export const scsListExtract = (fields: string[]) => (raw: unknown): unknown => {
+  const cleaned = stripEmptyFields(raw);
+  if (!Array.isArray(cleaned)) return cleaned;
+  return cleaned.map(item => {
+    if (item !== null && typeof item === "object" && !Array.isArray(item)) {
+      return pickFields(item as Record<string, unknown>, fields);
+    }
+    return item;
+  });
+};
+
+function pickFields(obj: Record<string, unknown>, fields: string[]): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const field of fields) {
+    if (field in obj && obj[field] !== undefined) {
+      result[field] = obj[field];
+    }
+  }
+  return result;
+}
+
 function stripEmptyFields(obj: unknown): unknown {
   if (Array.isArray(obj)) return obj.map(stripEmptyFields);
   if (obj !== null && typeof obj === "object") {
