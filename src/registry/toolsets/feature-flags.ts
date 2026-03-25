@@ -10,6 +10,15 @@ const fmeFeatureFlagUpdateSchema: BodySchema = {
   ],
 };
 
+const fmeFeatureFlagCreateSchema: BodySchema = {
+  description: "Create a new feature flag (split) in a workspace under a specific traffic type",
+  fields: [
+    { name: "name", type: "string", required: true, description: "Feature flag name (must be unique within the workspace)" },
+    { name: "description", type: "string", required: false, description: "Optional description of the feature flag" },
+    { name: "tags", type: "array", required: false, description: "Optional tags to categorize the flag", itemType: "string" },
+  ],
+};
+
 const fmeRbsCreateSchema: BodySchema = {
   description: "Create a new rule-based segment in a workspace",
   fields: [
@@ -107,7 +116,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_feature_flag",
       displayName: "FME Feature Flag",
       description:
-        "Feature flag via the Split.io API. List flags by workspace with filtering (name, tags, rollout_status_id) and pagination (offset/size, default 20, max 50). Supports get, delete, update, and kill/restore/archive/unarchive execute actions.",
+        "Feature flag via the Split.io API. List flags by workspace with filtering (name, tags, rollout_status_id) and pagination (offset/size, default 20, max 50). Supports create (requires traffic_type_id), get, delete, update, and kill/restore/archive/unarchive execute actions.",
       toolset: "feature-flags",
       scope: "account",
       identifierFields: ["workspace_id", "feature_flag_name"],
@@ -142,6 +151,22 @@ export const featureFlagsToolset: ToolsetDefinition = {
           pathParams: { workspace_id: "wsId", feature_flag_name: "featureFlagName" },
           responseExtractor: fmeGetExtract,
           description: "Get a specific feature flag's metadata without requiring an environment",
+        },
+        create: {
+          method: "POST",
+          path: "/internal/api/v2/splits/ws/{wsId}/trafficTypes/{trafficTypeId}",
+          pathParams: { workspace_id: "wsId", traffic_type_id: "trafficTypeId" },
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            return {
+              name: body?.name ?? input.name,
+              ...(body?.description || input.description ? { description: body?.description ?? input.description } : {}),
+              ...(body?.tags || input.tags ? { tags: body?.tags ?? input.tags } : {}),
+            };
+          },
+          responseExtractor: passthrough,
+          bodySchema: fmeFeatureFlagCreateSchema,
+          description: "Create a feature flag in a workspace. Requires workspace_id and traffic_type_id (get from fme_workspace). Body requires name, optional description and tags.",
         },
         delete: {
           method: "DELETE",
