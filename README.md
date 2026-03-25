@@ -933,14 +933,14 @@ Harness pipelines can be stored in three ways:
 |---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
 | `fme_workspace` | x | | | | | |
 | `fme_environment` | x | | | | | |
-| `fme_feature_flag` | x | x | | x | x | `kill`, `restore`, `archive`, `unarchive` |
+| `fme_feature_flag` | x | x | x | x | x | `kill`, `restore`, `archive`, `unarchive` |
 | `fme_feature_flag_definition` | | x | | | | |
 | `fme_rollout_status` | x | | | | | |
 | `fme_rule_based_segment` | x | x | x | | x | |
 | `fme_rule_based_segment_definition` | x | | | x | | `enable`, `disable`, `change_request` |
 | `feature_flag` | x | x | x | | x | `toggle` |
 
-**FME (Split.io) resources** — `fme_*` resources use the Split.io API (`api.split.io`) and are scoped by workspace ID rather than org/project. Auth uses `HARNESS_API_KEY` as a Bearer token. `fme_feature_flag` supports full lifecycle management: list, get, update metadata, delete, and kill/restore/archive/unarchive execute actions. `fme_rule_based_segment` provides CRUD for targeting segments, while `fme_rule_based_segment_definition` manages environment-specific segment rules with enable/disable and change request approval flows. Use `feature_flag` for the Harness CF admin API which supports environment-specific definitions, create, delete, and toggle.
+**FME (Split.io) resources** — `fme_*` resources use the Split.io API (`api.split.io`) and are scoped by workspace ID rather than org/project. Auth uses `HARNESS_API_KEY` as a Bearer token. `fme_feature_flag` supports full lifecycle management: create (requires `traffic_type_id`), list, get, update metadata, delete, and kill/restore/archive/unarchive execute actions. `fme_rule_based_segment` provides CRUD for targeting segments, while `fme_rule_based_segment_definition` manages environment-specific segment rules with enable/disable and change request approval flows. Use `feature_flag` for the Harness CF admin API which supports environment-specific definitions, create, delete, and toggle.
 
 ### GitOps
 
