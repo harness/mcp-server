@@ -54,17 +54,9 @@ describe("ConfigSchema", () => {
     }
   });
 
-  it("fails when both HARNESS_API_KEY and JWT_SECRET are missing", () => {
+  it("fails when HARNESS_API_KEY is missing", () => {
     const result = ConfigSchema.safeParse({ HARNESS_ACCOUNT_ID: "acct123" });
     expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues[0].message).toContain("Either JWT_SECRET or HARNESS_API_KEY");
-    }
-  });
-
-  it("succeeds with JWT_SECRET instead of HARNESS_API_KEY", () => {
-    const result = ConfigSchema.safeParse({ JWT_SECRET: "test-secret-minimum-32-characters-long" });
-    expect(result.success).toBe(true);
   });
 
   it("HARNESS_ACCOUNT_ID is optional in schema", () => {
@@ -72,20 +64,9 @@ describe("ConfigSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("fails when both HARNESS_API_KEY and JWT_SECRET are missing", () => {
-    const result = ConfigSchema.safeParse({ HARNESS_ACCOUNT_ID: "acct" });
+  it("fails when HARNESS_API_KEY is empty", () => {
+    const result = ConfigSchema.safeParse({ HARNESS_API_KEY: "", HARNESS_ACCOUNT_ID: "acct" });
     expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues[0].message).toContain("Either JWT_SECRET or HARNESS_API_KEY");
-    }
-  });
-
-  it("fails when JWT_SECRET is empty string", () => {
-    const result = ConfigSchema.safeParse({ JWT_SECRET: "", HARNESS_ACCOUNT_ID: "acct" });
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues[0].message).toContain("expected string to have >=1 characters");
-    }
   });
 
   it("applies default HARNESS_BASE_URL", () => {

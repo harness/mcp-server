@@ -4,11 +4,6 @@ build/
 *.tgz
 .DS_Store
 
-# Editor files
-*.swp
-*.swo
-*~
-
 # Generated pipeline files
 pipelines/
 
