@@ -2,13 +2,17 @@ import type { ToolsetDefinition } from "../types.js";
 import { passthrough } from "../extractors.js";
 import {
   descToolsetChaos,
+  // Resource descriptions
   descChaosExperiment, descChaosExperimentRun, descChaosProbe,
   descChaosExperimentTemplate, descChaosExperimentVariable,
   descChaosInfrastructure, descChaosLoadtest, descChaosK8sInfrastructure,
   descChaosHub, descChaosFault, descChaosFaultTemplate,
+  descChaosProbeTemplate, descChaosActionTemplate,
+  descChaosHubFault, descChaosEnvironment,
   descChaosNetworkMap,
   descChaosGuardCondition, descChaosGuardRule,
   descChaosRecommendation, descChaosRisk,
+  // Operation descriptions
   descListExperiments, descGetExperiment,
   descGetExperimentRun,
   descListProbes, descGetProbe,
@@ -20,17 +24,26 @@ import {
   descListHubs, descGetHub, descCreateHub, descUpdateHub, descDeleteHub,
   descListFaults, descGetFault,
   descListFaultTemplates, descGetFaultTemplate, descDeleteFaultTemplate,
+  descListProbeTemplates, descGetProbeTemplate, descDeleteProbeTemplate,
+  descListActionTemplates, descGetActionTemplate, descDeleteActionTemplate,
+  descListHubFaults, descListChaosEnvironments,
   descListNetworkMaps, descGetNetworkMap,
-  descListGuardConditions, descGetGuardCondition,
-  descListGuardRules, descGetGuardRule,
+  descListGuardConditions, descGetGuardCondition, descDeleteGuardCondition,
+  descListGuardRules, descGetGuardRule, descDeleteGuardRule,
   descListRecommendations, descGetRecommendation,
   descListRisks, descGetRisk,
+  // Action descriptions
   descRunExperiment, descEnableProbe, descVerifyProbe,
   descCreateFromTemplate,
   descListRevisions, descGetVariables, descGetYaml, descCompareRevisions,
   descRunLoadtest, descStopLoadtest, descCheckK8sHealth,
+  descEnableGuardRule,
+  descGetProbeTemplateVariables,
+  descListActionTemplateRevisions, descGetActionTemplateVariables, descCompareActionTemplateRevisions,
+  // Body schema descriptions
   descBodyExperimentRun, descBodyNoBody,
   descBodyCreateFromTemplate, descBodyLoadtestDefinition,
+  // Field descriptions
   descInputsetIdentity, descRuntimeInputs,
   descHubIdentity, descInfraType,
   descExperimentName, descExperimentIdentity, descInfraRef,
@@ -43,9 +56,14 @@ import {
   descHubSearch, descIncludeAllScope,
   descTemplateSearch, descSortField, descSortAsc,
   descTags, descInfrastructure, descTemplateIdentity,
-  descRevision, descRevision1, descRevision2,
+  descRevision, descRevision1, descRevision2, descRevisionToCompare,
   descFaultType, descFaultCategory, descFaultPermissions, descFaultIsEnterprise,
   descImportType, descExperimentDescription, descExperimentTags,
+  descEntityTypeProbe, descEntityTypeAction,
+  descEntityTypeFault, descPermissionsRequiredEnum, descOnlyTemplatisedFaults,
+  descEnvironmentId, descK8sInfraStatus, descIncludeLegacyInfra, descSearchK8sInfra,
+  descSearchTermEnv, descSortEnv, descEnvironmentType,
+  descGuardSearch, descGuardInfraType, descGuardTags, descGuardEnabled,
 } from "./chaos-descriptions.js";
 
 /**
@@ -542,26 +560,43 @@ export const chaosToolset: ToolsetDefinition = {
       description: descChaosK8sInfrastructure,
       toolset: "chaos",
       scope: "project",
+      scopeParams: CHAOS_SCOPE,
       identifierFields: ["infra_id"],
+      listFilterFields: [
+        { name: "environment_id", description: descEnvironmentId },
+        { name: "status", description: descK8sInfraStatus, enum: ["ACTIVE", "INACTIVE", "PENDING", "All"] },
+        { name: "include_legacy_infra", description: descIncludeLegacyInfra, type: "boolean" },
+        { name: "search", description: descSearchK8sInfra },
+      ],
       operations: {
         list: {
           method: "POST",
-          path: `${CHAOS}/rest/kubernetes/infras`,
-          staticQueryParams: { page: "0", limit: "15" },
+          path: `${CHAOS}/rest/v2/infrastructures`,
+          queryParams: {
+            page: "page",
+            limit: "limit",
+            environment_id: "environmentIdentifier",
+            search: "search",
+            include_legacy_infra: "includeLegacyInfra",
+          },
           bodyBuilder: (input) => {
             const filter: Record<string, unknown> = {};
             const statusInput = input.status as string | undefined;
             if (statusInput && statusInput !== "All") {
               filter.status = statusInput;
             } else if (!statusInput) {
-              filter.status = "Active";
+              filter.status = "ACTIVE";
+            }
+            if (input.search) {
+              filter.name = input.search;
             }
             return {
-              filter,
-              sort: { field: "NAME", ascending: true },
+              pagination: { page: input.page ?? 0, limit: input.limit ?? 15 },
+              sort: { field: "LAST_MODIFIED", ascending: false },
+              ...(Object.keys(filter).length > 0 ? { filter } : {}),
             };
           },
-          responseExtractor: chaosInfraListExtract,
+          responseExtractor: chaosPageExtract,
           description: descListK8sInfra,
         },
         get: {
@@ -852,6 +887,285 @@ export const chaosToolset: ToolsetDefinition = {
       },
     },
 
+    // ── Chaos Probe Templates ────────────────────────────────────────
+    {
+      resourceType: "chaos_probe_template",
+      displayName: "Chaos Probe Template",
+      description: descChaosProbeTemplate,
+      toolset: "chaos",
+      scope: "project",
+      scopeParams: CHAOS_SCOPE,
+      identifierFields: ["template_identity"],
+      listFilterFields: [
+        { name: "hub_identity", description: descHubIdentity },
+        { name: "search", description: descTemplateSearch },
+        { name: "infra_type", description: descInfraType, enum: ["Kubernetes", "KubernetesV2", "Linux", "Windows", "CloudFoundry", "Container"] },
+        { name: "entity_type", description: descEntityTypeProbe, enum: ["httpProbe", "cmdProbe", "promProbe", "k8sProbe", "sloProbe", "datadogProbe", "dynatraceProbe", "containerProbe", "apmProbe"] },
+        { name: "include_all_scope", description: descIncludeAllScope, type: "boolean" },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${CHAOS}/rest/templates/probes`,
+          queryParams: {
+            page: "page",
+            limit: "limit",
+            hub_identity: "hubIdentity",
+            search: "search",
+            infra_type: "infraType",
+            entity_type: "entityType",
+            include_all_scope: "includeAllScope",
+          },
+          responseExtractor: chaosPageExtract,
+          description: descListProbeTemplates,
+        },
+        get: {
+          method: "GET",
+          path: `${CHAOS}/rest/templates/probes/{templateIdentity}`,
+          pathParams: { template_identity: "templateIdentity" },
+          queryParams: {
+            hub_identity: "hubIdentity",
+            revision: "revision",
+          },
+          responseExtractor: passthrough,
+          description: descGetProbeTemplate,
+        },
+        delete: {
+          method: "DELETE",
+          path: `${CHAOS}/rest/templates/probes/{templateIdentity}`,
+          pathParams: { template_identity: "templateIdentity" },
+          queryParams: {
+            hub_identity: "hubIdentity",
+            revision: "revision",
+          },
+          responseExtractor: passthrough,
+          description: descDeleteProbeTemplate,
+        },
+      },
+      executeActions: {
+        get_variables: {
+          method: "GET",
+          path: `${CHAOS}/rest/templates/probes/{templateIdentity}/variables`,
+          pathParams: { template_identity: "templateIdentity" },
+          queryParams: {
+            hub_identity: "hubIdentity",
+            revision: "revision",
+          },
+          responseExtractor: passthrough,
+          actionDescription: descGetProbeTemplateVariables,
+          bodySchema: {
+            description: "No body required. Probe template identified by path parameter.",
+            fields: [
+              { name: "template_identity", type: "string", required: true, description: descTemplateIdentity },
+              { name: "hub_identity", type: "string", required: false, description: descHubIdentity },
+              { name: "revision", type: "string", required: false, description: descRevision },
+            ],
+          },
+        },
+      },
+    },
+
+    // ── Chaos Action Templates ────────────────────────────────────────
+    {
+      resourceType: "chaos_action_template",
+      displayName: "Chaos Action Template",
+      description: descChaosActionTemplate,
+      toolset: "chaos",
+      scope: "project",
+      scopeParams: CHAOS_SCOPE,
+      identifierFields: ["template_identity"],
+      listFilterFields: [
+        { name: "hub_identity", description: descHubIdentity },
+        { name: "search", description: descTemplateSearch },
+        { name: "infra_type", description: descInfraType, enum: ["Kubernetes", "KubernetesV2", "Linux", "Windows", "CloudFoundry", "Container"] },
+        { name: "entity_type", description: descEntityTypeAction, enum: ["delay", "customScript", "container"] },
+        { name: "include_all_scope", description: descIncludeAllScope, type: "boolean" },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${CHAOS}/rest/templates/actions`,
+          queryParams: {
+            page: "page",
+            limit: "limit",
+            hub_identity: "hubIdentity",
+            search: "search",
+            infra_type: "infraType",
+            entity_type: "entityType",
+            include_all_scope: "includeAllScope",
+          },
+          responseExtractor: chaosPageExtract,
+          description: descListActionTemplates,
+        },
+        get: {
+          method: "GET",
+          path: `${CHAOS}/rest/templates/actions/{templateIdentity}`,
+          pathParams: { template_identity: "templateIdentity" },
+          queryParams: {
+            hub_identity: "hubIdentity",
+            revision: "revision",
+          },
+          responseExtractor: passthrough,
+          description: descGetActionTemplate,
+        },
+        delete: {
+          method: "DELETE",
+          path: `${CHAOS}/rest/templates/actions/{templateIdentity}`,
+          pathParams: { template_identity: "templateIdentity" },
+          queryParams: {
+            hub_identity: "hubIdentity",
+            revision: "revision",
+          },
+          responseExtractor: passthrough,
+          description: descDeleteActionTemplate,
+        },
+      },
+      executeActions: {
+        list_revisions: {
+          method: "GET",
+          path: `${CHAOS}/rest/templates/actions/{templateIdentity}/revisions`,
+          pathParams: { template_identity: "templateIdentity" },
+          queryParams: {
+            hub_identity: "hubIdentity",
+            page: "page",
+            limit: "limit",
+            search: "search",
+            infra_type: "infraType",
+            entity_type: "entityType",
+            include_all_scope: "includeAllScope",
+          },
+          responseExtractor: passthrough,
+          actionDescription: descListActionTemplateRevisions,
+          bodySchema: {
+            description: "No body required. Action template identified by path parameter.",
+            fields: [
+              { name: "template_identity", type: "string", required: true, description: descTemplateIdentity },
+              { name: "hub_identity", type: "string", required: false, description: descHubIdentity },
+            ],
+          },
+        },
+        get_variables: {
+          method: "GET",
+          path: `${CHAOS}/rest/templates/actions/{templateIdentity}/variables`,
+          pathParams: { template_identity: "templateIdentity" },
+          queryParams: {
+            hub_identity: "hubIdentity",
+            revision: "revision",
+          },
+          responseExtractor: passthrough,
+          actionDescription: descGetActionTemplateVariables,
+          bodySchema: {
+            description: "No body required. Action template identified by path parameter.",
+            fields: [
+              { name: "template_identity", type: "string", required: true, description: descTemplateIdentity },
+              { name: "hub_identity", type: "string", required: false, description: descHubIdentity },
+              { name: "revision", type: "string", required: false, description: descRevision },
+            ],
+          },
+        },
+        compare_revisions: {
+          method: "GET",
+          path: `${CHAOS}/rest/templates/actions/{templateIdentity}/compare`,
+          pathParams: { template_identity: "templateIdentity" },
+          queryParams: {
+            hub_identity: "hubIdentity",
+            revision: "revision",
+            revision_to_compare: "revisionToCompare",
+          },
+          responseExtractor: passthrough,
+          actionDescription: descCompareActionTemplateRevisions,
+          bodySchema: {
+            description: "No body required. Action template identified by path parameter.",
+            fields: [
+              { name: "template_identity", type: "string", required: true, description: descTemplateIdentity },
+              { name: "hub_identity", type: "string", required: false, description: descHubIdentity },
+              { name: "revision", type: "string", required: true, description: descRevision1 },
+              { name: "revision_to_compare", type: "string", required: true, description: descRevisionToCompare },
+            ],
+          },
+        },
+      },
+    },
+
+    // ── Chaos Hub Faults ──────────────────────────────────────────────
+    {
+      resourceType: "chaos_hub_fault",
+      displayName: "Chaos Hub Fault",
+      description: descChaosHubFault,
+      toolset: "chaos",
+      scope: "project",
+      scopeParams: CHAOS_SCOPE,
+      identifierFields: [],
+      listFilterFields: [
+        { name: "hub_identity", description: descHubIdentity },
+        { name: "search", description: descTemplateSearch },
+        { name: "infra_type", description: descInfraType, enum: ["Kubernetes", "KubernetesV2", "Linux", "Windows", "CloudFoundry", "Container"] },
+        { name: "entity_type", description: descEntityTypeFault },
+        { name: "permissions_required", description: descPermissionsRequiredEnum, enum: ["Basic", "Advanced"] },
+        { name: "include_all_scope", description: descIncludeAllScope, type: "boolean" },
+        { name: "only_templatised_faults", description: descOnlyTemplatisedFaults, type: "boolean" },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${CHAOS}/rest/hubs/faults`,
+          queryParams: {
+            page: "page",
+            limit: "limit",
+            hub_identity: "hubIdentity",
+            search: "search",
+            infra_type: "infraType",
+            entity_type: "entityType",
+            permissions_required: "permissionsRequired",
+            include_all_scope: "includeAllScope",
+            only_templatised_faults: "onlyTemplatisedFaults",
+          },
+          responseExtractor: passthrough,
+          description: descListHubFaults,
+        },
+      },
+    },
+
+    // ── Chaos Environments ────────────────────────────────────────────
+    {
+      resourceType: "chaos_environment",
+      displayName: "Chaos Environment",
+      description: descChaosEnvironment,
+      toolset: "chaos",
+      scope: "project",
+      identifierFields: ["environment_id"],
+      listFilterFields: [
+        { name: "search_term", description: descSearchTermEnv },
+        { name: "sort", description: descSortEnv },
+        { name: "environment_type", description: descEnvironmentType, enum: ["PreProduction", "Production"] },
+      ],
+      operations: {
+        list: {
+          method: "POST",
+          path: `/ng/api/environmentsV2/listV2`,
+          queryParams: {
+            page: "page",
+            size: "size",
+            search_term: "searchTerm",
+            sort: "sort",
+          },
+          defaultQueryParams: { sort: "lastModifiedAt,DESC" },
+          bodyBuilder: (input) => ({
+            filterType: "Environment",
+            ...(input.environment_type ? { environmentTypes: [input.environment_type] } : {}),
+          }),
+          responseExtractor: (raw: unknown): { items: unknown[]; total: number } => {
+            const r = raw as { data?: { content?: unknown[]; totalItems?: number } };
+            return {
+              items: r.data?.content ?? [],
+              total: r.data?.totalItems ?? 0,
+            };
+          },
+          description: descListChaosEnvironments,
+        },
+      },
+    },
+
     // ── Chaos Network Maps ──────────────────────────────────────────
     {
       resourceType: "chaos_network_map",
@@ -891,23 +1205,42 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["condition_id"],
+      listFilterFields: [
+        { name: "search", description: descGuardSearch },
+        { name: "sort_field", description: descSortField, enum: ["name", "lastUpdated"] },
+        { name: "sort_ascending", description: descSortAsc, type: "boolean" },
+        { name: "infrastructure_type", description: descGuardInfraType, enum: ["Kubernetes", "KubernetesV2", "Linux", "Windows"] },
+        { name: "tags", description: descGuardTags },
+      ],
       operations: {
         list: {
           method: "GET",
-          path: `${CHAOS}/rest/v2/conditions`,
+          path: `${CHAOS}/v3/chaosguard-conditions`,
           queryParams: {
             page: "page",
             limit: "limit",
+            search: "search",
+            sort_field: "sortField",
+            sort_ascending: "sortAscending",
+            infrastructure_type: "infrastructureType",
+            tags: "tags",
           },
           responseExtractor: chaosPageExtract,
           description: descListGuardConditions,
         },
         get: {
           method: "GET",
-          path: `${CHAOS}/rest/v2/conditions/{conditionId}`,
+          path: `${CHAOS}/v3/chaosguard-conditions/{conditionId}`,
           pathParams: { condition_id: "conditionId" },
           responseExtractor: passthrough,
           description: descGetGuardCondition,
+        },
+        delete: {
+          method: "DELETE",
+          path: `${CHAOS}/v3/chaosguard-conditions/{conditionId}`,
+          pathParams: { condition_id: "conditionId" },
+          responseExtractor: passthrough,
+          description: descDeleteGuardCondition,
         },
       },
     },
@@ -921,23 +1254,60 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["rule_id"],
+      listFilterFields: [
+        { name: "search", description: descGuardSearch },
+        { name: "sort_field", description: descSortField, enum: ["name", "lastUpdated"] },
+        { name: "sort_ascending", description: descSortAsc, type: "boolean" },
+        { name: "infrastructure_type", description: descGuardInfraType, enum: ["Kubernetes", "KubernetesV2", "Linux", "Windows"] },
+        { name: "tags", description: descGuardTags },
+      ],
       operations: {
         list: {
           method: "GET",
-          path: `${CHAOS}/rest/v2/rules`,
+          path: `${CHAOS}/v3/chaosguard-rules`,
           queryParams: {
             page: "page",
             limit: "limit",
+            search: "search",
+            sort_field: "sortField",
+            sort_ascending: "sortAscending",
+            infrastructure_type: "infrastructureType",
+            tags: "tags",
           },
           responseExtractor: chaosPageExtract,
           description: descListGuardRules,
         },
         get: {
           method: "GET",
-          path: `${CHAOS}/rest/v2/rules/{ruleId}`,
+          path: `${CHAOS}/v3/chaosguard-rules/{ruleId}`,
           pathParams: { rule_id: "ruleId" },
           responseExtractor: passthrough,
           description: descGetGuardRule,
+        },
+        delete: {
+          method: "DELETE",
+          path: `${CHAOS}/v3/chaosguard-rules/{ruleId}`,
+          pathParams: { rule_id: "ruleId" },
+          responseExtractor: passthrough,
+          description: descDeleteGuardRule,
+        },
+      },
+      executeActions: {
+        enable: {
+          method: "PUT",
+          path: `${CHAOS}/v3/chaosguard-rules/{ruleId}/enable`,
+          pathParams: { rule_id: "ruleId" },
+          queryParams: { enabled: "enabled" },
+          bodyBuilder: () => ({}),
+          responseExtractor: passthrough,
+          actionDescription: descEnableGuardRule,
+          bodySchema: {
+            description: "No body required. Rule identity and enabled flag are passed as path/query parameters.",
+            fields: [
+              { name: "rule_id", type: "string", required: true, description: `Identifier of the ChaosGuard rule to enable/disable.` },
+              { name: "enabled", type: "boolean", required: true, description: descGuardEnabled },
+            ],
+          },
         },
       },
     },

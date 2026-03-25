@@ -1,6 +1,6 @@
 // ── Toolset ──────────────────────────────────────────────────────────
 
-export const descToolsetChaos = `Harness Chaos Engineering — experiments, probes, hubs, faults, ChaosGuard rules/conditions, Kubernetes and Linux infrastructure, network maps, recommendations, risks, and load tests`;
+export const descToolsetChaos = `Harness Chaos Engineering — experiments, probes, hubs, faults, ChaosGuard rules/conditions, Kubernetes and Linux infrastructure, network maps, recommendations, risks, load tests, and templates (experiment, fault, probe, action)`;
 
 // ── Resource Descriptions ────────────────────────────────────────────
 
@@ -22,7 +22,11 @@ export const descChaosInfrastructure = `Linux/machine infrastructure registered 
 
 export const descChaosLoadtest = `Load test instance. Supports list, get, create, and delete. Run/stop via execute actions.`;
 
-export const descChaosK8sInfrastructure = `Kubernetes infrastructure registered for chaos experiments. List uses POST with filter/sort body. Supports list, get, and check_health action.`;
+export const descChaosK8sInfrastructure = `Kubernetes chaos infrastructure available for running experiments.
+Use chaos_environment list first to get an environmentId, then pass it here to filter infrastructures for that environment.
+Returns infrastructure details including identity, infraID, name, environmentID, status, infraType, and infraScope.
+The infraID is used as the infra_ref parameter in create_from_template.
+Supports filtering by status (ACTIVE, INACTIVE, PENDING), search, and optional inclusion of legacy V1 infrastructures.`;
 
 export const descChaosHub = `ChaosHub — a Git-backed repository that provides version-controlled chaos fault, experiment, probe, and action templates.
 Every project includes a default Enterprise ChaosHub with pre-built templates; custom hubs can be created to bring in organization-specific chaos artifacts.
@@ -33,9 +37,13 @@ export const descChaosFault = `Chaos fault definition (e.g. pod-delete, network-
 
 export const descChaosNetworkMap = `Network map (application map) for chaos blast radius visualization. Supports list and get.`;
 
-export const descChaosGuardCondition = `ChaosGuard condition that defines criteria for experiment execution governance. Supports list and get.`;
+export const descChaosGuardCondition = `ChaosGuard condition — defines the infrastructure, fault, and application constraints that ChaosGuard rules evaluate against chaos experiments.
+Returns name, description, infraType, faultSpec, associated rules, tags, and audit info.
+Supports list, get, and delete. List supports filtering by infrastructure type, tags, search, and sorting.`;
 
-export const descChaosGuardRule = `ChaosGuard rule that enforces governance policies on chaos experiment execution. Supports list and get.`;
+export const descChaosGuardRule = `ChaosGuard governance rule — defines security policies that control when and how chaos experiments can run, including user group restrictions, time windows, and conditions.
+Returns name, description, conditions, time windows, userGroupIds, isEnabled, and audit info.
+Supports list, get, delete, and enable/disable action. List supports filtering by infrastructure type, tags, search, and sorting.`;
 
 export const descChaosRecommendation = `Chaos resilience recommendation based on experiment results. Supports list and get.`;
 
@@ -44,6 +52,27 @@ export const descChaosRisk = `Chaos risk assessment for services and infrastruct
 export const descChaosFaultTemplate = `Versioned, structured chaos fault template stored in the database with full CRUD support.
 Supports list, get, delete, plus revision history, variables, YAML retrieval, and revision comparison via execute actions.
 Used for modern flows: experiment template builder, ChaosHub fault listing, and creating custom faults.`;
+
+export const descChaosProbeTemplate = `Versioned chaos probe template stored in a ChaosHub.
+Probe templates define reusable resilience probe configurations (HTTP, CMD, Prometheus, K8s, SLO, Datadog, Dynatrace, Container, APM).
+Supports list, get, delete, and get_variables actions.
+Returns identity, name, type, infrastructureType, revision, probeProperties, runProperties, and audit info.`;
+
+export const descChaosActionTemplate = `Versioned chaos action template stored in a ChaosHub.
+Action templates define reusable actions (delay, customScript, container) that can be embedded in experiment workflows.
+Supports list, get, delete, list_revisions, get_variables, and compare_revisions actions.
+Returns identity, name, type, infrastructureType, revision, actionProperties, runProperties, and audit info.`;
+
+export const descChaosHubFault = `Faults available in ChaosHubs.
+Returns fault details including name, category, infrastructure type, permissions required, and platform support.
+Also returns fault category counts for each infrastructure type.
+Supports filtering by hub, infrastructure type, category, permissions, and search. Supports list only.
+Used only for legacy infrastructure experiments. Deprecated — do not use for new features.`;
+
+export const descChaosEnvironment = `Harness environment available for chaos experiments.
+Returns identifier, name, type (Production/PreProduction), and timestamps.
+Use the environment identifier with chaos_k8s_infrastructure list to find available infrastructure within that environment.
+Supports search by name and sort by lastModifiedAt or name.`;
 
 // ── Operation Descriptions ───────────────────────────────────────────
 
@@ -78,7 +107,10 @@ export const descGetLoadtest = `Get load test instance details`;
 export const descCreateLoadtest = `Create a sample load test instance`;
 export const descDeleteLoadtest = `Delete a load test instance`;
 
-export const descListK8sInfra = `List Kubernetes chaos infrastructures`;
+export const descListK8sInfra = `List Kubernetes chaos infrastructures available for running experiments.
+Use chaos_environment list first to get an environmentId, then pass it here to filter infrastructures for that environment.
+Returns infrastructure details including identity, infraID, name, environmentID, status, infraType, and infraScope.
+Supports filtering by status (ACTIVE, INACTIVE, PENDING) and optional inclusion of legacy V1 infrastructures.`;
 export const descGetK8sInfra = `Get Kubernetes chaos infrastructure details`;
 
 export const descListHubs = `List ChaosHubs (Git-connected repositories containing fault, experiment, probe, and action templates).
@@ -124,11 +156,55 @@ Returns a success confirmation on completion.`;
 export const descListNetworkMaps = `List chaos network maps`;
 export const descGetNetworkMap = `Get chaos network map details`;
 
-export const descListGuardConditions = `List ChaosGuard conditions`;
-export const descGetGuardCondition = `Get ChaosGuard condition details`;
+export const descListGuardConditions = `List ChaosGuard conditions.
+Conditions define the infrastructure, fault, and application constraints that ChaosGuard rules evaluate against chaos experiments.
+Returns a paginated list of conditions with name, description, infraType, faultSpec, associated rules, tags, and audit info.
+Supports filtering by infrastructure type, tags, search, sorting, and pagination.`;
+export const descGetGuardCondition = `Get a ChaosGuard condition by its identifier.
+Returns the full condition details including infrastructure type, fault specifications, K8s/machine specs, associated rules, and tags.`;
+export const descDeleteGuardCondition = `Delete (soft-delete) a ChaosGuard condition by its identifier.
+The condition is marked as removed and will no longer appear in listings or be evaluated by rules.
+Returns a JSON object with success status and message.`;
 
-export const descListGuardRules = `List ChaosGuard rules`;
-export const descGetGuardRule = `Get ChaosGuard rule details`;
+export const descListGuardRules = `List ChaosGuard governance rules.
+ChaosGuard rules define security policies that control when and how chaos experiments can run, including user group restrictions, time windows, and conditions.
+Returns a paginated list of rules with name, description, conditions, time windows, userGroupIds, isEnabled, and audit info.
+Supports filtering by infrastructure type, tags, search, sorting, and pagination.`;
+export const descGetGuardRule = `Get a ChaosGuard rule by its identifier.
+Returns the full rule details including name, description, conditions, time windows, user group restrictions, and enabled status.`;
+export const descDeleteGuardRule = `Delete (soft-delete) a ChaosGuard rule by its identifier.
+The rule is marked as removed and will no longer appear in listings or be enforced.
+Returns a JSON object with success status and message.`;
+
+export const descListProbeTemplates = `List chaos probe templates.
+Returns a paginated list of templates with identity, name, type, infrastructureType, revision, probeProperties, runProperties, and audit info.
+Supports filtering by hub, infrastructure type, probe entity type, search, and pagination.`;
+export const descGetProbeTemplate = `Get detailed info about a chaos probe template by identity.
+Returns the template data including type, probeProperties, runProperties, variables, revision, and audit info.`;
+export const descDeleteProbeTemplate = `Delete a chaos probe template by its identity. Requires hub_identity.
+When revision is 0 or not provided, all revisions are deleted.
+Cannot delete from the Enterprise ChaosHub. The template must not be referenced by any experiment templates.
+Returns {"deleted":true} or {"deleted":false} on success.`;
+
+export const descListActionTemplates = `List chaos action templates.
+Returns a paginated list of templates with identity, name, type, infrastructureType, revision, actionProperties, runProperties, and audit info.
+Supports filtering by hub, infrastructure type, action entity type, search, and pagination.`;
+export const descGetActionTemplate = `Get detailed info about a chaos action template by identity.
+Returns the template data including type, actionProperties, runProperties, variables, revision, and audit info.`;
+export const descDeleteActionTemplate = `Delete a chaos action template by its identity. Requires hub_identity.
+When revision is 0 or not provided, all revisions are deleted.
+The template must not be referenced by any experiment templates. Cannot delete the default revision when targeting a specific revision.
+Returns {"deleted":true} or {"deleted":false} on success.`;
+
+export const descListHubFaults = `List faults available in ChaosHubs.
+Returns fault details including name, category, infrastructure type, permissions required, and platform support.
+Also returns fault category counts for each infrastructure type.
+Supports filtering by hub, infrastructure type, category, permissions, and search.`;
+
+export const descListChaosEnvironments = `List Harness environments available for chaos experiments.
+Returns a paginated list of environments with their identifier, name, type (Production/PreProduction), and timestamps.
+Use the environment identifier with chaos_k8s_infrastructure list to find available infrastructure within that environment.
+Supports search by name and sort by lastModifiedAt or name.`;
 
 export const descListRecommendations = `List chaos recommendations`;
 export const descGetRecommendation = `Get chaos recommendation details`;
@@ -163,6 +239,27 @@ export const descRunLoadtest = `Run a load test instance`;
 export const descStopLoadtest = `Stop a running load test`;
 export const descCheckK8sHealth = `Check health of a Kubernetes chaos infrastructure`;
 
+export const descEnableGuardRule = `Enable or disable a ChaosGuard rule.
+When enabled, the rule actively enforces its governance conditions on chaos experiments.
+When disabled, the rule is inactive and does not affect experiment execution.
+Returns a success message on completion.`;
+
+export const descGetProbeTemplateVariables = `Get the runtime input variables for a chaos probe template.
+Returns variables grouped into: variables, probeProperties, and probeRunProperty.
+Each variable includes name, value, path, category, type, description, required flag, and allowed values.`;
+
+export const descListActionTemplateRevisions = `List all revisions of a chaos action template by its identity.
+Returns a paginated list of revisions with identity, name, type, revision, isDefault, and audit info.
+Supports pagination and search.`;
+
+export const descGetActionTemplateVariables = `Get the runtime input variables for a chaos action template.
+Returns variables grouped into: variables, actionProperties, and actionRunProperty.
+Each variable includes name, value, path, category, type, description, required flag, and allowed values.`;
+
+export const descCompareActionTemplateRevisions = `Compare two revisions of a chaos action template side by side.
+Returns a paginated list containing the two requested revisions for diff comparison.
+Requires the template identity, hub identity, and two revision numbers.`;
+
 // ── Body Schema Descriptions ─────────────────────────────────────────
 
 export const descBodyExperimentRun = `Optional runtime inputs for the chaos experiment. Use chaos_experiment_variable list to discover required variables first.`;
@@ -174,10 +271,10 @@ export const descBodyLoadtestDefinition = `Load test instance definition`;
 
 export const descInputsetIdentity = `Optional inputset identity to use for the experiment run`;
 export const descRuntimeInputs = `Runtime input variables: { experiment: [{name, value}], tasks: { taskName: [{name, value}] } }`;
-export const descInfraType = `Filter by infrastructure type (e.g. Kubernetes, Linux)`;
+export const descInfraType = `Filter by infrastructure type (e.g. Kubernetes, KubernetesV2, Linux, Windows, CloudFoundry, Container)`;
 export const descExperimentName = `Experiment name`;
 export const descExperimentIdentity = `Experiment identity (auto-generated from name if omitted)`;
-export const descInfraRef = `Infrastructure reference in format: environmentId/infraId`;
+export const descInfraRef = `Infrastructure reference in format: environmentId/infraId. Use chaos_environment list to find environments, then chaos_k8s_infrastructure list to find infraIDs.`;
 export const descExperimentId = `Chaos experiment ID to list variables for`;
 export const descInfraStatus = `Filter by infra status: Active (default) or All`;
 export const descLoadtestName = `Load test name`;
@@ -195,7 +292,7 @@ export const descRepoName = `Name of the Git repository. Optional at creation, r
 export const descRepoBranch = `Git branch for the ChaosHub. Optional at creation, required before template operations.`;
 export const descHubSearch = `Search hubs by name (case-insensitive).`;
 
-// Shared template + fault template fields
+// Shared template fields
 
 export const descHubIdentity = `Unique identifier for the chaos hub that owns the template. Use harness_list with resource_type=chaos_hub to find hub identities.`;
 export const descTemplateSearch = `Search Templates by name or identity.`;
@@ -203,6 +300,7 @@ export const descTemplateIdentity = `Unique identifier for the template. Use har
 export const descRevision = `Specific revision of the template. If omitted, the latest revision is returned.`;
 export const descRevision1 = `First revision identifier for comparison.`;
 export const descRevision2 = `Second revision identifier for comparison.`;
+export const descRevisionToCompare = `Second revision identifier for comparison (action templates use this param name).`;
 export const descSortField = `Field to sort results by.`;
 export const descSortAsc = `When true, sort in ascending order. Defaults to false (descending).`;
 export const descTags = `Comma-separated list of tags to filter by. Must have ALL specified tags (AND filter).`;
@@ -221,3 +319,34 @@ export const descFaultIsEnterprise = `When true, filter for enterprise faults on
 export const descImportType = `How to link the experiment to its template: 'LOCAL' copies into project (default), 'REFERENCE' keeps live reference to hub template.`;
 export const descExperimentDescription = `Optional description for the experiment.`;
 export const descExperimentTags = `Optional tags for the experiment as an array of strings.`;
+
+// Probe/action template fields
+
+export const descEntityTypeProbe = `Probe entity type filter (e.g. httpProbe, cmdProbe, promProbe, k8sProbe, sloProbe, datadogProbe, dynatraceProbe, containerProbe, apmProbe).`;
+export const descEntityTypeAction = `Action entity type filter (e.g. delay, customScript, container).`;
+
+// Hub faults fields
+
+export const descEntityTypeFault = `Fault entity type filter.`;
+export const descPermissionsRequiredEnum = `Filter by permissions required: 'Basic' or 'Advanced'.`;
+export const descOnlyTemplatisedFaults = `When true, return only faults that have associated templates. Defaults to false.`;
+
+// K8s infrastructure fields
+
+export const descEnvironmentId = `Environment identifier. Use chaos_environment list to find available environment IDs.`;
+export const descK8sInfraStatus = `Filter by infrastructure status. Use 'ACTIVE' (default), 'INACTIVE', 'PENDING', or 'All' for no filter.`;
+export const descIncludeLegacyInfra = `When true, also includes V1 (legacy) Kubernetes infrastructures alongside V2 ones. Defaults to false.`;
+export const descSearchK8sInfra = `Search infrastructures by name (case-insensitive).`;
+
+// Chaos environment fields
+
+export const descSearchTermEnv = `Search environments by name (case-insensitive).`;
+export const descSortEnv = `Sort field and direction as a combined string (e.g. "lastModifiedAt,DESC" or "name,ASC"). Defaults to lastModifiedAt,DESC.`;
+export const descEnvironmentType = `Filter environments by type: 'PreProduction' or 'Production'. Leave empty to return all types.`;
+
+// ChaosGuard fields
+
+export const descGuardSearch = `Search conditions/rules by name (case-insensitive).`;
+export const descGuardInfraType = `Filter by infrastructure type (e.g. Kubernetes, KubernetesV2, Linux, Windows).`;
+export const descGuardTags = `Comma-separated list of tags to filter conditions/rules by.`;
+export const descGuardEnabled = `Set to true to enable the rule, false to disable it. Required.`;
