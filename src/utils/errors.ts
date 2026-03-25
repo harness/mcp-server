@@ -74,6 +74,15 @@ export function toMcpError(err: unknown): McpError {
   return new McpError(ErrorCode.InternalError, String(err));
 }
 
+/**
+ * Enrich an error message with a resource's diagnosticHint when available.
+ * Used by tool handlers to give the LLM specific recovery instructions on 404s.
+ */
+export function enrichErrorWithHint(message: string, diagnosticHint?: string): string {
+  if (!diagnosticHint) return message;
+  return `${message}\n\nRecovery hint: ${diagnosticHint}`;
+}
+
 function mapHttpStatusToMcpCode(status: number): ErrorCode {
   if (status === 400) return ErrorCode.InvalidParams;
   if (status === 401 || status === 403) return ErrorCode.InvalidRequest;

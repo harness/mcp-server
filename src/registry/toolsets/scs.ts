@@ -1,5 +1,32 @@
 import type { ToolsetDefinition } from "../types.js";
-import { scsCleanExtract } from "../extractors.js";
+import { scsCleanExtract, scsListExtract } from "../extractors.js";
+
+// ── P2-2: Per-resource field lists for list extractors ─────────────────────
+// Only actionable fields are retained in list responses to reduce token usage.
+// Get operations keep scsCleanExtract (full detail for single-item views).
+const ARTIFACT_SOURCE_LIST_FIELDS = [
+  "id", "source_id", "identifier", "name", "artifact_type", "source_type",
+  "registry_type", "registry_url", "artifact_count", "created", "updated",
+];
+
+const ARTIFACT_SECURITY_LIST_FIELDS = [
+  "id", "artifact_id", "identifier", "name", "tag", "url", "digest",
+  "components_count", "vulnerability_count", "sto_issue_count",
+  "scorecard", "orchestration", "policy_enforcement",
+  "slsa_verification", "signing_status", "updated", "created",
+];
+
+const ARTIFACT_COMPONENT_LIST_FIELDS = [
+  "purl", "packageUrl", "package_name", "name", "package_version", "version",
+  "package_license", "license", "dependency_type",
+  "vulnerability_count", "supplier",
+];
+
+const CODE_REPO_LIST_FIELDS = [
+  "id", "repo_id", "identifier", "name", "repo_name", "repo_url",
+  "branch", "default_branch", "components_count",
+  "vulnerability_count", "updated",
+];
 
 /**
  * Normalize a value to an array. LLMs frequently send scalar strings
@@ -29,7 +56,10 @@ export const scsToolset: ToolsetDefinition = {
       resourceType: "scs_artifact_source",
       displayName: "SCS Artifact Source",
       description: "Artifact source (registry) registered in the project. Supports list. "
-        + "Retain source_id from responses — it is required to list artifacts within a source.",
+        + "Retain source_id from responses — it is required to list artifacts within a source. "
+        + "Two-step flow: first list sources to get source_id, then list artifacts within that source.",
+      diagnosticHint: "If you get a 404: use harness_list(resource_type='scs_artifact_source') to discover valid source IDs. "
+        + "Source IDs are required before querying artifacts, components, or compliance.",
       toolset: "scs",
       scope: "project",
       identifierFields: ["source_id"],
@@ -50,7 +80,8 @@ export const scsToolset: ToolsetDefinition = {
             ...(input.search_term ? { search_term: input.search_term } : {}),
             ...(input.artifact_type ? { artifact_type: ensureArray(input.artifact_type) } : {}),
           }),
-          responseExtractor: scsCleanExtract,
+          defaultQueryParams: { limit: "10" },
+          responseExtractor: scsListExtract(ARTIFACT_SOURCE_LIST_FIELDS),
           description: "List artifact sources in the project",
         },
       },
@@ -62,7 +93,10 @@ export const scsToolset: ToolsetDefinition = {
       displayName: "Artifact Security",
       description: "Artifact security posture. List artifacts from a source, or get an artifact overview. "
         + "Retain artifact_id and source_id from responses — they are required for follow-up queries "
-        + "(compliance, components, chain of custody, SBOM, remediation).",
+        + "(compliance, components, chain of custody, SBOM, remediation). "
+        + "IMPORTANT: source_id is required to list artifacts. Get it from harness_list(resource_type='scs_artifact_source') first.",
+      diagnosticHint: "If you get a 404: verify source_id is correct. Use harness_list(resource_type='scs_artifact_source') to find valid source IDs. "
+        + "For artifact details, use harness_get with both source_id and artifact_id.",
       toolset: "scs",
       scope: "project",
       identifierFields: ["source_id", "artifact_id"],
@@ -85,7 +119,8 @@ export const scsToolset: ToolsetDefinition = {
           bodyBuilder: (input) => ({
             ...(input.search_term ? { search_term: input.search_term } : {}),
           }),
-          responseExtractor: scsCleanExtract,
+          defaultQueryParams: { limit: "10" },
+          responseExtractor: scsListExtract(ARTIFACT_SECURITY_LIST_FIELDS),
           description: "List artifacts from an artifact source with pagination",
         },
         get: {
@@ -109,6 +144,8 @@ export const scsToolset: ToolsetDefinition = {
       displayName: "SCS Artifact Component",
       description: "Components (dependencies) within an artifact. Supports list. "
         + "Retain purl from responses — it is required for remediation lookups.",
+      diagnosticHint: "If you get a 404: verify artifact_id is correct. Get artifact IDs from harness_list(resource_type='artifact_security', source_id='...'). "
+        + "Use dependency_type='DIRECT' to filter for direct dependencies only.",
       toolset: "scs",
       scope: "project",
       identifierFields: ["artifact_id"],
@@ -132,7 +169,8 @@ export const scsToolset: ToolsetDefinition = {
             ...(input.search_term ? { search_term: input.search_term } : {}),
             ...(input.dependency_type ? { dependency_type: input.dependency_type } : {}),
           }),
-          responseExtractor: scsCleanExtract,
+          defaultQueryParams: { limit: "10" },
+          responseExtractor: scsListExtract(ARTIFACT_COMPONENT_LIST_FIELDS),
           description: "List components (dependencies) in an artifact",
         },
       },
@@ -145,6 +183,8 @@ export const scsToolset: ToolsetDefinition = {
       description: "Remediation advice for a component identified by its package URL (purl). "
         + "Works for code repository artifacts only — not available for container images. "
         + "Pass artifact_id as resource_id and purl via params.",
+      diagnosticHint: "If you get a 404: (1) verify artifact_id and purl are correct, (2) remediation only works for code repo artifacts, not container images. "
+        + "Get purl values from harness_list(resource_type='scs_artifact_component', artifact_id='...').",
       toolset: "scs",
       scope: "project",
       identifierFields: ["artifact_id"],
@@ -173,6 +213,7 @@ export const scsToolset: ToolsetDefinition = {
       displayName: "SCS Chain of Custody",
       description: "Chain of custody (event history) for an artifact. Supports get. "
         + "Returns orchestration IDs needed to download SBOMs.",
+      diagnosticHint: "If you get a 404: verify artifact_id is correct. Get artifact IDs from harness_list(resource_type='artifact_security', source_id='...').",
       toolset: "scs",
       scope: "project",
       identifierFields: ["artifact_id"],
@@ -193,6 +234,8 @@ export const scsToolset: ToolsetDefinition = {
       resourceType: "scs_compliance_result",
       displayName: "SCS Compliance Result",
       description: "Compliance scan results for an artifact. Supports list.",
+      diagnosticHint: "If you get a 404: verify artifact_id is correct. Get artifact IDs from harness_list(resource_type='artifact_security', source_id='...'). "
+        + "Filter by standards (e.g. 'CIS', 'OWASP') and status ('PASSED', 'FAILED', 'WARNING').",
       toolset: "scs",
       scope: "project",
       identifierFields: ["artifact_id"],
@@ -214,6 +257,7 @@ export const scsToolset: ToolsetDefinition = {
             ...(input.standards ? { standards: ensureArray(input.standards) } : {}),
             ...(input.status ? { status: ensureArray(input.status) } : {}),
           }),
+          defaultQueryParams: { limit: "10" },
           responseExtractor: scsCleanExtract,
           description: "List compliance results for an artifact",
         },
@@ -226,6 +270,8 @@ export const scsToolset: ToolsetDefinition = {
       displayName: "Code Repository Security",
       description: "Code repository security posture. Supports list and get (overview). "
         + "Retain repo_id from responses — it is required to get the repository security overview.",
+      diagnosticHint: "If you get a 404: use harness_list(resource_type='code_repo_security') to discover valid repo IDs. "
+        + "Code repos are also artifacts (ArtifactType.REPOSITORY) — repo_id can be used as artifact_id for component queries.",
       toolset: "scs",
       scope: "project",
       identifierFields: ["repo_id"],
@@ -245,7 +291,8 @@ export const scsToolset: ToolsetDefinition = {
           bodyBuilder: (input) => ({
             ...(input.search_term ? { search_term: input.search_term } : {}),
           }),
-          responseExtractor: scsCleanExtract,
+          defaultQueryParams: { limit: "10" },
+          responseExtractor: scsListExtract(CODE_REPO_LIST_FIELDS),
           description: "List scanned code repositories",
         },
         get: {
@@ -263,6 +310,7 @@ export const scsToolset: ToolsetDefinition = {
       resourceType: "scs_sbom",
       displayName: "SBOM",
       description: "Software Bill of Materials download. Requires an orchestration ID (from artifact chain of custody).",
+      diagnosticHint: "If you get a 404: verify orchestration_id is correct. Get orchestration IDs from harness_get(resource_type='scs_chain_of_custody', artifact_id='...').",
       toolset: "scs",
       scope: "project",
       identifierFields: ["orchestration_id"],
