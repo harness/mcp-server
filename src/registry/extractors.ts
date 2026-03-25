@@ -24,6 +24,33 @@ export const pageExtract = (raw: unknown): { items: unknown[]; total: number } =
 export const passthrough = (raw: unknown): unknown => raw;
 
 /**
+ * SCS-specific extractor — strips null, undefined, empty string, empty array,
+ * and empty object fields recursively from API responses. SCS payloads contain
+ * ~40% empty/null fields; removing them yields significant token savings.
+ */
+export const scsCleanExtract = (raw: unknown): unknown => {
+  return stripEmptyFields(raw);
+};
+
+function stripEmptyFields(obj: unknown): unknown {
+  if (Array.isArray(obj)) return obj.map(stripEmptyFields);
+  if (obj !== null && typeof obj === "object") {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      if (value === null || value === undefined) continue;
+      if (value === "") continue;
+      if (Array.isArray(value) && value.length === 0) continue;
+      const cleaned = stripEmptyFields(value);
+      if (typeof cleaned === "object" && cleaned !== null && !Array.isArray(cleaned)
+        && Object.keys(cleaned as Record<string, unknown>).length === 0) continue;
+      result[key] = cleaned;
+    }
+    return result;
+  }
+  return obj;
+}
+
+/**
  * Factory for HAR (Artifact Registry) list responses.
  * HAR wraps lists as `{ data: { <arrayKey>: [...], itemCount, pageIndex, ... }, status }`.
  * Normalizes to `{ items, total, pageIndex, pageSize, pageCount }` so the deep link
@@ -165,6 +192,86 @@ export const dashboardListExtract = (raw: unknown): { items: unknown[]; total: n
 export const dashboardDataExtract = (raw: unknown): unknown => {
   if (raw instanceof ArrayBuffer) {
     return parseZipCsv(raw);
+  }
+  return raw;
+};
+
+// ---------------------------------------------------------------------------
+// Chaos Engineering extractors
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract chaos paginated list response: { data: [...], pagination: { totalItems } }
+ * Used by chaos experiments and templates.
+ */
+export const chaosPageExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { data?: unknown[]; pagination?: { totalItems?: number } };
+  return {
+    items: r.data ?? [],
+    total: r.pagination?.totalItems ?? (Array.isArray(r.data) ? r.data.length : 0),
+  };
+};
+
+/**
+ * Extract chaos probe list response: { totalNoOfProbes, data: [...] }
+ */
+export const chaosProbeListExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { data?: unknown[]; totalNoOfProbes?: number };
+  return {
+    items: r.data ?? [],
+    total: r.totalNoOfProbes ?? (Array.isArray(r.data) ? r.data.length : 0),
+  };
+};
+
+/**
+ * Extract chaos infrastructure list response: { totalNoOfInfras, infras: [...] }
+ */
+export const chaosInfraListExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { infras?: unknown[]; totalNoOfInfras?: number };
+  return {
+    items: r.infras ?? [],
+    total: r.totalNoOfInfras ?? (Array.isArray(r.infras) ? r.infras.length : 0),
+  };
+};
+
+// ---------------------------------------------------------------------------
+// Feature Management Enterprise (FME) extractors
+// ---------------------------------------------------------------------------
+
+/**
+ * Flattens `trafficType.id` → `trafficTypeId` at the top level of an FME item.
+ * Enables deep link templates to reference `trafficTypeId` directly.
+ */
+export function flattenTrafficType(item: Record<string, unknown>): void {
+  const tt = item.trafficType;
+  if (tt && typeof tt === "object" && !Array.isArray(tt)) {
+    const ttRecord = tt as Record<string, unknown>;
+    if (ttRecord.id !== undefined && item.trafficTypeId === undefined) {
+      item.trafficTypeId = ttRecord.id;
+    }
+  }
+}
+
+/** Extract FME feature flag list — passthrough with trafficType.id flattened on each item. */
+export const fmeListExtract = (raw: unknown): unknown => {
+  if (raw && typeof raw === "object") {
+    const r = raw as Record<string, unknown>;
+    const objects = r.objects;
+    if (Array.isArray(objects)) {
+      for (const item of objects) {
+        if (item && typeof item === "object") {
+          flattenTrafficType(item as Record<string, unknown>);
+        }
+      }
+    }
+  }
+  return raw;
+};
+
+/** Extract FME feature flag single item — passthrough with trafficType.id flattened. */
+export const fmeGetExtract = (raw: unknown): unknown => {
+  if (raw && typeof raw === "object") {
+    flattenTrafficType(raw as Record<string, unknown>);
   }
   return raw;
 };

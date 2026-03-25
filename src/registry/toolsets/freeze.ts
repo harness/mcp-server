@@ -1,17 +1,5 @@
 import type { ToolsetDefinition, BodySchema } from "../types.js";
-import { ngExtract } from "../extractors.js";
-
-// ---------------------------------------------------------------------------
-// Custom extractor for freeze list — uses `totalItems` instead of `totalElements`
-// ---------------------------------------------------------------------------
-
-const freezeListExtract = (raw: unknown): { items: unknown[]; total: number } => {
-  const r = raw as { data?: { content?: unknown[]; totalItems?: number } };
-  return {
-    items: r.data?.content ?? [],
-    total: r.data?.totalItems ?? 0,
-  };
-};
+import { ngExtract, pageExtract } from "../extractors.js";
 
 // ---------------------------------------------------------------------------
 // Body schemas (for harness_describe output)
@@ -80,7 +68,7 @@ export const freezeToolset: ToolsetDefinition = {
             if (input.end_time) filterProperties.endTime = input.end_time;
             return filterProperties;
           },
-          responseExtractor: freezeListExtract,
+          responseExtractor: pageExtract,
           description: "List deployment freeze windows with optional filters",
         },
         get: {

@@ -1,0 +1,849 @@
+#!/usr/bin/env python3
+"""
+Phase 0.5: LLM Smoke Test for SCS MCP Tools (V2 — harness-mcp-v2)
+
+V2 Tool Model: Generic tools (harness_list, harness_get, harness_describe)
+dispatched via resource_type parameter. Scoring checks (tool_name, resource_type) tuples.
+
+Prerequisites:
+  1. genai-service at GENAI_URL with SKIP_AUTHORIZATION=true, MCP external mode
+  2. harness-mcp-v2 built (pnpm build), HARNESS_MCP_BIN_PATH=build/index.js
+  3. ml-infra .env: ML_ENABLE_MCP_OVER_HTTP=false, HARNESS_TOOLSETS=scs
+  4. ANTHROPIC_API_KEY, HARNESS_API_KEY set
+
+Usage:
+  python tests/e2e/scs_llm_smoke_test.py [--url URL] [--query-ids Q01,M01,...] [--delay SECS]
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Optional
+
+import urllib.error
+import urllib.request
+
+# ---------------------------------------------------------------------------
+# Types & Config
+# ---------------------------------------------------------------------------
+ToolSpec = tuple  # (tool_name, resource_type) — Python 3.9 compat
+
+GENAI_URL = os.getenv("GENAI_URL", "http://localhost:8000")
+ACCOUNT_ID = os.getenv("HARNESS_ACCOUNT_ID", "ppbLW9YpRharzPs_JtWT7g")
+ORG_ID = os.getenv("HARNESS_ORG_ID", "SSCA")
+PROJECT_ID = os.getenv("HARNESS_PROJECT_ID", "SSCA_Sanity_Automation")
+MCP_LOG_FILE = os.getenv("HARNESS_MCP_LOG_FILE", "/tmp/scs-smoke-mcp.log")
+INTER_QUERY_DELAY = float(os.getenv("INTER_QUERY_DELAY", "5"))
+OUTPUT_DIR = Path(__file__).resolve().parent / "benchmark_results"
+
+
+def _fmt_tool(spec: ToolSpec) -> str:
+    if isinstance(spec, (list, tuple)) and len(spec) == 2:
+        return f"{spec[0]}({spec[1]})"
+    return str(spec)
+
+
+def _fmt_tools(specs: list) -> str:
+    return ", ".join(_fmt_tool(s) for s in specs) if specs else "(none)"
+
+
+# ---------------------------------------------------------------------------
+# 15 Test Queries — V2
+# expected_tools: list of (tool_name, resource_type) tuples
+# Q02, Q03, Q05: Downgraded — filters not ported to v2
+# Q15: Reclassified per PD-1 — vuln counts are CORRECT behavior
+# ---------------------------------------------------------------------------
+QUERIES = [
+    {
+        "id": "Q01", "query": "List all my artifacts",
+        "expected_intent": "Partially Supported: List artifacts",
+        "confidence": "Supported",
+        "expected_tools": [("harness_list", "scs_artifact_source")],
+        "observe": "Does it call harness_list with resource_type=scs_artifact_source?",
+    },
+    {
+        "id": "Q02", "query": "Show me only Docker image artifacts",
+        "expected_intent": "Not Supported in v2: artifact_type filter not ported",
+        "confidence": "N/A", "expected_tools": [],
+        "observe": "V2 has no artifact_type filter. Graceful decline or client-side filter?",
+    },
+    {
+        "id": "Q03", "query": "Which artifacts have policy violations?",
+        "expected_intent": "Not Supported in v2: policy_violation filter not ported",
+        "confidence": "N/A", "expected_tools": [],
+        "observe": "V2 has no policy_violation filter. Graceful decline?",
+    },
+    {
+        "id": "Q04", "query": "List my code repositories that have been scanned",
+        "expected_intent": "Supported: List scanned code repos",
+        "confidence": "Supported",
+        "expected_tools": [("harness_list", "code_repo_security")],
+        "observe": "Does it call harness_list with resource_type=code_repo_security?",
+    },
+    {
+        "id": "Q05", "query": "Which of my code repos contain the lodash dependency?",
+        "expected_intent": "Not Supported in v2: dependency_filter not ported",
+        "confidence": "N/A", "expected_tools": [],
+        "observe": "V2 has no dependency_filter. Graceful decline?",
+    },
+    {
+        "id": "Q06", "query": "What is the security status of my first code repository?",
+        "expected_intent": "Partially Supported: Repo security overview",
+        "confidence": "High",
+        "expected_tools": [("harness_list", "code_repo_security"), ("harness_get", "code_repo_security")],
+        "observe": "Does it chain harness_list → harness_get with correct repo_id?",
+    },
+    {
+        "id": "Q07", "query": "Show me the SBOM components for one of my artifacts",
+        "expected_intent": "Partially Supported: SBOM inspection",
+        "confidence": "High",
+        "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "scs_artifact_component")],
+        "observe": "Does it chain scs_artifact_source → scs_artifact_component? May call artifact_security in between.",
+    },
+    {
+        "id": "Q08", "query": "Is my first code repository compliant with CIS benchmarks?",
+        "expected_intent": "Partially Supported: CIS compliance check",
+        "confidence": "Medium",
+        "expected_tools": [("harness_list", "code_repo_security"), ("harness_list", "scs_compliance_result")],
+        "observe": "Does it pass standards=['CIS']? Watch for array normalization bug (T2-v2).",
+    },
+    {
+        "id": "Q09", "query": "Download the SBOM for one of my artifacts",
+        "expected_intent": "Partially Supported: SBOM download",
+        "confidence": "Medium",
+        "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_get", "scs_sbom")],
+        "observe": "Does it extract orchestration_id? Compact mode may strip it.",
+    },
+    {
+        "id": "Q10", "query": "Show me the supply chain provenance for one of my artifacts",
+        "expected_intent": "Partially Supported: Chain of custody",
+        "confidence": "Medium",
+        "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_get", "scs_chain_of_custody")],
+        "observe": "Does it chain source list → chain of custody with correct artifact_id?",
+    },
+    {
+        "id": "Q11", "query": "What licenses are present in the SBOM of one of my artifacts?",
+        "expected_intent": "Partially Supported: SBOM license inspection",
+        "confidence": "Medium",
+        "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "scs_artifact_component")],
+        "observe": "Compact mode strips package_license — LLM should use compact=false.",
+    },
+    {
+        "id": "Q12", "query": "Show me recently scanned artifacts, sorted by most recent first",
+        "expected_intent": "Partially Supported: Recent scans",
+        "confidence": "Medium",
+        "expected_tools": [("harness_list", "scs_artifact_source")],
+        "observe": "V2 scs_artifact_source has no sort param. Does LLM attempt sort?",
+    },
+    {
+        "id": "Q13",
+        "query": "I want remediation guidance for the zlib component in my artifacts. Can you find it and tell me what version to upgrade to?",
+        "expected_intent": "Partially Supported: Remediation (4-call chain in v2)",
+        "confidence": "Low",
+        "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_artifact_remediation")],
+        "observe": "Needs purl from component list. Compact mode strips purl — must use compact=false.",
+    },
+    {
+        "id": "Q14", "query": "Give me a complete security overview of my entire project including all artifacts and repos",
+        "expected_intent": "Deprioritized (PD-5): Project-level overview blocked on risk scoring",
+        "confidence": "N/A", "expected_tools": [],
+        "observe": "Does it gracefully decline or attempt partial answer?",
+    },
+    {
+        "id": "Q15", "query": "Which of my artifacts have critical vulnerabilities? List only those with critical severity.",
+        "expected_intent": "Deprioritized (PD-1): Vuln severity is STO territory. Counts-only is CORRECT.",
+        "confidence": "Medium",
+        "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_get", "artifact_security")],
+        "observe": "Per PD-1: CORRECT if it returns vuln counts. No penalty for no severity filter.",
+    },
+]
+
+# ---------------------------------------------------------------------------
+# Multi-Turn Conversations — V2
+# ---------------------------------------------------------------------------
+CONVERSATIONS = [
+    {
+        "id": "M01", "title": "Artifact Drill-Down Journey",
+        "description": "List artifact sources → pick one → inspect SBOM",
+        "turns": [
+            {"turn": 1, "query": "List all my artifacts",
+             "expected_tools": [("harness_list", "scs_artifact_source")],
+             "observe": "Baseline list. Does it return source names/IDs?"},
+            {"turn": 2, "query": "Tell me more about the first ECR artifact in that list",
+             "expected_tools": [],
+             "observe": "Can it resolve 'first ECR artifact' from Turn 1?"},
+            {"turn": 3, "query": "What are its SBOM components?",
+             "expected_tools": [("harness_list", "scs_artifact_component")],
+             "observe": "Does it resolve 'its' to the artifact from Turn 2?"},
+        ],
+    },
+    {
+        "id": "M02", "title": "Code Repo Security Deep-Dive",
+        "description": "List repos → security overview → CIS compliance",
+        "turns": [
+            {"turn": 1, "query": "List my code repositories",
+             "expected_tools": [("harness_list", "code_repo_security")],
+             "observe": "Does it list repos with IDs?"},
+            {"turn": 2, "query": "What's the security overview of ProtectedPDF2Doc?",
+             "expected_tools": [("harness_get", "code_repo_security")],
+             "observe": "Can it resolve repo name to repo_id from Turn 1?"},
+            {"turn": 3, "query": "Show me its CIS compliance results",
+             "expected_tools": [("harness_list", "scs_compliance_result")],
+             "observe": "Does it retain repo UUID? Does it pass standards=['CIS']?"},
+        ],
+    },
+    {
+        "id": "M03", "title": "Remediation Journey",
+        "description": "User drives the remediation chain one turn at a time",
+        "turns": [
+            {"turn": 1, "query": "Show me the SBOM components for my latest ECR artifact",
+             "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "scs_artifact_component")],
+             "observe": "Does it chain source list → component list?"},
+            {"turn": 2, "query": "Which of those components have known vulnerabilities?",
+             "expected_tools": [],
+             "observe": "Can it reference SBOM data from Turn 1?"},
+            {"turn": 3, "query": "How do I fix the zlib component? What version should I upgrade to?",
+             "expected_tools": [("harness_get", "scs_artifact_remediation")],
+             "observe": "Does it extract the correct purl?"},
+        ],
+    },
+    {
+        "id": "M04", "title": "Refinement & Correction",
+        "description": "Broad list → attempt type filter → attempt policy filter (both missing in v2)",
+        "turns": [
+            {"turn": 1, "query": "List all my artifacts",
+             "expected_tools": [("harness_list", "scs_artifact_source")],
+             "observe": "Baseline unfiltered list."},
+            {"turn": 2, "query": "Actually, show me only the Docker image artifacts",
+             "expected_tools": [],
+             "observe": "V2 has no artifact_type filter. Creative workaround?"},
+            {"turn": 3, "query": "Which of those have policy violations?",
+             "expected_tools": [],
+             "observe": "V2 has no policy_violation filter. Creative workaround?"},
+        ],
+    },
+    {
+        "id": "M05", "title": "Cross-Entity Exploration",
+        "description": "Repo overview → switch to artifacts → attempt cross-entity comparison",
+        "turns": [
+            {"turn": 1, "query": "What's the security status of the ProtectedPDF2Doc repo?",
+             "expected_tools": [("harness_list", "code_repo_security"), ("harness_get", "code_repo_security")],
+             "observe": "Resolves repo name → repo_id → overview."},
+            {"turn": 2, "query": "Now show me the artifacts in this project",
+             "expected_tools": [("harness_list", "scs_artifact_source")],
+             "observe": "Can it switch context from repos to artifacts?"},
+            {"turn": 3, "query": "Compare the security posture of that repo with the first artifact",
+             "expected_tools": [],
+             "observe": "Cross-entity comparison not supported. Graceful decline?"},
+        ],
+    },
+]
+
+# ---------------------------------------------------------------------------
+# SSE Parsing (unchanged from v1)
+# ---------------------------------------------------------------------------
+def parse_sse_lines(raw_body: str) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    current_event = ""
+    current_data_lines: list[str] = []
+    for line in raw_body.splitlines():
+        if line == "":
+            if current_data_lines:
+                data_str = "\n".join(current_data_lines)
+                event_type = current_event or "message"
+                parsed_data: Any = data_str
+                try:
+                    parsed_data = json.loads(data_str)
+                except (json.JSONDecodeError, ValueError):
+                    pass
+                events.append({"event": event_type, "data": parsed_data})
+            current_event = ""
+            current_data_lines = []
+            continue
+        if line.startswith(":"):
+            continue
+        if line.startswith("event:"):
+            current_event = line[len("event:"):].strip()
+        elif line.startswith("data:"):
+            current_data_lines.append(line[len("data:"):].strip())
+    if current_data_lines:
+        data_str = "\n".join(current_data_lines)
+        parsed_data = data_str
+        try:
+            parsed_data = json.loads(data_str)
+        except (json.JSONDecodeError, ValueError):
+            pass
+        events.append({"event": current_event or "message", "data": parsed_data})
+    return events
+
+
+# ---------------------------------------------------------------------------
+# Tool Call Extraction — V2: extracts (tool_name, resource_type) tuples
+# ---------------------------------------------------------------------------
+def extract_tools_from_events(events: list[dict[str, Any]]) -> dict[str, Any]:
+    tools_called: list[ToolSpec] = []
+    tool_params: dict[str, Any] = {}
+    tool_results: list[dict[str, Any]] = []
+    errors: list[str] = []
+    token_usage: dict[str, int] = {}
+    suggested_prompts: list[Any] = []
+    thoughts_parts: list[str] = []
+    final_answer_parts: list[str] = []
+
+    for ev in events:
+        event_type = ev.get("event", "")
+        data = ev.get("data")
+        if event_type == "assistant_tool_request":
+            if isinstance(data, dict):
+                for req in data.get("v", []):
+                    name = req.get("name", "unknown")
+                    args = req.get("arguments", {})
+                    resource_type = args.get("resource_type", "")
+                    tool_spec = (name, resource_type)
+                    tools_called.append(tool_spec)
+                    tool_params[_fmt_tool(tool_spec)] = args
+        elif event_type == "assistant_tool_result":
+            if isinstance(data, dict):
+                for res in data.get("v", []):
+                    content = res.get("content", "")
+                    content_len = len(content) if isinstance(content, str) else len(json.dumps(content))
+                    tool_results.append({"name": res.get("name"), "is_error": res.get("is_error", False), "content_length": content_len})
+        elif event_type == "assistant_thought":
+            if isinstance(data, dict):
+                v = data.get("v", "")
+                if isinstance(v, str): thoughts_parts.append(v)
+            elif isinstance(data, str): thoughts_parts.append(data)
+        elif event_type == "assistant_message":
+            if isinstance(data, dict):
+                v = data.get("v", "")
+                if isinstance(v, str): final_answer_parts.append(v)
+            elif isinstance(data, str): final_answer_parts.append(data)
+        elif event_type == "model_usage":
+            if isinstance(data, dict):
+                for _, usage in data.items():
+                    if isinstance(usage, dict):
+                        token_usage["prompt_tokens"] = token_usage.get("prompt_tokens", 0) + usage.get("prompt_tokens", 0)
+                        token_usage["completion_tokens"] = token_usage.get("completion_tokens", 0) + usage.get("completion_tokens", 0)
+                token_usage["total_tokens"] = token_usage.get("prompt_tokens", 0) + token_usage.get("completion_tokens", 0)
+        elif event_type == "error":
+            if isinstance(data, dict): errors.append(data.get("message", str(data)))
+            elif isinstance(data, str): errors.append(data)
+        elif event_type == "prompts":
+            if isinstance(data, dict): suggested_prompts.append(data)
+            elif isinstance(data, list): suggested_prompts.extend(data)
+
+    seen: set = set()
+    unique_tools: list[ToolSpec] = []
+    for t in tools_called:
+        if t not in seen:
+            seen.add(t)
+            unique_tools.append(t)
+    return {
+        "tools_called": unique_tools, "tool_params": tool_params, "tool_results": tool_results,
+        "chain_depth": len(unique_tools), "final_answer": "".join(final_answer_parts),
+        "final_answer_length": len("".join(final_answer_parts)), "errors": errors,
+        "token_usage": token_usage, "suggested_prompts": suggested_prompts, "thoughts": "".join(thoughts_parts),
+    }
+
+
+# ---------------------------------------------------------------------------
+# MCP Log Parsing — V2: Node.js JSON stderr + Go slog fallback
+# ---------------------------------------------------------------------------
+def read_mcp_log_delta(log_path: str, start_pos: int) -> tuple[list[dict], int]:
+    entries: list[dict] = []
+    new_pos = start_pos
+    if not os.path.exists(log_path):
+        return entries, new_pos
+    try:
+        with open(log_path, "r") as f:
+            f.seek(start_pos)
+            raw = f.read()
+            new_pos = f.tell()
+    except OSError:
+        return entries, new_pos
+    if not raw:
+        return entries, new_pos
+    for line in raw.strip().splitlines():
+        try:
+            entries.append(json.loads(line))
+            continue
+        except (json.JSONDecodeError, ValueError):
+            pass
+        entry: dict[str, str] = {}
+        for match in re.finditer(r'(\w+)=(?:"([^"]*?)"|(\S+))', line):
+            key = match.group(1)
+            val = match.group(2) if match.group(2) is not None else match.group(3)
+            entry[key] = val
+        if entry:
+            entries.append(entry)
+    return entries, new_pos
+
+
+def extract_tool_entries_from_log(log_entries: list[dict]) -> list[dict]:
+    tool_entries = []
+    for entry in log_entries:
+        tool_name = entry.get("tool") or entry.get("toolName") or entry.get("name")
+        if not tool_name:
+            continue
+        if not (tool_name.startswith("harness_") or tool_name.startswith("scs_")):
+            continue
+        tool_entries.append({
+            "tool": tool_name,
+            "resource_type": entry.get("resource_type") or entry.get("resourceType") or "",
+            "elapsed_ms": _to_float(entry.get("elapsed_ms") or entry.get("duration") or entry.get("latency")),
+            "response_bytes": _to_int(entry.get("response_bytes") or entry.get("size")),
+            "is_error": entry.get("level") in ("ERROR", "error", "ERR") or entry.get("is_error") in ("true", True),
+        })
+    return tool_entries
+
+
+def _to_float(val: Any) -> Optional[float]:
+    if val is None: return None
+    try: return float(val)
+    except (ValueError, TypeError): return None
+
+def _to_int(val: Any) -> Optional[int]:
+    if val is None: return None
+    try: return int(val)
+    except (ValueError, TypeError): return None
+
+
+# ---------------------------------------------------------------------------
+# Scoring — V2: compares (tool_name, resource_type) tuples
+# ---------------------------------------------------------------------------
+def auto_score_tool_selection(expected_tools: list[ToolSpec], actual_tools: list[ToolSpec], confidence: str) -> str:
+    if confidence == "N/A":
+        return "GRACEFUL" if not actual_tools else "ATTEMPTED"
+    if not expected_tools and not actual_tools:
+        return "CORRECT"
+    if not actual_tools:
+        return "DECLINED"
+    expected_set = set(expected_tools)
+    actual_set = set(actual_tools)
+    if expected_set == actual_set:
+        return "CORRECT"
+    elif expected_set.issubset(actual_set):
+        return "CORRECT"
+    elif expected_set & actual_set:
+        return "PARTIAL"
+    else:
+        return "WRONG"
+
+
+def _is_chain_complete(expected: list[ToolSpec], actual: list[ToolSpec]) -> bool:
+    return set(expected).issubset(set(actual))
+
+
+# ---------------------------------------------------------------------------
+# Query Execution (unchanged logic, uses curl subprocess for SSE)
+# ---------------------------------------------------------------------------
+def send_query(query_text: str, genai_url: str, account_id: str, org_id: str, project_id: str,
+               timeout: int = 300, conversation_id: Optional[str] = None,
+               conversation_history: Optional[list[dict[str, Any]]] = None) -> tuple[list[dict[str, Any]], float]:
+    if conversation_id is None:
+        conversation_id = str(uuid.uuid4())
+    payload = {
+        "prompt": query_text, "stream": True,
+        "conversation_id": conversation_id, "interaction_id": str(uuid.uuid4()),
+        "metadata": {"accountId": account_id},
+        "harness_context": {"account_id": account_id, "org_id": org_id, "project_id": project_id},
+        "conversation": conversation_history or [],
+    }
+    url = f"{genai_url}/chat/unified"
+    start = time.monotonic()
+    try:
+        proc = subprocess.Popen(
+            ["curl", "-sS", "--no-buffer", "-X", "POST", url,
+             "-H", "Content-Type: application/json", "-H", "Accept: text/event-stream",
+             "-d", json.dumps(payload), "--max-time", str(timeout)],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        lines: list[str] = []
+        last_event_type = ""
+        ping_count = 0
+        while True:
+            raw_line = proc.stdout.readline()
+            if not raw_line:
+                break
+            line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
+            if line.startswith(": ping"):
+                ping_count += 1
+                if ping_count % 4 == 0:
+                    print(f"    [{time.monotonic()-start:.0f}s] ... waiting ({ping_count} pings)", flush=True)
+                continue
+            lines.append(line)
+            if line.startswith("event:"):
+                last_event_type = line[len("event:"):].strip()
+                print(f"    [{time.monotonic()-start:.1f}s] SSE event: {last_event_type}", flush=True)
+            elif line.startswith("data:") and last_event_type in ("assistant_tool_request", "error"):
+                print(f"             {line[:120]}", flush=True)
+            if last_event_type == "done" and line == "":
+                proc.terminate()
+                break
+        proc.wait(timeout=5)
+        if proc.returncode and proc.returncode not in (0, -15):
+            stderr_out = proc.stderr.read().decode("utf-8", errors="replace") if proc.stderr else ""
+            return [{"event": "error", "data": {"message": f"curl error (rc={proc.returncode}): {stderr_out[:500]}"}}], time.monotonic() - start
+        events = parse_sse_lines("\n".join(lines))
+    except Exception as exc:
+        return [{"event": "error", "data": {"message": str(exc)}}], time.monotonic() - start
+    return events, time.monotonic() - start
+
+
+# ---------------------------------------------------------------------------
+# Single Query Runner
+# ---------------------------------------------------------------------------
+def _run_single_query(query_def: dict[str, Any], genai_url: str, account_id: str,
+                      org_id: str, project_id: str, mcp_log_file: str) -> dict[str, Any]:
+    log_pos_before = os.path.getsize(mcp_log_file) if os.path.exists(mcp_log_file) else 0
+    events, duration_s = send_query(query_def["query"], genai_url, account_id, org_id, project_id)
+    extracted = extract_tools_from_events(events)
+    mcp_log_entries_raw, _ = read_mcp_log_delta(mcp_log_file, log_pos_before)
+    mcp_tool_entries = extract_tool_entries_from_log(mcp_log_entries_raw)
+    tool_selection = auto_score_tool_selection(query_def["expected_tools"], extracted["tools_called"], query_def.get("confidence", "N/A"))
+    result = {
+        "id": query_def["id"], "query": query_def["query"],
+        "expected_intent": query_def.get("expected_intent", ""), "confidence": query_def.get("confidence", ""),
+        "expected_tools": [list(t) for t in query_def["expected_tools"]],
+        "timestamp": datetime.now(timezone.utc).isoformat(), "duration_s": round(duration_s, 2),
+        "events": _serialize_events(events),
+        "extracted": {
+            "tools_called": [list(t) for t in extracted["tools_called"]],
+            "tool_params": extracted["tool_params"], "tool_results": extracted["tool_results"],
+            "chain_depth": extracted["chain_depth"],
+            "final_answer": extracted["final_answer"][:2000], "final_answer_length": extracted["final_answer_length"],
+            "errors": extracted["errors"], "token_usage": extracted["token_usage"],
+            "suggested_prompts": extracted["suggested_prompts"],
+        },
+        "mcp_log_entries": mcp_tool_entries,
+        "scoring": {
+            "tool_selection": tool_selection,
+            "chain_complete": _is_chain_complete(query_def["expected_tools"], extracted["tools_called"]),
+            "answer_score": None, "notable_observations": None,
+        },
+    }
+    _print_query_summary(result, extracted)
+    return result
+
+
+def _serialize_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    serialized = []
+    for ev in events:
+        entry: dict[str, Any] = {"event": ev["event"]}
+        data = ev.get("data")
+        if isinstance(data, str) and len(data) > 1000:
+            entry["data"] = data[:1000] + "... [truncated]"
+        elif isinstance(data, dict):
+            entry["data"] = {k: (v[:1000] + "... [truncated]" if isinstance(v, str) and len(v) > 1000 else v) for k, v in data.items()}
+        else:
+            entry["data"] = data
+        serialized.append(entry)
+    return serialized
+
+
+def _print_query_summary(result: dict, extracted: dict) -> None:
+    score = result["scoring"]["tool_selection"]
+    label = {"CORRECT": "PASS", "PARTIAL": "PARTIAL", "WRONG": "FAIL", "DECLINED": "DECLINED", "GRACEFUL": "GRACEFUL", "ATTEMPTED": "ATTEMPTED"}.get(score, score)
+    print(f"\n  Result: [{label}] tool_selection={score}")
+    print(f"  Duration: {result['duration_s']}s")
+    print(f"  Tools called: {_fmt_tools(extracted['tools_called'])}")
+    print(f"  Chain complete: {result['scoring']['chain_complete']}")
+    print(f"  Answer length: {extracted['final_answer_length']} chars")
+    if extracted["token_usage"]:
+        t = extracted["token_usage"]
+        print(f"  Tokens: prompt={t.get('prompt_tokens','?')}, completion={t.get('completion_tokens','?')}, total={t.get('total_tokens','?')}")
+    if extracted["errors"]:
+        print(f"  Errors: {extracted['errors']}")
+    preview = extracted["final_answer"][:200]
+    if preview:
+        print(f"  Answer preview: {preview}...")
+
+
+# ---------------------------------------------------------------------------
+# Conversation Runner
+# ---------------------------------------------------------------------------
+def run_conversation(conv_def: dict[str, Any], genai_url: str, account_id: str, org_id: str,
+                     project_id: str, mcp_log_file: str, delay: float = INTER_QUERY_DELAY) -> dict[str, Any]:
+    conv_id = str(uuid.uuid4())
+    history: list[dict[str, Any]] = []
+    turn_results: list[dict[str, Any]] = []
+    total_duration = 0.0
+    all_tools: list[ToolSpec] = []
+    all_errors: list[str] = []
+    total_tokens: dict[str, int] = {}
+
+    for turn_def in conv_def["turns"]:
+        turn_num = turn_def["turn"]
+        print(f"\n  --- Turn {turn_num}/{len(conv_def['turns'])}: {turn_def['query']}")
+        log_pos_before = os.path.getsize(mcp_log_file) if os.path.exists(mcp_log_file) else 0
+        events, duration_s = send_query(turn_def["query"], genai_url, account_id, org_id, project_id, conversation_id=conv_id, conversation_history=history)
+        extracted = extract_tools_from_events(events)
+        mcp_log_entries_raw, _ = read_mcp_log_delta(mcp_log_file, log_pos_before)
+        mcp_tool_entries = extract_tool_entries_from_log(mcp_log_entries_raw)
+        tool_selection = auto_score_tool_selection(turn_def["expected_tools"], extracted["tools_called"], "N/A" if not turn_def["expected_tools"] else "High")
+
+        turn_results.append({
+            "turn": turn_num, "query": turn_def["query"],
+            "expected_tools": [list(t) for t in turn_def["expected_tools"]], "observe": turn_def["observe"],
+            "duration_s": round(duration_s, 2),
+            "tools_called": [list(t) for t in extracted["tools_called"]],
+            "tool_params": extracted["tool_params"], "tool_results": extracted["tool_results"],
+            "final_answer": extracted["final_answer"][:2000], "final_answer_length": extracted["final_answer_length"],
+            "errors": extracted["errors"], "token_usage": extracted["token_usage"],
+            "mcp_log_entries": mcp_tool_entries, "tool_selection": tool_selection,
+            "chain_complete": _is_chain_complete(turn_def["expected_tools"], extracted["tools_called"]),
+        })
+        total_duration += duration_s
+        all_tools.extend(extracted["tools_called"])
+        all_errors.extend(extracted["errors"])
+        for k, v in extracted["token_usage"].items():
+            total_tokens[k] = total_tokens.get(k, 0) + v
+        print(f"    [{tool_selection}] tools={_fmt_tools(extracted['tools_called'])} duration={duration_s:.1f}s answer_len={extracted['final_answer_length']}")
+        if extracted["errors"]:
+            print(f"    ERRORS: {extracted['errors']}")
+        history.append({"role": "user", "message": {"type": "text", "data": turn_def["query"]}})
+        text = extracted["final_answer"] or extracted["thoughts"]
+        if text:
+            history.append({"role": "assistant", "message": {"type": "text", "data": text[:4000]}})
+        if turn_num < len(conv_def["turns"]):
+            time.sleep(delay)
+
+    turns_correct = sum(1 for t in turn_results if t["tool_selection"] == "CORRECT")
+    turns_with_tools = sum(1 for t in turn_results if t["expected_tools"])
+    overall = "CORRECT" if turns_correct == turns_with_tools and turns_with_tools > 0 else "PARTIAL" if turns_correct > 0 else "WRONG"
+    seen: set = set()
+    unique_tools = [t for t in all_tools if t not in seen and not seen.add(t)]
+    return {
+        "id": conv_def["id"], "type": "conversation", "title": conv_def["title"],
+        "description": conv_def["description"], "conversation_id": conv_id,
+        "timestamp": datetime.now(timezone.utc).isoformat(), "duration_s": round(total_duration, 2),
+        "num_turns": len(conv_def["turns"]), "turns": turn_results,
+        "aggregate": {"all_tools_called": [list(t) for t in unique_tools], "total_chain_depth": len(unique_tools), "total_errors": all_errors, "total_token_usage": total_tokens},
+        "scoring": {"overall": overall, "turns_correct": turns_correct, "turns_total": len(conv_def["turns"]), "turns_with_expected_tools": turns_with_tools, "context_retention": None, "answer_score": None, "notable_observations": None},
+    }
+
+
+# ---------------------------------------------------------------------------
+# Main Runner + Summary + Output
+# ---------------------------------------------------------------------------
+def run_smoke_tests(genai_url: str = GENAI_URL, account_id: str = ACCOUNT_ID, org_id: str = ORG_ID,
+                    project_id: str = PROJECT_ID, mcp_log_file: str = MCP_LOG_FILE,
+                    query_ids: Optional[list[str]] = None, delay: float = INTER_QUERY_DELAY) -> dict[str, Any]:
+    run_single = run_multi = True
+    single_ids = multi_ids = None
+    if query_ids:
+        id_set = {qid.upper() for qid in query_ids}
+        single_ids = {qid for qid in id_set if qid.startswith("Q")}
+        multi_ids = {qid for qid in id_set if qid.startswith("M")}
+        run_single, run_multi = bool(single_ids), bool(multi_ids)
+        if not single_ids and not multi_ids:
+            print(f"ERROR: No queries matched IDs: {query_ids}", file=sys.stderr)
+            sys.exit(1)
+    queries = [q for q in QUERIES if q["id"] in single_ids] if single_ids else QUERIES
+    conversations = [c for c in CONVERSATIONS if c["id"] in multi_ids] if multi_ids else CONVERSATIONS
+
+    print(f"[pre-flight] Checking genai-service at {genai_url} ...")
+    try:
+        with urllib.request.urlopen(urllib.request.Request(f"{genai_url}/docs", method="GET"), timeout=10) as r:
+            print(f"[pre-flight] genai-service is {'UP' if r.status == 200 else f'WARNING: status {r.status}'}")
+    except (urllib.error.URLError, OSError):
+        print(f"[pre-flight] ERROR: Cannot connect to {genai_url}", file=sys.stderr)
+        sys.exit(1)
+
+    run_start = time.monotonic()
+    run_timestamp = datetime.now(timezone.utc).isoformat()
+    single_results: list[dict[str, Any]] = []
+    conv_results: list[dict[str, Any]] = []
+
+    if run_single and queries:
+        print(f"\n{'#'*70}\n# SINGLE-TURN QUERIES ({len(queries)})\n{'#'*70}")
+        for idx, qd in enumerate(queries, 1):
+            print(f"\n{'='*70}\n[{idx}/{len(queries)}] {qd['id']}: {qd['query']}\n{'='*70}")
+            single_results.append(_run_single_query(qd, genai_url, account_id, org_id, project_id, mcp_log_file))
+            if idx < len(queries):
+                print(f"\n  [delay] Waiting {delay}s..."); time.sleep(delay)
+
+    if run_multi and conversations:
+        print(f"\n{'#'*70}\n# MULTI-TURN CONVERSATIONS ({len(conversations)})\n{'#'*70}")
+        for idx, cd in enumerate(conversations, 1):
+            print(f"\n{'='*70}\n[{idx}/{len(conversations)}] {cd['id']}: {cd['title']}\n  {cd['description']}\n{'='*70}")
+            cr = run_conversation(cd, genai_url, account_id, org_id, project_id, mcp_log_file, delay)
+            conv_results.append(cr)
+            s = cr["scoring"]
+            print(f"\n  Conversation: [{s['overall']}] turns_correct={s['turns_correct']}/{s['turns_total']} duration={cr['duration_s']}s")
+            if idx < len(conversations):
+                print(f"\n  [delay] Waiting {delay}s..."); time.sleep(delay)
+
+    return _build_summary(single_results, conv_results, run_timestamp, time.monotonic() - run_start, account_id, org_id, project_id)
+
+
+def _build_summary(results, conv_results, run_timestamp, total_duration, account_id, org_id, project_id):
+    def _count(score): return sum(1 for r in results if r["scoring"]["tool_selection"] == score)
+    durations = [r["duration_s"] for r in results if r["duration_s"] > 0]
+    chain_depths = [r["extracted"]["chain_depth"] for r in results]
+    by_confidence: dict[str, dict[str, int]] = {}
+    for r in results:
+        tier = r["confidence"]
+        if tier not in by_confidence:
+            by_confidence[tier] = {"count": 0, "correct": 0, "partial": 0, "wrong": 0, "declined": 0, "graceful": 0, "attempted": 0}
+        by_confidence[tier]["count"] += 1
+        key = r["scoring"]["tool_selection"].lower()
+        if key in by_confidence[tier]:
+            by_confidence[tier][key] += 1
+
+    conv_summary = {}
+    if conv_results:
+        conv_durations = [c["duration_s"] for c in conv_results if c["duration_s"] > 0]
+        conv_summary = {
+            "total_conversations": len(conv_results),
+            "overall_correct": sum(1 for c in conv_results if c["scoring"]["overall"] == "CORRECT"),
+            "overall_partial": sum(1 for c in conv_results if c["scoring"]["overall"] == "PARTIAL"),
+            "overall_wrong": sum(1 for c in conv_results if c["scoring"]["overall"] == "WRONG"),
+            "total_turns": sum(c["num_turns"] for c in conv_results),
+            "turns_correct": sum(c["scoring"]["turns_correct"] for c in conv_results),
+            "avg_duration_s": round(sum(conv_durations) / len(conv_durations), 2) if conv_durations else 0,
+            "total_tokens": sum(c["aggregate"]["total_token_usage"].get("total_tokens", 0) for c in conv_results),
+        }
+    return {
+        "run_metadata": {
+            "timestamp": run_timestamp, "provider": "anthropic", "model": "claude-sonnet-4-20250514",
+            "account_id": account_id, "org_id": org_id, "project_id": project_id,
+            "mcp_server_version": "2.0.0", "mcp_server_type": "node", "mcp_server_repo": "harness-mcp-v2",
+            "tool_model": "generic (harness_list, harness_get, harness_describe)",
+            "total_duration_s": round(total_duration, 2), "genai_url": GENAI_URL,
+        },
+        "results": results, "conversation_results": conv_results,
+        "summary": {
+            "total_queries": len(results), "tool_selection_correct": _count("CORRECT"),
+            "tool_selection_partial": _count("PARTIAL"), "tool_selection_wrong": _count("WRONG"),
+            "tool_selection_declined": _count("DECLINED"), "tool_selection_graceful": _count("GRACEFUL"),
+            "tool_selection_attempted": _count("ATTEMPTED"),
+            "avg_duration_s": round(sum(durations) / len(durations), 2) if durations else 0,
+            "avg_chain_depth": round(sum(chain_depths) / len(chain_depths), 2) if chain_depths else 0,
+            "total_tokens": sum(r["extracted"]["token_usage"].get("total_tokens", 0) for r in results),
+            "errors_encountered": sum(1 for r in results if r["extracted"]["errors"]),
+            "by_confidence": by_confidence,
+        },
+        "conversation_summary": conv_summary,
+    }
+
+
+def write_results(summary: dict[str, Any]) -> tuple[Path, Path]:
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    results_path = OUTPUT_DIR / "smoke_test_results.json"
+    summary_path = OUTPUT_DIR / "smoke_test_summary.json"
+    with open(results_path, "w") as f:
+        json.dump(summary, f, indent=2, default=str)
+    summary_only = {
+        "run_metadata": summary["run_metadata"], "summary": summary["summary"],
+        "scoring_table": [
+            {"id": r["id"], "query": r["query"][:60], "confidence": r["confidence"],
+             "expected_tools": r["expected_tools"], "actual_tools": r["extracted"]["tools_called"],
+             "tool_selection": r["scoring"]["tool_selection"], "chain_complete": r["scoring"]["chain_complete"],
+             "duration_s": r["duration_s"], "answer_length": r["extracted"]["final_answer_length"],
+             "errors": r["extracted"]["errors"]}
+            for r in summary["results"]
+        ],
+    }
+    if summary.get("conversation_results"):
+        summary_only["conversation_summary"] = summary.get("conversation_summary", {})
+        summary_only["conversation_scoring_table"] = [
+            {"id": c["id"], "title": c["title"], "num_turns": c["num_turns"],
+             "overall": c["scoring"]["overall"], "turns_correct": c["scoring"]["turns_correct"],
+             "turns_total": c["scoring"]["turns_total"], "duration_s": c["duration_s"],
+             "all_tools": c["aggregate"]["all_tools_called"], "total_errors": c["aggregate"]["total_errors"]}
+            for c in summary["conversation_results"]
+        ]
+    with open(summary_path, "w") as f:
+        json.dump(summary_only, f, indent=2, default=str)
+    return results_path, summary_path
+
+
+def print_final_summary(summary: dict[str, Any]) -> None:
+    s = summary["summary"]
+    meta = summary["run_metadata"]
+    print(f"\n{'='*70}\nSMOKE TEST SUMMARY (V2)\n{'='*70}")
+    print(f"  Timestamp:     {meta['timestamp']}\n  Model:         {meta['model']}")
+    print(f"  MCP Server:    {meta['mcp_server_repo']} ({meta['mcp_server_type']})")
+    print(f"  Tool Model:    {meta['tool_model']}")
+    print(f"  Account:       {meta['account_id']}\n  Org/Project:   {meta['org_id']}/{meta['project_id']}")
+    print(f"  Total time:    {meta['total_duration_s']}s\n")
+    if summary["results"]:
+        print(f"  SINGLE-TURN QUERIES\n  Queries run:     {s['total_queries']}")
+        print(f"  Tool CORRECT:    {s['tool_selection_correct']}\n  Tool PARTIAL:    {s['tool_selection_partial']}")
+        print(f"  Tool WRONG:      {s['tool_selection_wrong']}\n  Tool DECLINED:   {s['tool_selection_declined']}")
+        print(f"  Tool GRACEFUL:   {s['tool_selection_graceful']}\n  Tool ATTEMPTED:  {s['tool_selection_attempted']}")
+        print(f"  Avg duration:    {s['avg_duration_s']}s\n  Avg chain depth: {s['avg_chain_depth']}")
+        print(f"  Total tokens:    {s['total_tokens']}\n  Errors:          {s['errors_encountered']}\n")
+        print("  By Confidence Tier:")
+        for tier, counts in s["by_confidence"].items():
+            print(f"    {tier}: {counts}")
+        print(f"\n  {'ID':<5} {'Score':<12} {'Chain':<6} {'Time':<7} {'Tools Called'}")
+        print(f"  {'--':<5} {'-----':<12} {'-----':<6} {'----':<7} {'------------'}")
+        for r in summary["results"]:
+            tools_str = ", ".join(f"{t[0]}({t[1]})" if isinstance(t, list) and len(t) == 2 else str(t) for t in r["extracted"]["tools_called"]) or "(none)"
+            chain = "Yes" if r["scoring"]["chain_complete"] else "No"
+            print(f"  {r['id']:<5} {r['scoring']['tool_selection']:<12} {chain:<6} {r['duration_s']}s".ljust(35) + f" {tools_str}")
+        print()
+    conv_results = summary.get("conversation_results", [])
+    cs = summary.get("conversation_summary", {})
+    if conv_results:
+        print(f"  MULTI-TURN CONVERSATIONS\n  Conversations:   {cs.get('total_conversations', 0)}")
+        print(f"  Overall CORRECT: {cs.get('overall_correct', 0)}\n  Overall PARTIAL: {cs.get('overall_partial', 0)}")
+        print(f"  Total turns:     {cs.get('total_turns', 0)} ({cs.get('turns_correct', 0)} correct)")
+        print(f"  Avg duration:    {cs.get('avg_duration_s', 0)}s\n  Total tokens:    {cs.get('total_tokens', 0)}\n")
+        print(f"  {'ID':<5} {'Overall':<10} {'Turns':<12} {'Time':<9} {'Title'}")
+        print(f"  {'--':<5} {'-------':<10} {'-----':<12} {'----':<9} {'-----'}")
+        for c in conv_results:
+            print(f"  {c['id']:<5} {c['scoring']['overall']:<10} {c['scoring']['turns_correct']}/{c['scoring']['turns_total']:<10} {c['duration_s']}s".ljust(40) + f" {c['title'][:40]}")
+        print()
+        for c in conv_results:
+            print(f"  {c['id']}: {c['title']}")
+            for t in c["turns"]:
+                tools_str = ", ".join(f"{x[0]}({x[1]})" if isinstance(x, list) and len(x) == 2 else str(x) for x in t["tools_called"]) or "(none)"
+                print(f"    T{t['turn']}: [{t['tool_selection']}] {t['query'][:50]}")
+                print(f"         tools={tools_str} duration={t['duration_s']}s")
+        print()
+
+
+# ---------------------------------------------------------------------------
+# CLI Entry Point
+# ---------------------------------------------------------------------------
+def main():
+    parser = argparse.ArgumentParser(description="Phase 0.5: LLM Smoke Test for SCS MCP Tools (V2)")
+    parser.add_argument("--url", default=GENAI_URL, help=f"genai-service base URL (default: {GENAI_URL})")
+    parser.add_argument("--account-id", default=ACCOUNT_ID)
+    parser.add_argument("--org-id", default=ORG_ID)
+    parser.add_argument("--project-id", default=PROJECT_ID)
+    parser.add_argument("--query-ids", default=None, help="Comma-separated IDs (e.g., Q01,Q05,M01,M03)")
+    parser.add_argument("--delay", type=float, default=INTER_QUERY_DELAY)
+    parser.add_argument("--mcp-log", default=MCP_LOG_FILE)
+    args = parser.parse_args()
+    query_ids = [qid.strip() for qid in args.query_ids.split(",")] if args.query_ids else None
+
+    print(f"{'='*70}\nPhase 0.5: SCS LLM Smoke Test (V2 — harness-mcp-v2)\n{'='*70}")
+    print(f"  genai-service URL: {args.url}\n  Account:           {args.account_id}")
+    print(f"  Org/Project:       {args.org_id}/{args.project_id}\n  MCP log:           {args.mcp_log}")
+    print(f"  Query delay:       {args.delay}s")
+    if query_ids:
+        print(f"  Running IDs:       {query_ids}")
+    else:
+        print(f"  Running:           ALL ({len(QUERIES)} single-turn + {len(CONVERSATIONS)} multi-turn)")
+    print()
+
+    summary = run_smoke_tests(args.url, args.account_id, args.org_id, args.project_id, args.mcp_log, query_ids, args.delay)
+    results_path, summary_path = write_results(summary)
+    print_final_summary(summary)
+    print(f"  Full results:  {results_path}\n  Summary:       {summary_path}\n")
+
+
+if __name__ == "__main__":
+    main()

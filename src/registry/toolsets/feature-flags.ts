@@ -1,43 +1,5 @@
 import type { ToolsetDefinition, BodySchema } from "../types.js";
-import { passthrough } from "../extractors.js";
-
-/**
- * FME response extractor that flattens `trafficType.id` → `trafficTypeId`
- * at the top level so deep link templates can reference it.
- */
-function flattenTrafficType(item: Record<string, unknown>): void {
-  const tt = item.trafficType;
-  if (tt && typeof tt === "object" && !Array.isArray(tt)) {
-    const ttRecord = tt as Record<string, unknown>;
-    if (ttRecord.id !== undefined && item.trafficTypeId === undefined) {
-      item.trafficTypeId = ttRecord.id;
-    }
-  }
-}
-
-/** Extract FME feature flag list — passthrough with trafficType.id flattened on each item. */
-const fmeListExtract = (raw: unknown): unknown => {
-  if (raw && typeof raw === "object") {
-    const r = raw as Record<string, unknown>;
-    const objects = r.objects;
-    if (Array.isArray(objects)) {
-      for (const item of objects) {
-        if (item && typeof item === "object") {
-          flattenTrafficType(item as Record<string, unknown>);
-        }
-      }
-    }
-  }
-  return raw;
-};
-
-/** Extract FME feature flag single item — passthrough with trafficType.id flattened. */
-const fmeGetExtract = (raw: unknown): unknown => {
-  if (raw && typeof raw === "object") {
-    flattenTrafficType(raw as Record<string, unknown>);
-  }
-  return raw;
-};
+import { passthrough, fmeListExtract, fmeGetExtract } from "../extractors.js";
 
 const fmeFeatureFlagUpdateSchema: BodySchema = {
   description: "Partial update for an FME feature flag's metadata",

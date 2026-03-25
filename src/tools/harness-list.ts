@@ -20,12 +20,14 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
     ? `Resource-specific filters as key-value pairs. Available keys across enabled resource types: ${allFilterNames.join(", ")}. Call harness_describe for filters available on a specific resource_type.`
     : "Resource-specific filters as key-value pairs. Call harness_describe for available filters per resource_type.";
 
+  const listableTypes = registry.getTypesForOperation("list") as [string, ...string[]];
+
   server.registerTool(
     "harness_list",
     {
       description: "List Harness resources with filtering and pagination. Accepts a Harness URL to auto-extract scope.",
       inputSchema: {
-        resource_type: z.string().describe("Resource type (e.g. pipeline, service, environment). Auto-detected from url.").optional(),
+        resource_type: z.enum(listableTypes).describe("Resource type to list. Auto-detected from url.").optional(),
         url: z.string().describe("Harness UI URL — auto-extracts org, project, and type").optional(),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
@@ -33,6 +35,7 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
         size: z.number().min(1).max(100).describe("Page size (1–100)").default(20).optional(),
         search_term: z.string().describe("Filter results by name or keyword").optional(),
         compact: z.boolean().describe("Strip verbose metadata from list items, keeping only essential fields (default true)").default(true).optional(),
+        params: z.record(z.string(), z.unknown()).describe("Additional identifiers for nested resources (e.g. repo_id for pull requests). Call harness_describe for fields per resource_type.").optional(),
         filters: z.record(z.string(), z.unknown()).describe(filtersDesc).optional(),
         include_visual: z.boolean().describe("Include an inline PNG chart of the results (default false). Supported for execution resource_type. Use when user asks for a visualization, chart, or graph.").default(false).optional(),
         visual_type: z.enum(["timeseries", "bar", "pie"]).describe("Chart type when include_visual=true. 'timeseries' = daily execution counts, 'pie' = breakdown by status, 'bar' = breakdown by pipeline. Default 'pie'.").default("pie").optional(),
@@ -45,9 +48,10 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
     },
     async (args) => {
       try {
-        const { filters, ...rest } = args;
+        const { params, filters, ...rest } = args;
         const input = applyUrlDefaults(rest as Record<string, unknown>, args.url);
-        // Spread caller-supplied filters into the input for registry dispatch
+        // Spread caller-supplied params (path identifiers) and filters into the input
+        if (params) Object.assign(input, params);
         if (filters) Object.assign(input, filters);
         const resourceType = asString(input.resource_type);
         if (!resourceType) {

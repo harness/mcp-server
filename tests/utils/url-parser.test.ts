@@ -163,8 +163,8 @@ describe("parseHarnessUrl", () => {
     expect(result.project_id).toBe("Data_Platform");
     expect(result.repo_id).toBe("query-service");
     expect(result.pr_number).toBe("166");
-    expect(result.resource_type).toBe("pull_request");
-    expect(result.resource_id).toBe("166");
+    expect(result.resource_type).toBe("pr_activity");
+    // conversation URLs route to pr_activity (the canonical way to read PR comments)
   });
 
   it("extracts repo_id and pr_number from pull-requests deep link URL", () => {

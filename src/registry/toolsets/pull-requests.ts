@@ -174,22 +174,14 @@ export const pullRequestsToolset: ToolsetDefinition = {
       resourceType: "pr_comment",
       displayName: "PR Comment",
       description:
-        "Comments on a pull request. Supports list and create.",
+        "Create, update, or delete comments on a pull request. To READ/LIST comments, use pr_activity with kind=comment.",
       toolset: "pull-requests",
       scope: "account",
       scopeOptional: true,
       identifierFields: ["repo_id", "pr_number"],
+      diagnosticHint:
+        "The Harness Code API does not support GET on the comments endpoint. To list or read comments, use harness_list with resource_type='pr_activity' and filters: {kind: 'comment'} or {type: 'comment'}.",
       operations: {
-        list: {
-          method: "GET",
-          path: "/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}/comments",
-          pathParams: {
-            repo_id: "repoIdentifier",
-            pr_number: "prNumber",
-          },
-          responseExtractor: passthrough,
-          description: "List comments on a pull request",
-        },
         create: {
           method: "POST",
           path: "/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}/comments",
@@ -212,6 +204,36 @@ export const pullRequestsToolset: ToolsetDefinition = {
               { name: "target_commit_sha", type: "string", required: false, description: "Target commit SHA for code comment context" },
             ],
           },
+        },
+        update: {
+          method: "PATCH",
+          path: "/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}/comments/{pullreqCommentId}",
+          pathParams: {
+            repo_id: "repoIdentifier",
+            pr_number: "prNumber",
+            comment_id: "pullreqCommentId",
+          },
+          bodyBuilder: (input) => input.body,
+          responseExtractor: passthrough,
+          description:
+            "Update an existing pull request comment. Body fields: text (required).",
+          bodySchema: {
+            description: "Updated comment content",
+            fields: [
+              { name: "text", type: "string", required: true, description: "Updated comment text (markdown supported)" },
+            ],
+          },
+        },
+        delete: {
+          method: "DELETE",
+          path: "/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}/comments/{pullreqCommentId}",
+          pathParams: {
+            repo_id: "repoIdentifier",
+            pr_number: "prNumber",
+            comment_id: "pullreqCommentId",
+          },
+          responseExtractor: passthrough,
+          description: "Delete a pull request comment",
         },
       },
     },
@@ -240,11 +262,19 @@ export const pullRequestsToolset: ToolsetDefinition = {
       resourceType: "pr_activity",
       displayName: "PR Activity",
       description:
-        "Activity timeline on a pull request (comments, reviews, status changes). Supports list.",
+        "Activity timeline on a pull request (comments, reviews, status changes). This is the canonical way to READ comments — use kind=comment or type=comment to filter.",
       toolset: "pull-requests",
       scope: "account",
       scopeOptional: true,
       identifierFields: ["repo_id", "pr_number"],
+      listFilterFields: [
+        { name: "kind", description: "Activity kind filter: change-comment, comment, system", enum: ["change-comment", "comment", "system"] },
+        { name: "type", description: "Activity type filter: comment, code-comment, review-submit, reviewer-add, reviewer-delete, state-change, branch-update, branch-delete, branch-restore, merge, title-change, label-modify, target-branch-change, user-group-reviewer-add, user-group-reviewer-delete", enum: ["comment", "code-comment", "review-submit", "reviewer-add", "reviewer-delete", "state-change", "branch-update", "branch-delete", "branch-restore", "merge", "title-change", "label-modify", "target-branch-change", "user-group-reviewer-add", "user-group-reviewer-delete"] },
+        { name: "after", description: "Only entries created at/after this timestamp (unix millis)", type: "number" },
+        { name: "before", description: "Only entries created before this timestamp (unix millis)", type: "number" },
+      ],
+      diagnosticHint:
+        "To list only comments, use filters: {kind: 'comment'}. For code review comments, use {type: 'code-comment'}. For all discussion, use {kind: 'comment'} which includes both general and code comments.",
       operations: {
         list: {
           method: "GET",
@@ -253,8 +283,15 @@ export const pullRequestsToolset: ToolsetDefinition = {
             repo_id: "repoIdentifier",
             pr_number: "prNumber",
           },
+          queryParams: {
+            kind: "kind",
+            type: "type",
+            after: "after",
+            before: "before",
+            limit: "limit",
+          },
           responseExtractor: passthrough,
-          description: "List activities for a pull request",
+          description: "List activities for a pull request. Use kind=comment to get only comments. This is the only way to read PR comments (the /comments endpoint is POST-only).",
         },
       },
     },
