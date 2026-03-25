@@ -2,11 +2,11 @@ import type { ToolsetDefinition, BodySchema } from "../types.js";
 import { passthrough, fmeListExtract, fmeGetExtract } from "../extractors.js";
 
 const fmeFeatureFlagUpdateSchema: BodySchema = {
-  description: "Partial update for an FME feature flag's metadata",
+  description: "Partial update for an FME feature flag's metadata. Provide the fields you want to change — they are converted to JSON Patch (RFC 6902) operations automatically.",
   fields: [
     { name: "description", type: "string", required: false, description: "Updated description" },
-    { name: "tags", type: "array", required: false, description: "Updated tags list", itemType: "string" },
-    { name: "rolloutStatus", type: "object", required: false, description: "Rollout status to assign (use fme_rollout_status to discover valid values)" },
+    { name: "tags", type: "array", required: false, description: "Updated tags — provide as [{name: 'tag1'}] or ['tag1', 'tag2'] (strings are auto-wrapped)", itemType: "object" },
+    { name: "rolloutStatus", type: "object", required: false, description: "Rollout status — provide as {id: '<uuid>'} (use fme_rollout_status to discover valid IDs)" },
   ],
 };
 
@@ -16,6 +16,19 @@ const fmeFeatureFlagCreateSchema: BodySchema = {
     { name: "name", type: "string", required: true, description: "Feature flag name (must be unique within the workspace)" },
     { name: "description", type: "string", required: false, description: "Optional description of the feature flag" },
     { name: "tags", type: "array", required: false, description: "Optional tags to categorize the flag", itemType: "string" },
+  ],
+};
+
+const fmeFeatureFlagDefinitionUpdateSchema: BodySchema = {
+  description: "Update a feature flag definition in a specific environment (treatments, rules, targeting, traffic allocation)",
+  fields: [
+    { name: "treatments", type: "array", required: false, description: "Array of treatment objects with name (string) and optional configurations (JSON string)", itemType: "object" },
+    { name: "defaultTreatment", type: "string", required: false, description: "The treatment to serve when no rules match or the flag is killed" },
+    { name: "baselineTreatment", type: "string", required: false, description: "The baseline (control) treatment for experimentation" },
+    { name: "rules", type: "array", required: false, description: "Targeting rules array — each rule has buckets (treatment/size pairs) and a condition (combiner + matchers)", itemType: "object" },
+    { name: "defaultRule", type: "array", required: false, description: "Default rule buckets (treatment/size pairs) applied when no targeting rules match", itemType: "object" },
+    { name: "trafficAllocation", type: "number", required: false, description: "Percentage of traffic to include (0–100)" },
+    { name: "comment", type: "string", required: false, description: "Comment describing the change" },
   ],
 };
 
@@ -179,9 +192,30 @@ export const featureFlagsToolset: ToolsetDefinition = {
           method: "PATCH",
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}",
           pathParams: { workspace_id: "wsId", feature_flag_name: "featureFlagName" },
-          bodyBuilder: (input) => input.body,
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            if (!body) return [];
+            const ops: Array<{ op: string; path: string; value: unknown }> = [];
+            if (body.description !== undefined) {
+              ops.push({ op: "replace", path: "/description", value: body.description });
+            }
+            if (body.tags !== undefined) {
+              const rawTags = body.tags as unknown[];
+              const tags = Array.isArray(rawTags)
+                ? rawTags.map((t) => (typeof t === "string" ? { name: t } : t))
+                : rawTags;
+              ops.push({ op: "replace", path: "/tags", value: tags });
+            }
+            if (body.rolloutStatus !== undefined) {
+              const rs = body.rolloutStatus as Record<string, unknown>;
+              if (rs && rs.id) {
+                ops.push({ op: "replace", path: "/rolloutStatus/id", value: rs.id });
+              }
+            }
+            return ops;
+          },
           responseExtractor: passthrough,
-          description: "Update a feature flag's metadata (description, tags, rolloutStatus)",
+          description: "Update a feature flag's metadata (description, tags, rolloutStatus). Uses JSON Patch (RFC 6902) format — provide fields directly and they are converted to patch operations automatically.",
           bodySchema: fmeFeatureFlagUpdateSchema,
         },
       },
@@ -228,7 +262,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_feature_flag_definition",
       displayName: "FME Feature Flag Definition",
       description:
-        "Detailed definition of a feature flag in a specific environment, including treatments, rules, targeting, and traffic allocation.",
+        "Detailed definition of a feature flag in a specific environment, including treatments, rules, targeting, and traffic allocation. Supports get and update (PUT with treatments, rules, defaultRule, trafficAllocation, etc.).",
       toolset: "feature-flags",
       scope: "account",
       identifierFields: ["workspace_id", "feature_flag_name", "environment_id"],
@@ -244,6 +278,19 @@ export const featureFlagsToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           description: "Get feature flag definition in a specific environment (treatments, rules, default rule, traffic allocation)",
+        },
+        update: {
+          method: "PUT",
+          path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/environments/{environmentId}",
+          pathParams: {
+            workspace_id: "wsId",
+            feature_flag_name: "featureFlagName",
+            environment_id: "environmentId",
+          },
+          bodyBuilder: (input) => input.body,
+          responseExtractor: passthrough,
+          bodySchema: fmeFeatureFlagDefinitionUpdateSchema,
+          description: "Update a feature flag definition in a specific environment (treatments, rules, default rule, traffic allocation, baseline treatment)",
         },
       },
     },
