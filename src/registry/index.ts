@@ -338,6 +338,11 @@ export class Registry {
         typeof bodyRecord[spec.bodyWrapperKey] === "object"
           ? (bodyRecord[spec.bodyWrapperKey] as Record<string, unknown>)
           : bodyRecord;
+      // Only inject accountIdentifier when the endpoint explicitly requires it
+      // (gRPC-gateway APIs with body:"*" need it in the body, not just query params)
+      if (spec.injectAccountInBody && this.config.HARNESS_ACCOUNT_ID && !targetRecord.accountIdentifier) {
+        targetRecord.accountIdentifier = this.config.HARNESS_ACCOUNT_ID;
+      }
       if (params.orgIdentifier && !targetRecord.orgIdentifier) {
         targetRecord.orgIdentifier = params.orgIdentifier;
       }
