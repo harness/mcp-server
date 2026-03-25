@@ -168,3 +168,83 @@ export const dashboardDataExtract = (raw: unknown): unknown => {
   }
   return raw;
 };
+
+// ---------------------------------------------------------------------------
+// Chaos Engineering extractors
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract chaos paginated list response: { data: [...], pagination: { totalItems } }
+ * Used by chaos experiments and templates.
+ */
+export const chaosPageExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { data?: unknown[]; pagination?: { totalItems?: number } };
+  return {
+    items: r.data ?? [],
+    total: r.pagination?.totalItems ?? (Array.isArray(r.data) ? r.data.length : 0),
+  };
+};
+
+/**
+ * Extract chaos probe list response: { totalNoOfProbes, data: [...] }
+ */
+export const chaosProbeListExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { data?: unknown[]; totalNoOfProbes?: number };
+  return {
+    items: r.data ?? [],
+    total: r.totalNoOfProbes ?? (Array.isArray(r.data) ? r.data.length : 0),
+  };
+};
+
+/**
+ * Extract chaos infrastructure list response: { totalNoOfInfras, infras: [...] }
+ */
+export const chaosInfraListExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { infras?: unknown[]; totalNoOfInfras?: number };
+  return {
+    items: r.infras ?? [],
+    total: r.totalNoOfInfras ?? (Array.isArray(r.infras) ? r.infras.length : 0),
+  };
+};
+
+// ---------------------------------------------------------------------------
+// Feature Management Enterprise (FME) extractors
+// ---------------------------------------------------------------------------
+
+/**
+ * Flattens `trafficType.id` → `trafficTypeId` at the top level of an FME item.
+ * Enables deep link templates to reference `trafficTypeId` directly.
+ */
+export function flattenTrafficType(item: Record<string, unknown>): void {
+  const tt = item.trafficType;
+  if (tt && typeof tt === "object" && !Array.isArray(tt)) {
+    const ttRecord = tt as Record<string, unknown>;
+    if (ttRecord.id !== undefined && item.trafficTypeId === undefined) {
+      item.trafficTypeId = ttRecord.id;
+    }
+  }
+}
+
+/** Extract FME feature flag list — passthrough with trafficType.id flattened on each item. */
+export const fmeListExtract = (raw: unknown): unknown => {
+  if (raw && typeof raw === "object") {
+    const r = raw as Record<string, unknown>;
+    const objects = r.objects;
+    if (Array.isArray(objects)) {
+      for (const item of objects) {
+        if (item && typeof item === "object") {
+          flattenTrafficType(item as Record<string, unknown>);
+        }
+      }
+    }
+  }
+  return raw;
+};
+
+/** Extract FME feature flag single item — passthrough with trafficType.id flattened. */
+export const fmeGetExtract = (raw: unknown): unknown => {
+  if (raw && typeof raw === "object") {
+    flattenTrafficType(raw as Record<string, unknown>);
+  }
+  return raw;
+};

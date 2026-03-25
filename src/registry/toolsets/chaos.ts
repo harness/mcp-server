@@ -1,5 +1,5 @@
 import type { ToolsetDefinition } from "../types.js";
-import { passthrough } from "../extractors.js";
+import { passthrough, chaosPageExtract, chaosProbeListExtract, chaosInfraListExtract } from "../extractors.js";
 
 /**
  * Chaos API base path — requires /gateway prefix per Harness API routing.
@@ -13,40 +13,6 @@ const CHAOS_LOADTEST = "/loadTest/manager/api";
 
 /** Chaos scope override — Chaos REST API uses organizationIdentifier (not orgIdentifier). */
 const CHAOS_SCOPE = { org: "organizationIdentifier" } as const;
-
-/**
- * Extract chaos paginated list response: { data: [...], pagination: { totalItems } }
- * Used by experiments and templates.
- */
-const chaosPageExtract = (raw: unknown): { items: unknown[]; total: number } => {
-  const r = raw as { data?: unknown[]; pagination?: { totalItems?: number } };
-  return {
-    items: r.data ?? [],
-    total: r.pagination?.totalItems ?? (Array.isArray(r.data) ? r.data.length : 0),
-  };
-};
-
-/**
- * Extract chaos probe list response: { totalNoOfProbes, data: [...] }
- */
-const chaosProbeListExtract = (raw: unknown): { items: unknown[]; total: number } => {
-  const r = raw as { data?: unknown[]; totalNoOfProbes?: number };
-  return {
-    items: r.data ?? [],
-    total: r.totalNoOfProbes ?? (Array.isArray(r.data) ? r.data.length : 0),
-  };
-};
-
-/**
- * Extract chaos infrastructure list response: { totalNoOfInfras, infras: [...] }
- */
-const chaosInfraListExtract = (raw: unknown): { items: unknown[]; total: number } => {
-  const r = raw as { infras?: unknown[]; totalNoOfInfras?: number };
-  return {
-    items: r.infras ?? [],
-    total: r.totalNoOfInfras ?? (Array.isArray(r.infras) ? r.infras.length : 0),
-  };
-};
 
 export const chaosToolset: ToolsetDefinition = {
   name: "chaos",

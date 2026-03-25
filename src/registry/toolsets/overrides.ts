@@ -1,18 +1,6 @@
 import type { ToolsetDefinition, BodySchema } from "../types.js";
 import { buildBodyNormalized } from "../../utils/body-normalizer.js";
-import { ngExtract } from "../extractors.js";
-
-/**
- * Custom list extractor for the V1 service overrides list endpoint.
- * Uses `totalItems` instead of the standard NG `totalElements`.
- */
-const overrideListExtract = (raw: unknown): { items: unknown[]; total: number } => {
-  const r = raw as { data?: { content?: unknown[]; totalItems?: number; totalElements?: number } };
-  return {
-    items: r.data?.content ?? [],
-    total: r.data?.totalItems ?? r.data?.totalElements ?? 0,
-  };
-};
+import { ngExtract, pageExtract } from "../extractors.js";
 
 /**
  * Body builder for service override create/update.
@@ -102,7 +90,7 @@ export const overridesToolset: ToolsetDefinition = {
             page: "page",
             size: "size",
           },
-          responseExtractor: overrideListExtract,
+          responseExtractor: pageExtract,
           description: "List service overrides for an environment. Requires environment_id. Optionally filter by service_id.",
         },
         get: {
