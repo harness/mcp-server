@@ -24,6 +24,33 @@ export const pageExtract = (raw: unknown): { items: unknown[]; total: number } =
 export const passthrough = (raw: unknown): unknown => raw;
 
 /**
+ * SCS-specific extractor — strips null, undefined, empty string, empty array,
+ * and empty object fields recursively from API responses. SCS payloads contain
+ * ~40% empty/null fields; removing them yields significant token savings.
+ */
+export const scsCleanExtract = (raw: unknown): unknown => {
+  return stripEmptyFields(raw);
+};
+
+function stripEmptyFields(obj: unknown): unknown {
+  if (Array.isArray(obj)) return obj.map(stripEmptyFields);
+  if (obj !== null && typeof obj === "object") {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      if (value === null || value === undefined) continue;
+      if (value === "") continue;
+      if (Array.isArray(value) && value.length === 0) continue;
+      const cleaned = stripEmptyFields(value);
+      if (typeof cleaned === "object" && cleaned !== null && !Array.isArray(cleaned)
+        && Object.keys(cleaned as Record<string, unknown>).length === 0) continue;
+      result[key] = cleaned;
+    }
+    return result;
+  }
+  return obj;
+}
+
+/**
  * Factory for HAR (Artifact Registry) list responses.
  * HAR wraps lists as `{ data: { <arrayKey>: [...], itemCount, pageIndex, ... }, status }`.
  * Normalizes to `{ items, total, pageIndex, pageSize, pageCount }` so the deep link
