@@ -24,9 +24,9 @@ export const pageExtract = (raw: unknown): { items: unknown[]; total: number } =
 export const passthrough = (raw: unknown): unknown => raw;
 
 /**
- * SCS-specific extractor — strips null, undefined, empty string, and empty array
- * fields recursively from API responses. SCS payloads contain ~40% empty/null fields;
- * removing them yields significant token savings.
+ * SCS-specific extractor — strips null, undefined, empty string, empty array,
+ * and empty object fields recursively from API responses. SCS payloads contain
+ * ~40% empty/null fields; removing them yields significant token savings.
  */
 export const scsCleanExtract = (raw: unknown): unknown => {
   return stripEmptyFields(raw);
@@ -40,7 +40,10 @@ function stripEmptyFields(obj: unknown): unknown {
       if (value === null || value === undefined) continue;
       if (value === "") continue;
       if (Array.isArray(value) && value.length === 0) continue;
-      result[key] = stripEmptyFields(value);
+      const cleaned = stripEmptyFields(value);
+      if (typeof cleaned === "object" && cleaned !== null && !Array.isArray(cleaned)
+        && Object.keys(cleaned as Record<string, unknown>).length === 0) continue;
+      result[key] = cleaned;
     }
     return result;
   }

@@ -81,6 +81,15 @@ describe("scsCleanExtract", () => {
     ]);
   });
 
+  it("strips empty object fields after recursive cleaning", () => {
+    const input = {
+      id: "abc",
+      metadata: { deleted: null, extra: "", tags: [] },
+      nested: { inner: { a: null, b: undefined } },
+    };
+    expect(scsCleanExtract(input)).toEqual({ id: "abc" });
+  });
+
   it("preserves falsy but meaningful values (0, false)", () => {
     const result = scsCleanExtract({ count: 0, enabled: false, name: "test" });
     expect(result).toEqual({ count: 0, enabled: false, name: "test" });
@@ -232,6 +241,12 @@ describe("T11-v2: ID retention hints in descriptions", () => {
     const res = findResource("scs_chain_of_custody");
     expect(res.description).toContain("orchestration");
     expect(res.description).toContain("SBOM");
+  });
+
+  it("scs_artifact_component description mentions retaining purl", () => {
+    const res = findResource("scs_artifact_component");
+    expect(res.description).toContain("purl");
+    expect(res.description).toMatch(/[Rr]etain/);
   });
 });
 

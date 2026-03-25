@@ -107,7 +107,8 @@ export const scsToolset: ToolsetDefinition = {
     {
       resourceType: "scs_artifact_component",
       displayName: "SCS Artifact Component",
-      description: "Components (dependencies) within an artifact. Supports list.",
+      description: "Components (dependencies) within an artifact. Supports list. "
+        + "Retain purl from responses — it is required for remediation lookups.",
       toolset: "scs",
       scope: "project",
       identifierFields: ["artifact_id"],
