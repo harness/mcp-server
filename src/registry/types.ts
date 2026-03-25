@@ -163,6 +163,13 @@ export interface EndpointSpec {
   /** When true, omit the automatic `accountIdentifier` query param from the
    *  request URL. Some APIs (e.g. SEI) use only the `Harness-Account` header. */
   headerBasedScoping?: boolean;
+  /**
+   * When true, inject `accountIdentifier` from config into the POST/PUT request body.
+   * Required for gRPC-gateway APIs (e.g. GitOps) where `body: "*"` means the entire
+   * JSON body IS the proto message — query-param-only accountIdentifier is invisible
+   * to the handler.
+   */
+  injectAccountInBody?: boolean;
 }
 
 /**

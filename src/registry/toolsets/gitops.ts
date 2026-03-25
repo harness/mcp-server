@@ -1,6 +1,18 @@
 import type { ToolsetDefinition } from "../types.js";
 import { passthrough } from "../extractors.js";
 
+function gitopsListBody(
+  input: Record<string, unknown>,
+  extras?: Record<string, unknown>,
+) {
+  return {
+    pageIndex: typeof input.page === "number" ? input.page : 0,
+    pageSize: typeof input.size === "number" ? input.size : 20,
+    searchTerm: (input.search_term as string) ?? "",
+    ...extras,
+  };
+}
+
 export const gitopsToolset: ToolsetDefinition = {
   name: "gitops",
   displayName: "GitOps",
@@ -10,9 +22,16 @@ export const gitopsToolset: ToolsetDefinition = {
     {
       resourceType: "gitops_agent",
       displayName: "GitOps Agent",
-      description: "GitOps agent (Argo CD instance). Supports list and get.",
+      description:
+        "GitOps agent (Argo CD instance). Agents can be scoped at account, org, or project level.\n" +
+        "SCOPE BEHAVIOR:\n" +
+        "- Account-level: Do NOT pass org_id or project_id\n" +
+        "- Org-level: Pass org_id only (no project_id)\n" +
+        "- Project-level: Pass both org_id AND project_id\n" +
+        "IDENTIFIERS: agent_id is the raw identifier (e.g. 'myagent', NOT 'account.myagent').",
       toolset: "gitops",
       scope: "project",
+      scopeOptional: true,
       identifierFields: ["agent_id"],
       listFilterFields: [
         { name: "search_term", description: "Filter GitOps agents by name or keyword" },
@@ -45,7 +64,11 @@ export const gitopsToolset: ToolsetDefinition = {
       resourceType: "gitops_application",
       displayName: "GitOps Application",
       description:
-        "GitOps application managed by an agent. List returns all apps in project (no agent required). Get/sync require agent_id.",
+        "GitOps application managed by an agent. List returns all apps (no agent required). Get/sync require agent_id.\n" +
+        "IDENTIFIERS: agent_id is scope-prefixed:\n" +
+        "- Account-scoped agent: 'account.myagent'\n" +
+        "- Org-scoped agent: 'org.myagent'\n" +
+        "- Project-scoped agent: 'myagent' (no prefix)",
       toolset: "gitops",
       scope: "project",
       diagnosticHint: "Use harness_diagnose with resource_type='gitops_application', agent_id, and resource_id (app name) to analyze sync failures, health issues, and unhealthy K8s resources. Combines app status, resource tree, and recent events.",
@@ -58,14 +81,10 @@ export const gitopsToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: "/gitops/api/v1/applications",
-          bodyBuilder: (input) => ({
-            pageIndex: typeof input.page === "number" ? input.page : 0,
-            pageSize: typeof input.size === "number" ? input.size : 20,
-            searchTerm: input.search_term ?? "",
-            metadataOnly: true,
-          }),
+          injectAccountInBody: true,
+          bodyBuilder: (input) => gitopsListBody(input, { metadataOnly: true }),
           responseExtractor: passthrough,
-          description: "List all GitOps applications in the project",
+          description: "List GitOps applications in the project",
         },
         get: {
           method: "GET",
@@ -104,9 +123,19 @@ export const gitopsToolset: ToolsetDefinition = {
       resourceType: "gitops_cluster",
       displayName: "GitOps Cluster",
       description:
-        "Kubernetes cluster registered with GitOps. List returns all clusters in project (no agent required). Get requires agent_id.",
+        "Kubernetes cluster registered with GitOps. List returns all clusters (no agent required). Get requires agent_id.\n" +
+        "SCOPE BEHAVIOR:\n" +
+        "- Account-level: Do NOT pass org_id or project_id\n" +
+        "- Org-level: Pass org_id only (no project_id)\n" +
+        "- Project-level: Pass both org_id AND project_id\n" +
+        "IDENTIFIERS: agent_id is scope-prefixed:\n" +
+        "- Account-scoped agent: 'account.myagent'\n" +
+        "- Org-scoped agent: 'org.myagent'\n" +
+        "- Project-scoped agent: 'myagent' (no prefix)\n" +
+        "cluster_id is the raw identifier (e.g. 'incluster'), not prefixed.",
       toolset: "gitops",
       scope: "project",
+      scopeOptional: true,
       identifierFields: ["agent_id", "cluster_id"],
       listFilterFields: [
         { name: "search_term", description: "Filter clusters by name or keyword" },
@@ -116,13 +145,10 @@ export const gitopsToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: "/gitops/api/v1/clusters",
-          bodyBuilder: (input) => ({
-            pageIndex: typeof input.page === "number" ? input.page : 0,
-            pageSize: typeof input.size === "number" ? input.size : 20,
-            searchTerm: input.search_term ?? "",
-          }),
+          injectAccountInBody: true,
+          bodyBuilder: (input) => gitopsListBody(input),
           responseExtractor: passthrough,
-          description: "List all GitOps clusters in the project",
+          description: "List GitOps clusters (scope depends on org_id/project_id presence)",
         },
         get: {
           method: "GET",
@@ -140,9 +166,19 @@ export const gitopsToolset: ToolsetDefinition = {
       resourceType: "gitops_repository",
       displayName: "GitOps Repository",
       description:
-        "Git repository registered with GitOps. List returns all repositories in project (no agent required). Get requires agent_id.",
+        "Git repository registered with GitOps. List returns all repositories (no agent required). Get requires agent_id.\n" +
+        "SCOPE BEHAVIOR:\n" +
+        "- Account-level: Do NOT pass org_id or project_id\n" +
+        "- Org-level: Pass org_id only (no project_id)\n" +
+        "- Project-level: Pass both org_id AND project_id\n" +
+        "IDENTIFIERS: agent_id is scope-prefixed:\n" +
+        "- Account-scoped agent: 'account.myagent'\n" +
+        "- Org-scoped agent: 'org.myagent'\n" +
+        "- Project-scoped agent: 'myagent' (no prefix)\n" +
+        "repo_id is the raw identifier, not prefixed.",
       toolset: "gitops",
       scope: "project",
+      scopeOptional: true,
       identifierFields: ["agent_id", "repo_id"],
       listFilterFields: [
         { name: "search_term", description: "Filter repositories by name or URL" },
@@ -152,14 +188,10 @@ export const gitopsToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: "/gitops/api/v1/repositories",
-          bodyBuilder: (input) => ({
-            pageIndex: typeof input.page === "number" ? input.page : 0,
-            pageSize: typeof input.size === "number" ? input.size : 20,
-            searchTerm: input.search_term ?? "",
-            repoCredsId: input.repo_creds_id ?? "",
-          }),
+          injectAccountInBody: true,
+          bodyBuilder: (input) => gitopsListBody(input, { repoCredsId: input.repo_creds_id ?? "" }),
           responseExtractor: passthrough,
-          description: "List all GitOps repositories in the project",
+          description: "List GitOps repositories (scope depends on org_id/project_id presence)",
         },
         get: {
           method: "GET",
@@ -176,25 +208,37 @@ export const gitopsToolset: ToolsetDefinition = {
     {
       resourceType: "gitops_applicationset",
       displayName: "GitOps ApplicationSet",
-      description: "GitOps ApplicationSet for templated application generation. Supports list and get.",
+      description:
+        "GitOps ApplicationSet for templated application generation. Supports list and get.\n" +
+        "IDENTIFIERS: agent_id is scope-prefixed:\n" +
+        "- Account-scoped agent: 'account.myagent'\n" +
+        "- Org-scoped agent: 'org.myagent'\n" +
+        "- Project-scoped agent: 'myagent' (no prefix)",
       toolset: "gitops",
       scope: "project",
       identifierFields: ["agent_id", "appset_name"],
+      listFilterFields: [
+        { name: "search_term", description: "Filter ApplicationSets by name or keyword" },
+        { name: "agent_id", description: "Optional: Filter by GitOps agent identifier" },
+      ],
       operations: {
         list: {
-          method: "GET",
-          path: "/gitops/api/v1/agents/{agentIdentifier}/applicationsets",
-          pathParams: { agent_id: "agentIdentifier" },
+          method: "POST",
+          path: "/gitops/api/v1/applicationsets",
+          injectAccountInBody: true,
+          bodyBuilder: (input) => gitopsListBody(input, input.agent_id ? { agentIdentifier: input.agent_id } : {}),
           responseExtractor: passthrough,
           emptyOnErrorPatterns: [/agent is not registered/, /never connected/, /Not Implemented/],
           description: "List GitOps ApplicationSets",
         },
         get: {
           method: "GET",
-          path: "/gitops/api/v1/agents/{agentIdentifier}/applicationsets/{appsetName}",
+          path: "/gitops/api/v1/applicationset/{identifier}",
           pathParams: {
+            appset_name: "identifier",
+          },
+          queryParams: {
             agent_id: "agentIdentifier",
-            appset_name: "appsetName",
           },
           responseExtractor: passthrough,
           description: "Get GitOps ApplicationSet details",
@@ -204,15 +248,30 @@ export const gitopsToolset: ToolsetDefinition = {
     {
       resourceType: "gitops_repo_credential",
       displayName: "GitOps Repository Credential",
-      description: "Repository credentials for GitOps agent. Supports list and get.",
+      description:
+        "Repository credentials for GitOps agent. Supports list and get.\n" +
+        "SCOPE BEHAVIOR:\n" +
+        "- Account-level: Do NOT pass org_id or project_id\n" +
+        "- Org-level: Pass org_id only (no project_id)\n" +
+        "- Project-level: Pass both org_id AND project_id\n" +
+        "IDENTIFIERS: agent_id is scope-prefixed:\n" +
+        "- Account-scoped agent: 'account.myagent'\n" +
+        "- Org-scoped agent: 'org.myagent'\n" +
+        "- Project-scoped agent: 'myagent' (no prefix)",
       toolset: "gitops",
       scope: "project",
+      scopeOptional: true,
       identifierFields: ["agent_id", "credential_id"],
+      listFilterFields: [
+        { name: "search_term", description: "Filter repository credentials by name or keyword" },
+        { name: "agent_id", description: "Optional: Filter by GitOps agent identifier" },
+      ],
       operations: {
         list: {
-          method: "GET",
-          path: "/gitops/api/v1/agents/{agentIdentifier}/repocreds",
-          pathParams: { agent_id: "agentIdentifier" },
+          method: "POST",
+          path: "/gitops/api/v1/repocreds",
+          injectAccountInBody: true,
+          bodyBuilder: (input) => gitopsListBody(input, input.agent_id ? { agentIdentifier: input.agent_id } : {}),
           responseExtractor: passthrough,
           emptyOnErrorPatterns: [/agent is not registered/, /never connected/, /Not Implemented/],
           description: "List GitOps repository credentials",
@@ -232,7 +291,12 @@ export const gitopsToolset: ToolsetDefinition = {
     {
       resourceType: "gitops_app_event",
       displayName: "GitOps App Event",
-      description: "Events for a GitOps application. Supports list.",
+      description:
+        "Events for a GitOps application. Supports list.\n" +
+        "IDENTIFIERS: agent_id is scope-prefixed:\n" +
+        "- Account-scoped agent: 'account.myagent'\n" +
+        "- Org-scoped agent: 'org.myagent'\n" +
+        "- Project-scoped agent: 'myagent' (no prefix)",
       toolset: "gitops",
       scope: "project",
       identifierFields: ["agent_id", "app_name"],
@@ -257,7 +321,12 @@ export const gitopsToolset: ToolsetDefinition = {
     {
       resourceType: "gitops_pod_log",
       displayName: "GitOps Pod Log",
-      description: "Pod logs for a GitOps application. Supports get with pod_name, namespace, container, tail_lines.",
+      description:
+        "Pod logs for a GitOps application. Supports get with pod_name, namespace, container, tail_lines.\n" +
+        "IDENTIFIERS: agent_id is scope-prefixed:\n" +
+        "- Account-scoped agent: 'account.myagent'\n" +
+        "- Org-scoped agent: 'org.myagent'\n" +
+        "- Project-scoped agent: 'myagent' (no prefix)",
       toolset: "gitops",
       scope: "project",
       identifierFields: ["agent_id", "app_name"],
@@ -290,7 +359,12 @@ export const gitopsToolset: ToolsetDefinition = {
     {
       resourceType: "gitops_managed_resource",
       displayName: "GitOps Managed Resource",
-      description: "Managed Kubernetes resources for a GitOps application. Supports list.",
+      description:
+        "Managed Kubernetes resources for a GitOps application. Supports list.\n" +
+        "IDENTIFIERS: agent_id is scope-prefixed:\n" +
+        "- Account-scoped agent: 'account.myagent'\n" +
+        "- Org-scoped agent: 'org.myagent'\n" +
+        "- Project-scoped agent: 'myagent' (no prefix)",
       toolset: "gitops",
       scope: "project",
       identifierFields: ["agent_id", "app_name"],
@@ -315,7 +389,12 @@ export const gitopsToolset: ToolsetDefinition = {
     {
       resourceType: "gitops_resource_action",
       displayName: "GitOps Resource Action",
-      description: "Available actions for a specific resource in a GitOps application. Supports list with namespace, resource_name, kind.",
+      description:
+        "Available actions for a specific resource in a GitOps application. Supports list with namespace, resource_name, kind.\n" +
+        "IDENTIFIERS: agent_id is scope-prefixed:\n" +
+        "- Account-scoped agent: 'account.myagent'\n" +
+        "- Org-scoped agent: 'org.myagent'\n" +
+        "- Project-scoped agent: 'myagent' (no prefix)",
       toolset: "gitops",
       scope: "project",
       identifierFields: ["agent_id", "app_name"],
@@ -323,6 +402,8 @@ export const gitopsToolset: ToolsetDefinition = {
         { name: "namespace", description: "Kubernetes namespace filter" },
         { name: "resource_name", description: "Resource name filter" },
         { name: "kind", description: "Kubernetes resource kind filter" },
+        { name: "group", description: "Kubernetes API group filter (e.g. 'apps')" },
+        { name: "version", description: "Kubernetes API version filter (e.g. 'v1')" },
       ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/gitops/applications/{appName}",
       operations: {
@@ -334,9 +415,11 @@ export const gitopsToolset: ToolsetDefinition = {
             app_name: "appName",
           },
           queryParams: {
-            namespace: "namespace",
-            resource_name: "resourceName",
-            kind: "kind",
+            namespace: "request.namespace",
+            resource_name: "request.resourceName",
+            kind: "request.kind",
+            group: "request.group",
+            version: "request.version",
           },
           responseExtractor: passthrough,
           description: "List available actions for a resource in a GitOps application",
@@ -363,7 +446,12 @@ export const gitopsToolset: ToolsetDefinition = {
     {
       resourceType: "gitops_app_resource_tree",
       displayName: "GitOps App Resource Tree",
-      description: "Kubernetes resource tree for a GitOps application. Supports get.",
+      description:
+        "Kubernetes resource tree for a GitOps application. Supports get.\n" +
+        "IDENTIFIERS: agent_id is scope-prefixed:\n" +
+        "- Account-scoped agent: 'account.myagent'\n" +
+        "- Org-scoped agent: 'org.myagent'\n" +
+        "- Project-scoped agent: 'myagent' (no prefix)",
       toolset: "gitops",
       scope: "project",
       identifierFields: ["agent_id", "app_name"],
