@@ -172,12 +172,12 @@ describe("chaos_k8s_infrastructure list", () => {
     registry = new Registry(makeConfig());
   });
 
-  it("list: uses POST with filter body and standard scope params", async () => {
+  it("list: uses POST to v2/infrastructures with chaos scope params and paginated response", async () => {
     const mockRequest = vi.fn().mockResolvedValue({
-      infras: [
+      data: [
         { infraID: "k8s-1", name: "prod-cluster" },
       ],
-      totalNoOfInfras: 1,
+      pagination: { totalItems: 1 },
     });
     const client = makeClient(mockRequest);
 
@@ -189,10 +189,9 @@ describe("chaos_k8s_infrastructure list", () => {
     expect(mockRequest).toHaveBeenCalledOnce();
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("POST");
-    expect(call.path).toBe("/gateway/chaos/manager/api/rest/kubernetes/infras");
-    // K8s infra uses standard orgIdentifier, not organizationIdentifier
+    expect(call.path).toBe("/gateway/chaos/manager/api/rest/v2/infrastructures");
     expect(call.params).toMatchObject({
-      orgIdentifier: "default",
+      organizationIdentifier: "default",
       projectIdentifier: "PM_Signoff",
     });
     expect(result.items).toHaveLength(1);

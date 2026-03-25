@@ -8,6 +8,7 @@ build/
 *.swp
 *.swo
 *~
+.idea/
 
 # Generated pipeline files
 pipelines/
