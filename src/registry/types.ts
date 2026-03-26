@@ -209,6 +209,23 @@ export interface ResourceDefinition {
   deepLinkTemplate?: string;
   /** Troubleshooting guidance for LLMs. Describes how to diagnose issues with this resource type. */
   diagnosticHint?: string;
+  /**
+   * Alternative search terms that should match this resource type.
+   * Helps LLMs find SCS-specific types when searching with generic terms
+   * like "artifact" or "repository". Matched at high priority (score 90)
+   * in searchResources().
+   */
+  searchAliases?: string[];
+  /**
+   * Related resources that are commonly used together in multi-turn flows.
+   * Helps LLMs understand the resource graph and retain context across turns.
+   * Shown in harness_describe output.
+   */
+  relatedResources?: Array<{
+    resourceType: string;
+    relationship: string;
+    description: string;
+  }>;
   /** Execution guidance for LLMs. Describes how to discover and provide runtime inputs. */
   executeHint?: string;
   /** CRUD endpoint mappings */

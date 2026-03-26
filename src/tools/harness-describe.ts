@@ -53,6 +53,7 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
                 }))
               : undefined,
             diagnosticHint: def.diagnosticHint ?? undefined,
+            relatedResources: def.relatedResources ?? undefined,
             executeHint: def.executeHint ?? undefined,
           });
         } catch (err) {
