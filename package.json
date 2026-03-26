@@ -1,6 +1,6 @@
 {
   "name": "harness-mcp-v2",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "Give AI agents full access to the Harness.io platform — manage pipelines, deployments, cloud costs, chaos engineering, feature flags, SEI, and 125+ resource types through 11 MCP tools",
   "type": "module",
   "main": "build/index.js",
