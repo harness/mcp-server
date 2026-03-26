@@ -18,6 +18,17 @@ This server is built differently:
 - **Zero-config start.** Just provide a Harness API key. Account ID is auto-extracted from PAT tokens, org/project defaults are optional, and toolset filtering lets you expose only what you need.
 - **Extensible by design.** Adding a new Harness resource means adding a declarative data file — no new tool registration, no schema changes, no prompt updates.
 
+## Prerequisites
+
+Before installing or running the server, you need a Harness API key:
+
+1. Log in to your [Harness account](https://app.harness.io)
+2. Go to **My Profile** → **API Keys** → **+ New API Key**
+3. Create a new **Token** under the API key — this generates a PAT in the format `pat.<accountId>.<tokenId>.<secret>`
+4. Save the token somewhere secure — you'll need it in the next step
+
+> For detailed instructions, see the [Harness API Quickstart](https://developer.harness.io/docs/platform/automation/api/api-quickstart/).
+
 ## Quick Start
 
 ### Option 1: npx (Recommended)
@@ -25,10 +36,10 @@ This server is built differently:
 No install required — just run it:
 
 ```bash
-npx harness-mcp-v2@latest 
+HARNESS_API_KEY=pat.xxx.xxx.xxx npx harness-mcp-v2@latest
 ```
 
-That's it. Pass your Harness API key via environment variable or configure it in your AI client (see [Client Configuration](#client-configuration) below).
+Or configure the API key in your AI client (see [Client Configuration](#client-configuration) below).
 
 ```bash
 # Stdio transport (default — for Claude Desktop, Cursor, Windsurf, etc.)
