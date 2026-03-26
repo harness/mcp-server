@@ -38,7 +38,7 @@ function createHarnessServer(config: Config, authContext?: AuthContext): McpServ
 
   const server = new McpServer(
     {
-      name: "harness-mcp-server-v2",
+      name: "harness-mcp-server",
       version: "2.0.0",
       icons: [{ src: "https://app.harness.io/favicon.ico" }],
       websiteUrl: "https://harness.io",
