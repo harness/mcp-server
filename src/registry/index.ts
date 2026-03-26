@@ -607,6 +607,7 @@ export class Registry {
           identifierFields: r.identifierFields,
           listFilterFields: r.listFilterFields,
           diagnosticHint: r.diagnosticHint ?? undefined,
+          relatedResources: r.relatedResources ?? undefined,
         })),
       };
     }
@@ -627,6 +628,8 @@ export class Registry {
       const toolsetName = this.toolsets.find((t) => t.resources.includes(def))?.name ?? "";
 
       if (def.resourceType.toLowerCase() === q) score = 100;
+      else if (def.searchAliases?.some(a => a.toLowerCase() === q)) score = 95;
+      else if (def.searchAliases?.some(a => a.toLowerCase().includes(q) || q.includes(a.toLowerCase()))) score = 90;
       else if (def.resourceType.toLowerCase().includes(q)) score = 80;
       else if (def.displayName.toLowerCase().includes(q)) score = 60;
       else if (toolsetName.toLowerCase().includes(q)) score = 40;
@@ -667,6 +670,7 @@ export class Registry {
           name: r.displayName,
           toolset: ts.name,
           ops,
+          ...(r.searchAliases?.length ? { aliases: r.searchAliases } : {}),
         });
       }
     }

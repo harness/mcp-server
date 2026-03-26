@@ -55,11 +55,18 @@ export const scsToolset: ToolsetDefinition = {
     {
       resourceType: "scs_artifact_source",
       displayName: "SCS Artifact Source",
-      description: "Artifact source (registry) registered in the project. Supports list. "
+      description: "Software supply chain artifact source (registry) registered in the project. Supports list. "
+        + "NOT the same as 'artifact' (Artifact Registry) or 'registry' — use this for supply chain security queries. "
         + "Retain source_id from responses — it is required to list artifacts within a source. "
         + "Two-step flow: first list sources to get source_id, then list artifacts within that source.",
       diagnosticHint: "If you get a 404: use harness_list(resource_type='scs_artifact_source') to discover valid source IDs. "
         + "Source IDs are required before querying artifacts, components, or compliance.",
+      searchAliases: ["artifact source", "artifact registry security", "supply chain artifact", "scs artifact", "docker image source", "container registry"],
+      relatedResources: [
+        { resourceType: "artifact_security", relationship: "child", description: "List artifacts within this source (requires source_id)" },
+        { resourceType: "scs_artifact_component", relationship: "grandchild", description: "List dependencies within an artifact (requires artifact_id from artifact_security)" },
+        { resourceType: "scs_compliance_result", relationship: "grandchild", description: "Compliance results for an artifact" },
+      ],
       toolset: "scs",
       scope: "project",
       identifierFields: ["source_id"],
@@ -91,12 +98,23 @@ export const scsToolset: ToolsetDefinition = {
     {
       resourceType: "artifact_security",
       displayName: "Artifact Security",
-      description: "Artifact security posture. List artifacts from a source, or get an artifact overview. "
+      description: "Supply chain artifact security posture — vulnerabilities, compliance, SBOM. "
+        + "NOT the same as 'artifact' (Artifact Registry) — use this for security/vulnerability/compliance queries about artifacts. "
+        + "List artifacts from a source, or get an artifact overview. "
         + "Retain artifact_id and source_id from responses — they are required for follow-up queries "
         + "(compliance, components, chain of custody, SBOM, remediation). "
         + "IMPORTANT: source_id is required to list artifacts. Get it from harness_list(resource_type='scs_artifact_source') first.",
       diagnosticHint: "If you get a 404: verify source_id is correct. Use harness_list(resource_type='scs_artifact_source') to find valid source IDs. "
         + "For artifact details, use harness_get with both source_id and artifact_id.",
+      searchAliases: ["artifact vulnerability", "artifact security posture", "artifact overview", "supply chain artifact", "scs artifact", "artifact sbom"],
+      relatedResources: [
+        { resourceType: "scs_artifact_source", relationship: "parent", description: "Get source_id needed to list artifacts" },
+        { resourceType: "scs_artifact_component", relationship: "child", description: "List dependencies/components within this artifact" },
+        { resourceType: "scs_compliance_result", relationship: "child", description: "Compliance scan results for this artifact" },
+        { resourceType: "scs_chain_of_custody", relationship: "child", description: "Chain of custody events for this artifact" },
+        { resourceType: "scs_sbom", relationship: "child", description: "SBOM download (requires orchestration_id from chain of custody)" },
+        { resourceType: "scs_artifact_remediation", relationship: "child", description: "Remediation advice for components (requires purl)" },
+      ],
       toolset: "scs",
       scope: "project",
       identifierFields: ["source_id", "artifact_id"],
@@ -142,10 +160,16 @@ export const scsToolset: ToolsetDefinition = {
     {
       resourceType: "scs_artifact_component",
       displayName: "SCS Artifact Component",
-      description: "Components (dependencies) within an artifact. Supports list. "
+      description: "Software components (dependencies) within an artifact — SBOM component list. Supports list. "
+        + "Use this for dependency queries (e.g., 'show dependencies', 'find lodash', 'list direct dependencies'). "
         + "Retain purl from responses — it is required for remediation lookups.",
       diagnosticHint: "If you get a 404: verify artifact_id is correct. Get artifact IDs from harness_list(resource_type='artifact_security', source_id='...'). "
         + "Use dependency_type='DIRECT' to filter for direct dependencies only.",
+      searchAliases: ["dependency", "sbom component", "package", "library", "component list", "direct dependency", "transitive dependency"],
+      relatedResources: [
+        { resourceType: "artifact_security", relationship: "parent", description: "Get artifact_id needed to list components" },
+        { resourceType: "scs_artifact_remediation", relationship: "sibling", description: "Remediation advice for a component (pass purl)" },
+      ],
       toolset: "scs",
       scope: "project",
       identifierFields: ["artifact_id"],
@@ -185,6 +209,10 @@ export const scsToolset: ToolsetDefinition = {
         + "Pass artifact_id as resource_id and purl via params.",
       diagnosticHint: "If you get a 404: (1) verify artifact_id and purl are correct, (2) remediation only works for code repo artifacts, not container images. "
         + "Get purl values from harness_list(resource_type='scs_artifact_component', artifact_id='...').",
+      searchAliases: ["remediation", "fix vulnerability", "upgrade component", "patch"],
+      relatedResources: [
+        { resourceType: "scs_artifact_component", relationship: "parent", description: "Get purl values needed for remediation lookup" },
+      ],
       toolset: "scs",
       scope: "project",
       identifierFields: ["artifact_id"],
@@ -214,6 +242,11 @@ export const scsToolset: ToolsetDefinition = {
       description: "Chain of custody (event history) for an artifact. Supports get. "
         + "Returns orchestration IDs needed to download SBOMs.",
       diagnosticHint: "If you get a 404: verify artifact_id is correct. Get artifact IDs from harness_list(resource_type='artifact_security', source_id='...').",
+      searchAliases: ["chain of custody", "provenance", "attestation", "signing", "slsa"],
+      relatedResources: [
+        { resourceType: "artifact_security", relationship: "parent", description: "Get artifact_id needed for chain of custody" },
+        { resourceType: "scs_sbom", relationship: "child", description: "Download SBOM using orchestration_id from chain of custody" },
+      ],
       toolset: "scs",
       scope: "project",
       identifierFields: ["artifact_id"],
@@ -233,9 +266,14 @@ export const scsToolset: ToolsetDefinition = {
     {
       resourceType: "scs_compliance_result",
       displayName: "SCS Compliance Result",
-      description: "Compliance scan results for an artifact. Supports list.",
+      description: "Compliance scan results for an artifact — policy violations, CIS/OWASP checks. Supports list. "
+        + "Use this for compliance and policy violation queries.",
       diagnosticHint: "If you get a 404: verify artifact_id is correct. Get artifact IDs from harness_list(resource_type='artifact_security', source_id='...'). "
         + "Filter by standards (e.g. 'CIS', 'OWASP') and status ('PASSED', 'FAILED', 'WARNING').",
+      searchAliases: ["compliance", "policy violation", "cis", "owasp", "compliance check"],
+      relatedResources: [
+        { resourceType: "artifact_security", relationship: "parent", description: "Get artifact_id needed for compliance queries" },
+      ],
       toolset: "scs",
       scope: "project",
       identifierFields: ["artifact_id"],
@@ -268,10 +306,18 @@ export const scsToolset: ToolsetDefinition = {
     {
       resourceType: "code_repo_security",
       displayName: "Code Repository Security",
-      description: "Code repository security posture. Supports list and get (overview). "
-        + "Retain repo_id from responses — it is required to get the repository security overview.",
+      description: "Code repository security posture — vulnerabilities, compliance, SBOM for source code repos. "
+        + "NOT the same as 'repository' (Harness Code) — use this for security/vulnerability queries about code repos. "
+        + "Supports list and get (overview). "
+        + "Retain repo_id from responses — it is required to get the repository security overview. "
+        + "repo_id can also be used as artifact_id with scs_artifact_component to list repo dependencies.",
       diagnosticHint: "If you get a 404: use harness_list(resource_type='code_repo_security') to discover valid repo IDs. "
         + "Code repos are also artifacts (ArtifactType.REPOSITORY) — repo_id can be used as artifact_id for component queries.",
+      searchAliases: ["repo security", "repository security", "code repo vulnerability", "repo compliance", "source code security"],
+      relatedResources: [
+        { resourceType: "scs_artifact_component", relationship: "child", description: "List repo dependencies (use repo_id as artifact_id, dependency_type=DIRECT)" },
+        { resourceType: "scs_compliance_result", relationship: "child", description: "Compliance results for this repo" },
+      ],
       toolset: "scs",
       scope: "project",
       identifierFields: ["repo_id"],
@@ -309,8 +355,13 @@ export const scsToolset: ToolsetDefinition = {
     {
       resourceType: "scs_sbom",
       displayName: "SBOM",
-      description: "Software Bill of Materials download. Requires an orchestration ID (from artifact chain of custody).",
+      description: "Software Bill of Materials download. Requires an orchestration ID (from artifact chain of custody). "
+        + "Use this to download the full SBOM for an artifact build.",
       diagnosticHint: "If you get a 404: verify orchestration_id is correct. Get orchestration IDs from harness_get(resource_type='scs_chain_of_custody', artifact_id='...').",
+      searchAliases: ["sbom", "software bill of materials", "bom", "sbom download"],
+      relatedResources: [
+        { resourceType: "scs_chain_of_custody", relationship: "parent", description: "Get orchestration_id needed for SBOM download" },
+      ],
       toolset: "scs",
       scope: "project",
       identifierFields: ["orchestration_id"],

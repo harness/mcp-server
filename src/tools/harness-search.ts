@@ -16,6 +16,9 @@ const RELEVANCE_TIERS: Record<string, number> = {
   pipeline: 1, service: 1, environment: 1, connector: 1, execution: 1,
   template: 2, trigger: 2, input_set: 2, secret: 2, fme_feature_flag: 2,
   repository: 2, infrastructure: 2,
+  // SCS types at tier 2 — same priority as other domain-specific resources
+  scs_artifact_source: 2, artifact_security: 2, code_repo_security: 2,
+  scs_artifact_component: 2, scs_compliance_result: 2,
   // Everything else defaults to tier 3
 };
 
