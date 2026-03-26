@@ -84,10 +84,17 @@ export class HarnessClient {
     const url = this.buildUrl(options);
     const isFme = options.product === "fme";
     const headers: Record<string, string> = {
-      "x-api-key": this.token,
-      "Harness-Account": this.resolveAccountId(),
+      "Harness-Account": this.accountId,
       ...options.headers,
     };
+
+    // Only inject x-api-key when the caller hasn't already set auth.
+    // When service-routing handles auth (bearer-jwt, remote-mcp), it sets
+    // Authorization directly — sending x-api-key alongside would cause
+    // downstream services to attempt API-key validation on the dummy token.
+    if (!headers["Authorization"] && !headers["x-api-key"]) {
+      headers["x-api-key"] = this.token;
+    }
 
     if (options.body) {
       if (typeof options.body === "string") {
@@ -235,10 +242,14 @@ export class HarnessClient {
     const url = this.buildUrl(options);
     const isFme = options.product === "fme";
     const headers: Record<string, string> = {
-      "x-api-key": this.token,
-      "Harness-Account": this.resolveAccountId(),
+      "Harness-Account": this.accountId,
       ...options.headers,
     };
+
+    // Same auth-header guard as request() — see comment there.
+    if (!headers["Authorization"] && !headers["x-api-key"]) {
+      headers["x-api-key"] = this.token;
+    }
 
     if (options.body) {
       if (typeof options.body === "string") {
