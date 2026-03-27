@@ -191,7 +191,7 @@ export const scsToolset: ToolsetDefinition = {
           },
           bodyBuilder: (input) => ({
             ...(input.search_term ? { search_term: input.search_term } : {}),
-            ...(input.dependency_type ? { dependency_type: input.dependency_type } : {}),
+            ...(input.dependency_type ? { dependency_type_filter: [input.dependency_type] } : {}),
           }),
           defaultQueryParams: { limit: "10" },
           responseExtractor: scsListExtract(ARTIFACT_COMPONENT_LIST_FIELDS),

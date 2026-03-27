@@ -161,16 +161,16 @@ describe("T2-v2: array parameter normalization", () => {
 // ─── T12-v2: dependency_type filter ───────────────────────────────────────
 
 describe("T12-v2: dependency type filter", () => {
-  it("scs_artifact_component bodyBuilder passes dependency_type", () => {
+  it("scs_artifact_component bodyBuilder passes dependency_type as dependency_type_filter array", () => {
     const spec = getOp("scs_artifact_component", "list");
     const body = spec.bodyBuilder!({ dependency_type: "DIRECT" });
-    expect(body).toEqual({ dependency_type: "DIRECT" });
+    expect(body).toEqual({ dependency_type_filter: ["DIRECT"] });
   });
 
-  it("scs_artifact_component bodyBuilder passes search_term + dependency_type", () => {
+  it("scs_artifact_component bodyBuilder passes search_term + dependency_type_filter", () => {
     const spec = getOp("scs_artifact_component", "list");
     const body = spec.bodyBuilder!({ search_term: "lodash", dependency_type: "TRANSITIVE" });
-    expect(body).toEqual({ search_term: "lodash", dependency_type: "TRANSITIVE" });
+    expect(body).toEqual({ search_term: "lodash", dependency_type_filter: ["TRANSITIVE"] });
   });
 
   it("scs_artifact_component bodyBuilder omits absent filters", () => {

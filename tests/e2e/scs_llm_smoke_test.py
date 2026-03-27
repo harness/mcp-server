@@ -55,6 +55,44 @@ def _fmt_tools(specs: list) -> str:
     return ", ".join(_fmt_tool(s) for s in specs) if specs else "(none)"
 
 
+MAX_HISTORY_CHARS = 4000
+
+# History mode constants
+HISTORY_MODE_ANSWER_ONLY = "answer_only"     # Strategy A: only final answer text
+HISTORY_MODE_TOOL_SUMMARY = "tool_summary"   # Strategy B: answer + structured tool call summary
+
+
+def build_tool_call_summary(extracted: dict[str, Any]) -> str:
+    """Build a structured tool call summary for conversation history enrichment (Strategy B).
+
+    Includes tool names, resource types, and key parameters to help the LLM
+    retain context across multi-turn conversations without re-discovering
+    resource types and entity IDs.
+    """
+    tools = extracted.get("tools_called", [])
+    params = extracted.get("tool_params", {})
+
+    if not tools:
+        return ""
+
+    lines = ["", "---", "[Tool calls in this turn]"]
+    for tool_spec in tools:
+        tool_str = _fmt_tool(tool_spec)
+        tool_args = params.get(tool_str, {})
+        # Extract key parameters (skip resource_type — already in tool_spec)
+        id_parts = []
+        for key, val in tool_args.items():
+            if key == "resource_type":
+                continue
+            if val is not None and isinstance(val, str) and len(val) < 200:
+                id_parts.append(f"{key}={val}")
+        param_str = f" | {', '.join(id_parts)}" if id_parts else ""
+        lines.append(f"- {tool_str}{param_str}")
+
+    lines.append("[Retain the resource_type and entity IDs above for follow-up queries]")
+    return "\n".join(lines)
+
+
 # ---------------------------------------------------------------------------
 # 15 Test Queries — V2
 # expected_tools: list of (tool_name, resource_type) tuples
@@ -163,6 +201,20 @@ QUERIES = [
         "confidence": "Medium",
         "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_get", "artifact_security")],
         "observe": "Per PD-1: CORRECT if it returns vuln counts. No penalty for no severity filter.",
+    },
+    {
+        "id": "Q16", "query": "List my code repositories",
+        "expected_intent": "P2-13: Bare repo query — should route to code_repo_security via SCS module context",
+        "confidence": "Supported",
+        "expected_tools": [("harness_list", "code_repo_security")],
+        "observe": "P2-13 validation: no security keyword in query. Module context must drive routing to code_repo_security, not repository.",
+    },
+    {
+        "id": "Q17", "query": "Show me my repos and their status",
+        "expected_intent": "P2-13: Ambiguous repo query — should route to code_repo_security via SCS module context",
+        "confidence": "Supported",
+        "expected_tools": [("harness_list", "code_repo_security")],
+        "observe": "P2-13 validation: 'status' is ambiguous (could mean code repo status or security status). SCS module context should prefer code_repo_security.",
     },
 ]
 
@@ -453,7 +505,7 @@ def send_query(query_text: str, genai_url: str, account_id: str, org_id: str, pr
     payload = {
         "prompt": query_text, "stream": True,
         "conversation_id": conversation_id, "interaction_id": str(uuid.uuid4()),
-        "metadata": {"accountId": account_id},
+        "metadata": {"accountId": account_id, "module": "SCS"},
         "harness_context": {"account_id": account_id, "org_id": org_id, "project_id": project_id},
         "conversation": conversation_history or [],
     }
@@ -571,7 +623,8 @@ def _print_query_summary(result: dict, extracted: dict) -> None:
 # Conversation Runner
 # ---------------------------------------------------------------------------
 def run_conversation(conv_def: dict[str, Any], genai_url: str, account_id: str, org_id: str,
-                     project_id: str, mcp_log_file: str, delay: float = INTER_QUERY_DELAY) -> dict[str, Any]:
+                     project_id: str, mcp_log_file: str, delay: float = INTER_QUERY_DELAY,
+                     history_mode: str = HISTORY_MODE_ANSWER_ONLY) -> dict[str, Any]:
     conv_id = str(uuid.uuid4())
     history: list[dict[str, Any]] = []
     turn_results: list[dict[str, Any]] = []
@@ -612,7 +665,13 @@ def run_conversation(conv_def: dict[str, Any], genai_url: str, account_id: str, 
         history.append({"role": "user", "message": {"type": "text", "data": turn_def["query"]}})
         text = extracted["final_answer"] or extracted["thoughts"]
         if text:
-            history.append({"role": "assistant", "message": {"type": "text", "data": text[:4000]}})
+            if history_mode == HISTORY_MODE_TOOL_SUMMARY:
+                tool_summary = build_tool_call_summary(extracted)
+                answer_budget = MAX_HISTORY_CHARS - len(tool_summary)
+                history_text = f"{text[:max(answer_budget, 0)]}{tool_summary}"
+            else:
+                history_text = text[:MAX_HISTORY_CHARS]
+            history.append({"role": "assistant", "message": {"type": "text", "data": history_text}})
         if turn_num < len(conv_def["turns"]):
             time.sleep(delay)
 
@@ -628,6 +687,7 @@ def run_conversation(conv_def: dict[str, Any], genai_url: str, account_id: str, 
         "num_turns": len(conv_def["turns"]), "turns": turn_results,
         "aggregate": {"all_tools_called": [list(t) for t in unique_tools], "total_chain_depth": len(unique_tools), "total_errors": all_errors, "total_token_usage": total_tokens},
         "scoring": {"overall": overall, "turns_correct": turns_correct, "turns_total": len(conv_def["turns"]), "turns_with_expected_tools": turns_with_tools, "context_retention": None, "answer_score": None, "notable_observations": None},
+        "history_mode": history_mode,
     }
 
 
@@ -636,7 +696,8 @@ def run_conversation(conv_def: dict[str, Any], genai_url: str, account_id: str, 
 # ---------------------------------------------------------------------------
 def run_smoke_tests(genai_url: str = GENAI_URL, account_id: str = ACCOUNT_ID, org_id: str = ORG_ID,
                     project_id: str = PROJECT_ID, mcp_log_file: str = MCP_LOG_FILE,
-                    query_ids: Optional[list[str]] = None, delay: float = INTER_QUERY_DELAY) -> dict[str, Any]:
+                    query_ids: Optional[list[str]] = None, delay: float = INTER_QUERY_DELAY,
+                    history_mode: str = HISTORY_MODE_ANSWER_ONLY) -> dict[str, Any]:
     run_single = run_multi = True
     single_ids = multi_ids = None
     if query_ids:
@@ -675,17 +736,17 @@ def run_smoke_tests(genai_url: str = GENAI_URL, account_id: str = ACCOUNT_ID, or
         print(f"\n{'#'*70}\n# MULTI-TURN CONVERSATIONS ({len(conversations)})\n{'#'*70}")
         for idx, cd in enumerate(conversations, 1):
             print(f"\n{'='*70}\n[{idx}/{len(conversations)}] {cd['id']}: {cd['title']}\n  {cd['description']}\n{'='*70}")
-            cr = run_conversation(cd, genai_url, account_id, org_id, project_id, mcp_log_file, delay)
+            cr = run_conversation(cd, genai_url, account_id, org_id, project_id, mcp_log_file, delay, history_mode)
             conv_results.append(cr)
             s = cr["scoring"]
             print(f"\n  Conversation: [{s['overall']}] turns_correct={s['turns_correct']}/{s['turns_total']} duration={cr['duration_s']}s")
             if idx < len(conversations):
                 print(f"\n  [delay] Waiting {delay}s..."); time.sleep(delay)
 
-    return _build_summary(single_results, conv_results, run_timestamp, time.monotonic() - run_start, account_id, org_id, project_id)
+    return _build_summary(single_results, conv_results, run_timestamp, time.monotonic() - run_start, account_id, org_id, project_id, history_mode)
 
 
-def _build_summary(results, conv_results, run_timestamp, total_duration, account_id, org_id, project_id):
+def _build_summary(results, conv_results, run_timestamp, total_duration, account_id, org_id, project_id, history_mode=HISTORY_MODE_ANSWER_ONLY):
     def _count(score): return sum(1 for r in results if r["scoring"]["tool_selection"] == score)
     durations = [r["duration_s"] for r in results if r["duration_s"] > 0]
     chain_depths = [r["extracted"]["chain_depth"] for r in results]
@@ -718,6 +779,7 @@ def _build_summary(results, conv_results, run_timestamp, total_duration, account
             "account_id": account_id, "org_id": org_id, "project_id": project_id,
             "mcp_server_version": "2.0.0", "mcp_server_type": "node", "mcp_server_repo": "harness-mcp-v2",
             "tool_model": "generic (harness_list, harness_get, harness_describe)",
+            "history_mode": history_mode,
             "total_duration_s": round(total_duration, 2), "genai_url": GENAI_URL,
         },
         "results": results, "conversation_results": conv_results,
@@ -774,6 +836,7 @@ def print_final_summary(summary: dict[str, Any]) -> None:
     print(f"  Timestamp:     {meta['timestamp']}\n  Model:         {meta['model']}")
     print(f"  MCP Server:    {meta['mcp_server_repo']} ({meta['mcp_server_type']})")
     print(f"  Tool Model:    {meta['tool_model']}")
+    print(f"  History Mode:  {meta.get('history_mode', 'answer_only')}")
     print(f"  Account:       {meta['account_id']}\n  Org/Project:   {meta['org_id']}/{meta['project_id']}")
     print(f"  Total time:    {meta['total_duration_s']}s\n")
     if summary["results"]:
@@ -825,6 +888,9 @@ def main():
     parser.add_argument("--project-id", default=PROJECT_ID)
     parser.add_argument("--query-ids", default=None, help="Comma-separated IDs (e.g., Q01,Q05,M01,M03)")
     parser.add_argument("--delay", type=float, default=INTER_QUERY_DELAY)
+    parser.add_argument("--history-mode", default=HISTORY_MODE_ANSWER_ONLY,
+                        choices=[HISTORY_MODE_ANSWER_ONLY, HISTORY_MODE_TOOL_SUMMARY],
+                        help="Multi-turn history strategy: 'answer_only' (Strategy A, default) or 'tool_summary' (Strategy B — enriches history with tool call summaries)")
     parser.add_argument("--mcp-log", default=MCP_LOG_FILE)
     args = parser.parse_args()
     query_ids = [qid.strip() for qid in args.query_ids.split(",")] if args.query_ids else None
@@ -833,13 +899,14 @@ def main():
     print(f"  genai-service URL: {args.url}\n  Account:           {args.account_id}")
     print(f"  Org/Project:       {args.org_id}/{args.project_id}\n  MCP log:           {args.mcp_log}")
     print(f"  Query delay:       {args.delay}s")
+    print(f"  History mode:      {args.history_mode}")
     if query_ids:
         print(f"  Running IDs:       {query_ids}")
     else:
         print(f"  Running:           ALL ({len(QUERIES)} single-turn + {len(CONVERSATIONS)} multi-turn)")
     print()
 
-    summary = run_smoke_tests(args.url, args.account_id, args.org_id, args.project_id, args.mcp_log, query_ids, args.delay)
+    summary = run_smoke_tests(args.url, args.account_id, args.org_id, args.project_id, args.mcp_log, query_ids, args.delay, args.history_mode)
     results_path, summary_path = write_results(summary)
     print_final_summary(summary)
     print(f"  Full results:  {results_path}\n  Summary:       {summary_path}\n")
