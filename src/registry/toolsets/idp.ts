@@ -154,10 +154,13 @@ export const idpToolset: ToolsetDefinition = {
     {
       resourceType: "idp_score",
       displayName: "IDP Score",
-      description: "Entity score summary from IDP scorecards. Supports list and get.",
+      description: "Entity score summary from IDP scorecards. Supports list and get. List requires entity_identifier filter.",
       toolset: "idp",
       scope: "account",
       identifierFields: ["entity_id"],
+      listFilterFields: [
+        { name: "entity_identifier", description: "Entity identifier (required for listing scores)" },
+      ],
       operations: {
         list: {
           method: "GET",
@@ -165,9 +168,14 @@ export const idpToolset: ToolsetDefinition = {
           queryParams: {
             page: "page",
             size: "limit",
+            entity_identifier: "entity_identifier",
           },
-          responseExtractor: v1ListExtract(),
-          description: "List entity scores",
+          responseExtractor: (raw: unknown) => {
+            const r = raw as { overall_score?: number; scorecard_scores?: unknown[] };
+            const items = r.scorecard_scores ?? [];
+            return { overall_score: r.overall_score, items, total: items.length };
+          },
+          description: "List entity scores. Requires entity_identifier filter (format: namespace/Kind/name, e.g. default/Component/my-service).",
         },
         get: {
           method: "GET",
@@ -231,7 +239,7 @@ export const idpToolset: ToolsetDefinition = {
           method: "POST",
           path: "/v1/tech-docs/semantic-search",
           bodyBuilder: (input) => ({ query: input.query ?? input.search_term ?? "" }),
-          responseExtractor: ngExtract,
+          responseExtractor: v1ListExtract(),
           description: "Search IDP TechDocs via semantic search",
         },
       },
