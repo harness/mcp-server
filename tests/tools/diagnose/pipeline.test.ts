@@ -429,6 +429,61 @@ describe("pipelineHandler", () => {
     expect(stepLog.error).toContain("not found in execution graph");
   });
 
+  it("returns error when requested step is in graph but has no logBaseKey", async () => {
+    const exec = makeExecution({
+      status: "Success",
+      nodeMapEntries: {
+        "step-no-key": {
+          uuid: "step-no-key",
+          identifier: "step-no-key",
+          name: "TemplateStep",
+          baseFqn: "pipeline.stages.s1.spec.execution.steps.step-no-key",
+          status: "Success",
+          // no logBaseKey — happens with remote template steps
+        },
+      },
+    });
+
+    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const ctx = makeContext({
+      input: { execution_id: "exec-001", step_id: "step-no-key" },
+      registry,
+      args: { summary: true, include_logs: true },
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    expect(result.requested_step_log).toBeDefined();
+    const stepLog = result.requested_step_log as Record<string, unknown>;
+    expect(stepLog.step).toBe("step-no-key");
+    expect(stepLog.status).toBe("Success");
+    expect(stepLog.error).toContain("No logBaseKey available");
+  });
+
+  it("does not fetch step log when include_logs is false even if step_id is provided", async () => {
+    const exec = makeExecution({
+      status: "Success",
+      nodeMapEntries: {
+        "step-passed": {
+          uuid: "step-passed", identifier: "step-passed", name: "Deploy",
+          baseFqn: "pipeline.stages.s1.spec.execution.steps.step-passed",
+          status: "Success", logBaseKey: "log/step-passed",
+        },
+      },
+    });
+
+    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const ctx = makeContext({
+      input: { execution_id: "exec-001", step_id: "step-passed" },
+      registry,
+      args: { summary: true, include_logs: false },
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    expect(result.requested_step_log).toBeUndefined();
+  });
+
   it("returns error when log resolution fails", async () => {
     // Override resolveLogContent mock to throw for this test
     const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
