@@ -335,6 +335,100 @@ describe("pipelineHandler", () => {
     expect((entry.log_snippet as string)).toContain("lines omitted");
   });
 
+  it("fetches log for explicitly requested step even when it passed", async () => {
+    const exec = makeExecution({
+      status: "Success",
+      stages: [{ id: "s1", name: "Stage1", status: "Success", steps: [{ id: "step-passed", name: "Deploy", status: "Success" }] }],
+      nodeMapEntries: {
+        "step-passed": {
+          uuid: "step-passed",
+          identifier: "step-passed",
+          name: "Deploy",
+          baseFqn: "pipeline.stages.s1.spec.execution.steps.step-passed",
+          status: "Success",
+          logBaseKey: "log/step-passed",
+        },
+      },
+    });
+
+    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const ctx = makeContext({
+      // step_id is set by the URL parser from ?step=<nodeExecutionId>
+      input: { execution_id: "exec-001", step_id: "step-passed" },
+      registry,
+      args: { summary: true, include_logs: true },
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    // No failed_step_logs since nothing failed
+    expect(result.failed_step_logs).toBeUndefined();
+
+    // But requested_step_log should be present for the passed step
+    expect(result.requested_step_log).toBeDefined();
+    const stepLog = result.requested_step_log as Record<string, unknown>;
+    expect(stepLog.step_id).toBe("step-passed");
+    expect(stepLog.step).toBe("step-passed");
+    expect(stepLog.status).toBe("Success");
+    expect(stepLog.log).toBe("resolved log line 1\nresolved log line 2");
+  });
+
+  it("returns requested_step_log alongside failed_step_logs when step is explicitly requested", async () => {
+    const exec = makeExecution({
+      status: "Failed",
+      stages: [{ id: "s1", name: "S1", status: "Failed", steps: [
+        { id: "step-failed", name: "FailedStep", status: "Failed" },
+        { id: "step-passed", name: "PassedStep", status: "Success" },
+      ]}],
+      nodeMapEntries: {
+        "step-failed": {
+          uuid: "step-failed", identifier: "step-failed", name: "FailedStep",
+          baseFqn: "pipeline.stages.s1.spec.execution.steps.step-failed",
+          status: "Failed", failureInfo: { message: "step error" }, logBaseKey: "log/step-failed",
+        },
+        "step-passed": {
+          uuid: "step-passed", identifier: "step-passed", name: "PassedStep",
+          baseFqn: "pipeline.stages.s1.spec.execution.steps.step-passed",
+          status: "Success", logBaseKey: "log/step-passed",
+        },
+      },
+    });
+
+    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const ctx = makeContext({
+      input: { execution_id: "exec-001", step_id: "step-passed" },
+      registry,
+      args: { summary: false, include_logs: true },
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    // Failed step logs still present
+    expect(result.failed_step_logs).toBeDefined();
+    // Requested passed step log also present
+    expect(result.requested_step_log).toBeDefined();
+    const stepLog = result.requested_step_log as Record<string, unknown>;
+    expect(stepLog.status).toBe("Success");
+    expect(stepLog.step).toBe("step-passed");
+  });
+
+  it("returns error message when requested step_id is not in execution graph", async () => {
+    const exec = makeExecution({ status: "Success" });
+    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const ctx = makeContext({
+      input: { execution_id: "exec-001", step_id: "non-existent-step-id" },
+      registry,
+      args: { summary: true, include_logs: true },
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    expect(result.requested_step_log).toBeDefined();
+    const stepLog = result.requested_step_log as Record<string, unknown>;
+    expect(stepLog.step_id).toBe("non-existent-step-id");
+    expect(stepLog.error).toContain("not found in execution graph");
+  });
+
   it("returns error when log resolution fails", async () => {
     // Override resolveLogContent mock to throw for this test
     const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
