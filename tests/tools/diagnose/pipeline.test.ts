@@ -588,6 +588,52 @@ describe("pipelineHandler", () => {
     expect(result.requested_step_log).toBeUndefined();
   });
 
+  it("fetches requested_step_log even when step_id is a failed step truncated by max_failed_steps", async () => {
+    // If there are more failed steps than max_failed_steps allows, the capped list
+    // excludes some. A step_id pointing to a truncated failure must still get
+    // requested_step_log — it was never actually fetched in failed_step_logs.
+    const exec = makeExecution({
+      status: "Failed",
+      stages: [{ id: "s1", name: "S1", status: "Failed", steps: [
+        { id: "step-a", name: "StepA", status: "Failed" },
+        { id: "step-b", name: "StepB", status: "Failed" },
+      ]}],
+      nodeMapEntries: {
+        "step-a": {
+          uuid: "step-a", identifier: "step-a", name: "StepA",
+          baseFqn: "pipeline.stages.s1.spec.execution.steps.step-a",
+          status: "Failed", failureInfo: { message: "err-a" }, logBaseKey: "log/step-a",
+        },
+        "step-b": {
+          uuid: "step-b", identifier: "step-b", name: "StepB",
+          baseFqn: "pipeline.stages.s1.spec.execution.steps.step-b",
+          status: "Failed", failureInfo: { message: "err-b" }, logBaseKey: "log/step-b",
+        },
+      },
+    });
+
+    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const ctx = makeContext({
+      // step-b is the second failed step; max_failed_steps=1 caps at step-a only
+      input: { execution_id: "exec-001", step_id: "step-b" },
+      registry,
+      args: { summary: false, include_logs: true, max_failed_steps: 1 },
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    // Only step-a fetched in failed_step_logs (capped)
+    const failedLogs = result.failed_step_logs as Record<string, unknown>;
+    expect(Object.keys(failedLogs)).toHaveLength(1);
+    expect(failedLogs["s1/step-a"]).toBeDefined();
+
+    // step-b was truncated — must still appear via requested_step_log
+    expect(result.requested_step_log).toBeDefined();
+    const stepLog = result.requested_step_log as Record<string, unknown>;
+    expect(stepLog.step).toBe("step-b");
+    expect(stepLog.status).toBe("Failed");
+  });
+
   it("does not set requested_step_log when execution graph has no nodeMap", async () => {
     // Simulates template-based pipelines where executionGraph.nodeMap is not returned
     const exec = {

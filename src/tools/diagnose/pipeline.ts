@@ -567,6 +567,12 @@ export const pipelineHandler: DiagnoseHandler = {
       diagnostic.execution_error = String(err);
     }
 
+    // Track which log keys were actually fetched for failed steps — used below to
+    // avoid double-fetching the same log if step_id points to a failed step.
+    // Must use `capped` (the actually-fetched subset), not the full `failedNodes`,
+    // so that truncated failures don't incorrectly block the requested_step_log fetch.
+    let fetchedFailedLogKeys = new Set<string>();
+
     if (includeLogs && failedNodes.length > 0) {
       await sendProgress(extra, currentStep, totalSteps, "Fetching failed step logs...");
 
@@ -580,6 +586,7 @@ export const pipelineHandler: DiagnoseHandler = {
           const key = `${fn.stage}/${fn.step}`;
           const prefix = fn.log_key;
           if (!prefix) return { key, value: { error: "No log key available for this step" } };
+          fetchedFailedLogKeys.add(prefix);
           try {
             const logText = await resolveLogContent(client, prefix, { signal });
             return { key, value: truncateLog(logText, logSnippetLines) };
@@ -599,10 +606,9 @@ export const pipelineHandler: DiagnoseHandler = {
 
     // If a specific step was requested via the Harness URL (?step=<nodeExecutionId>),
     // fetch its log regardless of pass/fail status. The nodeMap key IS the nodeExecutionId.
-    // Skip if the step was already fetched as a failed step (avoid double-fetching the same log).
-    const alreadyFetchedAsFailedStep = requestedStepId
-      ? failedNodes.some((fn) => fn.log_key === graphNodeMap?.[requestedStepId]?.logBaseKey)
-      : false;
+    // Skip only if the step's log was actually fetched in the capped failed_step_logs above.
+    const requestedLogKey = requestedStepId ? graphNodeMap?.[requestedStepId]?.logBaseKey : undefined;
+    const alreadyFetchedAsFailedStep = !!requestedLogKey && fetchedFailedLogKeys.has(requestedLogKey);
 
     if (includeLogs && requestedStepId && graphNodeMap && !alreadyFetchedAsFailedStep) {
       await sendProgress(extra, currentStep, totalSteps, "Fetching requested step log...");
