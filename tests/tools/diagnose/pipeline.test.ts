@@ -551,6 +551,43 @@ describe("pipelineHandler", () => {
     expect((logEntry.log_snippet as string)).toContain("lines omitted");
   });
 
+  it("does not double-fetch log when requested step_id is already a failed step", async () => {
+    const exec = makeExecution({
+      status: "Failed",
+      stages: [{ id: "s1", name: "S1", status: "Failed", steps: [{ id: "step-failed", name: "FailedStep", status: "Failed" }] }],
+      nodeMapEntries: {
+        "step-failed": {
+          uuid: "step-failed", identifier: "step-failed", name: "FailedStep",
+          baseFqn: "pipeline.stages.s1.spec.execution.steps.step-failed",
+          status: "Failed", failureInfo: { message: "step error" }, logBaseKey: "log/step-failed",
+        },
+      },
+    });
+
+    const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
+    const mockFn = resolveLogContent as ReturnType<typeof vi.fn>;
+    mockFn.mockClear();
+
+    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const ctx = makeContext({
+      // step_id points to the same step that is also in failedNodes
+      input: { execution_id: "exec-001", step_id: "step-failed" },
+      registry,
+      args: { summary: false, include_logs: true },
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    // Log was fetched only once (for failed_step_logs), not twice
+    expect(mockFn).toHaveBeenCalledTimes(1);
+
+    // failed_step_logs still has the entry
+    expect(result.failed_step_logs).toBeDefined();
+
+    // requested_step_log is NOT set because the step was already covered in failed_step_logs
+    expect(result.requested_step_log).toBeUndefined();
+  });
+
   it("does not set requested_step_log when execution graph has no nodeMap", async () => {
     // Simulates template-based pipelines where executionGraph.nodeMap is not returned
     const exec = {

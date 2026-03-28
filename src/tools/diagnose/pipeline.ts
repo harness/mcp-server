@@ -454,9 +454,11 @@ export const pipelineHandler: DiagnoseHandler = {
     const logSnippetLines = asNumber(args.log_snippet_lines) ?? 120;
     const maxFailedSteps = asNumber(args.max_failed_steps) ?? 5;
 
+    const hasRequestedStep = !!asString(input.step_id);
     let totalSteps = 1;
     if (includeYaml) totalSteps++;
     if (includeLogs) totalSteps++;
+    if (includeLogs && hasRequestedStep) totalSteps++;
 
     if (!executionId && pipelineId) {
       log.info("Fetching latest execution for pipeline", { pipelineId });
@@ -597,7 +599,13 @@ export const pipelineHandler: DiagnoseHandler = {
 
     // If a specific step was requested via the Harness URL (?step=<nodeExecutionId>),
     // fetch its log regardless of pass/fail status. The nodeMap key IS the nodeExecutionId.
-    if (includeLogs && requestedStepId && graphNodeMap) {
+    // Skip if the step was already fetched as a failed step (avoid double-fetching the same log).
+    const alreadyFetchedAsFailedStep = requestedStepId
+      ? failedNodes.some((fn) => fn.log_key === graphNodeMap?.[requestedStepId]?.logBaseKey)
+      : false;
+
+    if (includeLogs && requestedStepId && graphNodeMap && !alreadyFetchedAsFailedStep) {
+      await sendProgress(extra, currentStep, totalSteps, "Fetching requested step log...");
       const requestedNode = graphNodeMap[requestedStepId];
       if (requestedNode?.logBaseKey) {
         log.info("Fetching log for explicitly requested step", {
@@ -635,6 +643,7 @@ export const pipelineHandler: DiagnoseHandler = {
           error: "Step not found in execution graph. It may belong to a nested template pipeline.",
         };
       }
+      currentStep++;
     }
 
     await sendProgress(extra, totalSteps, totalSteps, isSummary ? "Report complete" : "Diagnosis complete");
