@@ -484,6 +484,111 @@ describe("pipelineHandler", () => {
     expect(result.requested_step_log).toBeUndefined();
   });
 
+  it("returns error in requested_step_log when log resolution fails for requested step", async () => {
+    const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
+    (resolveLogContent as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error("Log blob not ready after 3 attempts (status: queued)"),
+    );
+
+    const exec = makeExecution({
+      status: "Success",
+      nodeMapEntries: {
+        "step-ok": {
+          uuid: "step-ok", identifier: "step-ok", name: "Deploy",
+          baseFqn: "pipeline.stages.s1.spec.execution.steps.step-ok",
+          status: "Success", logBaseKey: "log/step-ok",
+        },
+      },
+    });
+
+    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const ctx = makeContext({
+      input: { execution_id: "exec-001", step_id: "step-ok" },
+      registry,
+      args: { summary: true, include_logs: true },
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    expect(result.requested_step_log).toBeDefined();
+    const stepLog = result.requested_step_log as Record<string, unknown>;
+    expect(stepLog.status).toBe("Success");
+    expect(stepLog.error).toContain("not ready after 3 attempts");
+    // log field should not be present on error
+    expect(stepLog.log).toBeUndefined();
+  });
+
+  it("truncates long log for requested step when log_snippet_lines is set", async () => {
+    const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
+    const longLog = Array.from({ length: 200 }, (_, i) => `line ${i + 1}`).join("\n");
+    (resolveLogContent as ReturnType<typeof vi.fn>).mockResolvedValueOnce(longLog);
+
+    const exec = makeExecution({
+      status: "Success",
+      nodeMapEntries: {
+        "step-verbose": {
+          uuid: "step-verbose", identifier: "step-verbose", name: "VerboseStep",
+          baseFqn: "pipeline.stages.s1.spec.execution.steps.step-verbose",
+          status: "Success", logBaseKey: "log/step-verbose",
+        },
+      },
+    });
+
+    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const ctx = makeContext({
+      input: { execution_id: "exec-001", step_id: "step-verbose" },
+      registry,
+      args: { summary: true, include_logs: true, log_snippet_lines: 50 },
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    expect(result.requested_step_log).toBeDefined();
+    const stepLog = result.requested_step_log as Record<string, unknown>;
+    const logEntry = stepLog.log as Record<string, unknown>;
+    expect(logEntry.truncated).toBe(true);
+    expect(logEntry.total_lines).toBe(200);
+    expect((logEntry.log_snippet as string)).toContain("lines omitted");
+  });
+
+  it("does not set requested_step_log when execution graph has no nodeMap", async () => {
+    // Simulates template-based pipelines where executionGraph.nodeMap is not returned
+    const exec = {
+      pipelineExecutionSummary: {
+        pipelineIdentifier: "test-pipeline",
+        name: "Test Pipeline",
+        planExecutionId: "exec-001",
+        status: "Success",
+        runSequence: 1,
+        startTs: NOW,
+        endTs: NOW + 60000,
+        layoutNodeMap: {
+          root: {
+            nodeType: "ROOT", nodeGroup: "ROOT", nodeIdentifier: "root",
+            name: "pipeline", status: "Success",
+            edgeLayoutList: { currentNodeChildren: [], nextIds: [] },
+          },
+        },
+        startingNodeId: "root",
+        executionTriggerInfo: { triggerType: "MANUAL", triggeredBy: { identifier: "admin" } },
+      },
+      executionGraph: {}, // no nodeMap — as seen in remote-template pipelines
+    };
+
+    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const ctx = makeContext({
+      input: { execution_id: "exec-001", step_id: "some-step-id" },
+      registry,
+      args: { summary: true, include_logs: true },
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    // When graph has no nodeMap, graphNodeMap is undefined — condition short-circuits,
+    // no requested_step_log is set (caller gets no false positives)
+    expect(result.requested_step_log).toBeUndefined();
+  });
+
   it("returns error when log resolution fails", async () => {
     // Override resolveLogContent mock to throw for this test
     const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
