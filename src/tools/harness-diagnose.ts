@@ -43,7 +43,7 @@ export function registerDiagnoseTool(server: McpServer, registry: Registry, clie
         url: z.string().describe("A Harness URL — resource type, org, project, and ID are extracted automatically").optional(),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
-        options: z.record(z.string(), z.unknown()).describe("Resource-specific diagnostic options. Pipeline: execution_id, pipeline_id, summary, include_yaml, include_logs, log_snippet_lines, max_failed_steps, include_visual (boolean, include PNG image inline), visual_type ('timeline'|'flow'|'architecture', default 'timeline' — 'architecture' renders full pipeline YAML as multi-level diagram with stages, step groups, steps, rollback), visual_width (number, default 900). GitOps: agent_id. Call harness_describe for details.").optional(),
+        options: z.record(z.string(), z.unknown()).describe("Resource-specific diagnostic options. Pipeline: execution_id, pipeline_id, summary, include_yaml, include_logs, log_snippet_lines, max_failed_steps, include_visual (boolean, include PNG image inline), visual_type ('timeline'|'flow'|'architecture', default 'timeline' — 'architecture' renders full pipeline YAML as multi-level diagram with stages, step groups, steps, rollback), visual_width (number, default 900). When a Harness URL contains ?step=<nodeExecutionId>, setting include_logs:true fetches that specific step's log regardless of pass/fail status and returns it as requested_step_log alongside any failed_step_logs. GitOps: agent_id. Call harness_describe for details.").optional(),
       },
       annotations: {
         title: "Diagnose Harness Resource",

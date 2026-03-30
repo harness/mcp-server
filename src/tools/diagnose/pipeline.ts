@@ -454,9 +454,11 @@ export const pipelineHandler: DiagnoseHandler = {
     const logSnippetLines = asNumber(args.log_snippet_lines) ?? 120;
     const maxFailedSteps = asNumber(args.max_failed_steps) ?? 5;
 
+    const hasRequestedStep = !!asString(input.step_id);
     let totalSteps = 1;
     if (includeYaml) totalSteps++;
     if (includeLogs) totalSteps++;
+    if (includeLogs && hasRequestedStep) totalSteps++;
 
     if (!executionId && pipelineId) {
       log.info("Fetching latest execution for pipeline", { pipelineId });
@@ -486,6 +488,10 @@ export const pipelineHandler: DiagnoseHandler = {
     let currentStep = 0;
     let resolvedPipelineId: string | undefined;
     let failedNodes: FailedNodeDetail[] = [];
+    let graphNodeMap: Record<string, ExecGraphNode> | undefined;
+
+    // step_id is extracted from the Harness URL's ?step= query param
+    const requestedStepId = asString(input.step_id);
 
     await sendProgress(extra, currentStep, totalSteps, "Fetching execution details...");
     log.info("Fetching execution details", { executionId });
@@ -498,6 +504,11 @@ export const pipelineHandler: DiagnoseHandler = {
       const exec = asRecord(execution) ?? {};
       const pes = asRecord(exec.pipelineExecutionSummary);
       resolvedPipelineId = asString(pes?.pipelineIdentifier);
+
+      // Always extract the full graph node map — needed for both failed-step
+      // log fetching and the explicit step log lookup below.
+      const execGraph = asRecord(exec.executionGraph);
+      graphNodeMap = isRecord(execGraph?.nodeMap) ? execGraph.nodeMap as Record<string, ExecGraphNode> : undefined;
 
       if (isSummary) {
         const result = buildExecutionSummary(exec, config, input);
@@ -531,8 +542,6 @@ export const pipelineHandler: DiagnoseHandler = {
         }
       } else {
         diagnostic.execution = execution;
-        const execGraph = asRecord(exec.executionGraph);
-        const graphNodeMap = isRecord(execGraph?.nodeMap) ? execGraph.nodeMap as Record<string, ExecGraphNode> : undefined;
         if (graphNodeMap) {
           failedNodes = findFailedNodes(graphNodeMap);
         }
@@ -558,6 +567,12 @@ export const pipelineHandler: DiagnoseHandler = {
       diagnostic.execution_error = String(err);
     }
 
+    // Track which log keys were actually fetched for failed steps — used below to
+    // avoid double-fetching the same log if step_id points to a failed step.
+    // Must use `capped` (the actually-fetched subset), not the full `failedNodes`,
+    // so that truncated failures don't incorrectly block the requested_step_log fetch.
+    let fetchedFailedLogKeys = new Set<string>();
+
     if (includeLogs && failedNodes.length > 0) {
       await sendProgress(extra, currentStep, totalSteps, "Fetching failed step logs...");
 
@@ -571,6 +586,7 @@ export const pipelineHandler: DiagnoseHandler = {
           const key = `${fn.stage}/${fn.step}`;
           const prefix = fn.log_key;
           if (!prefix) return { key, value: { error: "No log key available for this step" } };
+          fetchedFailedLogKeys.add(prefix);
           try {
             const logText = await resolveLogContent(client, prefix, { signal });
             return { key, value: truncateLog(logText, logSnippetLines) };
@@ -586,6 +602,54 @@ export const pipelineHandler: DiagnoseHandler = {
         stepLogs[entry.key] = entry.value;
       }
       diagnostic.failed_step_logs = stepLogs;
+    }
+
+    // If a specific step was requested via the Harness URL (?step=<nodeExecutionId>),
+    // fetch its log regardless of pass/fail status. The nodeMap key IS the nodeExecutionId.
+    // Skip only if the step's log was actually fetched in the capped failed_step_logs above.
+    const requestedLogKey = requestedStepId ? graphNodeMap?.[requestedStepId]?.logBaseKey : undefined;
+    const alreadyFetchedAsFailedStep = !!requestedLogKey && fetchedFailedLogKeys.has(requestedLogKey);
+
+    if (includeLogs && requestedStepId && graphNodeMap && !alreadyFetchedAsFailedStep) {
+      await sendProgress(extra, currentStep, totalSteps, "Fetching requested step log...");
+      const requestedNode = graphNodeMap[requestedStepId];
+      if (requestedNode?.logBaseKey) {
+        log.info("Fetching log for explicitly requested step", {
+          step_id: requestedStepId,
+          step: requestedNode.identifier ?? requestedNode.name,
+          status: requestedNode.status,
+        });
+        try {
+          const logText = await resolveLogContent(client, requestedNode.logBaseKey, { signal });
+          diagnostic.requested_step_log = {
+            step_id: requestedStepId,
+            step: requestedNode.identifier ?? requestedNode.name,
+            status: requestedNode.status,
+            log: truncateLog(logText, logSnippetLines),
+          };
+        } catch (err) {
+          log.warn("Failed to fetch requested step log", { step_id: requestedStepId, error: String(err) });
+          diagnostic.requested_step_log = {
+            step_id: requestedStepId,
+            step: requestedNode.identifier ?? requestedNode.name,
+            status: requestedNode.status,
+            error: String(err),
+          };
+        }
+      } else if (requestedNode) {
+        diagnostic.requested_step_log = {
+          step_id: requestedStepId,
+          step: requestedNode.identifier ?? requestedNode.name,
+          status: requestedNode.status,
+          error: "No logBaseKey available for this step — it may be part of a remote template whose graph is not exposed.",
+        };
+      } else {
+        diagnostic.requested_step_log = {
+          step_id: requestedStepId,
+          error: "Step not found in execution graph. It may belong to a nested template pipeline.",
+        };
+      }
+      currentStep++;
     }
 
     await sendProgress(extra, totalSteps, totalSteps, isSummary ? "Report complete" : "Diagnosis complete");
