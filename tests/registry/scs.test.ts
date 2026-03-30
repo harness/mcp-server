@@ -213,6 +213,14 @@ describe("T4-v2: remediation limitation note", () => {
     expect(res.description).toContain("code repository");
     expect(res.description).toContain("not available for container");
   });
+
+  it("scs_artifact_remediation maps target_version query param to targetVersion (API camelCase)", () => {
+    const spec = getOp("scs_artifact_remediation", "get");
+    expect(spec.queryParams).toEqual({
+      purl: "purl",
+      target_version: "targetVersion",
+    });
+  });
 });
 
 // ─── T11-v2: ID retention hints ───────────────────────────────────────────
@@ -613,6 +621,7 @@ describe("P3-6: scs_remediation_pr resource", () => {
   it("description warns about write operation", () => {
     const res = findResource("scs_remediation_pr");
     expect(res.description).toContain("WRITE OPERATION");
+    expect(res.description).not.toMatch(/\bclose\b/i);
   });
 
   it("has diagnosticHint", () => {

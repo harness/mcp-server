@@ -275,7 +275,7 @@ export const scsToolset: ToolsetDefinition = {
           pathParams: { org_id: "org", project_id: "project", artifact_id: "artifact" },
           queryParams: {
             purl: "purl",
-            target_version: "target_version",
+            target_version: "targetVersion",
           },
           responseExtractor: scsCleanExtract,
           description: "Get remediation advice for a component by package URL (purl)",
@@ -444,13 +444,13 @@ export const scsToolset: ToolsetDefinition = {
     {
       resourceType: "scs_remediation_pr",
       displayName: "Remediation Pull Request",
-      description: "Create, list, or close remediation pull requests that upgrade vulnerable/outdated components. "
+      description: "Create and list remediation pull requests that upgrade vulnerable/outdated components. "
         + "WRITE OPERATION: create will open a real PR in the source repository. "
         + "Requires artifact_id. For create, also requires component purl and target_version. "
-        + "Use scs_component_remediation first to review the upgrade suggestion before creating a PR.",
+        + "Use scs_component_remediation first to review the upgrade suggestion before creating a PR. "
+        + "Closing or merging PRs is done in the source repository (or generic pull-request tools), not via this SCS resource.",
       diagnosticHint: "If you get a 404: verify artifact_id is correct. Use harness_get(resource_type='scs_component_remediation', artifact_id='...', purl='...') to verify the component exists. "
-        + "For create: ensure purl and target_version are provided. "
-        + "For close: provide pr_id from the list response.",
+        + "For create: ensure purl and target_version are provided.",
       searchAliases: ["remediation pr", "fix pr", "upgrade pr", "pull request", "create pr", "remediation pull request"],
       relatedResources: [
         { resourceType: "scs_component_remediation", relationship: "parent", description: "Review upgrade suggestion before creating PR" },
