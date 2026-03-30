@@ -94,10 +94,12 @@ def build_tool_call_summary(extracted: dict[str, Any]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# 15 Test Queries — V2
+# 27 Test Queries — V2
 # expected_tools: list of (tool_name, resource_type) tuples
 # Q02, Q03, Q05: Downgraded — filters not ported to v2
 # Q15: Reclassified per PD-1 — vuln counts are CORRECT behavior
+# Q20-Q26: Phase 3 queries (P3-6, P3-7, P3-8, P3-9, P3-12)
+# Q27-Q31: Disambiguation queries — test tool selection when multiple resources match
 # ---------------------------------------------------------------------------
 QUERIES = [
     {
@@ -184,10 +186,10 @@ QUERIES = [
     {
         "id": "Q13",
         "query": "I want remediation guidance for the zlib component in my artifacts. Can you find it and tell me what version to upgrade to?",
-        "expected_intent": "Partially Supported: Remediation (4-call chain in v2)",
+        "expected_intent": "Partially Supported: Remediation (4-call chain in v2). scs_component_remediation preferred over scs_artifact_remediation.",
         "confidence": "Low",
-        "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_artifact_remediation")],
-        "observe": "Needs purl from component list. Compact mode strips purl — must use compact=false.",
+        "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_remediation")],
+        "observe": "Needs purl from component list. scs_component_remediation (structured) is preferred over scs_artifact_remediation (text-only).",
     },
     {
         "id": "Q14", "query": "Give me a complete security overview of my entire project including all artifacts and repos",
@@ -215,6 +217,99 @@ QUERIES = [
         "confidence": "Supported",
         "expected_tools": [("harness_list", "code_repo_security")],
         "observe": "P2-13 validation: 'status' is ambiguous (could mean code repo status or security status). SCS module context should prefer code_repo_security.",
+    },
+    # ─── Phase 3 Tier 1 Queries ───────────────────────────────────────────
+    {
+        "id": "Q20",
+        "query": "I have a vulnerable express component in my code repository. Can you suggest a safe version to upgrade to?",
+        "expected_intent": "P3-6: Component remediation — upgrade suggestions with dependency impact",
+        "confidence": "Medium",
+        "expected_tools": [("harness_list", "code_repo_security"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_remediation")],
+        "observe": "Does it chain code_repo_security → scs_artifact_component (to find purl) → scs_component_remediation? "
+            "Does the response include dependency_changes (P3-9 impact analysis)?",
+    },
+    {
+        "id": "Q21",
+        "query": "Show me the direct dependencies of my first code repository",
+        "expected_intent": "P3-7: Repo-level dependency queries — repo_id as artifact_id",
+        "confidence": "High",
+        "expected_tools": [("harness_list", "code_repo_security"), ("harness_list", "scs_artifact_component")],
+        "observe": "Does it use repo_id as artifact_id with dependency_type=DIRECT? "
+            "code_repo_security description explicitly guides this two-step flow.",
+    },
+    {
+        "id": "Q22",
+        "query": "Show me the full dependency tree for the express component in my first artifact",
+        "expected_intent": "P3-8: Component dependency tree — direct and transitive dependencies",
+        "confidence": "Medium",
+        "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "artifact_security"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_dependencies")],
+        "observe": "Does it chain artifact_source → artifact_security → scs_artifact_component (to find purl) → scs_component_dependencies? "
+            "Does the response show DIRECT vs INDIRECT relationships and relationship_path?",
+    },
+    {
+        "id": "Q23",
+        "query": "What would break if I upgrade the zlib component in my artifact? Show me the dependency impact.",
+        "expected_intent": "P3-9: Dependency impact analysis — embedded in remediation response",
+        "confidence": "Medium",
+        "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_remediation")],
+        "observe": "Does it route to scs_component_remediation (not scs_artifact_remediation)? "
+            "Does the LLM surface the dependency_changes from the response?",
+    },
+    {
+        "id": "Q26",
+        "query": "Show me the auto-PR configuration for my project",
+        "expected_intent": "P3-12: Auto PR configuration management — view config",
+        "confidence": "Supported",
+        "expected_tools": [("harness_get", "scs_auto_pr_config")],
+        "observe": "Does it call harness_get with resource_type=scs_auto_pr_config? No entity ID needed.",
+    },
+    # ─── Disambiguation Queries ────────────────────────────────────────
+    {
+        "id": "Q27",
+        "query": "Get structured remediation advice with upgrade suggestions for a vulnerable component in my first artifact. I want dependency impact analysis, not just text.",
+        "expected_intent": "Disambiguation: scs_component_remediation (structured) vs scs_artifact_remediation (text-only)",
+        "confidence": "Medium",
+        "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_remediation")],
+        "observe": "KEY DISAMBIGUATION: Does it pick scs_component_remediation (upgrade suggestions + impact analysis) "
+            "over scs_artifact_remediation (deprecated text-only advice)? "
+            "'first artifact' forces the LLM to chain through sources → artifacts → components → remediation.",
+    },
+    {
+        "id": "Q28",
+        "query": "What does the express package depend on? Show me its full dependency chain including transitive dependencies.",
+        "expected_intent": "Disambiguation: scs_component_dependencies (tree) vs scs_artifact_component (flat list)",
+        "confidence": "Medium",
+        "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_dependencies")],
+        "observe": "KEY DISAMBIGUATION: 'dependency chain' and 'transitive' should route to scs_component_dependencies (tree), "
+            "NOT scs_artifact_component (flat list of all components in artifact). "
+            "scs_artifact_component lists components IN an artifact; scs_component_dependencies shows what a component DEPENDS ON.",
+    },
+    {
+        "id": "Q29",
+        "query": "I want to set up automatic pull requests to fix vulnerabilities in my project. How is it configured?",
+        "expected_intent": "Disambiguation: scs_auto_pr_config (project config) vs scs_remediation_pr (manual PR creation)",
+        "confidence": "Supported",
+        "expected_tools": [("harness_get", "scs_auto_pr_config")],
+        "observe": "KEY DISAMBIGUATION: 'automatic pull requests' and 'configured' should route to scs_auto_pr_config (project-level config), "
+            "NOT scs_remediation_pr (create/list individual PRs). 'set up' and 'configured' are config keywords.",
+    },
+    {
+        "id": "Q30",
+        "query": "Check if my first artifact passes all the security compliance rules",
+        "expected_intent": "Disambiguation: scs_compliance_result (SCS compliance) vs opa_policy (OPA governance)",
+        "confidence": "Medium",
+        "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "artifact_security"), ("harness_list", "scs_compliance_result")],
+        "observe": "KEY DISAMBIGUATION: 'compliance rules' in SCS context should route to scs_compliance_result, "
+            "NOT opa_policy (governance toolset). Module context (SCS) should drive this.",
+    },
+    {
+        "id": "Q31",
+        "query": "Show me details about the security posture of my artifacts",
+        "expected_intent": "Disambiguation: artifact_security (security overview) vs scs_artifact_source (source listing)",
+        "confidence": "High",
+        "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "artifact_security")],
+        "observe": "KEY DISAMBIGUATION: 'security posture' of plural 'artifacts' justifies harness_list(artifact_security) to get overview of all. "
+            "Tests whether LLM chains source listing → security listing for a broad posture view.",
     },
 ]
 
@@ -263,8 +358,8 @@ CONVERSATIONS = [
              "expected_tools": [],
              "observe": "Can it reference SBOM data from Turn 1?"},
             {"turn": 3, "query": "How do I fix the zlib component? What version should I upgrade to?",
-             "expected_tools": [("harness_get", "scs_artifact_remediation")],
-             "observe": "Does it extract the correct purl?"},
+             "expected_tools": [("harness_get", "scs_component_remediation")],
+             "observe": "scs_component_remediation preferred (structured upgrade suggestions). Does it extract the correct purl?"},
         ],
     },
     {
@@ -295,6 +390,58 @@ CONVERSATIONS = [
             {"turn": 3, "query": "Compare the security posture of that repo with the first artifact",
              "expected_tools": [],
              "observe": "Cross-entity comparison not supported. Graceful decline?"},
+        ],
+    },
+    # ─── Phase 3 Tier 1 Conversations ─────────────────────────────────────
+    {
+        "id": "M06", "title": "Dependency Investigation + Remediation Journey (P3-6/P3-7/P3-8/P3-9/P3-12)",
+        "description": "Repo deps → dependency tree → remediation suggestion → impact analysis → auto-PR config",
+        "turns": [
+            {"turn": 1, "query": "Show me the direct dependencies of my first code repository",
+             "expected_tools": [("harness_list", "code_repo_security"), ("harness_list", "scs_artifact_component")],
+             "observe": "P3-7: Does it use repo_id as artifact_id with dependency_type=DIRECT?"},
+            {"turn": 2, "query": "Show me the full dependency tree for the first component in that list",
+             "expected_tools": [("harness_get", "scs_component_dependencies")],
+             "observe": "P3-8: Does it extract purl from Turn 1 and call scs_component_dependencies? Does it show DIRECT vs INDIRECT relationships?"},
+            {"turn": 3, "query": "What safe upgrade is available for that component? Also show me the dependency impact.",
+             "expected_tools": [("harness_get", "scs_component_remediation")],
+             "observe": "P3-6/P3-9: Does it reuse purl from Turn 2 and call scs_component_remediation? Does it surface dependency_changes?"},
+            {"turn": 4, "query": "What's the current auto-PR configuration for this project?",
+             "expected_tools": [("harness_get", "scs_auto_pr_config")],
+             "observe": "P3-12: Does it call scs_auto_pr_config? Context switch from component to project-level config."},
+        ],
+    },
+    # ─── Error Recovery Conversations ─────────────────────────────────────
+    {
+        "id": "M07", "title": "Invalid Artifact ID Recovery (diagnosticHint self-correction)",
+        "description": "Use a made-up artifact_id → get error → LLM should self-correct by listing sources first",
+        "turns": [
+            {"turn": 1, "query": "Show me the security details for artifact ID 'fake-artifact-12345'",
+             "expected_tools": [("harness_get", "artifact_security")],
+             "observe": "ERROR RECOVERY T1: LLM calls harness_get with fake artifact_id. Should get 404 or error. "
+                 "Does the error response include diagnosticHint guidance?"},
+            {"turn": 2, "query": "That didn't work. Can you find the correct artifact ID and try again?",
+             "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "artifact_security"), ("harness_get", "artifact_security")],
+             "observe": "ERROR RECOVERY T2: KEY TEST — does the LLM self-correct by listing sources first, "
+                 "then listing artifacts to find valid IDs, then retrying harness_get? "
+                 "diagnosticHint says: 'use harness_list(resource_type=scs_artifact_source) to discover valid source IDs'."},
+        ],
+    },
+    {
+        "id": "M08", "title": "Remediation Scope Limitation Recovery (code-repo vs container image)",
+        "description": "Request remediation for a container image component → 404 → LLM explains limitation → try code repo",
+        "turns": [
+            {"turn": 1, "query": "List my artifact sources and show me the first container image artifact",
+             "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "artifact_security")],
+             "observe": "Setup turn: establishes a container image artifact in context."},
+            {"turn": 2, "query": "Get remediation advice for a component in that container image artifact",
+             "expected_tools": [("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_remediation")],
+             "observe": "ERROR RECOVERY T2: Remediation only works for code repo artifacts, not container images. "
+                 "Should get 404. diagnosticHint says: 'remediation works for code repo artifacts only — not container images'."},
+            {"turn": 3, "query": "That failed. Can you try with a code repository instead?",
+             "expected_tools": [("harness_list", "code_repo_security"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_remediation")],
+             "observe": "ERROR RECOVERY T3: KEY TEST — does the LLM switch to code_repo_security, "
+                 "use repo_id as artifact_id (P3-7), and retry remediation with a code repo artifact?"},
         ],
     },
 ]

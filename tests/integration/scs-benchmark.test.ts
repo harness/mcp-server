@@ -1,7 +1,7 @@
 /**
  * T5-v2: SCS Benchmark — Integration tests against live Harness QA environment.
  *
- * 16 scenarios across 3 tiers exercising the registry dispatch layer.
+ * 24 scenarios across 3 tiers exercising the registry dispatch layer.
  * Requires real credentials — skipped when HARNESS_API_KEY is not set.
  *
  * Env vars (set in shell or .env):
@@ -147,6 +147,18 @@ describe.skipIf(!HAS_CREDENTIALS)("SCS Benchmark (live API)", () => {
       }) as unknown;
       expect(result).toBeDefined();
       console.log(`  S04: search_term=PDF, ${jsonBytes(result)} bytes`);
+    }, 30_000);
+
+    it("S19: Get auto-PR configuration (P3-12)", async () => {
+      try {
+        const result = await registry.dispatch(client, "scs_auto_pr_config", "get", {}) as unknown;
+        expect(result).toBeDefined();
+        console.log(`  S19: auto-PR config, ${jsonBytes(result)} bytes`);
+      } catch (err) {
+        // Auto-PR config may not be configured in QA — log but don't fail
+        const msg = err instanceof Error ? err.message : String(err);
+        console.log(`  S19: auto-PR config not available: ${msg.slice(0, 120)}`);
+      }
     }, 30_000);
 
     it("S05: List with pagination (size=5)", async () => {
@@ -318,6 +330,118 @@ describe.skipIf(!HAS_CREDENTIALS)("SCS Benchmark (live API)", () => {
         console.log(`  S13: remediation error (expected for non-code-repo): ${msg.slice(0, 120)}`);
       }
     }, 30_000);
+
+    it("S20: Get component remediation suggestion (P3-6)", async () => {
+      if (!state.artifactId || !state.purl) {
+        console.log("  S20: SKIPPED — no artifact_id or purl");
+        return;
+      }
+
+      try {
+        const result = await registry.dispatch(client, "scs_component_remediation", "get", {
+          artifact_id: state.artifactId,
+          purl: state.purl,
+        }) as Record<string, unknown>;
+        expect(result).toBeDefined();
+
+        // P3-9: Check if dependency impact analysis is embedded in response
+        const hasDependencyChanges = result && (
+          "dependency_changes" in result || "dependencyChanges" in result
+          || "changes" in result || "impact" in result
+        );
+        console.log(`  S20: component remediation, ${jsonBytes(result)} bytes`);
+        console.log(`  S20: dependency impact data present: ${hasDependencyChanges}`);
+      } catch (err) {
+        // Remediation is code-repo only; container image artifacts will 404
+        const msg = err instanceof Error ? err.message : String(err);
+        console.log(`  S20: remediation error (expected for non-code-repo): ${msg.slice(0, 120)}`);
+      }
+    }, 30_000);
+
+    it("S21: List remediation pull requests (P3-6)", async () => {
+      if (!state.artifactId) {
+        console.log("  S21: SKIPPED — no artifact_id");
+        return;
+      }
+
+      try {
+        const result = await registry.dispatch(client, "scs_remediation_pr", "list", {
+          artifact_id: state.artifactId,
+        }) as unknown;
+        expect(result).toBeDefined();
+
+        const items = Array.isArray(result) ? result : [];
+        console.log(`  S21: ${items.length} remediation PRs, ${jsonBytes(result)} bytes`);
+      } catch (err) {
+        // Endpoint may not exist yet or artifact may not support PRs
+        const msg = err instanceof Error ? err.message : String(err);
+        console.log(`  S21: remediation PR list error: ${msg.slice(0, 120)}`);
+      }
+    }, 30_000);
+
+    it("S24: Component dependency tree (P3-8)", async () => {
+      if (!state.artifactId || !state.purl) {
+        console.log("  S24: SKIPPED — no artifact_id or purl");
+        return;
+      }
+
+      try {
+        const result = await registry.dispatch(client, "scs_component_dependencies", "get", {
+          artifact_id: state.artifactId,
+          purl: state.purl,
+        }) as unknown;
+        expect(result).toBeDefined();
+
+        // Response should contain a dependencies array (may be inside the extracted result)
+        const deps = Array.isArray(result) ? result
+          : (result as Record<string, unknown>).dependencies;
+        const depItems = Array.isArray(deps) ? deps : [];
+
+        // Log relationship breakdown if there are dependencies
+        let directCount = 0;
+        let indirectCount = 0;
+        for (const dep of depItems) {
+          const d = dep as Record<string, unknown>;
+          if (d.relationship === "DIRECT") directCount++;
+          else if (d.relationship === "INDIRECT") indirectCount++;
+        }
+
+        console.log(`  S24: ${depItems.length} dependencies (${directCount} direct, ${indirectCount} indirect), ${jsonBytes(result)} bytes`);
+      } catch (err) {
+        // May 404 if component has no dependency data
+        const msg = err instanceof Error ? err.message : String(err);
+        console.log(`  S24: dependency tree error: ${msg.slice(0, 120)}`);
+      }
+    }, 30_000);
+
+    it("S22: Repo dependencies via repo_id as artifact_id (P3-7)", async () => {
+      if (!state.repoId) {
+        console.log("  S22: SKIPPED — no repo_id from S03");
+        return;
+      }
+
+      try {
+        // P3-7: repo_id IS an artifact_id — use it to list DIRECT dependencies
+        const result = await registry.dispatch(client, "scs_artifact_component", "list", {
+          artifact_id: state.repoId,
+          dependency_type: "DIRECT",
+        }) as unknown;
+        expect(result).toBeDefined();
+
+        const items = Array.isArray(result) ? result : [];
+        // Capture a purl from repo components for remediation tests
+        if (items.length > 0 && !state.purl) {
+          const first = items[0] as Record<string, unknown>;
+          const p = first.purl ?? first.packageUrl;
+          if (p) state.purl = String(p);
+        }
+
+        console.log(`  S22: ${items.length} direct repo deps (repo_id=${state.repoId.slice(0, 12)}...), ${jsonBytes(result)} bytes`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.log(`  S22: repo dependency query error: ${msg.slice(0, 120)}`);
+      }
+    }, 30_000);
   });
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -405,6 +529,28 @@ describe.skipIf(!HAS_CREDENTIALS)("SCS Benchmark (live API)", () => {
       }) as unknown;
       expect(result).toBeDefined();
       console.log(`  S17: repo overview, ${jsonBytes(result)} bytes`);
+    }, 30_000);
+
+    it("S23: Component remediation with target_version (P3-6/P3-9)", async () => {
+      if (!state.artifactId || !state.purl) {
+        console.log("  S23: SKIPPED — no artifact_id or purl");
+        return;
+      }
+
+      try {
+        // Request remediation with a specific target version
+        const result = await registry.dispatch(client, "scs_component_remediation", "get", {
+          artifact_id: state.artifactId,
+          purl: state.purl,
+          target_version: "99.99.99",  // Unrealistic version — tests param pass-through
+        }) as Record<string, unknown>;
+        expect(result).toBeDefined();
+        console.log(`  S23: remediation with target_version, ${jsonBytes(result)} bytes`);
+      } catch (err) {
+        // May 404 for non-code-repo artifacts or reject invalid target version
+        const msg = err instanceof Error ? err.message : String(err);
+        console.log(`  S23: remediation with target_version error: ${msg.slice(0, 120)}`);
+      }
     }, 30_000);
 
     it("S18: Compact mode effectiveness for SCS (T9-v2)", async () => {

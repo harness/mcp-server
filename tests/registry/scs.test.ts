@@ -213,6 +213,14 @@ describe("T4-v2: remediation limitation note", () => {
     expect(res.description).toContain("code repository");
     expect(res.description).toContain("not available for container");
   });
+
+  it("scs_artifact_remediation maps target_version query param to targetVersion (API camelCase)", () => {
+    const spec = getOp("scs_artifact_remediation", "get");
+    expect(spec.queryParams).toEqual({
+      purl: "purl",
+      target_version: "targetVersion",
+    });
+  });
 });
 
 // ─── T11-v2: ID retention hints ───────────────────────────────────────────
@@ -407,6 +415,10 @@ describe("P2-6: SCS resource diagnosticHints", () => {
     "scs_compliance_result",
     "code_repo_security",
     "scs_sbom",
+    "scs_component_dependencies",
+    "scs_component_remediation",
+    "scs_remediation_pr",
+    "scs_auto_pr_config",
   ];
 
   for (const rt of resourcesWithHints) {
@@ -435,6 +447,256 @@ describe("P2-12: Two-step artifact listing guidance", () => {
     const res = findResource("artifact_security");
     expect(res.description).toContain("source_id is required");
     expect(res.description).toContain("scs_artifact_source");
+  });
+});
+
+// ─── P3-8: Component Dependencies (dependency tree) ───────────────────────
+
+describe("P3-8: scs_component_dependencies resource", () => {
+  it("exists in scsToolset", () => {
+    expect(() => findResource("scs_component_dependencies")).not.toThrow();
+  });
+
+  it("has a get operation pointing to the dependencies endpoint", () => {
+    const spec = getOp("scs_component_dependencies", "get");
+    expect(spec.method).toBe("GET");
+    expect(spec.path).toContain("/component/dependencies");
+  });
+
+  it("maps purl as query param", () => {
+    const spec = getOp("scs_component_dependencies", "get");
+    expect(spec.queryParams).toEqual({
+      purl: "purl",
+    });
+  });
+
+  it("uses scsListExtract for field selection", () => {
+    const spec = getOp("scs_component_dependencies", "get");
+    expect(spec.responseExtractor).toBeDefined();
+  });
+
+  it("description distinguishes from scs_artifact_component (flat list)", () => {
+    const res = findResource("scs_component_dependencies");
+    expect(res.description).toContain("dependency tree");
+    expect(res.description).toContain("scs_artifact_component");
+  });
+
+  it("description mentions transitive dependencies", () => {
+    const res = findResource("scs_component_dependencies");
+    expect(res.description).toContain("transitive");
+  });
+
+  it("has purl as required listFilterField", () => {
+    const res = findResource("scs_component_dependencies");
+    const purlField = res.listFilterFields?.find((f) => f.name === "purl");
+    expect(purlField).toBeDefined();
+    expect(purlField!.required).toBe(true);
+  });
+
+  it("has diagnosticHint mentioning scs_artifact_component for purl values", () => {
+    const res = findResource("scs_component_dependencies");
+    expect(res.diagnosticHint).toBeDefined();
+    expect(res.diagnosticHint!).toContain("scs_artifact_component");
+  });
+
+  it("has searchAliases including dependency tree and dependency graph", () => {
+    const res = findResource("scs_component_dependencies");
+    expect(res.searchAliases).toContain("dependency tree");
+    expect(res.searchAliases).toContain("dependency graph");
+  });
+
+  it("relatedResources links to scs_artifact_component as parent", () => {
+    const res = findResource("scs_component_dependencies");
+    const parent = res.relatedResources?.find((r) => r.resourceType === "scs_artifact_component");
+    expect(parent).toBeDefined();
+    expect(parent!.relationship).toBe("parent");
+  });
+
+  it("scs_artifact_component links to scs_component_dependencies as child", () => {
+    const res = findResource("scs_artifact_component");
+    const child = res.relatedResources?.find((r) => r.resourceType === "scs_component_dependencies");
+    expect(child).toBeDefined();
+    expect(child!.relationship).toBe("child");
+  });
+});
+
+// ─── P3-6: Component Remediation (upgrade suggestions + impact analysis) ───
+
+describe("P3-6: scs_component_remediation resource", () => {
+  it("exists in scsToolset", () => {
+    expect(() => findResource("scs_component_remediation")).not.toThrow();
+  });
+
+  it("has a get operation pointing to the remediation endpoint", () => {
+    const spec = getOp("scs_component_remediation", "get");
+    expect(spec.method).toBe("GET");
+    expect(spec.path).toContain("/component/remediation");
+  });
+
+  it("maps purl and target_version as query params", () => {
+    const spec = getOp("scs_component_remediation", "get");
+    expect(spec.queryParams).toEqual({
+      purl: "purl",
+      target_version: "targetVersion",
+    });
+  });
+
+  it("uses scsCleanExtract", () => {
+    const spec = getOp("scs_component_remediation", "get");
+    expect(spec.responseExtractor).toBeDefined();
+    expect(spec.responseExtractor!.name).not.toBe("passthrough");
+  });
+
+  it("description mentions dependency impact analysis (P3-9)", () => {
+    const res = findResource("scs_component_remediation");
+    expect(res.description).toContain("dependency impact");
+    expect(res.description).toContain("dependency_changes");
+  });
+
+  it("description mentions scs_remediation_pr for follow-up", () => {
+    const res = findResource("scs_component_remediation");
+    expect(res.description).toContain("scs_remediation_pr");
+  });
+
+  it("has purl as required listFilterField", () => {
+    const res = findResource("scs_component_remediation");
+    const purlField = res.listFilterFields?.find((f) => f.name === "purl");
+    expect(purlField).toBeDefined();
+    expect(purlField!.required).toBe(true);
+  });
+
+  it("has diagnosticHint", () => {
+    const res = findResource("scs_component_remediation");
+    expect(res.diagnosticHint).toBeDefined();
+    expect(res.diagnosticHint!).toContain("code repo");
+  });
+});
+
+// ─── P3-6: Remediation Pull Requests ───────────────────────────────────────
+
+describe("P3-6: scs_remediation_pr resource", () => {
+  it("exists in scsToolset", () => {
+    expect(() => findResource("scs_remediation_pr")).not.toThrow();
+  });
+
+  it("has a list operation", () => {
+    const spec = getOp("scs_remediation_pr", "list");
+    expect(spec.method).toBe("GET");
+    expect(spec.path).toContain("/remediation/pull-requests");
+  });
+
+  it("list has defaultQueryParams with limit=10", () => {
+    const spec = getOp("scs_remediation_pr", "list");
+    expect(spec.defaultQueryParams).toBeDefined();
+    expect(spec.defaultQueryParams!.limit).toBe("10");
+  });
+
+  it("has a create operation (write)", () => {
+    const spec = getOp("scs_remediation_pr", "create" as "list");
+    expect(spec.method).toBe("POST");
+    expect(spec.path).toContain("/create-pull-request");
+  });
+
+  it("create bodyBuilder passes purl and target_version", () => {
+    const spec = getOp("scs_remediation_pr", "create" as "list");
+    const body = spec.bodyBuilder!({ purl: "pkg:npm/express@4.18.0", target_version: "4.19.0" });
+    expect(body).toEqual({ purl: "pkg:npm/express@4.18.0", target_version: "4.19.0" });
+  });
+
+  it("create bodyBuilder omits absent fields", () => {
+    const spec = getOp("scs_remediation_pr", "create" as "list");
+    const body = spec.bodyBuilder!({});
+    expect(body).toEqual({});
+  });
+
+  it("create has bodySchema with purl and target_version fields", () => {
+    const spec = getOp("scs_remediation_pr", "create" as "list");
+    expect(spec.bodySchema).toBeDefined();
+    expect(spec.bodySchema!.description).toBeTruthy();
+    const fieldNames = spec.bodySchema!.fields.map((f) => f.name);
+    expect(fieldNames).toContain("purl");
+    expect(fieldNames).toContain("target_version");
+  });
+
+  it("description warns about write operation", () => {
+    const res = findResource("scs_remediation_pr");
+    expect(res.description).toContain("WRITE OPERATION");
+    expect(res.description).not.toMatch(/\bclose\b/i);
+  });
+
+  it("has diagnosticHint", () => {
+    const res = findResource("scs_remediation_pr");
+    expect(res.diagnosticHint).toBeDefined();
+    expect(res.diagnosticHint!.length).toBeGreaterThan(20);
+  });
+});
+
+// ─── P3-12: Auto PR Configuration ──────────────────────────────────────────
+
+describe("P3-12: scs_auto_pr_config resource", () => {
+  it("exists in scsToolset", () => {
+    expect(() => findResource("scs_auto_pr_config")).not.toThrow();
+  });
+
+  it("has a get operation", () => {
+    const spec = getOp("scs_auto_pr_config", "get");
+    expect(spec.method).toBe("GET");
+    expect(spec.path).toContain("/auto-pr-config");
+  });
+
+  it("has an update operation (write)", () => {
+    const spec = getOp("scs_auto_pr_config", "update" as "list");
+    expect(spec.method).toBe("PUT");
+    expect(spec.path).toContain("/auto-pr-config");
+  });
+
+  it("update has bodySchema", () => {
+    const spec = getOp("scs_auto_pr_config", "update" as "list");
+    expect(spec.bodySchema).toBeDefined();
+    expect(spec.bodySchema!.description).toBeTruthy();
+  });
+
+  it("update bodyBuilder passes body through", () => {
+    const spec = getOp("scs_auto_pr_config", "update" as "list");
+    const config = { enabled: true, severity_threshold: "HIGH" };
+    const body = spec.bodyBuilder!({ body: config });
+    expect(body).toEqual(config);
+  });
+
+  it("has empty identifierFields (project-level config)", () => {
+    const res = findResource("scs_auto_pr_config");
+    expect(res.identifierFields).toEqual([]);
+  });
+
+  it("description warns about write operation", () => {
+    const res = findResource("scs_auto_pr_config");
+    expect(res.description).toContain("WRITE OPERATION");
+  });
+
+  it("has diagnosticHint", () => {
+    const res = findResource("scs_auto_pr_config");
+    expect(res.diagnosticHint).toBeDefined();
+    expect(res.diagnosticHint!).toContain("harness_get");
+  });
+});
+
+// ─── P3-7: Code repo → repo dependency guidance ────────────────────────────
+
+describe("P3-7: code_repo_security repo-level dependency guidance", () => {
+  it("description mentions repo_id IS an artifact_id", () => {
+    const res = findResource("code_repo_security");
+    expect(res.description).toContain("repo_id IS an artifact_id");
+  });
+
+  it("description shows scs_artifact_component query pattern", () => {
+    const res = findResource("code_repo_security");
+    expect(res.description).toContain("scs_artifact_component");
+    expect(res.description).toContain("dependency_type='DIRECT'");
+  });
+
+  it("description references scs_component_remediation for repo deps", () => {
+    const res = findResource("code_repo_security");
+    expect(res.description).toContain("scs_component_remediation");
   });
 });
 

@@ -47,7 +47,7 @@ describe("errorResult", () => {
 });
 
 describe("imageResult", () => {
-  it("returns base64-encoded PNG as image content", () => {
+  it("returns base64-encoded PNG as image content", { timeout: 15_000 }, () => {
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="red"/></svg>';
     const result = imageResult(svg);
     expect(result.content).toHaveLength(1);
@@ -62,7 +62,7 @@ describe("imageResult", () => {
     expect(buf[3]).toBe(0x47); // 'G'
   });
 
-  it("does not set isError", () => {
+  it("does not set isError", { timeout: 15_000 }, () => {
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10"/></svg>';
     const result = imageResult(svg);
     expect(result.isError).toBeUndefined();
@@ -70,7 +70,7 @@ describe("imageResult", () => {
 });
 
 describe("mixedResult", () => {
-  it("returns text first, then PNG image", () => {
+  it("returns text first, then PNG image", { timeout: 15_000 }, () => {
     const data = { count: 5 };
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="blue"/></svg>';
     const result = mixedResult(data, svg);

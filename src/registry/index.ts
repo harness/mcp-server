@@ -320,7 +320,11 @@ export class Registry {
     // Map input fields to query params (overrides defaults)
     if (spec.queryParams) {
       for (const [inputKey, queryKey] of Object.entries(spec.queryParams)) {
-        const value = input[inputKey];
+        let value = input[inputKey];
+        // Convert 0-indexed page to 1-indexed when the API requires it
+        if (spec.pageOneIndexed && inputKey === "page" && typeof value === "number") {
+          value = value + 1;
+        }
         if (value !== undefined && value !== "") {
           params[queryKey] = value as string | number | boolean;
         }

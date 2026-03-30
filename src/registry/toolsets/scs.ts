@@ -22,6 +22,11 @@ const ARTIFACT_COMPONENT_LIST_FIELDS = [
   "vulnerability_count", "supplier",
 ];
 
+const COMPONENT_DEPENDENCY_LIST_FIELDS = [
+  "name", "version", "purl", "relationship", "relationship_path",
+  "vulnerabilities_count",
+];
+
 const CODE_REPO_LIST_FIELDS = [
   "id", "repo_id", "identifier", "name", "repo_name", "repo_url",
   "branch", "default_branch", "components_count",
@@ -49,7 +54,7 @@ export const scsToolset: ToolsetDefinition = {
   name: "scs",
   displayName: "Software Supply Chain Assurance",
   description:
-    "Harness SCS — artifact sources, artifact security, code repositories, SBOMs, compliance, and remediation",
+    "Harness SCS — artifact sources, artifact security, code repositories, SBOMs, compliance, remediation, dependency graph, PR creation, and auto-PR configuration",
   resources: [
     // ── Artifact Sources ───────────────────────────────────────────────
     {
@@ -114,6 +119,8 @@ export const scsToolset: ToolsetDefinition = {
         { resourceType: "scs_chain_of_custody", relationship: "child", description: "Chain of custody events for this artifact" },
         { resourceType: "scs_sbom", relationship: "child", description: "SBOM download (requires orchestration_id from chain of custody)" },
         { resourceType: "scs_artifact_remediation", relationship: "child", description: "Remediation advice for components (requires purl)" },
+        { resourceType: "scs_component_remediation", relationship: "child", description: "Safe upgrade suggestions with dependency impact analysis (requires purl)" },
+        { resourceType: "scs_remediation_pr", relationship: "child", description: "Create/list remediation PRs for component upgrades" },
       ],
       toolset: "scs",
       scope: "project",
@@ -162,12 +169,15 @@ export const scsToolset: ToolsetDefinition = {
       displayName: "SCS Artifact Component",
       description: "Software components (dependencies) within an artifact — SBOM component list. Supports list. "
         + "Use this for dependency queries (e.g., 'show dependencies', 'find lodash', 'list direct dependencies'). "
-        + "Retain purl from responses — it is required for remediation lookups.",
+        + "Also use this to find which components have known vulnerabilities (check vulnerability_count field in response). "
+        + "Retain purl from responses — it is required for remediation lookups and dependency tree queries.",
       diagnosticHint: "If you get a 404: verify artifact_id is correct. Get artifact IDs from harness_list(resource_type='artifact_security', source_id='...'). "
-        + "Use dependency_type='DIRECT' to filter for direct dependencies only.",
+        + "Use dependency_type='DIRECT' to filter for direct dependencies only. "
+        + "For dependency TREE (what a specific component depends on, transitive deps), use scs_component_dependencies instead — this resource only returns a flat list.",
       searchAliases: ["dependency", "sbom component", "package", "library", "component list", "direct dependency", "transitive dependency"],
       relatedResources: [
         { resourceType: "artifact_security", relationship: "parent", description: "Get artifact_id needed to list components" },
+        { resourceType: "scs_component_dependencies", relationship: "child", description: "Get dependency tree for a specific component (pass purl)" },
         { resourceType: "scs_artifact_remediation", relationship: "sibling", description: "Remediation advice for a component (pass purl)" },
       ],
       toolset: "scs",
@@ -200,6 +210,44 @@ export const scsToolset: ToolsetDefinition = {
       },
     },
 
+    // ── Component Dependencies / Dependency Tree (P3-8) ──────────────
+    {
+      resourceType: "scs_component_dependencies",
+      displayName: "Component Dependency Tree",
+      description: "Dependency tree for a specific component within an artifact — shows what a component DEPENDS ON. "
+        + "Returns direct and indirect (transitive) dependencies with their relationship paths and vulnerability counts. "
+        + "Input: artifact_id (as resource_id) + component purl (required). "
+        + "Use this when the user asks about: dependency tree, dependency chain, transitive dependencies, what X depends on, full dependency graph, or dependency impact. "
+        + "This is DIFFERENT from scs_artifact_component which lists all components IN an artifact (flat list). "
+        + "This resource shows what a SINGLE component depends on (tree structure).",
+      diagnosticHint: "If you get a 404: verify artifact_id and purl are correct. "
+        + "Get purl values from harness_list(resource_type='scs_artifact_component', artifact_id='...'). "
+        + "This endpoint works for both code repo and container image artifacts.",
+      searchAliases: ["dependency tree", "dependency graph", "transitive dependencies", "component tree", "depends on", "dependency chain"],
+      relatedResources: [
+        { resourceType: "scs_artifact_component", relationship: "parent", description: "Get purl values needed for dependency tree lookup" },
+        { resourceType: "scs_component_remediation", relationship: "sibling", description: "Get upgrade suggestions for a component" },
+      ],
+      toolset: "scs",
+      scope: "project",
+      identifierFields: ["artifact_id"],
+      listFilterFields: [
+        { name: "purl", description: "Package URL of the component (e.g. pkg:npm/express@4.18.0) — required", required: true },
+      ],
+      operations: {
+        get: {
+          method: "GET",
+          path: `${SCS}/v1/orgs/{org}/projects/{project}/artifacts/{artifact}/component/dependencies`,
+          pathParams: { org_id: "org", project_id: "project", artifact_id: "artifact" },
+          queryParams: {
+            purl: "purl",
+          },
+          responseExtractor: scsListExtract(COMPONENT_DEPENDENCY_LIST_FIELDS),
+          description: "Get dependency tree for a component by PURL",
+        },
+      },
+    },
+
     // ── Artifact Remediation ───────────────────────────────────────────
     {
       resourceType: "scs_artifact_remediation",
@@ -227,7 +275,7 @@ export const scsToolset: ToolsetDefinition = {
           pathParams: { org_id: "org", project_id: "project", artifact_id: "artifact" },
           queryParams: {
             purl: "purl",
-            target_version: "target_version",
+            target_version: "targetVersion",
           },
           responseExtractor: scsCleanExtract,
           description: "Get remediation advice for a component by package URL (purl)",
@@ -310,7 +358,9 @@ export const scsToolset: ToolsetDefinition = {
         + "NOT the same as 'repository' (Harness Code) — use this for security/vulnerability queries about code repos. "
         + "Supports list and get (overview). "
         + "Retain repo_id from responses — it is required to get the repository security overview. "
-        + "repo_id can also be used as artifact_id with scs_artifact_component to list repo dependencies.",
+        + "repo_id IS an artifact_id (repos are artifacts of type REPOSITORY). "
+        + "To list repo dependencies: harness_list(resource_type='scs_artifact_component', artifact_id=<repo_id>, dependency_type='DIRECT'). "
+        + "To get remediation for a repo dependency: harness_get(resource_type='scs_component_remediation', artifact_id=<repo_id>, purl=<purl>).",
       diagnosticHint: "If you get a 404: use harness_list(resource_type='code_repo_security') to discover valid repo IDs. "
         + "Code repos are also artifacts (ArtifactType.REPOSITORY) — repo_id can be used as artifact_id for component queries.",
       searchAliases: ["repo security", "repository security", "code repo vulnerability", "repo compliance", "source code security"],
@@ -347,6 +397,144 @@ export const scsToolset: ToolsetDefinition = {
           pathParams: { org_id: "org", project_id: "project", repo_id: "codeRepo" },
           responseExtractor: scsCleanExtract,
           description: "Get code repository security overview",
+        },
+      },
+    },
+
+    // ── Component Remediation (P3-6: upgrade suggestions + impact analysis) ─
+    {
+      resourceType: "scs_component_remediation",
+      displayName: "Component Remediation Suggestion",
+      description: "Safe upgrade suggestions for a vulnerable or outdated OSS component. "
+        + "Returns recommended version, warnings, dependency impact analysis, and code preview. "
+        + "Input: artifact_id (as resource_id) + component purl (required). "
+        + "The response includes dependency_changes (added/removed/modified) — this IS the dependency impact analysis. "
+        + "To create a PR with the suggested upgrade, use scs_remediation_pr.",
+      diagnosticHint: "If you get a 404: (1) verify artifact_id and purl are correct, (2) remediation works for code repo artifacts only — not container images. "
+        + "Get purl values from harness_list(resource_type='scs_artifact_component', artifact_id='...'). "
+        + "Optionally pass target_version to get upgrade suggestions for a specific version.",
+      searchAliases: ["upgrade suggestion", "safe upgrade", "component upgrade", "fix vulnerability", "remediation suggestion", "dependency impact"],
+      relatedResources: [
+        { resourceType: "scs_artifact_component", relationship: "parent", description: "Get purl values needed for remediation lookup" },
+        { resourceType: "scs_remediation_pr", relationship: "child", description: "Create a PR to apply the suggested upgrade" },
+      ],
+      toolset: "scs",
+      scope: "project",
+      identifierFields: ["artifact_id"],
+      listFilterFields: [
+        { name: "purl", description: "Package URL of the component (e.g. pkg:npm/express@4.18.0) — required", required: true },
+        { name: "target_version", description: "Specific target version to evaluate upgrade to (optional)" },
+      ],
+      operations: {
+        get: {
+          method: "GET",
+          path: `${SCS}/v1/orgs/{org}/projects/{project}/artifacts/{artifact}/component/remediation`,
+          pathParams: { org_id: "org", project_id: "project", artifact_id: "artifact" },
+          queryParams: {
+            purl: "purl",
+            target_version: "targetVersion",
+          },
+          responseExtractor: scsCleanExtract,
+          description: "Get safe upgrade suggestions and dependency impact analysis for a component",
+        },
+      },
+    },
+
+    // ── Remediation Pull Requests (P3-6: PR creation + tracking) ──────
+    {
+      resourceType: "scs_remediation_pr",
+      displayName: "Remediation Pull Request",
+      description: "Create and list remediation pull requests that upgrade vulnerable/outdated components. "
+        + "WRITE OPERATION: create will open a real PR in the source repository. "
+        + "Requires artifact_id. For create, also requires component purl and target_version. "
+        + "Use scs_component_remediation first to review the upgrade suggestion before creating a PR. "
+        + "Closing or merging PRs is done in the source repository (or generic pull-request tools), not via this SCS resource.",
+      diagnosticHint: "If you get a 404: verify artifact_id is correct. Use harness_get(resource_type='scs_component_remediation', artifact_id='...', purl='...') to verify the component exists. "
+        + "For create: ensure purl and target_version are provided.",
+      searchAliases: ["remediation pr", "fix pr", "upgrade pr", "pull request", "create pr", "remediation pull request"],
+      relatedResources: [
+        { resourceType: "scs_component_remediation", relationship: "parent", description: "Review upgrade suggestion before creating PR" },
+        { resourceType: "scs_auto_pr_config", relationship: "sibling", description: "Configure automatic PR creation rules" },
+      ],
+      toolset: "scs",
+      scope: "project",
+      identifierFields: ["artifact_id"],
+      listFilterFields: [
+        { name: "artifact_id", description: "Artifact ID to list/create remediation PRs for", required: true },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${SCS}/v1/orgs/{org}/projects/{project}/artifacts/{artifact}/component/remediation/pull-requests`,
+          pathParams: { org_id: "org", project_id: "project", artifact_id: "artifact" },
+          queryParams: {
+            page: "page",
+            size: "limit",
+          },
+          defaultQueryParams: { limit: "10" },
+          responseExtractor: scsCleanExtract,
+          description: "List remediation pull requests for an artifact",
+        },
+        create: {
+          method: "POST",
+          path: `${SCS}/v1/orgs/{org}/projects/{project}/artifacts/{artifact}/component/remediation/create-pull-request`,
+          pathParams: { org_id: "org", project_id: "project", artifact_id: "artifact" },
+          bodyBuilder: (input) => ({
+            ...(input.purl ? { purl: input.purl } : {}),
+            ...(input.target_version ? { target_version: input.target_version } : {}),
+          }),
+          responseExtractor: scsCleanExtract,
+          description: "Create a remediation PR to upgrade a vulnerable component",
+          bodySchema: {
+            description: "Remediation PR creation payload — component PURL and target upgrade version",
+            fields: [
+              { name: "purl", type: "string", required: true, description: "Package URL of the component to upgrade (e.g. pkg:npm/express@4.18.0)" },
+              { name: "target_version", type: "string", required: true, description: "Target version to upgrade to (from scs_component_remediation suggestions)" },
+            ],
+          },
+        },
+      },
+    },
+
+    // ── Auto PR Configuration (P3-12) ─────────────────────────────────
+    {
+      resourceType: "scs_auto_pr_config",
+      displayName: "Auto PR Configuration",
+      description: "Automatic pull request configuration for OSS remediation. "
+        + "Controls when PRs are automatically created to upgrade vulnerable or outdated components. "
+        + "Use get to view current config, update to modify rules. "
+        + "WRITE OPERATION: update changes automated behavior — a misconfigured rule could flood repositories with PRs.",
+      diagnosticHint: "Use harness_get(resource_type='scs_auto_pr_config') to view current configuration before making changes. "
+        + "This is a project-level configuration — no artifact_id needed.",
+      searchAliases: ["auto pr", "automatic pull request", "auto remediation", "pr config", "auto pr configuration"],
+      relatedResources: [
+        { resourceType: "scs_remediation_pr", relationship: "sibling", description: "Manual PR creation for individual components" },
+        { resourceType: "scs_component_remediation", relationship: "sibling", description: "Review upgrade suggestions" },
+      ],
+      toolset: "scs",
+      scope: "project",
+      identifierFields: [],
+      operations: {
+        get: {
+          method: "GET",
+          path: `${SCS}/v1/orgs/{org}/projects/{project}/ssca-config/auto-pr-config`,
+          pathParams: { org_id: "org", project_id: "project" },
+          responseExtractor: scsCleanExtract,
+          description: "Get current auto-PR configuration",
+        },
+        update: {
+          method: "PUT",
+          path: `${SCS}/v1/orgs/{org}/projects/{project}/ssca-config/auto-pr-config`,
+          pathParams: { org_id: "org", project_id: "project" },
+          bodyBuilder: (input) => input.body,
+          responseExtractor: scsCleanExtract,
+          description: "Save or update auto-PR configuration",
+          bodySchema: {
+            description: "Auto-PR configuration — controls automatic remediation PR creation rules",
+            fields: [
+              { name: "body", type: "object", required: true, description: "Auto-PR configuration object. Use harness_get first to see the current shape, then modify and pass back." },
+            ],
+          },
         },
       },
     },
