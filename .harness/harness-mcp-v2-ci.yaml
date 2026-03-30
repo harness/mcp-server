@@ -1,0 +1,89 @@
+# Harness CI — build and test harness-mcp-v2 (TypeScript / pnpm / Vitest).
+# Stage runtime: Harness Cloud (hosted). Node 16 on image → bootstrap Node 20 in .harness-ci/. pnpm via npm -g (avoids Corepack signature/keyid mismatches).
+#
+# Before first run: set properties.ci.codebase.connectorRef and repoName to match your Git connector
+# (e.g. connectorRef: ThisRohanGupta, repoName: harness-mcp-v2 or org/repo as your connector expects).
+
+pipeline:
+  name: Harness MCP V2 CI
+  identifier: harness_mcp_v2_ci
+  orgIdentifier: default
+  projectIdentifier: PM_Signoff
+  tags: {}
+  properties:
+    ci:
+      codebase:
+        connectorRef: ThisRohanGupta
+        repoName: harness-mcp-v2
+        build:
+          type: branch
+          spec:
+            branch: main
+  stages:
+    - stage:
+        name: Build and Test
+        identifier: build_and_test
+        type: CI
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: true
+            paths: []
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Install Node 20 and dependencies
+                  identifier: pnpm_install
+                  spec:
+                    shell: Sh
+                    command: |-
+                      set -eu
+                      NODE_V=20.18.1
+                      mkdir -p .harness-ci
+                      if [ ! -x ".harness-ci/node-v${NODE_V}-linux-x64/bin/node" ]; then
+                        curl -fsSL "https://nodejs.org/dist/v${NODE_V}/node-v${NODE_V}-linux-x64.tar.xz" -o .harness-ci/node.tar.xz
+                        tar -xJf .harness-ci/node.tar.xz -C .harness-ci
+                      fi
+                      export PATH="$(pwd)/.harness-ci/node-v${NODE_V}-linux-x64/bin:$PATH"
+                      echo "export PATH=\"$(pwd)/.harness-ci/node-v${NODE_V}-linux-x64/bin:\$PATH\"" > .harness-ci/env.sh
+                      node -v
+                      npm install -g pnpm@10.18.2
+                      pnpm --version
+                      pnpm install --frozen-lockfile
+              - step:
+                  type: Run
+                  name: Typecheck
+                  identifier: typecheck
+                  spec:
+                    shell: Sh
+                    command: |-
+                      set -eu
+                      . ./.harness-ci/env.sh
+                      pnpm typecheck
+              - step:
+                  type: Run
+                  name: Build
+                  identifier: build
+                  spec:
+                    shell: Sh
+                    command: |-
+                      set -eu
+                      . ./.harness-ci/env.sh
+                      pnpm build
+              - step:
+                  type: Run
+                  name: Test
+                  identifier: test
+                  spec:
+                    shell: Sh
+                    command: |-
+                      set -eu
+                      . ./.harness-ci/env.sh
+                      pnpm test

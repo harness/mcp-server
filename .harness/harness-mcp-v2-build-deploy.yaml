@@ -1,0 +1,105 @@
+# Harness CI — build, test, and push the harness-mcp-v2 Docker image.
+#
+# Default push target: Harness Artifact Registry (HAR). Uses registryRef — do NOT add connectorRef.
+# For Docker Hub / ECR / GCR / ACR, replace the push step with the third-party block in
+# .harness/BUILD_DEPLOY.md (connectorRef + repo, no registryRef).
+#
+# First run: set pipeline inputs for registryRef + repo (HAR), or swap to third-party step.
+# Git: align properties.ci.codebase with your connector (connectorRef, repoName, branch).
+
+pipeline:
+  name: Harness MCP V2 Build and Deploy
+  identifier: harness_mcp_v2_build_deploy
+  orgIdentifier: default
+  projectIdentifier: PM_Signoff
+  tags: {}
+  properties:
+    ci:
+      codebase:
+        connectorRef: ThisRohanGupta
+        repoName: harness-mcp-v2
+        build:
+          type: branch
+          spec:
+            branch: main
+  stages:
+    - stage:
+        name: Build Test and Push
+        identifier: build_test_push
+        type: CI
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: true
+            paths: []
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Install Node 20 and dependencies
+                  identifier: pnpm_install
+                  spec:
+                    shell: Sh
+                    command: |-
+                      set -eu
+                      NODE_V=20.18.1
+                      mkdir -p .harness-ci
+                      if [ ! -x ".harness-ci/node-v${NODE_V}-linux-x64/bin/node" ]; then
+                        curl -fsSL "https://nodejs.org/dist/v${NODE_V}/node-v${NODE_V}-linux-x64.tar.xz" -o .harness-ci/node.tar.xz
+                        tar -xJf .harness-ci/node.tar.xz -C .harness-ci
+                      fi
+                      export PATH="$(pwd)/.harness-ci/node-v${NODE_V}-linux-x64/bin:$PATH"
+                      echo "export PATH=\"$(pwd)/.harness-ci/node-v${NODE_V}-linux-x64/bin:\$PATH\"" > .harness-ci/env.sh
+                      node -v
+                      npm install -g pnpm@10.18.2
+                      pnpm --version
+                      pnpm install --frozen-lockfile
+              - step:
+                  type: Run
+                  name: Typecheck
+                  identifier: typecheck
+                  spec:
+                    shell: Sh
+                    command: |-
+                      set -eu
+                      . ./.harness-ci/env.sh
+                      pnpm typecheck
+              - step:
+                  type: Run
+                  name: Build
+                  identifier: build
+                  spec:
+                    shell: Sh
+                    command: |-
+                      set -eu
+                      . ./.harness-ci/env.sh
+                      pnpm build
+              - step:
+                  type: Run
+                  name: Test
+                  identifier: test
+                  spec:
+                    shell: Sh
+                    command: |-
+                      set -eu
+                      . ./.harness-ci/env.sh
+                      pnpm test
+              - step:
+                  type: BuildAndPushDockerRegistry
+                  name: Build and Push to Harness Artifact Registry
+                  identifier: build_and_push_har
+                  spec:
+                    registryRef: <+input>
+                    repo: <+input>
+                    tags:
+                      - latest
+                      - <+pipeline.sequenceId>
+                    caching: true
+                    dockerfile: Dockerfile
+                    context: .
