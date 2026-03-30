@@ -55,11 +55,51 @@ def _fmt_tools(specs: list) -> str:
     return ", ".join(_fmt_tool(s) for s in specs) if specs else "(none)"
 
 
+MAX_HISTORY_CHARS = 4000
+
+# History mode constants
+HISTORY_MODE_ANSWER_ONLY = "answer_only"     # Strategy A: only final answer text
+HISTORY_MODE_TOOL_SUMMARY = "tool_summary"   # Strategy B: answer + structured tool call summary
+
+
+def build_tool_call_summary(extracted: dict[str, Any]) -> str:
+    """Build a structured tool call summary for conversation history enrichment (Strategy B).
+
+    Includes tool names, resource types, and key parameters to help the LLM
+    retain context across multi-turn conversations without re-discovering
+    resource types and entity IDs.
+    """
+    tools = extracted.get("tools_called", [])
+    params = extracted.get("tool_params", {})
+
+    if not tools:
+        return ""
+
+    lines = ["", "---", "[Tool calls in this turn]"]
+    for tool_spec in tools:
+        tool_str = _fmt_tool(tool_spec)
+        tool_args = params.get(tool_str, {})
+        # Extract key parameters (skip resource_type — already in tool_spec)
+        id_parts = []
+        for key, val in tool_args.items():
+            if key == "resource_type":
+                continue
+            if val is not None and isinstance(val, str) and len(val) < 200:
+                id_parts.append(f"{key}={val}")
+        param_str = f" | {', '.join(id_parts)}" if id_parts else ""
+        lines.append(f"- {tool_str}{param_str}")
+
+    lines.append("[Retain the resource_type and entity IDs above for follow-up queries]")
+    return "\n".join(lines)
+
+
 # ---------------------------------------------------------------------------
-# 15 Test Queries — V2
+# 27 Test Queries — V2
 # expected_tools: list of (tool_name, resource_type) tuples
 # Q02, Q03, Q05: Downgraded — filters not ported to v2
 # Q15: Reclassified per PD-1 — vuln counts are CORRECT behavior
+# Q20-Q26: Phase 3 queries (P3-6, P3-7, P3-8, P3-9, P3-12)
+# Q27-Q31: Disambiguation queries — test tool selection when multiple resources match
 # ---------------------------------------------------------------------------
 QUERIES = [
     {
@@ -146,10 +186,10 @@ QUERIES = [
     {
         "id": "Q13",
         "query": "I want remediation guidance for the zlib component in my artifacts. Can you find it and tell me what version to upgrade to?",
-        "expected_intent": "Partially Supported: Remediation (4-call chain in v2)",
+        "expected_intent": "Partially Supported: Remediation (4-call chain in v2). scs_component_remediation preferred over scs_artifact_remediation.",
         "confidence": "Low",
-        "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_artifact_remediation")],
-        "observe": "Needs purl from component list. Compact mode strips purl — must use compact=false.",
+        "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_remediation")],
+        "observe": "Needs purl from component list. scs_component_remediation (structured) is preferred over scs_artifact_remediation (text-only).",
     },
     {
         "id": "Q14", "query": "Give me a complete security overview of my entire project including all artifacts and repos",
@@ -163,6 +203,113 @@ QUERIES = [
         "confidence": "Medium",
         "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_get", "artifact_security")],
         "observe": "Per PD-1: CORRECT if it returns vuln counts. No penalty for no severity filter.",
+    },
+    {
+        "id": "Q16", "query": "List my code repositories",
+        "expected_intent": "P2-13: Bare repo query — should route to code_repo_security via SCS module context",
+        "confidence": "Supported",
+        "expected_tools": [("harness_list", "code_repo_security")],
+        "observe": "P2-13 validation: no security keyword in query. Module context must drive routing to code_repo_security, not repository.",
+    },
+    {
+        "id": "Q17", "query": "Show me my repos and their status",
+        "expected_intent": "P2-13: Ambiguous repo query — should route to code_repo_security via SCS module context",
+        "confidence": "Supported",
+        "expected_tools": [("harness_list", "code_repo_security")],
+        "observe": "P2-13 validation: 'status' is ambiguous (could mean code repo status or security status). SCS module context should prefer code_repo_security.",
+    },
+    # ─── Phase 3 Tier 1 Queries ───────────────────────────────────────────
+    {
+        "id": "Q20",
+        "query": "I have a vulnerable express component in my code repository. Can you suggest a safe version to upgrade to?",
+        "expected_intent": "P3-6: Component remediation — upgrade suggestions with dependency impact",
+        "confidence": "Medium",
+        "expected_tools": [("harness_list", "code_repo_security"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_remediation")],
+        "observe": "Does it chain code_repo_security → scs_artifact_component (to find purl) → scs_component_remediation? "
+            "Does the response include dependency_changes (P3-9 impact analysis)?",
+    },
+    {
+        "id": "Q21",
+        "query": "Show me the direct dependencies of my first code repository",
+        "expected_intent": "P3-7: Repo-level dependency queries — repo_id as artifact_id",
+        "confidence": "High",
+        "expected_tools": [("harness_list", "code_repo_security"), ("harness_list", "scs_artifact_component")],
+        "observe": "Does it use repo_id as artifact_id with dependency_type=DIRECT? "
+            "code_repo_security description explicitly guides this two-step flow.",
+    },
+    {
+        "id": "Q22",
+        "query": "Show me the full dependency tree for the express component in my first artifact",
+        "expected_intent": "P3-8: Component dependency tree — direct and transitive dependencies",
+        "confidence": "Medium",
+        "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "artifact_security"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_dependencies")],
+        "observe": "Does it chain artifact_source → artifact_security → scs_artifact_component (to find purl) → scs_component_dependencies? "
+            "Does the response show DIRECT vs INDIRECT relationships and relationship_path?",
+    },
+    {
+        "id": "Q23",
+        "query": "What would break if I upgrade the zlib component in my artifact? Show me the dependency impact.",
+        "expected_intent": "P3-9: Dependency impact analysis — embedded in remediation response",
+        "confidence": "Medium",
+        "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_remediation")],
+        "observe": "Does it route to scs_component_remediation (not scs_artifact_remediation)? "
+            "Does the LLM surface the dependency_changes from the response?",
+    },
+    {
+        "id": "Q26",
+        "query": "Show me the auto-PR configuration for my project",
+        "expected_intent": "P3-12: Auto PR configuration management — view config",
+        "confidence": "Supported",
+        "expected_tools": [("harness_get", "scs_auto_pr_config")],
+        "observe": "Does it call harness_get with resource_type=scs_auto_pr_config? No entity ID needed.",
+    },
+    # ─── Disambiguation Queries ────────────────────────────────────────
+    {
+        "id": "Q27",
+        "query": "Get structured remediation advice with upgrade suggestions for a vulnerable component in my first artifact. I want dependency impact analysis, not just text.",
+        "expected_intent": "Disambiguation: scs_component_remediation (structured) vs scs_artifact_remediation (text-only)",
+        "confidence": "Medium",
+        "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_remediation")],
+        "observe": "KEY DISAMBIGUATION: Does it pick scs_component_remediation (upgrade suggestions + impact analysis) "
+            "over scs_artifact_remediation (deprecated text-only advice)? "
+            "'first artifact' forces the LLM to chain through sources → artifacts → components → remediation.",
+    },
+    {
+        "id": "Q28",
+        "query": "What does the express package depend on? Show me its full dependency chain including transitive dependencies.",
+        "expected_intent": "Disambiguation: scs_component_dependencies (tree) vs scs_artifact_component (flat list)",
+        "confidence": "Medium",
+        "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_dependencies")],
+        "observe": "KEY DISAMBIGUATION: 'dependency chain' and 'transitive' should route to scs_component_dependencies (tree), "
+            "NOT scs_artifact_component (flat list of all components in artifact). "
+            "scs_artifact_component lists components IN an artifact; scs_component_dependencies shows what a component DEPENDS ON.",
+    },
+    {
+        "id": "Q29",
+        "query": "I want to set up automatic pull requests to fix vulnerabilities in my project. How is it configured?",
+        "expected_intent": "Disambiguation: scs_auto_pr_config (project config) vs scs_remediation_pr (manual PR creation)",
+        "confidence": "Supported",
+        "expected_tools": [("harness_get", "scs_auto_pr_config")],
+        "observe": "KEY DISAMBIGUATION: 'automatic pull requests' and 'configured' should route to scs_auto_pr_config (project-level config), "
+            "NOT scs_remediation_pr (create/list individual PRs). 'set up' and 'configured' are config keywords.",
+    },
+    {
+        "id": "Q30",
+        "query": "Check if my first artifact passes all the security compliance rules",
+        "expected_intent": "Disambiguation: scs_compliance_result (SCS compliance) vs opa_policy (OPA governance)",
+        "confidence": "Medium",
+        "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "artifact_security"), ("harness_list", "scs_compliance_result")],
+        "observe": "KEY DISAMBIGUATION: 'compliance rules' in SCS context should route to scs_compliance_result, "
+            "NOT opa_policy (governance toolset). Module context (SCS) should drive this.",
+    },
+    {
+        "id": "Q31",
+        "query": "Show me details about the security posture of my artifacts",
+        "expected_intent": "Disambiguation: artifact_security (security overview) vs scs_artifact_source (source listing)",
+        "confidence": "High",
+        "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "artifact_security")],
+        "observe": "KEY DISAMBIGUATION: 'security posture' of plural 'artifacts' justifies harness_list(artifact_security) to get overview of all. "
+            "Tests whether LLM chains source listing → security listing for a broad posture view.",
     },
 ]
 
@@ -211,8 +358,8 @@ CONVERSATIONS = [
              "expected_tools": [],
              "observe": "Can it reference SBOM data from Turn 1?"},
             {"turn": 3, "query": "How do I fix the zlib component? What version should I upgrade to?",
-             "expected_tools": [("harness_get", "scs_artifact_remediation")],
-             "observe": "Does it extract the correct purl?"},
+             "expected_tools": [("harness_get", "scs_component_remediation")],
+             "observe": "scs_component_remediation preferred (structured upgrade suggestions). Does it extract the correct purl?"},
         ],
     },
     {
@@ -243,6 +390,58 @@ CONVERSATIONS = [
             {"turn": 3, "query": "Compare the security posture of that repo with the first artifact",
              "expected_tools": [],
              "observe": "Cross-entity comparison not supported. Graceful decline?"},
+        ],
+    },
+    # ─── Phase 3 Tier 1 Conversations ─────────────────────────────────────
+    {
+        "id": "M06", "title": "Dependency Investigation + Remediation Journey (P3-6/P3-7/P3-8/P3-9/P3-12)",
+        "description": "Repo deps → dependency tree → remediation suggestion → impact analysis → auto-PR config",
+        "turns": [
+            {"turn": 1, "query": "Show me the direct dependencies of my first code repository",
+             "expected_tools": [("harness_list", "code_repo_security"), ("harness_list", "scs_artifact_component")],
+             "observe": "P3-7: Does it use repo_id as artifact_id with dependency_type=DIRECT?"},
+            {"turn": 2, "query": "Show me the full dependency tree for the first component in that list",
+             "expected_tools": [("harness_get", "scs_component_dependencies")],
+             "observe": "P3-8: Does it extract purl from Turn 1 and call scs_component_dependencies? Does it show DIRECT vs INDIRECT relationships?"},
+            {"turn": 3, "query": "What safe upgrade is available for that component? Also show me the dependency impact.",
+             "expected_tools": [("harness_get", "scs_component_remediation")],
+             "observe": "P3-6/P3-9: Does it reuse purl from Turn 2 and call scs_component_remediation? Does it surface dependency_changes?"},
+            {"turn": 4, "query": "What's the current auto-PR configuration for this project?",
+             "expected_tools": [("harness_get", "scs_auto_pr_config")],
+             "observe": "P3-12: Does it call scs_auto_pr_config? Context switch from component to project-level config."},
+        ],
+    },
+    # ─── Error Recovery Conversations ─────────────────────────────────────
+    {
+        "id": "M07", "title": "Invalid Artifact ID Recovery (diagnosticHint self-correction)",
+        "description": "Use a made-up artifact_id → get error → LLM should self-correct by listing sources first",
+        "turns": [
+            {"turn": 1, "query": "Show me the security details for artifact ID 'fake-artifact-12345'",
+             "expected_tools": [("harness_get", "artifact_security")],
+             "observe": "ERROR RECOVERY T1: LLM calls harness_get with fake artifact_id. Should get 404 or error. "
+                 "Does the error response include diagnosticHint guidance?"},
+            {"turn": 2, "query": "That didn't work. Can you find the correct artifact ID and try again?",
+             "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "artifact_security"), ("harness_get", "artifact_security")],
+             "observe": "ERROR RECOVERY T2: KEY TEST — does the LLM self-correct by listing sources first, "
+                 "then listing artifacts to find valid IDs, then retrying harness_get? "
+                 "diagnosticHint says: 'use harness_list(resource_type=scs_artifact_source) to discover valid source IDs'."},
+        ],
+    },
+    {
+        "id": "M08", "title": "Remediation Scope Limitation Recovery (code-repo vs container image)",
+        "description": "Request remediation for a container image component → 404 → LLM explains limitation → try code repo",
+        "turns": [
+            {"turn": 1, "query": "List my artifact sources and show me the first container image artifact",
+             "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "artifact_security")],
+             "observe": "Setup turn: establishes a container image artifact in context."},
+            {"turn": 2, "query": "Get remediation advice for a component in that container image artifact",
+             "expected_tools": [("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_remediation")],
+             "observe": "ERROR RECOVERY T2: Remediation only works for code repo artifacts, not container images. "
+                 "Should get 404. diagnosticHint says: 'remediation works for code repo artifacts only — not container images'."},
+            {"turn": 3, "query": "That failed. Can you try with a code repository instead?",
+             "expected_tools": [("harness_list", "code_repo_security"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_remediation")],
+             "observe": "ERROR RECOVERY T3: KEY TEST — does the LLM switch to code_repo_security, "
+                 "use repo_id as artifact_id (P3-7), and retry remediation with a code repo artifact?"},
         ],
     },
 ]
@@ -453,7 +652,7 @@ def send_query(query_text: str, genai_url: str, account_id: str, org_id: str, pr
     payload = {
         "prompt": query_text, "stream": True,
         "conversation_id": conversation_id, "interaction_id": str(uuid.uuid4()),
-        "metadata": {"accountId": account_id},
+        "metadata": {"accountId": account_id, "module": "SCS"},
         "harness_context": {"account_id": account_id, "org_id": org_id, "project_id": project_id},
         "conversation": conversation_history or [],
     }
@@ -571,7 +770,8 @@ def _print_query_summary(result: dict, extracted: dict) -> None:
 # Conversation Runner
 # ---------------------------------------------------------------------------
 def run_conversation(conv_def: dict[str, Any], genai_url: str, account_id: str, org_id: str,
-                     project_id: str, mcp_log_file: str, delay: float = INTER_QUERY_DELAY) -> dict[str, Any]:
+                     project_id: str, mcp_log_file: str, delay: float = INTER_QUERY_DELAY,
+                     history_mode: str = HISTORY_MODE_ANSWER_ONLY) -> dict[str, Any]:
     conv_id = str(uuid.uuid4())
     history: list[dict[str, Any]] = []
     turn_results: list[dict[str, Any]] = []
@@ -612,7 +812,13 @@ def run_conversation(conv_def: dict[str, Any], genai_url: str, account_id: str, 
         history.append({"role": "user", "message": {"type": "text", "data": turn_def["query"]}})
         text = extracted["final_answer"] or extracted["thoughts"]
         if text:
-            history.append({"role": "assistant", "message": {"type": "text", "data": text[:4000]}})
+            if history_mode == HISTORY_MODE_TOOL_SUMMARY:
+                tool_summary = build_tool_call_summary(extracted)
+                answer_budget = MAX_HISTORY_CHARS - len(tool_summary)
+                history_text = f"{text[:max(answer_budget, 0)]}{tool_summary}"
+            else:
+                history_text = text[:MAX_HISTORY_CHARS]
+            history.append({"role": "assistant", "message": {"type": "text", "data": history_text}})
         if turn_num < len(conv_def["turns"]):
             time.sleep(delay)
 
@@ -628,6 +834,7 @@ def run_conversation(conv_def: dict[str, Any], genai_url: str, account_id: str, 
         "num_turns": len(conv_def["turns"]), "turns": turn_results,
         "aggregate": {"all_tools_called": [list(t) for t in unique_tools], "total_chain_depth": len(unique_tools), "total_errors": all_errors, "total_token_usage": total_tokens},
         "scoring": {"overall": overall, "turns_correct": turns_correct, "turns_total": len(conv_def["turns"]), "turns_with_expected_tools": turns_with_tools, "context_retention": None, "answer_score": None, "notable_observations": None},
+        "history_mode": history_mode,
     }
 
 
@@ -636,7 +843,8 @@ def run_conversation(conv_def: dict[str, Any], genai_url: str, account_id: str, 
 # ---------------------------------------------------------------------------
 def run_smoke_tests(genai_url: str = GENAI_URL, account_id: str = ACCOUNT_ID, org_id: str = ORG_ID,
                     project_id: str = PROJECT_ID, mcp_log_file: str = MCP_LOG_FILE,
-                    query_ids: Optional[list[str]] = None, delay: float = INTER_QUERY_DELAY) -> dict[str, Any]:
+                    query_ids: Optional[list[str]] = None, delay: float = INTER_QUERY_DELAY,
+                    history_mode: str = HISTORY_MODE_ANSWER_ONLY) -> dict[str, Any]:
     run_single = run_multi = True
     single_ids = multi_ids = None
     if query_ids:
@@ -675,17 +883,17 @@ def run_smoke_tests(genai_url: str = GENAI_URL, account_id: str = ACCOUNT_ID, or
         print(f"\n{'#'*70}\n# MULTI-TURN CONVERSATIONS ({len(conversations)})\n{'#'*70}")
         for idx, cd in enumerate(conversations, 1):
             print(f"\n{'='*70}\n[{idx}/{len(conversations)}] {cd['id']}: {cd['title']}\n  {cd['description']}\n{'='*70}")
-            cr = run_conversation(cd, genai_url, account_id, org_id, project_id, mcp_log_file, delay)
+            cr = run_conversation(cd, genai_url, account_id, org_id, project_id, mcp_log_file, delay, history_mode)
             conv_results.append(cr)
             s = cr["scoring"]
             print(f"\n  Conversation: [{s['overall']}] turns_correct={s['turns_correct']}/{s['turns_total']} duration={cr['duration_s']}s")
             if idx < len(conversations):
                 print(f"\n  [delay] Waiting {delay}s..."); time.sleep(delay)
 
-    return _build_summary(single_results, conv_results, run_timestamp, time.monotonic() - run_start, account_id, org_id, project_id)
+    return _build_summary(single_results, conv_results, run_timestamp, time.monotonic() - run_start, account_id, org_id, project_id, history_mode)
 
 
-def _build_summary(results, conv_results, run_timestamp, total_duration, account_id, org_id, project_id):
+def _build_summary(results, conv_results, run_timestamp, total_duration, account_id, org_id, project_id, history_mode=HISTORY_MODE_ANSWER_ONLY):
     def _count(score): return sum(1 for r in results if r["scoring"]["tool_selection"] == score)
     durations = [r["duration_s"] for r in results if r["duration_s"] > 0]
     chain_depths = [r["extracted"]["chain_depth"] for r in results]
@@ -718,6 +926,7 @@ def _build_summary(results, conv_results, run_timestamp, total_duration, account
             "account_id": account_id, "org_id": org_id, "project_id": project_id,
             "mcp_server_version": "2.0.0", "mcp_server_type": "node", "mcp_server_repo": "harness-mcp-v2",
             "tool_model": "generic (harness_list, harness_get, harness_describe)",
+            "history_mode": history_mode,
             "total_duration_s": round(total_duration, 2), "genai_url": GENAI_URL,
         },
         "results": results, "conversation_results": conv_results,
@@ -774,6 +983,7 @@ def print_final_summary(summary: dict[str, Any]) -> None:
     print(f"  Timestamp:     {meta['timestamp']}\n  Model:         {meta['model']}")
     print(f"  MCP Server:    {meta['mcp_server_repo']} ({meta['mcp_server_type']})")
     print(f"  Tool Model:    {meta['tool_model']}")
+    print(f"  History Mode:  {meta.get('history_mode', 'answer_only')}")
     print(f"  Account:       {meta['account_id']}\n  Org/Project:   {meta['org_id']}/{meta['project_id']}")
     print(f"  Total time:    {meta['total_duration_s']}s\n")
     if summary["results"]:
@@ -825,6 +1035,9 @@ def main():
     parser.add_argument("--project-id", default=PROJECT_ID)
     parser.add_argument("--query-ids", default=None, help="Comma-separated IDs (e.g., Q01,Q05,M01,M03)")
     parser.add_argument("--delay", type=float, default=INTER_QUERY_DELAY)
+    parser.add_argument("--history-mode", default=HISTORY_MODE_ANSWER_ONLY,
+                        choices=[HISTORY_MODE_ANSWER_ONLY, HISTORY_MODE_TOOL_SUMMARY],
+                        help="Multi-turn history strategy: 'answer_only' (Strategy A, default) or 'tool_summary' (Strategy B — enriches history with tool call summaries)")
     parser.add_argument("--mcp-log", default=MCP_LOG_FILE)
     args = parser.parse_args()
     query_ids = [qid.strip() for qid in args.query_ids.split(",")] if args.query_ids else None
@@ -833,13 +1046,14 @@ def main():
     print(f"  genai-service URL: {args.url}\n  Account:           {args.account_id}")
     print(f"  Org/Project:       {args.org_id}/{args.project_id}\n  MCP log:           {args.mcp_log}")
     print(f"  Query delay:       {args.delay}s")
+    print(f"  History mode:      {args.history_mode}")
     if query_ids:
         print(f"  Running IDs:       {query_ids}")
     else:
         print(f"  Running:           ALL ({len(QUERIES)} single-turn + {len(CONVERSATIONS)} multi-turn)")
     print()
 
-    summary = run_smoke_tests(args.url, args.account_id, args.org_id, args.project_id, args.mcp_log, query_ids, args.delay)
+    summary = run_smoke_tests(args.url, args.account_id, args.org_id, args.project_id, args.mcp_log, query_ids, args.delay, args.history_mode)
     results_path, summary_path = write_results(summary)
     print_final_summary(summary)
     print(f"  Full results:  {results_path}\n  Summary:       {summary_path}\n")

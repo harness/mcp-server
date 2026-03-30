@@ -18,7 +18,9 @@ export function svgToPngBase64(svgString: string, options?: RenderPngOptions): s
   const resvg = new Resvg(svgString, {
     fitTo: { mode: "zoom", value: scale },
     font: {
-      loadSystemFonts: true,
+      // Avoid scanning OS font dirs — can exceed CI test timeouts on Node 20 runners;
+      // our SVG builders set explicit font-family stacks resvg can resolve without that scan.
+      loadSystemFonts: false,
     },
   });
 
