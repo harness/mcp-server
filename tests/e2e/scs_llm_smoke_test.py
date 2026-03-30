@@ -311,6 +311,25 @@ QUERIES = [
         "observe": "KEY DISAMBIGUATION: 'security posture' of plural 'artifacts' justifies harness_list(artifact_security) to get overview of all. "
             "Tests whether LLM chains source listing → security listing for a broad posture view.",
     },
+    # ─── P3-10: OPA Policy Management in SCS Context ──────────────────
+    {
+        "id": "Q32",
+        "query": "List the OPA policies configured for my project so I can review the SBOM enforcement rules",
+        "expected_intent": "P3-10: Cross-toolset routing — SCS user asking about OPA policies should route to governance toolset",
+        "confidence": "Medium",
+        "expected_tools": [("harness_list", "policy")],
+        "observe": "P3-10: 'OPA policies' + 'SBOM enforcement' should route to governance toolset's `policy` resource. "
+            "LLM must NOT try to find an SCS-specific policy resource. Module routing context should guide it.",
+    },
+    {
+        "id": "Q33",
+        "query": "Show me all policy sets that enforce rules on my supply chain artifacts",
+        "expected_intent": "P3-10: Cross-toolset routing — policy set listing in SCS context uses governance toolset",
+        "confidence": "Medium",
+        "expected_tools": [("harness_list", "policy_set")],
+        "observe": "P3-10: 'policy sets' + 'enforce' + 'supply chain artifacts' should route to governance's `policy_set` resource. "
+            "Tests cross-toolset routing from SCS module to governance.",
+    },
 ]
 
 # ---------------------------------------------------------------------------
@@ -442,6 +461,24 @@ CONVERSATIONS = [
              "expected_tools": [("harness_list", "code_repo_security"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_remediation")],
              "observe": "ERROR RECOVERY T3: KEY TEST — does the LLM switch to code_repo_security, "
                  "use repo_id as artifact_id (P3-7), and retry remediation with a code repo artifact?"},
+        ],
+    },
+    # ─── P3-10: OPA Policy Management Flow ────────────────────────────────
+    {
+        "id": "M09", "title": "OPA Policy Management in SCS Context (P3-10)",
+        "description": "List existing policies → check compliance results → attempt to list policy sets for SBOM enforcement",
+        "turns": [
+            {"turn": 1, "query": "What OPA policies are currently configured in my project?",
+             "expected_tools": [("harness_list", "policy")],
+             "observe": "P3-10 T1: Cross-toolset routing — 'OPA policies' should route to governance `policy` resource, "
+                 "not look for SCS-specific policy resource."},
+            {"turn": 2, "query": "Now show me the compliance results for my first artifact to see if those policies are being enforced",
+             "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "artifact_security"), ("harness_list", "scs_compliance_result")],
+             "observe": "P3-10 T2: Context switch from governance policies to SCS compliance results. "
+                 "Tests whether LLM can chain artifact discovery → compliance results."},
+            {"turn": 3, "query": "Show me the policy sets that control SBOM enforcement for this project",
+             "expected_tools": [("harness_list", "policy_set")],
+             "observe": "P3-10 T3: Cross-toolset routing again — 'policy sets' + 'SBOM enforcement' should route to governance `policy_set`."},
         ],
     },
 ]

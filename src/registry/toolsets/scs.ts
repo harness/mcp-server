@@ -318,9 +318,11 @@ export const scsToolset: ToolsetDefinition = {
         + "Use this for compliance and policy violation queries.",
       diagnosticHint: "If you get a 404: verify artifact_id is correct. Get artifact IDs from harness_list(resource_type='artifact_security', source_id='...'). "
         + "Filter by standards (e.g. 'CIS', 'OWASP') and status ('PASSED', 'FAILED', 'WARNING').",
-      searchAliases: ["compliance", "policy violation", "cis", "owasp", "compliance check"],
+      searchAliases: ["compliance", "policy violation", "cis", "owasp", "compliance check", "enforcement", "bom enforcement", "sbom enforcement"],
       relatedResources: [
         { resourceType: "artifact_security", relationship: "parent", description: "Get artifact_id needed for compliance queries" },
+        { resourceType: "policy", relationship: "sibling", description: "OPA policies (deny-list/allow-list) evaluated during enforcement — use governance toolset to create/manage" },
+        { resourceType: "policy_set", relationship: "sibling", description: "OPA policy sets controlling enforcement rules — use governance toolset to create/manage" },
       ],
       toolset: "scs",
       scope: "project",
