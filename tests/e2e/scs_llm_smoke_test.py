@@ -221,7 +221,7 @@ QUERIES = [
     # ─── Phase 3 Tier 1 Queries ───────────────────────────────────────────
     {
         "id": "Q20",
-        "query": "I have a vulnerable express component in my code repository. Can you suggest a safe version to upgrade to?",
+        "query": "Find a vulnerable component in my first code repository and suggest a safe version to upgrade to, including the dependency impact of the upgrade.",
         "expected_intent": "P3-6: Component remediation — upgrade suggestions with dependency impact",
         "confidence": "Medium",
         "expected_tools": [("harness_list", "code_repo_security"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_remediation")],
@@ -239,7 +239,7 @@ QUERIES = [
     },
     {
         "id": "Q22",
-        "query": "Show me the full dependency tree for the express component in my first artifact",
+        "query": "Show me the full dependency tree for the zlib component in my first artifact",
         "expected_intent": "P3-8: Component dependency tree — direct and transitive dependencies",
         "confidence": "Medium",
         "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "artifact_security"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_dependencies")],
@@ -276,7 +276,7 @@ QUERIES = [
     },
     {
         "id": "Q28",
-        "query": "What does the express package depend on? Show me its full dependency chain including transitive dependencies.",
+        "query": "What does the zlib package depend on? Show me its full dependency chain including all transitive dependencies using the dependency tree.",
         "expected_intent": "Disambiguation: scs_component_dependencies (tree) vs scs_artifact_component (flat list)",
         "confidence": "Medium",
         "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_dependencies")],
@@ -422,9 +422,9 @@ CONVERSATIONS = [
             {"turn": 2, "query": "Show me the full dependency tree for the first component in that list",
              "expected_tools": [("harness_get", "scs_component_dependencies")],
              "observe": "P3-8: Does it extract purl from Turn 1 and call scs_component_dependencies? Does it show DIRECT vs INDIRECT relationships?"},
-            {"turn": 3, "query": "What safe upgrade is available for that component? Also show me the dependency impact.",
+            {"turn": 3, "query": "Get structured upgrade suggestions for that component with dependency impact analysis — what version should I upgrade to and what dependencies would change?",
              "expected_tools": [("harness_get", "scs_component_remediation")],
-             "observe": "P3-6/P3-9: Does it reuse purl from Turn 2 and call scs_component_remediation? Does it surface dependency_changes?"},
+             "observe": "P3-6/P3-9: Does it reuse purl from Turn 2 and call scs_component_remediation (NOT scs_artifact_remediation)? Does it surface dependency_changes?"},
             {"turn": 4, "query": "What's the current auto-PR configuration for this project?",
              "expected_tools": [("harness_get", "scs_auto_pr_config")],
              "observe": "P3-12: Does it call scs_auto_pr_config? Context switch from component to project-level config."},
