@@ -743,3 +743,116 @@ describe("T9-v2: compactItems effectiveness for SCS", () => {
     expect(compacted.orchestration).toBeUndefined();
   });
 });
+
+// ─── P3-10: scs_compliance_result governance cross-references ───────────────
+
+describe("P3-10: scs_compliance_result governance cross-references", () => {
+  it("has relatedResources pointing to governance policy", () => {
+    const res = findResource("scs_compliance_result");
+    const policyRef = res.relatedResources!.find(
+      (rel) => rel.resourceType === "policy",
+    );
+    expect(policyRef).toBeDefined();
+    expect(policyRef!.relationship).toBe("sibling");
+    expect(policyRef!.description).toContain("governance");
+  });
+
+  it("has relatedResources pointing to governance policy_set", () => {
+    const res = findResource("scs_compliance_result");
+    const policySetRef = res.relatedResources!.find(
+      (rel) => rel.resourceType === "policy_set",
+    );
+    expect(policySetRef).toBeDefined();
+    expect(policySetRef!.relationship).toBe("sibling");
+    expect(policySetRef!.description).toContain("governance");
+  });
+
+  it("retains parent reference to artifact_security", () => {
+    const res = findResource("scs_compliance_result");
+    const parentRef = res.relatedResources!.find(
+      (rel) => rel.resourceType === "artifact_security",
+    );
+    expect(parentRef).toBeDefined();
+    expect(parentRef!.relationship).toBe("parent");
+  });
+
+  it("searchAliases include enforcement-related terms", () => {
+    const res = findResource("scs_compliance_result");
+    const aliases = res.searchAliases!.map((a) => a.toLowerCase());
+    expect(aliases).toContain("enforcement");
+    expect(aliases).toContain("sbom enforcement");
+    expect(aliases).toContain("bom enforcement");
+  });
+});
+
+// ─── P3-8: scs_component_dependencies structural tests ─────────────────────
+
+describe("P3-8: scs_component_dependencies resource", () => {
+  it("exists in scsToolset", () => {
+    expect(() => findResource("scs_component_dependencies")).not.toThrow();
+  });
+
+  it("has a get operation with correct path", () => {
+    const spec = getOp("scs_component_dependencies", "get");
+    expect(spec.method).toBe("GET");
+    expect(spec.path).toContain("/component/dependencies");
+  });
+
+  it("get operation requires purl as query param", () => {
+    const spec = getOp("scs_component_dependencies", "get");
+    expect(spec.queryParams).toBeDefined();
+    expect(spec.queryParams!.purl).toBe("purl");
+  });
+
+  it("description distinguishes from scs_artifact_component (flat list)", () => {
+    const res = findResource("scs_component_dependencies");
+    expect(res.description).toContain("DEPENDS ON");
+    expect(res.description).toContain("DIFFERENT from scs_artifact_component");
+  });
+
+  it("description mentions transitive dependencies", () => {
+    const res = findResource("scs_component_dependencies");
+    expect(res.description).toContain("transitive");
+  });
+
+  it("diagnosticHint explains how to get purl values", () => {
+    const res = findResource("scs_component_dependencies");
+    expect(res.diagnosticHint).toBeDefined();
+    expect(res.diagnosticHint!).toContain("scs_artifact_component");
+    expect(res.diagnosticHint!).toContain("purl");
+  });
+
+  it("searchAliases include dependency tree terms", () => {
+    const res = findResource("scs_component_dependencies");
+    const aliases = res.searchAliases!.map((a) => a.toLowerCase());
+    expect(aliases).toContain("dependency tree");
+    expect(aliases).toContain("transitive dependencies");
+    expect(aliases).toContain("dependency graph");
+    expect(aliases).toContain("depends on");
+  });
+
+  it("has relatedResources referencing scs_artifact_component as parent", () => {
+    const res = findResource("scs_component_dependencies");
+    const parentRef = res.relatedResources!.find(
+      (rel) => rel.resourceType === "scs_artifact_component",
+    );
+    expect(parentRef).toBeDefined();
+    expect(parentRef!.relationship).toBe("parent");
+  });
+
+  it("has relatedResources referencing scs_component_remediation as sibling", () => {
+    const res = findResource("scs_component_dependencies");
+    const siblingRef = res.relatedResources!.find(
+      (rel) => rel.resourceType === "scs_component_remediation",
+    );
+    expect(siblingRef).toBeDefined();
+    expect(siblingRef!.relationship).toBe("sibling");
+  });
+
+  it("purl is a required listFilterField", () => {
+    const res = findResource("scs_component_dependencies");
+    const purlField = res.listFilterFields!.find((f) => f.name === "purl");
+    expect(purlField).toBeDefined();
+    expect(purlField!.required).toBe(true);
+  });
+});

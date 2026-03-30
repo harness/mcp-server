@@ -66,7 +66,15 @@ export const governanceToolset: ToolsetDefinition = {
     {
       resourceType: "policy",
       displayName: "OPA Policy",
-      description: "OPA Rego policy for Harness governance. Supports full CRUD.",
+      description: "OPA Rego policy for Harness governance. Supports full CRUD. "
+        + "Use this for SCS/SBOM enforcement — create deny-list or allow-list policies that control which components are permitted in your supply chain. "
+        + "Policies are written in Rego and evaluated against SBOM components during enforcement.",
+      searchAliases: ["opa policy", "rego policy", "deny list", "allow list", "sbom policy", "governance policy", "supply chain policy"],
+      relatedResources: [
+        { resourceType: "policy_set", relationship: "parent", description: "Group policies into policy sets with enforcement actions" },
+        { resourceType: "policy_evaluation", relationship: "child", description: "View evaluation results for this policy" },
+        { resourceType: "scs_compliance_result", relationship: "sibling", description: "SCS compliance results showing policy enforcement outcomes on artifacts" },
+      ],
       toolset: "governance",
       scope: "project",
       identifierFields: ["policy_id"],
@@ -132,7 +140,15 @@ export const governanceToolset: ToolsetDefinition = {
     {
       resourceType: "policy_set",
       displayName: "OPA Policy Set",
-      description: "Policy set grouping OPA policies with enforcement action and entity type. Supports full CRUD.",
+      description: "Policy set grouping OPA policies with enforcement action and entity type. Supports full CRUD. "
+        + "For SCS/SBOM enforcement, create a policy set with type 'ssca_enforcement' to apply deny-list or allow-list rules during artifact scans. "
+        + "Policy sets control when and how policies are evaluated (on pipeline run, on save, etc.).",
+      searchAliases: ["policy set", "enforcement rules", "sbom enforcement", "supply chain enforcement", "governance rules"],
+      relatedResources: [
+        { resourceType: "policy", relationship: "child", description: "Individual policies contained in this set" },
+        { resourceType: "policy_evaluation", relationship: "child", description: "Evaluation results for this policy set" },
+        { resourceType: "scs_compliance_result", relationship: "sibling", description: "SCS compliance results showing enforcement outcomes" },
+      ],
       toolset: "governance",
       scope: "project",
       identifierFields: ["policy_set_id"],

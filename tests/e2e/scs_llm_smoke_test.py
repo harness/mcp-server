@@ -221,7 +221,7 @@ QUERIES = [
     # ─── Phase 3 Tier 1 Queries ───────────────────────────────────────────
     {
         "id": "Q20",
-        "query": "I have a vulnerable express component in my code repository. Can you suggest a safe version to upgrade to?",
+        "query": "Find a vulnerable component in my first code repository and suggest a safe version to upgrade to, including the dependency impact of the upgrade.",
         "expected_intent": "P3-6: Component remediation — upgrade suggestions with dependency impact",
         "confidence": "Medium",
         "expected_tools": [("harness_list", "code_repo_security"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_remediation")],
@@ -239,7 +239,7 @@ QUERIES = [
     },
     {
         "id": "Q22",
-        "query": "Show me the full dependency tree for the express component in my first artifact",
+        "query": "Show me the full dependency tree for the zlib component in my first artifact",
         "expected_intent": "P3-8: Component dependency tree — direct and transitive dependencies",
         "confidence": "Medium",
         "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "artifact_security"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_dependencies")],
@@ -276,7 +276,7 @@ QUERIES = [
     },
     {
         "id": "Q28",
-        "query": "What does the express package depend on? Show me its full dependency chain including transitive dependencies.",
+        "query": "What does the zlib package depend on? Show me its full dependency chain including all transitive dependencies using the dependency tree.",
         "expected_intent": "Disambiguation: scs_component_dependencies (tree) vs scs_artifact_component (flat list)",
         "confidence": "Medium",
         "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_dependencies")],
@@ -310,6 +310,25 @@ QUERIES = [
         "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "artifact_security")],
         "observe": "KEY DISAMBIGUATION: 'security posture' of plural 'artifacts' justifies harness_list(artifact_security) to get overview of all. "
             "Tests whether LLM chains source listing → security listing for a broad posture view.",
+    },
+    # ─── P3-10: OPA Policy Management in SCS Context ──────────────────
+    {
+        "id": "Q32",
+        "query": "List the OPA policies configured for my project so I can review the SBOM enforcement rules",
+        "expected_intent": "P3-10: Cross-toolset routing — SCS user asking about OPA policies should route to governance toolset",
+        "confidence": "Medium",
+        "expected_tools": [("harness_list", "policy")],
+        "observe": "P3-10: 'OPA policies' + 'SBOM enforcement' should route to governance toolset's `policy` resource. "
+            "LLM must NOT try to find an SCS-specific policy resource. Module routing context should guide it.",
+    },
+    {
+        "id": "Q33",
+        "query": "Show me all policy sets that enforce rules on my supply chain artifacts",
+        "expected_intent": "P3-10: Cross-toolset routing — policy set listing in SCS context uses governance toolset",
+        "confidence": "Medium",
+        "expected_tools": [("harness_list", "policy_set")],
+        "observe": "P3-10: 'policy sets' + 'enforce' + 'supply chain artifacts' should route to governance's `policy_set` resource. "
+            "Tests cross-toolset routing from SCS module to governance.",
     },
 ]
 
@@ -403,9 +422,9 @@ CONVERSATIONS = [
             {"turn": 2, "query": "Show me the full dependency tree for the first component in that list",
              "expected_tools": [("harness_get", "scs_component_dependencies")],
              "observe": "P3-8: Does it extract purl from Turn 1 and call scs_component_dependencies? Does it show DIRECT vs INDIRECT relationships?"},
-            {"turn": 3, "query": "What safe upgrade is available for that component? Also show me the dependency impact.",
+            {"turn": 3, "query": "Get structured upgrade suggestions for that component with dependency impact analysis — what version should I upgrade to and what dependencies would change?",
              "expected_tools": [("harness_get", "scs_component_remediation")],
-             "observe": "P3-6/P3-9: Does it reuse purl from Turn 2 and call scs_component_remediation? Does it surface dependency_changes?"},
+             "observe": "P3-6/P3-9: Does it reuse purl from Turn 2 and call scs_component_remediation (NOT scs_artifact_remediation)? Does it surface dependency_changes?"},
             {"turn": 4, "query": "What's the current auto-PR configuration for this project?",
              "expected_tools": [("harness_get", "scs_auto_pr_config")],
              "observe": "P3-12: Does it call scs_auto_pr_config? Context switch from component to project-level config."},
@@ -442,6 +461,24 @@ CONVERSATIONS = [
              "expected_tools": [("harness_list", "code_repo_security"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_remediation")],
              "observe": "ERROR RECOVERY T3: KEY TEST — does the LLM switch to code_repo_security, "
                  "use repo_id as artifact_id (P3-7), and retry remediation with a code repo artifact?"},
+        ],
+    },
+    # ─── P3-10: OPA Policy Management Flow ────────────────────────────────
+    {
+        "id": "M09", "title": "OPA Policy Management in SCS Context (P3-10)",
+        "description": "List existing policies → check compliance results → attempt to list policy sets for SBOM enforcement",
+        "turns": [
+            {"turn": 1, "query": "What OPA policies are currently configured in my project?",
+             "expected_tools": [("harness_list", "policy")],
+             "observe": "P3-10 T1: Cross-toolset routing — 'OPA policies' should route to governance `policy` resource, "
+                 "not look for SCS-specific policy resource."},
+            {"turn": 2, "query": "Now show me the compliance results for my first artifact to see if those policies are being enforced",
+             "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "artifact_security"), ("harness_list", "scs_compliance_result")],
+             "observe": "P3-10 T2: Context switch from governance policies to SCS compliance results. "
+                 "Tests whether LLM can chain artifact discovery → compliance results."},
+            {"turn": 3, "query": "Show me the policy sets that control SBOM enforcement for this project",
+             "expected_tools": [("harness_list", "policy_set")],
+             "observe": "P3-10 T3: Cross-toolset routing again — 'policy sets' + 'SBOM enforcement' should route to governance `policy_set`."},
         ],
     },
 ]

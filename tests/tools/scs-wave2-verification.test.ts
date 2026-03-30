@@ -199,10 +199,14 @@ describe("P2-0: relatedResources defined for multi-turn flow guidance", () => {
     }
   });
 
-  it("all referenced resource types in relatedResources exist in SCS toolset", () => {
+  // Cross-toolset references are allowed for governance integration (P3-10)
+  const CROSS_TOOLSET_TYPES = new Set(["policy", "policy_set", "policy_evaluation"]);
+  const allKnownTypes = new Set([...scsTypes, ...CROSS_TOOLSET_TYPES]);
+
+  it("all referenced resource types in relatedResources exist in SCS or allowed cross-toolset types", () => {
     for (const r of scsResources) {
       for (const rel of r.relatedResources!) {
-        expect(scsTypes.has(rel.resourceType),
+        expect(allKnownTypes.has(rel.resourceType),
           `${r.resourceType} references unknown type "${rel.resourceType}"`
         ).toBe(true);
       }
@@ -293,5 +297,106 @@ describe("P2-1-new: SCS types in harness-search relevance tiers", () => {
     for (const type of boostedTypes) {
       expect(scsTypes.has(type), `${type} should be in SCS toolset`).toBe(true);
     }
+  });
+});
+
+// ─── P3-10: Cross-toolset search routing (SCS → governance) ─────────────────
+
+describe("P3-10: searchResources routes SCS policy queries to governance", () => {
+  const registry = new Registry(makeConfig());
+
+  it("searching 'deny list policy' returns governance policy in results", () => {
+    const results = registry.searchResources("deny list policy");
+    const policyResult = results.find(r => r.type === "policy");
+    expect(policyResult, "governance 'policy' should appear for 'deny list policy' search").toBeDefined();
+  });
+
+  it("searching 'sbom enforcement' returns governance policy_set in results", () => {
+    const results = registry.searchResources("sbom enforcement");
+    const policySetResult = results.find(r => r.type === "policy_set");
+    expect(policySetResult, "governance 'policy_set' should appear for 'sbom enforcement' search").toBeDefined();
+  });
+
+  it("searching 'opa policy' returns governance policy in results", () => {
+    const results = registry.searchResources("opa policy");
+    const policyResult = results.find(r => r.type === "policy");
+    expect(policyResult, "governance 'policy' should appear for 'opa policy' search").toBeDefined();
+  });
+
+  it("searching 'supply chain policy' returns governance policy in results", () => {
+    const results = registry.searchResources("supply chain policy");
+    const policyResult = results.find(r => r.type === "policy");
+    expect(policyResult, "governance 'policy' should appear for 'supply chain policy' search").toBeDefined();
+  });
+
+  it("searching 'enforcement rules' returns governance policy_set in results", () => {
+    const results = registry.searchResources("enforcement rules");
+    const policySetResult = results.find(r => r.type === "policy_set");
+    expect(policySetResult, "governance 'policy_set' should appear for 'enforcement rules' search").toBeDefined();
+  });
+
+  it("searching 'compliance' still returns scs_compliance_result first", () => {
+    const results = registry.searchResources("compliance");
+    const scsIdx = results.findIndex(r => r.type === "scs_compliance_result");
+    expect(scsIdx, "scs_compliance_result should appear in results").toBeGreaterThanOrEqual(0);
+  });
+});
+
+// ─── P3-8: Dependency tree search routing ───────────────────────────────────
+
+describe("P3-8: searchResources routes dependency tree queries correctly", () => {
+  const registry = new Registry(makeConfig());
+
+  it("searching 'dependency tree' returns scs_component_dependencies in results", () => {
+    const results = registry.searchResources("dependency tree");
+    const depTreeResult = results.find(r => r.type === "scs_component_dependencies");
+    expect(depTreeResult, "scs_component_dependencies should appear for 'dependency tree' search").toBeDefined();
+  });
+
+  it("searching 'transitive dependencies' returns scs_component_dependencies in results", () => {
+    const results = registry.searchResources("transitive dependencies");
+    const depTreeResult = results.find(r => r.type === "scs_component_dependencies");
+    expect(depTreeResult, "scs_component_dependencies should appear for 'transitive dependencies' search").toBeDefined();
+  });
+
+  it("searching 'depends on' returns scs_component_dependencies in results", () => {
+    const results = registry.searchResources("depends on");
+    const depTreeResult = results.find(r => r.type === "scs_component_dependencies");
+    expect(depTreeResult, "scs_component_dependencies should appear for 'depends on' search").toBeDefined();
+  });
+
+  it("searching 'dependency' returns both flat list and tree resources", () => {
+    const results = registry.searchResources("dependency");
+    const flatResult = results.find(r => r.type === "scs_artifact_component");
+    const treeResult = results.find(r => r.type === "scs_component_dependencies");
+    expect(flatResult, "scs_artifact_component should appear for 'dependency' search").toBeDefined();
+    expect(treeResult, "scs_component_dependencies should appear for 'dependency' search").toBeDefined();
+  });
+});
+
+// ─── P3-10: scs_compliance_result cross-toolset relatedResources ────────────
+
+describe("P3-10: scs_compliance_result has governance cross-refs", () => {
+  it("scs_compliance_result references governance policy as sibling", () => {
+    const r = findResource("scs_compliance_result");
+    const policyRef = r.relatedResources!.find(rel => rel.resourceType === "policy");
+    expect(policyRef).toBeDefined();
+    expect(policyRef!.relationship).toBe("sibling");
+    expect(policyRef!.description).toContain("governance");
+  });
+
+  it("scs_compliance_result references governance policy_set as sibling", () => {
+    const r = findResource("scs_compliance_result");
+    const policySetRef = r.relatedResources!.find(rel => rel.resourceType === "policy_set");
+    expect(policySetRef).toBeDefined();
+    expect(policySetRef!.relationship).toBe("sibling");
+    expect(policySetRef!.description).toContain("governance");
+  });
+
+  it("scs_compliance_result searchAliases include enforcement terms", () => {
+    const r = findResource("scs_compliance_result");
+    const aliases = r.searchAliases!.map(a => a.toLowerCase());
+    expect(aliases).toContain("enforcement");
+    expect(aliases).toContain("sbom enforcement");
   });
 });

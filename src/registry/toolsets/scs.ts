@@ -178,7 +178,7 @@ export const scsToolset: ToolsetDefinition = {
       relatedResources: [
         { resourceType: "artifact_security", relationship: "parent", description: "Get artifact_id needed to list components" },
         { resourceType: "scs_component_dependencies", relationship: "child", description: "Get dependency tree for a specific component (pass purl)" },
-        { resourceType: "scs_artifact_remediation", relationship: "sibling", description: "Remediation advice for a component (pass purl)" },
+        { resourceType: "scs_component_remediation", relationship: "sibling", description: "Safe upgrade suggestions with dependency impact analysis (pass purl) — preferred over scs_artifact_remediation" },
       ],
       toolset: "scs",
       scope: "project",
@@ -251,8 +251,9 @@ export const scsToolset: ToolsetDefinition = {
     // ── Artifact Remediation ───────────────────────────────────────────
     {
       resourceType: "scs_artifact_remediation",
-      displayName: "SCS Artifact Remediation",
-      description: "Remediation advice for a component identified by its package URL (purl). "
+      displayName: "SCS Artifact Remediation (Legacy)",
+      description: "Legacy remediation advice endpoint. PREFER scs_component_remediation instead — it returns structured upgrade suggestions with dependency impact analysis (added/removed/modified dependencies). "
+        + "This resource returns the same data but scs_component_remediation has richer descriptions and is the recommended resource for all remediation queries. "
         + "Works for code repository artifacts only — not available for container images. "
         + "Pass artifact_id as resource_id and purl via params.",
       diagnosticHint: "If you get a 404: (1) verify artifact_id and purl are correct, (2) remediation only works for code repo artifacts, not container images. "
@@ -318,9 +319,11 @@ export const scsToolset: ToolsetDefinition = {
         + "Use this for compliance and policy violation queries.",
       diagnosticHint: "If you get a 404: verify artifact_id is correct. Get artifact IDs from harness_list(resource_type='artifact_security', source_id='...'). "
         + "Filter by standards (e.g. 'CIS', 'OWASP') and status ('PASSED', 'FAILED', 'WARNING').",
-      searchAliases: ["compliance", "policy violation", "cis", "owasp", "compliance check"],
+      searchAliases: ["compliance", "policy violation", "cis", "owasp", "compliance check", "enforcement", "bom enforcement", "sbom enforcement"],
       relatedResources: [
         { resourceType: "artifact_security", relationship: "parent", description: "Get artifact_id needed for compliance queries" },
+        { resourceType: "policy", relationship: "sibling", description: "OPA policies (deny-list/allow-list) evaluated during enforcement — use governance toolset to create/manage" },
+        { resourceType: "policy_set", relationship: "sibling", description: "OPA policy sets controlling enforcement rules — use governance toolset to create/manage" },
       ],
       toolset: "scs",
       scope: "project",
