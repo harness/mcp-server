@@ -112,6 +112,7 @@ export const gitopsToolset: ToolsetDefinition = {
       toolset: "gitops",
       scope: "project",
       diagnosticHint: "Use harness_diagnose with resource_type='gitops_application', agent_id, and resource_id (app name) to analyze sync failures, health issues, and unhealthy K8s resources. Combines app status, resource tree, and recent events.",
+      executeHint: "SYNC: harness_execute(action='sync') for single app, action='bulk_sync' for multiple. REFRESH: action='refresh' (normal or hard). RESOURCE ACTIONS (restart, pause, etc.): 1) harness_get resource_type='gitops_app_resource_tree' to discover K8s resources, 2) harness_list resource_type='gitops_resource_action' to discover available actions, 3) harness_execute action='run_resource_action'. NOTE: resource_id maps to agent_id in harness_execute but to app_name in harness_get.",
       identifierFields: ["agent_id", "app_name"],
       listFilterFields: [
         { name: "search_term", description: "Filter GitOps applications by name or keyword" },
@@ -139,6 +140,7 @@ export const gitopsToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/gitops/api/v1/agents/{agentIdentifier}/applications",
+          injectAccountInBody: true,
           pathParams: {
             agent_id: "agentIdentifier",
           },
@@ -205,6 +207,7 @@ export const gitopsToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/gitops/api/v1/agents/{agentIdentifier}/applications/{appName}",
+          injectAccountInBody: true,
           pathParams: {
             agent_id: "agentIdentifier",
             app_name: "appName",
@@ -276,17 +279,18 @@ export const gitopsToolset: ToolsetDefinition = {
         refresh: {
           method: "POST",
           path: "/gitops/api/v1/applications/bulk/refresh",
+          injectAccountInBody: true,
           bodyBuilder: (input) => {
             const body = (input.body ?? {}) as Record<string, unknown>;
             return {
               applicationTargets: buildBulkTargets(input, "Refresh"),
-              refresh: body.refresh ?? input.refresh ?? "normal",
+              refresh: body.refresh ?? "normal",
             };
           },
           responseExtractor: passthrough,
           actionDescription:
             "Refresh one or more GitOps applications. Normal refresh checks if source changed; hard refresh forces full manifest regeneration.\n\n" +
-            "SINGLE APP: harness_execute(resource_type='gitops_application', action='refresh', resource_id='account.myagent', params={app_name:'my-app', refresh:'hard'})\n\n" +
+            "SINGLE APP: harness_execute(resource_type='gitops_application', action='refresh', resource_id='account.myagent', params={app_name:'my-app'}, body={refresh:'hard'})\n\n" +
             "MULTIPLE APPS: harness_execute(resource_type='gitops_application', action='refresh', body={targets:[{agent_id:'account.myagent', app_name:'app1'}, {agent_id:'account.myagent', app_name:'app2'}], refresh:'hard'})\n\n" +
             "NOTE: resource_id maps to agent_id (scope-prefixed). For apps across different agents, use body.targets.",
           bodySchema: {
@@ -301,6 +305,7 @@ export const gitopsToolset: ToolsetDefinition = {
         bulk_sync: {
           method: "POST",
           path: "/gitops/api/v1/applications/bulk/sync",
+          injectAccountInBody: true,
           bodyBuilder: (input) => {
             const body = (input.body ?? {}) as Record<string, unknown>;
             const targets = buildBulkTargets(input, "Bulk sync");
@@ -316,6 +321,8 @@ export const gitopsToolset: ToolsetDefinition = {
               const opts = body.syncOptions;
               result.syncOptions = Array.isArray(opts) ? { items: opts } : opts;
             }
+
+            if (body.revision) result.revision = body.revision;
 
             return result;
           },
@@ -336,6 +343,7 @@ export const gitopsToolset: ToolsetDefinition = {
               { name: "strategy", type: "object", required: false, description: "Sync strategy: {apply?: {force: bool}} for kubectl apply, or {hook?: {force: bool}} for hook-based sync (default)." },
               { name: "retryStrategy", type: "object", required: false, description: "Retry on failure: {limit: number, backoff?: {duration: string, factor: number, maxDuration: string}}." },
               { name: "syncOptions", type: "array", required: false, description: "Sync option strings, e.g. ['CreateNamespace=true', 'PruneLast=true', 'ApplyOutOfSyncOnly=true']." },
+              { name: "revision", type: "string", required: false, description: "Override target revision for the sync (e.g. a specific commit SHA, tag, or branch)." },
             ],
           },
         },
@@ -781,6 +789,11 @@ export const gitopsToolset: ToolsetDefinition = {
       toolset: "gitops",
       scope: "project",
       identifierFields: ["cluster_id"],
+      diagnosticHint: "If create fails with a scope error, verify the cluster scope is equal to or wider than the environment scope (ACCOUNT > ORGANIZATION > PROJECT). Use harness_list(resource_type='gitops_cluster') to check available clusters and their scopes. All identifiers must be raw (not scope-prefixed).",
+      relatedResources: [
+        { resourceType: "gitops_cluster", relationship: "linked_cluster", description: "The GitOps cluster being linked to an environment" },
+        { resourceType: "environment", relationship: "target_environment", description: "The Harness environment the cluster is linked to" },
+      ],
       listFilterFields: [
         { name: "environment_id", description: "Environment identifier (required)", required: true },
         { name: "search_term", description: "Filter clusters by name or keyword" },
