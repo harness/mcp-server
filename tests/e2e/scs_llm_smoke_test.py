@@ -330,6 +330,17 @@ QUERIES = [
         "observe": "P3-10: 'policy sets' + 'enforce' + 'supply chain artifacts' should route to governance's `policy_set` resource. "
             "Tests cross-toolset routing from SCS module to governance.",
     },
+    # ─── P3-3: Pipeline SBOM Step Modification ────────────────────────
+    {
+        "id": "Q19",
+        "query": "Show me the SBOM generation step configuration in my first pipeline that has an SscaOrchestration step. What tool is it using — Syft or CycloneDX?",
+        "expected_intent": "P3-3: Pipeline SBOM step inspection — cross-toolset routing from SCS to pipeline tools",
+        "confidence": "Medium",
+        "expected_tools": [("harness_list", "pipeline"), ("harness_get", "pipeline")],
+        "observe": "P3-3: Does the LLM use pipeline tools (not SCS tools) for SBOM step config? "
+            "It should list pipelines → get pipeline YAML → parse and identify the SscaOrchestration step → report tool type (syft/cdxgen). "
+            "Cross-toolset routing: SCS module user asking about pipeline config should route to pipelines toolset.",
+    },
 ]
 
 # ---------------------------------------------------------------------------
@@ -422,9 +433,10 @@ CONVERSATIONS = [
             {"turn": 2, "query": "Show me the full dependency tree for the first component in that list",
              "expected_tools": [("harness_get", "scs_component_dependencies")],
              "observe": "P3-8: Does it extract purl from Turn 1 and call scs_component_dependencies? Does it show DIRECT vs INDIRECT relationships?"},
-            {"turn": 3, "query": "Get structured upgrade suggestions for that component with dependency impact analysis — what version should I upgrade to and what dependencies would change?",
+            {"turn": 3, "query": "What version should I upgrade that component to? Will the upgrade break any of its dependencies?",
              "expected_tools": [("harness_get", "scs_component_remediation")],
-             "observe": "P3-6/P3-9: Does it reuse purl from Turn 2 and call scs_component_remediation (NOT scs_artifact_remediation)? Does it surface dependency_changes?"},
+             "observe": "P3-6/P3-9: Does it reuse purl from Turn 2 and call scs_component_remediation (NOT scs_artifact_remediation)? "
+                 "Natural user query — user asks about upgrade version and dependency impact without knowing tool names."},
             {"turn": 4, "query": "What's the current auto-PR configuration for this project?",
              "expected_tools": [("harness_get", "scs_auto_pr_config")],
              "observe": "P3-12: Does it call scs_auto_pr_config? Context switch from component to project-level config."},
@@ -479,6 +491,47 @@ CONVERSATIONS = [
             {"turn": 3, "query": "Show me the policy sets that control SBOM enforcement for this project",
              "expected_tools": [("harness_list", "policy_set")],
              "observe": "P3-10 T3: Cross-toolset routing again — 'policy sets' + 'SBOM enforcement' should route to governance `policy_set`."},
+        ],
+    },
+    # ─── P3-3: Pipeline SBOM Step Modification Flow ─────────────────────
+    {
+        "id": "M10", "title": "Pipeline SBOM Step Inspection + Modification Plan (P3-3)",
+        "description": "Repo security → find pipeline with SBOM step → inspect config → plan modification (cross-toolset: SCS ↔ pipeline)",
+        "turns": [
+            {"turn": 1, "query": "List my code repositories and show me the security overview of the first one",
+             "expected_tools": [("harness_list", "code_repo_security"), ("harness_get", "code_repo_security")],
+             "observe": "Setup: establishes a code repository in context for the pipeline discovery in Turn 2."},
+            {"turn": 2, "query": "Find the pipeline that generates SBOMs for this project. Show me its SBOM generation step configuration.",
+             "expected_tools": [("harness_list", "pipeline"), ("harness_get", "pipeline")],
+             "observe": "P3-3 CROSS-TOOLSET: Does the LLM switch from SCS tools to pipeline tools? "
+                 "It should list pipelines → get pipeline YAML → identify the SscaOrchestration step and report its tool type (syft/cdxgen)."},
+            {"turn": 3, "query": "What would I need to change in that pipeline to switch the SBOM tool to CycloneDX (cdxgen) and add SBOM drift detection?",
+             "expected_tools": [],
+             "observe": "P3-3 PLANNING: LLM should reference the pipeline YAML from Turn 2 and explain the YAML changes needed "
+                 "(tool.type: cdxgen, add sbom_drift section). It should NOT try to execute the update in a smoke test — "
+                 "just validate it can articulate the correct modification plan. Bonus: mentions is_new_branch for safety."},
+        ],
+    },
+    # ─── Cross-Capability: Security Posture → Policy → Pipeline ───────
+    {
+        "id": "M11", "title": "Cross-Capability Security Investigation (SCS + Governance + Pipeline)",
+        "description": "Vulnerability discovery → policy enforcement check → pipeline SBOM config inspection (spans SCS, governance, pipeline toolsets)",
+        "turns": [
+            {"turn": 1, "query": "Show me the components with known vulnerabilities in my first code repository",
+             "expected_tools": [("harness_list", "code_repo_security"), ("harness_list", "scs_artifact_component")],
+             "observe": "SCS: Establishes vulnerable components in context. LLM should use repo_id as artifact_id (P3-7)."},
+            {"turn": 2, "query": "What OPA policy sets are enforcing rules on this project's supply chain artifacts?",
+             "expected_tools": [("harness_list", "policy_set")],
+             "observe": "GOVERNANCE CROSS-TOOLSET: Context switch from SCS vulnerability data to governance policy sets. "
+                 "Tests whether LLM routes to governance toolset for 'policy sets' query even after working in SCS context."},
+            {"turn": 3, "query": "Now show me which pipeline handles SBOM generation for this project and what tool it uses",
+             "expected_tools": [("harness_list", "pipeline"), ("harness_get", "pipeline")],
+             "observe": "PIPELINE CROSS-TOOLSET: Second context switch — from governance back to pipeline tools. "
+                 "Tests LLM's ability to maintain project context across 3 different toolsets in a single conversation."},
+            {"turn": 4, "query": "Based on the vulnerabilities from earlier, get upgrade suggestions for the most critical component",
+             "expected_tools": [("harness_get", "scs_component_remediation")],
+             "observe": "SCS RETURN: Returns to SCS tools after 2 cross-toolset turns. "
+                 "Tests whether LLM retains the vulnerable component purl from Turn 1 across the governance and pipeline detours."},
         ],
     },
 ]
@@ -682,7 +735,7 @@ def _is_chain_complete(expected: list[ToolSpec], actual: list[ToolSpec]) -> bool
 # Query Execution (unchanged logic, uses curl subprocess for SSE)
 # ---------------------------------------------------------------------------
 def send_query(query_text: str, genai_url: str, account_id: str, org_id: str, project_id: str,
-               timeout: int = 300, conversation_id: Optional[str] = None,
+               timeout: int = 600, conversation_id: Optional[str] = None,
                conversation_history: Optional[list[dict[str, Any]]] = None) -> tuple[list[dict[str, Any]], float]:
     if conversation_id is None:
         conversation_id = str(uuid.uuid4())
