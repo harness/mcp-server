@@ -36,12 +36,12 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/thisrohangupta/harness-mcp-v2.git"
+    "url": "https://github.com/harness/mcp-server.git"
   },
   "bugs": {
-    "url": "https://github.com/thisrohangupta/harness-mcp-v2/issues"
+    "url": "https://github.com/harness/mcp-server/issues"
   },
-  "homepage": "https://github.com/thisrohangupta/harness-mcp-v2#readme",
+  "homepage": "https://github.com/harness/mcp-server#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@resvg/resvg-js": "^2.6.2",
