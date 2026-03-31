@@ -1,6 +1,6 @@
 # Harness MCP Server 2.0
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 10 consolidated tools and 137 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 10 consolidated tools and 139 resource types.
 
 [![CI](https://github.com/thisrohangupta/harness-mcp-v2/actions/workflows/ci.yml/badge.svg)](https://github.com/thisrohangupta/harness-mcp-v2/actions/workflows/ci.yml)
 
@@ -10,10 +10,10 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **10 tools, 137 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 10 tools instead of hundreds.
-- **Full platform coverage.** 29 toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Internal Developer Portal, Software Supply Chain, Governance, Service Overrides, Visualizations, and more. Not just pipelines — the entire Harness platform.
+- **10 tools, 139 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 10 tools instead of hundreds.
+- **Full platform coverage.** 30 toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Internal Developer Portal, Software Supply Chain, Governance, Service Overrides, Visualizations, and more. Not just pipelines — the entire Harness platform.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
-- **26 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
+- **27 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
 - **Works everywhere.** Stdio transport for local clients (Claude Desktop, Cursor, Windsurf), HTTP transport for remote/shared deployments, Docker and Kubernetes ready.
 - **Zero-config start.** Just provide a Harness API key. Account ID is auto-extracted from PAT tokens, org/project defaults are optional, and toolset filtering lets you expose only what you need.
 - **Extensible by design.** Adding a new Harness resource means adding a declarative data file — no new tool registration, no schema changes, no prompt updates.
@@ -810,7 +810,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-137 resource types organized across 29 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+139 resource types organized across 30 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -830,6 +830,13 @@ Harness pipelines can be stored in three ways:
 | `input_set` | x | x | | | | |
 | `runtime_input_template` | | x | | | | |
 | `approval_instance` | x | | | | | `approve`, `reject` |
+
+### AI Agents
+
+| Resource Type | List | Get | Create | Update | Delete | Execute Actions |
+|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
+| `agent` | x | x | x | x | x | |
+| `agent_run` | x | | | | | |
 
 ### Services
 
@@ -1110,6 +1117,7 @@ Inline PNG chart visualizations rendered from Harness data. These are metadata-o
 | `build-deploy-app` | End-to-end CI/CD workflow: scan a git repo, generate CI pipeline (build & push Docker image), discover or generate K8s manifests, create CD pipeline, and deploy — with auto-retry on CI failures (up to 5 attempts) and CD failures (up to 3 attempts with user permission). On exhausted retries, provides Harness UI deep links to all created resources for manual investigation. | `repoUrl` (required), `imageName` (required), `projectId` (optional), `namespace` (optional) |
 | `debug-pipeline-failure` | Analyze a failed execution: accepts an execution ID, pipeline ID, or Harness URL. Gets stage/step breakdown, failure details, delegate info, and failed step logs via `harness_diagnose`, then provides root cause analysis and suggested fixes. Automatically follows chained pipeline failures. | `executionId` (optional), `projectId` (optional) |
 | `create-pipeline` | Generate a new pipeline YAML from natural language requirements, reviewing existing resources for context | `description` (required), `projectId` (optional) |
+| `create-agent` | Interactively build a Harness AI agent — check existing agents, gather requirements, generate agent YAML spec using the agent-pipeline schema, confirm with user, then create or update via `harness_create`/`harness_update` | `agent_name` (required), `task_description` (required), `org_id` (optional), `project_id` (optional) |
 | `onboard-service` | Walk through onboarding a new service with environments and a deployment pipeline | `serviceName` (required), `projectId` (optional) |
 | `dora-metrics-review` | Review DORA metrics (deployment frequency, change failure rate, MTTR, lead time) with Elite/High/Medium/Low classification and improvement recommendations | `teamRefId` (optional), `dateStart` (optional), `dateEnd` (optional) |
 | `setup-gitops-application` | Guide through onboarding a GitOps application — verify agent, cluster, repo, and create the application | `agentId` (required), `projectId` (optional) |
@@ -1159,10 +1167,11 @@ Inline PNG chart visualizations rendered from Harness data. These are metadata-o
 | `schema:///pipeline` | Harness pipeline JSON Schema | `application/schema+json` |
 | `schema:///template` | Harness template JSON Schema | `application/schema+json` |
 | `schema:///trigger` | Harness trigger JSON Schema | `application/schema+json` |
+| `schema:///agent-pipeline` | Harness AI agent pipeline JSON Schema | `application/schema+json` |
 
 ## Toolset Filtering
 
-By default, all 29 toolsets (and their 137 resource types) are enabled. Use `HARNESS_TOOLSETS` to expose only the toolsets you need. This reduces the resource types the LLM sees, improving tool selection accuracy.
+By default, all 30 toolsets (and their 139 resource types) are enabled. Use `HARNESS_TOOLSETS` to expose only the toolsets you need. This reduces the resource types the LLM sees, improving tool selection accuracy.
 
 ```bash
 # Only expose pipelines, services, and connectors
@@ -1175,6 +1184,7 @@ Available toolset names:
 |---------|---------------|
 | `platform` | organization, project |
 | `pipelines` | pipeline, execution, trigger, pipeline_summary, input_set, approval_instance |
+| `agent-pipelines` | agent, agent_run |
 | `services` | service |
 | `environments` | environment |
 | `connectors` | connector, connector_catalogue |

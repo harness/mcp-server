@@ -6,6 +6,7 @@ import { buildDeepLink, appendStoreType } from "../utils/deep-links.js";
 
 // Import all toolsets
 import { pipelinesToolset } from "./toolsets/pipelines.js";
+import { agentPipelinesToolset } from "./toolsets/agent-pipelines.js";
 import { servicesToolset } from "./toolsets/services.js";
 import { environmentsToolset } from "./toolsets/environments.js";
 import { connectorsToolset } from "./toolsets/connectors.js";
@@ -44,6 +45,7 @@ const LIST_ARRAY_KEYS = ["items", "features", "content", "data", "objects"];
 /** All available toolsets */
 const ALL_TOOLSETS: ToolsetDefinition[] = [
   pipelinesToolset,
+  agentPipelinesToolset,
   servicesToolset,
   environmentsToolset,
   connectorsToolset,
@@ -320,11 +322,7 @@ export class Registry {
     // Map input fields to query params (overrides defaults)
     if (spec.queryParams) {
       for (const [inputKey, queryKey] of Object.entries(spec.queryParams)) {
-        let value = input[inputKey];
-        // Convert 0-indexed page to 1-indexed when the API requires it
-        if (spec.pageOneIndexed && inputKey === "page" && typeof value === "number") {
-          value = value + 1;
-        }
+        const value = input[inputKey];
         if (value !== undefined && value !== "") {
           params[queryKey] = value as string | number | boolean;
         }
