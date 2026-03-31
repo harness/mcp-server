@@ -1,3 +1,4 @@
+# UPDATE: This Repo has been brought into Harness.io https://github.com/harness/mcp-server - main branch has this repo and we are GA'ing this MCP
 ## Harness MCP Server 2.0
 
 An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 10 consolidated tools and 139 resource types.
