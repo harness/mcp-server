@@ -140,7 +140,6 @@ export const gitopsToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/gitops/api/v1/agents/{agentIdentifier}/applications",
-          injectAccountInBody: true,
           pathParams: {
             agent_id: "agentIdentifier",
           },
@@ -207,7 +206,6 @@ export const gitopsToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/gitops/api/v1/agents/{agentIdentifier}/applications/{appName}",
-          injectAccountInBody: true,
           pathParams: {
             agent_id: "agentIdentifier",
             app_name: "appName",
@@ -279,7 +277,6 @@ export const gitopsToolset: ToolsetDefinition = {
         refresh: {
           method: "POST",
           path: "/gitops/api/v1/applications/bulk/refresh",
-          injectAccountInBody: true,
           bodyBuilder: (input) => {
             const body = (input.body ?? {}) as Record<string, unknown>;
             return {
@@ -305,7 +302,6 @@ export const gitopsToolset: ToolsetDefinition = {
         bulk_sync: {
           method: "POST",
           path: "/gitops/api/v1/applications/bulk/sync",
-          injectAccountInBody: true,
           bodyBuilder: (input) => {
             const body = (input.body ?? {}) as Record<string, unknown>;
             const targets = buildBulkTargets(input, "Bulk sync");
@@ -321,8 +317,6 @@ export const gitopsToolset: ToolsetDefinition = {
               const opts = body.syncOptions;
               result.syncOptions = Array.isArray(opts) ? { items: opts } : opts;
             }
-
-            if (body.revision) result.revision = body.revision;
 
             return result;
           },
@@ -343,7 +337,6 @@ export const gitopsToolset: ToolsetDefinition = {
               { name: "strategy", type: "object", required: false, description: "Sync strategy: {apply?: {force: bool}} for kubectl apply, or {hook?: {force: bool}} for hook-based sync (default)." },
               { name: "retryStrategy", type: "object", required: false, description: "Retry on failure: {limit: number, backoff?: {duration: string, factor: number, maxDuration: string}}." },
               { name: "syncOptions", type: "array", required: false, description: "Sync option strings, e.g. ['CreateNamespace=true', 'PruneLast=true', 'ApplyOutOfSyncOnly=true']." },
-              { name: "revision", type: "string", required: false, description: "Override target revision for the sync (e.g. a specific commit SHA, tag, or branch)." },
             ],
           },
         },
