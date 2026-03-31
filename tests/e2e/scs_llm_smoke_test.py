@@ -602,7 +602,7 @@ def extract_tools_from_events(events: list[dict[str, Any]]) -> dict[str, Any]:
         elif event_type == "assistant_tool_result":
             if isinstance(data, dict):
                 for res in data.get("v", []):
-                    content = res.get("content", "")
+                    content = res.get("content") or res.get("result", "")
                     content_len = len(content) if isinstance(content, str) else len(json.dumps(content))
                     tool_results.append({"name": res.get("name"), "is_error": res.get("is_error", False), "content_length": content_len})
         elif event_type == "assistant_thought":
@@ -742,6 +742,7 @@ def send_query(query_text: str, genai_url: str, account_id: str, org_id: str, pr
     payload = {
         "prompt": query_text, "stream": True,
         "conversation_id": conversation_id, "interaction_id": str(uuid.uuid4()),
+        "use_multi_agent_orchestration": True,
         "metadata": {"accountId": account_id, "module": "SCS"},
         "harness_context": {"account_id": account_id, "org_id": org_id, "project_id": project_id},
         "conversation": conversation_history or [],
