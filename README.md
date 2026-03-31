@@ -2,7 +2,6 @@
 
 An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 10 consolidated tools and 137 resource types.
 
-[![CI](https://github.com/thisrohangupta/harness-mcp-v2/actions/workflows/ci.yml/badge.svg)](https://github.com/thisrohangupta/harness-mcp-v2/actions/workflows/ci.yml)
 
 ## Why Use This MCP Server
 
