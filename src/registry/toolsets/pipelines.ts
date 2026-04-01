@@ -343,12 +343,16 @@ export const pipelinesToolset: ToolsetDefinition = {
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | undefined;
             if (!body) return "";
-            // Hoist pipelineIdentifier from body to input so queryParams maps it to targetIdentifier
-            const inner = (body.trigger && typeof body.trigger === "object")
-              ? body.trigger as Record<string, unknown>
-              : body;
-            if (inner.pipelineIdentifier && !input.pipeline_id) {
-              input.pipeline_id = inner.pipelineIdentifier as string;
+            // Hoist pipelineIdentifier from body to input so queryParams maps it to targetIdentifier.
+            // Check all possible locations: inside body.trigger, on the body itself (flat or sibling).
+            if (!input.pipeline_id) {
+              const inner = (body.trigger && typeof body.trigger === "object")
+                ? body.trigger as Record<string, unknown>
+                : null;
+              const pipelineId = inner?.pipelineIdentifier ?? body.pipelineIdentifier;
+              if (pipelineId) {
+                input.pipeline_id = pipelineId as string;
+              }
             }
             // Build the trigger object and serialize as YAML string.
             // The Harness trigger API requires YAML to avoid Jackson polymorphic
@@ -375,11 +379,14 @@ export const pipelinesToolset: ToolsetDefinition = {
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | undefined;
             if (!body) return "";
-            const inner = (body.trigger && typeof body.trigger === "object")
-              ? body.trigger as Record<string, unknown>
-              : body;
-            if (inner.pipelineIdentifier && !input.pipeline_id) {
-              input.pipeline_id = inner.pipelineIdentifier as string;
+            if (!input.pipeline_id) {
+              const inner = (body.trigger && typeof body.trigger === "object")
+                ? body.trigger as Record<string, unknown>
+                : null;
+              const pipelineId = inner?.pipelineIdentifier ?? body.pipelineIdentifier;
+              if (pipelineId) {
+                input.pipeline_id = pipelineId as string;
+              }
             }
             // Serialize as YAML string — same reason as trigger create.
             const triggerObj = (body.trigger && typeof body.trigger === "object")

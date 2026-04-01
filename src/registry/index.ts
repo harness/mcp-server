@@ -210,6 +210,19 @@ export class Registry {
       throw new Error(`Resource "${resourceType}" does not support "${operation}". Supported: ${supported}`);
     }
 
+    // Validate required listFilterFields for list operations before hitting the API
+    if (operation === "list" && def.listFilterFields) {
+      const missing = def.listFilterFields
+        .filter(f => f.required && input[f.name] === undefined)
+        .map(f => f.name);
+      if (missing.length > 0) {
+        throw new Error(
+          `Missing required filter(s) for listing ${resourceType}: ${missing.join(", ")}. ` +
+          `Pass them via filters (e.g. filters: { ${missing.map(n => `${n}: "..."`).join(", ")} }).`
+        );
+      }
+    }
+
     return this.executeSpec(client, def, spec, input, signal);
   }
 
