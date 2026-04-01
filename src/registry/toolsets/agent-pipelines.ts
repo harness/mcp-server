@@ -1,5 +1,5 @@
 import type { ToolsetDefinition, BodySchema } from "../types.js";
-import { passthrough, v1ListExtract } from "../extractors.js";
+import { passthrough } from "../extractors.js";
 
 /**
  * Generate a UID from an agent name by converting to lowercase and replacing
@@ -9,7 +9,7 @@ function generateAgentUid(name: string): string {
   return name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
+    .replace(/^_+|_+$/g, ""); // trim leading/trailing underscores
 }
 
 const agentCreateSchema: BodySchema = {
@@ -18,7 +18,7 @@ const agentCreateSchema: BodySchema = {
     { name: "uid", type: "string", required: true, description: "Unique identifier for the agent. Must be unique within the scope (account/org/project). Use lowercase with underscores, no spaces or colons (e.g., 'code_reviewer', 'devops_assistant'). Cannot conflict with system agent UIDs." },
     { name: "name", type: "string", required: true, description: "Display name of the agent (e.g., 'Code Reviewer', 'DevOps Assistant')" },
     { name: "description", type: "string", required: false, description: "Brief description of the agent's purpose and capabilities" },
-    { name: "spec", type: "string", required: true, description: "Agent YAML specification. Defines stages, steps, container image, task, rules, skills, MCP servers, and inputs. Use harness_schema(resource_type='agent-pipeline') to explore the YAML structure." },
+    { name: "spec", type: "string", required: true, description: "Agent YAML specification. Defines stages, steps, container image, task, rules, skills, MCP servers, and inputs. See harness_describe or create-agent prompt for examples." },
     { name: "wiki", type: "string", required: false, description: "Markdown documentation for the agent (usage guide, features, examples)" },
     { name: "logo", type: "string", required: false, description: "URL to the agent's logo image" },
   ],
@@ -35,6 +35,15 @@ const agentUpdateSchema: BodySchema = {
   ],
 };
 
+// Execute schema - matches OpenAPI ExecuteAgentRequest
+// TODO: Uncomment when execute endpoint is ready for production use
+// const agentExecuteSchema: BodySchema = {
+//   description: "Agent execution request. Provide runtime inputs as YAML string with 'inputs:' top-level key. The inputs should match the agent's input schema defined in the spec.",
+//   fields: [
+//     { name: "inputs_yaml", type: "string", required: false, description: "YAML-formatted runtime inputs for the agent. Must have 'inputs:' as top-level key. Example: 'inputs:\\n  anthropicKey: myKey\\n  repo: hello-world\\n  branch: main'" },
+//   ],
+// };
+
 export const agentPipelinesToolset: ToolsetDefinition = {
   name: "agent-pipelines",
   displayName: "Agent Pipelines",
@@ -43,39 +52,18 @@ export const agentPipelinesToolset: ToolsetDefinition = {
     {
       resourceType: "agent",
       displayName: "AI Agent",
-      description: "Custom or system AI agent definition. Agents execute tasks using LLMs, can clone repos, run in containers, use MCP servers, and follow rules/skills. Supports CRUD operations.",
+      description: "Custom or system AI agent definition. Agents execute tasks using LLMs, can clone repos, run in containers, use MCP servers, and follow rules/skills. Supports CRUD and execution.",
       toolset: "agent-pipelines",
       scope: "project",
-      scopeOptional: true,
+      scopeOptional: false,
       identifierFields: ["agent_id"],
-      diagnosticHint:
-        "If agent creation fails: (1) verify uid is unique and uses only lowercase/underscores, " +
-        "(2) validate spec YAML with harness_schema(resource_type='agent-pipeline'), " +
-        "(3) ensure connectors referenced in spec exist (e.g., account.harnessImage), " +
-        "(4) confirm secrets referenced via <+secrets.getValue(...)> are created in Harness. " +
-        "Only custom agents (role='custom') can be updated or deleted; system agents are read-only.",
-      listFilterFields: [
-        { name: "search_term", description: "Filter agents by name or keyword" },
-        { name: "role", description: "Filter by agent role", enum: ["system", "custom"] },
-        { name: "status", description: "Filter by agent status", enum: ["active", "inactive", "deleted"] },
-      ],
-      relatedResources: [
-        { resourceType: "agent_run", relationship: "child", description: "Execution runs for this agent" },
-        { resourceType: "pipeline", relationship: "related", description: "Agents extend pipeline constructs and share schema elements" },
-      ],
+      executeHint: "Before executing, inspect the agent's spec (harness_get) to see required inputs. Then provide inputs as YAML via the inputs_yaml field.",
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/agents/{agentIdentifier}/details",
       operations: {
         list: {
           method: "GET",
           path: "/gateway/agents/api/v1/agents",
-          queryParams: {
-            search_term: "searchTerm",
-            role: "role",
-            status: "status",
-            page: "page",
-            size: "size",
-          },
-          responseExtractor: v1ListExtract(),
+          responseExtractor: passthrough,
           description: "List all agents (system and custom) scoped to the account/org/project context",
         },
         get: {
@@ -92,6 +80,7 @@ export const agentPipelinesToolset: ToolsetDefinition = {
             const body = input.body as Record<string, unknown> | undefined;
             if (!body) throw new Error("body is required for agent creation");
 
+            // Ensure uid is present - generate from name if not provided
             if (!body.uid && body.name) {
               body.uid = generateAgentUid(body.name as string);
             }
@@ -124,9 +113,27 @@ export const agentPipelinesToolset: ToolsetDefinition = {
           path: "/gateway/agents/api/v1/agents/{agentIdentifier}",
           pathParams: { agent_id: "agentIdentifier" },
           responseExtractor: passthrough,
-          description: "Delete a custom agent (soft delete — sets status to 'deleted'). Only custom agents can be deleted.",
+          description: "Delete a custom agent (soft delete - sets status to 'deleted'). Only custom agents can be deleted.",
         },
       },
+      // Execute endpoint - matches POST /api/v1/agents/{agent_id}/execute from OpenAPI spec
+      // TODO: Uncomment when backend endpoint is ready for production use
+      // executeActions: {
+      //   run: {
+      //     method: "POST",
+      //     path: "/gateway/agents/api/v1/agents/{agentIdentifier}/execute",
+      //     pathParams: { agent_id: "agentIdentifier" },
+      //     bodyBuilder: (input) => {
+      //       const body = input.body as Record<string, unknown> | undefined;
+      //       // Handle inputs_yaml field - optional per OpenAPI spec
+      //       const inputs_yaml = body?.inputs_yaml ?? "";
+      //       return { inputs_yaml };
+      //     },
+      //     responseExtractor: passthrough,
+      //     actionDescription: "Execute an agent with runtime inputs. Returns execution_details with execution_id and status. Check the agent's spec first to see required inputs.",
+      //     bodySchema: agentExecuteSchema,
+      //   },
+      // },
     },
     {
       resourceType: "agent_run",
@@ -134,33 +141,17 @@ export const agentPipelinesToolset: ToolsetDefinition = {
       description: "Agent execution history. Lists past runs for a specific agent with execution ID, status, and timestamps.",
       toolset: "agent-pipelines",
       scope: "project",
-      scopeOptional: true,
+      scopeOptional: false,
       identifierFields: ["agent_id"],
-      diagnosticHint:
-        "Runs are scoped to a specific agent — you must provide agent_id. " +
-        "If no runs appear, verify the agent has been executed at least once.",
-      relatedResources: [
-        { resourceType: "agent", relationship: "parent", description: "The agent definition this run belongs to" },
-      ],
-      listFilterFields: [
-        { name: "agent_id", description: "Agent identifier to list runs for", required: true },
-        { name: "status", description: "Execution status filter", enum: ["pending", "running", "success", "failed"] },
-      ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/agents/{agentIdentifier}/runs",
       operations: {
         list: {
           method: "GET",
           path: "/gateway/agents/api/v1/agents/{agentIdentifier}/runs",
           pathParams: { agent_id: "agentIdentifier" },
-          queryParams: {
-            status: "status",
-            page: "page",
-            size: "size",
-          },
-          responseExtractor: (raw: unknown): { items: unknown[]; total: number } => {
-            const resp = raw as { runs?: unknown[]; total?: number };
-            const items = resp.runs ?? (Array.isArray(raw) ? raw as unknown[] : []);
-            return { items, total: resp.total ?? items.length };
+          responseExtractor: (raw) => {
+            const resp = raw as { runs?: unknown[] };
+            return resp.runs ?? [];
           },
           description: "List execution runs for an agent. Returns execution_id, status, started_at, finished_at.",
         },
