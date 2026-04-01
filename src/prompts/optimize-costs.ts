@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 export function registerOptimizeCostsPrompt(server: McpServer): void {

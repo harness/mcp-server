@@ -2,6 +2,7 @@
 
 # Build the TypeScript project
 build:
+	npm install
 	npm run build
 
 # Format code (no-op for now as no formatter is configured)

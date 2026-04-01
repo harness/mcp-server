@@ -1,4 +1,4 @@
-import * as z from "zod/v4";
+import * as z from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { createLogger } from "../utils/logger.js";
