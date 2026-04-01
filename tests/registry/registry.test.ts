@@ -441,6 +441,92 @@ describe("Registry", () => {
     });
   });
 
+  describe("trigger pipelineIdentifier extraction", () => {
+    let registry: Registry;
+
+    beforeEach(() => {
+      registry = new Registry(makeConfig());
+    });
+
+    it("flat body: extracts pipelineIdentifier and wraps in trigger envelope", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: {} });
+      const client = makeClient(mockRequest);
+      await registry.dispatch(client, "trigger", "create", {
+        pipeline_id: undefined,
+        body: { name: "my-trigger", identifier: "myTrigger", pipelineIdentifier: "myPipeline", source: { type: "Scheduled" } },
+      });
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params.targetIdentifier).toBe("myPipeline");
+      const yamlBody = call.body as string;
+      expect(yamlBody).toContain("trigger:");
+      expect(yamlBody).toContain("pipelineIdentifier: myPipeline");
+    });
+
+    it("wrapped body: extracts pipelineIdentifier from inside trigger", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: {} });
+      const client = makeClient(mockRequest);
+      await registry.dispatch(client, "trigger", "create", {
+        pipeline_id: undefined,
+        body: { trigger: { name: "my-trigger", identifier: "myTrigger", pipelineIdentifier: "myPipeline", source: { type: "Scheduled" } } },
+      });
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params.targetIdentifier).toBe("myPipeline");
+      const yamlBody = call.body as string;
+      expect(yamlBody).toContain("pipelineIdentifier: myPipeline");
+    });
+
+    it("sibling body: merges pipelineIdentifier into trigger and drops from root", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: {} });
+      const client = makeClient(mockRequest);
+      await registry.dispatch(client, "trigger", "create", {
+        pipeline_id: undefined,
+        body: { trigger: { name: "my-trigger", identifier: "myTrigger", source: { type: "Scheduled" } }, pipelineIdentifier: "myPipeline" },
+      });
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params.targetIdentifier).toBe("myPipeline");
+      const yamlBody = call.body as string;
+      expect(yamlBody).toContain("pipelineIdentifier: myPipeline");
+      // pipelineIdentifier must be inside trigger, not duplicated at root
+      const lines = yamlBody.split("\n").filter((l: string) => l.includes("pipelineIdentifier"));
+      expect(lines.length).toBe(1);
+    });
+
+    it("sibling body: does not overwrite existing inner pipelineIdentifier", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: {} });
+      const client = makeClient(mockRequest);
+      await registry.dispatch(client, "trigger", "create", {
+        pipeline_id: undefined,
+        body: {
+          trigger: { name: "t", identifier: "t", pipelineIdentifier: "innerPipeline", source: { type: "Scheduled" } },
+          pipelineIdentifier: "outerPipeline",
+        },
+      });
+      const call = mockRequest.mock.calls[0][0];
+      // inner takes precedence for the query param
+      expect(call.params.targetIdentifier).toBe("innerPipeline");
+      const yamlBody = call.body as string;
+      expect(yamlBody).toContain("pipelineIdentifier: innerPipeline");
+    });
+
+    it("explicit pipeline_id takes precedence over body extraction", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: {} });
+      const client = makeClient(mockRequest);
+      await registry.dispatch(client, "trigger", "create", {
+        pipeline_id: "explicitPipeline",
+        body: { trigger: { name: "t", identifier: "t", source: { type: "Scheduled" } }, pipelineIdentifier: "bodyPipeline" },
+      });
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params.targetIdentifier).toBe("explicitPipeline");
+    });
+
+    it("list without pipeline_id throws a clear error", async () => {
+      const client = makeClient();
+      await expect(
+        registry.dispatch(client, "trigger", "list", {}),
+      ).rejects.toThrow(/Missing required filter.*pipeline_id/);
+    });
+  });
+
   describe("bodySchema enforcement", () => {
     let registry: Registry;
     beforeEach(() => {

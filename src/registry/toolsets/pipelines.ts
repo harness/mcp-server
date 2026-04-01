@@ -2,6 +2,42 @@ import type { ToolsetDefinition, BodySchema } from "../types.js";
 import { ngExtract, pageExtract, passthrough, v1ListExtract, runtimeInputExtract } from "../extractors.js";
 import YAML from "yaml";
 
+/**
+ * Normalize a trigger body into the canonical `{ trigger: { ... } }` shape,
+ * hoist `pipelineIdentifier` onto `input.pipeline_id` for the query param,
+ * and ensure it ends up inside the trigger object for YAML serialization.
+ *
+ * Handles three caller-provided shapes:
+ *  1. Flat:    `{ name, identifier, pipelineIdentifier, ... }`
+ *  2. Wrapped: `{ trigger: { ..., pipelineIdentifier } }`
+ *  3. Sibling: `{ trigger: { ... }, pipelineIdentifier }`
+ */
+function normalizeTriggerBody(
+  body: Record<string, unknown>,
+  input: Record<string, unknown>,
+): Record<string, unknown> {
+  const hasWrapper = body.trigger && typeof body.trigger === "object";
+  const inner = hasWrapper
+    ? (body.trigger as Record<string, unknown>)
+    : body;
+
+  // Resolve pipelineIdentifier: prefer inner, fall back to root-level sibling
+  const pipelineId = (inner.pipelineIdentifier ?? body.pipelineIdentifier) as string | undefined;
+  if (pipelineId && !input.pipeline_id) {
+    input.pipeline_id = pipelineId;
+  }
+
+  if (hasWrapper) {
+    // Sibling shape: merge pipelineIdentifier into the trigger object and drop from root
+    if (!inner.pipelineIdentifier && pipelineId) {
+      inner.pipelineIdentifier = pipelineId;
+    }
+    delete body.pipelineIdentifier;
+    return body;
+  }
+  // Flat shape: auto-wrap
+  return { trigger: body };
+}
 
 const pipelineCreateSchema: BodySchema = {
   description: "Pipeline definition. Prefer yamlPipeline (YAML string) to avoid serialization issues; pipeline (JSON object) is also supported. Storage options via params: (1) Inline (default): no extra params needed. (2) External Git: store_type='REMOTE', connector_ref (Git connector ID), repo_name, branch, file_path. (3) Harness Code: store_type='REMOTE', is_harness_code_repo=true, repo_name, branch, file_path (no connector_ref needed).",
@@ -343,23 +379,7 @@ export const pipelinesToolset: ToolsetDefinition = {
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | undefined;
             if (!body) return "";
-            // Hoist pipelineIdentifier from body to input so queryParams maps it to targetIdentifier.
-            // Check all possible locations: inside body.trigger, on the body itself (flat or sibling).
-            if (!input.pipeline_id) {
-              const inner = (body.trigger && typeof body.trigger === "object")
-                ? body.trigger as Record<string, unknown>
-                : null;
-              const pipelineId = inner?.pipelineIdentifier ?? body.pipelineIdentifier;
-              if (pipelineId) {
-                input.pipeline_id = pipelineId as string;
-              }
-            }
-            // Build the trigger object and serialize as YAML string.
-            // The Harness trigger API requires YAML to avoid Jackson polymorphic
-            // deserialization issues with nested type discriminator fields in source/spec.
-            const triggerObj = (body.trigger && typeof body.trigger === "object")
-              ? body
-              : { trigger: body };
+            const triggerObj = normalizeTriggerBody(body, input);
             return YAML.stringify(triggerObj);
           },
           responseExtractor: ngExtract,
@@ -379,19 +399,7 @@ export const pipelinesToolset: ToolsetDefinition = {
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | undefined;
             if (!body) return "";
-            if (!input.pipeline_id) {
-              const inner = (body.trigger && typeof body.trigger === "object")
-                ? body.trigger as Record<string, unknown>
-                : null;
-              const pipelineId = inner?.pipelineIdentifier ?? body.pipelineIdentifier;
-              if (pipelineId) {
-                input.pipeline_id = pipelineId as string;
-              }
-            }
-            // Serialize as YAML string — same reason as trigger create.
-            const triggerObj = (body.trigger && typeof body.trigger === "object")
-              ? body
-              : { trigger: body };
+            const triggerObj = normalizeTriggerBody(body, input);
             return YAML.stringify(triggerObj);
           },
           responseExtractor: ngExtract,
