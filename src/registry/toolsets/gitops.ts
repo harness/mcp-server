@@ -53,6 +53,125 @@ function buildBulkTargets(
   return targets;
 }
 
+/**
+ * gRPC-gateway encoding for `apiextensionsv1.JSON` fields.
+ *
+ * The proto type is `message JSON { optional bytes raw = 1; }`.
+ * gRPC-gateway maps `bytes` to base64, so each JSON value must be sent as
+ * `{ raw: "<base64 of UTF-8 JSON>" }`.  Pre-encoded values (already have `raw`)
+ * are passed through unchanged.
+ */
+function encodeJsonField(val: unknown): unknown {
+  if (val === null || val === undefined) return val;
+  if (isRecord(val) && "raw" in val) return val;
+  return { raw: Buffer.from(JSON.stringify(val), "utf-8").toString("base64") };
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/**
+ * Encode `apiextensionsv1.JSON` fields inside a generator's `list.elements`
+ * and `plugin.input.parameters`.  Shared by top-level and nested encoders.
+ */
+function encodeGeneratorJsonFields(gen: Record<string, unknown>): Record<string, unknown> {
+  const result = { ...gen };
+
+  if (isRecord(result.list)) {
+    const list = { ...result.list };
+    if (Array.isArray(list.elements)) {
+      list.elements = list.elements.map(encodeJsonField);
+    }
+    result.list = list;
+  }
+
+  if (isRecord(result.plugin)) {
+    const plugin = { ...result.plugin };
+    if (isRecord(plugin.input)) {
+      const input = { ...plugin.input };
+      if (isRecord(input.parameters)) {
+        const encoded: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(input.parameters)) {
+          encoded[k] = encodeJsonField(v);
+        }
+        input.parameters = encoded;
+      }
+      plugin.input = input;
+    }
+    result.plugin = plugin;
+  }
+
+  return result;
+}
+
+/**
+ * Encode a top-level generator (ApplicationSetGenerator).
+ * Handles list/plugin JSON fields, then recurses into matrix/merge nested generators.
+ */
+function encodeGenerator(gen: Record<string, unknown>): Record<string, unknown> {
+  const result = encodeGeneratorJsonFields(gen);
+
+  if (isRecord(result.matrix)) {
+    const matrix = { ...result.matrix };
+    if (Array.isArray(matrix.generators)) {
+      matrix.generators = matrix.generators.filter(isRecord).map(encodeNestedGenerator);
+    }
+    result.matrix = matrix;
+  }
+
+  if (isRecord(result.merge)) {
+    const merge = { ...result.merge };
+    if (Array.isArray(merge.generators)) {
+      merge.generators = merge.generators.filter(isRecord).map(encodeNestedGenerator);
+    }
+    result.merge = merge;
+  }
+
+  return result;
+}
+
+/**
+ * Encode a nested generator (ApplicationSetNestedGenerator).
+ * Same list/plugin encoding as top-level, but at this depth `matrix` and `merge`
+ * are `apiextensionsv1.JSON` blobs — the entire sub-object gets base64-encoded.
+ */
+function encodeNestedGenerator(gen: Record<string, unknown>): Record<string, unknown> {
+  const result = encodeGeneratorJsonFields(gen);
+
+  if (isRecord(result.matrix)) {
+    result.matrix = encodeJsonField(result.matrix);
+  }
+
+  if (isRecord(result.merge)) {
+    result.merge = encodeJsonField(result.merge);
+  }
+
+  return result;
+}
+
+/**
+ * Walk an ApplicationSet object and encode all `apiextensionsv1.JSON` fields
+ * for gRPC-gateway compatibility. Handles:
+ *   - ListGenerator.elements (repeated JSON)
+ *   - PluginInput.parameters (map<string, JSON>)
+ *   - ApplicationSetNestedGenerator.matrix/merge (JSON blobs in nested generators)
+ */
+function encodeAppSetJsonFields(
+  appset: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!isRecord(appset.spec)) return appset;
+  const spec = appset.spec;
+  if (!Array.isArray(spec.generators)) return appset;
+
+  const encodedGenerators = spec.generators.filter(isRecord).map(encodeGenerator);
+
+  return {
+    ...appset,
+    spec: { ...spec, generators: encodedGenerators },
+  };
+}
+
 export const gitopsToolset: ToolsetDefinition = {
   name: "gitops",
   displayName: "GitOps",
@@ -112,6 +231,14 @@ export const gitopsToolset: ToolsetDefinition = {
       toolset: "gitops",
       scope: "project",
       diagnosticHint: "Use harness_diagnose with resource_type='gitops_application', agent_id, and resource_id (app name) to analyze sync failures, health issues, and unhealthy K8s resources. Combines app status, resource tree, and recent events.",
+      executeHint:
+        "SYNC: action='sync' for single app, action='bulk_sync' for multiple. " +
+        "REFRESH: action='refresh' (body.refresh='normal' or 'hard'). " +
+        "CANCEL: action='cancel_operation' to stop a running sync/rollback. " +
+        "RESOURCE ACTIONS (restart, pause, etc.): 1) harness_get resource_type='gitops_app_resource_tree' to discover K8s resources, " +
+        "2) harness_list resource_type='gitops_resource_action' to discover available actions, " +
+        "3) harness_execute action='run_resource_action'. " +
+        "NOTE: resource_id maps to agent_id in harness_execute but to app_name in harness_get.",
       identifierFields: ["agent_id", "app_name"],
       listFilterFields: [
         { name: "search_term", description: "Filter GitOps applications by name or keyword" },
@@ -280,13 +407,13 @@ export const gitopsToolset: ToolsetDefinition = {
             const body = (input.body ?? {}) as Record<string, unknown>;
             return {
               applicationTargets: buildBulkTargets(input, "Refresh"),
-              refresh: body.refresh ?? input.refresh ?? "normal",
+              refresh: body.refresh ?? "normal",
             };
           },
           responseExtractor: passthrough,
           actionDescription:
             "Refresh one or more GitOps applications. Normal refresh checks if source changed; hard refresh forces full manifest regeneration.\n\n" +
-            "SINGLE APP: harness_execute(resource_type='gitops_application', action='refresh', resource_id='account.myagent', params={app_name:'my-app', refresh:'hard'})\n\n" +
+            "SINGLE APP: harness_execute(resource_type='gitops_application', action='refresh', resource_id='account.myagent', params={app_name:'my-app'}, body={refresh:'hard'})\n\n" +
             "MULTIPLE APPS: harness_execute(resource_type='gitops_application', action='refresh', body={targets:[{agent_id:'account.myagent', app_name:'app1'}, {agent_id:'account.myagent', app_name:'app2'}], refresh:'hard'})\n\n" +
             "NOTE: resource_id maps to agent_id (scope-prefixed). For apps across different agents, use body.targets.",
           bodySchema: {
@@ -504,14 +631,24 @@ export const gitopsToolset: ToolsetDefinition = {
       resourceType: "gitops_applicationset",
       displayName: "GitOps ApplicationSet",
       description:
-        "GitOps ApplicationSet for templated application generation. Supports list and get.\n" +
-        "IDENTIFIERS: agent_id is scope-prefixed:\n" +
-        "- Account-scoped agent: 'account.myagent'\n" +
-        "- Org-scoped agent: 'org.myagent'\n" +
-        "- Project-scoped agent: 'myagent' (no prefix)",
+        "GitOps ApplicationSet — a template that auto-generates multiple Applications from generators.\n" +
+        "An ApplicationSet has: generators (list/git/clusters/matrix/merge/pullRequest/scmProvider/plugin) that produce parameter sets, " +
+        "and a template (ApplicationSpec) that gets rendered once per parameter set to create an Application.\n\n" +
+        "IDENTIFIERS:\n" +
+        "  agent_id — scope-prefixed agent identifier: 'account.myagent' | 'org.myagent' | 'myagent'\n" +
+        "  appset_id — the ApplicationSet UUID (NOT the name). You CANNOT use the appset name for get/update.\n" +
+        "    To find the UUID: harness_list(resource_type='gitops_applicationset', params={agent_id:'...'}) → each item has 'identifier' = the UUID.\n" +
+        "    Then use: harness_get(resource_type='gitops_applicationset', resource_id='<uuid>', params={agent_id:'...'})",
       toolset: "gitops",
       scope: "project",
-      identifierFields: ["agent_id", "appset_name"],
+      identifierFields: ["agent_id", "appset_id"],
+      executeHint:
+        "GET/UPDATE requires the ApplicationSet UUID, NOT its name. The API uses UUID as the identifier.\n" +
+        "REQUIRED WORKFLOW:\n" +
+        "  1. harness_list(resource_type='gitops_applicationset', params={agent_id:'account.myagent'}) — find appset by name, note 'identifier' (= UUID)\n" +
+        "  2. For GET: harness_get(resource_type='gitops_applicationset', resource_id='<uuid>', params={agent_id:'account.myagent'})\n" +
+        "  3. For UPDATE: include metadata.uid=<uuid> and preserve spec.template.spec.project from the list response\n" +
+        "CREATE does NOT need a UUID — just pass agent_id in params.",
       listFilterFields: [
         { name: "search_term", description: "Filter ApplicationSets by name or keyword" },
         { name: "agent_id", description: "Optional: Filter by GitOps agent identifier" },
@@ -530,13 +667,132 @@ export const gitopsToolset: ToolsetDefinition = {
           method: "GET",
           path: "/gitops/api/v1/applicationset/{identifier}",
           pathParams: {
-            appset_name: "identifier",
+            appset_id: "identifier",
           },
           queryParams: {
             agent_id: "agentIdentifier",
           },
           responseExtractor: passthrough,
-          description: "Get GitOps ApplicationSet details",
+          description:
+            "Get GitOps ApplicationSet details by UUID.\n" +
+            "IMPORTANT: resource_id must be the ApplicationSet UUID (e.g. 'cce8a056-8059-...'), NOT the name.\n" +
+            "To find the UUID: harness_list(resource_type='gitops_applicationset', params={agent_id:'account.myagent'}) — the response 'identifier' field is the UUID.\n" +
+            "Example: harness_get(resource_type='gitops_applicationset', resource_id='<uuid>', params={agent_id:'account.myagent'})",
+        },
+        create: {
+          method: "POST",
+          path: "/gitops/api/v1/applicationset",
+          queryParams: {
+            agent_id: "agentIdentifier",
+          },
+          bodyBuilder: (input) => {
+            const body = isRecord(input.body) ? input.body : {};
+            if (!isRecord(body.applicationset)) {
+              throw new Error(
+                "body.applicationset is required. Provide the full ArgoCD ApplicationSet object: " +
+                "{ metadata: { name }, spec: { generators: [...], template: { metadata: { name }, spec: { source, destination } } } }. " +
+                "Use harness_describe(resource_type='gitops_applicationset') for examples.",
+              );
+            }
+            return {
+              applicationset: encodeAppSetJsonFields(body.applicationset),
+              upsert: body.upsert ?? false,
+              dryRun: body.dryRun ?? false,
+            };
+          },
+          responseExtractor: passthrough,
+          description:
+            "Create a GitOps ApplicationSet. Generators define WHERE to generate apps; template defines WHAT each app looks like.\n\n" +
+            "EXAMPLE (list generator):\n" +
+            "harness_create(resource_type='gitops_applicationset', params={agent_id:'account.myagent'},\n" +
+            "  body={applicationset:{metadata:{name:'my-appset'}, spec:{\n" +
+            "    goTemplate:true, generators:[{list:{elements:[{ns:'dev'},{ns:'staging'}]}}],\n" +
+            "    template:{metadata:{name:'app-{{.ns}}'}, spec:{source:{repoURL:'...', path:'manifests', targetRevision:'HEAD'}, destination:{server:'https://kubernetes.default.svc', namespace:'{{.ns}}'}}}\n" +
+            "  }}})\n\n" +
+            "EXAMPLE (git directory): generators:[{git:{repoURL:'...', revision:'HEAD', directories:[{path:'apps/*'}]}}]\n" +
+            "EXAMPLE (cluster): generators:[{clusters:{selector:{matchLabels:{env:'production'}}}}]\n\n" +
+            "REQUIRED: agent_id in params (scope-prefixed). No resource_id for create.\n" +
+            "DO NOT set spec.template.spec.project — Harness auto-assigns it.\n" +
+            "Set spec.goTemplate=true for Go template syntax (e.g. '{{.path.basename}}').",
+          bodySchema: {
+            description:
+              "Body must contain 'applicationset' with the full ArgoCD ApplicationSet object.",
+            fields: [
+              {
+                name: "applicationset", type: "object", required: true,
+                description:
+                  "ArgoCD ApplicationSet object:\n" +
+                  "{ metadata: { name (required) },\n" +
+                  "  spec: {\n" +
+                  "    goTemplate: boolean (recommended: true),\n" +
+                  "    generators: [{ <type>: { ... } }, ...] — REQUIRED. Types: list, git, clusters, matrix, merge, pullRequest, scmProvider, plugin\n" +
+                  "    template: { metadata: { name }, spec: { source: { repoURL, path, targetRevision }, destination: { server, namespace }, syncPolicy? } },\n" +
+                  "    syncPolicy?: { applicationsSync?: 'create-only'|'create-update'|'create-delete'|'sync' }\n" +
+                  "  } }",
+              },
+              { name: "upsert", type: "boolean", required: false, description: "If true, update existing ApplicationSet instead of failing on duplicate (default: false)." },
+              { name: "dryRun", type: "boolean", required: false, description: "Simulate creation without applying (default: false)." },
+            ],
+          },
+        },
+        update: {
+          method: "PUT",
+          path: "/gitops/api/v1/applicationset",
+          queryParams: {
+            agent_id: "agentIdentifier",
+          },
+          bodyBuilder: (input) => {
+            const body = isRecord(input.body) ? input.body : {};
+            if (!isRecord(body.applicationset)) {
+              throw new Error(
+                "body.applicationset is required. Provide the full ArgoCD ApplicationSet object. " +
+                "CRITICAL: metadata.uid is REQUIRED — first harness_list to find the appset and obtain its 'identifier' (= uid).",
+              );
+            }
+            const appset = body.applicationset;
+            const metadata = isRecord(appset.metadata) ? appset.metadata : undefined;
+            if (!metadata?.uid) {
+              throw new Error(
+                "metadata.uid is REQUIRED for update. " +
+                "Run harness_list(resource_type='gitops_applicationset', params={agent_id:'...'}) first — " +
+                "the response 'identifier' field is the uid. " +
+                "Include it as body.applicationset.metadata.uid.",
+              );
+            }
+            return {
+              applicationset: encodeAppSetJsonFields(appset),
+              upsert: body.upsert ?? false,
+              dryRun: body.dryRun ?? false,
+            };
+          },
+          responseExtractor: passthrough,
+          description:
+            "Update a GitOps ApplicationSet. Full PUT replace — provide the complete desired state.\n\n" +
+            "REQUIRED FLOW:\n" +
+            "  1. harness_list(resource_type='gitops_applicationset', params={agent_id:'account.myagent'}, search_term='my-appset')\n" +
+            "     → note 'identifier' (= metadata.uid) and spec.template.spec.project\n" +
+            "  2. Modify the fields you need\n" +
+            "  3. harness_update(resource_type='gitops_applicationset', resource_id='account.myagent',\n" +
+            "     body={applicationset:{metadata:{name:'my-appset', uid:'<identifier>'}, spec:{...project:'<project>'...}}})\n\n" +
+            "MUST PRESERVE from list response:\n" +
+            "  - metadata.uid — server uses it to identify the appset\n" +
+            "  - metadata.name — server validates it matches\n" +
+            "  - spec.template.spec.project — omitting it causes 'resource name may not be empty' error",
+          bodySchema: {
+            description:
+              "Full PUT replace. MUST include metadata.uid (= 'identifier' from harness_list) and spec.template.spec.project.",
+            fields: [
+              {
+                name: "applicationset", type: "object", required: true,
+                description:
+                  "Full ArgoCD ApplicationSet object.\n" +
+                  "{ metadata: { name (required), uid (REQUIRED — from harness_list 'identifier') },\n" +
+                  "  spec: { generators: [...], template: { metadata, spec: { ..., project: '<from harness_list>' } } } }",
+              },
+              { name: "upsert", type: "boolean", required: false, description: "If true, create if not exists (default: false)." },
+              { name: "dryRun", type: "boolean", required: false, description: "Simulate update without applying (default: false)." },
+            ],
+          },
         },
       },
     },
@@ -781,6 +1037,11 @@ export const gitopsToolset: ToolsetDefinition = {
       toolset: "gitops",
       scope: "project",
       identifierFields: ["cluster_id"],
+      diagnosticHint: "If create fails with a scope error, verify the cluster scope is equal to or wider than the environment scope (ACCOUNT > ORGANIZATION > PROJECT). Use harness_list(resource_type='gitops_cluster') to check available clusters and their scopes. All identifiers must be raw (not scope-prefixed).",
+      relatedResources: [
+        { resourceType: "gitops_cluster", relationship: "linked_cluster", description: "The GitOps cluster being linked to an environment" },
+        { resourceType: "environment", relationship: "target_environment", description: "The Harness environment the cluster is linked to" },
+      ],
       listFilterFields: [
         { name: "environment_id", description: "Environment identifier (required)", required: true },
         { name: "search_term", description: "Filter clusters by name or keyword" },
