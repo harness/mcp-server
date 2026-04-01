@@ -54,7 +54,10 @@ export const scsToolset: ToolsetDefinition = {
   name: "scs",
   displayName: "Software Supply Chain Assurance",
   description:
-    "Harness SCS — artifact sources, artifact security, code repositories, SBOMs, compliance, remediation, dependency graph, PR creation, and auto-PR configuration",
+    "Harness SCS — artifact sources, artifact security, code repositories, SBOMs, compliance, remediation, dependency graph, PR creation, and auto-PR configuration. "
+    + "To modify SBOM/SCS pipeline steps (e.g., change SBOM tool from Syft to CycloneDX, update source image), use the pipeline resource from the pipelines toolset: "
+    + "harness_get(resource_type='pipeline') → edit YAML → harness_update(resource_type='pipeline'). "
+    + "SCS step types: SscaOrchestration, SscaEnforcement, SscaCompliance, SscaArtifactSigning, SscaArtifactVerification.",
   resources: [
     // ── Artifact Sources ───────────────────────────────────────────────
     {
@@ -226,7 +229,7 @@ export const scsToolset: ToolsetDefinition = {
       searchAliases: ["dependency tree", "dependency graph", "transitive dependencies", "component tree", "depends on", "dependency chain"],
       relatedResources: [
         { resourceType: "scs_artifact_component", relationship: "parent", description: "Get purl values needed for dependency tree lookup" },
-        { resourceType: "scs_component_remediation", relationship: "sibling", description: "Get upgrade suggestions for a component" },
+        { resourceType: "scs_component_remediation", relationship: "sibling", description: "NEXT STEP for upgrade questions: returns recommended version and dependency impact analysis — data NOT available in the dependency tree" },
       ],
       toolset: "scs",
       scope: "project",
@@ -409,9 +412,10 @@ export const scsToolset: ToolsetDefinition = {
       resourceType: "scs_component_remediation",
       displayName: "Component Remediation Suggestion",
       description: "Safe upgrade suggestions for a vulnerable or outdated OSS component. "
-        + "Returns recommended version, warnings, dependency impact analysis, and code preview. "
+        + "ALWAYS call this resource when the user asks about upgrade versions, safe versions, remediation advice, or dependency impact of upgrades — "
+        + "this data comes from a dedicated API and CANNOT be inferred from component lists or dependency trees. "
+        + "Returns: recommended_version (the specific safe version to upgrade to), warnings, dependency_changes (added/removed/modified dependencies), and code_preview. "
         + "Input: artifact_id (as resource_id) + component purl (required). "
-        + "The response includes dependency_changes (added/removed/modified) — this IS the dependency impact analysis. "
         + "To create a PR with the suggested upgrade, use scs_remediation_pr.",
       diagnosticHint: "If you get a 404: (1) verify artifact_id and purl are correct, (2) remediation works for code repo artifacts only — not container images. "
         + "Get purl values from harness_list(resource_type='scs_artifact_component', artifact_id='...'). "
