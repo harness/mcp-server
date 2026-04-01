@@ -178,7 +178,7 @@ container:
 \`\`\`yaml
 env:
   ANTHROPIC_MODEL: arn:aws:bedrock:us-east-1:587817102444:application-inference-profile/7p8sn93lhspw
-  AWS_BEARER_TOKEN_BEDROCK: <+secrets.getValue("bedrock_yaml_key")>
+  AWS_BEARER_TOKEN_BEDROCK: <+secrets.getValue("bedrock_api_key")>
   AWS_REGION: us-east-1
   CLAUDE_CODE_USE_BEDROCK: "1"
 \`\`\`
@@ -546,7 +546,7 @@ agent:
               image: pkg.harness.io/vrvdt5ius7uwygso8s0bia/harness-agents/claude-code-plugin:main
             env:
               ANTHROPIC_MODEL: arn:aws:bedrock:us-east-1:587817102444:application-inference-profile/7p8sn93lhspw
-              AWS_BEARER_TOKEN_BEDROCK: <+secrets.getValue("bedrock_yaml_key")>
+              AWS_BEARER_TOKEN_BEDROCK: <+secrets.getValue("bedrock_api_key")>
               AWS_REGION: us-east-1
               CLAUDE_CODE_USE_BEDROCK: "1"
             task: |
@@ -660,7 +660,7 @@ agent:
               image: pkg.harness.io/vrvdt5ius7uwygso8s0bia/harness-agents/claude-code-plugin:main
             env:
               ANTHROPIC_MODEL: arn:aws:bedrock:us-east-1:587817102444:application-inference-profile/7p8sn93lhspw
-              AWS_BEARER_TOKEN_BEDROCK: <+secrets.getValue("bedrock_yaml_key")>
+              AWS_BEARER_TOKEN_BEDROCK: <+secrets.getValue("bedrock_api_key")>
               AWS_REGION: us-east-1
               CLAUDE_CODE_USE_BEDROCK: "1"
             task: |
