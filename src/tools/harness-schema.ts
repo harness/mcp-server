@@ -130,19 +130,18 @@ export function registerSchemaTool(server: McpServer): void {
         "Fetch Harness YAML schema for a resource type. Returns the JSON Schema definition " +
         "so you know the exact body structure for harness_create/harness_update. " +
         "Use without path for a summary of fields and available sections. " +
-        "Use with path to drill into a specific section (e.g. path='scheduled_trigger' for cron trigger spec). " +
+        "Use with path to drill into a specific section. " +
         `Available schemas: ${VALID_SCHEMAS.join(", ")}.`,
       inputSchema: {
         resource_type: z
           .enum(VALID_SCHEMAS as [string, ...string[]])
-          .describe("Schema to fetch: pipeline, template, or trigger"),
+          .describe(`Schema to fetch. Available: ${VALID_SCHEMAS.join(", ")}`),
         path: z
           .string()
           .optional()
           .describe(
             "Dot-separated path to drill into a specific definition section. " +
-            "E.g. 'trigger_source' for source types, 'scheduled_trigger' for cron spec, " +
-            "'webhook_trigger' for webhook spec. Omit for a top-level summary.",
+            "Omit for a top-level summary showing all available sections.",
           ),
       },
       annotations: {

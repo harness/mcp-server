@@ -6,6 +6,7 @@ export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 export type ToolsetName =
   | "pipelines"
+  | "agent-pipelines"
   | "services"
   | "environments"
   | "infrastructure"
