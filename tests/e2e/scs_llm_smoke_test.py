@@ -94,12 +94,13 @@ def build_tool_call_summary(extracted: dict[str, Any]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# 27 Test Queries — V2
+# 31 Test Queries — V2
 # expected_tools: list of (tool_name, resource_type) tuples
 # Q02, Q03, Q05: Downgraded — filters not ported to v2
 # Q15: Reclassified per PD-1 — vuln counts are CORRECT behavior
 # Q20-Q26: Phase 3 queries (P3-6, P3-7, P3-8, P3-9, P3-12)
 # Q27-Q31: Disambiguation queries — test tool selection when multiple resources match
+# Q34-Q37: P3-1 BOM enforcement violation queries
 # ---------------------------------------------------------------------------
 QUERIES = [
     {
@@ -330,6 +331,67 @@ QUERIES = [
         "observe": "P3-10: 'policy sets' + 'enforce' + 'supply chain artifacts' should route to governance's `policy_set` resource. "
             "Tests cross-toolset routing from SCS module to governance.",
     },
+    # ─── P3-1: BOM Enforcement Violations ─────────────────────────────
+    {
+        "id": "Q34",
+        "query": "What BOM enforcement policy violations does my first artifact have? Show me which components failed the enforcement check.",
+        "expected_intent": "P3-1: BOM enforcement violations — two-step flow from artifact overview to violation list",
+        "confidence": "Medium",
+        "expected_tools": [(
+            "harness_list", "scs_artifact_source"), ("harness_list", "artifact_security"), ("harness_list", "scs_bom_violation")],
+        "observe": "P3-1 TWO-STEP: Does the LLM chain artifact_source → artifact_security (to get enforcement_id from violations.enforcementId) → scs_bom_violation? "
+            "This is the core P3-1 flow. The LLM must extract enforcement_id from the artifact overview response. "
+            "Note: LLM uses harness_list (not harness_get) for artifact_security since it filters by source_id/artifact_id.",
+    },
+    {
+        "id": "Q35",
+        "query": "Show me the BOM enforcement violation summary for my first artifact — I want to see the overall enforcement status and violation counts by type, not the individual violations.",
+        "expected_intent": "P3-1: Enforcement summary — get operation for violation counts",
+        "confidence": "Medium",
+        "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "artifact_security"), ("harness_get", "scs_bom_violation")],
+        "observe": "P3-1 SUMMARY: Does the LLM use harness_get (not harness_list) for scs_bom_violation to get the enforcement summary? "
+            "'overall enforcement status' + 'violation counts' + 'not individual violations' should signal the get/summary endpoint.",
+    },
+    {
+        "id": "Q36",
+        "query": "Are there any components in my artifact that are on the deny list? Show me the denied components and why they were blocked.",
+        "expected_intent": "P3-1: Deny-list specific violation query",
+        "confidence": "Medium",
+        "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "artifact_security"), ("harness_list", "scs_bom_violation")],
+        "observe": "P3-1 DENY-LIST: Does the LLM route to scs_bom_violation for deny-list queries? "
+            "'deny list' is a searchAlias. The response should include violationType and violationDetails fields.",
+    },
+    {
+        "id": "Q37",
+        "query": "What policy violations does my first artifact have? I want to see the BOM enforcement results, not CIS compliance.",
+        "expected_intent": "P3-1 Disambiguation: scs_bom_violation (BOM enforcement) vs scs_compliance_result (CIS/OWASP compliance)",
+        "confidence": "Medium",
+        "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "artifact_security"), ("harness_list", "scs_bom_violation")],
+        "observe": "KEY DISAMBIGUATION: 'policy violations' + 'BOM enforcement' + 'not CIS compliance' should route to scs_bom_violation, "
+            "NOT scs_compliance_result. Tests whether the LLM can disambiguate between the two compliance-related resources. "
+            "scs_compliance_result handles CIS/OWASP checks; scs_bom_violation handles OPA policy enforcement violations.",
+    },
+    # ─── P3-11: Component Enrichment / OSS Risk Lookup ──────────────────
+    {
+        "id": "Q38",
+        "query": "What is the OSS risk score and EOL status of the zlib component in my first artifact? Use the enrichment resource to check if it is unmaintained.",
+        "expected_intent": "P3-11: OSS risk assessment — EOL status and risk score via scs_component_enrichment",
+        "confidence": "Medium",
+        "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_enrichment")],
+        "observe": "P3-11: Does the LLM chain source → components (to find zlib purl) → scs_component_enrichment? "
+            "Key test: 'end-of-life' and 'outdated' should route to scs_component_enrichment (OSS risk), NOT security_issue (STO CVEs). "
+            "Response should include EOL status, outdated flag, and latest_version.",
+    },
+    {
+        "id": "Q39",
+        "query": "Use the component enrichment resource to get the OSS risk assessment for a component in my first code repository — what is its EOL status and risk score?",
+        "expected_intent": "P3-11: Project-scoped OSS risk assessment — repo as artifact, scs_component_enrichment with artifact_id",
+        "confidence": "Medium",
+        "expected_tools": [("harness_list", "code_repo_security"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_enrichment")],
+        "observe": "P3-11: Does it chain code_repo_security → scs_artifact_component (repo_id as artifact_id) → scs_component_enrichment? "
+            "'OSS risk', 'unmaintained', 'end-of-life' are all search aliases for scs_component_enrichment. "
+            "Bonus: does it pass artifact_id to scs_component_enrichment for richer project-scoped data?",
+    },
     # ─── P3-3: Pipeline SBOM Step Modification ────────────────────────
     {
         "id": "Q19",
@@ -510,6 +572,69 @@ CONVERSATIONS = [
              "observe": "P3-3 PLANNING: LLM should reference the pipeline YAML from Turn 2 and explain the YAML changes needed "
                  "(tool.type: cdxgen, add sbom_drift section). It should NOT try to execute the update in a smoke test — "
                  "just validate it can articulate the correct modification plan. Bonus: mentions is_new_branch for safety."},
+        ],
+    },
+    # ─── P3-1: BOM Enforcement Violation Investigation ────────────────
+    {
+        "id": "M12", "title": "BOM Enforcement Violation Investigation (P3-1)",
+        "description": "Artifact overview → enforcement violations → enforcement summary → OPA policy cross-reference",
+        "turns": [
+            {"turn": 1, "query": "Show me the security overview of my first artifact",
+             "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "artifact_security")],
+             "observe": "P3-1 T1: Setup — establishes artifact context and surfaces enforcement_id in the violations section. "
+                 "The LLM should present enforcement data including violations.enforcementId."},
+            {"turn": 2, "query": "What BOM enforcement violations does it have? List the specific components that failed.",
+             "expected_tools": [("harness_list", "scs_bom_violation")],
+             "observe": "P3-1 T2: KEY TEST — does the LLM extract enforcement_id from Turn 1's artifact overview "
+                 "and call harness_list(resource_type='scs_bom_violation', enforcement_id=<id>)? "
+                 "Should show component names, violation types (DENY_LIST/ALLOW_LIST), and details."},
+            {"turn": 3, "query": "Give me a summary of the violation counts — how many deny-list vs allow-list violations?",
+             "expected_tools": [],
+             "observe": "P3-1 T3: LLM may answer from T2 context (violation data already loaded) without a new tool call. "
+                 "This is acceptable — the violation list from T2 contains enough data to summarize counts by type. "
+                 "Bonus if it calls harness_get(scs_bom_violation) for the formal summary endpoint."},
+            {"turn": 4, "query": "Show me the OPA policies that define these enforcement rules so I can review them",
+             "expected_tools": [("harness_list", "policy")],
+             "observe": "P3-1 T4: CROSS-TOOLSET — context switch from SCS bom_violation to governance policy. "
+                 "Tests whether the LLM routes 'OPA policies' to the governance toolset after working in SCS context. "
+                 "relatedResources on scs_bom_violation links to governance policy as sibling."},
+        ],
+    },
+    {
+        "id": "M13", "title": "BOM Violation → Remediation Chain (P3-1 + P3-6)",
+        "description": "Discover violations → identify violating component → get remediation → check auto-PR config",
+        "turns": [
+            {"turn": 1, "query": "Show me all the BOM policy violations for my first artifact",
+             "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "artifact_security"), ("harness_list", "scs_bom_violation")],
+             "observe": "P3-1 T1: Full two-step chain in single turn. Does the LLM discover artifact → get enforcement_id → list violations?"},
+            {"turn": 2, "query": "For the first violated component, can you find its full details in the SBOM and suggest an upgrade version?",
+             "expected_tools": [("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_remediation")],
+             "observe": "P3-1→P3-6 CHAIN: Does the LLM use the component name/purl from the violation in T1 to search "
+                 "scs_artifact_component, then chain to scs_component_remediation for upgrade advice? "
+                 "Tests cross-resource chaining from bom_violation → component → remediation."},
+            {"turn": 3, "query": "Is there an auto-PR configuration that could automatically fix these violations?",
+             "expected_tools": [("harness_get", "scs_auto_pr_config")],
+             "observe": "P3-12: Context switch from component remediation to project-level auto-PR config. "
+                 "Tests whether the LLM can pivot from per-component fixes to project-level automation."},
+        ],
+    },
+    # ─── P3-11: OSS Risk Assessment Journey ─────────────────────────────
+    {
+        "id": "M14", "title": "Component OSS Risk Assessment Journey (P3-11)",
+        "description": "List components → check OSS risk/EOL status → get remediation for outdated component",
+        "turns": [
+            {"turn": 1, "query": "Show me the SBOM components for my first artifact",
+             "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "scs_artifact_component")],
+             "observe": "Setup: establishes component list with purls in context."},
+            {"turn": 2, "query": "Use the component enrichment resource to check the OSS risk score and EOL status of the zlib component from that list.",
+             "expected_tools": [("harness_get", "scs_component_enrichment")],
+             "observe": "P3-11 KEY TEST: Does the LLM reuse the zlib purl from Turn 1 and route to scs_component_enrichment? "
+                 "Explicit 'enrichment resource' + 'risk score' + 'EOL status' should trigger enrichment, NOT remediation. "
+                 "Response should include EOL status, is_outdated, latest_version."},
+            {"turn": 3, "query": "That component looks outdated. What version should I upgrade to and will it break anything?",
+             "expected_tools": [("harness_get", "scs_component_remediation")],
+             "observe": "P3-11→P3-6 chain: Does the LLM reuse the purl from Turn 2 context and pivot to scs_component_remediation? "
+                 "Natural follow-up — user sees outdated status from enrichment, asks for upgrade guidance."},
         ],
     },
     # ─── Cross-Capability: Security Posture → Policy → Pipeline ───────

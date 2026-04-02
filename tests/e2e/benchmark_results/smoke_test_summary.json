@@ -1,0 +1,167 @@
+{
+  "run_metadata": {
+    "timestamp": "2026-04-02T17:29:40.882998+00:00",
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-20250514",
+    "account_id": "ppbLW9YpRharzPs_JtWT7g",
+    "org_id": "SSCA",
+    "project_id": "SSCA_Sanity_Automation",
+    "mcp_server_version": "2.0.0",
+    "mcp_server_type": "node",
+    "mcp_server_repo": "harness-mcp-v2",
+    "tool_model": "generic (harness_list, harness_get, harness_describe)",
+    "history_mode": "answer_only",
+    "total_duration_s": 206.68,
+    "genai_url": "http://localhost:8000"
+  },
+  "summary": {
+    "total_queries": 2,
+    "tool_selection_correct": 2,
+    "tool_selection_partial": 0,
+    "tool_selection_wrong": 0,
+    "tool_selection_declined": 0,
+    "tool_selection_graceful": 0,
+    "tool_selection_attempted": 0,
+    "avg_duration_s": 36.05,
+    "avg_chain_depth": 3.5,
+    "total_tokens": 265627,
+    "errors_encountered": 0,
+    "by_confidence": {
+      "Medium": {
+        "count": 2,
+        "correct": 2,
+        "partial": 0,
+        "wrong": 0,
+        "declined": 0,
+        "graceful": 0,
+        "attempted": 0
+      }
+    }
+  },
+  "scoring_table": [
+    {
+      "id": "Q38",
+      "query": "What is the OSS risk score and EOL status of the zlib compon",
+      "confidence": "Medium",
+      "expected_tools": [
+        [
+          "harness_list",
+          "scs_artifact_source"
+        ],
+        [
+          "harness_list",
+          "scs_artifact_component"
+        ],
+        [
+          "harness_get",
+          "scs_component_enrichment"
+        ]
+      ],
+      "actual_tools": [
+        [
+          "harness_list",
+          "scs_artifact_source"
+        ],
+        [
+          "harness_list",
+          "artifact_security"
+        ],
+        [
+          "harness_list",
+          "scs_artifact_component"
+        ],
+        [
+          "harness_get",
+          "scs_component_enrichment"
+        ]
+      ],
+      "tool_selection": "CORRECT",
+      "chain_complete": true,
+      "duration_s": 39.8,
+      "answer_length": 711,
+      "errors": []
+    },
+    {
+      "id": "Q39",
+      "query": "Use the component enrichment resource to get the OSS risk as",
+      "confidence": "Medium",
+      "expected_tools": [
+        [
+          "harness_list",
+          "code_repo_security"
+        ],
+        [
+          "harness_list",
+          "scs_artifact_component"
+        ],
+        [
+          "harness_get",
+          "scs_component_enrichment"
+        ]
+      ],
+      "actual_tools": [
+        [
+          "harness_list",
+          "code_repo_security"
+        ],
+        [
+          "harness_list",
+          "scs_artifact_component"
+        ],
+        [
+          "harness_get",
+          "scs_component_enrichment"
+        ]
+      ],
+      "tool_selection": "CORRECT",
+      "chain_complete": true,
+      "duration_s": 32.29,
+      "answer_length": 1190,
+      "errors": []
+    }
+  ],
+  "conversation_summary": {
+    "total_conversations": 1,
+    "overall_correct": 1,
+    "overall_partial": 0,
+    "overall_wrong": 0,
+    "total_turns": 3,
+    "turns_correct": 3,
+    "avg_duration_s": 125.59,
+    "total_tokens": 384178
+  },
+  "conversation_scoring_table": [
+    {
+      "id": "M14",
+      "title": "Component OSS Risk Assessment Journey (P3-11)",
+      "num_turns": 3,
+      "overall": "CORRECT",
+      "turns_correct": 3,
+      "turns_total": 3,
+      "duration_s": 125.59,
+      "all_tools": [
+        [
+          "harness_list",
+          "scs_artifact_source"
+        ],
+        [
+          "harness_list",
+          "artifact_security"
+        ],
+        [
+          "harness_list",
+          "scs_artifact_component"
+        ],
+        [
+          "harness_get",
+          "scs_component_enrichment"
+        ],
+        [
+          "harness_get",
+          "scs_component_remediation"
+        ]
+      ],
+      "total_errors": []
+    }
+  ]
+}
