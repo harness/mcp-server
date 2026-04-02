@@ -777,12 +777,16 @@ describe("P3-10: scs_compliance_result governance cross-references", () => {
     expect(parentRef!.relationship).toBe("parent");
   });
 
-  it("searchAliases include enforcement-related terms", () => {
+  it("searchAliases cover CIS/OWASP but NOT enforcement (P3-1 disambiguation)", () => {
     const res = findResource("scs_compliance_result");
     const aliases = res.searchAliases!.map((a) => a.toLowerCase());
-    expect(aliases).toContain("enforcement");
-    expect(aliases).toContain("sbom enforcement");
-    expect(aliases).toContain("bom enforcement");
+    expect(aliases).toContain("compliance");
+    expect(aliases).toContain("cis");
+    expect(aliases).toContain("owasp");
+    // Enforcement aliases moved to scs_bom_violation (P3-1)
+    expect(aliases).not.toContain("enforcement");
+    expect(aliases).not.toContain("sbom enforcement");
+    expect(aliases).not.toContain("bom enforcement");
   });
 });
 
