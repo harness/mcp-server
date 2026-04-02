@@ -419,6 +419,7 @@ describe("P2-6: SCS resource diagnosticHints", () => {
     "scs_component_remediation",
     "scs_remediation_pr",
     "scs_auto_pr_config",
+    "scs_bom_violation",
   ];
 
   for (const rt of resourcesWithHints) {
@@ -854,5 +855,191 @@ describe("P3-8: scs_component_dependencies resource", () => {
     const purlField = res.listFilterFields!.find((f) => f.name === "purl");
     expect(purlField).toBeDefined();
     expect(purlField!.required).toBe(true);
+  });
+});
+
+// ─── P3-1: BOM Enforcement Violations ───────────────────────────────────────
+
+describe("P3-1: scs_bom_violation resource", () => {
+  it("exists in scsToolset", () => {
+    expect(() => findResource("scs_bom_violation")).not.toThrow();
+  });
+
+  it("has a list operation pointing to policy-violations endpoint", () => {
+    const spec = getOp("scs_bom_violation", "list");
+    expect(spec.method).toBe("GET");
+    expect(spec.path).toContain("/enforcement/");
+    expect(spec.path).toContain("/policy-violations");
+  });
+
+  it("list maps enforcement_id to path param", () => {
+    const spec = getOp("scs_bom_violation", "list");
+    expect(spec.pathParams).toEqual({
+      org_id: "org",
+      project_id: "project",
+      enforcement_id: "enforcement",
+    });
+  });
+
+  it("list maps search_term to searchText query param", () => {
+    const spec = getOp("scs_bom_violation", "list");
+    expect(spec.queryParams!.search_term).toBe("searchText");
+  });
+
+  it("list has pagination query params", () => {
+    const spec = getOp("scs_bom_violation", "list");
+    expect(spec.queryParams!.page).toBe("page");
+    expect(spec.queryParams!.size).toBe("limit");
+    expect(spec.queryParams!.sort).toBe("sort");
+    expect(spec.queryParams!.order).toBe("order");
+  });
+
+  it("list has defaultQueryParams with limit=10", () => {
+    const spec = getOp("scs_bom_violation", "list");
+    expect(spec.defaultQueryParams).toBeDefined();
+    expect(spec.defaultQueryParams!.limit).toBe("10");
+  });
+
+  it("list uses scsListExtract for field selection", () => {
+    const spec = getOp("scs_bom_violation", "list");
+    expect(spec.responseExtractor).toBeDefined();
+    // Verify field selection works
+    const result = spec.responseExtractor!([
+      {
+        name: "log4j", version: "2.14.0", purl: "pkg:maven/log4j@2.14.0",
+        license: "Apache-2.0", violationType: "DENY_LIST", violationDetails: "Component blocked",
+        isExempted: false, exemptionId: null,
+        supplier: "Apache", supplierType: "ORG", packageManager: "maven",
+        internalField: "dropped", imageName: "dropped",
+      },
+    ]) as Record<string, unknown>[];
+    expect(result).toHaveLength(1);
+    expect(result[0]).toHaveProperty("name");
+    expect(result[0]).toHaveProperty("version");
+    expect(result[0]).toHaveProperty("purl");
+    expect(result[0]).toHaveProperty("violationType");
+    expect(result[0]).toHaveProperty("violationDetails");
+    expect(result[0]).toHaveProperty("isExempted");
+    expect(result[0]).not.toHaveProperty("internalField");
+    expect(result[0]).not.toHaveProperty("imageName");
+  });
+
+  it("list extractor preserves exempted violations (isExempted=true)", () => {
+    const spec = getOp("scs_bom_violation", "list");
+    const result = spec.responseExtractor!([
+      { name: "dep1", violationType: "ALLOW_LIST", isExempted: true, exemptionId: "ex-123" },
+    ]) as Record<string, unknown>[];
+    expect(result[0]).toHaveProperty("isExempted", true);
+    expect(result[0]).toHaveProperty("exemptionId", "ex-123");
+  });
+
+  it("has a get operation pointing to enforcement summary endpoint", () => {
+    const spec = getOp("scs_bom_violation", "get");
+    expect(spec.method).toBe("GET");
+    expect(spec.path).toContain("/enforcement/");
+    expect(spec.path).toContain("/summary");
+  });
+
+  it("get maps enforcement_id to path param", () => {
+    const spec = getOp("scs_bom_violation", "get");
+    expect(spec.pathParams).toEqual({
+      org_id: "org",
+      project_id: "project",
+      enforcement_id: "enforcement",
+    });
+  });
+
+  it("get uses scsCleanExtract", () => {
+    const spec = getOp("scs_bom_violation", "get");
+    expect(spec.responseExtractor).toBeDefined();
+    expect(spec.responseExtractor!.name).not.toBe("passthrough");
+  });
+
+  it("enforcement_id is a required listFilterField", () => {
+    const res = findResource("scs_bom_violation");
+    const field = res.listFilterFields!.find((f) => f.name === "enforcement_id");
+    expect(field).toBeDefined();
+    expect(field!.required).toBe(true);
+  });
+
+  it("has enforcement_id as identifierField", () => {
+    const res = findResource("scs_bom_violation");
+    expect(res.identifierFields).toContain("enforcement_id");
+  });
+
+  it("description mentions two-step flow", () => {
+    const res = findResource("scs_bom_violation");
+    expect(res.description).toMatch(/[Tt]wo-step/);
+    expect(res.description).toContain("artifact_security");
+    expect(res.description).toContain("enforcement_id");
+  });
+
+  it("description mentions both deny-list and allow-list violations", () => {
+    const res = findResource("scs_bom_violation");
+    expect(res.description).toContain("deny-list");
+    expect(res.description).toContain("allow-list");
+  });
+
+  it("description mentions exempted violations", () => {
+    const res = findResource("scs_bom_violation");
+    expect(res.description).toContain("exempted");
+    expect(res.description).toContain("isExempted");
+  });
+
+  it("has diagnosticHint mentioning artifact_security for enforcement_id", () => {
+    const res = findResource("scs_bom_violation");
+    expect(res.diagnosticHint).toBeDefined();
+    expect(res.diagnosticHint!).toContain("artifact_security");
+    expect(res.diagnosticHint!).toContain("enforcementId");
+  });
+
+  it("has searchAliases covering violation-related terms", () => {
+    const res = findResource("scs_bom_violation");
+    const aliases = res.searchAliases!.map((a) => a.toLowerCase());
+    expect(aliases).toContain("bom violation");
+    expect(aliases).toContain("policy violation");
+    expect(aliases).toContain("deny list violation");
+    expect(aliases).toContain("allow list violation");
+  });
+
+  it("relatedResources links to artifact_security as parent", () => {
+    const res = findResource("scs_bom_violation");
+    const parent = res.relatedResources!.find((r) => r.resourceType === "artifact_security");
+    expect(parent).toBeDefined();
+    expect(parent!.relationship).toBe("parent");
+  });
+
+  it("relatedResources links to scs_compliance_result as sibling", () => {
+    const res = findResource("scs_bom_violation");
+    const sibling = res.relatedResources!.find((r) => r.resourceType === "scs_compliance_result");
+    expect(sibling).toBeDefined();
+    expect(sibling!.relationship).toBe("sibling");
+  });
+
+  it("relatedResources links to governance policy as sibling", () => {
+    const res = findResource("scs_bom_violation");
+    const sibling = res.relatedResources!.find((r) => r.resourceType === "policy");
+    expect(sibling).toBeDefined();
+    expect(sibling!.relationship).toBe("sibling");
+  });
+
+  it("artifact_security relatedResources includes scs_bom_violation", () => {
+    const res = findResource("artifact_security");
+    const child = res.relatedResources!.find((r) => r.resourceType === "scs_bom_violation");
+    expect(child).toBeDefined();
+    expect(child!.relationship).toBe("child");
+    expect(child!.description).toContain("enforcement_id");
+  });
+
+  it("uses singular org/project path (consistent with enforcement API)", () => {
+    const listSpec = getOp("scs_bom_violation", "list");
+    const getSpec = getOp("scs_bom_violation", "get");
+    // Enforcement endpoints use /v1/org/{org}/project/{project}/ (singular, no 's')
+    expect(listSpec.path).toContain("/v1/org/");
+    expect(listSpec.path).toContain("/project/");
+    expect(listSpec.path).not.toContain("/orgs/");
+    expect(listSpec.path).not.toContain("/projects/");
+    expect(getSpec.path).toContain("/v1/org/");
+    expect(getSpec.path).toContain("/project/");
   });
 });
