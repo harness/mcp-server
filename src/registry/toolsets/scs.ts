@@ -33,6 +33,13 @@ const CODE_REPO_LIST_FIELDS = [
   "vulnerability_count", "updated",
 ];
 
+const BOM_VIOLATION_LIST_FIELDS = [
+  "name", "version", "purl", "license",
+  "violationType", "violationDetails",
+  "supplier", "supplierType", "packageManager",
+  "isExempted", "exemptionId",
+];
+
 /**
  * Normalize a value to an array. LLMs frequently send scalar strings
  * (e.g. "CIS") instead of arrays (["CIS"]) for array-typed parameters.
@@ -117,8 +124,9 @@ export const scsToolset: ToolsetDefinition = {
       searchAliases: ["artifact vulnerability", "artifact security posture", "artifact overview", "supply chain artifact", "scs artifact", "artifact sbom"],
       relatedResources: [
         { resourceType: "scs_artifact_source", relationship: "parent", description: "Get source_id needed to list artifacts" },
+        { resourceType: "scs_bom_violation", relationship: "child", description: "BOM enforcement policy violations — deny-list/allow-list/OPA violations (requires enforcement_id from violations.enforcementId). Use for ANY 'policy violation' or 'enforcement' query." },
         { resourceType: "scs_artifact_component", relationship: "child", description: "List dependencies/components within this artifact" },
-        { resourceType: "scs_compliance_result", relationship: "child", description: "Compliance scan results for this artifact" },
+        { resourceType: "scs_compliance_result", relationship: "child", description: "CIS/OWASP benchmark checks ONLY — NOT for BOM enforcement or policy violations" },
         { resourceType: "scs_chain_of_custody", relationship: "child", description: "Chain of custody events for this artifact" },
         { resourceType: "scs_sbom", relationship: "child", description: "SBOM download (requires orchestration_id from chain of custody)" },
         { resourceType: "scs_artifact_remediation", relationship: "child", description: "Remediation advice for components (requires purl)" },
@@ -318,11 +326,13 @@ export const scsToolset: ToolsetDefinition = {
     {
       resourceType: "scs_compliance_result",
       displayName: "SCS Compliance Result",
-      description: "Compliance scan results for an artifact — policy violations, CIS/OWASP checks. Supports list. "
-        + "Use this for compliance and policy violation queries.",
+      description: "CIS and OWASP benchmark compliance scan results for an artifact. "
+        + "Use ONLY for CIS/OWASP compliance checks (e.g. 'Is my artifact CIS compliant?', 'Show OWASP results'). "
+        + "NOT for BOM enforcement violations, deny-list/allow-list violations, or OPA policy violations — use scs_bom_violation for those.",
       diagnosticHint: "If you get a 404: verify artifact_id is correct. Get artifact IDs from harness_list(resource_type='artifact_security', source_id='...'). "
-        + "Filter by standards (e.g. 'CIS', 'OWASP') and status ('PASSED', 'FAILED', 'WARNING').",
-      searchAliases: ["compliance", "policy violation", "cis", "owasp", "compliance check", "enforcement", "bom enforcement", "sbom enforcement"],
+        + "Filter by standards (e.g. 'CIS', 'OWASP') and status ('PASSED', 'FAILED', 'WARNING'). "
+        + "IMPORTANT: For BOM enforcement / OPA policy violations, use scs_bom_violation instead.",
+      searchAliases: ["compliance", "cis", "owasp", "compliance check", "cis benchmark", "owasp check"],
       relatedResources: [
         { resourceType: "artifact_security", relationship: "parent", description: "Get artifact_id needed for compliance queries" },
         { resourceType: "policy", relationship: "sibling", description: "OPA policies (deny-list/allow-list) evaluated during enforcement — use governance toolset to create/manage" },
@@ -352,6 +362,61 @@ export const scsToolset: ToolsetDefinition = {
           defaultQueryParams: { limit: "10" },
           responseExtractor: scsCleanExtract,
           description: "List compliance results for an artifact",
+        },
+      },
+    },
+
+    // ── BOM Enforcement Violations (P3-1) ────────────────────────────
+    {
+      resourceType: "scs_bom_violation",
+      displayName: "BOM Enforcement Violation",
+      description: "BOM (Bill of Materials) enforcement policy violations — shows which OPA policies failed and why. "
+        + "Use this for ANY query about policy violations, enforcement violations, deny-list violations, allow-list violations, or BOM enforcement results. "
+        + "Surfaces both deny-list and allow-list violations, including exempted violations (shown with isExempted flag). "
+        + "NOT for CIS/OWASP benchmark checks — use scs_compliance_result for those. "
+        + "Two-step flow: first get artifact overview via harness_list(resource_type='artifact_security') to find enforcement_id from violations.enforcementId, "
+        + "then harness_list(resource_type='scs_bom_violation', enforcement_id=<id>) for violation details. "
+        + "Use get operation to retrieve enforcement summary (overall counts by violation type — deny-list vs allow-list).",
+      diagnosticHint: "If you get a 404: verify enforcement_id is correct. "
+        + "Get enforcement_id from harness_list(resource_type='artifact_security', filters={source_id:'...', artifact_id:'...'}) — "
+        + "look for violations.enforcementId in the response. "
+        + "If the artifact has no enforcement results, enforcement_id will be absent. "
+        + "IMPORTANT: Do NOT use scs_compliance_result for BOM/OPA enforcement violations — that resource is only for CIS/OWASP checks.",
+      searchAliases: ["bom violation", "policy violation", "enforcement violation", "deny list violation", "allow list violation", "sbom violation", "bom enforcement violation", "enforcement", "enforcement summary", "enforcement status", "violation counts", "violation summary", "bom enforcement", "sbom enforcement"],
+      relatedResources: [
+        { resourceType: "artifact_security", relationship: "parent", description: "Get enforcement_id from artifact overview (violations.enforcementId)" },
+        { resourceType: "scs_compliance_result", relationship: "sibling", description: "Compliance scan results (CIS/OWASP checks) — different from BOM enforcement violations" },
+        { resourceType: "policy", relationship: "sibling", description: "OPA policies that define enforcement rules — use governance toolset to manage" },
+      ],
+      toolset: "scs",
+      scope: "project",
+      identifierFields: ["enforcement_id"],
+      listFilterFields: [
+        { name: "enforcement_id", description: "Enforcement ID (from artifact overview violations.enforcementId)", required: true },
+        { name: "search_term", description: "Search violations by component name or purl" },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${SCS}/v1/org/{org}/project/{project}/enforcement/{enforcement}/policy-violations`,
+          pathParams: { org_id: "org", project_id: "project", enforcement_id: "enforcement" },
+          queryParams: {
+            page: "page",
+            size: "limit",
+            sort: "sort",
+            order: "order",
+            search_term: "searchText",
+          },
+          defaultQueryParams: { limit: "10" },
+          responseExtractor: scsListExtract(BOM_VIOLATION_LIST_FIELDS),
+          description: "List BOM enforcement policy violations for an enforcement run",
+        },
+        get: {
+          method: "GET",
+          path: `${SCS}/v1/org/{org}/project/{project}/enforcement/{enforcement}/summary`,
+          pathParams: { org_id: "org", project_id: "project", enforcement_id: "enforcement" },
+          responseExtractor: scsCleanExtract,
+          description: "Get enforcement summary with violation counts by type",
         },
       },
     },
