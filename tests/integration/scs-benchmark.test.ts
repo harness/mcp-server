@@ -7,8 +7,8 @@
  * Env vars (set in shell or .env):
  *   HARNESS_API_KEY           — PAT token (pat.<accountId>.<tokenId>.<secret>)
  *   HARNESS_ACCOUNT_ID        — (optional if PAT format, auto-extracted)
- *   HARNESS_DEFAULT_ORG_ID    — default: "SSCA"
- *   HARNESS_DEFAULT_PROJECT_ID — default: "SSCA_Sanity_Automation"
+ *   HARNESS_ORG    — default: "SSCA"
+ *   HARNESS_PROJECT — default: "SSCA_Sanity_Automation"
  *   HARNESS_BASE_URL          — default: "https://app.harness.io"
  *
  * Run:
@@ -27,8 +27,8 @@ import type { Config } from "../../src/config.js";
 const API_KEY = process.env.HARNESS_API_KEY ?? "";
 const ACCOUNT_ID = process.env.HARNESS_ACCOUNT_ID ?? "";
 const BASE_URL = process.env.HARNESS_BASE_URL ?? "https://qa.harness.io";
-const ORG_ID = process.env.HARNESS_DEFAULT_ORG_ID ?? "SSCA";
-const PROJECT_ID = process.env.HARNESS_DEFAULT_PROJECT_ID ?? "SSCA_Sanity_Automation";
+const ORG_ID = process.env.HARNESS_ORG ?? "SSCA";
+const PROJECT_ID = process.env.HARNESS_PROJECT ?? "SSCA_Sanity_Automation";
 
 const HAS_CREDENTIALS = API_KEY.length > 0;
 
@@ -37,8 +37,8 @@ function makeConfig(): Config {
     HARNESS_API_KEY: API_KEY,
     HARNESS_ACCOUNT_ID: ACCOUNT_ID || extractAccountId(API_KEY),
     HARNESS_BASE_URL: BASE_URL,
-    HARNESS_DEFAULT_ORG_ID: ORG_ID,
-    HARNESS_DEFAULT_PROJECT_ID: PROJECT_ID,
+    HARNESS_ORG: ORG_ID,
+    HARNESS_PROJECT: PROJECT_ID,
     HARNESS_API_TIMEOUT_MS: 30_000,
     HARNESS_MAX_RETRIES: 2,
     HARNESS_MAX_BODY_SIZE_MB: 10,

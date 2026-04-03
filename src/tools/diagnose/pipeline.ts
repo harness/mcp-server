@@ -402,8 +402,8 @@ function buildExecutionSummary(
     }
   }
 
-  const orgId = asString(input.org_id) ?? config.HARNESS_DEFAULT_ORG_ID;
-  const projectId = asString(input.project_id) ?? config.HARNESS_DEFAULT_PROJECT_ID;
+  const orgId = asString(input.org_id) ?? config.HARNESS_ORG;
+  const projectId = asString(input.project_id) ?? config.HARNESS_PROJECT;
   const pipelineIdentifier = asString(pes.pipelineIdentifier);
   const execId = asString(pes.planExecutionId);
   if (pipelineIdentifier && execId && orgId && projectId) {

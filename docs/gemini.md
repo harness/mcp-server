@@ -125,8 +125,8 @@ Secret values are never exposed — only metadata (name, type, scope).
    ```
    HARNESS_API_KEY=pat.xxxxx.xxxxx.xxxxx
    HARNESS_ACCOUNT_ID=your_account_id   # Optional for PATs, required for non-PAT API keys
-   HARNESS_DEFAULT_ORG_ID=default
-   HARNESS_DEFAULT_PROJECT_ID=your_project
+   HARNESS_ORG=default
+   HARNESS_PROJECT=your_project
    HARNESS_RATE_LIMIT_RPS=10            # Optional: client-side throttling
    HARNESS_MAX_BODY_SIZE_MB=10          # Optional: HTTP mode request size limit
    ```

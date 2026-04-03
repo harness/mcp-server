@@ -399,8 +399,8 @@ async function main(): Promise<void> {
     transport,
     baseUrl: config.HARNESS_BASE_URL,
     accountId: config.HARNESS_ACCOUNT_ID,
-    defaultOrg: config.HARNESS_DEFAULT_ORG_ID,
-    defaultProject: config.HARNESS_DEFAULT_PROJECT_ID ?? "(none)",
+    defaultOrg: config.HARNESS_ORG,
+    defaultProject: config.HARNESS_PROJECT ?? "(none)",
     toolsets: config.HARNESS_TOOLSETS ?? "(all)",
   });
 

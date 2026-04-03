@@ -37,8 +37,8 @@ describe("ConfigSchema", () => {
     const result = ConfigSchema.safeParse({
       ...validConfig,
       HARNESS_BASE_URL: "https://custom.harness.io",
-      HARNESS_DEFAULT_ORG_ID: "myorg",
-      HARNESS_DEFAULT_PROJECT_ID: "myproject",
+      HARNESS_ORG: "myorg",
+      HARNESS_PROJECT: "myproject",
       HARNESS_API_TIMEOUT_MS: "5000",
       HARNESS_MAX_RETRIES: "5",
       LOG_LEVEL: "debug",
@@ -46,8 +46,8 @@ describe("ConfigSchema", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.HARNESS_BASE_URL).toBe("https://custom.harness.io");
-      expect(result.data.HARNESS_DEFAULT_ORG_ID).toBe("myorg");
-      expect(result.data.HARNESS_DEFAULT_PROJECT_ID).toBe("myproject");
+      expect(result.data.HARNESS_ORG).toBe("myorg");
+      expect(result.data.HARNESS_PROJECT).toBe("myproject");
       expect(result.data.HARNESS_API_TIMEOUT_MS).toBe(5000);
       expect(result.data.HARNESS_MAX_RETRIES).toBe(5);
       expect(result.data.LOG_LEVEL).toBe("debug");
@@ -77,11 +77,11 @@ describe("ConfigSchema", () => {
     }
   });
 
-  it("applies default HARNESS_DEFAULT_ORG_ID", () => {
+  it("applies default HARNESS_ORG", () => {
     const result = ConfigSchema.safeParse(validConfig);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.HARNESS_DEFAULT_ORG_ID).toBe("default");
+      expect(result.data.HARNESS_ORG).toBe("default");
     }
   });
 
@@ -123,11 +123,11 @@ describe("ConfigSchema", () => {
     }
   });
 
-  it("HARNESS_DEFAULT_PROJECT_ID is optional", () => {
+  it("HARNESS_PROJECT is optional", () => {
     const result = ConfigSchema.safeParse(validConfig);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.HARNESS_DEFAULT_PROJECT_ID).toBeUndefined();
+      expect(result.data.HARNESS_PROJECT).toBeUndefined();
     }
   });
 

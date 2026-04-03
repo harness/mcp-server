@@ -104,7 +104,7 @@ export interface InputExpansionRule {
 /**
  * Config type for pathBuilder (avoids circular import).
  */
-export type PathBuilderConfig = { HARNESS_ACCOUNT_ID?: string; HARNESS_DEFAULT_ORG_ID?: string; HARNESS_DEFAULT_PROJECT_ID?: string };
+export type PathBuilderConfig = { HARNESS_ACCOUNT_ID?: string; HARNESS_ORG?: string; HARNESS_PROJECT?: string };
 
 /**
  * Specifies how a single CRUD operation maps to the Harness API.

@@ -20,8 +20,8 @@ export function registerExecutionSummaryResource(server: McpServer, registry: Re
         log.info("Fetching recent executions");
 
         const result = await registry.dispatch(client, "execution", "list", {
-          org_id: config.HARNESS_DEFAULT_ORG_ID,
-          project_id: config.HARNESS_DEFAULT_PROJECT_ID ?? "",
+          org_id: config.HARNESS_ORG,
+          project_id: config.HARNESS_PROJECT ?? "",
           size: 10,
           page: 0,
         });

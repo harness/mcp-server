@@ -12,8 +12,8 @@ export function registerPipelineYamlResource(server: McpServer, registry: Regist
     list: async () => {
       try {
         const result = await registry.dispatch(client, "pipeline", "list", {
-          org_id: config.HARNESS_DEFAULT_ORG_ID,
-          project_id: config.HARNESS_DEFAULT_PROJECT_ID ?? "",
+          org_id: config.HARNESS_ORG,
+          project_id: config.HARNESS_PROJECT ?? "",
           size: 20,
           page: 0,
         });
@@ -46,8 +46,8 @@ export function registerPipelineYamlResource(server: McpServer, registry: Regist
       const parts = path.split("/");
 
       // URI format: pipeline:///pipelineId or pipeline:///orgId/projectId/pipelineId
-      let orgId = config.HARNESS_DEFAULT_ORG_ID;
-      let projectId = config.HARNESS_DEFAULT_PROJECT_ID ?? "";
+      let orgId = config.HARNESS_ORG;
+      let projectId = config.HARNESS_PROJECT ?? "";
       let pipelineId: string;
 
       if (parts.length >= 3) {

@@ -110,8 +110,8 @@ export const connectorHandler: DiagnoseHandler = {
     }
 
     // Deep link
-    const orgId = asString(input.org_id) ?? config.HARNESS_DEFAULT_ORG_ID;
-    const projectId = asString(input.project_id) ?? config.HARNESS_DEFAULT_PROJECT_ID;
+    const orgId = asString(input.org_id) ?? config.HARNESS_ORG;
+    const projectId = asString(input.project_id) ?? config.HARNESS_PROJECT;
     if (orgId && projectId) {
       const base = config.HARNESS_BASE_URL.replace(/\/$/, "");
       diagnostic.openInHarness = `${base}/ng/account/${config.HARNESS_ACCOUNT_ID}/all/orgs/${orgId}/projects/${projectId}/setup/connectors/${connectorId}`;

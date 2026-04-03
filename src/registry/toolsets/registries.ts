@@ -11,8 +11,8 @@ import { passthrough, harListExtract } from "../extractors.js";
 
 function harSpaceRef(input: Record<string, unknown>, config: PathBuilderConfig): string {
   const account = config.HARNESS_ACCOUNT_ID ?? "";
-  const org = (input.org_id as string) || config.HARNESS_DEFAULT_ORG_ID || "";
-  const project = (input.project_id as string) || config.HARNESS_DEFAULT_PROJECT_ID || "";
+  const org = (input.org_id as string) || config.HARNESS_ORG || "";
+  const project = (input.project_id as string) || config.HARNESS_PROJECT || "";
   return `${account}/${org}/${project}`;
 }
 
