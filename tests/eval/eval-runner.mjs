@@ -305,7 +305,7 @@ async function main() {
   }
 
   // ── Discover project ────────────────────────────────────────────
-  let PROJECT_ID = opts.project || envVars.HARNESS_DEFAULT_PROJECT_ID || null;
+  let PROJECT_ID = opts.project || envVars.HARNESS_PROJECT || null;
 
   if (!PROJECT_ID) {
     if (!opts.json) console.log("Phase 0: Discovering a valid project...");
@@ -347,7 +347,7 @@ async function main() {
   }
 
   if (!PROJECT_ID) {
-    console.error("ERROR: No project found. Pass --project <id> or set HARNESS_DEFAULT_PROJECT_ID in .env");
+    console.error("ERROR: No project found. Pass --project <id> or set HARNESS_PROJECT in .env");
     process.exit(1);
   }
 
@@ -678,7 +678,7 @@ async function main() {
   if (shouldRunTier(4) && opts.includeCrud) {
     if (!opts.json) console.log("─── Tier 4: CRUD Lifecycle ────────────────────────────────────\n");
 
-    const orgId = envVars.HARNESS_DEFAULT_ORG_ID || "default";
+    const orgId = envVars.HARNESS_ORG || "default";
 
     for (const [resourceType, bodyFactory] of Object.entries(CRUD_BODIES)) {
       if (!shouldRunToolset(resourceType === "pipeline" ? "pipelines" : resourceType === "service" ? "services" : "environments")) continue;
@@ -816,7 +816,7 @@ async function main() {
   {
     if (!opts.json) console.log("─── Schema Validation: Staleness Detection ────────────────────\n");
 
-    const orgId = envVars.HARNESS_DEFAULT_ORG_ID || "default";
+    const orgId = envVars.HARNESS_ORG || "default";
 
     // Resource types with bodySchema on create (the 5 annotated toolsets)
     const SCHEMA_TYPES = [

@@ -18,7 +18,11 @@ const RawConfigSchema = z.object({
   HARNESS_API_KEY: z.string().min(1, "HARNESS_API_KEY is required"),
   HARNESS_ACCOUNT_ID: z.string().optional(),
   HARNESS_BASE_URL: z.string().url().default("https://app.harness.io"),
-  HARNESS_DEFAULT_ORG_ID: z.string().default("default"),
+  // New names (preferred)
+  HARNESS_ORG: z.string().optional(),
+  HARNESS_PROJECT: z.string().optional(),
+  // Deprecated names (backward compat)
+  HARNESS_DEFAULT_ORG_ID: z.string().optional(),
   HARNESS_DEFAULT_PROJECT_ID: z.string().optional(),
   HARNESS_API_TIMEOUT_MS: z.coerce.number().default(30000),
   HARNESS_MAX_RETRIES: z.coerce.number().default(3),
@@ -50,7 +54,20 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
     );
   }
 
-  return { ...data, HARNESS_ACCOUNT_ID: accountId };
+  // Resolve org/project: prefer new names, fall back to deprecated names
+  if (!data.HARNESS_ORG && data.HARNESS_DEFAULT_ORG_ID) {
+    console.error('[DEPRECATION] HARNESS_DEFAULT_ORG_ID is deprecated. Use HARNESS_ORG instead.');
+  }
+  if (!data.HARNESS_PROJECT && data.HARNESS_DEFAULT_PROJECT_ID) {
+    console.error('[DEPRECATION] HARNESS_DEFAULT_PROJECT_ID is deprecated. Use HARNESS_PROJECT instead.');
+  }
+  const HARNESS_ORG = data.HARNESS_ORG ?? data.HARNESS_DEFAULT_ORG_ID ?? "default";
+  const HARNESS_PROJECT = data.HARNESS_PROJECT ?? data.HARNESS_DEFAULT_PROJECT_ID;
+
+  // Remove deprecated keys from output, expose only the canonical names
+  const { HARNESS_DEFAULT_ORG_ID: _oldOrg, HARNESS_DEFAULT_PROJECT_ID: _oldProject, ...rest } = data;
+
+  return { ...rest, HARNESS_ACCOUNT_ID: accountId, HARNESS_ORG, HARNESS_PROJECT };
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

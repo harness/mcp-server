@@ -16,8 +16,8 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     HARNESS_API_KEY: "pat.testaccount.tokenid.secret",
     HARNESS_ACCOUNT_ID: "testaccount",
     HARNESS_BASE_URL: "https://app.harness.io",
-    HARNESS_DEFAULT_ORG_ID: "default",
-    HARNESS_DEFAULT_PROJECT_ID: "test-project",
+    HARNESS_ORG: "default",
+    HARNESS_PROJECT: "test-project",
     HARNESS_API_TIMEOUT_MS: 5000,
     HARNESS_MAX_RETRIES: 0, // No retries for tests
     LOG_LEVEL: "error",
@@ -215,8 +215,8 @@ describe("Integration: Registry → HarnessClient → fetch", () => {
       );
 
       const config = makeConfig({
-        HARNESS_DEFAULT_ORG_ID: "my-org",
-        HARNESS_DEFAULT_PROJECT_ID: "my-project",
+        HARNESS_ORG: "my-org",
+        HARNESS_PROJECT: "my-project",
       });
       const client = new HarnessClient(config);
       const registry = new Registry(config);

@@ -128,8 +128,8 @@ export class Registry {
     return new Set(valid);
   }
 
-  get defaultOrgId(): string { return this.config.HARNESS_DEFAULT_ORG_ID; }
-  get defaultProjectId(): string | undefined { return this.config.HARNESS_DEFAULT_PROJECT_ID; }
+  get orgId(): string { return this.config.HARNESS_ORG; }
+  get projectId(): string | undefined { return this.config.HARNESS_PROJECT; }
 
   /** Get a resource definition by type, or throw. */
   getResource(resourceType: string): ResourceDefinition {
@@ -269,9 +269,9 @@ export class Registry {
           if (value === undefined || value === "") {
             // Default scope placeholders from config for project/org-scoped resources
             if (pathPlaceholder === "org" && (def.scope === "project" || def.scope === "org")) {
-              value = this.config.HARNESS_DEFAULT_ORG_ID;
+              value = this.config.HARNESS_ORG;
             } else if (pathPlaceholder === "project" && def.scope === "project") {
-              value = this.config.HARNESS_DEFAULT_PROJECT_ID;
+              value = this.config.HARNESS_PROJECT;
             }
           }
           if (value === undefined || value === "") {
@@ -301,10 +301,10 @@ export class Registry {
     } else {
       // Standard scoping: always inject based on scope level, falling back to config defaults
       if (def.scope === "project" || def.scope === "org") {
-        params[orgParam] = (input.org_id as string) ?? this.config.HARNESS_DEFAULT_ORG_ID;
+        params[orgParam] = (input.org_id as string) ?? this.config.HARNESS_ORG;
       }
       if (def.scope === "project") {
-        params[projectParam] = (input.project_id as string) ?? this.config.HARNESS_DEFAULT_PROJECT_ID;
+        params[projectParam] = (input.project_id as string) ?? this.config.HARNESS_PROJECT;
       }
     }
     // Inject custom account param when scopeParams.account is set
@@ -447,9 +447,9 @@ export class Registry {
         if (baseLinkParams[pathPlaceholder]) continue; // already set
         let value = input[inputKey] as string | undefined;
         if (!value && pathPlaceholder === "org") {
-          value = this.config.HARNESS_DEFAULT_ORG_ID;
+          value = this.config.HARNESS_ORG;
         } else if (!value && pathPlaceholder === "project") {
-          value = this.config.HARNESS_DEFAULT_PROJECT_ID;
+          value = this.config.HARNESS_PROJECT;
         }
         if (value) {
           baseLinkParams[pathPlaceholder] = value;

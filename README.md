@@ -133,7 +133,7 @@ curl -X DELETE http://localhost:3000/mcp \
 
 ### Client Configuration
 
-> **Note:** `HARNESS_DEFAULT_ORG_ID` and `HARNESS_DEFAULT_PROJECT_ID` are optional. Agents can discover orgs and projects dynamically using `harness_list(resource_type="organization")` and `harness_list(resource_type="project")`. Set them only if you want to pin a default scope for convenience.
+> **Note:** `HARNESS_ORG` and `HARNESS_PROJECT` are optional. They set the org ID and project ID used when not specified per tool call. Agents can discover orgs and projects dynamically using `harness_list(resource_type="organization")` and `harness_list(resource_type="project")`. The deprecated names `HARNESS_DEFAULT_ORG_ID` and `HARNESS_DEFAULT_PROJECT_ID` are still accepted for backward compatibility.
 
 > **Troubleshooting `npx ENOENT` or `node: No such file or directory`**
 >
@@ -454,8 +454,8 @@ The server automatically loads environment variables from a `.env` file in the p
 | `HARNESS_API_KEY` | Yes | -- | Harness personal access token or service account token |
 | `HARNESS_ACCOUNT_ID` | No | *(from PAT)* | Harness account identifier. Auto-extracted from PAT tokens; only needed for non-PAT API keys |
 | `HARNESS_BASE_URL` | No | `https://app.harness.io` | Base URL (override for self-managed Harness) |
-| `HARNESS_DEFAULT_ORG_ID` | No | `default` | Default organization identifier. Optional convenience — agents can discover orgs dynamically via `harness_list(resource_type="organization")` |
-| `HARNESS_DEFAULT_PROJECT_ID` | No | -- | Default project identifier. Optional convenience — agents can discover projects dynamically via `harness_list(resource_type="project")` |
+| `HARNESS_ORG` | No | `default` | Organization ID. Used when `org_id` is not specified per tool call. Agents can also discover orgs dynamically via `harness_list(resource_type="organization")` |
+| `HARNESS_PROJECT` | No | -- | Project ID. Used when `project_id` is not specified per tool call. Agents can also discover projects dynamically via `harness_list(resource_type="project")` |
 | `HARNESS_API_TIMEOUT_MS` | No | `30000` | HTTP request timeout in milliseconds |
 | `HARNESS_MAX_RETRIES` | No | `3` | Retry count for transient failures (429, 5xx) |
 | `HARNESS_MAX_BODY_SIZE_MB` | No | `10` | Max HTTP request body size in MB for `http` transport |
@@ -480,7 +480,7 @@ All write operations (`harness_create`, `harness_update`, `harness_delete`, `har
 
 ## Tools Reference
 
-The server exposes 11 MCP tools. Most API tools accept `org_id` and `project_id` as optional overrides — if omitted, they fall back to `HARNESS_DEFAULT_ORG_ID` and `HARNESS_DEFAULT_PROJECT_ID`. `harness_describe` is local metadata only and does not use org/project scope.
+The server exposes 11 MCP tools. Most API tools accept `org_id` and `project_id` as optional overrides — if omitted, they fall back to `HARNESS_ORG` and `HARNESS_PROJECT`. `harness_describe` is local metadata only and does not use org/project scope.
 
 **URL support:** Most API-facing tools accept a `url` parameter — paste a Harness UI URL and the server auto-extracts org, project, resource type, resource ID, pipeline ID, and execution ID. `harness_describe` does not accept `url`.
 
@@ -1486,7 +1486,7 @@ The Harness MCP server pairs well with **[Harness Skills](https://github.com/thi
 | HTTP `405 Method Not Allowed` on `/mcp` | Unsupported method for MCP endpoint | Use `POST`, `GET`, `DELETE`, or `OPTIONS` only |
 | HTTP `Invalid request` | Invalid JSON body or request body exceeded `HARNESS_MAX_BODY_SIZE_MB` | Validate JSON payload size/shape; increase `HARNESS_MAX_BODY_SIZE_MB` if needed |
 | `Unknown resource_type "..."` from tools | Resource type is misspelled or filtered out via `HARNESS_TOOLSETS` | Call `harness_describe` (with optional `search_term`) to discover valid types |
-| `Missing required field "... for path parameter ..."` | A project/org scoped call is missing identifiers | Set `HARNESS_DEFAULT_ORG_ID`/`HARNESS_DEFAULT_PROJECT_ID` or pass `org_id`/`project_id` per tool call |
+| `Missing required field "... for path parameter ..."` | A project/org scoped call is missing identifiers | Set `HARNESS_ORG`/`HARNESS_PROJECT` or pass `org_id`/`project_id` per tool call |
 | `Read-only mode is enabled ... operations are not allowed` | `HARNESS_READ_ONLY=true` blocks create/update/delete/execute | Set `HARNESS_READ_ONLY=false` if write operations are intended |
 | Pipeline run fails pre-flight with unresolved required inputs | Provided `inputs` did not cover required runtime placeholders | Fetch `runtime_input_template`, supply missing simple keys, or use `input_set_ids` for structural inputs |
 | Pipeline CI shorthand (`branch`, `tag`, `pr_number`, `commit_sha`) did not apply | `inputs.build` was already provided, so shorthand expansion was intentionally skipped | Remove `inputs.build` to use shorthand expansion, or keep full explicit `build` structure |

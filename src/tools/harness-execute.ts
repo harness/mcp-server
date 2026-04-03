@@ -109,8 +109,8 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
               : flattenInputs(args.inputs);
             resolved = await resolveRuntimeInputs(client, inputsToResolve, {
               pipelineId,
-              orgId: asString(input.org_id) || registry.defaultOrgId,
-              projectId: asString(input.project_id) || registry.defaultProjectId,
+              orgId: asString(input.org_id) || registry.orgId,
+              projectId: asString(input.project_id) || registry.projectId,
               branch: asString(input.branch),
             });
 
@@ -233,8 +233,8 @@ async function fetchInputSetHint(
       path: "/pipeline/api/inputSets",
       params: {
         pipelineIdentifier: pipelineId,
-        orgIdentifier: String(input.org_id || registry.defaultOrgId),
-        projectIdentifier: String(input.project_id || registry.defaultProjectId),
+        orgIdentifier: String(input.org_id || registry.orgId),
+        projectIdentifier: String(input.project_id || registry.projectId),
         size: "5",
       },
     });
