@@ -1,4 +1,4 @@
-import type { ToolsetDefinition, PathBuilderConfig } from "../types.js";
+import type { ToolsetDefinition } from "../types.js";
 import { scsCleanExtract, scsListExtract } from "../extractors.js";
 
 // ── P2-2: Per-resource field lists for list extractors ─────────────────────
@@ -661,12 +661,13 @@ export const scsToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: `${SCS}/v1/components/details`,
-          pathBuilder: (input: Record<string, unknown>, config: PathBuilderConfig) => {
+          pathBuilder: (input, config) => {
             const artifactId = input.artifact_id as string | undefined;
             if (artifactId) {
               // Project-scoped: richer response with SBOM context
-              const org = (input.org_id as string) || config.HARNESS_DEFAULT_ORG_ID || "";
-              const project = (input.project_id as string) || config.HARNESS_DEFAULT_PROJECT_ID || "";
+              const cfg = config as Record<string, string | undefined>;
+              const org = (input.org_id as string) || cfg.HARNESS_DEFAULT_ORG_ID || "";
+              const project = (input.project_id as string) || cfg.HARNESS_DEFAULT_PROJECT_ID || "";
               return `${SCS}/v1/orgs/${org}/projects/${project}/artifacts/${artifactId}/component/overview`;
             }
             // Account-scoped fallback: enrichment data only
