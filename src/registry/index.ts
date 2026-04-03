@@ -78,17 +78,25 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
 ];
 
 /**
+ * Options for extending the Registry with additional toolsets.
+ */
+export interface RegistryOptions {
+  additionalToolsets?: ToolsetDefinition[];
+}
+
+/**
  * The enabled registry — filtered by HARNESS_TOOLSETS config.
  */
 export class Registry {
   private resourceMap: Map<string, ResourceDefinition> = new Map();
   private toolsets: ToolsetDefinition[] = [];
 
-  constructor(private config: Config) {
-    const enabledNames = this.parseToolsetFilter();
+  constructor(private config: Config, options: RegistryOptions = {}) {
+    const allToolsets = [...ALL_TOOLSETS, ...(options.additionalToolsets ?? [])];
+    const enabledNames = this.parseToolsetFilter(allToolsets);
     this.toolsets = enabledNames
-      ? ALL_TOOLSETS.filter((t) => enabledNames.has(t.name))
-      : ALL_TOOLSETS;
+      ? allToolsets.filter((t) => enabledNames.has(t.name))
+      : allToolsets;
 
     for (const toolset of this.toolsets) {
       for (const resource of toolset.resources) {
@@ -99,18 +107,18 @@ export class Registry {
     log.info(`Registry loaded: ${this.resourceMap.size} resource types from ${this.toolsets.length} toolsets`);
   }
 
-  private parseToolsetFilter(): Set<ToolsetName> | null {
+  private parseToolsetFilter(allToolsets: ToolsetDefinition[]): Set<string> | null {
     const raw = this.config.HARNESS_TOOLSETS;
     if (!raw || raw.trim() === "") return null;
 
-    const validNames = new Set<string>(ALL_TOOLSETS.map((t) => t.name));
+    const validNames = new Set<string>(allToolsets.map((t) => t.name));
     const parsed = raw.split(",").map((s) => s.trim()).filter(Boolean);
-    const valid: ToolsetName[] = [];
+    const valid: string[] = [];
     const invalid: string[] = [];
 
     for (const name of parsed) {
       if (validNames.has(name)) {
-        valid.push(name as ToolsetName);
+        valid.push(name);
       } else {
         invalid.push(name);
       }
