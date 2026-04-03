@@ -52,6 +52,20 @@ export function isUserFixableApiError(err: unknown): err is HarnessApiError {
 }
 
 /**
+ * Strip HTML/JS noise from error messages that may have leaked from
+ * proxy redirect pages or WAF responses.
+ */
+function sanitizeErrorMessage(message: string): string {
+  if (/^\s*</.test(message) || /<!doctype/i.test(message.slice(0, 100))) {
+    return "Harness returned an HTML error page instead of JSON. Check your API key, account ID, and base URL.";
+  }
+  if (/function\s+\w+\s*\(/.test(message) || /redirectPage|signInPath/.test(message)) {
+    return "Harness returned a login redirect. The API key may be invalid or expired.";
+  }
+  return message;
+}
+
+/**
  * Map a HarnessApiError (or generic Error) to an MCP-friendly McpError.
  */
 export function toMcpError(err: unknown): McpError {
@@ -60,7 +74,8 @@ export function toMcpError(err: unknown): McpError {
   if (err instanceof HarnessApiError) {
     const code = mapHttpStatusToMcpCode(err.statusCode);
     const detail = err.correlationId ? ` (correlationId: ${err.correlationId})` : "";
-    const mcpErr = new McpError(code, `${err.message}${detail}`);
+    const cleanMessage = sanitizeErrorMessage(err.message);
+    const mcpErr = new McpError(code, `${cleanMessage}${detail}`);
     mcpErr.cause = err;
     return mcpErr;
   }

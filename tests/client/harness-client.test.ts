@@ -239,6 +239,53 @@ describe("HarnessClient", () => {
       }
     });
 
+    it("strips JS redirect page from 401 error message", async () => {
+      const redirectHtml = `<html><head><script>
+        function redirectPage() {
+          const signInPath = "auth/#/signin";
+          const returnUrl = encodeURIComponent(window.location.href);
+          window.location.href = signInPath + "?returnUrl=" + returnUrl;
+        }
+        redirectPage();
+      </script></head><body></body></html>`;
+      fetchSpy.mockResolvedValue(new Response(redirectHtml, { status: 401 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      try {
+        await client.request({ path: "/test" });
+        expect.fail("should have thrown");
+      } catch (err) {
+        expect(err).toBeInstanceOf(HarnessApiError);
+        const e = err as HarnessApiError;
+        expect(e.statusCode).toBe(401);
+        expect(e.message).toContain("HARNESS_API_KEY");
+        expect(e.message).not.toContain("redirectPage");
+        expect(e.message).not.toContain("signInPath");
+        expect(e.message).not.toContain("function");
+        expect(e.message).not.toContain("<script");
+      }
+    });
+
+    it("strips garbage JSON message containing redirect JS", async () => {
+      const body = JSON.stringify({
+        message: 'Harness Redirect function redirectPage() { const signInPath = "auth/#/signin"; const returnUrl = encodeURIComponent(window.location.href) }',
+      });
+      fetchSpy.mockResolvedValue(new Response(body, { status: 401 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      try {
+        await client.request({ path: "/test" });
+        expect.fail("should have thrown");
+      } catch (err) {
+        expect(err).toBeInstanceOf(HarnessApiError);
+        const e = err as HarnessApiError;
+        expect(e.statusCode).toBe(401);
+        expect(e.message).toContain("HARNESS_API_KEY");
+        expect(e.message).not.toContain("redirectPage");
+        expect(e.message).not.toContain("signInPath");
+      }
+    });
+
     it("does not retry on 400", async () => {
       fetchSpy.mockResolvedValue(new Response(JSON.stringify({ message: "bad" }), { status: 400 }));
       const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 2 }));
