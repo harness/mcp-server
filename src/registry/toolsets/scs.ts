@@ -1,4 +1,4 @@
-import type { ToolsetDefinition, PathBuilderConfig } from "../types.js";
+import type { ToolsetDefinition } from "../types.js";
 import { scsCleanExtract, scsListExtract } from "../extractors.js";
 
 // ── P2-2: Per-resource field lists for list extractors ─────────────────────
@@ -674,7 +674,7 @@ export const scsToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: `${SCS}/v1/components/details`,
-          pathBuilder: (input: Record<string, unknown>, config: PathBuilderConfig) => {
+          pathBuilder: (input, config) => {
             const artifactId = input.artifact_id as string | undefined;
             if (artifactId) {
               // Project-scoped: richer response with SBOM context
