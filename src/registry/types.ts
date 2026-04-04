@@ -31,6 +31,7 @@ export type ToolsetName =
   | "access_control"
   | "settings"
   | "platform"
+  | "documentation"
 
   | "visualizations"
   | "governance"
@@ -129,6 +130,8 @@ export interface EndpointSpec {
   bodyBuilder?: (input: Record<string, unknown>) => unknown;
   /** Static headers to merge into the request (e.g. Content-Type override) */
   headers?: Record<string, string>;
+  /** Dynamic headers builder — called per request with tool input. Merged after static headers. */
+  headersBuilder?: (input: Record<string, unknown>) => Record<string, string>;
   /** For GET: extract the useful part from the raw response */
   responseExtractor?: (raw: unknown) => unknown;
   /** Request binary (ArrayBuffer) response instead of JSON. Used for ZIP download endpoints. */

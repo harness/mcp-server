@@ -13,7 +13,7 @@ const log = createLogger("search");
 
 /** Relevance tiers — lower number = more relevant. */
 const RELEVANCE_TIERS: Record<string, number> = {
-  pipeline: 1, service: 1, environment: 1, connector: 1, execution: 1,
+  documentation: 1, pipeline: 1, service: 1, environment: 1, connector: 1, execution: 1,
   template: 2, trigger: 2, input_set: 2, secret: 2, fme_feature_flag: 2,
   repository: 2, infrastructure: 2,
   // SCS types at tier 2 — same priority as other domain-specific resources
@@ -41,10 +41,13 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
   server.registerTool(
     "harness_search",
     {
-      description: "Search across multiple Harness resource types. Returns results ranked by relevance. Accepts a Harness URL for scope.",
+      description:
+        "Search across multiple Harness resource types. Returns results ranked by relevance. Accepts a Harness URL for scope. " +
+        "For questions about Harness features, concepts, or how-to guides, use resource_types=['documentation'] to query the Harness Documentation Bot — " +
+        "it retrieves answers grounded in official Harness docs (https://developer.harness.io/docs) with source citations.",
       inputSchema: {
         query: z.string().describe("Search term"),
-        resource_types: z.array(z.enum(listableTypes)).describe("Types to search (defaults to all listable)").optional(),
+        resource_types: z.array(z.enum(listableTypes)).describe("Types to search (defaults to all listable). Use ['documentation'] for Harness docs/knowledge questions.").optional(),
         url: z.string().describe("Harness UI URL — auto-extracts org and project").optional(),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),

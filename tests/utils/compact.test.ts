@@ -26,6 +26,20 @@ describe("compactItems", () => {
     expect(result[0]).toEqual({ tags: ["prod"], labels: { env: "prod" }, owner: "alice", author: "bob" });
   });
 
+  it("keeps content fields (documentation chatbot responses)", () => {
+    const items = [{
+      answer: "Harness is a CI/CD platform...",
+      sources: [{ url: "https://docs.harness.io", title: "Harness Docs" }],
+      question: "What is Harness?",
+    }];
+    const result = compactItems(items) as Record<string, unknown>[];
+    expect(result[0]).toEqual({
+      answer: "Harness is a CI/CD platform...",
+      sources: [{ url: "https://docs.harness.io", title: "Harness Docs" }],
+      question: "What is Harness?",
+    });
+  });
+
   it("keeps timestamp fields matching pattern", () => {
     const items = [{ createdAt: 1000, lastModifiedTs: 2000, startTime: 3000, updatedDate: "2025-01-01" }];
     const result = compactItems(items) as Record<string, unknown>[];

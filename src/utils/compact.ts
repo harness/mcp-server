@@ -26,6 +26,10 @@ const OWNERSHIP_FIELDS = new Set([
   "tags", "labels", "owner", "author", "committer",
 ]);
 
+const CONTENT_FIELDS = new Set([
+  "answer", "sources", "question",
+]);
+
 const ALWAYS_KEEP = new Set(["openInHarness"]);
 
 /** Identifier-like key pattern: pipelineIdentifier, projectId, env_id, etc. */
@@ -37,6 +41,7 @@ function isWhitelistedKey(key: string): boolean {
     STATUS_FIELDS.has(key) ||
     TYPE_FIELDS.has(key) ||
     OWNERSHIP_FIELDS.has(key) ||
+    CONTENT_FIELDS.has(key) ||
     ALWAYS_KEEP.has(key) ||
     TIMESTAMP_PATTERN.test(key) ||
     IDENTIFIER_PATTERN.test(key)

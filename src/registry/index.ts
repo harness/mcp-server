@@ -36,6 +36,7 @@ import { visualizationsToolset } from "./toolsets/visualizations.js";
 import { governanceToolset } from "./toolsets/governance.js";
 import { freezeToolset } from "./toolsets/freeze.js";
 import { overridesToolset } from "./toolsets/overrides.js";
+import { documentationToolset } from "./toolsets/documentation.js";
 
 const log = createLogger("registry");
 
@@ -70,6 +71,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   accessControlToolset,
   settingsToolset,
   platformToolset,
+  documentationToolset,
 
   visualizationsToolset,
   governanceToolset,
@@ -134,6 +136,20 @@ export class Registry {
 
     if (valid.length === 0) return null;
     return new Set(valid);
+  }
+
+  /**
+   * Register an external toolset at runtime.
+   * Allows consumers (e.g. mcpServerInternal) to inject additional toolsets
+   * without modifying this package. Resources are added to the registry and
+   * become available to harness_search, harness_list, and harness_describe.
+   */
+  registerToolset(toolset: ToolsetDefinition): void {
+    this.toolsets.push(toolset);
+    for (const resource of toolset.resources) {
+      this.resourceMap.set(resource.resourceType, resource);
+    }
+    log.info(`Registered external toolset "${toolset.name}": ${toolset.resources.length} resource(s)`);
   }
 
   get orgId(): string { return this.config.HARNESS_ORG; }
@@ -403,7 +419,10 @@ export class Registry {
     // Make request — resolve base URL and auth from product backend
     const product = def.product ?? "harness";
     const baseUrl = resolveProductBaseUrl(this.config, product);
-    const productHeaders: Record<string, string> = { ...spec.headers };
+    const productHeaders: Record<string, string> = {
+      ...spec.headers,
+      ...(spec.headersBuilder ? spec.headersBuilder(input) : {}),
+    };
     if (product === "fme") {
       productHeaders["Authorization"] = `Bearer ${this.config.HARNESS_API_KEY}`;
     }
