@@ -862,6 +862,153 @@ describe("P3-8: scs_component_dependencies resource", () => {
   });
 });
 
+// ─── P3-11: scs_component_enrichment structural tests ────────────────────────
+
+describe("P3-11: scs_component_enrichment resource", () => {
+  it("exists in scsToolset", () => {
+    expect(() => findResource("scs_component_enrichment")).not.toThrow();
+  });
+
+  it("has a get operation with correct fallback path", () => {
+    const spec = getOp("scs_component_enrichment", "get");
+    expect(spec.method).toBe("GET");
+    expect(spec.path).toContain("/v1/components/details");
+  });
+
+  it("has a pathBuilder that returns project-scoped path when artifact_id is provided", () => {
+    const spec = getOp("scs_component_enrichment", "get");
+    expect(spec.pathBuilder).toBeDefined();
+    const path = spec.pathBuilder!(
+      { artifact_id: "art123", org_id: "myOrg", project_id: "myProj", purl: "pkg:npm/express@4.18.0" },
+      { HARNESS_ACCOUNT_ID: "acc", HARNESS_DEFAULT_ORG_ID: "defOrg", HARNESS_DEFAULT_PROJECT_ID: "defProj" },
+    );
+    expect(path).toContain("/v1/orgs/myOrg/projects/myProj/artifacts/art123/component/overview");
+  });
+
+  it("pathBuilder falls back to account-scoped path when artifact_id is absent", () => {
+    const spec = getOp("scs_component_enrichment", "get");
+    const path = spec.pathBuilder!(
+      { purl: "pkg:npm/express@4.18.0" },
+      { HARNESS_ACCOUNT_ID: "acc", HARNESS_DEFAULT_ORG_ID: "defOrg", HARNESS_DEFAULT_PROJECT_ID: "defProj" },
+    );
+    expect(path).toContain("/v1/components/details");
+    expect(path).not.toContain("/orgs/");
+  });
+
+  it("pathBuilder uses default org/project from config when not in input", () => {
+    const spec = getOp("scs_component_enrichment", "get");
+    const path = spec.pathBuilder!(
+      { artifact_id: "art123", purl: "pkg:npm/express@4.18.0" },
+      { HARNESS_ACCOUNT_ID: "acc", HARNESS_DEFAULT_ORG_ID: "defOrg", HARNESS_DEFAULT_PROJECT_ID: "defProj" },
+    );
+    expect(path).toContain("/v1/orgs/defOrg/projects/defProj/artifacts/art123/component/overview");
+  });
+
+  it("get operation requires purl as query param", () => {
+    const spec = getOp("scs_component_enrichment", "get");
+    expect(spec.queryParams).toBeDefined();
+    expect(spec.queryParams!.purl).toBe("purl");
+  });
+
+  it("is project-scoped with scopeOptional for account fallback", () => {
+    const res = findResource("scs_component_enrichment");
+    expect(res.scope).toBe("project");
+    expect(res.scopeOptional).toBe(true);
+  });
+
+  it("description mentions EOL, outdated, unmaintained", () => {
+    const res = findResource("scs_component_enrichment");
+    expect(res.description).toContain("end-of-life");
+    expect(res.description).toContain("outdated");
+    expect(res.description).toContain("unmaintained");
+  });
+
+  it("description clarifies CVE boundary with STO", () => {
+    const res = findResource("scs_component_enrichment");
+    expect(res.description).toContain("security_issue");
+    expect(res.description).toContain("STO");
+  });
+
+  it("diagnosticHint explains PURL format", () => {
+    const res = findResource("scs_component_enrichment");
+    expect(res.diagnosticHint).toBeDefined();
+    expect(res.diagnosticHint!).toContain("pkg:");
+  });
+
+  it("searchAliases include OSS risk terms", () => {
+    const res = findResource("scs_component_enrichment");
+    const aliases = res.searchAliases!.map((a) => a.toLowerCase());
+    expect(aliases).toContain("oss risk");
+    expect(aliases).toContain("end of life");
+    expect(aliases).toContain("eol");
+    expect(aliases).toContain("outdated");
+    expect(aliases).toContain("unmaintained");
+    expect(aliases).toContain("latest version");
+  });
+
+  it("has relatedResources referencing scs_artifact_component as parent", () => {
+    const res = findResource("scs_component_enrichment");
+    const parentRef = res.relatedResources!.find(
+      (rel) => rel.resourceType === "scs_artifact_component",
+    );
+    expect(parentRef).toBeDefined();
+    expect(parentRef!.relationship).toBe("parent");
+  });
+
+  it("has relatedResources referencing scs_component_remediation as sibling", () => {
+    const res = findResource("scs_component_enrichment");
+    const siblingRef = res.relatedResources!.find(
+      (rel) => rel.resourceType === "scs_component_remediation",
+    );
+    expect(siblingRef).toBeDefined();
+    expect(siblingRef!.relationship).toBe("sibling");
+  });
+
+  it("has relatedResources referencing security_issue (STO) as sibling", () => {
+    const res = findResource("scs_component_enrichment");
+    const stoRef = res.relatedResources!.find(
+      (rel) => rel.resourceType === "security_issue",
+    );
+    expect(stoRef).toBeDefined();
+    expect(stoRef!.relationship).toBe("sibling");
+  });
+
+  it("purl is a required listFilterField", () => {
+    const res = findResource("scs_component_enrichment");
+    const purlField = res.listFilterFields!.find((f) => f.name === "purl");
+    expect(purlField).toBeDefined();
+    expect(purlField!.required).toBe(true);
+  });
+
+  it("artifact_id is an optional listFilterField", () => {
+    const res = findResource("scs_component_enrichment");
+    const artifactField = res.listFilterFields!.find((f) => f.name === "artifact_id");
+    expect(artifactField).toBeDefined();
+    expect(artifactField!.required).toBeFalsy();
+  });
+
+  it("has artifact_id in identifierFields", () => {
+    const res = findResource("scs_component_enrichment");
+    expect(res.identifierFields).toContain("artifact_id");
+  });
+
+  it("description mentions both modes and artifact_id", () => {
+    const res = findResource("scs_component_enrichment");
+    expect(res.description).toContain("artifact_id");
+    expect(res.description).toContain("Account-scoped");
+    expect(res.description).toContain("Project-scoped");
+  });
+
+  it("scs_artifact_component has relatedResources referencing scs_component_enrichment", () => {
+    const res = findResource("scs_artifact_component");
+    const enrichmentRef = res.relatedResources!.find(
+      (rel) => rel.resourceType === "scs_component_enrichment",
+    );
+    expect(enrichmentRef).toBeDefined();
+    expect(enrichmentRef!.relationship).toBe("sibling");
+  });
+});
+
 // ─── P3-1: BOM Enforcement Violations ───────────────────────────────────────
 
 describe("P3-1: scs_bom_violation resource", () => {

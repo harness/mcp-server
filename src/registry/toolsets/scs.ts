@@ -33,6 +33,14 @@ const CODE_REPO_LIST_FIELDS = [
   "vulnerability_count", "updated",
 ];
 
+const COMPONENT_ENRICHMENT_FIELDS = [
+  "purl", "package_name", "package_version", "version",
+  "is_outdated", "is_unmaintained", "is_deprecated", "latest_version",
+  "eol_status", "eol_score", "eol_findings", "eol_recommendation",
+  "package_license", "vulnerability_count",
+  "description",
+];
+
 const BOM_VIOLATION_LIST_FIELDS = [
   "name", "version", "purl", "license",
   "violationType", "violationDetails",
@@ -190,6 +198,7 @@ export const scsToolset: ToolsetDefinition = {
         { resourceType: "artifact_security", relationship: "parent", description: "Get artifact_id needed to list components" },
         { resourceType: "scs_component_dependencies", relationship: "child", description: "Get dependency tree for a specific component (pass purl)" },
         { resourceType: "scs_component_remediation", relationship: "sibling", description: "Safe upgrade suggestions with dependency impact analysis (pass purl) — preferred over scs_artifact_remediation" },
+        { resourceType: "scs_component_enrichment", relationship: "sibling", description: "OSS risk / EOL / outdated status for a component (pass purl)" },
       ],
       toolset: "scs",
       scope: "project",
@@ -476,8 +485,9 @@ export const scsToolset: ToolsetDefinition = {
     {
       resourceType: "scs_component_remediation",
       displayName: "Component Remediation Suggestion",
-      description: "Safe upgrade suggestions for a vulnerable or outdated OSS component. "
-        + "ALWAYS call this resource when the user asks about upgrade versions, safe versions, remediation advice, or dependency impact of upgrades — "
+      description: "Safe upgrade suggestions for a vulnerable OSS component — returns the specific version to upgrade to and what dependencies change. "
+        + "DO NOT use for status checks (is it outdated? is it EOL? risk score?) — use scs_component_enrichment for those. "
+        + "ONLY call this resource when the user explicitly asks about upgrade versions, safe versions, remediation advice, or dependency impact of upgrades — "
         + "this data comes from a dedicated API and CANNOT be inferred from component lists or dependency trees. "
         + "Returns: recommended_version (the specific safe version to upgrade to), warnings, dependency_changes (added/removed/modified dependencies), and code_preview. "
         + "Input: artifact_id (as resource_id) + component purl (required). "
@@ -607,6 +617,67 @@ export const scsToolset: ToolsetDefinition = {
               { name: "body", type: "object", required: true, description: "Auto-PR configuration object. Use harness_get first to see the current shape, then modify and pass back." },
             ],
           },
+        },
+      },
+    },
+
+    // ── Component Enrichment / OSS Risk Lookup (P3-11) ────────────────
+    {
+      resourceType: "scs_component_enrichment",
+      displayName: "Component OSS Risk & Enrichment",
+      description: "OSS risk ASSESSMENT and enrichment data for a component by Package URL (PURL). "
+        + "This is the STATUS CHECK resource — call it BEFORE scs_component_remediation. "
+        + "Returns: end-of-life (EOL) status and risk score, whether the version is outdated or unmaintained, "
+        + "latest available version, license info, and vulnerability count. "
+        + "ALWAYS use this when the user asks: 'Is this library safe?', 'Is component X end-of-life?', "
+        + "'Is my version of Y outdated?', 'What is the latest version of Z?', 'What is the risk?', 'Check OSS risk status'. "
+        + "Input: purl (Package URL, e.g. pkg:npm/express@4.18.0). "
+        + "Two modes: (1) Account-scoped — pass purl only. Works for any known component. "
+        + "(2) Project-scoped — pass artifact_id + purl. Returns richer data: dependency type (direct/transitive), parent components, STO vulnerability source. "
+        + "For CVE/vulnerability DETAILS, use security_issue (STO) instead — this resource covers OSS risk only.",
+      diagnosticHint: "If you get empty results: the component may not have been enriched yet (only components seen in scanned SBOMs are enriched). "
+        + "Get purl values from harness_list(resource_type='scs_artifact_component', artifact_id='...'). "
+        + "PURL format: pkg:<type>/<namespace>/<name>@<version> (e.g. pkg:npm/express@4.18.0, pkg:golang/stdlib@1.20.0). "
+        + "For richer data (dependency type, parents), always pass artifact_id when available.",
+      searchAliases: [
+        "oss risk", "end of life", "eol", "outdated", "unmaintained",
+        "component risk", "library risk", "package risk", "version risk",
+        "is it safe", "latest version", "component enrichment",
+      ],
+      relatedResources: [
+        { resourceType: "scs_artifact_component", relationship: "parent", description: "List components in an artifact to get purl values and artifact_id" },
+        { resourceType: "scs_component_remediation", relationship: "sibling", description: "Get upgrade suggestions if the component is outdated/at-risk" },
+        { resourceType: "security_issue", relationship: "sibling", description: "CVE/vulnerability details (STO domain) — use for specific CVE queries" },
+      ],
+      toolset: "scs",
+      scope: "project",
+      scopeOptional: true,
+      identifierFields: ["artifact_id"],
+      listFilterFields: [
+        { name: "purl", description: "Package URL of the component (e.g. pkg:npm/express@4.18.0) — required", required: true },
+        { name: "artifact_id", description: "Artifact ID for project-scoped lookup (preferred — returns richer data including dependency type and parents)" },
+      ],
+      operations: {
+        get: {
+          method: "GET",
+          path: `${SCS}/v1/components/details`,
+          pathBuilder: (input, config) => {
+            const artifactId = input.artifact_id as string | undefined;
+            if (artifactId) {
+              // Project-scoped: richer response with SBOM context
+              const cfg = config as Record<string, string | undefined>;
+              const org = (input.org_id as string) || cfg.HARNESS_DEFAULT_ORG_ID || "";
+              const project = (input.project_id as string) || cfg.HARNESS_DEFAULT_PROJECT_ID || "";
+              return `${SCS}/v1/orgs/${org}/projects/${project}/artifacts/${artifactId}/component/overview`;
+            }
+            // Account-scoped fallback: enrichment data only
+            return `${SCS}/v1/components/details`;
+          },
+          queryParams: {
+            purl: "purl",
+          },
+          responseExtractor: scsCleanExtract,
+          description: "Get OSS risk and enrichment data for a component by PURL. Pass artifact_id for project-scoped results.",
         },
       },
     },
