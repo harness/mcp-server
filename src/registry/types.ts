@@ -184,7 +184,7 @@ export interface ResourceDefinition {
   /** Brief description for harness_describe output */
   description: string;
   /** Which toolset this resource belongs to (for HARNESS_TOOLSETS filtering) */
-  toolset: ToolsetName;
+  toolset: string;
   /** Scope level: "project" | "org" | "account" */
   scope: "project" | "org" | "account";
   /**
@@ -252,7 +252,7 @@ export interface ResourceDefinition {
  * A toolset groups related ResourceDefinitions together.
  */
 export interface ToolsetDefinition {
-  name: ToolsetName;
+  name: string;
   displayName: string;
   description: string;
   resources: ResourceDefinition[];
