@@ -160,7 +160,7 @@ export const platformToolset: ToolsetDefinition = {
       operations: {
         list: {
           method: "GET",
-          path: "/v1/orgs",
+          path: "/ng/api/organizations",
           queryParams: {
             search_term: "search_term",
             page: "page",
@@ -173,14 +173,14 @@ export const platformToolset: ToolsetDefinition = {
         },
         get: {
           method: "GET",
-          path: "/v1/orgs/{org}",
+          path: "/ng/api/organizations/{org}",
           pathParams: { org_id: "org" },
           responseExtractor: v1Unwrap("org"),
           description: "Get organization details",
         },
         create: {
           method: "POST",
-          path: "/v1/orgs",
+          path: "/ng/api/organizations",
           bodyBuilder: buildOrgBody,
           responseExtractor: v1Unwrap("org"),
           description: "Create a new organization",
@@ -189,7 +189,7 @@ export const platformToolset: ToolsetDefinition = {
         },
         update: {
           method: "PUT",
-          path: "/v1/orgs/{org}",
+          path: "/ng/api/organizations/{org}",
           pathParams: { org_id: "org" },
           bodyBuilder: buildOrgUpdateBody,
           responseExtractor: v1Unwrap("org"),
@@ -199,7 +199,7 @@ export const platformToolset: ToolsetDefinition = {
         },
         delete: {
           method: "DELETE",
-          path: "/v1/orgs/{org}",
+          path: "/ng/api/organizations/{org}",
           pathParams: { org_id: "org" },
           responseExtractor: v1Unwrap("org"),
           description: "Delete an organization",
@@ -226,7 +226,7 @@ export const platformToolset: ToolsetDefinition = {
       operations: {
         list: {
           method: "GET",
-          path: "/v1/orgs/{org}/projects",
+          path: "/ng/api/organizations/{org}/projects",
           pathParams: { org_id: "org" },
           queryParams: {
             search_term: "search_term",
@@ -242,14 +242,14 @@ export const platformToolset: ToolsetDefinition = {
         },
         get: {
           method: "GET",
-          path: "/v1/orgs/{org}/projects/{project}",
+          path: "/ng/api/organizations/{org}/projects/{project}",
           pathParams: { org_id: "org", project_id: "project" },
           responseExtractor: v1Unwrap("project"),
           description: "Get project details",
         },
         create: {
           method: "POST",
-          path: "/v1/orgs/{org}/projects",
+          path: "/ng/api/organizations/{org}/projects",
           pathParams: { org_id: "org" },
           bodyBuilder: buildProjectBody,
           responseExtractor: v1Unwrap("project"),
@@ -259,7 +259,7 @@ export const platformToolset: ToolsetDefinition = {
         },
         update: {
           method: "PUT",
-          path: "/v1/orgs/{org}/projects/{project}",
+          path: "/ng/api/organizations/{org}/projects/{project}",
           pathParams: { org_id: "org", project_id: "project" },
           bodyBuilder: buildProjectUpdateBody,
           responseExtractor: v1Unwrap("project"),
@@ -269,7 +269,7 @@ export const platformToolset: ToolsetDefinition = {
         },
         delete: {
           method: "DELETE",
-          path: "/v1/orgs/{org}/projects/{project}",
+          path: "/ng/api/organizations/{org}/projects/{project}",
           pathParams: { org_id: "org", project_id: "project" },
           responseExtractor: v1Unwrap("project"),
           description: "Delete a project",
