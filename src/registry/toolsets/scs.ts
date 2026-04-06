@@ -20,6 +20,7 @@ const ARTIFACT_COMPONENT_LIST_FIELDS = [
   "purl", "packageUrl", "package_name", "name", "package_version", "version",
   "package_license", "license", "dependency_type",
   "vulnerability_count", "supplier",
+  "is_outdated", "is_unmaintained", "eol_status", "eol_score", "latest_version",
 ];
 
 const COMPONENT_DEPENDENCY_LIST_FIELDS = [
@@ -46,6 +47,10 @@ const BOM_VIOLATION_LIST_FIELDS = [
   "violationType", "violationDetails",
   "supplier", "supplierType", "packageManager",
   "isExempted", "exemptionId",
+];
+
+const COMPONENT_DRIFT_LIST_FIELDS = [
+  "status", "old_component", "new_component",
 ];
 
 /**
@@ -134,6 +139,7 @@ export const scsToolset: ToolsetDefinition = {
         { resourceType: "scs_artifact_source", relationship: "parent", description: "Get source_id needed to list artifacts" },
         { resourceType: "scs_bom_violation", relationship: "child", description: "BOM enforcement policy violations — deny-list/allow-list/OPA violations (requires enforcement_id from violations.enforcementId). Use for ANY 'policy violation' or 'enforcement' query." },
         { resourceType: "scs_artifact_component", relationship: "child", description: "List dependencies/components within this artifact" },
+        { resourceType: "scs_sbom_drift", relationship: "child", description: "SBOM drift — compare this artifact's SBOM against previous version. Use orchestration.id from artifact response. PREFERRED over manually fetching and diffing component lists." },
         { resourceType: "scs_compliance_result", relationship: "child", description: "CIS/OWASP benchmark checks ONLY — NOT for BOM enforcement or policy violations" },
         { resourceType: "scs_chain_of_custody", relationship: "child", description: "Chain of custody events for this artifact" },
         { resourceType: "scs_sbom", relationship: "child", description: "SBOM download (requires orchestration_id from chain of custody)" },
@@ -199,6 +205,7 @@ export const scsToolset: ToolsetDefinition = {
         { resourceType: "scs_component_dependencies", relationship: "child", description: "Get dependency tree for a specific component (pass purl)" },
         { resourceType: "scs_component_remediation", relationship: "sibling", description: "Safe upgrade suggestions with dependency impact analysis (pass purl) — preferred over scs_artifact_remediation" },
         { resourceType: "scs_component_enrichment", relationship: "sibling", description: "OSS risk / EOL / outdated status for a component (pass purl)" },
+        { resourceType: "scs_oss_risk_summary", relationship: "sibling", description: "Project-level OSS risk overview across all artifacts" },
       ],
       toolset: "scs",
       scope: "project",
@@ -206,7 +213,8 @@ export const scsToolset: ToolsetDefinition = {
       listFilterFields: [
         { name: "artifact_id", description: "Artifact ID to list components for", required: true },
         { name: "search_term", description: "Search components by name or package identifier" },
-        { name: "dependency_type", description: "Filter by dependency type (DIRECT or TRANSITIVE)" }
+        { name: "dependency_type", description: "Filter by dependency type (DIRECT or TRANSITIVE)" },
+        { name: "oss_risk_filter", description: "Filter by OSS risk category. Comma-separated values from: DEFINITE_EOL, DERIVED_EOL, CLOSE_TO_EOL, UNMAINTAINED, OUTDATED" }
       ],
       operations: {
         list: {
@@ -222,6 +230,7 @@ export const scsToolset: ToolsetDefinition = {
           bodyBuilder: (input) => ({
             ...(input.search_term ? { search_term: input.search_term } : {}),
             ...(input.dependency_type ? { dependency_type_filter: [input.dependency_type] } : {}),
+            ...(input.oss_risk_filter ? { oss_risk_filter: (input.oss_risk_filter as string).split(",").map(s => s.trim()) } : {}),
           }),
           defaultQueryParams: { limit: "10" },
           responseExtractor: scsListExtract(ARTIFACT_COMPONENT_LIST_FIELDS),
@@ -643,10 +652,14 @@ export const scsToolset: ToolsetDefinition = {
         "oss risk", "end of life", "eol", "outdated", "unmaintained",
         "component risk", "library risk", "package risk", "version risk",
         "is it safe", "latest version", "component enrichment",
+        "still maintained", "actively maintained", "is it maintained",
+        "risk level", "risk score", "maintenance status",
+        "deprecated", "abandoned", "stale dependency",
       ],
       relatedResources: [
         { resourceType: "scs_artifact_component", relationship: "parent", description: "List components in an artifact to get purl values and artifact_id" },
         { resourceType: "scs_component_remediation", relationship: "sibling", description: "Get upgrade suggestions if the component is outdated/at-risk" },
+        { resourceType: "scs_oss_risk_summary", relationship: "parent", description: "Project-level OSS risk overview — start here for broad risk assessment" },
         { resourceType: "security_issue", relationship: "sibling", description: "CVE/vulnerability details (STO domain) — use for specific CVE queries" },
       ],
       toolset: "scs",
@@ -678,6 +691,152 @@ export const scsToolset: ToolsetDefinition = {
           },
           responseExtractor: scsCleanExtract,
           description: "Get OSS risk and enrichment data for a component by PURL. Pass artifact_id for project-scoped results.",
+        },
+      },
+    },
+
+    // ── Project-Level OSS Risk Summary (P3-2) ─────────────────────────
+    {
+      resourceType: "scs_oss_risk_summary",
+      displayName: "Project OSS Risk Summary",
+      description: "Project-level OSS risk overview — aggregated counts of end-of-life, unmaintained, and outdated components across ALL artifacts in a project. "
+        + "Returns: total_artifacts_scanned, total_artifacts_with_risks, aggregate risk counts (EOL, derived EOL, close-to-EOL, unmaintained, outdated), "
+        + "and a per-artifact breakdown sorted by total risk count descending. "
+        + "Use this for: 'What is the OSS risk in my project?', 'Which artifacts have the most risk?', 'How many EOL components do we have?', "
+        + "'Show me a project security overview', 'OSS health summary'. "
+        + "This is a READ-ONLY summary — for individual component risk details, follow up with scs_component_enrichment (pass purl). "
+        + "For remediation advice on specific components, use scs_component_remediation.",
+      diagnosticHint: "If you get a 404: the SCS_COMPONENT_ENRICHMENT feature flag may not be enabled for this account. "
+        + "If total_artifacts_scanned is 0: no artifacts in this project have SBOM data — ensure SBOM generation steps are configured in pipelines.",
+      searchAliases: [
+        "oss risk summary", "project risk", "eol summary", "outdated summary",
+        "unmaintained summary", "project security overview", "oss health",
+        "risk overview", "component risk summary", "project oss risk",
+      ],
+      relatedResources: [
+        { resourceType: "scs_component_enrichment", relationship: "child", description: "Drill into individual component risk by purl" },
+        { resourceType: "scs_artifact_component", relationship: "child", description: "List components for a specific artifact" },
+        { resourceType: "scs_component_remediation", relationship: "sibling", description: "Get upgrade suggestions for at-risk components" },
+        { resourceType: "artifact_security", relationship: "parent", description: "List artifacts in the project" },
+      ],
+      toolset: "scs",
+      scope: "project",
+      identifierFields: [],
+      operations: {
+        get: {
+          method: "GET",
+          path: `${SCS}/v1/orgs/{org}/projects/{project}/oss-risks/summary`,
+          pathParams: { org_id: "org", project_id: "project" },
+          responseExtractor: scsCleanExtract,
+          description: "Get project-level OSS risk summary with aggregate counts and per-artifact breakdown",
+        },
+      },
+    },
+
+    // ── SBOM Drift (server-side diff between two SBOM versions) ───────
+    {
+      resourceType: "scs_sbom_drift",
+      displayName: "SBOM Drift",
+      description: "Server-side SBOM drift calculation — compares two SBOM versions and returns a summary of component and license changes. "
+        + "FAR more efficient than fetching all components for both artifacts and diffing in-context. "
+        + "Use this for ANY query about: new dependencies between versions, removed packages, SBOM diff, dependency changes, what changed between builds. "
+        + "Two-step flow: (1) get orchestration_id from artifact_security list response (orchestration.id field), "
+        + "(2) harness_execute(resource_type='scs_sbom_drift', action='calculate', orchestration_id=<id>, base='last_generated_sbom'). "
+        + "The 'base' parameter controls what to compare against: 'last_generated_sbom' (previous SBOM for same artifact source), "
+        + "'baseline' (the pinned baseline version), or 'repository' (a specific tag/version). "
+        + "Returns: drift_id (for detailed drill-down), total_drifts, component_drift_summary (added/deleted/modified counts), license_drift_summary. "
+        + "For detailed component-level diffs, use scs_component_drift with the returned drift_id.",
+      diagnosticHint: "If you get 'Could not find activity': the orchestration_id may be expired or invalid. "
+        + "Get fresh orchestration IDs from harness_list(resource_type='artifact_security', source_id='...') — look for orchestration.id in each artifact. "
+        + "The 'base' field is required. Use 'last_generated_sbom' to compare against the previous version of the same artifact source.",
+      searchAliases: [
+        "sbom diff", "sbom drift", "dependency diff", "dependency changes",
+        "new dependencies", "removed dependencies", "what changed",
+        "component changes", "version diff", "sbom comparison",
+        "compare versions", "compare artifacts", "changes between versions",
+        "what was added", "what was removed", "new packages",
+        "introduced dependencies", "diff between builds",
+      ],
+      relatedResources: [
+        { resourceType: "artifact_security", relationship: "parent", description: "Get orchestration_id from artifact list (orchestration.id field)" },
+        { resourceType: "scs_component_drift", relationship: "child", description: "Drill into component-level diffs using drift_id from calculate response" },
+      ],
+      toolset: "scs",
+      scope: "project",
+      identifierFields: ["orchestration_id"],
+      executeHint: "To calculate SBOM drift: "
+        + "(1) List artifacts: harness_list(resource_type='artifact_security', source_id='...'). "
+        + "(2) Pick the most recent artifact's orchestration.id. "
+        + "(3) harness_execute(resource_type='scs_sbom_drift', action='calculate', orchestration_id=<id>, base='last_generated_sbom'). "
+        + "The server compares against the previous SBOM automatically. No need to fetch component lists manually.",
+      operations: {},
+      executeActions: {
+        calculate: {
+          method: "POST",
+          path: `${SCS}/v1/orgs/{org}/projects/{project}/orchestration/{orchestration}/sbom-drift`,
+          pathParams: { org_id: "org", project_id: "project", orchestration_id: "orchestration" },
+          bodyBuilder: (input) => ({
+            base: (input.base as string) || "last_generated_sbom",
+            ...(input.variant ? { variant: input.variant } : {}),
+          }),
+          responseExtractor: scsCleanExtract,
+          actionDescription: "Calculate SBOM drift between an orchestration step and its baseline. "
+            + "Required: orchestration_id (path), base (body: 'last_generated_sbom', 'baseline', or 'repository'). "
+            + "Returns drift_id + summary with component/license change counts.",
+          bodySchema: {
+            description: "SBOM drift calculation request — specify what to compare against",
+            fields: [
+              { name: "orchestration_id", type: "string", required: true, description: "Orchestration step execution ID (from artifact_security orchestration.id field)" },
+              { name: "base", type: "string", required: true, description: "Baseline to compare against: 'last_generated_sbom' (previous version), 'baseline' (pinned baseline), or 'repository' (specific tag)" },
+              { name: "variant", type: "object", required: false, description: "Only for base='repository': { type: 'tag', value: '<tag_name>' } — specifies which tag to compare against" },
+            ],
+          },
+        },
+      },
+    },
+
+    // ── Component Drift (detailed component-level diffs from a drift) ─
+    {
+      resourceType: "scs_component_drift",
+      displayName: "SBOM Component Drift",
+      description: "Component-level drift details from a server-side SBOM comparison. Shows exactly which packages were added, deleted, or modified between two SBOM versions. "
+        + "Requires drift_id from harness_execute(resource_type='scs_sbom_drift', action='calculate'). "
+        + "Each result includes: status (added/modified/deleted), old_component, new_component — with package name, version, license, purl, supplier. "
+        + "Filter by status to see only additions, deletions, or modifications. "
+        + "This replaces the need to fetch full component lists and diff them manually — saving tokens and improving accuracy.",
+      diagnosticHint: "If you get a 404: verify drift_id is correct. "
+        + "Get drift_id from harness_execute(resource_type='scs_sbom_drift', action='calculate', orchestration_id='...', base='last_generated_sbom'). "
+        + "If total_drifts was 0 in the calculate response, there are no component drifts to list.",
+      searchAliases: [
+        "component diff", "package diff", "added components", "removed components",
+        "modified components", "dependency additions", "dependency removals",
+      ],
+      relatedResources: [
+        { resourceType: "scs_sbom_drift", relationship: "parent", description: "Calculate drift first to get drift_id" },
+        { resourceType: "artifact_security", relationship: "parent", description: "Get orchestration_id needed to trigger drift calculation" },
+      ],
+      toolset: "scs",
+      scope: "project",
+      identifierFields: ["drift_id"],
+      listFilterFields: [
+        { name: "drift_id", description: "Drift ID from scs_sbom_drift calculate response", required: true },
+        { name: "status", description: "Filter by drift status: 'added', 'modified', or 'deleted'" },
+        { name: "search_term", description: "Search components by name" },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${SCS}/v1/orgs/{org}/projects/{project}/sbom-drift/{drift}/components`,
+          pathParams: { org_id: "org", project_id: "project", drift_id: "drift" },
+          queryParams: {
+            page: "page",
+            size: "limit",
+            status: "status",
+            search_term: "search_term",
+          },
+          defaultQueryParams: { limit: "10" },
+          responseExtractor: scsListExtract(COMPONENT_DRIFT_LIST_FIELDS),
+          description: "List component-level drifts (added/modified/deleted packages) for a drift ID",
         },
       },
     },

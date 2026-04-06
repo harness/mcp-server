@@ -94,13 +94,14 @@ def build_tool_call_summary(extracted: dict[str, Any]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# 31 Test Queries — V2
+# 33 Test Queries — V2
 # expected_tools: list of (tool_name, resource_type) tuples
 # Q02, Q03, Q05: Downgraded — filters not ported to v2
 # Q15: Reclassified per PD-1 — vuln counts are CORRECT behavior
 # Q20-Q26: Phase 3 queries (P3-6, P3-7, P3-8, P3-9, P3-12)
 # Q27-Q31: Disambiguation queries — test tool selection when multiple resources match
 # Q34-Q37: P3-1 BOM enforcement violation queries
+# Q41-Q42: P3-2 OSS risk summary & filtering queries
 # ---------------------------------------------------------------------------
 QUERIES = [
     {
@@ -222,7 +223,7 @@ QUERIES = [
     # ─── Phase 3 Tier 1 Queries ───────────────────────────────────────────
     {
         "id": "Q20",
-        "query": "Find a vulnerable component in my first code repository and suggest a safe version to upgrade to, including the dependency impact of the upgrade.",
+        "query": "Find a vulnerable component in my first code repository and suggest a safe version to upgrade to. Will upgrading it break anything?",
         "expected_intent": "P3-6: Component remediation — upgrade suggestions with dependency impact",
         "confidence": "Medium",
         "expected_tools": [("harness_list", "code_repo_security"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_remediation")],
@@ -267,7 +268,7 @@ QUERIES = [
     # ─── Disambiguation Queries ────────────────────────────────────────
     {
         "id": "Q27",
-        "query": "Get structured remediation advice with upgrade suggestions for a vulnerable component in my first artifact. I want dependency impact analysis, not just text.",
+        "query": "How do I fix a vulnerable component in my first artifact? What version should I upgrade to and will it break anything?",
         "expected_intent": "Disambiguation: scs_component_remediation (structured) vs scs_artifact_remediation (text-only)",
         "confidence": "Medium",
         "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_remediation")],
@@ -277,7 +278,7 @@ QUERIES = [
     },
     {
         "id": "Q28",
-        "query": "What does the zlib package depend on? Show me its full dependency chain including all transitive dependencies using the dependency tree.",
+        "query": "What does the zlib package in my first artifact depend on? Show me everything it pulls in — direct and transitive.",
         "expected_intent": "Disambiguation: scs_component_dependencies (tree) vs scs_artifact_component (flat list)",
         "confidence": "Medium",
         "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_dependencies")],
@@ -334,7 +335,7 @@ QUERIES = [
     # ─── P3-1: BOM Enforcement Violations ─────────────────────────────
     {
         "id": "Q34",
-        "query": "What BOM enforcement policy violations does my first artifact have? Show me which components failed the enforcement check.",
+        "query": "Which components in my first artifact failed the policy check? Show me what was blocked and why.",
         "expected_intent": "P3-1: BOM enforcement violations — two-step flow from artifact overview to violation list",
         "confidence": "Medium",
         "expected_tools": [(
@@ -345,7 +346,7 @@ QUERIES = [
     },
     {
         "id": "Q35",
-        "query": "Show me the BOM enforcement violation summary for my first artifact — I want to see the overall enforcement status and violation counts by type, not the individual violations.",
+        "query": "Give me a high-level summary of the enforcement results for my first artifact — how many violations are there and what types?",
         "expected_intent": "P3-1: Enforcement summary — get operation for violation counts",
         "confidence": "Medium",
         "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "artifact_security"), ("harness_get", "scs_bom_violation")],
@@ -363,7 +364,7 @@ QUERIES = [
     },
     {
         "id": "Q37",
-        "query": "What policy violations does my first artifact have? I want to see the BOM enforcement results, not CIS compliance.",
+        "query": "What policy violations does my first artifact have from the BOM enforcement check?",
         "expected_intent": "P3-1 Disambiguation: scs_bom_violation (BOM enforcement) vs scs_compliance_result (CIS/OWASP compliance)",
         "confidence": "Medium",
         "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "artifact_security"), ("harness_list", "scs_bom_violation")],
@@ -374,9 +375,9 @@ QUERIES = [
     # ─── P3-11: Component Enrichment / OSS Risk Lookup ──────────────────
     {
         "id": "Q38",
-        "query": "What is the OSS risk score and EOL status of the zlib component in my first artifact? Use the enrichment resource to check if it is unmaintained.",
+        "query": "Is the zlib component in my first artifact still maintained? What's its risk level and is it end-of-life?",
         "expected_intent": "P3-11: OSS risk assessment — EOL status and risk score via scs_component_enrichment",
-        "confidence": "Medium",
+        "confidence": "Low",
         "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_enrichment")],
         "observe": "P3-11: Does the LLM chain source → components (to find zlib purl) → scs_component_enrichment? "
             "Key test: 'end-of-life' and 'outdated' should route to scs_component_enrichment (OSS risk), NOT security_issue (STO CVEs). "
@@ -384,24 +385,62 @@ QUERIES = [
     },
     {
         "id": "Q39",
-        "query": "Use the component enrichment resource to get the OSS risk assessment for a component in my first code repository — what is its EOL status and risk score?",
+        "query": "Check if any components in my first code repository are end-of-life or unmaintained. What's their risk level?",
         "expected_intent": "P3-11: Project-scoped OSS risk assessment — repo as artifact, scs_component_enrichment with artifact_id",
-        "confidence": "Medium",
+        "confidence": "Low",
         "expected_tools": [("harness_list", "code_repo_security"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_enrichment")],
         "observe": "P3-11: Does it chain code_repo_security → scs_artifact_component (repo_id as artifact_id) → scs_component_enrichment? "
             "'OSS risk', 'unmaintained', 'end-of-life' are all search aliases for scs_component_enrichment. "
             "Bonus: does it pass artifact_id to scs_component_enrichment for richer project-scoped data?",
     },
+    # ─── SBOM Drift: New Dependencies Between Consecutive Runs ────────
+    {
+        "id": "Q40",
+        "query": "What new dependencies were introduced in the latest version of my first artifact source compared to the previous version?",
+        "expected_intent": "SBOM drift: Use server-side drift calculation to find component changes between consecutive artifact versions",
+        "confidence": "Low",
+        "expected_tools": [
+            ("harness_list", "scs_artifact_source"),
+            ("harness_list", "artifact_security"),
+            ("harness_execute", "scs_sbom_drift"),
+        ],
+        "observe": "SBOM DRIFT TEST: Does the LLM chain source → artifacts → harness_execute(scs_sbom_drift, action='calculate', orchestration_id=<id>, base='last_generated_sbom')? "
+            "KEY: The LLM should use the drift API instead of manually fetching component lists. "
+            "CORRECT if it calls harness_execute with scs_sbom_drift. PARTIAL if it falls back to scs_artifact_component manual diff. "
+            "Bonus: does it follow up with harness_list(scs_component_drift, drift_id=...) for detailed diffs?",
+    },
     # ─── P3-3: Pipeline SBOM Step Modification ────────────────────────
     {
         "id": "Q19",
-        "query": "Show me the SBOM generation step configuration in my first pipeline that has an SscaOrchestration step. What tool is it using — Syft or CycloneDX?",
+        "query": "Show me the SBOM generation step in my first pipeline. What tool is it using — Syft or CycloneDX?",
         "expected_intent": "P3-3: Pipeline SBOM step inspection — cross-toolset routing from SCS to pipeline tools",
         "confidence": "Medium",
         "expected_tools": [("harness_list", "pipeline"), ("harness_get", "pipeline")],
         "observe": "P3-3: Does the LLM use pipeline tools (not SCS tools) for SBOM step config? "
             "It should list pipelines → get pipeline YAML → parse and identify the SscaOrchestration step → report tool type (syft/cdxgen). "
             "Cross-toolset routing: SCS module user asking about pipeline config should route to pipelines toolset.",
+    },
+    # ─── P3-2: OSS Risk Summary & Filtering ──────────────────────────
+    {
+        "id": "Q41",
+        "query": "What is the overall OSS risk in my project? How many artifacts have end-of-life or unmaintained components? Give me a project-level risk overview.",
+        "expected_intent": "P3-2: Project-level OSS risk summary via scs_oss_risk_summary",
+        "confidence": "High",
+        "expected_tools": [("harness_get", "scs_oss_risk_summary")],
+        "observe": "P3-2 PROJECT RISK: Does the LLM route directly to scs_oss_risk_summary? "
+            "'project risk overview', 'OSS risk', 'end-of-life summary' are all searchAliases. "
+            "Should NOT need artifact listing first — this is a project-scoped GET with no extra IDs. "
+            "Response should include total_artifacts_scanned, aggregate counts, and per-artifact breakdown.",
+    },
+    {
+        "id": "Q42",
+        "query": "List all end-of-life components in my first artifact. Filter the SBOM components to show only those with DEFINITE_EOL or DERIVED_EOL risk.",
+        "expected_intent": "P3-2: OSS risk filtering on artifact components via oss_risk_filter",
+        "confidence": "Medium",
+        "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "artifact_security"), ("harness_list", "scs_artifact_component")],
+        "observe": "P3-2 OSS RISK FILTER: Does the LLM pass oss_risk_filter='DEFINITE_EOL,DERIVED_EOL' to scs_artifact_component? "
+            "Key test: the body should contain oss_risk_filter array. "
+            "CORRECT if oss_risk_filter is passed. PARTIAL if it lists components without the filter.",
     },
 ]
 
@@ -583,7 +622,7 @@ CONVERSATIONS = [
              "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "artifact_security")],
              "observe": "P3-1 T1: Setup — establishes artifact context and surfaces enforcement_id in the violations section. "
                  "The LLM should present enforcement data including violations.enforcementId."},
-            {"turn": 2, "query": "What BOM enforcement violations does it have? List the specific components that failed.",
+            {"turn": 2, "query": "Which components failed the policy check? Show me the specific violations.",
              "expected_tools": [("harness_list", "scs_bom_violation")],
              "observe": "P3-1 T2: KEY TEST — does the LLM extract enforcement_id from Turn 1's artifact overview "
                  "and call harness_list(resource_type='scs_bom_violation', enforcement_id=<id>)? "
@@ -604,7 +643,7 @@ CONVERSATIONS = [
         "id": "M13", "title": "BOM Violation → Remediation Chain (P3-1 + P3-6)",
         "description": "Discover violations → identify violating component → get remediation → check auto-PR config",
         "turns": [
-            {"turn": 1, "query": "Show me all the BOM policy violations for my first artifact",
+            {"turn": 1, "query": "Show me all the policy enforcement violations for my first artifact",
              "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "artifact_security"), ("harness_list", "scs_bom_violation")],
              "observe": "P3-1 T1: Full two-step chain in single turn. Does the LLM discover artifact → get enforcement_id → list violations?"},
             {"turn": 2, "query": "For the first violated component, can you find its full details in the SBOM and suggest an upgrade version?",
@@ -626,15 +665,36 @@ CONVERSATIONS = [
             {"turn": 1, "query": "Show me the SBOM components for my first artifact",
              "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "scs_artifact_component")],
              "observe": "Setup: establishes component list with purls in context."},
-            {"turn": 2, "query": "Use the component enrichment resource to check the OSS risk score and EOL status of the zlib component from that list.",
+            {"turn": 2, "query": "Is the zlib component from that list still actively maintained? What's its risk score and is it end-of-life?",
              "expected_tools": [("harness_get", "scs_component_enrichment")],
              "observe": "P3-11 KEY TEST: Does the LLM reuse the zlib purl from Turn 1 and route to scs_component_enrichment? "
-                 "Explicit 'enrichment resource' + 'risk score' + 'EOL status' should trigger enrichment, NOT remediation. "
+                 "'maintained' + 'risk score' + 'end-of-life' should trigger enrichment, NOT remediation. "
                  "Response should include EOL status, is_outdated, latest_version."},
             {"turn": 3, "query": "That component looks outdated. What version should I upgrade to and will it break anything?",
              "expected_tools": [("harness_get", "scs_component_remediation")],
              "observe": "P3-11→P3-6 chain: Does the LLM reuse the purl from Turn 2 context and pivot to scs_component_remediation? "
                  "Natural follow-up — user sees outdated status from enrichment, asks for upgrade guidance."},
+        ],
+    },
+    # ─── SBOM Drift: Server-Side Diff Between Consecutive Runs ───────
+    {
+        "id": "M15", "title": "SBOM Drift Between Consecutive Artifact Versions (Server-Side)",
+        "description": "List artifacts → calculate drift server-side → get component diffs (tests efficient drift API flow vs manual diff)",
+        "turns": [
+            {"turn": 1, "query": "List the artifacts from my first artifact source, sorted by most recent. I want to compare the two latest versions.",
+             "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "artifact_security")],
+             "observe": "SBOM DRIFT T1: Does the LLM chain source list → artifact list? "
+                 "The response must include orchestration.id fields — these are needed for the drift calculation in Turn 2."},
+            {"turn": 2, "query": "What changed between the most recent artifact and its previous version? Calculate the diff for me.",
+             "expected_tools": [("harness_execute", "scs_sbom_drift")],
+             "observe": "SBOM DRIFT T2: KEY TEST — does the LLM call harness_execute(resource_type='scs_sbom_drift', action='calculate', "
+                 "orchestration_id=<most_recent_orch_id>, base='last_generated_sbom')? "
+                 "It should extract orchestration.id from Turn 1 artifacts. The response includes drift_id, total_drifts, and summary counts."},
+            {"turn": 3, "query": "Show me the detailed component-level diffs — which packages were added, removed, or modified?",
+             "expected_tools": [("harness_list", "scs_component_drift")],
+             "observe": "SBOM DRIFT T3: Does the LLM use the drift_id from Turn 2 to call "
+                 "harness_list(resource_type='scs_component_drift', drift_id=<id>)? "
+                 "This is the drill-down step. Response should include status (added/modified/deleted), old_component, new_component."},
         ],
     },
     # ─── Cross-Capability: Security Posture → Policy → Pipeline ───────
@@ -657,6 +717,27 @@ CONVERSATIONS = [
              "expected_tools": [("harness_get", "scs_component_remediation")],
              "observe": "SCS RETURN: Returns to SCS tools after 2 cross-toolset turns. "
                  "Tests whether LLM retains the vulnerable component purl from Turn 1 across the governance and pipeline detours."},
+        ],
+    },
+    # ─── P3-2: OSS Risk Summary → Drill-Down → Remediation ──────────────
+    {
+        "id": "M16", "title": "Project OSS Risk Overview → Component Drill-Down (P3-2)",
+        "description": "Get project risk summary → drill into riskiest artifact → get remediation for EOL component",
+        "turns": [
+            {"turn": 1, "query": "Give me a project-level OSS risk overview. How many of my artifacts have end-of-life or unmaintained components?",
+             "expected_tools": [("harness_get", "scs_oss_risk_summary")],
+             "observe": "P3-2 T1: Does the LLM route directly to scs_oss_risk_summary? "
+                 "No artifact listing needed — this is a project-scoped GET. "
+                 "Response should include total_artifacts_scanned, aggregate counts, and per-artifact breakdown."},
+            {"turn": 2, "query": "Show me the EOL components in the artifact with the most risks from that summary. Filter to only DEFINITE_EOL and DERIVED_EOL.",
+             "expected_tools": [("harness_list", "scs_artifact_component")],
+             "observe": "P3-2 T2: Does the LLM extract artifact_id from T1's per-artifact breakdown (sorted by risk, first = most risks) "
+                 "and call scs_artifact_component with oss_risk_filter='DEFINITE_EOL,DERIVED_EOL'? "
+                 "Key test: oss_risk_filter should be passed in the request body."},
+            {"turn": 3, "query": "For the first EOL component in that list, check its risk score and suggest an upgrade.",
+             "expected_tools": [("harness_get", "scs_component_enrichment"), ("harness_get", "scs_component_remediation")],
+             "observe": "P3-2→P3-11→P3-6 chain: Does the LLM reuse the purl from T2 to check enrichment (risk score) "
+                 "and then chain to remediation (upgrade advice)? Tests full OSS risk triage flow."},
         ],
     },
 ]
