@@ -13,10 +13,35 @@ Prerequisites:
 
 Usage:
   python tests/e2e/scs_llm_smoke_test.py [--url URL] [--query-ids Q01,M01,...] [--delay SECS]
+
+Langfuse Integration (optional):
+  pip install langfuse openai  # or: pip install langfuse anthropic
+  export LANGFUSE_PUBLIC_KEY=pk-lf-...
+  export LANGFUSE_SECRET_KEY=sk-lf-...
+  export LANGFUSE_HOST=https://langfuse-prod.harness.io  # optional, this is the default
+
+  # Run with Langfuse tracing + deterministic evaluators:
+  python tests/e2e/scs_llm_smoke_test.py --langfuse
+
+  # Run with Langfuse + LLM-as-Judge answer quality evaluation:
+  python tests/e2e/scs_llm_smoke_test.py --langfuse --langfuse-judge
+
+  # Only sync test datasets to Langfuse (no test execution):
+  python tests/e2e/scs_llm_smoke_test.py --langfuse --langfuse-sync-only
+
+  Evaluators provided (see langfuse_evaluators.py):
+    - trajectory: Tool selection matching (proportional score 0.0-1.0)
+    - trajectory_order: Subsequence check on tool call ordering
+    - parameters: Validates key tool arguments against expected values
+    - latency: Flags slow queries (>60s warn, >120s fail)
+    - error_free: Checks for execution errors
+    - answer_presence: Verifies non-trivial answer was generated
+    - answer_quality: LLM-as-Judge (only with --langfuse-judge)
 """
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import json
 import os
 import re
@@ -997,12 +1022,16 @@ def send_query(query_text: str, genai_url: str, account_id: str, org_id: str, pr
 # Single Query Runner
 # ---------------------------------------------------------------------------
 def _run_single_query(query_def: dict[str, Any], genai_url: str, account_id: str,
-                      org_id: str, project_id: str, mcp_log_file: str) -> dict[str, Any]:
-    log_pos_before = os.path.getsize(mcp_log_file) if os.path.exists(mcp_log_file) else 0
+                      org_id: str, project_id: str, mcp_log_file: str,
+                      skip_mcp_log: bool = False) -> dict[str, Any]:
+    log_pos_before = 0 if skip_mcp_log else (os.path.getsize(mcp_log_file) if os.path.exists(mcp_log_file) else 0)
     events, duration_s = send_query(query_def["query"], genai_url, account_id, org_id, project_id)
     extracted = extract_tools_from_events(events)
-    mcp_log_entries_raw, _ = read_mcp_log_delta(mcp_log_file, log_pos_before)
-    mcp_tool_entries = extract_tool_entries_from_log(mcp_log_entries_raw)
+    if skip_mcp_log:
+        mcp_tool_entries = []
+    else:
+        mcp_log_entries_raw, _ = read_mcp_log_delta(mcp_log_file, log_pos_before)
+        mcp_tool_entries = extract_tool_entries_from_log(mcp_log_entries_raw)
     tool_selection = auto_score_tool_selection(query_def["expected_tools"], extracted["tools_called"], query_def.get("confidence", "N/A"))
     result = {
         "id": query_def["id"], "query": query_def["query"],
@@ -1137,10 +1166,29 @@ def run_conversation(conv_def: dict[str, Any], genai_url: str, account_id: str, 
 # ---------------------------------------------------------------------------
 # Main Runner + Summary + Output
 # ---------------------------------------------------------------------------
+def _run_single_query_worker(args: tuple) -> dict[str, Any]:
+    """Worker function for parallel single-turn query execution."""
+    query_def, genai_url, account_id, org_id, project_id, mcp_log_file, idx, total = args
+    print(f"\n{'='*70}\n[{idx}/{total}] {query_def['id']}: {query_def['query']}\n{'='*70}", flush=True)
+    result = _run_single_query(query_def, genai_url, account_id, org_id, project_id, mcp_log_file, skip_mcp_log=True)
+    return result
+
+
+def _run_conversation_worker(args: tuple) -> dict[str, Any]:
+    """Worker function for parallel multi-turn conversation execution."""
+    conv_def, genai_url, account_id, org_id, project_id, mcp_log_file, delay, history_mode, idx, total = args
+    print(f"\n{'='*70}\n[{idx}/{total}] {conv_def['id']}: {conv_def['title']}\n  {conv_def['description']}\n{'='*70}", flush=True)
+    cr = run_conversation(conv_def, genai_url, account_id, org_id, project_id, mcp_log_file, delay, history_mode)
+    s = cr["scoring"]
+    print(f"\n  Conversation {conv_def['id']}: [{s['overall']}] turns_correct={s['turns_correct']}/{s['turns_total']} duration={cr['duration_s']}s", flush=True)
+    return cr
+
+
 def run_smoke_tests(genai_url: str = GENAI_URL, account_id: str = ACCOUNT_ID, org_id: str = ORG_ID,
                     project_id: str = PROJECT_ID, mcp_log_file: str = MCP_LOG_FILE,
                     query_ids: Optional[list[str]] = None, delay: float = INTER_QUERY_DELAY,
-                    history_mode: str = HISTORY_MODE_ANSWER_ONLY) -> dict[str, Any]:
+                    history_mode: str = HISTORY_MODE_ANSWER_ONLY,
+                    concurrency: int = 1, skip_na: bool = False) -> dict[str, Any]:
     run_single = run_multi = True
     single_ids = multi_ids = None
     if query_ids:
@@ -1154,6 +1202,13 @@ def run_smoke_tests(genai_url: str = GENAI_URL, account_id: str = ACCOUNT_ID, or
     queries = [q for q in QUERIES if q["id"] in single_ids] if single_ids else QUERIES
     conversations = [c for c in CONVERSATIONS if c["id"] in multi_ids] if multi_ids else CONVERSATIONS
 
+    if skip_na:
+        before = len(queries)
+        queries = [q for q in queries if q.get("confidence") != "N/A"]
+        skipped = before - len(queries)
+        if skipped:
+            print(f"[skip-na] Skipping {skipped} N/A confidence queries")
+
     print(f"[pre-flight] Checking genai-service at {genai_url} ...")
     try:
         with urllib.request.urlopen(urllib.request.Request(f"{genai_url}/docs", method="GET"), timeout=10) as r:
@@ -1162,29 +1217,63 @@ def run_smoke_tests(genai_url: str = GENAI_URL, account_id: str = ACCOUNT_ID, or
         print(f"[pre-flight] ERROR: Cannot connect to {genai_url}", file=sys.stderr)
         sys.exit(1)
 
+    parallel = concurrency > 1
+    if parallel:
+        print(f"[parallel] Running with concurrency={concurrency} (MCP log per-query attribution disabled)")
+
     run_start = time.monotonic()
     run_timestamp = datetime.now(timezone.utc).isoformat()
     single_results: list[dict[str, Any]] = []
     conv_results: list[dict[str, Any]] = []
 
     if run_single and queries:
-        print(f"\n{'#'*70}\n# SINGLE-TURN QUERIES ({len(queries)})\n{'#'*70}")
-        for idx, qd in enumerate(queries, 1):
-            print(f"\n{'='*70}\n[{idx}/{len(queries)}] {qd['id']}: {qd['query']}\n{'='*70}")
-            single_results.append(_run_single_query(qd, genai_url, account_id, org_id, project_id, mcp_log_file))
-            if idx < len(queries):
-                print(f"\n  [delay] Waiting {delay}s..."); time.sleep(delay)
+        print(f"\n{'#'*70}\n# SINGLE-TURN QUERIES ({len(queries)}){' [parallel]' if parallel else ''}\n{'#'*70}")
+        if parallel:
+            worker_args = [
+                (qd, genai_url, account_id, org_id, project_id, mcp_log_file, idx, len(queries))
+                for idx, qd in enumerate(queries, 1)
+            ]
+            with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as executor:
+                futures = {executor.submit(_run_single_query_worker, a): a[0]["id"] for a in worker_args}
+                for future in concurrent.futures.as_completed(futures):
+                    qid = futures[future]
+                    try:
+                        single_results.append(future.result())
+                    except Exception as exc:
+                        print(f"  ERROR: {qid} raised {exc}", file=sys.stderr)
+            single_results.sort(key=lambda r: r["id"])
+        else:
+            for idx, qd in enumerate(queries, 1):
+                print(f"\n{'='*70}\n[{idx}/{len(queries)}] {qd['id']}: {qd['query']}\n{'='*70}")
+                single_results.append(_run_single_query(qd, genai_url, account_id, org_id, project_id, mcp_log_file))
+                if idx < len(queries):
+                    print(f"\n  [delay] Waiting {delay}s..."); time.sleep(delay)
 
     if run_multi and conversations:
-        print(f"\n{'#'*70}\n# MULTI-TURN CONVERSATIONS ({len(conversations)})\n{'#'*70}")
-        for idx, cd in enumerate(conversations, 1):
-            print(f"\n{'='*70}\n[{idx}/{len(conversations)}] {cd['id']}: {cd['title']}\n  {cd['description']}\n{'='*70}")
-            cr = run_conversation(cd, genai_url, account_id, org_id, project_id, mcp_log_file, delay, history_mode)
-            conv_results.append(cr)
-            s = cr["scoring"]
-            print(f"\n  Conversation: [{s['overall']}] turns_correct={s['turns_correct']}/{s['turns_total']} duration={cr['duration_s']}s")
-            if idx < len(conversations):
-                print(f"\n  [delay] Waiting {delay}s..."); time.sleep(delay)
+        print(f"\n{'#'*70}\n# MULTI-TURN CONVERSATIONS ({len(conversations)}){' [parallel]' if parallel else ''}\n{'#'*70}")
+        if parallel:
+            worker_args = [
+                (cd, genai_url, account_id, org_id, project_id, mcp_log_file, delay, history_mode, idx, len(conversations))
+                for idx, cd in enumerate(conversations, 1)
+            ]
+            with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as executor:
+                futures = {executor.submit(_run_conversation_worker, a): a[0]["id"] for a in worker_args}
+                for future in concurrent.futures.as_completed(futures):
+                    cid = futures[future]
+                    try:
+                        conv_results.append(future.result())
+                    except Exception as exc:
+                        print(f"  ERROR: {cid} raised {exc}", file=sys.stderr)
+            conv_results.sort(key=lambda r: r["id"])
+        else:
+            for idx, cd in enumerate(conversations, 1):
+                print(f"\n{'='*70}\n[{idx}/{len(conversations)}] {cd['id']}: {cd['title']}\n  {cd['description']}\n{'='*70}")
+                cr = run_conversation(cd, genai_url, account_id, org_id, project_id, mcp_log_file, delay, history_mode)
+                conv_results.append(cr)
+                s = cr["scoring"]
+                print(f"\n  Conversation: [{s['overall']}] turns_correct={s['turns_correct']}/{s['turns_total']} duration={cr['duration_s']}s")
+                if idx < len(conversations):
+                    print(f"\n  [delay] Waiting {delay}s..."); time.sleep(delay)
 
     return _build_summary(single_results, conv_results, run_timestamp, time.monotonic() - run_start, account_id, org_id, project_id, history_mode)
 
@@ -1254,7 +1343,9 @@ def write_results(summary: dict[str, Any]) -> tuple[Path, Path]:
              "expected_tools": r["expected_tools"], "actual_tools": r["extracted"]["tools_called"],
              "tool_selection": r["scoring"]["tool_selection"], "chain_complete": r["scoring"]["chain_complete"],
              "duration_s": r["duration_s"], "answer_length": r["extracted"]["final_answer_length"],
-             "errors": r["extracted"]["errors"]}
+             "errors": r["extracted"]["errors"],
+             **({"langfuse_scores": {k: v["value"] for k, v in r["scoring"]["langfuse_scores"].items()}}
+                if r["scoring"].get("langfuse_scores") else {})}
             for r in summary["results"]
         ],
     }
@@ -1264,7 +1355,9 @@ def write_results(summary: dict[str, Any]) -> tuple[Path, Path]:
             {"id": c["id"], "title": c["title"], "num_turns": c["num_turns"],
              "overall": c["scoring"]["overall"], "turns_correct": c["scoring"]["turns_correct"],
              "turns_total": c["scoring"]["turns_total"], "duration_s": c["duration_s"],
-             "all_tools": c["aggregate"]["all_tools_called"], "total_errors": c["aggregate"]["total_errors"]}
+             "all_tools": c["aggregate"]["all_tools_called"], "total_errors": c["aggregate"]["total_errors"],
+             **({"langfuse_scores": {k: v["value"] for k, v in c["scoring"]["langfuse_scores"].items()}}
+                if c["scoring"].get("langfuse_scores") else {})}
             for c in summary["conversation_results"]
         ]
     with open(summary_path, "w") as f:
@@ -1292,12 +1385,25 @@ def print_final_summary(summary: dict[str, Any]) -> None:
         print("  By Confidence Tier:")
         for tier, counts in s["by_confidence"].items():
             print(f"    {tier}: {counts}")
-        print(f"\n  {'ID':<5} {'Score':<12} {'Chain':<6} {'Time':<7} {'Tools Called'}")
-        print(f"  {'--':<5} {'-----':<12} {'-----':<6} {'----':<7} {'------------'}")
-        for r in summary["results"]:
-            tools_str = ", ".join(f"{t[0]}({t[1]})" if isinstance(t, list) and len(t) == 2 else str(t) for t in r["extracted"]["tools_called"]) or "(none)"
-            chain = "Yes" if r["scoring"]["chain_complete"] else "No"
-            print(f"  {r['id']:<5} {r['scoring']['tool_selection']:<12} {chain:<6} {r['duration_s']}s".ljust(35) + f" {tools_str}")
+        has_langfuse = any(r["scoring"].get("langfuse_scores") for r in summary["results"])
+        if has_langfuse:
+            print(f"\n  {'ID':<5} {'Score':<12} {'Chain':<6} {'Time':<7} {'Traj':<6} {'Params':<7} {'AnsQ':<6} {'Tools Called'}")
+            print(f"  {'--':<5} {'-----':<12} {'-----':<6} {'----':<7} {'----':<6} {'------':<7} {'----':<6} {'------------'}")
+            for r in summary["results"]:
+                tools_str = ", ".join(f"{t[0]}({t[1]})" if isinstance(t, list) and len(t) == 2 else str(t) for t in r["extracted"]["tools_called"]) or "(none)"
+                chain = "Yes" if r["scoring"]["chain_complete"] else "No"
+                lf = r["scoring"].get("langfuse_scores", {})
+                traj = f"{lf['trajectory']['value']:.2f}" if lf.get("trajectory", {}).get("value") is not None else "-"
+                params = f"{lf['parameters']['value']:.2f}" if lf.get("parameters", {}).get("value") is not None else "-"
+                ansq = f"{lf['answer_quality']['value']:.2f}" if lf.get("answer_quality", {}).get("value") is not None else "-"
+                print(f"  {r['id']:<5} {r['scoring']['tool_selection']:<12} {chain:<6} {r['duration_s']}s".ljust(35) + f" {traj:<6} {params:<7} {ansq:<6} {tools_str}")
+        else:
+            print(f"\n  {'ID':<5} {'Score':<12} {'Chain':<6} {'Time':<7} {'Tools Called'}")
+            print(f"  {'--':<5} {'-----':<12} {'-----':<6} {'----':<7} {'------------'}")
+            for r in summary["results"]:
+                tools_str = ", ".join(f"{t[0]}({t[1]})" if isinstance(t, list) and len(t) == 2 else str(t) for t in r["extracted"]["tools_called"]) or "(none)"
+                chain = "Yes" if r["scoring"]["chain_complete"] else "No"
+                print(f"  {r['id']:<5} {r['scoring']['tool_selection']:<12} {chain:<6} {r['duration_s']}s".ljust(35) + f" {tools_str}")
         print()
     conv_results = summary.get("conversation_results", [])
     cs = summary.get("conversation_summary", {})
@@ -1321,6 +1427,71 @@ def print_final_summary(summary: dict[str, Any]) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Langfuse Scoring (post-run)
+# ---------------------------------------------------------------------------
+def _run_langfuse_scoring(lf_integration, summary: dict[str, Any]) -> None:
+    """Score all results via Langfuse evaluators and attach scores to traces.
+
+    Runs after the smoke test completes. Creates Langfuse traces for each
+    query/conversation and attaches evaluator scores (trajectory, parameters,
+    latency, answer quality, etc.).
+    """
+    results = summary.get("results", [])
+    conv_results = summary.get("conversation_results", [])
+
+    # Build a lookup from query_id -> query_def for expected_output info
+    query_lookup = {q["id"]: q for q in QUERIES}
+    conv_lookup = {c["id"]: c for c in CONVERSATIONS}
+
+    # --- Score single-turn queries ---
+    if results:
+        print(f"\n  Scoring {len(results)} single-turn queries...")
+        for r in results:
+            query_def = query_lookup.get(r["id"], {})
+            if not query_def:
+                continue
+            extracted = {
+                "tools_called": [tuple(t) for t in r["extracted"]["tools_called"]],
+                "tool_params": r["extracted"]["tool_params"],
+                "final_answer": r["extracted"]["final_answer"],
+                "final_answer_length": r["extracted"]["final_answer_length"],
+                "errors": r["extracted"]["errors"],
+                "token_usage": r["extracted"]["token_usage"],
+                "chain_depth": r["extracted"]["chain_depth"],
+            }
+            trace_id = lf_integration.create_trace(query_def, extracted, r["duration_s"])
+            scores = lf_integration.score_single_query(query_def, extracted, r["duration_s"], trace_id=trace_id)
+
+            # Attach Langfuse scores back into the result for JSON output
+            r["scoring"]["langfuse_scores"] = scores
+
+            score_summary = " | ".join(f"{k}={v['value']}" for k, v in scores.items() if v.get("value") is not None)
+            print(f"    {r['id']}: {score_summary}")
+
+    # --- Score multi-turn conversations ---
+    if conv_results:
+        print(f"\n  Scoring {len(conv_results)} multi-turn conversations...")
+        for cr in conv_results:
+            conv_def = conv_lookup.get(cr["id"], {})
+            if not conv_def:
+                continue
+            turn_results = cr.get("turns", [])
+            trace_id = lf_integration.create_conversation_trace(conv_def, turn_results, cr["duration_s"])
+            scores = lf_integration.score_conversation(conv_def, turn_results, cr["duration_s"], trace_id=trace_id)
+
+            # Attach Langfuse scores back into the result for JSON output
+            cr["scoring"]["langfuse_scores"] = scores
+
+            score_summary = " | ".join(f"{k}={v['value']}" for k, v in scores.items() if v.get("value") is not None)
+            print(f"    {cr['id']}: {score_summary}")
+
+    # --- Summary ---
+    total_traces = len(results) + len(conv_results)
+    print(f"\n  [langfuse] Created {total_traces} traces with evaluator scores")
+    print(f"  [langfuse] View results at: {os.getenv('LANGFUSE_HOST', 'https://langfuse-prod.harness.io')}")
+
+
+# ---------------------------------------------------------------------------
 # CLI Entry Point
 # ---------------------------------------------------------------------------
 def main():
@@ -1335,6 +1506,21 @@ def main():
                         choices=[HISTORY_MODE_ANSWER_ONLY, HISTORY_MODE_TOOL_SUMMARY],
                         help="Multi-turn history strategy: 'answer_only' (Strategy A, default) or 'tool_summary' (Strategy B — enriches history with tool call summaries)")
     parser.add_argument("--mcp-log", default=MCP_LOG_FILE)
+    parser.add_argument("--concurrency", type=int, default=1,
+                        help="Number of queries to run in parallel (default: 1 = sequential). "
+                             "Recommended: 3-5. MCP log per-query attribution is disabled in parallel mode.")
+    parser.add_argument("--skip-na", action="store_true", default=False,
+                        help="Skip queries with N/A confidence (unsupported features)")
+    parser.add_argument("--langfuse", action="store_true", default=False,
+                        help="Enable Langfuse integration: push traces and evaluator scores to Langfuse. "
+                             "Requires LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY env vars. "
+                             "Optionally set LANGFUSE_HOST (default: https://langfuse-prod.harness.io)")
+    parser.add_argument("--langfuse-judge", action="store_true", default=False,
+                        help="Enable LLM-as-Judge answer quality evaluation (requires --langfuse). "
+                             "Uses EVAL_JUDGE_MODEL (default: gpt-4.1-mini) and EVAL_JUDGE_PROVIDER (default: openai). "
+                             "Adds ~$0.01/query in LLM costs.")
+    parser.add_argument("--langfuse-sync-only", action="store_true", default=False,
+                        help="Only sync datasets to Langfuse without running tests (requires --langfuse)")
     args = parser.parse_args()
     query_ids = [qid.strip() for qid in args.query_ids.split(",")] if args.query_ids else None
 
@@ -1343,13 +1529,43 @@ def main():
     print(f"  Org/Project:       {args.org_id}/{args.project_id}\n  MCP log:           {args.mcp_log}")
     print(f"  Query delay:       {args.delay}s")
     print(f"  History mode:      {args.history_mode}")
+    print(f"  Concurrency:       {args.concurrency}{' (parallel)' if args.concurrency > 1 else ' (sequential)'}")
+    print(f"  Skip N/A:          {args.skip_na}")
+    print(f"  Langfuse:          {args.langfuse}{'  (+ LLM judge)' if args.langfuse_judge else ''}")
     if query_ids:
         print(f"  Running IDs:       {query_ids}")
     else:
         print(f"  Running:           ALL ({len(QUERIES)} single-turn + {len(CONVERSATIONS)} multi-turn)")
     print()
 
-    summary = run_smoke_tests(args.url, args.account_id, args.org_id, args.project_id, args.mcp_log, query_ids, args.delay, args.history_mode)
+    # --- Langfuse initialization (optional) ---
+    lf_integration = None
+    if args.langfuse:
+        try:
+            from langfuse_evaluators import LangfuseIntegration
+            lf_integration = LangfuseIntegration(enable_judge=args.langfuse_judge)
+            lf_integration.sync_dataset(QUERIES)
+            lf_integration.sync_conversation_dataset(CONVERSATIONS)
+            if args.langfuse_sync_only:
+                print("\n  [langfuse] Dataset sync complete (--langfuse-sync-only). Exiting.")
+                lf_integration.flush()
+                return
+        except ImportError as e:
+            print(f"  [langfuse] WARNING: {e}. Continuing without Langfuse.", file=sys.stderr)
+            lf_integration = None
+        except Exception as e:
+            print(f"  [langfuse] WARNING: Failed to initialize: {e}. Continuing without Langfuse.", file=sys.stderr)
+            lf_integration = None
+
+    summary = run_smoke_tests(args.url, args.account_id, args.org_id, args.project_id, args.mcp_log, query_ids, args.delay, args.history_mode,
+                              concurrency=args.concurrency, skip_na=args.skip_na)
+
+    # --- Langfuse scoring (post-run) ---
+    if lf_integration and summary:
+        print(f"\n{'#'*70}\n# LANGFUSE EVALUATION\n{'#'*70}")
+        _run_langfuse_scoring(lf_integration, summary)
+        lf_integration.flush()
+
     results_path, summary_path = write_results(summary)
     print_final_summary(summary)
     print(f"  Full results:  {results_path}\n  Summary:       {summary_path}\n")
