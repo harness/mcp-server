@@ -666,8 +666,8 @@ export const scsToolset: ToolsetDefinition = {
             if (artifactId) {
               // Project-scoped: richer response with SBOM context
               const cfg = config as Record<string, string | undefined>;
-              const org = (input.org_id as string) || cfg.HARNESS_DEFAULT_ORG_ID || "";
-              const project = (input.project_id as string) || cfg.HARNESS_DEFAULT_PROJECT_ID || "";
+              const org = (input.org_id as string) || cfg.HARNESS_ORG || "";
+              const project = (input.project_id as string) || cfg.HARNESS_PROJECT || "";
               return `${SCS}/v1/orgs/${org}/projects/${project}/artifacts/${artifactId}/component/overview`;
             }
             // Account-scoped fallback: enrichment data only

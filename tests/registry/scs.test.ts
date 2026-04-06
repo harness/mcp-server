@@ -899,7 +899,7 @@ describe("P3-11: scs_component_enrichment resource", () => {
     const spec = getOp("scs_component_enrichment", "get");
     const path = spec.pathBuilder!(
       { artifact_id: "art123", purl: "pkg:npm/express@4.18.0" },
-      { HARNESS_ACCOUNT_ID: "acc", HARNESS_DEFAULT_ORG_ID: "defOrg", HARNESS_DEFAULT_PROJECT_ID: "defProj" },
+      { HARNESS_ACCOUNT_ID: "acc", HARNESS_ORG: "defOrg", HARNESS_PROJECT: "defProj" },
     );
     expect(path).toContain("/v1/orgs/defOrg/projects/defProj/artifacts/art123/component/overview");
   });
