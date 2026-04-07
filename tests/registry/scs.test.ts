@@ -1009,6 +1009,7 @@ describe("P3-11: scs_component_enrichment resource", () => {
   });
 });
 
+
 // ─── P3-1: BOM Enforcement Violations ───────────────────────────────────────
 
 describe("P3-1: scs_bom_violation resource", () => {

@@ -447,3 +447,45 @@ describe("P3-11: searchResources routes OSS risk queries to scs_component_enrich
     expect(enrichResult, "scs_component_enrichment should appear for 'is it safe' search").toBeDefined();
   });
 });
+
+// ─── P3-11: scs_component_enrichment search routing ─────────────────────────
+
+describe("P3-11: searchResources routes OSS risk queries to scs_component_enrichment", () => {
+  const registry = new Registry(makeConfig());
+
+  it("searching 'oss risk' returns scs_component_enrichment in results", () => {
+    const results = registry.searchResources("oss risk");
+    const enrichResult = results.find(r => r.type === "scs_component_enrichment");
+    expect(enrichResult, "scs_component_enrichment should appear for 'oss risk' search").toBeDefined();
+  });
+
+  it("searching 'end of life' returns scs_component_enrichment in results", () => {
+    const results = registry.searchResources("end of life");
+    const enrichResult = results.find(r => r.type === "scs_component_enrichment");
+    expect(enrichResult, "scs_component_enrichment should appear for 'end of life' search").toBeDefined();
+  });
+
+  it("searching 'eol' returns scs_component_enrichment in results", () => {
+    const results = registry.searchResources("eol");
+    const enrichResult = results.find(r => r.type === "scs_component_enrichment");
+    expect(enrichResult, "scs_component_enrichment should appear for 'eol' search").toBeDefined();
+  });
+
+  it("searching 'outdated' returns scs_component_enrichment in results", () => {
+    const results = registry.searchResources("outdated");
+    const enrichResult = results.find(r => r.type === "scs_component_enrichment");
+    expect(enrichResult, "scs_component_enrichment should appear for 'outdated' search").toBeDefined();
+  });
+
+  it("searching 'latest version' returns scs_component_enrichment in results", () => {
+    const results = registry.searchResources("latest version");
+    const enrichResult = results.find(r => r.type === "scs_component_enrichment");
+    expect(enrichResult, "scs_component_enrichment should appear for 'latest version' search").toBeDefined();
+  });
+
+  it("searching 'is it safe' returns scs_component_enrichment in results", () => {
+    const results = registry.searchResources("is it safe");
+    const enrichResult = results.find(r => r.type === "scs_component_enrichment");
+    expect(enrichResult, "scs_component_enrichment should appear for 'is it safe' search").toBeDefined();
+  });
+});
