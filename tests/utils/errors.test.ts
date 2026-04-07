@@ -137,4 +137,24 @@ describe("toMcpError", () => {
     expect(result).toBeInstanceOf(McpError);
     expect(result.message).toContain("raw string");
   });
+
+  it("sanitizes HTML error messages from redirect pages", () => {
+    const htmlMsg = '<html><body>Please sign in</body></html>';
+    const result = toMcpError(new HarnessApiError(htmlMsg, 401));
+    expect(result.message).not.toContain("<html>");
+    expect(result.message).toContain("HTML error page");
+  });
+
+  it("sanitizes JS redirect content in error messages", () => {
+    const jsMsg = 'Harness Redirect function redirectPage() { const signInPath = "auth/#/signin"; }';
+    const result = toMcpError(new HarnessApiError(jsMsg, 401));
+    expect(result.message).not.toContain("redirectPage");
+    expect(result.message).toContain("login redirect");
+  });
+
+  it("passes through normal error messages unchanged", () => {
+    const normalMsg = "Pipeline not found in project default";
+    const result = toMcpError(new HarnessApiError(normalMsg, 404));
+    expect(result.message).toContain(normalMsg);
+  });
 });

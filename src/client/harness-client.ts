@@ -9,26 +9,50 @@ const log = createLogger("harness-client");
 const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
 const BASE_BACKOFF_MS = 1000;
 
-/** Strip HTML tags and collapse whitespace — used for non-JSON error bodies. */
+/** Strip HTML tags, script/style contents, and collapse whitespace. */
 function stripHtml(html: string): string {
-  return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  return html
+    .replace(/<script[\s>][\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s>][\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** True when body is an HTML page (redirect, WAF block, proxy error). */
+function isHtmlBody(body: string): boolean {
+  return /^\s*</.test(body) || /<!doctype/i.test(body.slice(0, 100));
 }
 
 /** Produce a clean, actionable error message for non-JSON HTTP error responses. */
 function humanizeHttpError(status: number, rawBody: string): string {
-  const isHtml = /^\s*</.test(rawBody);
-  const hint = isHtml ? stripHtml(rawBody).slice(0, 120) : rawBody.slice(0, 200);
+  const html = isHtmlBody(rawBody);
 
   switch (status) {
     case 401:
-      return `HTTP 401 Unauthorized — API key is invalid or expired. Verify HARNESS_API_KEY is a valid PAT or Service Account token.${hint ? ` (${hint})` : ""}`;
+      return "HTTP 401 Unauthorized — API key is invalid or expired. Verify HARNESS_API_KEY is a valid PAT or Service Account token.";
     case 403:
-      return `HTTP 403 Forbidden — access denied. Possible causes: wrong HARNESS_ACCOUNT_ID, IP restrictions, missing RBAC permissions, or corporate proxy/WAF blocking the request.${hint ? ` (${hint})` : ""}`;
+      return "HTTP 403 Forbidden — access denied. Possible causes: wrong HARNESS_ACCOUNT_ID, IP restrictions, missing RBAC permissions, or corporate proxy/WAF blocking the request.";
     case 404:
-      return `HTTP 404 Not Found — the API endpoint or resource does not exist. Verify the base URL and resource identifiers.${hint ? ` (${hint})` : ""}`;
-    default:
+      return `HTTP 404 Not Found — the API endpoint or resource does not exist. Verify the base URL and resource identifiers.`;
+    default: {
+      if (html) return `HTTP ${status}: Harness returned an HTML error page (possible proxy, WAF, or redirect). Check HARNESS_BASE_URL and network connectivity.`;
+      const hint = rawBody.slice(0, 200);
       return `HTTP ${status}: ${hint || "empty response"}`;
+    }
   }
+}
+
+/**
+ * Detect when parsed.message contains HTML/JS from a redirect page
+ * rather than a real Harness API error message.
+ */
+function isGarbageMessage(message: string | undefined): boolean {
+  if (!message) return true;
+  if (isHtmlBody(message)) return true;
+  if (/function\s+\w+\s*\(/.test(message)) return true;
+  if (/redirectPage|signInPath|encodeURIComponent/.test(message)) return true;
+  return false;
 }
 
 /**
@@ -155,7 +179,9 @@ export class HarnessClient {
             // Provide actionable messages instead of leaking raw HTML to the LLM
           }
 
-          const message = parsed.message ?? humanizeHttpError(response.status, body);
+          const message = isGarbageMessage(parsed.message)
+            ? humanizeHttpError(response.status, body)
+            : parsed.message!;
           log.debug(`HTTP ${response.status} error`, { body: body.slice(0, 1000) });
           const error = new HarnessApiError(
             message,
@@ -295,7 +321,9 @@ export class HarnessClient {
           let parsed: { message?: string; code?: string; correlationId?: string } = {};
           try { parsed = JSON.parse(body); } catch { /* non-JSON */ }
 
-          const message = parsed.message ?? humanizeHttpError(response.status, body);
+          const message = isGarbageMessage(parsed.message)
+            ? humanizeHttpError(response.status, body)
+            : parsed.message!;
           const error = new HarnessApiError(message, response.status, parsed.code, parsed.correlationId);
 
           if (RETRYABLE_STATUS_CODES.has(response.status) && attempt < this.maxRetries) {
