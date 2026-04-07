@@ -509,7 +509,7 @@ export const pipelinesToolset: ToolsetDefinition = {
       operations: {
         list: {
           method: "GET",
-          path: "/v1/orgs/{org}/projects/{project}/approvals/execution/{executionId}",
+          path: "/pipeline/api/v1/orgs/{org}/projects/{project}/approvals/execution/{executionId}",
           pathParams: { org_id: "org", project_id: "project", execution_id: "executionId" },
           queryParams: {
             approval_status: "approval_status",

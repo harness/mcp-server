@@ -371,6 +371,27 @@ QUERIES = [
             "NOT scs_compliance_result. Tests whether the LLM can disambiguate between the two compliance-related resources. "
             "scs_compliance_result handles CIS/OWASP checks; scs_bom_violation handles OPA policy enforcement violations.",
     },
+    # ─── P3-11: Component Enrichment / OSS Risk Lookup ──────────────────
+    {
+        "id": "Q38",
+        "query": "What is the OSS risk score and EOL status of the zlib component in my first artifact? Use the enrichment resource to check if it is unmaintained.",
+        "expected_intent": "P3-11: OSS risk assessment — EOL status and risk score via scs_component_enrichment",
+        "confidence": "Medium",
+        "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_enrichment")],
+        "observe": "P3-11: Does the LLM chain source → components (to find zlib purl) → scs_component_enrichment? "
+            "Key test: 'end-of-life' and 'outdated' should route to scs_component_enrichment (OSS risk), NOT security_issue (STO CVEs). "
+            "Response should include EOL status, outdated flag, and latest_version.",
+    },
+    {
+        "id": "Q39",
+        "query": "Use the component enrichment resource to get the OSS risk assessment for a component in my first code repository — what is its EOL status and risk score?",
+        "expected_intent": "P3-11: Project-scoped OSS risk assessment — repo as artifact, scs_component_enrichment with artifact_id",
+        "confidence": "Medium",
+        "expected_tools": [("harness_list", "code_repo_security"), ("harness_list", "scs_artifact_component"), ("harness_get", "scs_component_enrichment")],
+        "observe": "P3-11: Does it chain code_repo_security → scs_artifact_component (repo_id as artifact_id) → scs_component_enrichment? "
+            "'OSS risk', 'unmaintained', 'end-of-life' are all search aliases for scs_component_enrichment. "
+            "Bonus: does it pass artifact_id to scs_component_enrichment for richer project-scoped data?",
+    },
     # ─── P3-3: Pipeline SBOM Step Modification ────────────────────────
     {
         "id": "Q19",
@@ -595,6 +616,25 @@ CONVERSATIONS = [
              "expected_tools": [("harness_get", "scs_auto_pr_config")],
              "observe": "P3-12: Context switch from component remediation to project-level auto-PR config. "
                  "Tests whether the LLM can pivot from per-component fixes to project-level automation."},
+        ],
+    },
+    # ─── P3-11: OSS Risk Assessment Journey ─────────────────────────────
+    {
+        "id": "M14", "title": "Component OSS Risk Assessment Journey (P3-11)",
+        "description": "List components → check OSS risk/EOL status → get remediation for outdated component",
+        "turns": [
+            {"turn": 1, "query": "Show me the SBOM components for my first artifact",
+             "expected_tools": [("harness_list", "scs_artifact_source"), ("harness_list", "scs_artifact_component")],
+             "observe": "Setup: establishes component list with purls in context."},
+            {"turn": 2, "query": "Use the component enrichment resource to check the OSS risk score and EOL status of the zlib component from that list.",
+             "expected_tools": [("harness_get", "scs_component_enrichment")],
+             "observe": "P3-11 KEY TEST: Does the LLM reuse the zlib purl from Turn 1 and route to scs_component_enrichment? "
+                 "Explicit 'enrichment resource' + 'risk score' + 'EOL status' should trigger enrichment, NOT remediation. "
+                 "Response should include EOL status, is_outdated, latest_version."},
+            {"turn": 3, "query": "That component looks outdated. What version should I upgrade to and will it break anything?",
+             "expected_tools": [("harness_get", "scs_component_remediation")],
+             "observe": "P3-11→P3-6 chain: Does the LLM reuse the purl from Turn 2 context and pivot to scs_component_remediation? "
+                 "Natural follow-up — user sees outdated status from enrichment, asks for upgrade guidance."},
         ],
     },
     # ─── Cross-Capability: Security Posture → Policy → Pipeline ───────

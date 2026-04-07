@@ -1,7 +1,7 @@
 /**
  * T5-v2: SCS Benchmark — Integration tests against live Harness QA environment.
  *
- * 24 scenarios across 3 tiers exercising the registry dispatch layer.
+ * 26 scenarios across 3 tiers exercising the registry dispatch layer.
  * Requires real credentials — skipped when HARNESS_API_KEY is not set.
  *
  * Env vars (set in shell or .env):
@@ -411,6 +411,56 @@ describe.skipIf(!HAS_CREDENTIALS)("SCS Benchmark (live API)", () => {
         // May 404 if component has no dependency data
         const msg = err instanceof Error ? err.message : String(err);
         console.log(`  S24: dependency tree error: ${msg.slice(0, 120)}`);
+      }
+    }, 30_000);
+
+    it("S25a: Component enrichment — account-scoped (purl only, P3-11)", async () => {
+      if (!state.purl) {
+        console.log("  S25a: SKIPPED — no purl from S08");
+        return;
+      }
+
+      try {
+        const result = await registry.dispatch(client, "scs_component_enrichment", "get", {
+          purl: state.purl,
+        }) as Record<string, unknown>;
+        expect(result).toBeDefined();
+
+        const hasEol = "eol_status" in result || "eolStatus" in result || "eol_score" in result || "eolScore" in result;
+        const hasOutdated = "is_outdated" in result || "isOutdated" in result;
+        const hasLatestVersion = "latest_version" in result || "latestVersion" in result;
+
+        console.log(`  S25a: account-scoped enrichment for ${state.purl.slice(0, 60)}..., ${jsonBytes(result)} bytes`);
+        console.log(`  S25a: EOL: ${hasEol}, outdated: ${hasOutdated}, latestVersion: ${hasLatestVersion}`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.log(`  S25a: enrichment error (component may not be enriched): ${msg.slice(0, 120)}`);
+      }
+    }, 30_000);
+
+    it("S25b: Component enrichment — project-scoped (artifact_id + purl, P3-11)", async () => {
+      if (!state.purl || !state.artifactId) {
+        console.log("  S25b: SKIPPED — no purl from S08 or no artifact_id from S02");
+        return;
+      }
+
+      try {
+        const result = await registry.dispatch(client, "scs_component_enrichment", "get", {
+          artifact_id: state.artifactId,
+          purl: state.purl,
+        }) as Record<string, unknown>;
+        expect(result).toBeDefined();
+
+        // Project-scoped should include SBOM context fields beyond just enrichment
+        const hasDependencyType = "dependency_types" in result || "dependencyTypes" in result;
+        const hasParents = "parents" in result;
+        const hasEol = "eol_status" in result || "eolStatus" in result || "eol_score" in result || "eolScore" in result;
+
+        console.log(`  S25b: project-scoped enrichment for ${state.purl.slice(0, 60)}..., ${jsonBytes(result)} bytes`);
+        console.log(`  S25b: EOL: ${hasEol}, dependencyType: ${hasDependencyType}, parents: ${hasParents}`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.log(`  S25b: project-scoped enrichment error: ${msg.slice(0, 120)}`);
       }
     }, 30_000);
 
