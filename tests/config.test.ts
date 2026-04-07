@@ -140,6 +140,43 @@ describe("ConfigSchema", () => {
   });
 });
 
+describe("ConfigSchema — boolean env var coercion", () => {
+  const validConfig = {
+    HARNESS_API_KEY: "pat.acct123.tokenId.secret",
+    HARNESS_ACCOUNT_ID: "acct123",
+  };
+
+  it.each(["true", "1", "yes", "YES", "True"])("HARNESS_SKIP_ELICITATION=%s → true", (val) => {
+    const result = ConfigSchema.safeParse({ ...validConfig, HARNESS_SKIP_ELICITATION: val });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.HARNESS_SKIP_ELICITATION).toBe(true);
+  });
+
+  it.each(["false", "0", "no", "NO", "False", ""])("HARNESS_SKIP_ELICITATION=%s → false", (val) => {
+    const result = ConfigSchema.safeParse({ ...validConfig, HARNESS_SKIP_ELICITATION: val });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.HARNESS_SKIP_ELICITATION).toBe(false);
+  });
+
+  it("HARNESS_SKIP_ELICITATION defaults to false when unset", () => {
+    const result = ConfigSchema.safeParse(validConfig);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.HARNESS_SKIP_ELICITATION).toBe(false);
+  });
+
+  it("HARNESS_READ_ONLY=false is actually false", () => {
+    const result = ConfigSchema.safeParse({ ...validConfig, HARNESS_READ_ONLY: "false" });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.HARNESS_READ_ONLY).toBe(false);
+  });
+
+  it("HARNESS_READ_ONLY=true is true", () => {
+    const result = ConfigSchema.safeParse({ ...validConfig, HARNESS_READ_ONLY: "true" });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.HARNESS_READ_ONLY).toBe(true);
+  });
+});
+
 describe("ConfigSchema — HTTPS enforcement", () => {
   const validConfig = {
     HARNESS_API_KEY: "pat.acct123.tokenId.secret",

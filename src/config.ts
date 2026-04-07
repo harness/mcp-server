@@ -1,6 +1,15 @@
 import * as z from "zod/v4";
 
 /**
+ * Coerce a string env var to a boolean.
+ * "true" / "1" / "yes" → true; everything else (including "false") → false.
+ * This avoids the JS `Boolean("false") === true` footgun with z.coerce.boolean().
+ */
+const booleanFromEnv = z
+  .union([z.boolean(), z.string(), z.undefined()])
+  .transform((val) => typeof val === "string" && ["true", "1", "yes"].includes(val.toLowerCase()));
+
+/**
  * Extract the account ID from a Harness PAT token.
  * PAT format: pat.<accountId>.<tokenId>.<secret>
  * Returns undefined if the token doesn't match the expected format.
@@ -33,9 +42,9 @@ const RawConfigSchema = z.object({
   HARNESS_TOOLSETS: z.string().optional(),
   HARNESS_MAX_BODY_SIZE_MB: z.coerce.number().default(10),
   HARNESS_RATE_LIMIT_RPS: z.coerce.number().default(10),
-  HARNESS_READ_ONLY: z.coerce.boolean().default(false),
-  HARNESS_SKIP_ELICITATION: z.coerce.boolean().default(false),
-  HARNESS_ALLOW_HTTP: z.coerce.boolean().default(false),
+  HARNESS_READ_ONLY: booleanFromEnv.default(false),
+  HARNESS_SKIP_ELICITATION: booleanFromEnv.default(false),
+  HARNESS_ALLOW_HTTP: booleanFromEnv.default(false),
   HARNESS_FME_BASE_URL: z.string().url().default("https://api.split.io"),
 });
 
