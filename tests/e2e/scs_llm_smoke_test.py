@@ -834,8 +834,13 @@ def extract_tools_from_events(events: list[dict[str, Any]]) -> dict[str, Any]:
             if isinstance(data, dict):
                 for res in data.get("v", []):
                     content = res.get("content", "")
-                    content_len = len(content) if isinstance(content, str) else len(json.dumps(content))
-                    tool_results.append({"name": res.get("name"), "is_error": res.get("is_error", False), "content_length": content_len})
+                    content_str = content if isinstance(content, str) else json.dumps(content)
+                    content_len = len(content_str)
+                    tool_results.append({
+                        "name": res.get("name"), "is_error": res.get("is_error", False),
+                        "content_length": content_len,
+                        "content_preview": content_str[:1500],
+                    })
         elif event_type == "assistant_thought":
             if isinstance(data, dict):
                 v = data.get("v", "")
@@ -1336,6 +1341,11 @@ def write_results(summary: dict[str, Any]) -> tuple[Path, Path]:
     summary_path = OUTPUT_DIR / "smoke_test_summary.json"
     with open(results_path, "w") as f:
         json.dump(summary, f, indent=2, default=str)
+    # Timestamped copy for historical comparison (flaky detection, trend analysis)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    ts_path = OUTPUT_DIR / f"smoke_test_results_{ts}.json"
+    with open(ts_path, "w") as f:
+        json.dump(summary, f, indent=2, default=str)
     summary_only = {
         "run_metadata": summary["run_metadata"], "summary": summary["summary"],
         "scoring_table": [
@@ -1453,6 +1463,7 @@ def _run_langfuse_scoring(lf_integration, summary: dict[str, Any]) -> None:
             extracted = {
                 "tools_called": [tuple(t) for t in r["extracted"]["tools_called"]],
                 "tool_params": r["extracted"]["tool_params"],
+                "tool_results": r["extracted"].get("tool_results", {}),
                 "final_answer": r["extracted"]["final_answer"],
                 "final_answer_length": r["extracted"]["final_answer_length"],
                 "errors": r["extracted"]["errors"],
@@ -1485,9 +1496,77 @@ def _run_langfuse_scoring(lf_integration, summary: dict[str, Any]) -> None:
             score_summary = " | ".join(f"{k}={v['value']}" for k, v in scores.items() if v.get("value") is not None)
             print(f"    {cr['id']}: {score_summary}")
 
+    # --- Run-level aggregate evaluators ---
+    from langfuse_evaluators import RUN_EVALUATORS
+    query_confidence = {q["id"]: q.get("confidence", "N/A") or "N/A" for q in QUERIES}
+    item_results = []
+    for r in results:
+        lf_scores = r["scoring"].get("langfuse_scores", {})
+        if lf_scores:
+            item_results.append({
+                "query_id": r["id"],
+                "confidence": query_confidence.get(r["id"], r.get("confidence") or "N/A"),
+                "evaluations": lf_scores,
+                "token_usage": r["extracted"].get("token_usage", {}),
+            })
+    # Include multi-turn conversation scores in aggregation.
+    # When per-turn scores exist, use them exclusively (evaluations + token_usage)
+    # to avoid double-counting. When no per-turn scores exist (judge disabled),
+    # fall back to conversation-level aggregates.
+    for cr in conv_results:
+        lf_scores = cr["scoring"].get("langfuse_scores", {})
+        conv_usage = cr.get("aggregate", {}).get("total_token_usage", {})
+        turns = cr.get("turns", [])
+        has_per_turn = any(t.get("langfuse_scores") for t in turns)
+
+        if has_per_turn:
+            # Per-turn entries carry evaluations for MQI and token_usage for
+            # token_cost. No conv-level entry needed — per-turn token_usage
+            # already sums to total, adding conv_usage would double-count.
+            for turn in turns:
+                turn_lf = turn.get("langfuse_scores", {})
+                if turn_lf:
+                    item_results.append({
+                        "query_id": f"{cr['id']}-T{turn.get('turn', '?')}",
+                        "confidence": "High",
+                        "evaluations": turn_lf,
+                        "token_usage": turn.get("token_usage", {}),
+                    })
+        elif lf_scores or conv_usage:
+            # No per-turn scores — use conversation-level for everything
+            item_results.append({
+                "query_id": cr["id"],
+                "confidence": "High",
+                "evaluations": lf_scores or {},
+                "token_usage": conv_usage,
+            })
+    if item_results:
+        print(f"\n  Run-level aggregates ({len(item_results)} scored items):")
+        for run_eval in RUN_EVALUATORS:
+            try:
+                agg = run_eval(item_results=item_results)
+                if isinstance(agg, dict) and agg.get("value") is not None:
+                    val = agg["value"]
+                    val_str = f"{val:,.0f}" if agg["name"] == "token_cost" else f"{val:.3f}"
+                    print(f"    {agg['name']}: {val_str} — {agg.get('comment', '')}")
+                    summary.setdefault("run_aggregates", {})[agg["name"]] = {
+                        "value": agg["value"], "comment": agg.get("comment", ""),
+                    }
+            except Exception as e:
+                print(f"    {run_eval.__name__}: error — {e}")
+
+    # Push run aggregates to Langfuse
+    run_aggs = summary.get("run_aggregates", {})
+    if run_aggs:
+        lf_integration.push_run_aggregates(run_aggs)
+
     # --- Summary ---
     total_traces = len(results) + len(conv_results)
-    print(f"\n  [langfuse] Created {total_traces} traces with evaluator scores")
+    # Multi-turn creates per-turn traces too (parent + N turns per conversation)
+    per_turn_traces = sum(len(cr.get("turns", [])) for cr in conv_results)
+    total_all = total_traces + per_turn_traces
+    print(f"\n  [langfuse] Created {total_all} traces ({len(results)} single-turn + {len(conv_results)} conversation parents + {per_turn_traces} per-turn)")
+    print(f"  [langfuse] Experiment run: {lf_integration.experiment_run_name}")
     print(f"  [langfuse] View results at: {os.getenv('LANGFUSE_HOST', 'https://langfuse-prod.harness.io')}")
 
 
@@ -1519,6 +1598,19 @@ def main():
                         help="Enable LLM-as-Judge answer quality evaluation (requires --langfuse). "
                              "Uses EVAL_JUDGE_MODEL (default: gpt-4.1-mini) and EVAL_JUDGE_PROVIDER (default: openai). "
                              "Adds ~$0.01/query in LLM costs.")
+    parser.add_argument("--harness-judge", action="store_true", default=False,
+                        help="Use Harness ai-evals LLM-as-Judge service for rubric-based multi-criteria scoring "
+                             "(requires --langfuse --langfuse-judge). "
+                             "Requires HARNESS_EVAL_API_URL and HARNESS_EVAL_API_TOKEN env vars. "
+                             "Falls back to OpenAI if unavailable.")
+    parser.add_argument("--no-fail-on-regression", action="store_true", default=False,
+                        help="Do not exit with code 1 when regressions are detected. "
+                             "Useful for local development. CI pipelines should omit this flag.")
+    parser.add_argument("--deepeval", action="store_true", default=False,
+                        help="Enable DeepEval G-Eval metrics (requires pip install deepeval). "
+                             "Adds tool_correctness, answer_quality, and faithfulness scores "
+                             "using chain-of-thought + token probability calibration. "
+                             "Requires OPENAI_API_KEY. Optionally set DEEPEVAL_MODEL (default: gpt-4.1-mini).")
     parser.add_argument("--langfuse-sync-only", action="store_true", default=False,
                         help="Only sync datasets to Langfuse without running tests (requires --langfuse)")
     args = parser.parse_args()
@@ -1531,7 +1623,11 @@ def main():
     print(f"  History mode:      {args.history_mode}")
     print(f"  Concurrency:       {args.concurrency}{' (parallel)' if args.concurrency > 1 else ' (sequential)'}")
     print(f"  Skip N/A:          {args.skip_na}")
-    print(f"  Langfuse:          {args.langfuse}{'  (+ LLM judge)' if args.langfuse_judge else ''}")
+    judge_label = ""
+    if args.langfuse_judge:
+        judge_label = "  (+ Harness ai-evals judge)" if args.harness_judge else "  (+ LLM judge)"
+    print(f"  Langfuse:          {args.langfuse}{judge_label}")
+    print(f"  DeepEval:          {args.deepeval}")
     if query_ids:
         print(f"  Running IDs:       {query_ids}")
     else:
@@ -1543,7 +1639,11 @@ def main():
     if args.langfuse:
         try:
             from langfuse_evaluators import LangfuseIntegration
-            lf_integration = LangfuseIntegration(enable_judge=args.langfuse_judge)
+            lf_integration = LangfuseIntegration(
+                enable_judge=args.langfuse_judge,
+                use_harness_judge=args.harness_judge,
+            )
+            print(f"  [langfuse] Experiment run: {lf_integration.experiment_run_name}")
             lf_integration.sync_dataset(QUERIES)
             lf_integration.sync_conversation_dataset(CONVERSATIONS)
             if args.langfuse_sync_only:
@@ -1562,13 +1662,121 @@ def main():
 
     # --- Langfuse scoring (post-run) ---
     if lf_integration and summary:
-        print(f"\n{'#'*70}\n# LANGFUSE EVALUATION\n{'#'*70}")
+        print(f"\n{'#'*70}\n# LANGFUSE EVALUATION (experiment: {lf_integration.experiment_run_name})\n{'#'*70}")
         _run_langfuse_scoring(lf_integration, summary)
         lf_integration.flush()
+
+    # --- DeepEval scoring (optional, independent of Langfuse) ---
+    if args.deepeval and summary:
+        try:
+            from deepeval_evaluators import _check_deepeval, create_geval_metrics, run_deepeval_scoring, run_deepeval_aggregate
+            if not _check_deepeval():
+                print("\n  [deepeval] WARNING: deepeval package not installed. Run: pip install deepeval", file=sys.stderr)
+            else:
+                print(f"\n{'#'*70}\n# DEEPEVAL G-EVAL SCORING\n{'#'*70}")
+                metrics = create_geval_metrics()
+                query_lookup_de = {q["id"]: q for q in QUERIES}
+                all_deepeval_scores = []
+                for r in summary.get("results", []):
+                    qdef = query_lookup_de.get(r["id"])
+                    if not qdef:
+                        continue
+                    extracted = {
+                        "tools_called": [tuple(t) for t in r["extracted"]["tools_called"]],
+                        "tool_params": r["extracted"]["tool_params"],
+                        "tool_results": r["extracted"].get("tool_results", {}),
+                        "final_answer": r["extracted"]["final_answer"],
+                    }
+                    de_scores = run_deepeval_scoring(qdef, extracted, metrics)
+                    r["scoring"]["deepeval_scores"] = de_scores
+                    all_deepeval_scores.append(de_scores)
+                    score_str = " | ".join(f"{k}={v['value']}" for k, v in de_scores.items() if v.get("value") is not None)
+                    print(f"    {r['id']}: {score_str}")
+
+                    # Push DeepEval scores to Langfuse traces (when both are active)
+                    if lf_integration:
+                        try:
+                            trace_id = lf_integration._langfuse.create_trace_id(
+                                seed=f"{lf_integration._experiment_run}-{r['id']}"
+                            )
+                            for metric_name, metric_data in de_scores.items():
+                                if metric_data.get("value") is not None:
+                                    lf_integration._langfuse.create_score(
+                                        trace_id=trace_id,
+                                        name=metric_name,
+                                        value=metric_data["value"],
+                                        comment=metric_data.get("comment", "")[:500],
+                                    )
+                        except Exception as lf_err:
+                            print(f"      [deepeval→langfuse] {r['id']}: {lf_err}")
+
+                if all_deepeval_scores:
+                    aggs = run_deepeval_aggregate(all_deepeval_scores)
+                    print(f"\n  DeepEval Aggregates ({len(all_deepeval_scores)} items):")
+                    for name, data in aggs.items():
+                        print(f"    {name}: {data['value']:.3f} — {data['comment']}")
+                    summary.setdefault("deepeval_aggregates", {}).update(aggs)
+
+                if lf_integration:
+                    lf_integration.flush()
+                    print(f"  [deepeval→langfuse] Pushed scores to Langfuse traces")
+        except ImportError as e:
+            print(f"\n  [deepeval] WARNING: {e}", file=sys.stderr)
+        except Exception as e:
+            print(f"\n  [deepeval] ERROR: {e}", file=sys.stderr)
+
+    # --- Regression detection (compare against previous run BEFORE overwriting) ---
+    has_regression = False
+    prev_summary_path = OUTPUT_DIR / "smoke_test_summary.json"
+    try:
+        from langfuse_evaluators import detect_regressions
+        regressions = detect_regressions(summary, str(prev_summary_path))
+        if regressions and regressions[0].get("status") != "no_previous":
+            print(f"\n{'#'*70}\n# REGRESSION CHECK (vs previous run)\n{'#'*70}")
+            for r in regressions:
+                if r.get("status") == "error":
+                    print(f"  {r['metric']}: {r.get('comment', '')}")
+                    continue
+                icon = {"regression": "⚠️ ", "improvement": "✅ ", "stable": "   "}.get(r["status"], "   ")
+                delta = f"{r['delta_pct']:+.1f}%"
+                print(f"  {icon}{r['metric']:<30} {r['current']:<12} (was {r['previous']:<12}) {delta:<8} [{r['status']}]")
+                if r["status"] == "regression":
+                    has_regression = True
+            if has_regression:
+                print("\n  ⚠️  REGRESSIONS DETECTED — review changes before merging")
+            else:
+                print("\n  No regressions detected")
+            summary["regression_check"] = regressions
+            summary["has_regressions"] = has_regression
+    except ImportError:
+        pass
+    except Exception as e:
+        print(f"  [regression] Error: {e}")
+
+    # --- Flaky query detection (compare across last N runs) ---
+    try:
+        from langfuse_evaluators import detect_flaky_queries
+        flaky = detect_flaky_queries(summary, str(OUTPUT_DIR))
+        if flaky:
+            print(f"\n{'#'*70}\n# FLAKY QUERIES ({len(flaky)} detected)\n{'#'*70}")
+            for fq in flaky:
+                hist_str = " → ".join(fq["history"])
+                print(f"  🔄 {fq['query_id']:<10} {hist_str}  ({fq['flip_count']} flips, outcomes: {fq['distinct_outcomes']})")
+            summary["flaky_queries"] = flaky
+        else:
+            print(f"\n  No flaky queries detected")
+    except ImportError:
+        pass
+    except Exception as e:
+        print(f"  [flaky] Error: {e}")
 
     results_path, summary_path = write_results(summary)
     print_final_summary(summary)
     print(f"  Full results:  {results_path}\n  Summary:       {summary_path}\n")
+
+    # Exit non-zero if regressions detected (for CI gating)
+    if has_regression and not args.no_fail_on_regression:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
