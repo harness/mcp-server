@@ -204,8 +204,8 @@ export const gitopsToolset: ToolsetDefinition = {
           queryParams: {
             search_term: "searchTerm",
             type: "type",
-            page: "page",
-            size: "size",
+            page: "pageIndex",
+            size: "pageSize",
           },
           responseExtractor: passthrough,
           description: "List GitOps agents",
@@ -709,8 +709,6 @@ export const gitopsToolset: ToolsetDefinition = {
             "    goTemplate:true, generators:[{list:{elements:[{ns:'dev'},{ns:'staging'}]}}],\n" +
             "    template:{metadata:{name:'app-{{.ns}}'}, spec:{source:{repoURL:'...', path:'manifests', targetRevision:'HEAD'}, destination:{server:'https://kubernetes.default.svc', namespace:'{{.ns}}'}}}\n" +
             "  }}})\n\n" +
-            "EXAMPLE (git directory): generators:[{git:{repoURL:'...', revision:'HEAD', directories:[{path:'apps/*'}]}}]\n" +
-            "EXAMPLE (cluster): generators:[{clusters:{selector:{matchLabels:{env:'production'}}}}]\n\n" +
             "REQUIRED: agent_id in params (scope-prefixed). No resource_id for create.\n" +
             "DO NOT set spec.template.spec.project — Harness auto-assigns it.\n" +
             "Set spec.goTemplate=true for Go template syntax (e.g. '{{.path.basename}}').",
@@ -725,10 +723,44 @@ export const gitopsToolset: ToolsetDefinition = {
                   "{ metadata: { name (required) },\n" +
                   "  spec: {\n" +
                   "    goTemplate: boolean (recommended: true),\n" +
-                  "    generators: [{ <type>: { ... } }, ...] — REQUIRED. Types: list, git, clusters, matrix, merge, pullRequest, scmProvider, plugin\n" +
+                  "    generators: [{ <type>: { ... } }, ...] — REQUIRED\n" +
                   "    template: { metadata: { name }, spec: { source: { repoURL, path, targetRevision }, destination: { server, namespace }, syncPolicy? } },\n" +
                   "    syncPolicy?: { applicationsSync?: 'create-only'|'create-update'|'create-delete'|'sync' }\n" +
-                  "  } }",
+                  "  } }\n\n" +
+                  "GENERATOR TYPES AND FIELDS:\n\n" +
+                  "1. LIST — static list of key-value parameter sets:\n" +
+                  "   {list:{elements:[{cluster:'staging', url:'https://1.2.3.4'}, {cluster:'prod', url:'https://2.3.4.5'}]}}\n" +
+                  "   Template vars: any keys from elements (e.g. {{.cluster}}, {{.url}})\n\n" +
+                  "2. GIT — generates from directories or files in a Git repo:\n" +
+                  "   Directories: {git:{repoURL:'https://...', revision:'HEAD', directories:[{path:'apps/*'}]}}\n" +
+                  "   Files: {git:{repoURL:'https://...', revision:'HEAD', files:[{path:'config/*.json'}]}}\n" +
+                  "   Optional: values:{key:'val'} for extra template vars\n" +
+                  "   Template vars: {{.path.path}}, {{.path.basename}}, {{.path.basenameNormalized}}, {{index .path.segments N}}\n\n" +
+                  "3. CLUSTERS — generates from ArgoCD-registered clusters:\n" +
+                  "   Match all clusters: {clusters:{}} or {clusters:{selector:{}}}\n" +
+                  "   Filter by labels: {clusters:{selector:{matchLabels:{env:'production'}}}}\n" +
+                  "   Filter by expressions: {clusters:{selector:{matchExpressions:[{key:'region', operator:'In', values:['us-east','us-west']}]}}}\n" +
+                  "   NOTE: Empty selector {} or omitted selector both match ALL clusters (standard K8s LabelSelector semantics).\n" +
+                  "   Optional: values:{key:'val'} for extra template vars\n" +
+                  "   Template vars: {{.name}}, {{.nameNormalized}}, {{.server}}, {{.metadata.labels.<key>}}, {{.metadata.annotations.<key>}}\n\n" +
+                  "4. MATRIX — cartesian product of exactly 2 generators:\n" +
+                  "   {matrix:{generators:[{list:{elements:[{cluster:'staging', url:'https://1.2.3.4'}]}}, {git:{repoURL:'...', revision:'HEAD', directories:[{path:'apps/*'}]}}]}}\n" +
+                  "   Template vars: combined from both generators (e.g. {{.cluster}}, {{.path.basename}})\n\n" +
+                  "5. MERGE — merges output of 2+ generators by shared keys:\n" +
+                  "   {merge:{mergeKeys:['env'], generators:[{list:{elements:[{env:'dev', region:'us-east'}]}}, {list:{elements:[{env:'dev', replicas:'2'}]}}]}}\n" +
+                  "   Template vars: union of fields from all generators, merged by mergeKeys\n\n" +
+                  "6. PULL REQUEST — generates from open PRs in a repo (requires SCM token):\n" +
+                  "   GitHub: {pullRequest:{github:{owner:'org', repo:'repo', tokenRef:{secretName:'gh-token', key:'token'}, labels:['deploy']}}}\n" +
+                  "   Also supports: gitlab, gitea, bitbucket, bitbucketcloud, azuredevops\n" +
+                  "   Template vars: {{.number}}, {{.branch}}, {{.branch_slug}}, {{.head_sha}}, {{.head_short_sha}}, {{.labels}}\n\n" +
+                  "7. SCM PROVIDER — generates from repos matching filters in an SCM org:\n" +
+                  "   GitHub: {scmProvider:{github:{organization:'my-org', tokenRef:{secretName:'gh-token', key:'token'}}}}\n" +
+                  "   Also supports: gitlab, gitea, bitbucket, bitbucketcloud, azuredevops, awscodecommit\n" +
+                  "   Template vars: {{.organization}}, {{.repository}}, {{.url}}, {{.branch}}, {{.sha}}, {{.labels}}\n\n" +
+                  "8. PLUGIN — generates from an external plugin (ConfigMap-based):\n" +
+                  "   {plugin:{configMapRef:{name:'my-plugin'}, input:{parameters:{key1:'value1'}}, requeueAfterSeconds:30}}\n" +
+                  "   Optional: values:{key:'val'}\n" +
+                  "   Template vars: defined by the plugin output",
               },
               { name: "upsert", type: "boolean", required: false, description: "If true, update existing ApplicationSet instead of failing on duplicate (default: false)." },
               { name: "dryRun", type: "boolean", required: false, description: "Simulate creation without applying (default: false)." },
