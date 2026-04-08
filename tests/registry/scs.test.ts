@@ -1195,3 +1195,178 @@ describe("P3-1: scs_bom_violation resource", () => {
     expect(getSpec.path).toContain("/project/");
   });
 });
+
+// ─── P3-5: Project Security Overview ─────────────────────────────────────────
+
+describe("P3-5: scs_project_security_overview resource", () => {
+  it("exists in scsToolset", () => {
+    expect(() => findResource("scs_project_security_overview")).not.toThrow();
+  });
+
+  it("has a get operation pointing to security-overview endpoint", () => {
+    const spec = getOp("scs_project_security_overview", "get");
+    expect(spec.method).toBe("GET");
+    expect(spec.path).toContain("/security-overview");
+  });
+
+  it("get uses plural orgs/projects path (consistent with ssca-manager v1 pattern)", () => {
+    const spec = getOp("scs_project_security_overview", "get");
+    expect(spec.path).toContain("/v1/orgs/");
+    expect(spec.path).toContain("/projects/");
+  });
+
+  it("get maps org_id and project_id as path params", () => {
+    const spec = getOp("scs_project_security_overview", "get");
+    expect(spec.pathParams).toEqual({
+      org_id: "org",
+      project_id: "project",
+    });
+  });
+
+  it("get uses scsCleanExtract", () => {
+    const spec = getOp("scs_project_security_overview", "get");
+    expect(spec.responseExtractor).toBeDefined();
+    expect(spec.responseExtractor!.name).not.toBe("passthrough");
+  });
+
+  it("get extractor strips null fields from response", () => {
+    const spec = getOp("scs_project_security_overview", "get");
+    const result = spec.responseExtractor!({
+      artifact_count: { total: 10, images: 7, repositories: 3 },
+      vulnerability_summary: { total: 50, critical: 5, high: 10, medium: 20, low: 15, artifacts_with_vulnerabilities: 6 },
+      compliance_summary: null,
+      enforcement_summary: { deny_list_violations: 3, allow_list_violations: 1, artifacts_with_violations: 2 },
+      sbom_coverage: { artifacts_with_sbom: 8, artifacts_without_sbom: 2, total_components: 500 },
+      deployment_summary: { artifacts_in_prod: 4, artifacts_in_non_prod: 3 },
+    }) as Record<string, unknown>;
+    expect(result).toHaveProperty("artifact_count");
+    expect(result).toHaveProperty("vulnerability_summary");
+    expect(result).not.toHaveProperty("compliance_summary");
+    expect(result).toHaveProperty("enforcement_summary");
+    expect(result).toHaveProperty("sbom_coverage");
+    expect(result).toHaveProperty("deployment_summary");
+  });
+
+  it("get extractor preserves zero counts (falsy but meaningful)", () => {
+    const spec = getOp("scs_project_security_overview", "get");
+    const result = spec.responseExtractor!({
+      artifact_count: { total: 0, images: 0, repositories: 0 },
+      vulnerability_summary: { total: 0, critical: 0, high: 0, medium: 0, low: 0, artifacts_with_vulnerabilities: 0 },
+      compliance_summary: { checks_passed: 0, checks_failed: 0, critical_failures: 0, high_failures: 0, medium_failures: 0, low_failures: 0, artifacts_with_failures: 0 },
+      enforcement_summary: { deny_list_violations: 0, allow_list_violations: 0, artifacts_with_violations: 0 },
+      sbom_coverage: { artifacts_with_sbom: 0, artifacts_without_sbom: 0, total_components: 0 },
+      deployment_summary: { artifacts_in_prod: 0, artifacts_in_non_prod: 0 },
+    }) as Record<string, unknown>;
+    // All sections should be preserved even with zero values
+    expect(result).toHaveProperty("artifact_count");
+    expect(result).toHaveProperty("vulnerability_summary");
+    expect(result).toHaveProperty("compliance_summary");
+    expect(result).toHaveProperty("enforcement_summary");
+    expect(result).toHaveProperty("sbom_coverage");
+    expect(result).toHaveProperty("deployment_summary");
+    // Verify zero counts are preserved
+    const vulns = result.vulnerability_summary as Record<string, number>;
+    expect(vulns.total).toBe(0);
+    expect(vulns.critical).toBe(0);
+  });
+
+  it("has empty identifierFields (project-level resource)", () => {
+    const res = findResource("scs_project_security_overview");
+    expect(res.identifierFields).toEqual([]);
+  });
+
+  it("is project-scoped", () => {
+    const res = findResource("scs_project_security_overview");
+    expect(res.scope).toBe("project");
+  });
+
+  it("has no list operation (get-only resource)", () => {
+    const res = findResource("scs_project_security_overview");
+    expect(res.operations.list).toBeUndefined();
+  });
+
+  it("description mentions all six response sections", () => {
+    const res = findResource("scs_project_security_overview");
+    expect(res.description).toContain("artifact_count");
+    expect(res.description).toContain("vulnerability_summary");
+    expect(res.description).toContain("compliance_summary");
+    expect(res.description).toContain("enforcement_summary");
+    expect(res.description).toContain("sbom_coverage");
+    expect(res.description).toContain("deployment_summary");
+  });
+
+  it("description mentions common user queries for LLM routing", () => {
+    const res = findResource("scs_project_security_overview");
+    expect(res.description).toContain("security overview");
+    expect(res.description).toContain("security posture");
+    expect(res.description).toContain("vulnerabilities");
+    expect(res.description).toContain("SBOM coverage");
+  });
+
+  it("description mentions READ-ONLY and drill-down guidance", () => {
+    const res = findResource("scs_project_security_overview");
+    expect(res.description).toContain("READ-ONLY");
+    expect(res.description).toContain("artifact_security");
+    expect(res.description).toContain("scs_compliance_result");
+    expect(res.description).toContain("scs_bom_violation");
+  });
+
+  it("has diagnosticHint with recovery guidance", () => {
+    const res = findResource("scs_project_security_overview");
+    expect(res.diagnosticHint).toBeDefined();
+    expect(res.diagnosticHint!.length).toBeGreaterThan(20);
+    expect(res.diagnosticHint!).toMatch(/harness_(list|get)/);
+  });
+
+  it("diagnosticHint mentions SBOM generation as prerequisite", () => {
+    const res = findResource("scs_project_security_overview");
+    expect(res.diagnosticHint!).toContain("SBOM");
+    expect(res.diagnosticHint!).toContain("pipeline");
+  });
+
+  it("has searchAliases covering security overview queries", () => {
+    const res = findResource("scs_project_security_overview");
+    const aliases = res.searchAliases!.map((a) => a.toLowerCase());
+    expect(aliases).toContain("security overview");
+    expect(aliases).toContain("project security");
+    expect(aliases).toContain("security posture");
+    expect(aliases).toContain("vulnerability summary");
+    expect(aliases).toContain("compliance summary");
+    expect(aliases).toContain("sbom coverage");
+  });
+
+  it("relatedResources links to scs_artifact_source as child", () => {
+    const res = findResource("scs_project_security_overview");
+    const child = res.relatedResources!.find((r) => r.resourceType === "scs_artifact_source");
+    expect(child).toBeDefined();
+    expect(child!.relationship).toBe("child");
+  });
+
+  it("relatedResources links to artifact_security as child", () => {
+    const res = findResource("scs_project_security_overview");
+    const child = res.relatedResources!.find((r) => r.resourceType === "artifact_security");
+    expect(child).toBeDefined();
+    expect(child!.relationship).toBe("child");
+  });
+
+  it("relatedResources links to scs_compliance_result as child", () => {
+    const res = findResource("scs_project_security_overview");
+    const child = res.relatedResources!.find((r) => r.resourceType === "scs_compliance_result");
+    expect(child).toBeDefined();
+    expect(child!.relationship).toBe("child");
+  });
+
+  it("relatedResources links to scs_bom_violation as child", () => {
+    const res = findResource("scs_project_security_overview");
+    const child = res.relatedResources!.find((r) => r.resourceType === "scs_bom_violation");
+    expect(child).toBeDefined();
+    expect(child!.relationship).toBe("child");
+  });
+
+  it("relatedResources links to scs_oss_risk_summary as sibling", () => {
+    const res = findResource("scs_project_security_overview");
+    const sibling = res.relatedResources!.find((r) => r.resourceType === "scs_oss_risk_summary");
+    expect(sibling).toBeDefined();
+    expect(sibling!.relationship).toBe("sibling");
+  });
+});
