@@ -56,6 +56,32 @@ function isGarbageMessage(message: string | undefined): boolean {
 }
 
 /**
+ * Per-path-prefix error field enrichments.
+ * When an API error response contains the named field AND the request path
+ * matches the prefix, the field value is appended to the error message.
+ * Add entries here for endpoint groups that return extra context fields.
+ */
+const ERROR_FIELD_ENRICHMENTS: Array<{ pathPrefix: string; field: string }> = [
+  { pathPrefix: "/chaos/", field: "description" },
+  { pathPrefix: "/loadTest/", field: "description" },
+];
+
+function enrichErrorMessage(
+  rawMessage: string,
+  parsed: Record<string, unknown>,
+  path: string,
+): string {
+  let message = rawMessage;
+  for (const { pathPrefix, field } of ERROR_FIELD_ENRICHMENTS) {
+    const value = parsed[field];
+    if (path.startsWith(pathPrefix) && typeof value === "string" && value) {
+      message += ` — ${value}`;
+    }
+  }
+  return message;
+}
+
+/**
  * Optional per-request account ID resolver. When provided, HarnessClient
  * calls this to get the real account ID (e.g. from JWT claims stored in
  * AsyncLocalStorage) instead of using the static config value.
@@ -179,9 +205,10 @@ export class HarnessClient {
             // Provide actionable messages instead of leaking raw HTML to the LLM
           }
 
-          const message = isGarbageMessage(parsed.message)
-            ? humanizeHttpError(response.status, body)
-            : parsed.message!;
+          const rawMessage = isGarbageMessage(parsed.message)
+              ? humanizeHttpError(response.status, body)
+              : parsed.message!;
+          const message = enrichErrorMessage(rawMessage, parsed, options.path);
           log.debug(`HTTP ${response.status} error`, { body: body.slice(0, 1000) });
           const error = new HarnessApiError(
             message,
@@ -321,9 +348,10 @@ export class HarnessClient {
           let parsed: { message?: string; code?: string; correlationId?: string } = {};
           try { parsed = JSON.parse(body); } catch { /* non-JSON */ }
 
-          const message = isGarbageMessage(parsed.message)
-            ? humanizeHttpError(response.status, body)
-            : parsed.message!;
+          const rawMessage = isGarbageMessage(parsed.message)
+              ? humanizeHttpError(response.status, body)
+              : parsed.message!;
+          const message = enrichErrorMessage(rawMessage, parsed, options.path);
           const error = new HarnessApiError(message, response.status, parsed.code, parsed.correlationId);
 
           if (RETRYABLE_STATUS_CODES.has(response.status) && attempt < this.maxRetries) {

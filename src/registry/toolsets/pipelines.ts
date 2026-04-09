@@ -329,13 +329,7 @@ export const pipelinesToolset: ToolsetDefinition = {
           queryParams: { interrupt_type: "interruptType" },
           bodyBuilder: () => ({}),
           responseExtractor: ngExtract,
-          actionDescription: "Interrupt a running execution. Set interrupt_type to AbortAll, Pause, etc.",
-          bodySchema: {
-            description: "Interrupt a running execution. The interrupt_type is passed as a query parameter.",
-            fields: [
-              { name: "interrupt_type", type: "string", required: true, description: "Interrupt type: AbortAll, Pause, Resume, StageRollback, Abort, ExpireAll, Retry" },
-            ],
-          },
+          actionDescription: "Interrupt a running execution. Pass interrupt_type as a param: AbortAll (abort all stages), Pause, Resume, StageRollback, Abort (abort current retry), ExpireAll, or Retry.",
         },
       },
     },

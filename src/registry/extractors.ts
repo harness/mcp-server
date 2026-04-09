@@ -262,6 +262,36 @@ export const chaosInfraListExtract = (raw: unknown): { items: unknown[]; total: 
   };
 };
 
+/**
+ * Extract chaos K8s infrastructure list response:
+ * { infras: [...], totalNoOfInfrastructures, pagination }
+ */
+export const chaosK8sInfraListExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { infras?: unknown[]; totalNoOfInfrastructures?: number };
+  return {
+    items: r.infras ?? [],
+    total: r.totalNoOfInfrastructures ?? (Array.isArray(r.infras) ? r.infras.length : 0),
+  };
+};
+
+/**
+ * Extract chaos hub list response: { items: [...], pagination: { totalItems } }
+ */
+export const chaosHubListExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { items?: unknown[]; pagination?: { totalItems?: number } };
+  return {
+    items: r.items ?? [],
+    total: r.pagination?.totalItems ?? (Array.isArray(r.items) ? r.items.length : 0),
+  };
+};
+
+/** Extract chaos DR test list response: { drtests: [...] } */
+export const chaosDRTestListExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { drtests?: unknown[] };
+  const items = r.drtests ?? [];
+  return { items, total: items.length };
+};
+
 // ---------------------------------------------------------------------------
 // Feature Management Enterprise (FME) extractors
 // ---------------------------------------------------------------------------

@@ -8,13 +8,13 @@ const TIMESTAMP_PATTERN = /(?:At|Ts|Time|Date)$/;
 
 /** Fields to always keep when compacting list items. */
 const IDENTITY_FIELDS = new Set([
-  "identifier", "name", "displayName", "description", "slug",
+  "identifier", "identity", "name", "displayName", "description", "slug",
   "versionLabel", "sha", "title", "message",
 ]);
 
 const STATUS_FIELDS = new Set([
   "status", "state", "enabled", "health",
-  "stableTemplate",
+  "stableTemplate", "isChaosEnabled",
 ]);
 
 const TYPE_FIELDS = new Set([
@@ -33,13 +33,13 @@ const IDENTIFIER_PATTERN = /(?:Identifier|Id|_id)$/;
 
 function isWhitelistedKey(key: string): boolean {
   return (
-    IDENTITY_FIELDS.has(key) ||
-    STATUS_FIELDS.has(key) ||
-    TYPE_FIELDS.has(key) ||
-    OWNERSHIP_FIELDS.has(key) ||
-    ALWAYS_KEEP.has(key) ||
-    TIMESTAMP_PATTERN.test(key) ||
-    IDENTIFIER_PATTERN.test(key)
+      IDENTITY_FIELDS.has(key) ||
+      STATUS_FIELDS.has(key) ||
+      TYPE_FIELDS.has(key) ||
+      OWNERSHIP_FIELDS.has(key) ||
+      ALWAYS_KEEP.has(key) ||
+      TIMESTAMP_PATTERN.test(key) ||
+      IDENTIFIER_PATTERN.test(key)
   );
 }
 

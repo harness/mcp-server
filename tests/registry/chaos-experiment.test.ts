@@ -18,6 +18,12 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     HARNESS_API_TIMEOUT_MS: 30000,
     HARNESS_MAX_RETRIES: 3,
     LOG_LEVEL: "info",
+    HARNESS_MAX_BODY_SIZE_MB: 10,
+    HARNESS_RATE_LIMIT_RPS: 10,
+    HARNESS_READ_ONLY: false,
+    HARNESS_SKIP_ELICITATION: false,
+    HARNESS_ALLOW_HTTP: false,
+    HARNESS_FME_BASE_URL: "https://api.split.io",
     ...overrides,
   };
 }
@@ -157,7 +163,7 @@ describe("chaos_probe enable execute action", () => {
     expect(mockRequest).toHaveBeenCalledOnce();
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("POST");
-    expect(call.path).toBe("/gateway/chaos/manager/api/rest/v2/probes/enable/probe-http-check");
+    expect(call.path).toBe("/gateway/chaos/manager/api/rest/v2/probes/probe-http-check/enable");
     expect(call.params).toMatchObject({
       organizationIdentifier: "default",
       projectIdentifier: "PM_Signoff",
@@ -172,12 +178,13 @@ describe("chaos_k8s_infrastructure list", () => {
     registry = new Registry(makeConfig());
   });
 
-  it("list: uses POST to v2/infrastructures with chaos scope params and paginated response", async () => {
+  it("list: extracts infras array and totalNoOfInfrastructures from response", async () => {
     const mockRequest = vi.fn().mockResolvedValue({
-      data: [
+      infras: [
         { infraID: "k8s-1", name: "prod-cluster" },
       ],
-      pagination: { totalItems: 1 },
+      pagination: { page: 0, limit: 15 },
+      totalNoOfInfrastructures: 1,
     });
     const client = makeClient(mockRequest);
 
@@ -194,8 +201,85 @@ describe("chaos_k8s_infrastructure list", () => {
       organizationIdentifier: "default",
       projectIdentifier: "PM_Signoff",
     });
+    expect(call.body).toBeDefined();
     expect(result.items).toHaveLength(1);
     expect(result.total).toBe(1);
+  });
+
+  it("list: sends status and infra_type in body filter, not as query params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      infras: [{ infraID: "k8s-2", name: "dev-cluster" }],
+      totalNoOfInfrastructures: 1,
+    });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_k8s_infrastructure", "list", {
+      project_id: "ChaosDev1",
+      org_id: "default",
+      environment_id: "demoash",
+      status: "ACTIVE",
+      infra_type: "KubernetesV2",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.environmentIdentifier).toBe("demoash");
+    expect(call.params.status).toBeUndefined();
+    expect(call.params.infraType).toBeUndefined();
+    expect(call.body.filter).toMatchObject({
+      status: "ACTIVE",
+      infraTypeFilter: "KubernetesV2",
+    });
+  });
+
+  it("list: sends empty body (no filter) when no status or infra_type provided", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      infras: [],
+      totalNoOfInfrastructures: 0,
+    });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_k8s_infrastructure", "list", {
+      project_id: "ChaosDev1",
+      org_id: "default",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.body.filter).toBeUndefined();
+    expect(call.params?.status).toBeUndefined();
+  });
+
+  it("list: maps size to limit and search_term to search query params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      infras: [{ infraID: "k8s-3", name: "staging-cluster" }],
+      totalNoOfInfrastructures: 1,
+    });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_k8s_infrastructure", "list", {
+      project_id: "ChaosDev1",
+      org_id: "default",
+      size: 10,
+      search_term: "staging",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.limit).toBe(10);
+    expect(call.params.search).toBe("staging");
+  });
+
+  it("check_health: uses correct path with infraId before /health", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ connected: true });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "chaos_k8s_infrastructure", "check_health", {
+      infra_id: "infra-abc",
+      project_id: "ChaosDev1",
+      org_id: "default",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("GET");
+    expect(call.path).toBe("/gateway/chaos/manager/api/rest/kubernetes/infra/infra-abc/health");
   });
 });
 
@@ -208,7 +292,7 @@ describe("chaos_hub list", () => {
 
   it("list: builds correct path with chaos scope params", async () => {
     const mockRequest = vi.fn().mockResolvedValue({
-      data: [
+      items: [
         { hubID: "enterprise-hub", name: "Enterprise ChaosHub" },
       ],
       pagination: { totalItems: 1 },
@@ -230,5 +314,147 @@ describe("chaos_hub list", () => {
     });
     expect(result.items).toHaveLength(1);
     expect(result.total).toBe(1);
+  });
+});
+
+describe("chaos_experiment_template create_from_template", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("create_from_template: builds body from params (top-level input fields)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ experimentID: "new-exp", identity: "demo-exp-01" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "chaos_experiment_template", "create_from_template", {
+      template_id: "demotemplate01",
+      hub_identity: "amit-hub0e4",
+      name: "demo-exp-01",
+      identity: "demo-exp-01",
+      environment_id: "demoash",
+      infra_id: "gcpootbprobe",
+      import_type: "LOCAL",
+      project_id: "ChaosDev1",
+      org_id: "default",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/gateway/chaos/manager/api/rest/experimenttemplates/demotemplate01/launch");
+    expect(call.params.hubIdentity).toBe("amit-hub0e4");
+    expect(call.body.name).toBe("demo-exp-01");
+    expect(call.body.identity).toBe("demo-exp-01");
+    expect(call.body.infraRef).toBe("demoash/gcpootbprobe");
+    expect(call.body.importType).toBe("LOCAL");
+    expect(call.body.hub_identity).toBeUndefined();
+  });
+
+  it("create_from_template: builds body from nested input.body (LLM uses body arg)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ experimentID: "new-exp" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "chaos_experiment_template", "create_from_template", {
+      template_id: "demotemplate01",
+      hub_identity: "amit-hub0e4",
+      project_id: "ChaosDev1",
+      org_id: "default",
+      body: {
+        name: "demo-exp-02",
+        identity: "demo-exp-02",
+        environment_id: "demoash",
+        infra_id: "gcpootbprobe",
+        import_type: "LOCAL",
+      },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.body.name).toBe("demo-exp-02");
+    expect(call.body.identity).toBe("demo-exp-02");
+    expect(call.body.infraRef).toBe("demoash/gcpootbprobe");
+    expect(call.body.importType).toBe("LOCAL");
+    expect(call.params.hubIdentity).toBe("amit-hub0e4");
+  });
+
+  it("create_from_template: hub_identity goes to query params, not body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ experimentID: "new-exp" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "chaos_experiment_template", "create_from_template", {
+      template_id: "tmpl1",
+      hub_identity: "my-hub",
+      name: "exp1",
+      identity: "exp1",
+      infra_ref: "env1/infra1",
+      import_type: "REFERENCE",
+      project_id: "proj1",
+      org_id: "default",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.hubIdentity).toBe("my-hub");
+    expect(call.body.hubIdentity).toBeUndefined();
+    expect(call.body.hub_identity).toBeUndefined();
+  });
+});
+
+describe("chaos_probe_template list pagination and defaults", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("list: maps size param to limit query param for pagination", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      data: [{ identity: "t1", name: "Template 1" }],
+      pagination: { totalItems: 14 },
+    });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_probe_template", "list", {
+      project_id: "PM_Signoff",
+      org_id: "default",
+      size: 3,
+      page: 1,
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.limit).toBe(3);
+    expect(call.params.page).toBe(1);
+  });
+
+  it("list: includes includeAllScope=false by default", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      data: [],
+      pagination: { totalItems: 0 },
+    });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_probe_template", "list", {
+      project_id: "PM_Signoff",
+      org_id: "default",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.includeAllScope).toBe("false");
+  });
+
+  it("list: allows overriding includeAllScope to false", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      data: [],
+      pagination: { totalItems: 0 },
+    });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_probe_template", "list", {
+      project_id: "PM_Signoff",
+      org_id: "default",
+      include_all_scope: false,
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.includeAllScope).toBe(false);
   });
 });
