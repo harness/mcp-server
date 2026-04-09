@@ -733,6 +733,48 @@ export const scsToolset: ToolsetDefinition = {
       },
     },
 
+    // ── Project Security Overview (P3-5) ────────────────────────────────
+    {
+      resourceType: "scs_project_security_overview",
+      displayName: "Project Security Overview",
+      description: "Comprehensive project-level security posture overview — aggregates SBOM coverage, vulnerability counts, "
+        + "compliance check results, enforcement violations, and deployment summary across ALL artifacts (container images and code repositories). "
+        + "Use this for: 'Give me a security overview of my project', 'What is the security posture?', 'How many vulnerabilities in my project?', "
+        + "'Show compliance status', 'SBOM coverage', 'How many artifacts are deployed to production?'. "
+        + "Returns six sections: artifact_count (total/images/repositories), vulnerability_summary (critical/high/medium/low), "
+        + "compliance_summary (passed/failed checks with severity breakdown), enforcement_summary (deny-list/allow-list violations), "
+        + "sbom_coverage (artifacts with/without SBOM, total components), deployment_summary (prod/non-prod artifact counts). "
+        + "This is a READ-ONLY summary endpoint — for drill-down, use the specific SCS resources (artifact_security, scs_compliance_result, scs_bom_violation, etc.).",
+      diagnosticHint: "If you get a 404: ensure the project has SCS enabled and artifacts have been scanned. "
+        + "If all counts are zero: no artifacts have been onboarded — ensure SBOM generation steps are configured in pipelines. "
+        + "For individual artifact details, use harness_list(resource_type='artifact_security', source_id='...').",
+      searchAliases: [
+        "security overview", "project security", "security posture", "security summary",
+        "vulnerability summary", "compliance summary", "enforcement summary",
+        "sbom coverage", "deployment summary", "project health",
+        "how secure is my project", "security status",
+      ],
+      relatedResources: [
+        { resourceType: "scs_artifact_source", relationship: "child", description: "List artifact sources for drill-down into specific registries" },
+        { resourceType: "artifact_security", relationship: "child", description: "List individual artifacts with vulnerability and compliance details" },
+        { resourceType: "scs_compliance_result", relationship: "child", description: "Drill into compliance check results for a specific artifact" },
+        { resourceType: "scs_bom_violation", relationship: "child", description: "Drill into BOM enforcement violations for a specific artifact" },
+        { resourceType: "scs_oss_risk_summary", relationship: "sibling", description: "OSS risk summary — EOL, outdated, unmaintained component counts" },
+      ],
+      toolset: "scs",
+      scope: "project",
+      identifierFields: [],
+      operations: {
+        get: {
+          method: "GET",
+          path: `${SCS}/v1/orgs/{org}/projects/{project}/security-overview`,
+          pathParams: { org_id: "org", project_id: "project" },
+          responseExtractor: scsCleanExtract,
+          description: "Get comprehensive project-level security posture overview",
+        },
+      },
+    },
+
     // ── SBOM Drift (server-side diff between two SBOM versions) ───────
     {
       resourceType: "scs_sbom_drift",
