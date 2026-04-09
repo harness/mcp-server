@@ -1,6 +1,6 @@
 import type { ToolsetDefinition } from "../types.js";
 import type { PathBuilderConfig } from "../types.js";
-import { ngExtract, pageExtract, passthrough, gqlExtract, ccmBreakdownExtract, ccmTimeseriesExtract, ccmSummaryExtract, ccmRecommendationsExtract } from "../extractors.js";
+import { ngExtract, pageExtract, passthrough, gqlExtract, ccmBreakdownExtract, ccmTimeseriesExtract, ccmSummaryExtract, ccmRecommendationsExtract, ccmPerspectiveListExtract } from "../extractors.js";
 
 // ---------------------------------------------------------------------------
 // GraphQL queries — ported from the official Go MCP server
@@ -302,7 +302,7 @@ export const ccmToolset: ToolsetDefinition = {
             page: "pageNo",
             size: "pageSize",
           },
-          responseExtractor: pageExtract,
+          responseExtractor: ccmPerspectiveListExtract,
           description: "List all cost perspectives for the account",
         },
         get: {

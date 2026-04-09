@@ -121,6 +121,15 @@ export const v1Unwrap = (wrapperKey: string) => (raw: unknown): unknown => {
   return raw;
 };
 
+/** Extract CCM perspective list: `{ data: { totalCount, views: [...] } }` */
+export const ccmPerspectiveListExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { data?: { views?: unknown[]; totalCount?: number } };
+  return {
+    items: r.data?.views ?? [],
+    total: r.data?.totalCount ?? 0,
+  };
+};
+
 /** Factory for GraphQL field extraction (used by CCM). */
 export const gqlExtract = (field: string) => (raw: unknown): unknown => {
   const r = raw as { data?: Record<string, unknown> };

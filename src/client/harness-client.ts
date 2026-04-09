@@ -387,7 +387,7 @@ export class HarnessClient {
 
     const queryString = params.toString();
     const url = queryString ? `${baseUrl}${path}?${queryString}` : `${baseUrl}${path}`;
-    log.debug(`Built URL: ${url}`);
+    log.info(`Built URL: ${url}`);
     return url;
   }
 }
