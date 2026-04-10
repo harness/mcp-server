@@ -828,7 +828,6 @@ export const scsToolset: ToolsetDefinition = {
           bodySchema: {
             description: "SBOM drift calculation request — specify what to compare against",
             fields: [
-              { name: "orchestration_id", type: "string", required: true, description: "Orchestration step execution ID (from artifact_security orchestration.id field)" },
               { name: "base", type: "string", required: true, description: "Baseline to compare against: 'last_generated_sbom' (previous version), 'baseline' (pinned baseline), or 'repository' (specific tag)" },
               { name: "variant", type: "object", required: false, description: "Only for base='repository': { type: 'tag', value: '<tag_name>' } — specifies which tag to compare against" },
             ],
