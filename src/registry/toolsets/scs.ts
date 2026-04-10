@@ -751,7 +751,7 @@ export const scsToolset: ToolsetDefinition = {
             page: "page",
             size: "limit",
           },
-          defaultQueryParams: { limit: "25" },
+          defaultQueryParams: { limit: "10" },
           responseExtractor: scsCleanExtract,
           description: "List CVE/vulnerability details for a component by PURL. Returns severity, CVSS, fix versions per CVE.",
         },

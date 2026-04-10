@@ -923,10 +923,10 @@ describe("P3-11: scs_component_enrichment resource", () => {
     expect(res.description).toContain("unmaintained");
   });
 
-  it("description clarifies CVE boundary with STO", () => {
+  it("description clarifies CVE boundary with scs_component_vulnerability", () => {
     const res = findResource("scs_component_enrichment");
-    expect(res.description).toContain("security_issue");
-    expect(res.description).toContain("STO");
+    expect(res.description).toContain("scs_component_vulnerability");
+    expect(res.description).toContain("CVE");
   });
 
   it("diagnosticHint explains PURL format", () => {
@@ -964,13 +964,13 @@ describe("P3-11: scs_component_enrichment resource", () => {
     expect(siblingRef!.relationship).toBe("sibling");
   });
 
-  it("has relatedResources referencing security_issue (STO) as sibling", () => {
+  it("has relatedResources referencing scs_component_vulnerability as sibling", () => {
     const res = findResource("scs_component_enrichment");
-    const stoRef = res.relatedResources!.find(
-      (rel) => rel.resourceType === "security_issue",
+    const vulnRef = res.relatedResources!.find(
+      (rel) => rel.resourceType === "scs_component_vulnerability",
     );
-    expect(stoRef).toBeDefined();
-    expect(stoRef!.relationship).toBe("sibling");
+    expect(vulnRef).toBeDefined();
+    expect(vulnRef!.relationship).toBe("sibling");
   });
 
   it("purl is a required listFilterField", () => {
