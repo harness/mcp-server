@@ -72,7 +72,7 @@ const inputSetCreateSchema: BodySchema = {
 };
 
 const inputSetUpdateSchema: BodySchema = {
-  description: "Input set definition (full replacement). Three options: (1) Pass body as a raw YAML string directly (recommended). (2) Pass {yamlInputSet: '<yaml>'} for YAML inside an object. (3) Pass {inputSet: {...}} as JSON. For remote input sets, pass store_type='REMOTE' with git details via params. Include last_object_id from the GET response for conflict detection.",
+  description: "Input set definition (full replacement). Three options: (1) Pass body as a raw YAML string directly (recommended). (2) Pass {yamlInputSet: '<yaml>'} for YAML inside an object. (3) Pass {inputSet: {...}} as JSON. For remote input sets, pass store_type='REMOTE' with git details via params. Include last_object_id and last_commit_id from the GET response for conflict detection.",
   fields: [
     { name: "yamlInputSet", type: "string", required: false, description: "Full input set YAML string (replaces existing). Alternative: pass the YAML string directly as body." },
     { name: "inputSet", type: "object", required: false, description: "Complete input set as JSON object (replaces existing)" },
@@ -498,6 +498,7 @@ export const pipelinesToolset: ToolsetDefinition = {
             connector_ref: "connectorRef",
             repo_name: "repoName",
             branch: "branch",
+            base_branch: "baseBranch",
             file_path: "filePath",
             commit_msg: "commitMsg",
             is_harness_code_repo: "isHarnessCodeRepo",
@@ -532,6 +533,7 @@ export const pipelinesToolset: ToolsetDefinition = {
             commit_msg: "commitMsg",
             is_harness_code_repo: "isHarnessCodeRepo",
             last_object_id: "lastObjectId",
+            last_commit_id: "lastCommitId",
           },
           bodyBuilder: (input) => {
             const b = input.body;
@@ -544,7 +546,7 @@ export const pipelinesToolset: ToolsetDefinition = {
             throw new Error("body must be a YAML string, or an object with yamlInputSet (YAML string) or inputSet (JSON object)");
           },
           responseExtractor: ngExtract,
-          description: "Update an existing input set. Requires pipeline_id and input_set_id. For remote input sets, pass store_type='REMOTE' with git details and last_object_id from the GET response.",
+          description: "Update an existing input set. Requires pipeline_id and input_set_id. For remote input sets, pass store_type='REMOTE' with git details and last_object_id/last_commit_id from the GET response.",
           bodySchema: inputSetUpdateSchema,
         },
         delete: {
@@ -553,11 +555,13 @@ export const pipelinesToolset: ToolsetDefinition = {
           pathParams: { input_set_id: "inputSetIdentifier" },
           queryParams: {
             pipeline_id: "pipelineIdentifier",
+            branch: "branch",
+            file_path: "filePath",
             commit_msg: "commitMsg",
             last_object_id: "lastObjectId",
           },
           responseExtractor: ngExtract,
-          description: "Delete an input set. Requires pipeline_id and input_set_id.",
+          description: "Delete an input set. Requires pipeline_id and input_set_id. For remote input sets, pass branch and file_path.",
         },
       },
     },
