@@ -64,7 +64,7 @@ harness-mcp-v2
 For development or customization:
 
 ```bash
-git clone https://github.com/thisrohangupta/harness-mcp-v2.git
+git clone https://github.com/harness/mcp-server.git
 cd harness-mcp-v2
 pnpm install
 pnpm build
