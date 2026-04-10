@@ -14,10 +14,13 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
   server.registerTool(
     "harness_create",
     {
-      description: "Create a Harness resource. For pipelines: use body.yamlPipeline (YAML string, recommended) or body.pipeline (JSON). For remote pipelines, pass git details in params: external Git (store_type='REMOTE', connector_ref, repo_name, branch, file_path) or Harness Code (store_type='REMOTE', is_harness_code_repo=true, repo_name, branch, file_path). For others: call harness_describe for the body format.",
+      description: "Create a Harness resource. For pipelines/input sets: pass body as a YAML string directly (recommended for complex definitions), or use body.yamlPipeline (YAML string), or body.pipeline (JSON object). For remote pipelines, pass git details in params: external Git (store_type='REMOTE', connector_ref, repo_name, branch, file_path) or Harness Code (store_type='REMOTE', is_harness_code_repo=true, repo_name, branch, file_path). For others: call harness_describe for the body format.",
       inputSchema: {
         resource_type: z.enum(creatableTypes).describe("The type of resource to create"),
-        body: z.record(z.string(), z.unknown()).describe("The resource definition body (varies by resource type — typically the YAML or JSON spec)"),
+        body: z.union([
+          z.record(z.string(), z.unknown()),
+          z.string(),
+        ]).describe("The resource definition body. For pipelines: pass a YAML string directly, or an object with yamlPipeline (YAML string) or pipeline (JSON object). For other resources: pass a JSON object"),
         url: z.string().describe("A Harness UI URL — org and project are extracted automatically").optional(),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
@@ -44,10 +47,13 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
         }
 
         const blockWithoutConfirmation = !!def.operations.create?.blockWithoutConfirmation;
+        const bodyPreview = typeof args.body === "string"
+          ? (args.body.length > 500 ? args.body.slice(0, 500) + "\n...(truncated)" : args.body)
+          : JSON.stringify(args.body, null, 2);
         const elicit = await confirmViaElicitation({
           server,
           toolName: "harness_create",
-          message: `Create ${args.resource_type}?\n\n${JSON.stringify(args.body, null, 2)}`,
+          message: `Create ${args.resource_type}?\n\n${bodyPreview}`,
           destructive: blockWithoutConfirmation,
         });
         if (!elicit.proceed) {

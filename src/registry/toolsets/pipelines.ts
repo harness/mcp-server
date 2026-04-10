@@ -40,10 +40,10 @@ function normalizeTriggerBody(
 }
 
 const pipelineCreateSchema: BodySchema = {
-  description: "Pipeline definition. Prefer yamlPipeline (YAML string) to avoid serialization issues; pipeline (JSON object) is also supported. Storage options via params: (1) Inline (default): no extra params needed. (2) External Git: store_type='REMOTE', connector_ref (Git connector ID), repo_name, branch, file_path. (3) Harness Code: store_type='REMOTE', is_harness_code_repo=true, repo_name, branch, file_path (no connector_ref needed).",
+  description: "Pipeline definition. Three options: (1) Pass body as a raw YAML string directly (simplest for complex pipelines with shell scripts, JEXL, special chars). (2) Pass {yamlPipeline: '<yaml string>'} for YAML inside an object. (3) Pass {pipeline: {...}} as JSON object. Storage options via params: Inline (default), External Git (store_type='REMOTE', connector_ref, repo_name, branch, file_path), Harness Code (store_type='REMOTE', is_harness_code_repo=true, repo_name, branch, file_path).",
   fields: [
-    { name: "yamlPipeline", type: "string", required: false, description: "Full pipeline YAML string including the 'pipeline:' root. Recommended when creating from generated or edited YAML." },
-    { name: "pipeline", type: "object", required: false, description: "Pipeline as JSON object (name, identifier, stages, etc.). Use yamlPipeline instead when passing YAML to avoid large nested JSON.", fields: [
+    { name: "yamlPipeline", type: "string", required: false, description: "Full pipeline YAML string including the 'pipeline:' root. Alternative: pass the YAML string directly as body (not wrapped in an object)." },
+    { name: "pipeline", type: "object", required: false, description: "Pipeline as JSON object (name, identifier, stages, etc.). Use YAML string instead for complex pipelines to avoid serialization issues.", fields: [
       { name: "name", type: "string", required: true, description: "Pipeline display name" },
       { name: "identifier", type: "string", required: true, description: "Unique pipeline identifier" },
       { name: "stages", type: "array", required: false, description: "Pipeline stages", itemType: "stage object" },
@@ -52,10 +52,30 @@ const pipelineCreateSchema: BodySchema = {
 };
 
 const pipelineUpdateSchema: BodySchema = {
-  description: "Pipeline YAML definition (full replacement). Pass either pipeline (JSON object) or yamlPipeline (YAML string). For remote pipelines, pass store_type='REMOTE' with git details via params. External Git: connector_ref, repo_name, branch, file_path, commit_msg. Harness Code: is_harness_code_repo=true, repo_name, branch, file_path, commit_msg (no connector_ref). Include last_object_id and last_commit_id from the GET response for conflict detection.",
+  description: "Pipeline YAML definition (full replacement). Three options: (1) Pass body as a raw YAML string directly (recommended for complex pipelines). (2) Pass {yamlPipeline: '<yaml>'} for YAML inside an object. (3) Pass {pipeline: {...}} as JSON. For remote pipelines, pass store_type='REMOTE' with git details via params. Include last_object_id and last_commit_id from the GET response for conflict detection.",
   fields: [
     { name: "pipeline", type: "object", required: false, description: "Complete pipeline as JSON object (replaces existing)" },
-    { name: "yamlPipeline", type: "string", required: false, description: "Complete pipeline as YAML string (replaces existing). Use this when updating from get pipeline response or editing YAML." },
+    { name: "yamlPipeline", type: "string", required: false, description: "Complete pipeline as YAML string (replaces existing). Alternative: pass the YAML string directly as body (not wrapped in an object)." },
+  ],
+};
+
+const inputSetCreateSchema: BodySchema = {
+  description: "Input set definition. Three options: (1) Pass body as a raw YAML string directly (recommended). (2) Pass {yamlInputSet: '<yaml string>'} for YAML inside an object. (3) Pass {inputSet: {...}} as JSON object. Requires pipeline_id in params or filters.",
+  fields: [
+    { name: "yamlInputSet", type: "string", required: false, description: "Full input set YAML string including the 'inputSet:' root. Alternative: pass the YAML string directly as body." },
+    { name: "inputSet", type: "object", required: false, description: "Input set as JSON object.", fields: [
+      { name: "name", type: "string", required: true, description: "Input set display name" },
+      { name: "identifier", type: "string", required: true, description: "Unique input set identifier" },
+      { name: "pipeline", type: "object", required: true, description: "Pipeline runtime input values" },
+    ]},
+  ],
+};
+
+const inputSetUpdateSchema: BodySchema = {
+  description: "Input set definition (full replacement). Three options: (1) Pass body as a raw YAML string directly (recommended). (2) Pass {yamlInputSet: '<yaml>'} for YAML inside an object. (3) Pass {inputSet: {...}} as JSON. For remote input sets, pass store_type='REMOTE' with git details via params. Include last_object_id from the GET response for conflict detection.",
+  fields: [
+    { name: "yamlInputSet", type: "string", required: false, description: "Full input set YAML string (replaces existing). Alternative: pass the YAML string directly as body." },
+    { name: "inputSet", type: "object", required: false, description: "Complete input set as JSON object (replaces existing)" },
   ],
 };
 
@@ -124,14 +144,16 @@ export const pipelinesToolset: ToolsetDefinition = {
             is_harness_code_repo: "isHarnessCodeRepo",
           },
           bodyBuilder: (input) => {
-            const b = input.body as Record<string, unknown> | undefined;
-            if (b && typeof b === "object" && typeof b.yamlPipeline === "string") {
-              return b.yamlPipeline;
+            const b = input.body;
+            if (typeof b === "string") {
+              return b;
             }
-            if (b && typeof b === "object" && b.pipeline !== undefined) {
-              return input.body;
+            if (b && typeof b === "object") {
+              const obj = b as Record<string, unknown>;
+              if (typeof obj.yamlPipeline === "string") return obj.yamlPipeline;
+              if (obj.pipeline !== undefined) return b;
             }
-            throw new Error("body must include either yamlPipeline (YAML string) or pipeline (JSON object)");
+            throw new Error("body must be a YAML string, or an object with yamlPipeline (YAML string) or pipeline (JSON object)");
           },
           responseExtractor: ngExtract,
           description: "Create a new pipeline from YAML. For external Git: store_type='REMOTE' + connector_ref, repo_name, branch, file_path. For Harness Code: store_type='REMOTE' + is_harness_code_repo=true, repo_name, branch, file_path.",
@@ -156,14 +178,16 @@ export const pipelinesToolset: ToolsetDefinition = {
             last_commit_id: "lastCommitId",
           },
           bodyBuilder: (input) => {
-            const b = input.body as Record<string, unknown> | undefined;
-            if (b && typeof b === "object" && typeof b.yamlPipeline === "string") {
-              return b.yamlPipeline;
-            }
-            if (b && typeof b === "object" && b.pipeline !== undefined) {
+            const b = input.body;
+            if (typeof b === "string") {
               return b;
             }
-            throw new Error("body must include either pipeline (JSON object) or yamlPipeline (YAML string)");
+            if (b && typeof b === "object") {
+              const obj = b as Record<string, unknown>;
+              if (typeof obj.yamlPipeline === "string") return obj.yamlPipeline;
+              if (obj.pipeline !== undefined) return b;
+            }
+            throw new Error("body must be a YAML string, or an object with yamlPipeline (YAML string) or pipeline (JSON object)");
           },
           responseExtractor: ngExtract,
           description: "Update an existing pipeline YAML. For remote pipelines, pass store_type='REMOTE' with git details and last_object_id/last_commit_id from the GET response. For Harness Code: add is_harness_code_repo=true (no connector_ref needed).",
@@ -436,12 +460,12 @@ export const pipelinesToolset: ToolsetDefinition = {
     {
       resourceType: "input_set",
       displayName: "Input Set",
-      description: "Reusable runtime input sets for pipelines",
+      description: "Reusable runtime input sets for pipelines. Supports list, get, create, update, and delete.",
       toolset: "pipelines",
       scope: "project",
       identifierFields: ["pipeline_id", "input_set_id"],
       listFilterFields: [
-        { name: "pipeline_id", description: "Pipeline identifier to filter input sets" },
+        { name: "pipeline_id", description: "Pipeline identifier to filter input sets", required: true },
       ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipeline_id}/input-sets",
       operations: {
@@ -463,6 +487,77 @@ export const pipelinesToolset: ToolsetDefinition = {
           queryParams: { pipeline_id: "pipelineIdentifier" },
           responseExtractor: ngExtract,
           description: "Get input set details",
+        },
+        create: {
+          method: "POST",
+          path: "/pipeline/api/inputSets",
+          headers: { "Content-Type": "application/yaml" },
+          queryParams: {
+            pipeline_id: "pipelineIdentifier",
+            store_type: "storeType",
+            connector_ref: "connectorRef",
+            repo_name: "repoName",
+            branch: "branch",
+            file_path: "filePath",
+            commit_msg: "commitMsg",
+            is_harness_code_repo: "isHarnessCodeRepo",
+          },
+          bodyBuilder: (input) => {
+            const b = input.body;
+            if (typeof b === "string") return b;
+            if (b && typeof b === "object") {
+              const obj = b as Record<string, unknown>;
+              if (typeof obj.yamlInputSet === "string") return obj.yamlInputSet;
+              if (obj.inputSet !== undefined) return b;
+            }
+            throw new Error("body must be a YAML string, or an object with yamlInputSet (YAML string) or inputSet (JSON object)");
+          },
+          responseExtractor: ngExtract,
+          description: "Create a new input set for a pipeline. Requires pipeline_id. Pass the input set definition as YAML string (recommended) or as an object with yamlInputSet/inputSet.",
+          bodySchema: inputSetCreateSchema,
+        },
+        update: {
+          method: "PUT",
+          path: "/pipeline/api/inputSets/{inputSetIdentifier}",
+          pathParams: { input_set_id: "inputSetIdentifier" },
+          headers: { "Content-Type": "application/yaml" },
+          queryParams: {
+            pipeline_id: "pipelineIdentifier",
+            store_type: "storeType",
+            connector_ref: "connectorRef",
+            repo_name: "repoName",
+            branch: "branch",
+            file_path: "filePath",
+            base_branch: "baseBranch",
+            commit_msg: "commitMsg",
+            is_harness_code_repo: "isHarnessCodeRepo",
+            last_object_id: "lastObjectId",
+          },
+          bodyBuilder: (input) => {
+            const b = input.body;
+            if (typeof b === "string") return b;
+            if (b && typeof b === "object") {
+              const obj = b as Record<string, unknown>;
+              if (typeof obj.yamlInputSet === "string") return obj.yamlInputSet;
+              if (obj.inputSet !== undefined) return b;
+            }
+            throw new Error("body must be a YAML string, or an object with yamlInputSet (YAML string) or inputSet (JSON object)");
+          },
+          responseExtractor: ngExtract,
+          description: "Update an existing input set. Requires pipeline_id and input_set_id. For remote input sets, pass store_type='REMOTE' with git details and last_object_id from the GET response.",
+          bodySchema: inputSetUpdateSchema,
+        },
+        delete: {
+          method: "DELETE",
+          path: "/pipeline/api/inputSets/{inputSetIdentifier}",
+          pathParams: { input_set_id: "inputSetIdentifier" },
+          queryParams: {
+            pipeline_id: "pipelineIdentifier",
+            commit_msg: "commitMsg",
+            last_object_id: "lastObjectId",
+          },
+          responseExtractor: ngExtract,
+          description: "Delete an input set. Requires pipeline_id and input_set_id.",
         },
       },
     },
