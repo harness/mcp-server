@@ -205,6 +205,7 @@ export const scsToolset: ToolsetDefinition = {
         { resourceType: "scs_component_dependencies", relationship: "child", description: "Get dependency tree for a specific component (pass purl)" },
         { resourceType: "scs_component_remediation", relationship: "sibling", description: "Safe upgrade suggestions with dependency impact analysis (pass purl) — preferred over scs_artifact_remediation" },
         { resourceType: "scs_component_enrichment", relationship: "sibling", description: "OSS risk / EOL / outdated status for a component (pass purl)" },
+        { resourceType: "scs_component_vulnerability", relationship: "sibling", description: "Individual CVE details (severity, CVSS, fix versions) for a component (pass purl)" },
         { resourceType: "scs_oss_risk_summary", relationship: "sibling", description: "Project-level OSS risk overview across all artifacts" },
       ],
       toolset: "scs",
@@ -643,7 +644,7 @@ export const scsToolset: ToolsetDefinition = {
         + "Input: purl (Package URL, e.g. pkg:npm/express@4.18.0). "
         + "Two modes: (1) Account-scoped — pass purl only. Works for any known component. "
         + "(2) Project-scoped — pass artifact_id + purl. Returns richer data: dependency type (direct/transitive), parent components, STO vulnerability source. "
-        + "For CVE/vulnerability DETAILS, use security_issue (STO) instead — this resource covers OSS risk only.",
+        + "For individual CVE/vulnerability DETAILS (CVE IDs, CVSS scores, fix versions), use scs_component_vulnerability instead — this resource covers OSS risk only.",
       diagnosticHint: "If you get empty results: the component may not have been enriched yet (only components seen in scanned SBOMs are enriched). "
         + "Get purl values from harness_list(resource_type='scs_artifact_component', artifact_id='...'). "
         + "PURL format: pkg:<type>/<namespace>/<name>@<version> (e.g. pkg:npm/express@4.18.0, pkg:golang/stdlib@1.20.0). "
@@ -660,7 +661,7 @@ export const scsToolset: ToolsetDefinition = {
         { resourceType: "scs_artifact_component", relationship: "parent", description: "List components in an artifact to get purl values and artifact_id" },
         { resourceType: "scs_component_remediation", relationship: "sibling", description: "Get upgrade suggestions if the component is outdated/at-risk" },
         { resourceType: "scs_oss_risk_summary", relationship: "parent", description: "Project-level OSS risk overview — start here for broad risk assessment" },
-        { resourceType: "security_issue", relationship: "sibling", description: "CVE/vulnerability details (STO domain) — use for specific CVE queries" },
+        { resourceType: "scs_component_vulnerability", relationship: "sibling", description: "Individual CVE details (severity, CVSS, fix versions) — use for specific CVE/vulnerability queries" },
       ],
       toolset: "scs",
       scope: "project",
@@ -691,6 +692,68 @@ export const scsToolset: ToolsetDefinition = {
           },
           responseExtractor: scsCleanExtract,
           description: "Get OSS risk and enrichment data for a component by PURL. Pass artifact_id for project-scoped results.",
+        },
+      },
+    },
+
+    // ── Component Vulnerability Details (PRD §3.4 — CVE/CVSS lookup) ──
+    {
+      resourceType: "scs_component_vulnerability",
+      displayName: "Component Vulnerability Details",
+      description: "CVE and vulnerability details for a specific OSS component by Package URL (PURL). "
+        + "Returns INDIVIDUAL CVE records with severity, CVSS score, and fix/upgrade versions — "
+        + "this is the ONLY resource that provides per-CVE details for a component. "
+        + "Use this when the user asks: 'What CVEs affect X?', 'Show vulnerabilities for library Y', "
+        + "'CVSS scores for Z', 'Security advisories for component W', 'Is this version vulnerable?'. "
+        + "DO NOT use scs_component_enrichment for CVE queries — it only returns aggregate counts (issue_count), "
+        + "not individual CVE IDs or CVSS scores. "
+        + "Input: purl (Package URL, e.g. pkg:npm/express@4.18.0). Optionally pass artifact_id for artifact-scoped results. "
+        + "Two modes: (1) Account-scoped — pass purl only. Returns all known CVEs for the component globally. "
+        + "(2) Artifact-scoped — pass artifact_id + purl. Returns CVEs in the context of a specific artifact.",
+      diagnosticHint: "If you get empty results: the component may not have enrichment data yet. "
+        + "Get purl values from harness_list(resource_type='scs_artifact_component', artifact_id='...'). "
+        + "PURL format: pkg:<type>/<namespace>/<name>@<version> (e.g. pkg:npm/express@4.18.0).",
+      searchAliases: [
+        "cve", "vulnerability", "cvss", "security advisory", "security issue",
+        "component vulnerability", "library vulnerability", "package vulnerability",
+        "known vulnerabilities", "cve lookup", "vulnerability scan",
+        "is it vulnerable", "security flaws", "critical vulnerability",
+      ],
+      relatedResources: [
+        { resourceType: "scs_artifact_component", relationship: "parent", description: "List components in an artifact to get purl values" },
+        { resourceType: "scs_component_enrichment", relationship: "sibling", description: "OSS risk (EOL, unmaintained, outdated) — aggregate data, not individual CVEs" },
+        { resourceType: "scs_component_remediation", relationship: "sibling", description: "Safe upgrade suggestions to fix vulnerabilities" },
+      ],
+      toolset: "scs",
+      scope: "project",
+      scopeOptional: true,
+      identifierFields: ["artifact_id"],
+      listFilterFields: [
+        { name: "purl", description: "Package URL of the component (e.g. pkg:npm/express@4.18.0) — required", required: true },
+        { name: "artifact_id", description: "Artifact ID for artifact-scoped lookup (optional — omit for global/account-scoped results)" },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${SCS}/v1/components/vulnerabilities`,
+          pathBuilder: (input, config) => {
+            const artifactId = input.artifact_id as string | undefined;
+            if (artifactId) {
+              const cfg = config as Record<string, string | undefined>;
+              const org = (input.org_id as string) || cfg.HARNESS_ORG || "";
+              const project = (input.project_id as string) || cfg.HARNESS_PROJECT || "";
+              return `${SCS}/v1/orgs/${org}/projects/${project}/artifacts/${artifactId}/component/vulnerabilities`;
+            }
+            return `${SCS}/v1/components/vulnerabilities`;
+          },
+          queryParams: {
+            purl: "purl",
+            page: "page",
+            size: "limit",
+          },
+          defaultQueryParams: { limit: "25" },
+          responseExtractor: scsCleanExtract,
+          description: "List CVE/vulnerability details for a component by PURL. Returns severity, CVSS, fix versions per CVE.",
         },
       },
     },
