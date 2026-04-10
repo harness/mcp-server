@@ -595,4 +595,55 @@ describe("Registry", () => {
     });
   });
 
+  describe("injectOrgQueryFallback (account-scoped project CRUD)", () => {
+    it("falls back to config HARNESS_ORG when org_id is omitted", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { project: {} } });
+      const client = makeClient(mockRequest);
+      const registry = new Registry(
+        makeConfig({ HARNESS_TOOLSETS: "platform", HARNESS_ORG: "cfg-default-org" }),
+      );
+
+      await registry.dispatch(client, "project", "get", {
+        project_id: "my-proj",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params).toMatchObject({ orgIdentifier: "cfg-default-org" });
+    });
+
+    it("uses explicit org_id over config", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { project: {} } });
+      const client = makeClient(mockRequest);
+      const registry = new Registry(
+        makeConfig({ HARNESS_TOOLSETS: "platform", HARNESS_ORG: "cfg-default-org" }),
+      );
+
+      await registry.dispatch(client, "project", "get", {
+        project_id: "my-proj",
+        org_id: "explicit-org",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params).toMatchObject({ orgIdentifier: "explicit-org" });
+    });
+
+    it("does not inject org via fallback when injectOrgQueryFallback is not set (project list)", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: { content: [], totalElements: 0 },
+      });
+      const client = makeClient(mockRequest);
+      const registry = new Registry(
+        makeConfig({ HARNESS_TOOLSETS: "platform", HARNESS_ORG: "cfg-default-org" }),
+      );
+
+      await registry.dispatch(client, "project", "list", {
+        page: 0,
+        size: 10,
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params?.orgIdentifier).toBeUndefined();
+    });
+  });
+
 });

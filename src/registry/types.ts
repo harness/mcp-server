@@ -123,6 +123,12 @@ export interface EndpointSpec {
   staticQueryParams?: Record<string, string>;
   /** Default query params to include if not overridden by input */
   defaultQueryParams?: Record<string, string>;
+  /**
+   * When true, if `orgIdentifier` (or custom `scopeParams.org`) is still unset after scope
+   * resolution, set it from `input.org_id` or `config.HARNESS_ORG`. Used for account-scoped
+   * resources whose NG endpoints require `orgIdentifier` on the query string (e.g. POST /ng/api/projects).
+   */
+  injectOrgQueryFallback?: boolean;
   /** Override default scope query param names (e.g. for APIs using snake_case) */
   scopeParams?: { account?: string; org?: string; project?: string };
   /** For POST/PUT: how to build the request body from tool input */

@@ -7,6 +7,7 @@ import { parseZipCsv } from "../utils/zip-csv.js";
 
 /** Extract `data` from standard NG API responses: `{ status, data, ... }` */
 export const ngExtract = (raw: unknown): unknown => {
+  if (raw === null || raw === undefined) return raw;
   const r = raw as { data?: unknown };
   return r.data ?? raw;
 };
@@ -119,6 +120,34 @@ export const v1Unwrap = (wrapperKey: string) => (raw: unknown): unknown => {
     return raw[wrapperKey];
   }
   return raw;
+};
+
+/**
+ * Organization GET/POST/PUT responses: unwrap standard NG `{ status, data: { organization } }`
+ * and prefer `organization` over legacy `org` when both could appear.
+ */
+export const unwrapOrgResponse = (raw: unknown): unknown => {
+  const inner = ngExtract(raw);
+  if (isRecord(inner)) {
+    if ("organization" in inner && inner.organization !== null && typeof inner.organization === "object") {
+      return inner.organization;
+    }
+    if ("org" in inner && inner.org !== null && typeof inner.org === "object") {
+      return inner.org;
+    }
+  }
+  return inner;
+};
+
+/**
+ * Project GET/POST/PUT responses: unwrap NG `{ status, data: { project } }` → project entity.
+ */
+export const unwrapProjectResponse = (raw: unknown): unknown => {
+  const inner = ngExtract(raw);
+  if (isRecord(inner) && "project" in inner && inner.project !== null && typeof inner.project === "object") {
+    return inner.project;
+  }
+  return inner;
 };
 
 /** Factory for GraphQL field extraction (used by CCM). */

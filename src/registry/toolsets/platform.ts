@@ -1,5 +1,5 @@
 import type { ToolsetDefinition, BodySchema } from "../types.js";
-import { v1ListExtract, v1Unwrap } from "../extractors.js";
+import { pageExtract, unwrapOrgResponse, unwrapProjectResponse, v1Unwrap } from "../extractors.js";
 import { stripNulls } from "../../utils/body-normalizer.js";
 
 // ---------------------------------------------------------------------------
@@ -55,20 +55,21 @@ const projectUpdateSchema: BodySchema = {
 // ---------------------------------------------------------------------------
 
 /**
- * Build org body: v1 API expects `{ org: { identifier, name, ... } }`.
- * Accepts either `{ org: {...} }` (pass-through) or `{ identifier, name, ... }` (auto-wrap).
+ * Build org body: NG `/ng/api/organizations` expects `{ organization: { identifier, name, ... } }`.
+ * Accepts `{ organization: {...} }`, legacy `{ org: {...} }`, or flat `{ identifier, name, ... }`.
  */
 function buildOrgBody(input: Record<string, unknown>): unknown {
   const body = input.body;
   if (!body || typeof body !== "object") return undefined;
   const rec = body as Record<string, unknown>;
 
-  // Already wrapped — use as-is
-  if ("org" in rec && typeof rec.org === "object") {
-    return stripNulls(rec);
+  if ("organization" in rec && typeof rec.organization === "object" && rec.organization !== null) {
+    return stripNulls({ organization: rec.organization });
   }
-  // Wrap flat fields
-  return stripNulls({ org: rec });
+  if ("org" in rec && typeof rec.org === "object" && rec.org !== null) {
+    return stripNulls({ organization: rec.org });
+  }
+  return stripNulls({ organization: rec });
 }
 
 /**
@@ -80,7 +81,9 @@ function buildOrgUpdateBody(input: Record<string, unknown>): unknown {
   const rec = body as Record<string, unknown>;
 
   let inner: Record<string, unknown>;
-  if ("org" in rec && typeof rec.org === "object" && rec.org !== null) {
+  if ("organization" in rec && typeof rec.organization === "object" && rec.organization !== null) {
+    inner = { ...(rec.organization as Record<string, unknown>) };
+  } else if ("org" in rec && typeof rec.org === "object" && rec.org !== null) {
     inner = { ...(rec.org as Record<string, unknown>) };
   } else {
     inner = { ...rec };
@@ -91,7 +94,7 @@ function buildOrgUpdateBody(input: Record<string, unknown>): unknown {
     inner.identifier = input.org_id;
   }
 
-  return stripNulls({ org: inner });
+  return stripNulls({ organization: inner });
 }
 
 /**
@@ -152,56 +155,59 @@ export const platformToolset: ToolsetDefinition = {
       scope: "account",
       identifierFields: ["org_id"],
       listFilterFields: [
-        { name: "search_term", description: "Filter organizations by name or keyword" },
-        { name: "sort", description: "Sort field" },
-        { name: "order", description: "Sort order (asc/desc)" },
+        { name: "search_term", description: "Filter organizations by name, ID, or tags (maps to searchTerm)" },
+        { name: "identifiers", description: "Comma-separated org identifiers to fetch specific orgs" },
+        { name: "sort_orders", description: "Sort criteria (maps to sortOrders), e.g. fieldName=name&orderType=ASC" },
+        { name: "page_token", description: "Pagination token from a previous list response" },
       ],
       deepLinkTemplate: "/ng/account/{accountId}/settings/organizations/{org}",
       operations: {
         list: {
           method: "GET",
+          // NG: GET /ng/api/organizations?pageIndex=&pageSize=&searchTerm=&sortOrders=&pageToken=&identifiers=
           path: "/ng/api/organizations",
           queryParams: {
-            search_term: "search_term",
-            page: "page",
-            limit: "limit",
-            sort: "sort",
-            order: "order",
+            search_term: "searchTerm",
+            page: "pageIndex",
+            size: "pageSize",
+            sort_orders: "sortOrders",
+            page_token: "pageToken",
+            identifiers: "identifiers",
           },
-          responseExtractor: v1ListExtract("org"),
+          responseExtractor: pageExtract,
           description: "List organizations in the account",
         },
         get: {
           method: "GET",
           path: "/ng/api/organizations/{org}",
           pathParams: { org_id: "org" },
-          responseExtractor: v1Unwrap("org"),
+          responseExtractor: unwrapOrgResponse,
           description: "Get organization details",
         },
         create: {
           method: "POST",
           path: "/ng/api/organizations",
           bodyBuilder: buildOrgBody,
-          responseExtractor: v1Unwrap("org"),
+          responseExtractor: unwrapOrgResponse,
           description: "Create a new organization",
           bodySchema: orgCreateSchema,
-          bodyWrapperKey: "org",
+          bodyWrapperKey: "organization",
         },
         update: {
           method: "PUT",
           path: "/ng/api/organizations/{org}",
           pathParams: { org_id: "org" },
           bodyBuilder: buildOrgUpdateBody,
-          responseExtractor: v1Unwrap("org"),
+          responseExtractor: unwrapOrgResponse,
           description: "Update an existing organization",
           bodySchema: orgUpdateSchema,
-          bodyWrapperKey: "org",
+          bodyWrapperKey: "organization",
         },
         delete: {
           method: "DELETE",
           path: "/ng/api/organizations/{org}",
           pathParams: { org_id: "org" },
-          responseExtractor: v1Unwrap("org"),
+          responseExtractor: unwrapOrgResponse,
           description: "Delete an organization",
         },
       },
@@ -216,62 +222,76 @@ export const platformToolset: ToolsetDefinition = {
       scope: "account",
       identifierFields: ["project_id"],
       listFilterFields: [
-        { name: "search_term", description: "Filter projects by name or keyword" },
-        { name: "sort", description: "Sort field" },
-        { name: "order", description: "Sort order (asc/desc)" },
-        { name: "has_module", description: "Filter by module presence" },
-        { name: "module_type", description: "Module type filter" },
+        { name: "identifiers", description: "Comma-separated project identifiers to filter" },
+        { name: "search_term", description: "Search term (maps to searchTerm)" },
+        { name: "has_module", description: "Filter by module presence (hasModule)" },
+        { name: "module_type", description: "Module type (e.g. CD, CI)" },
+        { name: "only_favorites", description: "Only favorited projects", type: "boolean" },
+        { name: "sort_orders", description: "Sort descriptor, e.g. fieldName=name&orderType=ASC (maps to sortOrders)" },
+        { name: "page_token", description: "Pagination token from a previous response" },
       ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{org}/projects/{project}",
       operations: {
         list: {
           method: "GET",
-          path: "/ng/api/organizations/{org}/projects",
-          pathParams: { org_id: "org" },
+          // NG: GET /ng/api/projects?accountIdentifier=&orgIdentifier=&… (accountIdentifier injected by client)
+          path: "/ng/api/projects",
           queryParams: {
-            search_term: "search_term",
-            page: "page",
-            limit: "limit",
-            sort: "sort",
-            order: "order",
-            has_module: "has_module",
-            module_type: "module_type",
+            org_id: "orgIdentifier",
+            has_module: "hasModule",
+            identifiers: "identifiers",
+            module_type: "moduleType",
+            search_term: "searchTerm",
+            only_favorites: "onlyFavorites",
+            page: "pageIndex",
+            size: "pageSize",
+            sort_orders: "sortOrders",
+            page_token: "pageToken",
           },
-          responseExtractor: v1ListExtract("project"),
-          description: "List projects in an organization",
+          responseExtractor: pageExtract,
+          description: "List projects (NG /ng/api/projects)",
         },
         get: {
           method: "GET",
-          path: "/ng/api/organizations/{org}/projects/{project}",
-          pathParams: { org_id: "org", project_id: "project" },
-          responseExtractor: v1Unwrap("project"),
+          // NG: GET /ng/api/projects/{projectIdentifier}?orgIdentifier=&accountIdentifier= (client injects account)
+          path: "/ng/api/projects/{project}",
+          pathParams: { project_id: "project" },
+          queryParams: { org_id: "orgIdentifier" },
+          injectOrgQueryFallback: true,
+          responseExtractor: unwrapProjectResponse,
           description: "Get project details",
         },
         create: {
           method: "POST",
-          path: "/ng/api/organizations/{org}/projects",
-          pathParams: { org_id: "org" },
+          // NG: POST /ng/api/projects?orgIdentifier= — body { project: { orgIdentifier, identifier, name, ... } }
+          path: "/ng/api/projects",
+          queryParams: { org_id: "orgIdentifier" },
+          injectOrgQueryFallback: true,
           bodyBuilder: buildProjectBody,
-          responseExtractor: v1Unwrap("project"),
+          responseExtractor: unwrapProjectResponse,
           description: "Create a new project in an organization",
           bodySchema: projectCreateSchema,
           bodyWrapperKey: "project",
         },
         update: {
           method: "PUT",
-          path: "/ng/api/organizations/{org}/projects/{project}",
-          pathParams: { org_id: "org", project_id: "project" },
+          path: "/ng/api/projects/{project}",
+          pathParams: { project_id: "project" },
+          queryParams: { org_id: "orgIdentifier" },
+          injectOrgQueryFallback: true,
           bodyBuilder: buildProjectUpdateBody,
-          responseExtractor: v1Unwrap("project"),
+          responseExtractor: unwrapProjectResponse,
           description: "Update an existing project",
           bodySchema: projectUpdateSchema,
           bodyWrapperKey: "project",
         },
         delete: {
           method: "DELETE",
-          path: "/ng/api/organizations/{org}/projects/{project}",
-          pathParams: { org_id: "org", project_id: "project" },
-          responseExtractor: v1Unwrap("project"),
+          path: "/ng/api/projects/{project}",
+          pathParams: { project_id: "project" },
+          queryParams: { org_id: "orgIdentifier" },
+          injectOrgQueryFallback: true,
+          responseExtractor: unwrapProjectResponse,
           description: "Delete a project",
         },
       },

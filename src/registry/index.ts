@@ -321,6 +321,18 @@ export class Registry {
       params[def.scopeParams.account] = this.config.HARNESS_ACCOUNT_ID;
     }
 
+    // Account-scoped resources sometimes still need orgIdentifier in query params (NG /ng/api/projects).
+    if (spec.injectOrgQueryFallback) {
+      const orgKey = def.scopeParams?.org ?? "orgIdentifier";
+      const cur = params[orgKey];
+      if (cur === undefined || cur === "") {
+        const fallback = (input.org_id as string) ?? this.config.HARNESS_ORG;
+        if (fallback) {
+          params[orgKey] = fallback;
+        }
+      }
+    }
+
     // Add static query params (not derived from input)
     if (spec.staticQueryParams) {
       for (const [key, value] of Object.entries(spec.staticQueryParams)) {
@@ -416,6 +428,7 @@ export class Registry {
       ...(Object.keys(productHeaders).length > 0 ? { headers: productHeaders } : {}),
       ...(spec.responseType ? { responseType: spec.responseType } : {}),
       ...(product !== "harness" ? { product } : {}),
+      ...(spec.headerBasedScoping || def.headerBasedScoping ? { headerBasedScoping: true } : {}),
       signal,
     });
 
@@ -557,7 +570,7 @@ export class Registry {
               } else {
                 // Check for nested wrapper objects (e.g., connector.identifier, service.identifier)
                 // Common wrapper keys used by Harness NG APIs
-                const wrapperKeys = ["connector", "service", "environment", "secret", "role", "resourceGroup", "pipeline", "template", "artifact"];
+                const wrapperKeys = ["connector", "service", "environment", "secret", "role", "resourceGroup", "pipeline", "template", "artifact", "organization", "project"];
                 for (const wrapperKey of wrapperKeys) {
                   const nested = itemRecord[wrapperKey];
                   if (nested && typeof nested === "object") {
