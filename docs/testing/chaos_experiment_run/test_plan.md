@@ -29,6 +29,6 @@
 
 ## Notes
 - Uses `organizationIdentifier` instead of `orgIdentifier` (chaos scope override)
-- GET endpoint: `/gateway/chaos/manager/api/rest/v2/chaos-pipeline/{experimentId}?experimentRunId={runId}`
+- GET endpoint: `/chaos/manager/api/rest/v2/chaos-pipeline/{experimentId}?experimentRunId={runId}`
 - The `run_id` maps to `experimentRunId` query parameter
 - Response includes resiliency score, step-level fault data, and execution timeline

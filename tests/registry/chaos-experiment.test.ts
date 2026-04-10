@@ -65,7 +65,7 @@ describe("chaos_experiment list/get", () => {
     expect(mockRequest).toHaveBeenCalledOnce();
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("GET");
-    expect(call.path).toBe("/gateway/chaos/manager/api/rest/v2/experiment");
+    expect(call.path).toBe("/chaos/manager/api/rest/v2/experiment");
     expect(call.params).toMatchObject({
       organizationIdentifier: "default",
       projectIdentifier: "PM_Signoff",
@@ -117,7 +117,7 @@ describe("chaos_experiment list/get", () => {
     expect(mockRequest).toHaveBeenCalledOnce();
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("GET");
-    expect(call.path).toBe("/gateway/chaos/manager/api/rest/v2/experiments/exp-pod-delete");
+    expect(call.path).toBe("/chaos/manager/api/rest/v2/experiments/exp-pod-delete");
     expect(call.params).toMatchObject({
       organizationIdentifier: "default",
       projectIdentifier: "proj1",
@@ -163,7 +163,7 @@ describe("chaos_probe enable execute action", () => {
     expect(mockRequest).toHaveBeenCalledOnce();
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("POST");
-    expect(call.path).toBe("/gateway/chaos/manager/api/rest/v2/probes/probe-http-check/enable");
+    expect(call.path).toBe("/chaos/manager/api/rest/v2/probes/probe-http-check/enable");
     expect(call.params).toMatchObject({
       organizationIdentifier: "default",
       projectIdentifier: "PM_Signoff",
@@ -196,7 +196,7 @@ describe("chaos_k8s_infrastructure list", () => {
     expect(mockRequest).toHaveBeenCalledOnce();
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("POST");
-    expect(call.path).toBe("/gateway/chaos/manager/api/rest/v2/infrastructures");
+    expect(call.path).toBe("/chaos/manager/api/rest/v2/infrastructures");
     expect(call.params).toMatchObject({
       organizationIdentifier: "default",
       projectIdentifier: "PM_Signoff",
@@ -279,7 +279,7 @@ describe("chaos_k8s_infrastructure list", () => {
 
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("GET");
-    expect(call.path).toBe("/gateway/chaos/manager/api/rest/kubernetes/infra/infra-abc/health");
+    expect(call.path).toBe("/chaos/manager/api/rest/kubernetes/infra/infra-abc/health");
   });
 });
 
@@ -307,7 +307,7 @@ describe("chaos_hub list", () => {
     expect(mockRequest).toHaveBeenCalledOnce();
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("GET");
-    expect(call.path).toBe("/gateway/chaos/manager/api/rest/hubs");
+    expect(call.path).toBe("/chaos/manager/api/rest/hubs");
     expect(call.params).toMatchObject({
       organizationIdentifier: "default",
       projectIdentifier: "PM_Signoff",
@@ -342,7 +342,7 @@ describe("chaos_experiment_template create_from_template", () => {
 
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("POST");
-    expect(call.path).toBe("/gateway/chaos/manager/api/rest/experimenttemplates/demotemplate01/launch");
+    expect(call.path).toBe("/chaos/manager/api/rest/experimenttemplates/demotemplate01/launch");
     expect(call.params.hubIdentity).toBe("amit-hub0e4");
     expect(call.body.name).toBe("demo-exp-01");
     expect(call.body.identity).toBe("demo-exp-01");

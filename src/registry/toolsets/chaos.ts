@@ -110,7 +110,7 @@ import {
 } from "./chaos-descriptions.js";
 
 /**
- * Chaos API base path — requires /gateway prefix per Harness API routing.
+ * Chaos API base path.
  * REST endpoints live under rest/v2/ (experiments, probes) and rest/ (templates).
  * Load test endpoints live under v1/.
  */
@@ -797,7 +797,7 @@ export const chaosToolset: ToolsetDefinition = {
 
     // ── Load Tests ─────────────────────────────────────────────────────
     // Note: Load test API uses a different service path (loadTest/manager/api)
-    // than the chaos manager (gateway/chaos/manager/api), per v1 Go code.
+    // than the chaos manager (chaos/manager/api), per v1 Go code.
     // Also uses standard orgIdentifier (no scopeParams override).
     {
       resourceType: "chaos_loadtest",

@@ -30,5 +30,5 @@
 ## Notes
 - Chaos API uses `organizationIdentifier` instead of `orgIdentifier` (scopeParams override)
 - List response uses custom extractor: `{ totalNoOfProbes, data: [...] }`
-- GET endpoint: `/gateway/chaos/manager/api/rest/v2/probes/{probeId}`
-- List endpoint: `/gateway/chaos/manager/api/rest/v2/probes`
+- GET endpoint: `/chaos/manager/api/rest/v2/probes/{probeId}`
+- List endpoint: `/chaos/manager/api/rest/v2/probes`

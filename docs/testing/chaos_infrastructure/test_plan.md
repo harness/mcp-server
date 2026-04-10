@@ -28,7 +28,7 @@
 
 ## Notes
 - Chaos API uses `organizationIdentifier` instead of `orgIdentifier` (scopeParams override)
-- List uses POST method (not GET): `/gateway/chaos/manager/api/rest/machine/infras`
+- List uses POST method (not GET): `/chaos/manager/api/rest/machine/infras`
 - Static query params: `infraType=Linux`, `page=0`, `limit=15`
 - Body includes filter (status) and sort (field: NAME, ascending: true)
 - Default status filter is `Active` — omitting status returns active infras only

@@ -35,6 +35,6 @@
 - Chaos API uses `organizationIdentifier` instead of `orgIdentifier` (scopeParams override)
 - `hub_identity` is effectively required for listing templates
 - `infra_ref` must be in format `environmentId/infraId`
-- List endpoint: `/gateway/chaos/manager/api/rest/experimenttemplates`
-- Create endpoint: `/gateway/chaos/manager/api/rest/experimenttemplates/{templateId}/launch`
+- List endpoint: `/chaos/manager/api/rest/experimenttemplates`
+- Create endpoint: `/chaos/manager/api/rest/experimenttemplates/{templateId}/launch`
 - The `hub_identity` query parameter maps to `hubIdentity` in the API

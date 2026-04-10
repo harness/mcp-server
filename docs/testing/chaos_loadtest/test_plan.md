@@ -34,8 +34,8 @@
 
 ## Notes
 - Load test API uses standard `orgIdentifier` (no scopeParams override unlike other chaos resources)
-- List/Get/Create: `/gateway/chaos/manager/api/v1/load-tests`
-- Delete: `/gateway/chaos/manager/api/v1/load-tests/{loadtestId}`
-- Run: POST `/gateway/chaos/manager/api/v1/load-tests/{loadtestId}/runs` (no body)
-- Stop: POST `/gateway/chaos/manager/api/v1/runs/{runId}/stop` (no body)
+- List/Get/Create: `/chaos/manager/api/v1/load-tests`
+- Delete: `/chaos/manager/api/v1/load-tests/{loadtestId}`
+- Run: POST `/chaos/manager/api/v1/load-tests/{loadtestId}/runs` (no body)
+- Stop: POST `/chaos/manager/api/v1/runs/{runId}/stop` (no body)
 - The `run` action uses `loadtest_id` path param; the `stop` action uses `run_id` path param

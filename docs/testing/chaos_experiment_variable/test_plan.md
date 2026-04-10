@@ -28,7 +28,7 @@
 
 ## Notes
 - Chaos API uses `organizationIdentifier` instead of `orgIdentifier` (scopeParams override)
-- Endpoint: `/gateway/chaos/manager/api/rest/v2/experiments/{experimentId}/variables?isIdentity=false`
+- Endpoint: `/chaos/manager/api/rest/v2/experiments/{experimentId}/variables?isIdentity=false`
 - The `isIdentity=false` static query param is always sent
 - Variables are used to discover required runtime inputs before running a chaos experiment via `chaos_experiment` run action
 - Response structure includes both experiment-level variables and task-level variables organized by task name
