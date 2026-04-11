@@ -22,13 +22,13 @@ import {
   descChaosGuardCondition, descChaosGuardRule,
   descChaosRecommendation, descChaosRisk,
   descChaosAction, descChaosProbeInRun,
-  descChaosDRTest,
+  descChaosDRTest, descChaosComponentVariable,
   // Operation descriptions
   descListExperiments, descGetExperiment,
   descGetExperimentRun,
   descListProbes, descGetProbe,
   descListExperimentTemplates, descGetExperimentTemplate, descDeleteExperimentTemplate,
-  descListExperimentVariables,
+  descListExperimentVariables, descGetComponentVariable,
   descListLinuxInfra,
   descListLoadtests, descGetLoadtest, descCreateLoadtest, descDeleteLoadtest,
   descListK8sInfra, descGetK8sInfra,
@@ -107,6 +107,8 @@ import {
   descCreateInputSet, descUpdateInputSet, descDeleteInputSet,
   descInputSetIdentityField, descInputSetName, descInputSetDescription,
   descInputSetSpec, descIsIdentity,
+  // Component variable descriptions
+  descComponentType, descComponentIdentifier, descComponentHubReference,
 } from "./chaos-descriptions.js";
 
 /**
@@ -121,6 +123,12 @@ const CHAOS_LOADTEST = "/loadTest/manager/api";
 
 /** Chaos scope override — Chaos REST API uses organizationIdentifier (not orgIdentifier). */
 const CHAOS_SCOPE = { org: "organizationIdentifier" } as const;
+
+/** Unwrap single-item response from get-chaos-component-variable endpoint. */
+const chaosComponentVarExtract = (raw: unknown): unknown => {
+  const r = raw as { items?: Array<{ name: string; variables: unknown[] }> };
+  return r.items?.[0] ?? raw;
+};
 
 export const chaosToolset: ToolsetDefinition = {
   name: "chaos",
@@ -648,6 +656,40 @@ export const chaosToolset: ToolsetDefinition = {
           staticQueryParams: { isIdentity: "false" },
           responseExtractor: passthrough,
           description: descListExperimentVariables,
+        },
+      },
+    },
+
+    // ── Chaos Component Variables (unified v3) ─────────────────────────
+    {
+      resourceType: "chaos_component_variable",
+      displayName: "Chaos Component Variable",
+      description: descChaosComponentVariable,
+      toolset: "chaos",
+      scope: "project",
+      scopeParams: CHAOS_SCOPE,
+      identifierFields: ["identifier"],
+      listFilterFields: [
+        { name: "type", description: descComponentType, required: true, enum: ["Fault", "Probe", "Action"] },
+        { name: "identifier", description: descComponentIdentifier, required: true },
+        { name: "hub_reference", description: descComponentHubReference },
+      ],
+      relatedResources: [
+        { resourceType: "chaos_probe", relationship: "parent", description: "The probe whose variables are being retrieved. Use harness_get with resource_type=chaos_probe to fetch the full probe definition." },
+        { resourceType: "chaos_fault", relationship: "parent", description: "The fault whose variables are being retrieved. Use harness_get with resource_type=chaos_fault to fetch the full fault definition." },
+        { resourceType: "chaos_action", relationship: "parent", description: "The action whose variables are being retrieved. Use harness_get with resource_type=chaos_action to fetch the full action definition." },
+      ],
+      operations: {
+        get: {
+          method: "GET",
+          path: `${CHAOS}/v3/integrations/get-chaos-component-variable`,
+          queryParams: {
+            type: "type",
+            identifier: "identifier",
+            hub_reference: "hubReference",
+          },
+          responseExtractor: chaosComponentVarExtract,
+          description: descGetComponentVariable,
         },
       },
     },
