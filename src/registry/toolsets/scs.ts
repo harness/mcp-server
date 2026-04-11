@@ -131,7 +131,10 @@ export const scsToolset: ToolsetDefinition = {
         + "List artifacts from a source, or get an artifact overview. "
         + "Retain artifact_id and source_id from responses — they are required for follow-up queries "
         + "(compliance, components, chain of custody, SBOM, remediation). "
-        + "IMPORTANT: source_id is required to list artifacts. Get it from harness_list(resource_type='scs_artifact_source') first.",
+        + "IMPORTANT: source_id is required to list artifacts. Get it from harness_list(resource_type='scs_artifact_source') first. "
+        + "IMPORTANT: For policy violation DETAILS (component names, license types, deny-list vs allow-list), "
+        + "you MUST continue to scs_bom_violation using enforcement_id from violations.enforcementId in this response. "
+        + "This resource only shows violation counts — not the actual violation details.",
       diagnosticHint: "If you get a 404: verify source_id is correct. Use harness_list(resource_type='scs_artifact_source') to find valid source IDs. "
         + "For artifact details, use harness_get with both source_id and artifact_id.",
       searchAliases: ["artifact vulnerability", "artifact security posture", "artifact overview", "supply chain artifact", "scs artifact", "artifact sbom"],
