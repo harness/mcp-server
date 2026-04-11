@@ -746,3 +746,15 @@ export const descInputSetSpec = `JSON string containing the input set variable o
 export const descInputSetId = `Input set ID. Use harness_list with resource_type=chaos_input_set to find input set IDs.`;
 
 export const descIsIdentity = `Controls how experiment_id is interpreted. false (default): experiment_id is an internal UUID. true: experiment_id is a human-readable identity slug.`;
+
+// ── Chaos Component Variables (unified v3 endpoint) ─────────────────
+
+export const descChaosComponentVariable = `Runtime-configurable input variables for a chaos component (Fault, Probe, or Action). This is a unified v3 endpoint that retrieves variables for any component type via the type and identifier query params. Each variable describes a runtime input: its name, current/default value, data type, category, path in the component manifest, whether it is required, and allowed values. A value of '<+input>' means the variable is an unresolved runtime placeholder that must be supplied before execution. Supports get only (always returns exactly one component). Use harness_get with resource_type=chaos_component_variable, type=<Fault|Probe|Action>, identifier=<component-identity>.`;
+
+export const descGetComponentVariable = `Get runtime input variables for a specific chaos component. Requires type (Fault, Probe, or Action) and identifier (the component's identity/name). Returns the component name and its list of variables with metadata: name, value, path, category, type, required flag, allowed values, default, and validator regex.`;
+
+export const descComponentType = `Component type to retrieve variables for. One of: Fault, Probe, Action.`;
+
+export const descComponentIdentifier = `Identity (name/slug) of the chaos component whose variables to retrieve (e.g. 'my-http-probe', 'pod-delete-fault').`;
+
+export const descComponentHubReference = `Optional ChaosHub reference for hub-imported components. Omit for project-scoped components.`;
