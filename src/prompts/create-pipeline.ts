@@ -63,9 +63,32 @@ Steps:
    Key: uses \`connectorRef\`. Does NOT have \`registryRef\`.
 
 6. Generate the pipeline YAML conforming to the schema, using the correct template from step 5
-7. Present the YAML for review before creating
+7. **Choose storage mode** — ask the user where to store the pipeline:
+   - **Inline (default)**: Stored in Harness. Simplest setup, no Git required. Just call harness_create with resource_type="pipeline" and the YAML body.
+   - **Remote (External Git)**: Stored in GitHub/GitLab/Bitbucket. Pass \`params: { store_type: "REMOTE", connector_ref: "<git_connector>", repo_name: "<repo>", branch: "main", file_path: ".harness/<pipeline_id>.yaml", commit_msg: "Add pipeline via MCP" }\`
+   - **Remote (Harness Code)**: Stored in a Harness Code repo. Pass \`params: { store_type: "REMOTE", is_harness_code_repo: true, repo_name: "<repo>", branch: "main", file_path: ".harness/<pipeline_id>.yaml", commit_msg: "Add pipeline via MCP" }\`
+8. Present the YAML for review before creating
 
-Do NOT create the pipeline until I confirm — just show me the YAML first.`,
+Do NOT create the pipeline until I confirm — just show me the YAML first.
+
+After the pipeline is created, if it contains \`<+input>\` runtime placeholders:
+9. **Suggest creating input sets** to save common configurations for future runs:
+   - Call harness_get with resource_type="runtime_input_template" and resource_id=<pipeline_id> to discover all \`<+input>\` placeholders
+   - Propose input sets for common scenarios (e.g., "dev-defaults", "prod-defaults") that pre-fill values
+   - Create using harness_create with resource_type="input_set", pipeline_id=<pipeline_id>, and a YAML body like:
+     \`\`\`yaml
+     inputSet:
+       name: Dev Defaults
+       identifier: dev_defaults
+       pipeline:
+         identifier: <pipeline_id>
+         variables:
+           - name: env
+             type: String
+             value: dev
+     \`\`\`
+   - This lets future runs use \`input_set_ids: ["dev_defaults"]\` instead of manual input each time
+   - This step is optional — only create if the user wants reusable run configurations`,
         },
       }],
     }),

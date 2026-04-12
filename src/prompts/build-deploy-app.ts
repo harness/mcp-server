@@ -111,7 +111,11 @@ Present the full pipeline YAML for review. Do NOT create it yet.
 
 ### Step 7 — Create & execute CI pipeline (with auto-retry)
 - After user confirms the YAML, create it using harness_create with resource_type="pipeline"
-- Execute it using harness_execute with resource_type="pipeline"
+- **Discover runtime inputs**: Call harness_get with resource_type="runtime_input_template" and resource_id=<pipeline_id> to see which \`<+input>\` placeholders need values
+- **Execute with shorthands**: Call harness_execute with resource_type="pipeline", action="run", resource_id=<pipeline_id>. For CI pipelines, pass the Git branch/tag directly as shorthand inputs:
+  - \`inputs: { branch: "main" }\` — auto-expands to the full codebase build structure
+  - Other shorthands: \`tag\`, \`pr_number\`, \`commit_sha\` (see harness_describe for details)
+  - For remaining \`<+input>\` values, pass them as flat key-value pairs in \`inputs\`
 - Monitor progress using harness_status — poll until the execution completes or fails
 
 **CI FAILURE RETRY LOOP (up to 5 attempts):**
@@ -171,7 +175,8 @@ Present the full pipeline YAML for review. Do NOT create it yet.
 
 ### Step 11 — Create & execute CD pipeline (with auto-retry)
 - After user confirms, create the CD pipeline using harness_create with resource_type="pipeline"
-- Execute it using harness_execute with resource_type="pipeline"
+- **Discover runtime inputs**: Call harness_get with resource_type="runtime_input_template" and resource_id=<pipeline_id> to see which \`<+input>\` placeholders need values
+- **Execute**: Call harness_execute with resource_type="pipeline", action="run", resource_id=<pipeline_id>, passing any required runtime inputs as flat key-value \`inputs\`
 - Monitor with harness_status — poll until the execution completes or fails
 
 **CD FAILURE RETRY LOOP (up to 3 attempts):**
@@ -208,6 +213,25 @@ If still failing after 3 attempts:
   - CD: execution status, deployment details, namespace
   - Links: Harness UI links to both pipelines, service, and environment
   - App URL: if determinable from the K8s service (LoadBalancer IP/hostname)
+
+### Step 13 — Optional: Create input sets for reusability
+If the pipelines have \`<+input>\` runtime placeholders, offer to create saved input sets so future runs don't require manual input:
+- Call harness_get with resource_type="runtime_input_template" and resource_id=<pipeline_id> for each pipeline to identify all placeholders
+- Suggest creating input sets (e.g., "dev-inputs", "prod-inputs") that pre-fill common values
+- Create using harness_create with resource_type="input_set", pipeline_id=<pipeline_id>, and a YAML body:
+  \`\`\`yaml
+  inputSet:
+    name: Dev Defaults
+    identifier: dev_defaults
+    pipeline:
+      identifier: <pipeline_id>
+      variables:
+        - name: env
+          type: String
+          value: dev
+  \`\`\`
+- Future runs can use: harness_execute with input_set_ids=["dev_defaults"] instead of passing inputs manually
+- This is optional — only create if the user wants reusable configurations
 
 ---
 
