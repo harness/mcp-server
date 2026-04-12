@@ -16,6 +16,34 @@ const ARTIFACT_SECURITY_LIST_FIELDS = [
   "slsa_verification", "signing_status", "updated", "created",
 ];
 
+/**
+ * Custom extractor for artifact_security list responses.
+ * Wraps scsListExtract and injects a `_next_step` hint on each artifact that
+ * has policy violations, guiding the LLM to call scs_bom_violation with the
+ * correct enforcement_id. Follows the same pattern as runtimeInputExtract._hint.
+ */
+const artifactSecurityListExtract = (raw: unknown): unknown => {
+  const cleaned = scsListExtract(ARTIFACT_SECURITY_LIST_FIELDS)(raw);
+  if (!Array.isArray(cleaned)) return cleaned;
+  return cleaned.map(item => {
+    if (item && typeof item === "object" && !Array.isArray(item)) {
+      const rec = item as Record<string, unknown>;
+      const pe = rec.policy_enforcement as Record<string, unknown> | undefined;
+      if (pe?.id) {
+        const total = (Number(pe.allow_list_violation_count) || 0)
+                    + (Number(pe.deny_list_violation_count) || 0);
+        if (total > 0) {
+          rec._next_step = `⚠️ MANDATORY: This artifact has ${total} policy violations but the counts above are SUMMARY ONLY — `
+                + `they do NOT include component names, license types, or deny-list vs allow-list breakdown. `
+                + `You MUST call harness_list(resource_type='scs_bom_violation', enforcement_id='${pe.id}') `
+                + `to get the actual violation details. Do NOT present violation data to the user without this call.`;
+        }
+      }
+    }
+    return item;
+  });
+};
+
 const ARTIFACT_COMPONENT_LIST_FIELDS = [
   "purl", "packageUrl", "package_name", "name", "package_version", "version",
   "package_license", "license", "dependency_type",
@@ -173,7 +201,7 @@ export const scsToolset: ToolsetDefinition = {
             ...(input.search_term ? { search_term: input.search_term } : {}),
           }),
           defaultQueryParams: { limit: "10" },
-          responseExtractor: scsListExtract(ARTIFACT_SECURITY_LIST_FIELDS),
+          responseExtractor: artifactSecurityListExtract,
           description: "List artifacts from an artifact source with pagination",
         },
         get: {
@@ -239,6 +267,49 @@ export const scsToolset: ToolsetDefinition = {
           defaultQueryParams: { limit: "10" },
           responseExtractor: scsListExtract(ARTIFACT_COMPONENT_LIST_FIELDS),
           description: "List components (dependencies) in an artifact",
+        },
+      },
+    },
+
+    // ── Cross-Artifact Component Search ────────────────────────────────
+    {
+      resourceType: "scs_component_search",
+      displayName: "Cross-Artifact Component Search",
+      description: "Search for a component by name across ALL artifacts (images and repos) in the project. "
+        + "Returns matching components with their parent artifact info (artifactId, artifactName). "
+        + "Use this when the user asks 'which repos/artifacts contain dependency X' or 'find lodash across all artifacts'. "
+        + "This is a single-call alternative to iterating over every artifact and calling scs_artifact_component on each one. "
+        + "IMPORTANT: search_term is required.",
+      diagnosticHint: "If you get empty results: the component may not exist in any scanned artifact. "
+        + "Verify the component name is spelled correctly. Search is case-insensitive prefix match.",
+      searchAliases: ["cross-artifact search", "find dependency", "which repos use", "component across artifacts", "dependency search"],
+      relatedResources: [
+        { resourceType: "scs_artifact_component", relationship: "sibling", description: "List all components within a specific artifact (requires artifact_id)" },
+        { resourceType: "scs_component_enrichment", relationship: "child", description: "OSS risk / EOL status for a found component (pass purl from results)" },
+        { resourceType: "scs_component_vulnerability", relationship: "child", description: "CVE details for a found component (pass purl from results)" },
+      ],
+      toolset: "scs",
+      scope: "project",
+      identifierFields: [],
+      listFilterFields: [
+        { name: "search_term", description: "Component name to search for (case-insensitive prefix match)", required: true },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${SCS}/v1/orgs/{org}/projects/{project}/components/search`,
+          pathParams: { org_id: "org", project_id: "project" },
+          queryParams: {
+            page: "page",
+            size: "limit",
+            order: "order",
+            search_term: "search_term",
+          },
+          defaultQueryParams: { limit: "20" },
+          responseExtractor: scsListExtract([
+            "name", "version", "purl", "packageManager", "license", "artifactId", "artifactName",
+          ]),
+          description: "Search components across all artifacts in the project",
         },
       },
     },
@@ -541,9 +612,11 @@ export const scsToolset: ToolsetDefinition = {
       displayName: "Remediation Pull Request",
       description: "Create and list remediation pull requests that upgrade vulnerable/outdated components. "
         + "WRITE OPERATION: create will open a real PR in the source repository. "
-        + "Requires artifact_id. For create, also requires component purl and target_version. "
+        + "Requires artifact_id. For create, also requires component purl and target_version in the body. "
         + "Use scs_component_remediation first to review the upgrade suggestion before creating a PR. "
-        + "Closing or merging PRs is done in the source repository (or generic pull-request tools), not via this SCS resource.",
+        + "Closing or merging PRs is done in the source repository (or generic pull-request tools), not via this SCS resource. "
+        + "USAGE: harness_create(resource_type='scs_remediation_pr', params={artifact_id: '<id>'}, body={purl: '<purl>', target_version: '<ver>'}). "
+        + "Do NOT put purl/target_version in params — they must be in body.",
       diagnosticHint: "If you get a 404: verify artifact_id is correct. Use harness_get(resource_type='scs_component_remediation', artifact_id='...', purl='...') to verify the component exists. "
         + "For create: ensure purl and target_version are provided.",
       searchAliases: ["remediation pr", "fix pr", "upgrade pr", "pull request", "create pr", "remediation pull request"],
@@ -574,10 +647,13 @@ export const scsToolset: ToolsetDefinition = {
           method: "POST",
           path: `${SCS}/v1/orgs/{org}/projects/{project}/artifacts/{artifact}/component/remediation/create-pull-request`,
           pathParams: { org_id: "org", project_id: "project", artifact_id: "artifact" },
-          bodyBuilder: (input) => ({
-            ...(input.purl ? { purl: input.purl } : {}),
-            ...(input.target_version ? { target_version: input.target_version } : {}),
-          }),
+          bodyBuilder: (input) => {
+            const body = (input.body && typeof input.body === "object" ? input.body : {}) as Record<string, unknown>;
+            return {
+              ...(body.purl || input.purl ? { purl: (body.purl ?? input.purl) as string } : {}),
+              ...(body.target_version || input.target_version ? { target_version: (body.target_version ?? input.target_version) as string } : {}),
+            };
+          },
           responseExtractor: scsCleanExtract,
           description: "Create a remediation PR to upgrade a vulnerable component",
           bodySchema: {

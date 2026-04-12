@@ -420,7 +420,7 @@ export class Registry {
     }
 
     // Make request — resolve base URL and auth from product backend
-    const product = def.product ?? "harness";
+    const product = def.product ?? (def.toolset === "scs" ? "scs" : "harness");
     const baseUrl = resolveProductBaseUrl(this.config, product);
     const productHeaders: Record<string, string> = { ...spec.headers };
     if (product === "fme") {

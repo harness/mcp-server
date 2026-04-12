@@ -54,8 +54,8 @@ export interface RequestOptions {
   timeoutMs?: number;
   /** Return raw ArrayBuffer instead of parsing JSON. Used for binary endpoints (ZIP downloads). */
   responseType?: "json" | "buffer";
-  /** Product backend — when "fme", skips Harness-specific auth/headers/params. */
-  product?: "harness" | "fme";
+  /** Product backend — when "fme", skips Harness-specific auth/headers/params. "scs" routes to HARNESS_SCS_BASE_URL if set. */
+  product?: "harness" | "fme" | "scs";
   /** When true, omit the automatic `accountIdentifier` query param.
    *  Some APIs (e.g. SEI) use only the `Harness-Account` header for account scoping. */
   headerBasedScoping?: boolean;

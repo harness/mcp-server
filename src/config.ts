@@ -46,6 +46,7 @@ const RawConfigSchema = z.object({
   HARNESS_SKIP_ELICITATION: booleanFromEnv.default(false),
   HARNESS_ALLOW_HTTP: booleanFromEnv.default(false),
   HARNESS_FME_BASE_URL: z.string().url().default("https://api.split.io"),
+  HARNESS_SCS_BASE_URL: z.string().optional(),
 });
 
 export const ConfigSchema = RawConfigSchema.transform((data) => {
@@ -89,8 +90,9 @@ const FME_BASE_URL = "https://api.split.io";
  * - "harness" → undefined (uses the default client base URL)
  * - "fme"     → https://api.split.io
  */
-export function resolveProductBaseUrl(_config: Config, product: "harness" | "fme"): string | undefined {
+export function resolveProductBaseUrl(_config: Config, product: "harness" | "fme" | "scs"): string | undefined {
   if (product === "fme") return FME_BASE_URL;
+  if (product === "scs" && _config.HARNESS_SCS_BASE_URL) return _config.HARNESS_SCS_BASE_URL;
   return undefined;
 }
 
