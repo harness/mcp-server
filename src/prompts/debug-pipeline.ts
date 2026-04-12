@@ -36,6 +36,10 @@ Then analyze the diagnostic payload:
 - **failure section**: failed stage, step, error message, and delegate
 - **child_pipeline section**: if present, the failure is in a chained pipeline — focus on the child's failure details
 - **failed_step_logs**: actual log output from the failed steps — look for error patterns, stack traces, and exit codes
+- **runtime input issues**: if the error mentions unresolved \`<+input>\` expressions or missing variables, check:
+  - Call harness_get with resource_type="runtime_input_template" and resource_id=<pipeline_id> to see which inputs the pipeline expects
+  - Call harness_list with resource_type="input_set", pipeline_id=<pipeline_id> to see available input sets that could provide the missing values
+  - Suggest the user either pass the missing values as \`inputs\` or use \`input_set_ids\` referencing a saved input set
 
 Provide actionable recommendations based on the combined evidence.`,
           },

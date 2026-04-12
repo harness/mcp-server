@@ -807,6 +807,56 @@ Harness pipelines can be stored in three ways:
 }
 ```
 
+**List input sets for a pipeline:**
+
+```json
+{
+  "resource_type": "input_set",
+  "pipeline_id": "my-pipeline"
+}
+```
+
+**Get a specific input set:**
+
+```json
+{
+  "resource_type": "input_set",
+  "resource_id": "prod-inputs",
+  "pipeline_id": "my-pipeline"
+}
+```
+
+**Create an input set:**
+
+```json
+{
+  "resource_type": "input_set",
+  "pipeline_id": "my-pipeline",
+  "body": "inputSet:\n  name: Production Inputs\n  identifier: prod_inputs\n  pipeline:\n    identifier: my-pipeline\n    variables:\n      - name: env\n        type: String\n        value: production"
+}
+```
+
+**Update an input set:**
+
+```json
+{
+  "resource_type": "input_set",
+  "resource_id": "prod_inputs",
+  "pipeline_id": "my-pipeline",
+  "body": "inputSet:\n  name: Production Inputs\n  identifier: prod_inputs\n  pipeline:\n    identifier: my-pipeline\n    variables:\n      - name: env\n        type: String\n        value: production\n      - name: replicas\n        type: String\n        value: \"3\""
+}
+```
+
+**Delete an input set:**
+
+```json
+{
+  "resource_type": "input_set",
+  "resource_id": "prod_inputs",
+  "pipeline_id": "my-pipeline"
+}
+```
+
 ## Resource Types
 
 139 resource types organized across 30 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
@@ -826,7 +876,7 @@ Harness pipelines can be stored in three ways:
 | `execution` | x | x | | | | `interrupt` |
 | `trigger` | x | x | x | x | x | |
 | `pipeline_summary` | | x | | | | |
-| `input_set` | x | x | | | | |
+| `input_set` | x | x | x | x | x | |
 | `runtime_input_template` | | x | | | | |
 | `approval_instance` | x | | | | | `approve`, `reject` |
 

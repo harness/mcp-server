@@ -23,18 +23,36 @@ export function registerMigrateToTemplatePrompt(server: McpServer): void {
 Steps:
 1. **Get pipeline YAML**: Call harness_get with resource_type="pipeline", resource_id="${pipelineId}"${projectFilter} to fetch the full pipeline definition
 2. **List existing templates**: Call harness_list with resource_type="template"${projectFilter} to see what templates already exist (avoid duplicating)
-3. **Identify reusable patterns**: Analyze the pipeline for:
+3. **List existing input sets**: Call harness_list with resource_type="input_set", pipeline_id="${pipelineId}"${projectFilter} to see if input sets already exist for this pipeline
+4. **Identify reusable patterns**: Analyze the pipeline for:
    - Stages that could become **Stage templates** (e.g., deployment stages, approval stages)
    - Steps or step groups that could become **Step templates** (e.g., common build steps, deploy steps, notification steps)
    - Patterns repeated across stages that indicate template opportunity
-4. **Generate template YAML**: For each identified template:
+   - Hardcoded values that vary per environment or run (these become \`<+input>\` placeholders)
+5. **Generate template YAML**: For each identified template:
    - Extract the stage/step definition
-   - Parameterize hardcoded values as runtime inputs (<+input>)
+   - Parameterize hardcoded values as runtime inputs (\`<+input>\`)
    - Add template metadata (name, identifier, versionLabel, type)
-5. **Generate updated pipeline YAML**: Rewrite the pipeline to reference the new templates using templateRef and templateInputs
-6. **Present for review**: Show all template YAMLs and the updated pipeline YAML
+6. **Generate updated pipeline YAML**: Rewrite the pipeline to reference the new templates using templateRef and templateInputs
+7. **Generate input sets for common configurations**: For each set of \`<+input>\` placeholders introduced:
+   - Identify which values were previously hardcoded and extract them into named input sets
+   - Create input sets for common scenarios (e.g., "dev-defaults", "prod-defaults"):
+     \`\`\`yaml
+     inputSet:
+       name: Dev Defaults
+       identifier: dev_defaults
+       pipeline:
+         identifier: ${pipelineId}
+         variables:
+           - name: env
+             type: String
+             value: dev
+     \`\`\`
+   - This preserves the original behavior: running with \`input_set_ids: ["dev_defaults"]\` produces the same result as the pre-template pipeline
+   - Multiple input sets can be combined: \`input_set_ids: ["base_defaults", "prod_overrides"]\` (later sets override earlier ones by variable name)
+8. **Present for review**: Show all template YAMLs, the updated pipeline YAML, and proposed input sets
 
-Do NOT create templates or update the pipeline until I confirm the plan.`,
+Do NOT create templates, update the pipeline, or create input sets until I confirm the plan.`,
           },
         }],
       };
