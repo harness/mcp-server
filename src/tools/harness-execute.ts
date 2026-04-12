@@ -10,6 +10,7 @@ import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asRecord, asString } from "../utils/type-guards.js";
 import { isFlatKeyValueInputs, isResolvableInputs, flattenInputs, resolveRuntimeInputs, type ResolutionResult } from "../utils/runtime-input-resolver.js";
 import { applyInputExpansions } from "../utils/input-expander.js";
+import { materializeInputSetsToRuntimeYaml } from "../utils/materialize-input-sets.js";
 
 const log = createLogger("execute");
 
@@ -74,9 +75,50 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           input[primaryField] = resourceId;
         }
 
-        // Pass input_set_ids through to the dispatch input
+        // Pass input_set_ids as string[] so HarnessClient emits repeated `inputSetIdentifiers=` query keys
+        // (grpc-gateway array style). Comma-joined single param is ignored by pipeline execute.
         if (args.input_set_ids && args.input_set_ids.length > 0) {
-          input.input_set_ids = args.input_set_ids.join(",");
+          input.input_set_ids = [...args.input_set_ids];
+        }
+
+        // When only input_set_ids are provided, fetch each input set and build runtime YAML.
+        // Harness execute often does not apply `inputSetIdentifiers` from the query string alone;
+        // sending the merged `pipeline` fragment as the YAML body matches the working UI path.
+        if (
+          resourceType === "pipeline" &&
+          args.action === "run" &&
+          args.input_set_ids &&
+          args.input_set_ids.length > 0 &&
+          args.inputs === undefined
+        ) {
+          const pipelineId = asString(input.pipeline_id) ?? resourceId;
+          const orgId = asString(input.org_id) || registry.orgId;
+          const projectId = asString(input.project_id) || registry.projectId;
+          if (!pipelineId) {
+            return errorResult(
+              "pipeline_id is required when using input_set_ids without inputs. Provide resource_id or params.pipeline_id.",
+            );
+          }
+          if (!projectId) {
+            return errorResult(
+              "project_id is required when using input_set_ids. Pass project_id or set HARNESS_PROJECT.",
+            );
+          }
+          try {
+            const yaml = await materializeInputSetsToRuntimeYaml(client, {
+              pipelineId,
+              orgId,
+              projectId,
+              inputSetIds: args.input_set_ids,
+            });
+            if (yaml) {
+              input.inputs = yaml;
+              delete input.input_set_ids;
+            }
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return errorResult(`Could not load input set(s) for execution: ${msg}`);
+          }
         }
 
         // Auto-resolve flat key-value runtime inputs for pipeline run

@@ -217,7 +217,9 @@ export const pipelinesToolset: ToolsetDefinition = {
           headers: { "Content-Type": "application/yaml" },
           bodyBuilder: (input) => {
             const inputs = input.inputs;
-            // No runtime inputs — send empty YAML
+            // No inline runtime inputs: send empty YAML so Harness applies
+            // `inputSetIdentifiers` from the query string. HarnessClient must pass `""`
+            // as the fetch body (not omit it) — see serializeRequestBody / hasExplicitBody.
             if (!inputs) return "";
             // Already a YAML string (pre-resolved by execute tool handler or passed directly)
             if (typeof inputs === "string") return inputs;

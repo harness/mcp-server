@@ -40,7 +40,8 @@ export interface HarnessV1ListResponse<T> {
 export interface RequestOptions {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   path: string;
-  params?: Record<string, string | number | boolean | undefined>;
+  /** Scalar or string[] (repeated query keys, e.g. `inputSetIdentifiers=a&inputSetIdentifiers=b`). */
+  params?: Record<string, string | number | boolean | string[] | undefined>;
   body?: unknown;
   headers?: Record<string, string>;
   /** Override base URL for this request (e.g. FME/Split.io uses https://api.split.io) */
