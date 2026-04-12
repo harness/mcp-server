@@ -515,6 +515,31 @@ describe("harness_execute", () => {
     expect(mockRequest).toHaveBeenCalled();
   });
 
+  it("materializes input_set_ids by GETting each input set then POSTing merged pipeline YAML", async () => {
+    const inputSetYaml = `inputSet:\n  pipeline:\n    identifier: mat_pipe\n    variables:\n      - name: x\n        type: String\n        value: "1"\n`;
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetYaml } })
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { planExecutionId: "exec-mat" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "mat_pipe",
+      input_set_ids: ["saved_set"],
+    });
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledTimes(2);
+    const getCall = mockRequest.mock.calls[0]![0] as { method?: string; path?: string };
+    expect(getCall.method).toBe("GET");
+    expect(getCall.path).toContain("/pipeline/api/inputSets/");
+    expect(getCall.path).toContain("saved_set");
+
+    const runCall = mockRequest.mock.calls[1]![0] as { body?: string };
+    expect(typeof runCall.body).toBe("string");
+    expect(runCall.body).toContain("mat_pipe");
+    expect(runCall.body).toContain("x");
+  });
+
   it("falls back to fresh run when retry returns 405", async () => {
     // First call (retry) throws 405, second call (run) succeeds
     mockRequest

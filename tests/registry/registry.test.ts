@@ -388,7 +388,7 @@ describe("Registry", () => {
           pipeline_id: "x",
           body: {},
         }),
-      ).rejects.toThrow(/body must include either pipeline/);
+      ).rejects.toThrow(/body must be a YAML string/);
     });
   });
 

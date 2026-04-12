@@ -290,8 +290,8 @@ export class Registry {
       }
     }
 
-    // Build query params
-    const params: Record<string, string | number | boolean | undefined> = {};
+    // Build query params (values may be string[] for repeated query keys — see HarnessClient.buildUrl)
+    const params: Record<string, string | number | boolean | string[] | undefined> = {};
 
     // Add scope params (allow per-resource override of query param names)
     // When scopeOptional is true, only add org/project if explicitly provided in input.
@@ -360,7 +360,14 @@ export class Registry {
         if (spec.pageOneIndexed && inputKey === "page" && typeof value === "number") {
           value = value + 1;
         }
-        if (value !== undefined && value !== "") {
+        if (Array.isArray(value)) {
+          const parts = value.filter(
+            (v): v is string | number | boolean => v !== undefined && v !== "" && v !== null,
+          );
+          if (parts.length > 0) {
+            params[queryKey] = parts.map(String);
+          }
+        } else if (value !== undefined && value !== "") {
           params[queryKey] = value as string | number | boolean;
         }
       }

@@ -21,7 +21,7 @@ export function registerDeleteTool(server: McpServer, registry: Registry, client
         url: z.string().describe("A Harness UI URL — org, project, resource type, and ID are extracted automatically").optional(),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
-        params: z.record(z.string(), z.unknown()).describe("Additional identifiers for nested resources (e.g. pipeline_id for triggers, environment_id for infrastructure).").optional(),
+        params: z.record(z.string(), z.unknown()).describe("Additional identifiers for nested resources (e.g. pipeline_id for triggers/input sets, environment_id for infrastructure).").optional(),
       },
       annotations: {
         title: "Delete Harness Resource",
@@ -51,7 +51,10 @@ export function registerDeleteTool(server: McpServer, registry: Registry, client
         const { params, ...rest } = args;
         const input = applyUrlDefaults(rest as Record<string, unknown>, args.url);
         if (params) Object.assign(input, params);
-        const primaryField = def.identifierFields[0];
+        const identFields = def.identifierFields;
+        const primaryField = identFields.length > 1
+          ? identFields[identFields.length - 1]!
+          : identFields[0];
         if (primaryField && args.resource_id) {
           input[primaryField] = args.resource_id;
         }

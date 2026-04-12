@@ -7,6 +7,22 @@ import { createLogger } from "../utils/logger.js";
 const log = createLogger("harness-client");
 
 const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
+
+/**
+ * Whether the caller explicitly set a body (including empty string).
+ * `""` must be preserved: `if (options.body)` treats it as absent, which drops the
+ * YAML body on pipeline execute — Harness then ignores `inputSetIdentifiers` and
+ * fails with "Value not provided for required variable".
+ */
+function hasExplicitBody(body: unknown): boolean {
+  return body !== undefined && body !== null;
+}
+
+function serializeRequestBody(body: unknown): string | undefined {
+  if (!hasExplicitBody(body)) return undefined;
+  return typeof body === "string" ? body : JSON.stringify(body);
+}
+
 const BASE_BACKOFF_MS = 1000;
 
 /** Strip HTML tags, script/style contents, and collapse whitespace. */
@@ -146,7 +162,7 @@ export class HarnessClient {
       headers["x-api-key"] = this.token;
     }
 
-    if (options.body) {
+    if (hasExplicitBody(options.body)) {
       if (typeof options.body === "string") {
         headers["Content-Type"] = headers["Content-Type"] ?? "application/yaml";
       } else {
@@ -177,12 +193,10 @@ export class HarnessClient {
           ? AbortSignal.any([options.signal, timeoutController.signal])
           : timeoutController.signal;
 
-        const bodyString = options.body
-          ? (typeof options.body === "string" ? options.body : JSON.stringify(options.body))
-          : undefined;
+        const bodyString = serializeRequestBody(options.body);
 
         log.debug(`${method} ${url}`);
-        if (bodyString) {
+        if (bodyString !== undefined) {
           log.debug("Request body", { body: bodyString.slice(0, 1000) });
         }
 
@@ -304,7 +318,7 @@ export class HarnessClient {
       headers["x-api-key"] = this.token;
     }
 
-    if (options.body) {
+    if (hasExplicitBody(options.body)) {
       if (typeof options.body === "string") {
         headers["Content-Type"] = headers["Content-Type"] ?? "application/yaml";
       } else {
@@ -333,9 +347,7 @@ export class HarnessClient {
           ? AbortSignal.any([options.signal, timeoutController.signal])
           : timeoutController.signal;
 
-        const bodyString = options.body
-          ? (typeof options.body === "string" ? options.body : JSON.stringify(options.body))
-          : undefined;
+        const bodyString = serializeRequestBody(options.body);
 
         log.debug(`STREAM ${method} ${url}`);
 
@@ -407,7 +419,14 @@ export class HarnessClient {
 
     if (options.params) {
       for (const [key, value] of Object.entries(options.params)) {
-        if (value !== undefined && value !== "") {
+        if (value === undefined || value === "") continue;
+        if (Array.isArray(value)) {
+          for (const item of value) {
+            if (item !== undefined && item !== "") {
+              params.append(key, String(item));
+            }
+          }
+        } else {
           params.set(key, String(value));
         }
       }

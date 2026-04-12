@@ -120,6 +120,20 @@ describe("HarnessClient", () => {
       expect(url.searchParams.has("b")).toBe(false);
       expect(url.searchParams.has("c")).toBe(false);
     });
+
+    it("serializes string[] params as repeated query keys (grpc-gateway arrays)", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({
+        path: "/pipeline/api/pipeline/execute/p1",
+        params: { inputSetIdentifiers: ["set-a", "set-b"], orgIdentifier: "o" },
+      });
+
+      const url = new URL(fetchSpy.mock.calls[0][0] as string);
+      expect(url.searchParams.getAll("inputSetIdentifiers")).toEqual(["set-a", "set-b"]);
+      expect(url.searchParams.get("orgIdentifier")).toBe("o");
+    });
   });
 
   describe("request — headers", () => {
@@ -488,6 +502,30 @@ describe("HarnessClient", () => {
 
       const body = fetchSpy.mock.calls[0][1]?.body as string;
       expect(body).toBe("raw yaml content");
+    });
+
+    it("sends empty string body (pipeline execute uses YAML + inputSetIdentifiers query)", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({ status: "SUCCESS" }), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({
+        method: "POST",
+        path: "/pipeline/api/pipeline/execute/MyPipeline",
+        headers: { "Content-Type": "application/yaml" },
+        body: "",
+        params: {
+          orgIdentifier: "default",
+          projectIdentifier: "PM_Signoff",
+          inputSetIdentifiers: "mcp_default_runtime_inputs",
+        },
+      });
+
+      const init = fetchSpy.mock.calls[0][1] as RequestInit;
+      expect(init.body).toBe("");
+      const headers = init.headers as Record<string, string>;
+      expect(headers["Content-Type"]).toBe("application/yaml");
+      const url = new URL(fetchSpy.mock.calls[0][0] as string);
+      expect(url.searchParams.get("inputSetIdentifiers")).toBe("mcp_default_runtime_inputs");
     });
   });
 });
