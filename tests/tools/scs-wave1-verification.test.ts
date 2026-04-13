@@ -92,6 +92,8 @@ describe("P2-6: 404 errors include diagnosticHint for SCS resources", () => {
   });
 
   it("harness_list 404 on artifact_security includes source discovery hint", async () => {
+    // Two rejections: ELK attempt + MongoDB fallback (elkFallback: true)
+    mockRequest.mockRejectedValueOnce(new HarnessApiError("Not found", 404));
     mockRequest.mockRejectedValueOnce(new HarnessApiError("Not found", 404));
     const result = await server.call("harness_list", {
       resource_type: "artifact_security",
@@ -106,6 +108,7 @@ describe("P2-6: 404 errors include diagnosticHint for SCS resources", () => {
 
   it("harness_list 404 on scs_artifact_component includes artifact discovery hint", async () => {
     mockRequest.mockRejectedValueOnce(new HarnessApiError("Not found", 404));
+    mockRequest.mockRejectedValueOnce(new HarnessApiError("Not found", 404));
     const result = await server.call("harness_list", {
       resource_type: "scs_artifact_component",
       params: { artifact_id: "nonexistent-artifact" },
@@ -117,6 +120,7 @@ describe("P2-6: 404 errors include diagnosticHint for SCS resources", () => {
   });
 
   it("harness_list 404 on scs_compliance_result includes artifact discovery hint", async () => {
+    mockRequest.mockRejectedValueOnce(new HarnessApiError("Not found", 404));
     mockRequest.mockRejectedValueOnce(new HarnessApiError("Not found", 404));
     const result = await server.call("harness_list", {
       resource_type: "scs_compliance_result",
@@ -178,6 +182,7 @@ describe("P2-6: 404 errors include diagnosticHint for SCS resources", () => {
   });
 
   it("harness_list 404 on code_repo_security includes repo discovery hint", async () => {
+    mockRequest.mockRejectedValueOnce(new HarnessApiError("Not found", 404));
     mockRequest.mockRejectedValueOnce(new HarnessApiError("Not found", 404));
     const result = await server.call("harness_list", {
       resource_type: "code_repo_security",

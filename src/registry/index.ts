@@ -1,5 +1,6 @@
 import { type Config, resolveProductBaseUrl } from "../config.js";
 import type { HarnessClient } from "../client/harness-client.js";
+import { HarnessApiError } from "../utils/errors.js";
 import type { ResourceDefinition, ToolsetDefinition, ToolsetName, OperationName, EndpointSpec, FilterFieldSpec } from "./types.js";
 import { createLogger } from "../utils/logger.js";
 import { buildDeepLink, appendStoreType } from "../utils/deep-links.js";
@@ -426,7 +427,8 @@ export class Registry {
     if (product === "fme") {
       productHeaders["Authorization"] = `Bearer ${this.config.HARNESS_API_KEY}`;
     }
-    const raw = await client.request({
+
+    const requestOpts = {
       method: spec.method,
       path,
       params,
@@ -437,10 +439,43 @@ export class Registry {
       ...(product !== "harness" ? { product } : {}),
       ...(spec.headerBasedScoping || def.headerBasedScoping ? { headerBasedScoping: true } : {}),
       signal,
-    });
+    };
+
+    // ELK→Mongo fallback: when elkFallback is enabled, try Elasticsearch first.
+    // On server-side failure (5xx / timeout), retry against MongoDB.
+    let raw: unknown;
+    let dataSource: "elasticsearch" | "mongodb" | undefined;
+    if (spec.elkFallback) {
+      try {
+        raw = await client.request({ ...requestOpts, params: { ...params, enforce_elasticsearch: "true" } });
+        dataSource = "elasticsearch";
+      } catch (elkErr: unknown) {
+        const isApiError = elkErr instanceof HarnessApiError;
+        // Fall back to MongoDB on any server error (5xx), timeout (408),
+        // or client error (4xx) — a 404 often means the ES index doesn't
+        // exist yet for this account, and a 400 may be ES-specific.
+        // Only auth failures (401/403) are re-thrown immediately.
+        const status = isApiError ? elkErr.statusCode : 0;
+        const isRetryable = status >= 400 && status !== 401 && status !== 403;
+        if (isRetryable) {
+          log.warn(`ELK query failed for ${def.resourceType} (${status}); falling back to MongoDB`);
+          raw = await client.request({ ...requestOpts, params: { ...params, enforce_elasticsearch: "false" } });
+          dataSource = "mongodb";
+        } else {
+          throw elkErr;
+        }
+      }
+    } else {
+      raw = await client.request(requestOpts);
+    }
 
     // Extract response
-    const result = spec.responseExtractor ? spec.responseExtractor(raw) : raw;
+    let result = spec.responseExtractor ? spec.responseExtractor(raw) : raw;
+
+    // Tag ELK/Mongo data source on the response when fallback is active
+    if (dataSource && result && typeof result === "object" && !Array.isArray(result)) {
+      (result as Record<string, unknown>)._data_source = dataSource;
+    }
 
     // Propagate storeType from the request query params into the result when
     // the API response didn't include one.  Create/update endpoints like

@@ -22,3 +22,20 @@ export function asString(value: unknown): string | undefined {
 export function asNumber(value: unknown): number | undefined {
   return typeof value === "number" ? value : undefined;
 }
+
+/**
+ * Coerce a value to a Record.  LLMs sometimes serialize nested objects as JSON
+ * strings (e.g. `params: '{"artifact_id":"..."}' `) instead of actual objects.
+ * This helper transparently parses JSON strings into records so downstream code
+ * can always treat them uniformly.
+ */
+export function coerceRecord(value: unknown): Record<string, unknown> | undefined {
+  if (isRecord(value)) return value;
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (isRecord(parsed)) return parsed;
+    } catch { /* not valid JSON — ignore */ }
+  }
+  return undefined;
+}

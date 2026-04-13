@@ -343,13 +343,17 @@ describe("P2-2: scsListExtract field selection", () => {
     expect(spec.responseExtractor).toBeDefined();
     // Verify field selection works by testing with a mock response
     const result = spec.responseExtractor!([
-      { id: "src1", name: "ECR", artifact_type: "CONTAINER", registry_url: "https://ecr.aws", extra_field: "dropped" },
+      { id: "src1", name: "ECR", artifact_type: { type: "CONTAINER", sub_type: "CONTAINER_IMAGE" }, registry_url: "https://ecr.aws", extra_field: "dropped" },
     ]) as Record<string, unknown>[];
-    expect(result).toHaveLength(1);
+    // Custom extractor appends a _summary object at the end
+    expect(result).toHaveLength(2);
     expect(result[0]).toHaveProperty("id");
     expect(result[0]).toHaveProperty("name");
     expect(result[0]).toHaveProperty("artifact_type");
     expect(result[0]).not.toHaveProperty("extra_field");
+    // Verify _summary has correct counts
+    const summary = (result[1] as Record<string, unknown>)._summary as Record<string, unknown>;
+    expect(summary).toEqual({ total: 1, by_type: { CONTAINER: 1 } });
   });
 
   it("artifact_security list preserves orchestration for ID capture", () => {
@@ -1065,7 +1069,8 @@ describe("P3-1: scs_bom_violation resource", () => {
         internalField: "dropped", imageName: "dropped",
       },
     ]) as Record<string, unknown>[];
-    expect(result).toHaveLength(1);
+    // bomViolationListExtract appends a _reminder metadata object
+    expect(result.length).toBeGreaterThanOrEqual(1);
     expect(result[0]).toHaveProperty("name");
     expect(result[0]).toHaveProperty("version");
     expect(result[0]).toHaveProperty("purl");
@@ -1074,6 +1079,11 @@ describe("P3-1: scs_bom_violation resource", () => {
     expect(result[0]).toHaveProperty("isExempted");
     expect(result[0]).not.toHaveProperty("internalField");
     expect(result[0]).not.toHaveProperty("imageName");
+    // Verify the appended metadata
+    const last = result[result.length - 1];
+    expect(last).toHaveProperty("_total");
+    expect(last).toHaveProperty("_violation_types_found");
+    expect(last).toHaveProperty("_reminder");
   });
 
   it("list extractor preserves exempted violations (isExempted=true)", () => {

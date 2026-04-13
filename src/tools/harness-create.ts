@@ -7,6 +7,7 @@ import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.
 import { logAudit } from "../utils/logger.js";
 import { confirmViaElicitation } from "../utils/elicitation.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
+import { coerceRecord } from "../utils/type-guards.js";
 
 export function registerCreateTool(server: McpServer, registry: Registry, client: HarnessClient): void {
   const creatableTypes = registry.getTypesForOperation("create") as [string, ...string[]];
@@ -38,7 +39,8 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
       try {
         const { params, ...rest } = args;
         const input = applyUrlDefaults(rest as Record<string, unknown>, args.url);
-        if (params) Object.assign(input, params);
+        const coercedParams = coerceRecord(params);
+        if (coercedParams) Object.assign(input, coercedParams);
 
         // Validate resource_type and operation before asking user to confirm
         const def = registry.getResource(args.resource_type);
