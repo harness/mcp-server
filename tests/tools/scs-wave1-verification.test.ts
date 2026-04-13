@@ -348,16 +348,20 @@ describe("P2-2: scsListExtract token reduction vs scsCleanExtract", () => {
 });
 
 describe("P2-3A: pagination cap reduces default item count", () => {
-  it("all SCS list operations default to limit=10", () => {
+  it("all SCS list operations default to limit=10 (search ops may use 20)", () => {
+    // scs_component_search uses limit=20 because search results are lightweight
+    // (name/version/purl tuples) and users benefit from more results.
+    const HIGHER_LIMIT_ALLOWED = new Set(["scs_component_search"]);
     const listOps = scsToolset.resources
       .filter(r => r.operations.list)
       .map(r => ({ type: r.resourceType, limit: r.operations.list!.defaultQueryParams?.limit }));
 
     for (const { type, limit } of listOps) {
-      expect(limit, `${type} should have defaultQueryParams.limit = "10"`).toBe("10");
+      const expected = HIGHER_LIMIT_ALLOWED.has(type) ? "20" : "10";
+      expect(limit, `${type} should have defaultQueryParams.limit = "${expected}"`).toBe(expected);
     }
 
-    console.log(`  P2-3A: ${listOps.length} SCS list operations all capped at limit=10`);
+    console.log(`  P2-3A: ${listOps.length} SCS list operations capped at limit=10 (${HIGHER_LIMIT_ALLOWED.size} exceptions at 20)`);
   });
 
   it("estimated token savings: 10 items vs 20 items (50% reduction)", () => {
