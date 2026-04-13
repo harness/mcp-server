@@ -35,7 +35,8 @@ export type ToolsetName =
   | "visualizations"
   | "governance"
   | "freeze"
-  | "overrides";
+  | "overrides"
+  | "ai-evals";
 
 export type ProductName = "harness" | "fme";
 

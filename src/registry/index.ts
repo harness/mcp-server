@@ -36,6 +36,7 @@ import { visualizationsToolset } from "./toolsets/visualizations.js";
 import { governanceToolset } from "./toolsets/governance.js";
 import { freezeToolset } from "./toolsets/freeze.js";
 import { overridesToolset } from "./toolsets/overrides.js";
+import { aiEvalsToolset } from "./toolsets/ai-evals.js";
 
 const log = createLogger("registry");
 
@@ -75,6 +76,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   governanceToolset,
   freezeToolset,
   overridesToolset,
+  aiEvalsToolset,
 ];
 
 /**
