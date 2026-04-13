@@ -1522,7 +1522,7 @@ When enabled, **all** write and delete operations proceed without user confirmat
 
 ## Complementary Skills
 
-The Harness MCP server pairs well with **[Harness Skills](https://github.com/thisrohangupta/harness-skills)** — a collection of ready-made Claude Code skills (slash commands) designed for common Harness workflows. Install them alongside this MCP server to get high-level automation like `/deploy`, `/rollback`, `/triage`, and more without writing custom prompts.
+The Harness MCP server pairs well with **[Harness Skills](https://github.com/harness/harness-skills)** — a collection of ready-made Claude Code skills (slash commands) designed for common Harness workflows. Install them alongside this MCP server to get high-level automation like `/deploy`, `/rollback`, `/triage`, and more without writing custom prompts.
 
 ## Troubleshooting & Common Pitfalls
 
