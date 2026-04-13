@@ -37,7 +37,7 @@ export type ToolsetName =
   | "freeze"
   | "overrides";
 
-export type ProductName = "harness" | "fme" | "scs";
+export type ProductName = "harness" | "fme";
 
 export type OperationName = "list" | "get" | "create" | "update" | "delete";
 

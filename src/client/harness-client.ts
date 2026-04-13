@@ -404,13 +404,6 @@ export class HarnessClient {
       path = path.slice("/gateway".length);
     }
 
-    // Strip /ssca-manager prefix when routing to a local SCS backend.
-    // The Harness gateway normally routes /ssca-manager/* to the ssca-manager
-    // service, but a local instance serves at /v1/... directly.
-    if (options.product === "scs" && options.baseUrl && path.startsWith("/ssca-manager")) {
-      path = path.slice("/ssca-manager".length);
-    }
-
     // Inject accountIdentifier into query params (used by most Harness APIs).
     // Some APIs (e.g. SEI) use only the Harness-Account header — skip when told.
     const params = new URLSearchParams();
