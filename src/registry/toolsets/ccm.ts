@@ -1,6 +1,6 @@
 import type { ToolsetDefinition } from "../types.js";
 import type { PathBuilderConfig } from "../types.js";
-import { ngExtract, pageExtract, passthrough, gqlExtract, ccmBreakdownExtract, ccmTimeseriesExtract, ccmSummaryExtract, ccmRecommendationsExtract } from "../extractors.js";
+import { ngExtract, passthrough, gqlExtract, ccmViewsExtract, ccmBreakdownExtract, ccmTimeseriesExtract, ccmSummaryExtract, ccmRecommendationsExtract } from "../extractors.js";
 
 // ---------------------------------------------------------------------------
 // GraphQL queries — ported from the official Go MCP server
@@ -224,10 +224,25 @@ function buildFilters(viewId: string, timeFilter: string): Record<string, unknow
 }
 
 function buildGroupBy(field?: string): Record<string, unknown>[] {
-  const groupByField = field && OUTPUT_FIELDS[field]
-    ? OUTPUT_FIELDS[field]
-    : OUTPUT_FIELDS["product"];
-  return [{ entityGroupBy: groupByField }];
+  if (!field) {
+    return [{ entityGroupBy: OUTPUT_FIELDS["product"] }];
+  }
+
+  // Check if it's a predefined field (region, product, awsServicecode, etc.)
+  if (OUTPUT_FIELDS[field]) {
+    return [{ entityGroupBy: OUTPUT_FIELDS[field] }];
+  }
+
+  // Not a predefined field — treat as a label key (e.g. "env", "team", "environment")
+  // Use LABEL_V2 identifier with the field name as the label key
+  return [{
+    entityGroupBy: {
+      fieldId: "labels.value",
+      fieldName: field,
+      identifier: "LABEL_V2",
+      identifierName: "Label V2",
+    }
+  }];
 }
 
 function buildAggregateFunction(): Record<string, string>[] {
@@ -285,7 +300,7 @@ export const ccmToolset: ToolsetDefinition = {
       scope: "account",
       identifierFields: ["perspective_id"],
       listFilterFields: [
-        { name: "search", description: "Filter perspectives by name" },
+        { name: "search_term", description: "Filter perspectives by name" },
         { name: "sort_type", description: "Sort field", enum: ["NAME", "LAST_EDIT", "COST", "CLUSTER_COST"] },
         { name: "sort_order", description: "Sort direction", enum: ["ASCENDING", "DESCENDING"] },
         { name: "cloud_filter", description: "Filter by cloud provider", enum: ["AWS", "GCP", "AZURE", "CLUSTER", "DEFAULT"] },
@@ -295,20 +310,20 @@ export const ccmToolset: ToolsetDefinition = {
           method: "GET",
           path: "/ccm/api/perspective/getAllPerspectives",
           queryParams: {
-            search: "searchKey",
+            search_term: "searchKey",
             sort_type: "sortType",
             sort_order: "sortOrder",
             cloud_filter: "cloudFilters",
             page: "pageNo",
             size: "pageSize",
           },
-          responseExtractor: pageExtract,
+          responseExtractor: ccmViewsExtract,
           description: "List all cost perspectives for the account",
         },
         get: {
           method: "GET",
-          path: "/ccm/api/perspective/{perspectiveId}",
-          pathParams: { perspective_id: "perspectiveId" },
+          path: "/ccm/api/perspective",
+          queryParams: { perspective_id: "perspectiveId" },
           responseExtractor: ngExtract,
           description: "Get cost perspective details by ID",
         },
@@ -366,12 +381,12 @@ export const ccmToolset: ToolsetDefinition = {
       description: `Drill-down cost breakdown by any dimension within a perspective. Answers "where is my money going?" Returns cost per entity (e.g. per AWS service, per region, per product).
 
 Required: perspective_id (get from cost_perspective list).
-Optional: group_by (${VALID_GROUP_BY_FIELDS.join(", ")}), time_filter (${VALID_TIME_FILTERS.join(", ")}), limit, offset.`,
+Optional: group_by (predefined: ${VALID_GROUP_BY_FIELDS.join(", ")}, OR any label key like "env", "team", "app"), time_filter (${VALID_TIME_FILTERS.join(", ")}), limit, offset.`,
       toolset: "ccm",
       scope: "account",
       identifierFields: ["perspective_id"],
       listFilterFields: [
-        { name: "group_by", description: "Group results by field", enum: [...VALID_GROUP_BY_FIELDS] },
+        { name: "group_by", description: "Group results by field. Use predefined fields (region, product, etc.) OR any label key name (env, team, app, environment, etc.)" },
         { name: "time_filter", description: "Time range filter", enum: [...VALID_TIME_FILTERS] },
         { name: "limit", description: "Result limit", type: "number" },
         { name: "offset", description: "Pagination offset", type: "number" },
@@ -414,13 +429,13 @@ Optional: group_by (${VALID_GROUP_BY_FIELDS.join(", ")}), time_filter (${VALID_T
       displayName: "Cost Time Series",
       description: `Cost over time for a perspective, grouped by a dimension. Answers "how has my spend changed?" Returns daily/monthly cost data points.
 
-Required: perspective_id, group_by (${VALID_GROUP_BY_FIELDS.join(", ")}).
+Required: perspective_id, group_by (predefined: ${VALID_GROUP_BY_FIELDS.join(", ")}, OR any label key).
 Optional: time_filter (${VALID_TIME_FILTERS.join(", ")}), time_resolution (DAY, MONTH, WEEK), limit.`,
       toolset: "ccm",
       scope: "account",
       identifierFields: ["perspective_id"],
       listFilterFields: [
-        { name: "group_by", description: "Group results by field", enum: [...VALID_GROUP_BY_FIELDS] },
+        { name: "group_by", description: "Group results by field. Use predefined fields (region, product, etc.) OR any label key name (env, team, app, etc.)" },
         { name: "time_filter", description: "Time range filter", enum: [...VALID_TIME_FILTERS] },
         { name: "time_resolution", description: "Time resolution for aggregation", enum: ["DAY", "MONTH", "WEEK"] },
         { name: "limit", description: "Result limit", type: "number" },
@@ -853,37 +868,146 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
     },
 
     // ------------------------------------------------------------------
-    // 9. cost_filter_value — GraphQL perspective filter values
+    // 9. cost_filter_value — GraphQL perspective filter values (multi-purpose)
+    //    Used for: label keys, label values, field values (region, account, etc.)
     // ------------------------------------------------------------------
     {
       resourceType: "cost_filter_value",
       displayName: "Cost Filter Value",
-      description: "Available filter values for perspectives (e.g. regions, accounts, services). Supports list.",
+      description: "Multi-purpose endpoint for fetching perspective filter values. Use value_type to specify what to fetch: 'label_v2_key' for label keys, 'label_v2' for label values, 'region' for regions, etc.",
       toolset: "ccm",
       scope: "account",
       identifierFields: [],
       listFilterFields: [
-        { name: "perspective_id", description: "Cost perspective identifier", required: true },
-        { name: "field_id", description: "Field identifier" },
-        { name: "field_identifier", description: "Field identifier" },
+        { name: "perspective_id", description: "Cost perspective identifier (optional for some value types)" },
+        { name: "value_type", description: "Type of values to fetch: 'label_v2_key' (label keys), 'label_v2' (label values), 'region', 'product', 'awsUsageaccountid', 'cloudProvider', etc.", required: true },
+        { name: "value_sub_type", description: "Sub-type for label_v2: the specific label key name to get values for (e.g. 'env', 'team')" },
+        { name: "time_filter", description: "Time filter for the query", enum: [...VALID_TIME_FILTERS] },
+        { name: "offset", description: "Pagination offset", type: "number" },
+        { name: "limit", description: "Result limit (default 1000)", type: "number" },
+        { name: "is_cluster_query", description: "Whether this is a cluster query", type: "boolean" },
+        { name: "is_cluster_hourly_data", description: "Whether to use cluster hourly data", type: "boolean" },
       ],
       operations: {
         list: {
           method: "POST",
           path: "/ccm/api/graphql",
-          bodyBuilder: (input) => ({
-            query: `query FetchPerspectiveFilters($filters: [QLCEViewFilterWrapperInput]) {
-  perspectiveFilters(filters: $filters) { values __typename }
+          bodyBuilder: (input) => {
+            const valueType = input.value_type as string;
+            const valueSubType = input.value_sub_type as string | undefined;
+            const timeFilter = (input.time_filter as string) || "LAST_30_DAYS";
+
+            // Build filters array: perspective + time + field
+            const filters: Record<string, unknown>[] = [];
+
+            // Add perspective filter (optional for some value types)
+            if (input.perspective_id) {
+              filters.push(...buildViewFilter(input.perspective_id as string));
+            }
+
+            // Add time filter
+            filters.push(...buildTimeFilters(timeFilter));
+
+            // Add field filter based on value_type
+            if (valueType === "label_v2_key" || valueType === "label_key") {
+              // Fetching label KEYS - use KeyFieldFilter
+              const fieldOut = {
+                fieldId: "labels.key",
+                fieldName: "labels.key",
+                identifier: "LABEL",
+                identifierName: "Label",
+              };
+              filters.push({
+                idFilter: {
+                  values: [""],
+                  operator: "NOT_NULL",
+                  field: fieldOut,
+                },
+              });
+            } else if (valueType === "label_v2" || valueType === "label") {
+              // Fetching label VALUES for a specific key - use KeyValueFieldFilter
+              if (!valueSubType) {
+                throw new Error("value_sub_type is required when value_type is 'label_v2' or 'label'");
+              }
+              const fieldOut = {
+                fieldId: "labels.value",
+                fieldName: valueSubType, // The specific label key name
+                identifier: "LABEL",
+                identifierName: "Label",
+              };
+              filters.push({
+                idFilter: {
+                  values: [""],
+                  operator: "IN",
+                  field: fieldOut,
+                },
+              });
+            } else if (valueType === "business_mapping") {
+              // Cost category / business mapping
+              const fieldOut = {
+                fieldId: "businessMapping.costCategoryName",
+                fieldName: valueSubType || "Cost Category",
+                identifier: "BUSINESS_MAPPING",
+                identifierName: "Business Mapping",
+              };
+              filters.push({
+                idFilter: {
+                  values: [""],
+                  operator: "IN",
+                  field: fieldOut,
+                },
+              });
+            } else {
+              // Standard field (region, product, awsUsageaccountid, etc.)
+              const fieldOut = OUTPUT_FIELDS[valueType] || {
+                fieldId: valueType,
+                fieldName: valueType,
+                identifier: "COMMON",
+                identifierName: "Common",
+              };
+              filters.push({
+                idFilter: {
+                  values: [""],
+                  operator: "IN",
+                  field: fieldOut,
+                },
+              });
+            }
+
+            return {
+              query: `query FetchPerspectiveFiltersValue(
+  $filters: [QLCEViewFilterWrapperInput],
+  $offset: Int,
+  $limit: Int,
+  $sortCriteria: [QLCEViewSortCriteriaInput],
+  $isClusterQuery: Boolean = null,
+  $isClusterHourlyData: Boolean = null
+) {
+  perspectiveFilters(
+    filters: $filters
+    offset: $offset
+    limit: $limit
+    sortCriteria: $sortCriteria
+    isClusterQuery: $isClusterQuery
+    isClusterHourlyData: $isClusterHourlyData
+  ) {
+    values
+    __typename
+  }
 }`,
-            operationName: "FetchPerspectiveFilters",
-            variables: {
-              filters: input.perspective_id
-                ? buildViewFilter(input.perspective_id as string)
-                : [],
-            },
-          }),
+              operationName: "FetchPerspectiveFiltersValue",
+              variables: {
+                filters,
+                offset: (input.offset as number) ?? 0,
+                limit: (input.limit as number) ?? 1000,
+                sortCriteria: [{ sortOrder: "ASCENDING", sortType: "NAME" }],
+                isClusterQuery: input.is_cluster_query ?? null,
+                isClusterHourlyData: input.is_cluster_hourly_data ?? null,
+              },
+            };
+          },
           responseExtractor: gqlExtract("perspectiveFilters"),
-          description: "List available filter values for a perspective field",
+          description: "Fetch perspective filter values. Examples: value_type='label_v2_key' returns all label keys; value_type='label_v2' with value_sub_type='env' returns all values for 'env' label; value_type='region' returns all regions.",
         },
       },
     },
