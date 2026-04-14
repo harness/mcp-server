@@ -474,7 +474,7 @@ export class Registry {
 
     // Tag ELK/Mongo data source on the response when fallback is active
     if (dataSource && result && typeof result === "object" && !Array.isArray(result)) {
-      (result as Record<string, unknown>)._data_source = dataSource;
+      result = Object.assign({}, result, { _data_source: dataSource });
     }
 
     // Propagate storeType from the request query params into the result when

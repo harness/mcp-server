@@ -33,10 +33,9 @@ const artifactSecurityListExtract = (raw: unknown): unknown => {
         const total = (Number(pe.allow_list_violation_count) || 0)
                     + (Number(pe.deny_list_violation_count) || 0);
         if (total > 0) {
-          rec._next_step = `⚠️ MANDATORY: This artifact has ${total} policy violations but the counts above are SUMMARY ONLY — `
-                + `they do NOT include component names, license types, or deny-list vs allow-list breakdown. `
-                + `You MUST call harness_list(resource_type='scs_bom_violation', enforcement_id='${pe.id}') `
-                + `to get the actual violation details. Do NOT present violation data to the user without this call.`;
+          rec._next_step = `${total} policy violations (summary only). `
+                + `MUST call harness_list(resource_type='scs_bom_violation', enforcement_id='${pe.id}') for details. `
+                + `Do NOT present violation data without that call.`;
         }
       }
     }
@@ -72,7 +71,7 @@ const artifactSourceListExtract = (raw: unknown): unknown => {
 const componentDependenciesExtract = (raw: unknown): unknown => {
   const cleaned = scsListExtract(COMPONENT_DEPENDENCY_LIST_FIELDS)(raw);
   if (Array.isArray(cleaned) && cleaned.length === 0) {
-    return { _result: "EMPTY", _message: "This component has ZERO sub-dependencies. Do NOT infer or fabricate what might depend on it — report exactly: no dependencies found." };
+    return { _result: "EMPTY", _message: "Zero sub-dependencies found. Do NOT fabricate — report as-is." };
   }
   return cleaned;
 };
@@ -86,12 +85,10 @@ const componentVulnerabilityExtract = (raw: unknown): unknown => {
   const cleaned = scsCleanExtract(raw);
   if (Array.isArray(cleaned)) {
     if (cleaned.length === 0) {
-      return { _result: "EMPTY", _message: "No CVEs found for this component in the system. "
-        + "STOP: If 2+ components return empty, the vulnerability enrichment pipeline has not processed this artifact — do NOT keep querying other components. "
-        + "Report the AGGREGATE vulnerability counts from artifact_security (e.g. '89 critical, 278 high') and state: 'Specific CVE details are not yet available in the system.' "
-        + "NEVER supplement with CVEs from your training knowledge — that is fabrication." };
+      return { _result: "EMPTY", _message: "No CVEs found. If 2+ components return empty, stop querying — enrichment pipeline has not processed this artifact. "
+        + "Report aggregate counts from artifact_security instead. NEVER supplement with training-data CVEs." };
     }
-    return [...cleaned, { _total_cves: cleaned.length, _reminder: "Report ONLY the CVEs listed above. Do NOT add, invent, or supplement with CVEs from training knowledge." }];
+    return [...cleaned, { _total_cves: cleaned.length, _reminder: "Report ONLY these CVEs. Do NOT add CVEs from training knowledge." }];
   }
   return cleaned;
 };
@@ -108,12 +105,9 @@ const componentRemediationExtract = (raw: unknown): unknown => {
     const warnings = rec.remediation_warnings as Array<Record<string, unknown>> | undefined;
     const hasUnavailable = warnings?.some(w => typeof w.message === "string" && w.message.includes("not available"));
     if (hasUnavailable) {
-      rec._reminder = "Remediation guidance is NOT available for this component. "
-        + "Do NOT fabricate upgrade versions, fix versions, or migration steps. "
-        + "Report exactly what the API returned and suggest the user check the component's upstream project for upgrade guidance.";
+      rec._reminder = "Remediation not available. Do NOT fabricate versions. Suggest checking upstream project.";
     } else if (rec.recommended_version || rec.current_version) {
-      rec._reminder = "Report ONLY the versions shown above (current_version, recommended_version). "
-        + "Do NOT supplement with versions from your training knowledge.";
+      rec._reminder = "Report ONLY these versions. Do NOT supplement from training knowledge.";
     }
   }
   return cleaned;
@@ -127,8 +121,7 @@ const componentRemediationExtract = (raw: unknown): unknown => {
 const projectSecurityOverviewExtract = (raw: unknown): unknown => {
   const cleaned = scsCleanExtract(raw);
   if (cleaned && typeof cleaned === "object" && !Array.isArray(cleaned)) {
-    (cleaned as Record<string, unknown>)._reminder = "Report ONLY the numbers present in this response. "
-      + "Do NOT calculate percentages, infer trends, invent total component counts, or add metrics not explicitly listed above.";
+    (cleaned as Record<string, unknown>)._reminder = "Report ONLY these numbers. Do NOT calculate percentages, infer trends, or invent metrics.";
   }
   return cleaned;
 };
@@ -150,9 +143,7 @@ const bomViolationListExtract = (raw: unknown): unknown => {
     return [...cleaned, {
       _total: cleaned.length,
       _violation_types_found: typeStr,
-      _reminder: `These results contain ONLY: ${typeStr}. `
-        + "Report the EXACT violation_type as shown. Do NOT reclassify 'Allow List Violation' as deny-list or vice versa. "
-        + "If the user asked for deny-list violations but results only show allow-list violations (or vice versa), state that explicitly.",
+      _reminder: `Results contain ONLY: ${typeStr}. Report exact violation_type. Do NOT reclassify allow-list as deny-list or vice versa.`,
     }];
   }
   return cleaned;
@@ -185,9 +176,7 @@ const artifactComponentListExtract = (raw: unknown): unknown => {
     });
     if (hasRisk) {
       return [...cleaned, {
-        _next_step: "Some components show outdated/EOL/unmaintained status. "
-          + "For detailed risk assessment: harness_get(resource_type='scs_component_enrichment', resource_id=<artifact_id>, params={purl: '<component_purl>'}). "
-          + "For upgrade suggestions: harness_get(resource_type='scs_component_remediation', resource_id=<artifact_id>, params={purl: '<component_purl>'}).",
+        _next_step: "Components with risk detected. Use scs_component_enrichment (purl) for details, scs_component_remediation (purl) for upgrades.",
       }];
     }
   }
@@ -819,8 +808,8 @@ export const scsToolset: ToolsetDefinition = {
           bodyBuilder: (input) => {
             const body = (input.body && typeof input.body === "object" ? input.body : {}) as Record<string, unknown>;
             return {
-              ...(body.purl || input.purl ? { purl: (body.purl ?? input.purl) as string } : {}),
-              ...(body.target_version || input.target_version ? { target_version: (body.target_version ?? input.target_version) as string } : {}),
+              ...(body.purl || input.purl ? { purl: (body.purl || input.purl) as string } : {}),
+              ...(body.target_version || input.target_version ? { target_version: (body.target_version || input.target_version) as string } : {}),
             };
           },
           responseExtractor: scsCleanExtract,

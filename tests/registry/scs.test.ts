@@ -1380,3 +1380,325 @@ describe("P3-5: scs_project_security_overview resource", () => {
     expect(sibling!.relationship).toBe("sibling");
   });
 });
+
+// ─── scs_component_vulnerability resource ───────────────────────────────────
+
+describe("scs_component_vulnerability resource", () => {
+  it("exists in scsToolset", () => {
+    expect(() => findResource("scs_component_vulnerability")).not.toThrow();
+  });
+
+  it("has a list operation", () => {
+    const spec = getOp("scs_component_vulnerability", "list");
+    expect(spec.method).toBe("GET");
+    expect(spec.path).toContain("/vulnerabilities");
+  });
+
+  it("list has defaultQueryParams with limit=10", () => {
+    const spec = getOp("scs_component_vulnerability", "list");
+    expect(spec.defaultQueryParams).toBeDefined();
+    expect(spec.defaultQueryParams!.limit).toBe("10");
+  });
+
+  it("has purl queryParam", () => {
+    const spec = getOp("scs_component_vulnerability", "list");
+    expect(spec.queryParams).toHaveProperty("purl");
+  });
+
+  it("has pathBuilder for dual-mode (account/artifact scoped)", () => {
+    const spec = getOp("scs_component_vulnerability", "list");
+    expect(spec.pathBuilder).toBeDefined();
+  });
+
+  it("pathBuilder returns account-scoped path without artifact_id", () => {
+    const spec = getOp("scs_component_vulnerability", "list");
+    const path = spec.pathBuilder!({ purl: "pkg:npm/express@4.18.0" }, {});
+    expect(path).toBe("/ssca-manager/v1/components/vulnerabilities");
+  });
+
+  it("pathBuilder returns artifact-scoped path with artifact_id", () => {
+    const spec = getOp("scs_component_vulnerability", "list");
+    const path = spec.pathBuilder!(
+      { artifact_id: "art123", purl: "pkg:npm/express@4.18.0" },
+      { HARNESS_ORG: "myorg", HARNESS_PROJECT: "myproj" },
+    );
+    expect(path).toContain("/orgs/myorg/projects/myproj/artifacts/art123/component/vulnerabilities");
+  });
+
+  it("has searchAliases for CVE queries", () => {
+    const res = findResource("scs_component_vulnerability");
+    expect(res.searchAliases).toBeDefined();
+    const aliases = res.searchAliases!.map((a) => a.toLowerCase());
+    expect(aliases).toContain("cve");
+    expect(aliases).toContain("vulnerability");
+    expect(aliases).toContain("cvss");
+  });
+
+  it("has diagnosticHint", () => {
+    const res = findResource("scs_component_vulnerability");
+    expect(res.diagnosticHint).toBeDefined();
+    expect(res.diagnosticHint!.length).toBeGreaterThan(20);
+  });
+
+  it("responseExtractor is defined", () => {
+    const spec = getOp("scs_component_vulnerability", "list");
+    expect(spec.responseExtractor).toBeDefined();
+  });
+});
+
+// ─── scs_component_search resource ──────────────────────────────────────────
+
+describe("scs_component_search resource", () => {
+  it("exists in scsToolset", () => {
+    expect(() => findResource("scs_component_search")).not.toThrow();
+  });
+
+  it("has a list operation (GET)", () => {
+    const spec = getOp("scs_component_search", "list");
+    expect(spec.method).toBe("GET");
+    expect(spec.path).toContain("/components/search");
+  });
+
+  it("list has defaultQueryParams with limit=20", () => {
+    const spec = getOp("scs_component_search", "list");
+    expect(spec.defaultQueryParams).toBeDefined();
+    expect(spec.defaultQueryParams!.limit).toBe("20");
+  });
+
+  it("has elkFallback enabled", () => {
+    const spec = getOp("scs_component_search", "list");
+    expect(spec.elkFallback).toBe(true);
+  });
+
+  it("has search_term in queryParams", () => {
+    const spec = getOp("scs_component_search", "list");
+    expect(spec.queryParams).toHaveProperty("search_term");
+  });
+
+  it("has searchAliases for cross-artifact queries", () => {
+    const res = findResource("scs_component_search");
+    expect(res.searchAliases).toBeDefined();
+    const aliases = res.searchAliases!.map((a) => a.toLowerCase());
+    expect(aliases).toContain("cross-artifact search");
+    expect(aliases).toContain("find dependency");
+  });
+
+  it("description mentions search_term is required", () => {
+    const res = findResource("scs_component_search");
+    expect(res.description).toContain("search_term");
+  });
+
+  it("has diagnosticHint", () => {
+    const res = findResource("scs_component_search");
+    expect(res.diagnosticHint).toBeDefined();
+    expect(res.diagnosticHint!.length).toBeGreaterThan(20);
+  });
+
+  it("responseExtractor is scsListExtract with correct fields", () => {
+    const spec = getOp("scs_component_search", "list");
+    expect(spec.responseExtractor).toBeDefined();
+    // Verify it functions as a list extractor
+    const result = spec.responseExtractor!([
+      { name: "express", version: "4.18.0", purl: "pkg:npm/express@4.18.0", artifactId: "a1", extra: "removed" },
+    ]);
+    expect(Array.isArray(result)).toBe(true);
+    const item = (result as Record<string, unknown>[])[0];
+    expect(item).toHaveProperty("name");
+    expect(item).toHaveProperty("purl");
+    expect(item).not.toHaveProperty("extra");
+  });
+});
+
+// ─── Custom extractor tests ─────────────────────────────────────────────────
+
+describe("custom SCS extractors", () => {
+  describe("artifactSecurityListExtract", () => {
+    it("injects _next_step when policy violations exist", () => {
+      const spec = getOp("artifact_security", "list");
+      const result = spec.responseExtractor!([
+        {
+          id: "art1",
+          policy_enforcement: { id: "enf1", allow_list_violation_count: 3, deny_list_violation_count: 2 },
+        },
+      ]);
+      const items = result as Record<string, unknown>[];
+      expect(items[0]._next_step).toBeDefined();
+      expect(items[0]._next_step).toContain("scs_bom_violation");
+      expect(items[0]._next_step).toContain("enf1");
+    });
+
+    it("does not inject _next_step when no violations", () => {
+      const spec = getOp("artifact_security", "list");
+      const result = spec.responseExtractor!([
+        {
+          id: "art1",
+          policy_enforcement: { id: "enf1", allow_list_violation_count: 0, deny_list_violation_count: 0 },
+        },
+      ]);
+      const items = result as Record<string, unknown>[];
+      expect(items[0]._next_step).toBeUndefined();
+    });
+  });
+
+  describe("artifactSourceListExtract", () => {
+    it("appends _summary with type breakdown", () => {
+      const spec = getOp("scs_artifact_source", "list");
+      const result = spec.responseExtractor!([
+        { id: "1", name: "src1", artifact_type: { type: "CONTAINER" } },
+        { id: "2", name: "src2", artifact_type: { type: "FILE" } },
+        { id: "3", name: "src3", artifact_type: { type: "CONTAINER" } },
+      ]);
+      const items = result as unknown[];
+      const summary = items[items.length - 1] as Record<string, unknown>;
+      expect(summary._summary).toBeDefined();
+      const s = summary._summary as { total: number; by_type: Record<string, number> };
+      expect(s.total).toBe(3);
+      expect(s.by_type.CONTAINER).toBe(2);
+      expect(s.by_type.FILE).toBe(1);
+    });
+
+    it("returns cleaned array as-is when empty", () => {
+      const spec = getOp("scs_artifact_source", "list");
+      const result = spec.responseExtractor!([]);
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe("componentDependenciesExtract", () => {
+    it("returns EMPTY message for empty array", () => {
+      const spec = getOp("scs_component_dependencies", "get");
+      const result = spec.responseExtractor!([]) as Record<string, unknown>;
+      expect(result._result).toBe("EMPTY");
+      expect(result._message).toContain("Zero");
+    });
+
+    it("returns cleaned items for non-empty array", () => {
+      const spec = getOp("scs_component_dependencies", "get");
+      const result = spec.responseExtractor!([
+        { name: "lodash", version: "4.17.21", purl: "pkg:npm/lodash@4.17.21" },
+      ]);
+      expect(Array.isArray(result)).toBe(true);
+    });
+  });
+
+  describe("componentVulnerabilityExtract", () => {
+    it("returns EMPTY message for empty array", () => {
+      const spec = getOp("scs_component_vulnerability", "list");
+      const result = spec.responseExtractor!([]) as Record<string, unknown>;
+      expect(result._result).toBe("EMPTY");
+      expect(result._message).toContain("No CVEs");
+    });
+
+    it("appends _total_cves and _reminder for non-empty results", () => {
+      const spec = getOp("scs_component_vulnerability", "list");
+      const result = spec.responseExtractor!([
+        { cve_id: "CVE-2023-0001", severity: "CRITICAL" },
+        { cve_id: "CVE-2023-0002", severity: "HIGH" },
+      ]) as unknown[];
+      const last = result[result.length - 1] as Record<string, unknown>;
+      expect(last._total_cves).toBe(2);
+      expect(last._reminder).toContain("ONLY");
+    });
+
+    it("passes through non-array values unchanged", () => {
+      const spec = getOp("scs_component_vulnerability", "list");
+      const result = spec.responseExtractor!({ error: "something" });
+      expect(result).toEqual({ error: "something" });
+    });
+  });
+
+  describe("componentRemediationExtract", () => {
+    it("adds _reminder when remediation is not available", () => {
+      const spec = getOp("scs_component_remediation", "get");
+      const result = spec.responseExtractor!({
+        remediation_warnings: [{ message: "remediation guidance is not available for this component" }],
+      }) as Record<string, unknown>;
+      expect(result._reminder).toContain("not available");
+    });
+
+    it("adds version _reminder when recommended_version present", () => {
+      const spec = getOp("scs_component_remediation", "get");
+      const result = spec.responseExtractor!({
+        current_version: "1.0.0",
+        recommended_version: "2.0.0",
+      }) as Record<string, unknown>;
+      expect(result._reminder).toContain("ONLY");
+    });
+
+    it("does not add _reminder when no warnings and no versions", () => {
+      const spec = getOp("scs_component_remediation", "get");
+      const result = spec.responseExtractor!({
+        some_field: "value",
+      }) as Record<string, unknown>;
+      expect(result._reminder).toBeUndefined();
+    });
+  });
+
+  describe("projectSecurityOverviewExtract", () => {
+    it("adds _reminder to response object", () => {
+      const spec = getOp("scs_project_security_overview", "get");
+      const result = spec.responseExtractor!({
+        artifact_count: 10,
+        vulnerability_summary: { critical: 5 },
+      }) as Record<string, unknown>;
+      expect(result._reminder).toBeDefined();
+      expect(result._reminder).toContain("ONLY");
+    });
+  });
+
+  describe("bomViolationListExtract", () => {
+    it("appends _total and _reminder with violation types", () => {
+      const spec = getOp("scs_bom_violation", "list");
+      const result = spec.responseExtractor!([
+        { name: "pkg1", violation_type: "Deny List Violation" },
+        { name: "pkg2", violation_type: "Allow List Violation" },
+      ]) as unknown[];
+      const last = result[result.length - 1] as Record<string, unknown>;
+      expect(last._total).toBe(2);
+      expect(last._violation_types_found).toContain("Deny List Violation");
+      expect(last._violation_types_found).toContain("Allow List Violation");
+      expect(last._reminder).toContain("ONLY");
+    });
+
+    it("returns empty array as-is", () => {
+      const spec = getOp("scs_bom_violation", "list");
+      const result = spec.responseExtractor!([]);
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe("codeRepoListExtract", () => {
+    it("appends _total and _note for non-empty results", () => {
+      const spec = getOp("code_repo_security", "list");
+      const result = spec.responseExtractor!([
+        { id: "r1", name: "repo1" },
+        { id: "r2", name: "repo2" },
+      ]) as unknown[];
+      const last = result[result.length - 1] as Record<string, unknown>;
+      expect(last._total).toBe(2);
+      expect(last._note).toContain("exactly 2");
+    });
+  });
+
+  describe("artifactComponentListExtract", () => {
+    it("appends _next_step when risk components present", () => {
+      const spec = getOp("scs_artifact_component", "list");
+      const result = spec.responseExtractor!([
+        { purl: "pkg:npm/old@1.0", name: "old", is_outdated: true },
+        { purl: "pkg:npm/ok@2.0", name: "ok" },
+      ]) as unknown[];
+      const last = result[result.length - 1] as Record<string, unknown>;
+      expect(last._next_step).toBeDefined();
+      expect(last._next_step).toContain("scs_component_enrichment");
+    });
+
+    it("does not append _next_step when no risk", () => {
+      const spec = getOp("scs_artifact_component", "list");
+      const result = spec.responseExtractor!([
+        { purl: "pkg:npm/ok@2.0", name: "ok" },
+      ]) as unknown[];
+      // No summary item appended
+      expect(result).toHaveLength(1);
+    });
+  });
+});
