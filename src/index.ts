@@ -389,9 +389,11 @@ async function main(): Promise<void> {
     loadDotenv(); // loads .env from current directory if it exists
   }
 
-  // Global error handlers — must be installed before anything else.
+  // Global error handlers for runtime errors.
   // Node 20+ defaults --unhandled-rejections=throw, so unhandled rejections
   // crash the process. We catch them to log context before exiting.
+  // Note: CLI parsing and .env loading happen before these handlers are installed,
+  // which is intentional — CLI errors should fail fast.
   process.on("unhandledRejection", (reason) => {
     log.error("Unhandled promise rejection — exiting", { error: String(reason), stack: (reason as Error)?.stack });
     process.exit(1);
