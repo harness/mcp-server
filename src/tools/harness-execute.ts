@@ -7,7 +7,7 @@ import { isUserError, isUserFixableApiError, toMcpError, HarnessApiError } from 
 import { confirmViaElicitation } from "../utils/elicitation.js";
 import { createLogger, logAudit } from "../utils/logger.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
-import { asRecord, asString } from "../utils/type-guards.js";
+import { asRecord, asString, coerceRecord } from "../utils/type-guards.js";
 import { isFlatKeyValueInputs, isResolvableInputs, flattenInputs, resolveRuntimeInputs, type ResolutionResult } from "../utils/runtime-input-resolver.js";
 import { applyInputExpansions } from "../utils/input-expander.js";
 import { materializeInputSetsToRuntimeYaml } from "../utils/materialize-input-sets.js";
@@ -45,7 +45,8 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
       try {
         const { params, ...rest } = args;
         const input = applyUrlDefaults(rest as Record<string, unknown>, args.url);
-        if (params) Object.assign(input, params);
+        const coercedParams = coerceRecord(params);
+        if (coercedParams) Object.assign(input, coercedParams);
         log.debug("Execute input after params merge", { input: JSON.stringify(input), params: JSON.stringify(params) });
         const resourceType = asString(input.resource_type);
         if (!resourceType) {

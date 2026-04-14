@@ -177,6 +177,17 @@ export interface EndpointSpec {
    * to the handler.
    */
   injectAccountInBody?: boolean;
+  /**
+   * When true, the MCP layer controls ELK→Mongo fallback for this endpoint:
+   *  1. First request sent with `enforce_elasticsearch=true` (ELK path).
+   *  2. On failure (4xx except 401/403, 5xx, or timeout), retried with
+   *     `enforce_elasticsearch=false` (Mongo path).  A 404 often means the
+   *     ES index doesn't exist yet; a 400 may be ES-specific.
+   * The response includes `_data_source: "elasticsearch" | "mongodb"` so the caller
+   * knows which backend served the data.
+   * Only applicable to ssca-manager endpoints that accept the `enforce_elasticsearch` query param.
+   */
+  elkFallback?: boolean;
 }
 
 /**

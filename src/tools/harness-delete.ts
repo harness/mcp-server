@@ -7,6 +7,7 @@ import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.
 import { logAudit } from "../utils/logger.js";
 import { confirmViaElicitation } from "../utils/elicitation.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
+import { coerceRecord } from "../utils/type-guards.js";
 
 export function registerDeleteTool(server: McpServer, registry: Registry, client: HarnessClient): void {
   const deletableTypes = registry.getTypesForOperation("delete") as [string, ...string[]];
@@ -50,7 +51,8 @@ export function registerDeleteTool(server: McpServer, registry: Registry, client
         }
         const { params, ...rest } = args;
         const input = applyUrlDefaults(rest as Record<string, unknown>, args.url);
-        if (params) Object.assign(input, params);
+        const coercedParams = coerceRecord(params);
+        if (coercedParams) Object.assign(input, coercedParams);
         const identFields = def.identifierFields;
         const primaryField = identFields.length > 1
           ? identFields[identFields.length - 1]!

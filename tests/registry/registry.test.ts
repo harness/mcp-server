@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Registry } from "../../src/registry/index.js";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
+import { HarnessApiError } from "../../src/utils/errors.js";
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -12,6 +13,12 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     HARNESS_PROJECT: "test-project",
     HARNESS_API_TIMEOUT_MS: 30000,
     HARNESS_MAX_RETRIES: 3,
+    HARNESS_MAX_BODY_SIZE_MB: 10,
+    HARNESS_RATE_LIMIT_RPS: 10,
+    HARNESS_READ_ONLY: false,
+    HARNESS_SKIP_ELICITATION: false,
+    HARNESS_ALLOW_HTTP: false,
+    HARNESS_FME_BASE_URL: "https://api.split.io",
     LOG_LEVEL: "info",
     ...overrides,
   };
@@ -592,6 +599,111 @@ describe("Registry", () => {
         }
       }
       expect(invalid, `Invalid bodySchema fields: ${invalid.join("; ")}`).toEqual([]);
+    });
+  });
+
+  describe("ELK→Mongo fallback", () => {
+    let registry: Registry;
+    beforeEach(() => {
+      registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "scs" }));
+    });
+
+    it("ELK succeeds — sends enforce_elasticsearch=true", async () => {
+      const mockRequest = vi.fn().mockResolvedValue([{ id: "comp1" }]);
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "artifact_security", "list", {
+        source_id: "src1",
+      });
+
+      expect(mockRequest).toHaveBeenCalledOnce();
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params.enforce_elasticsearch).toBe("true");
+    });
+
+    it("ELK fails with 500 — falls back to Mongo", async () => {
+      const mockRequest = vi.fn()
+        .mockRejectedValueOnce(new HarnessApiError("ES down", 500))
+        .mockResolvedValueOnce([{ id: "comp1" }]);
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "artifact_security", "list", {
+        source_id: "src1",
+      });
+
+      expect(mockRequest).toHaveBeenCalledTimes(2);
+      expect(mockRequest.mock.calls[0][0].params.enforce_elasticsearch).toBe("true");
+      expect(mockRequest.mock.calls[1][0].params.enforce_elasticsearch).toBe("false");
+    });
+
+    it("ELK fails with 404 — falls back to Mongo (index not found)", async () => {
+      const mockRequest = vi.fn()
+        .mockRejectedValueOnce(new HarnessApiError("Not Found", 404))
+        .mockResolvedValueOnce([{ id: "comp1" }]);
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "artifact_security", "list", {
+        source_id: "src1",
+      });
+
+      expect(mockRequest).toHaveBeenCalledTimes(2);
+      expect(mockRequest.mock.calls[1][0].params.enforce_elasticsearch).toBe("false");
+    });
+
+    it("ELK fails with 401 — throws immediately, no fallback", async () => {
+      const mockRequest = vi.fn()
+        .mockRejectedValueOnce(new HarnessApiError("Unauthorized", 401));
+      const client = makeClient(mockRequest);
+
+      await expect(
+        registry.dispatch(client, "artifact_security", "list", { source_id: "src1" }),
+      ).rejects.toThrow("Unauthorized");
+      expect(mockRequest).toHaveBeenCalledOnce();
+    });
+
+    it("ELK fails with 403 — throws immediately, no fallback", async () => {
+      const mockRequest = vi.fn()
+        .mockRejectedValueOnce(new HarnessApiError("Forbidden", 403));
+      const client = makeClient(mockRequest);
+
+      await expect(
+        registry.dispatch(client, "artifact_security", "list", { source_id: "src1" }),
+      ).rejects.toThrow("Forbidden");
+      expect(mockRequest).toHaveBeenCalledOnce();
+    });
+
+    it("ELK fails with non-HarnessApiError — throws immediately, no fallback", async () => {
+      const mockRequest = vi.fn()
+        .mockRejectedValueOnce(new Error("Network error"));
+      const client = makeClient(mockRequest);
+
+      await expect(
+        registry.dispatch(client, "artifact_security", "list", { source_id: "src1" }),
+      ).rejects.toThrow("Network error");
+      expect(mockRequest).toHaveBeenCalledOnce();
+    });
+
+    it("both ELK and Mongo fail — Mongo error propagates", async () => {
+      const mockRequest = vi.fn()
+        .mockRejectedValueOnce(new HarnessApiError("ES down", 500))
+        .mockRejectedValueOnce(new HarnessApiError("Mongo also down", 503));
+      const client = makeClient(mockRequest);
+
+      await expect(
+        registry.dispatch(client, "artifact_security", "list", { source_id: "src1" }),
+      ).rejects.toThrow("Mongo also down");
+      expect(mockRequest).toHaveBeenCalledTimes(2);
+    });
+
+    it("non-elkFallback endpoint does not add enforce_elasticsearch", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { content: [], totalElements: 0 } });
+      const client = makeClient(mockRequest);
+      const pipelineRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
+
+      await pipelineRegistry.dispatch(client, "pipeline", "list", {});
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params.enforce_elasticsearch).toBeUndefined();
     });
   });
 

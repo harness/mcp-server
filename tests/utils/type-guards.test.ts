@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isRecord, asRecord, asString, asNumber } from "../../src/utils/type-guards.js";
+import { isRecord, asRecord, asString, asNumber, coerceRecord } from "../../src/utils/type-guards.js";
 
 describe("type guards", () => {
   describe("isRecord", () => {
@@ -46,6 +46,49 @@ describe("type guards", () => {
       expect(asString(null)).toBeUndefined();
       expect(asString(undefined)).toBeUndefined();
       expect(asString({})).toBeUndefined();
+    });
+  });
+
+  describe("coerceRecord", () => {
+    it("parses valid JSON object string", () => {
+      expect(coerceRecord('{"a":1}')).toEqual({ a: 1 });
+    });
+
+    it("returns undefined for non-JSON string", () => {
+      expect(coerceRecord("not json")).toBeUndefined();
+    });
+
+    it("returns undefined for JSON array string", () => {
+      expect(coerceRecord("[]")).toBeUndefined();
+    });
+
+    it("returns undefined for JSON null string", () => {
+      expect(coerceRecord("null")).toBeUndefined();
+    });
+
+    it("returns undefined for number", () => {
+      expect(coerceRecord(42)).toBeUndefined();
+    });
+
+    it("passes through plain object", () => {
+      const obj = { a: 1 };
+      expect(coerceRecord(obj)).toBe(obj);
+    });
+
+    it("returns undefined for undefined", () => {
+      expect(coerceRecord(undefined)).toBeUndefined();
+    });
+
+    it("returns undefined for null", () => {
+      expect(coerceRecord(null)).toBeUndefined();
+    });
+
+    it("returns undefined for boolean", () => {
+      expect(coerceRecord(true)).toBeUndefined();
+    });
+
+    it("returns undefined for empty string", () => {
+      expect(coerceRecord("")).toBeUndefined();
     });
   });
 
