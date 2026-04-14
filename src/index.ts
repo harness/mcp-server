@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { randomUUID } from "node:crypto";
+import { config as loadDotenv } from "dotenv";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -378,6 +379,16 @@ async function startHttp(config: Config, port: number): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  // Parse CLI args first to get env file path
+  const { transport, port, envFile } = parseArgs();
+
+  // Load .env file (custom path if specified, otherwise .env in current directory)
+  if (envFile) {
+    loadDotenv({ path: envFile });
+  } else {
+    loadDotenv(); // loads .env from current directory if it exists
+  }
+
   // Global error handlers — must be installed before anything else.
   // Node 20+ defaults --unhandled-rejections=throw, so unhandled rejections
   // crash the process. We catch them to log context before exiting.
@@ -392,8 +403,6 @@ async function main(): Promise<void> {
 
   const config = loadConfig();
   setLogLevel(config.LOG_LEVEL);
-
-  const { transport, port } = parseArgs();
 
   log.info("Starting harness-mcp-server", {
     transport,
