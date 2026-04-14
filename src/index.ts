@@ -50,6 +50,9 @@ function createHarnessServer(config: Config): McpServer {
         "SCHEMA: Use harness_schema(resource_type='<type>') to fetch the exact JSON Schema for create/update body payloads.",
         "",
         "PR RESOURCES: pull_request, pr_comment, pr_activity, pr_reviewer, pr_check — all accept URL or explicit repo_id + pr_number.",
+        ...(config.HARNESS_PIPELINE_VERSION === "1"
+          ? ["", "V1 PIPELINES: For pipeline operations, prefer resource_type='pipeline_v1' (v1 YAML format — simplified stages/steps, agent pipelines). Use resource_type='pipeline' for legacy v0 pipelines."]
+          : []),
       ].join("\n"),
     },
   );
