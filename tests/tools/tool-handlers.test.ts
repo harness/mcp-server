@@ -314,6 +314,7 @@ describe("harness_get — execution_log", () => {
 
   it("does not map resource_id to prefix field for other resource types", async () => {
     // Regression: ensure execution_log special-casing doesn't affect pipeline gets
+    mockRequest.mockResolvedValueOnce({ data: { identifier: "my-pipeline" } });
     const result = await server.call("harness_get", {
       resource_type: "pipeline",
       resource_id: "my-pipeline",
