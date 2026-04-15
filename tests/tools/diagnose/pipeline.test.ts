@@ -704,4 +704,105 @@ describe("pipelineHandler", () => {
 
     expect(entry.error).toContain("not ready after 3 attempts");
   });
+
+  it("auto-fetches log for main step when execution succeeds and no step_id is given", async () => {
+    const exec = makeExecution({
+      status: "Success",
+      stages: [{ id: "build", name: "Build", status: "Success", steps: [{ id: "run_tests", name: "RunTests", status: "Success" }] }],
+      nodeMapEntries: {
+        "stage-node": {
+          uuid: "stage-node",
+          identifier: "build",
+          baseFqn: "pipeline.stages.build",
+          status: "Success",
+          logBaseKey: "log/build",
+        },
+        "run_tests": {
+          uuid: "run_tests",
+          identifier: "run_tests",
+          name: "RunTests",
+          baseFqn: "pipeline.stages.build.spec.execution.steps.run_tests",
+          status: "Success",
+          logBaseKey: "log/build/steps/run_tests",
+        },
+      },
+    });
+
+    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const ctx = makeContext({
+      input: { execution_id: "exec-001" },  // no step_id
+      registry,
+      args: { summary: true, include_logs: true },
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    // No failed steps
+    expect(result.failed_step_logs).toBeUndefined();
+
+    // Auto-detected the deepest step and fetched its log
+    expect(result.requested_step_log).toBeDefined();
+    const stepLog = result.requested_step_log as Record<string, unknown>;
+    expect(stepLog.step).toBe("run_tests");
+    expect(stepLog.status).toBe("Success");
+    expect(stepLog.log).toBe("resolved log line 1\nresolved log line 2");
+  });
+
+  it("does not auto-fetch logs when include_logs is false even for successful execution", async () => {
+    const exec = makeExecution({
+      status: "Success",
+      nodeMapEntries: {
+        "run_tests": {
+          uuid: "run_tests", identifier: "run_tests", name: "RunTests",
+          baseFqn: "pipeline.stages.build.spec.execution.steps.run_tests",
+          status: "Success", logBaseKey: "log/build/steps/run_tests",
+        },
+      },
+    });
+
+    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const ctx = makeContext({
+      input: { execution_id: "exec-001" },
+      registry,
+      args: { summary: true, include_logs: false },
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    expect(result.requested_step_log).toBeUndefined();
+  });
+
+  it("does not auto-fetch when execution has failed steps (uses failed_step_logs instead)", async () => {
+    const exec = makeExecution({
+      status: "Failed",
+      stages: [{ id: "s1", name: "S1", status: "Failed", steps: [{ id: "step1", name: "FailStep", status: "Failed" }] }],
+      nodeMapEntries: {
+        step1: {
+          uuid: "step1", identifier: "step1", name: "FailStep",
+          baseFqn: "pipeline.stages.s1.spec.execution.steps.step1",
+          status: "Failed", failureInfo: { message: "err" }, logBaseKey: "log/step1",
+        },
+      },
+    });
+
+    const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
+    const mockFn = resolveLogContent as ReturnType<typeof vi.fn>;
+    mockFn.mockClear();
+
+    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const ctx = makeContext({
+      input: { execution_id: "exec-001" },  // no step_id
+      registry,
+      args: { summary: false, include_logs: true },
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    // Failed step logs are present
+    expect(result.failed_step_logs).toBeDefined();
+
+    // Auto-fetch should NOT have run because failed_step_logs was already populated
+    // resolveLogContent should have been called exactly once (for the failed step)
+    expect(mockFn).toHaveBeenCalledTimes(1);
+  });
 });
