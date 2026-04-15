@@ -281,12 +281,64 @@ describe("harness_get — execution_log", () => {
     resolveLogContentMock.mockRejectedValueOnce(new Error("Log blob not ready after 3 attempts (status: queued)"));
     const result = await server.call("harness_get", {
       resource_type: "execution_log",
-      resource_id: "acct1/pipeline/my-pipe/42/-exec-123",
+      resource_id: "some-exec-id",
     });
     expect(result.isError).toBe(true);
     const data = parseResult(result) as { error: string };
     expect(data.error).toContain("not ready after 3 attempts");
     expect(data.error).toContain("harness_diagnose");
+  });
+
+  it("returns errorResult when buildLogPrefixFromExecution throws", async () => {
+    buildLogPrefixMock.mockRejectedValueOnce(new Error("Could not extract pipelineIdentifier/runSequence"));
+    const result = await server.call("harness_get", {
+      resource_type: "execution_log",
+      resource_id: "bad-exec-id",
+    });
+    expect(result.isError).toBe(true);
+    const data = parseResult(result) as { error: string };
+    expect(data.error).toContain("pipelineIdentifier/runSequence");
+  });
+
+  it("prefers explicit prefix over resource_id when both are given", async () => {
+    const result = await server.call("harness_get", {
+      resource_type: "execution_log",
+      resource_id: "some-exec-id",
+      params: { prefix: "explicit/log/prefix/key" },
+    });
+    expect(result.isError).toBeUndefined();
+    // Should use the explicit prefix directly, not buildLogPrefix
+    expect(resolveLogContentMock).toHaveBeenCalledWith(client, "explicit/log/prefix/key");
+    expect(buildLogPrefixMock).not.toHaveBeenCalled();
+  });
+
+  it("does not map resource_id to prefix field for other resource types", async () => {
+    // Regression: ensure execution_log special-casing doesn't affect pipeline gets
+    const result = await server.call("harness_get", {
+      resource_type: "pipeline",
+      resource_id: "my-pipeline",
+    });
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as { identifier: string };
+    expect(data.identifier).toBe("my-pipeline");
+  });
+
+  it("forwards step_id and stage_id from URL to buildLogPrefixFromExecution", async () => {
+    const result = await server.call("harness_get", {
+      resource_type: "execution_log",
+      url: "https://app.harness.io/ng/account/acc1/module/ci/orgs/org1/projects/proj1/pipelines/pipe1/executions/exec-xyz/pipeline?step=nodeExec123&stageExecId=stageExec456",
+    });
+    expect(result.isError).toBeUndefined();
+    expect(buildLogPrefixMock).toHaveBeenCalledWith(
+      client,
+      registry,
+      "exec-xyz",
+      expect.objectContaining({
+        step_id: "nodeExec123",
+        stage_execution_id: "stageExec456",
+        execution_id: "exec-xyz",
+      }),
+    );
   });
 });
 

@@ -805,4 +805,169 @@ describe("pipelineHandler", () => {
     // resolveLogContent should have been called exactly once (for the failed step)
     expect(mockFn).toHaveBeenCalledTimes(1);
   });
+
+  it("auto-fetch picks deepest step when multiple steps have logBaseKeys", async () => {
+    const exec = makeExecution({
+      status: "Success",
+      stages: [{ id: "build", name: "Build", status: "Success", steps: [
+        { id: "setup", name: "Setup", status: "Success" },
+        { id: "test", name: "Test", status: "Success" },
+      ]}],
+      nodeMapEntries: {
+        "setup": {
+          uuid: "setup", identifier: "setup", name: "Setup",
+          baseFqn: "pipeline.stages.build.spec.execution.steps.setup",
+          status: "Success", logBaseKey: "log/setup",
+        },
+        "test": {
+          uuid: "test", identifier: "test", name: "Test",
+          baseFqn: "pipeline.stages.build.spec.execution.steps.test",
+          status: "Success", logBaseKey: "log/build/steps/test/longer",
+        },
+      },
+    });
+
+    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const ctx = makeContext({
+      input: { execution_id: "exec-001" },
+      registry,
+      args: { summary: true, include_logs: true },
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    expect(result.requested_step_log).toBeDefined();
+    const stepLog = result.requested_step_log as Record<string, unknown>;
+    // Should pick "test" — it has the longer logBaseKey
+    expect(stepLog.step).toBe("test");
+  });
+
+  it("auto-fetch does not run when no nodeMap is available", async () => {
+    const exec = {
+      pipelineExecutionSummary: {
+        pipelineIdentifier: "test-pipeline",
+        name: "Test Pipeline",
+        planExecutionId: "exec-001",
+        status: "Success",
+        runSequence: 1,
+        startTs: NOW,
+        endTs: NOW + 60000,
+        layoutNodeMap: {
+          root: {
+            nodeType: "ROOT", nodeGroup: "ROOT", nodeIdentifier: "root",
+            name: "pipeline", status: "Success",
+            edgeLayoutList: { currentNodeChildren: [], nextIds: [] },
+          },
+        },
+        startingNodeId: "root",
+        executionTriggerInfo: { triggerType: "MANUAL", triggeredBy: { identifier: "admin" } },
+      },
+      executionGraph: {}, // no nodeMap
+    };
+
+    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const ctx = makeContext({
+      input: { execution_id: "exec-001" },
+      registry,
+      args: { summary: true, include_logs: true },
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    // No nodeMap → auto-fetch should not run
+    expect(result.requested_step_log).toBeUndefined();
+  });
+
+  it("auto-fetch skips when no nodes have logBaseKeys", async () => {
+    const exec = makeExecution({
+      status: "Success",
+      nodeMapEntries: {
+        "step-no-key": {
+          uuid: "step-no-key", identifier: "step-no-key", name: "TemplateStep",
+          baseFqn: "pipeline.stages.s1.spec.execution.steps.step-no-key",
+          status: "Success",
+          // no logBaseKey
+        },
+      },
+    });
+
+    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const ctx = makeContext({
+      input: { execution_id: "exec-001" },
+      registry,
+      args: { summary: true, include_logs: true },
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    // No logBaseKey in any node → no auto-fetch
+    expect(result.requested_step_log).toBeUndefined();
+  });
+
+  it("auto-fetch does not run when explicit step_id is provided", async () => {
+    const exec = makeExecution({
+      status: "Success",
+      nodeMapEntries: {
+        "step-a": {
+          uuid: "step-a", identifier: "step-a", name: "StepA",
+          baseFqn: "pipeline.stages.s1.spec.execution.steps.step-a",
+          status: "Success", logBaseKey: "log/step-a",
+        },
+        "step-b": {
+          uuid: "step-b", identifier: "step-b", name: "StepB",
+          baseFqn: "pipeline.stages.s1.spec.execution.steps.step-b",
+          status: "Success", logBaseKey: "log/step-b/deeper",
+        },
+      },
+    });
+
+    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const ctx = makeContext({
+      // Explicit step_id — should use the requested_step path, not auto-fetch
+      input: { execution_id: "exec-001", step_id: "step-a" },
+      registry,
+      args: { summary: true, include_logs: true },
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    // Should fetch step-a specifically, not auto-detect step-b
+    expect(result.requested_step_log).toBeDefined();
+    const stepLog = result.requested_step_log as Record<string, unknown>;
+    expect(stepLog.step).toBe("step-a");
+  });
+
+  it("auto-fetch handles resolveLogContent failure gracefully", async () => {
+    const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
+    (resolveLogContent as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error("Download timeout"),
+    );
+
+    const exec = makeExecution({
+      status: "Success",
+      nodeMapEntries: {
+        "step-ok": {
+          uuid: "step-ok", identifier: "step-ok", name: "MainStep",
+          baseFqn: "pipeline.stages.s1.spec.execution.steps.step-ok",
+          status: "Success", logBaseKey: "log/step-ok",
+        },
+      },
+    });
+
+    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const ctx = makeContext({
+      input: { execution_id: "exec-001" },
+      registry,
+      args: { summary: true, include_logs: true },
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    // Should still populate requested_step_log with error, not throw
+    expect(result.requested_step_log).toBeDefined();
+    const stepLog = result.requested_step_log as Record<string, unknown>;
+    expect(stepLog.step).toBe("step-ok");
+    expect(stepLog.error).toContain("Download timeout");
+    expect(stepLog.log).toBeUndefined();
+  });
 });
