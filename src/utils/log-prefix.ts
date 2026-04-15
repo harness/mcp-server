@@ -70,7 +70,17 @@ function findNodeLogBaseKey(
     if (node.logBaseKey) return node.logBaseKey;
   }
 
-  return undefined;
+  // Last resort: no specific step/stage targeted and no pipeline-level key found.
+  // Pick any node that has a logBaseKey — prefer the deepest (longest) key which
+  // typically corresponds to the main execution step rather than a wrapper stage.
+  let bestKey: string | undefined;
+  for (const node of Object.values(nodeMap)) {
+    if (!node.logBaseKey) continue;
+    if (!bestKey || node.logBaseKey.length > bestKey.length) {
+      bestKey = node.logBaseKey;
+    }
+  }
+  return bestKey;
 }
 
 /**
