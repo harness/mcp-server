@@ -1129,5 +1129,103 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
         },
       },
     },
+
+    // ------------------------------------------------------------------
+    // 14. unit_metric — Unit Cost Metrics API
+    //    Full CRUD for unit metrics with time series data
+    //    Base path: /ccm/api/unit-metric
+    //    Requires: CCM_UNIT_COST_METRICS feature flag
+    // ------------------------------------------------------------------
+    {
+      resourceType: "unit_metric",
+      displayName: "Unit Metric",
+      description: `Unit cost metrics for tracking custom cost efficiency metrics (e.g., cost per build minute, cost per deployment, cost per API call).
+
+Use harness_list to see all unit metrics (paginated metadata only, no records).
+Use harness_get with metric_identifier, start_time, and end_time to retrieve metric details with time series data.
+Use harness_create/harness_update to manage metrics with unitMetricRecords.
+Use harness_delete to remove records in a time range.
+
+Requires CCM_UNIT_COST_METRICS feature flag.`,
+      toolset: "ccm",
+      scope: "account",
+      identifierFields: ["metric_identifier"],
+      listFilterFields: [
+        { name: "search_key", description: "Filter metrics by name (case-insensitive)" },
+        { name: "page", description: "Page number (0-indexed)", type: "number" },
+        { name: "size", description: "Page size (default 20, max 100)", type: "number" },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "/ccm/api/unit-metric/list",
+          queryParams: {
+            search_key: "searchKey",
+            page: "pageNo",
+            size: "pageSize",
+          },
+          responseExtractor: ngExtract,
+          description: "List all unit metrics (paginated metadata without records). Filter by name with search_key. Default pageSize=20, max 100.",
+        },
+        get: {
+          method: "GET",
+          path: "/ccm/api/unit-metric",
+          queryParams: {
+            metric_identifier: "identifier",
+            start_time: "startTime",
+            end_time: "endTime",
+          },
+          responseExtractor: ngExtract,
+          description: "Get unit metric with time series records for a time range. Requires metric_identifier, start_time (ISO 8601), and end_time (ISO 8601). Returns UnitMetricResponseDTO with unitMetricRecords. NOTE: API uses 'identifier' parameter name.",
+        },
+        create: {
+          method: "POST",
+          path: "/ccm/api/unit-metric",
+          bodyBuilder: (input) => input.body,
+          bodySchema: {
+            description: "Unit metric definition with time series data",
+            fields: [
+              { name: "identifier", type: "string", required: true, description: "Unique metric identifier (entity identifier rules: lowercase, hyphens/underscores)" },
+              { name: "name", type: "string", required: true, description: "Display name for the metric" },
+              { name: "labels", type: "object", required: false, description: "Optional labels (map<string,string>, max 128 entries, each key/value ≤256 chars)" },
+              { name: "description", type: "string", required: false, description: "Optional metric description" },
+              { name: "defaultAggregation", type: "string", required: false, description: "Default aggregation: AVG, MIN, or MAX (defaults to AVG if omitted)" },
+              { name: "unitMetricRecords", type: "array", required: true, description: "Non-empty array of records, each with: value (number) and usageTimeStamp (ISO 8601 string)", itemType: "UnitCostMetricRecord" },
+            ],
+          },
+          responseExtractor: ngExtract,
+          description: "Create a new unit metric. Body must include metricIdentifier, metricName, and unitMetricRecords array. Returns UnitMetricResponseDTO with createdAt and lastUpdatedAt timestamps.",
+        },
+        update: {
+          method: "PUT",
+          path: "/ccm/api/unit-metric",
+          bodyBuilder: (input) => input.body,
+          bodySchema: {
+            description: "Unit metric update (same shape as create)",
+            fields: [
+              { name: "identifier", type: "string", required: true, description: "Metric identifier to update" },
+              { name: "name", type: "string", required: true, description: "Display name" },
+              { name: "labels", type: "object", required: false, description: "Labels update: omit/null to leave unchanged, empty object {} to clear all labels" },
+              { name: "description", type: "string", required: false, description: "Optional description" },
+              { name: "defaultAggregation", type: "string", required: false, description: "Default aggregation: AVG, MIN, or MAX" },
+              { name: "unitMetricRecords", type: "array", required: true, description: "New records to add (non-empty array)", itemType: "UnitCostMetricRecord" },
+            ],
+          },
+          responseExtractor: ngExtract,
+          description: "Update an existing unit metric. Pass labels={} to clear all labels. New unitMetricRecords are added to the time series. Returns updated UnitMetricResponseDTO.",
+        },
+        delete: {
+          method: "DELETE",
+          path: "/ccm/api/unit-metric",
+          queryParams: {
+            metric_identifier: "identifier",
+            start_time: "startTime",
+            end_time: "endTime",
+          },
+          responseExtractor: ngExtract,
+          description: "Delete unit metric records in a time range. NOTE: API parameter name is 'identifier' (not 'metricIdentifier'). Requires identifier, start_time (ISO 8601), and end_time (ISO 8601). Returns boolean success status.",
+        },
+      },
+    },
   ],
 };
