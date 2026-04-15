@@ -188,10 +188,10 @@ describe("harness_get — execution_log", () => {
     registerGetTool(server, registry, client);
   });
 
-  it("resolves log content when prefix is provided directly", async () => {
+  it("resolves log content when prefix is provided explicitly via params", async () => {
     const result = await server.call("harness_get", {
       resource_type: "execution_log",
-      resource_id: "acct1/pipeline/my-pipe/42/-exec-123",
+      params: { prefix: "acct1/pipeline/my-pipe/42/-exec-123" },
     });
     expect(result.isError).toBeUndefined();
     const data = parseResult(result) as { log_content: string };
@@ -201,7 +201,24 @@ describe("harness_get — execution_log", () => {
     expect(buildLogPrefixMock).not.toHaveBeenCalled();
   });
 
-  it("auto-builds prefix from execution_id when no prefix given", async () => {
+  it("maps resource_id to execution_id and auto-builds prefix", async () => {
+    const result = await server.call("harness_get", {
+      resource_type: "execution_log",
+      resource_id: "exec-123",
+    });
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as { log_content: string };
+    expect(data.log_content).toContain("BUILD FAILURE");
+    expect(buildLogPrefixMock).toHaveBeenCalledWith(
+      client,
+      registry,
+      "exec-123",
+      expect.objectContaining({ execution_id: "exec-123" }),
+    );
+    expect(resolveLogContentMock).toHaveBeenCalledWith(client, "acct1/pipeline/my-pipe/42/-exec-123");
+  });
+
+  it("auto-builds prefix from execution_id when provided in params", async () => {
     const result = await server.call("harness_get", {
       resource_type: "execution_log",
       params: { execution_id: "exec-123" },
@@ -216,6 +233,21 @@ describe("harness_get — execution_log", () => {
       expect.objectContaining({ resource_type: "execution_log" }),
     );
     expect(resolveLogContentMock).toHaveBeenCalledWith(client, "acct1/pipeline/my-pipe/42/-exec-123");
+  });
+
+  it("does not override explicit execution_id with resource_id", async () => {
+    const result = await server.call("harness_get", {
+      resource_type: "execution_log",
+      resource_id: "ignored-id",
+      params: { execution_id: "exec-456" },
+    });
+    expect(result.isError).toBeUndefined();
+    expect(buildLogPrefixMock).toHaveBeenCalledWith(
+      client,
+      registry,
+      "exec-456",
+      expect.objectContaining({ execution_id: "exec-456" }),
+    );
   });
 
   it("passes step query params from the Harness URL into log prefix resolution", async () => {

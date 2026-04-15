@@ -174,6 +174,72 @@ describe("buildLogPrefixFromExecution", () => {
     ).rejects.toThrow("Could not extract pipelineIdentifier/runSequence");
   });
 
+  it("falls back to any available logBaseKey when no step or stage is targeted", async () => {
+    dispatchMock.mockResolvedValue({
+      pipelineExecutionSummary: {
+        pipelineIdentifier: "sample-pipeline",
+        runSequence: 7,
+        shouldUseSimplifiedKey: true,
+      },
+      executionGraph: {
+        nodeMap: {
+          stageNode: {
+            uuid: "stage-uuid",
+            identifier: "build_stage",
+            baseFqn: "pipeline.stages.build_stage",
+            logBaseKey: "acct1/stages/build_stage",
+          },
+          stepNode: {
+            uuid: "step-uuid",
+            identifier: "run_tests",
+            baseFqn: "pipeline.stages.build_stage.spec.execution.steps.run_tests",
+            logBaseKey: "acct1/stages/build_stage/steps/run_tests",
+          },
+          pipelineNode: {
+            uuid: "pipeline-uuid",
+            identifier: "pipeline",
+            baseFqn: "pipeline",
+            // no logBaseKey on pipeline node
+          },
+        },
+      },
+    });
+
+    const result = await buildLogPrefixFromExecution(
+      mockClient, mockRegistry, "exec-123", {},
+    );
+
+    // Should pick the deepest (longest) logBaseKey — the step node
+    expect(result).toBe("acct1/stages/build_stage/steps/run_tests");
+  });
+
+  it("falls back to synthesized prefix when no node has a logBaseKey", async () => {
+    dispatchMock.mockResolvedValue({
+      pipelineExecutionSummary: {
+        pipelineIdentifier: "my-pipe",
+        runSequence: 42,
+        shouldUseSimplifiedKey: true,
+      },
+      executionGraph: {
+        nodeMap: {
+          someNode: {
+            uuid: "node-uuid",
+            identifier: "some_step",
+            baseFqn: "pipeline.stages.build.steps.some_step",
+            // no logBaseKey
+          },
+        },
+      },
+    });
+
+    const result = await buildLogPrefixFromExecution(
+      mockClient, mockRegistry, "exec-123", {},
+    );
+
+    // No logBaseKey in any node — should fall back to synthesized prefix
+    expect(result).toBe("acct1/pipeline/my-pipe/42/-exec-123");
+  });
+
   it("handles flat execution object (no pipelineExecutionSummary wrapper)", async () => {
     dispatchMock.mockResolvedValue({
       pipelineIdentifier: "flat-pipe",
