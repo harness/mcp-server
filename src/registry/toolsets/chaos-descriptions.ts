@@ -368,7 +368,10 @@ ERRORS:
 
 NOTES:
   - The "identity" field is for the NEW experiment being created, not the template (template is identified by template_id).
-  - Scope query params (accountIdentifier, organizationIdentifier, projectIdentifier) are auto-injected — only the body scope fields (account_id, org_id, project_id) need to be passed explicitly.`;
+  - Scope query params (accountIdentifier, organizationIdentifier, projectIdentifier) are auto-injected — only the body scope fields (account_id, org_id, project_id) need to be passed explicitly.
+  
+ Note: If user wants to create an experiment from scratch (without using a template), use the create_experiment action on chaos_experiment. 
+  `;
 
 export const descListRevisions = `List revision history for a template.
 Returns all revisions with their identifiers, timestamps, and change descriptions. Use to track template evolution or find a specific revision for comparison.`;
@@ -770,7 +773,8 @@ For Kubernetes v1beta1, at least one fault is required in spec.faultRef.
 infraType must be one of: Kubernetes, KubernetesV2, Linux, Windows, CloudFoundry, Container — empty/invalid errors.
 For Kubernetes, infraId must be in 'environmentId/infraId' format.
 To create from a template instead, use the create_from_template action on chaos_experiment_template.
-IMPORTANT: Do NOT pass id for new experiments — omit it entirely or the backend may treat the request as an update.`;
+Note: This endpoint is used to create a new chaos experiment from scratch (without using a template), but if user wants to create a new chaos experiment from a template, use the create_from_template action on chaos_experiment_template.
+`;
 
 export const descBodyExperimentCreate = `Request body for creating a chaos experiment.
 
@@ -781,22 +785,34 @@ Validation rules:
 - identity: ^[a-z0-9-]*$, no leading/trailing dash, max 47 chars, unique in project
 - name: must be unique within account/org/project
 - manifest: valid JSON string with apiVersion (/v1alpha1, /v1alpha2, or /v1beta1); K8s v1beta1 needs >= 1 fault
-- infra_id: for Kubernetes use 'envId/infraId' format; for machine infra just the infra ID
-- infra_type: Kubernetes | KubernetesV2 | Linux | Windows | CloudFoundry | Container (required, no default)
+- infra_id + infra_type: both required, must be provided together
+- infra_id: always composite format '{environmentIdentifier}/{infrastructureIdentifier}' (e.g. 'demo/qaauto1') — applies to ALL infra types
+- infra_type (case-sensitive enum): Kubernetes | KubernetesV2 | Linux | Windows | windows (backward-compat alias) | CloudFoundry | Container
 
 Example:
-{
-  "name": "Pod Delete Test",
-  "identity": "pod-delete-test",
-  "manifest": "{\\"apiVersion\\":\\"litmuschaos.io/v1beta1\\", ...}",
-  "infra_id": "my-env/my-k8s-infra",
-  "infra_type": "Kubernetes"
-}`;
+{"id":"bdea40df-20f7-4280-a6f2-65f02885dc4d","identity":"demo-exp-00000001","infraId":"demo/qaauto1","isSingleRunCronEnabled":false,"description":"","infraType":"KubernetesV2","name":"demo-exp-00000001","manifest":"{\"apiVersion\":\"litmuschaos.io/v1beta1\",\"kind\":\"ChaosExperiment\",\"metadata\":{\"name\":\"demo-exp-00000001\",\"namespace\":\"hce\"},\"spec\":{\"cleanupPolicy\":\"delete\",\"experimentId\":\"bdea40df-20f7-4280-a6f2-65f02885dc4d\",\"experimentRunId\":\"\",\"faultRef\":[{\"authEnabled\":false,\"identity\":\"pod-cpu-hog\",\"infraId\":\"demo/qaauto1\",\"isEnterprise\":true,\"name\":\"pod-cpu-hog-56m\",\"values\":[{\"name\":\"TARGET_WORKLOAD_KIND\",\"value\":\"deployment\"},{\"name\":\"TARGET_WORKLOAD_NAMESPACE\",\"value\":\"boutique\"},{\"name\":\"TARGET_WORKLOAD_LABELS\",\"value\":\"app=cartservice\"}]}],\"infraId\":\"demo/qaauto1\",\"infraType\":\"KubernetesV2\",\"serviceAccountName\":\"litmus\",\"vertices\":[{\"name\":\"v-57o\",\"start\":{\"faults\":[{\"name\":\"pod-cpu-hog-56m\"}]}},{\"end\":{\"faults\":[{\"name\":\"pod-cpu-hog-56m\"}]},\"name\":\"v-end\"}]}}","tags":["fault=pod-cpu-hog"]}`;
 
 export const descExperimentManifest = `Full experiment specification as a JSON string. Must contain a valid apiVersion field with suffix /v1alpha1, /v1alpha2, or /v1beta1. For Kubernetes v1beta1 experiments, spec.faultRef must contain at least one fault — empty faultRef array is rejected. Empty string or invalid JSON will fail.`;
 
-export const descExperimentInfraType = `Infrastructure type for the experiment. Required — no default value; empty/invalid errors with 'infra type is not supported'. Valid values: Kubernetes, KubernetesV2, Linux, Windows, CloudFoundry, Container.`;
+export const descExperimentInfraType = `Infrastructure type for the experiment. Required — no default value; empty/invalid errors with 'infra type is not supported'.
+Valid values (case-sensitive string enum):
+- "Kubernetes" — Legacy Kubernetes infrastructure (v1)
+- "KubernetesV2" — New Kubernetes infrastructure (v2, recommended)
+- "Linux" — Linux machine-based infrastructure
+- "Windows" — Windows machine-based infrastructure
+- "windows" — Lowercase alias kept for backward compatibility (prefer "Windows")
+- "CloudFoundry" — Cloud Foundry infrastructure
+- "Container" — Container-based infrastructure
+Must be provided together with infra_id — both are required.`;
 
-export const descExperimentInfraIdCreate = `Target infrastructure reference. For Kubernetes infra, must be in 'environmentId/infraId' composite format (split on /, exactly 2 parts). For machine infra (Linux/Windows/Container/CloudFoundry), pass the infra ID directly. Use harness_list with resource_type=chaos_k8s_infrastructure or chaos_infrastructure to discover available IDs.`;
+export const descExperimentInfraIdCreate = `Target infrastructure reference. Must be provided together with infra_type — both are required.
+Composite format: "{environmentIdentifier}/{infrastructureIdentifier}" (e.g. "demo/qaauto1"). Applies to ALL infra types.
+
+If infra_id is not already known, discover it:
+  Step 1 — List environments: call harness_list resource_type=chaos_environment. Present environment names and identifiers to the user and let them pick one.
+  Step 2 — List infrastructures: call harness_list resource_type=chaos_k8s_infrastructure (for Kubernetes/KubernetesV2) or chaos_infrastructure (for Linux/Windows/Container/CloudFoundry) with environment_id=<selected env>. Only infrastructures where status=ACTIVE AND isChaosEnabled=true are valid — exclude all others. Present only valid infras to the user. If none are valid, do not proceed.
+  Step 3 — Build infra_id: combine as "{environmentIdentifier}/{infraID}" (e.g. environment "demo" + infra "qaauto1" = "demo/qaauto1").`;
 
 export const descExperimentCronSyntax = `Optional cron expression for scheduling recurring experiment runs (e.g. '0 0 * * *' for daily). When provided, the experiment type is automatically set to CronExperimentV2. NOT validated at save time — invalid cron will fail when the schedule is actually enabled. Omit for one-time experiments.`;
+
+export const descExperimentIdUUID = `Experiment UUID (v4). Required — generate a new random UUID for create. For update, pass the exact id from harness_get to avoid creating a duplicate.`;

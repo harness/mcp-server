@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { ToolsetDefinition } from "../types.js";
 import {
   passthrough,
@@ -111,6 +112,7 @@ import {
   descComponentType, descComponentIdentifier, descComponentHubReference,
   // Experiment create field descriptions
   descExperimentManifest, descExperimentInfraType, descExperimentInfraIdCreate, descExperimentCronSyntax,
+  descExperimentIdUUID,
 } from "./chaos-descriptions.js";
 
 /**
@@ -204,11 +206,12 @@ export const chaosToolset: ToolsetDefinition = {
           bodyBuilder: (input) => {
             const b = (input.body ?? input) as Record<string, unknown>;
             return {
+              id: (b.id as string) || randomUUID(),
               ...(b.identity ? { identity: b.identity } : {}),
               name: b.name,
               ...(b.manifest ? { manifest: b.manifest } : {}),
-              ...(b.infra_id ? { infraId: b.infra_id } : {}),
-              ...(b.infra_type ? { infraType: b.infra_type } : {}),
+              ...(b.infra_id ? { infraId: b.infra_id, infra_id: b.infra_id } : {}),
+              ...(b.infra_type ? { infraType: b.infra_type, infra_type: b.infra_type } : {}),
               ...(b.description ? { description: b.description } : {}),
               ...(b.tags ? { tags: Array.isArray(b.tags) ? b.tags : (b.tags as string).split(",").map((t: string) => t.trim()).filter(Boolean) } : {}),
               ...(b.cron_syntax !== undefined ? { cronSyntax: b.cron_syntax } : {}),
@@ -221,6 +224,7 @@ export const chaosToolset: ToolsetDefinition = {
           bodySchema: {
             description: descBodyExperimentCreate,
             fields: [
+              { name: "id", type: "string", required: true, description: descExperimentIdUUID },
               { name: "name", type: "string", required: true, description: descExperimentName },
               { name: "manifest", type: "string", required: true, description: descExperimentManifest },
               { name: "infra_id", type: "string", required: true, description: descExperimentInfraIdCreate },
