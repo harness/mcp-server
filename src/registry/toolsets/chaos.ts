@@ -28,7 +28,7 @@ import {
   descGetExperimentRun,
   descListProbes, descGetProbe,
   descListExperimentTemplates, descGetExperimentTemplate, descDeleteExperimentTemplate,
-  descListExperimentVariables, descGetComponentVariable,
+  descListExperimentVariables, descGetComponentVariable, descCreateExperiment,
   descListLinuxInfra,
   descListLoadtests, descGetLoadtest, descCreateLoadtest, descDeleteLoadtest,
   descListK8sInfra, descGetK8sInfra,
@@ -58,7 +58,7 @@ import {
   descGetProbeTemplateVariables,
   descListActionTemplateRevisions, descGetActionTemplateVariables, descCompareActionTemplateRevisions,
   // Body schema descriptions
-  descBodyExperimentRun, descBodyNoBody,
+  descBodyExperimentRun, descBodyNoBody, descBodyExperimentCreate,
   descBodyCreateFromTemplate, descBodyLoadtestDefinition,
   descBodyProbeEnable, descBodyProbeVerify, descBodyProbesInRun,
   // Field descriptions
@@ -109,6 +109,8 @@ import {
   descInputSetSpec, descIsIdentity,
   // Component variable descriptions
   descComponentType, descComponentIdentifier, descComponentHubReference,
+  // Experiment create field descriptions
+  descExperimentManifest, descExperimentInfraType, descExperimentInfraIdCreate, descExperimentCronSyntax,
 } from "./chaos-descriptions.js";
 
 /**
@@ -195,6 +197,42 @@ export const chaosToolset: ToolsetDefinition = {
           pathParams: { experiment_id: "experimentId" },
           responseExtractor: passthrough,
           description: descDeleteExperiment,
+        },
+        create: {
+          method: "POST",
+          path: `${CHAOS}/rest/v2/experiment`,
+          bodyBuilder: (input) => {
+            const b = (input.body ?? input) as Record<string, unknown>;
+            return {
+              ...(b.identity ? { identity: b.identity } : {}),
+              name: b.name,
+              ...(b.manifest ? { manifest: b.manifest } : {}),
+              ...(b.infra_id ? { infraId: b.infra_id } : {}),
+              ...(b.infra_type ? { infraType: b.infra_type } : {}),
+              ...(b.description ? { description: b.description } : {}),
+              ...(b.tags ? { tags: Array.isArray(b.tags) ? b.tags : (b.tags as string).split(",").map((t: string) => t.trim()).filter(Boolean) } : {}),
+              ...(b.cron_syntax !== undefined ? { cronSyntax: b.cron_syntax } : {}),
+              ...(b.is_single_run_cron !== undefined ? { isSingleRunCronEnabled: b.is_single_run_cron } : {}),
+              ...(b.experiment_type ? { experimentType: b.experiment_type } : {}),
+            };
+          },
+          responseExtractor: passthrough,
+          description: descCreateExperiment,
+          bodySchema: {
+            description: descBodyExperimentCreate,
+            fields: [
+              { name: "name", type: "string", required: true, description: descExperimentName },
+              { name: "manifest", type: "string", required: true, description: descExperimentManifest },
+              { name: "infra_id", type: "string", required: true, description: descExperimentInfraIdCreate },
+              { name: "infra_type", type: "string", required: true, description: descExperimentInfraType },
+              { name: "identity", type: "string", required: false, description: descExperimentIdentity },
+              { name: "description", type: "string", required: false, description: descExperimentDescription },
+              { name: "tags", type: "array", required: false, description: descExperimentTags },
+              { name: "cron_syntax", type: "string", required: false, description: descExperimentCronSyntax },
+              { name: "is_single_run_cron", type: "boolean", required: false, description: "When true and cron_syntax is set, the cron job runs only once (LimitRunsTo(1)). Default: false (unlimited runs)." },
+              { name: "experiment_type", type: "string", required: false, description: "Experiment workflow type. Valid: Workflow, CronWorkflow, ChaosEngine, ChaosSchedule, GamedayWorkflow. Usually auto-determined — only GamedayWorkflow is special-cased. Default: NonCronExperimentV2 (or CronExperimentV2 if cron_syntax is set)." },
+            ],
+          },
         },
       },
       executeActions: {
