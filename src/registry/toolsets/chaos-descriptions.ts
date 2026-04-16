@@ -4,7 +4,7 @@ export const descToolsetChaos = `Harness Chaos Engineering — run/stop/govern c
 
 // ── Resource Descriptions ────────────────────────────────────────────
 
-export const descChaosExperiment = `Chaos experiment definition. Supports list, get, delete, and execute actions: run, stop. Use chaos_experiment_variable list to discover required runtime inputs before running.`;
+export const descChaosExperiment = `Chaos experiment definition. Supports list, get, delete, create, and execute actions: run, stop. Use chaos_experiment_variable list to discover required runtime inputs before running.`;
 
 export const descChaosExperimentRun = `Experiment run timeline — full snapshot of an ongoing or completed chaos experiment run.
 Returns the execution pipeline with individual nodes (faults, probes, actions), each with status, timing, and chaos data.
@@ -758,3 +758,45 @@ export const descComponentType = `Component type to retrieve variables for. One 
 export const descComponentIdentifier = `Identity (name/slug) of the chaos component whose variables to retrieve (e.g. 'my-http-probe', 'pod-delete-fault').`;
 
 export const descComponentHubReference = `Optional ChaosHub reference for hub-imported components. Omit for project-scoped components.`;
+
+// ── Chaos Experiment Create ─────────────────────────────────────────
+
+export const descCreateExperiment = `Create a new chaos experiment (POST /rest/v2/experiment).
+Requires name, manifest (JSON string with valid apiVersion), infraId, and infraType.
+Identity is optional — auto-generated from name if omitted (lowercase slug, max 47 chars, ^[a-z0-9-]*$, no leading/trailing dash).
+Both identity and name must be unique within the project scope.
+The manifest must be a valid JSON string containing apiVersion (suffix /v1alpha1, /v1alpha2, or /v1beta1).
+For Kubernetes v1beta1, at least one fault is required in spec.faultRef.
+infraType must be one of: Kubernetes, KubernetesV2, Linux, Windows, CloudFoundry, Container — empty/invalid errors.
+For Kubernetes, infraId must be in 'environmentId/infraId' format.
+To create from a template instead, use the create_from_template action on chaos_experiment_template.
+IMPORTANT: Do NOT pass id for new experiments — omit it entirely or the backend may treat the request as an update.`;
+
+export const descBodyExperimentCreate = `Request body for creating a chaos experiment.
+
+Required fields: name, manifest, infra_id, infra_type.
+Optional: identity (auto-generated if omitted), description, tags, cron_syntax, experiment_type.
+
+Validation rules:
+- identity: ^[a-z0-9-]*$, no leading/trailing dash, max 47 chars, unique in project
+- name: must be unique within account/org/project
+- manifest: valid JSON string with apiVersion (/v1alpha1, /v1alpha2, or /v1beta1); K8s v1beta1 needs >= 1 fault
+- infra_id: for Kubernetes use 'envId/infraId' format; for machine infra just the infra ID
+- infra_type: Kubernetes | KubernetesV2 | Linux | Windows | CloudFoundry | Container (required, no default)
+
+Example:
+{
+  "name": "Pod Delete Test",
+  "identity": "pod-delete-test",
+  "manifest": "{\\"apiVersion\\":\\"litmuschaos.io/v1beta1\\", ...}",
+  "infra_id": "my-env/my-k8s-infra",
+  "infra_type": "Kubernetes"
+}`;
+
+export const descExperimentManifest = `Full experiment specification as a JSON string. Must contain a valid apiVersion field with suffix /v1alpha1, /v1alpha2, or /v1beta1. For Kubernetes v1beta1 experiments, spec.faultRef must contain at least one fault — empty faultRef array is rejected. Empty string or invalid JSON will fail.`;
+
+export const descExperimentInfraType = `Infrastructure type for the experiment. Required — no default value; empty/invalid errors with 'infra type is not supported'. Valid values: Kubernetes, KubernetesV2, Linux, Windows, CloudFoundry, Container.`;
+
+export const descExperimentInfraIdCreate = `Target infrastructure reference. For Kubernetes infra, must be in 'environmentId/infraId' composite format (split on /, exactly 2 parts). For machine infra (Linux/Windows/Container/CloudFoundry), pass the infra ID directly. Use harness_list with resource_type=chaos_k8s_infrastructure or chaos_infrastructure to discover available IDs.`;
+
+export const descExperimentCronSyntax = `Optional cron expression for scheduling recurring experiment runs (e.g. '0 0 * * *' for daily). When provided, the experiment type is automatically set to CronExperimentV2. NOT validated at save time — invalid cron will fail when the schedule is actually enabled. Omit for one-time experiments.`;
