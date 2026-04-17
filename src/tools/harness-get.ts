@@ -52,11 +52,18 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
         const primaryField = identFields.length > 1
           ? identFields[identFields.length - 1]!
           : identFields[0];
+        // For execution_log, resource_id is the execution ID — map it to
+        // execution_id so buildLogPrefixFromExecution resolves the real log key
+        // from the execution graph.  Don't map it to "prefix" (the identifier
+        // field) because a raw execution ID is not a valid log-service prefix.
+        if (resourceType === "execution_log" && resourceId && !asString(input.execution_id)) {
+          input.execution_id = resourceId;
+        }
         const shouldMapResourceId =
           primaryField &&
           resourceId &&
           !input[primaryField] &&
-          !(resourceType === "execution_log" && asString(input.execution_id));
+          resourceType !== "execution_log";
         if (shouldMapResourceId) {
           input[primaryField] = resourceId;
         }

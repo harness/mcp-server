@@ -66,16 +66,82 @@ function createHarnessServer(config: Config): McpServer {
 }
 
 /**
+ * Write a diagnostic line directly to a log file.
+ * Used during disconnect/crash when stderr (console.error) may already be dead
+ * because Claude Code closed the pipe.
+ */
+function logToFile(message: string, data?: Record<string, unknown>): void {
+  try {
+    const entry = JSON.stringify({
+      ts: new Date().toISOString(),
+      level: "error",
+      module: "stdio-lifecycle",
+      msg: message,
+      ...data,
+    });
+    // Try env var first, then fall back to ~/.claude/harness-mcp.log
+    const logPath = process.env.HARNESS_MCP_LOG_FILE
+      ?? (process.env.HOME ? `${process.env.HOME}/.claude/harness-mcp.log` : undefined);
+    if (logPath) {
+      // Sync write — process may exit immediately after this
+      require("node:fs").appendFileSync(logPath, entry + "\n");
+    }
+    // Also try stderr in case it's still alive
+    console.error(entry);
+  } catch {
+    // Nothing we can do — both file and stderr are dead
+  }
+}
+
+/**
  * Start the server in stdio mode — single persistent connection.
  */
 async function startStdio(config: Config): Promise<void> {
   const server = createHarnessServer(config);
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  log.info("harness-mcp-server connected via stdio");
+  log.info("harness-mcp-server connected via stdio", {
+    pid: process.pid,
+    node_version: process.version,
+    uptime_s: Math.round(process.uptime()),
+  });
+
+  // --- Stdio disconnect diagnostics ---
+  // Without these handlers, disconnects are completely silent because
+  // stderr (where the logger writes) is piped through the same connection
+  // that just broke. logToFile writes directly to disk as a fallback.
+  let lastActivityTs = Date.now();
+  const originalSend = transport.send.bind(transport) as (msg: never) => Promise<void>;
+  transport.send = async (msg: never) => {
+    lastActivityTs = Date.now();
+    return originalSend(msg);
+  };
+
+  process.stdin.on("end", () => {
+    logToFile("stdin EOF — parent disconnected", {
+      idle_ms: Date.now() - lastActivityTs,
+      uptime_s: Math.round(process.uptime()),
+      memory_mb: Math.round(process.memoryUsage.rss() / 1024 / 1024),
+    });
+    process.exit(0);
+  });
+
+  process.stdout.on("error", (err: NodeJS.ErrnoException) => {
+    logToFile("stdout error — pipe broken", {
+      code: err.code,
+      idle_ms: Date.now() - lastActivityTs,
+      uptime_s: Math.round(process.uptime()),
+    });
+    if (err.code === "EPIPE" || err.code === "ERR_STREAM_DESTROYED") {
+      process.exit(0);
+    }
+  });
 
   const shutdown = async (signal: string): Promise<void> => {
-    log.info(`Received ${signal}, closing stdio transport...`);
+    log.info(`Received ${signal}, closing stdio transport...`, {
+      idle_ms: Date.now() - lastActivityTs,
+      uptime_s: Math.round(process.uptime()),
+    });
     await transport.close();
     await server.close();
     log.info("Stdio server closed");
@@ -385,11 +451,15 @@ async function main(): Promise<void> {
   // Node 20+ defaults --unhandled-rejections=throw, so unhandled rejections
   // crash the process. We catch them to log context before exiting.
   process.on("unhandledRejection", (reason) => {
-    log.error("Unhandled promise rejection — exiting", { error: String(reason), stack: (reason as Error)?.stack });
+    const data = { error: String(reason), stack: (reason as Error)?.stack };
+    log.error("Unhandled promise rejection — exiting", data);
+    logToFile("unhandledRejection — exiting", data);
     process.exit(1);
   });
   process.on("uncaughtException", (err) => {
-    log.error("Uncaught exception — exiting", { error: err.message, stack: err.stack });
+    const data = { error: err.message, stack: err.stack, code: (err as NodeJS.ErrnoException).code };
+    log.error("Uncaught exception — exiting", data);
+    logToFile("uncaughtException — exiting", data);
     process.exit(1);
   });
 
