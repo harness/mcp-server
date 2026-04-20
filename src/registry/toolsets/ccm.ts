@@ -338,10 +338,35 @@ export const ccmToolset: ToolsetDefinition = {
               { name: "viewVisualization", type: "object", required: false, description: "Chart type and group by configuration" },
               { name: "viewRules", type: "array", required: false, description: "Filter rules for the perspective", itemType: "rule object" },
               { name: "viewTimeRange", type: "object", required: false, description: "Time range settings" },
+              {
+                name: "unitMetricInfo", type: "array", required: false,
+                description: "Unit cost metric configurations. Each entry computes a unit cost (e.g., cost per request). Requires CCM_UNIT_COST_METRICS feature flag.",
+                itemType: "UnitMetricInfo",
+                fields: [
+                  { name: "name", type: "string", required: true, description: "Display name for this unit metric row (max 80 chars)" },
+                  { name: "kind", type: "string", required: false, description: "Evaluation mode: DIVISION (default) or FORMULA" },
+                  {
+                    name: "unitMetricNumerator", type: "object", required: true,
+                    description: "Numerator expression: one or more operands with binary operators (left-associative)",
+                    fields: [
+                      { name: "operands", type: "array", required: true, description: "Ordered operands (min 1). Each operand has type=VIEW or type=METRIC, an operandName (unique label, max 80 chars), and optional multiplier (default 1.0). VIEW operands may include filters (additional perspective filters). METRIC operands require metricId (identifier of a unit metric created via unit_metric resource).", itemType: "UnitMetricOperand" },
+                      { name: "operators", type: "array", required: false, description: "Binary operators between consecutive operands: ADD, SUBTRACT, MULTIPLY, DIVIDE. Must have (operands.length - 1) entries. Omit for single-operand expressions.", itemType: "UnitMetricBinaryOperator" },
+                    ],
+                  },
+                  {
+                    name: "unitMetricDenominator", type: "object", required: true,
+                    description: "Denominator expression: same structure as unitMetricNumerator",
+                    fields: [
+                      { name: "operands", type: "array", required: true, description: "Ordered operands (min 1). Same structure as numerator operands.", itemType: "UnitMetricOperand" },
+                      { name: "operators", type: "array", required: false, description: "Binary operators between consecutive operands: ADD, SUBTRACT, MULTIPLY, DIVIDE.", itemType: "UnitMetricBinaryOperator" },
+                    ],
+                  },
+                ],
+              },
             ],
           },
           responseExtractor: ngExtract,
-          description: "Create a new cost perspective",
+          description: "Create a new cost perspective. Optionally include unitMetricInfo for unit cost calculations (requires CCM_UNIT_COST_METRICS feature flag).",
         },
         update: {
           method: "PUT",
@@ -355,10 +380,35 @@ export const ccmToolset: ToolsetDefinition = {
               { name: "viewVisualization", type: "object", required: false, description: "Chart type and group by configuration" },
               { name: "viewRules", type: "array", required: false, description: "Filter rules", itemType: "rule object" },
               { name: "viewTimeRange", type: "object", required: false, description: "Time range settings" },
+              {
+                name: "unitMetricInfo", type: "array", required: false,
+                description: "Unit cost metric configurations. Each entry computes a unit cost (e.g., cost per request). Requires CCM_UNIT_COST_METRICS feature flag. Pass null/omit to leave unchanged, pass empty array [] to clear all unit metrics.",
+                itemType: "UnitMetricInfo",
+                fields: [
+                  { name: "name", type: "string", required: true, description: "Display name for this unit metric row (max 80 chars)" },
+                  { name: "kind", type: "string", required: false, description: "Evaluation mode: DIVISION (default) or FORMULA" },
+                  {
+                    name: "unitMetricNumerator", type: "object", required: true,
+                    description: "Numerator expression: one or more operands with binary operators (left-associative)",
+                    fields: [
+                      { name: "operands", type: "array", required: true, description: "Ordered operands (min 1). Each operand has type=VIEW or type=METRIC, an operandName (unique label, max 80 chars), and optional multiplier (default 1.0). VIEW operands may include filters. METRIC operands require metricId.", itemType: "UnitMetricOperand" },
+                      { name: "operators", type: "array", required: false, description: "Binary operators between consecutive operands: ADD, SUBTRACT, MULTIPLY, DIVIDE.", itemType: "UnitMetricBinaryOperator" },
+                    ],
+                  },
+                  {
+                    name: "unitMetricDenominator", type: "object", required: true,
+                    description: "Denominator expression: same structure as unitMetricNumerator",
+                    fields: [
+                      { name: "operands", type: "array", required: true, description: "Ordered operands (min 1). Same structure as numerator operands.", itemType: "UnitMetricOperand" },
+                      { name: "operators", type: "array", required: false, description: "Binary operators between consecutive operands: ADD, SUBTRACT, MULTIPLY, DIVIDE.", itemType: "UnitMetricBinaryOperator" },
+                    ],
+                  },
+                ],
+              },
             ],
           },
           responseExtractor: ngExtract,
-          description: "Update an existing cost perspective",
+          description: "Update an existing cost perspective. Optionally include unitMetricInfo for unit cost calculations.",
         },
         delete: {
           method: "DELETE",
