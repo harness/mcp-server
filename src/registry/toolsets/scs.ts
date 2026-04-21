@@ -220,6 +220,29 @@ const COMPONENT_DRIFT_LIST_FIELDS = [
   "status", "old_component", "new_component",
 ];
 
+const REMEDIATION_PR_LIST_FIELDS = [
+  "id", "purl", "package_name", "current_version", "target_version",
+  "pr_url", "pr_number", "pr_status", "repo_name",
+  "base_branch", "remediation_branch",
+  "created_at", "updated_at", "trigger_type", "created_by",
+];
+
+/**
+ * Custom extractor for scs_remediation_pr list responses.
+ * The API returns { items: [ {rich PR fields} ] }. If we kept the { items }
+ * wrapper, harness-list's post-processing would apply compactItems() which
+ * strips non-whitelisted PR fields (purl, pr_number, pr_url, target_version,
+ * trigger_type, etc.) and collapse each PR to {}. Flatten to a bare array
+ * — matching other SCS list extractors — so compactItems is bypassed, and
+ * pick PR-specific fields explicitly.
+ */
+const remediationPrListExtract = (raw: unknown): unknown => {
+  const items = (raw && typeof raw === "object" && !Array.isArray(raw))
+    ? (raw as Record<string, unknown>).items
+    : raw;
+  return scsListExtract(REMEDIATION_PR_LIST_FIELDS)(items);
+};
+
 /**
  * Normalize a value to an array. LLMs frequently send scalar strings
  * (e.g. "CIS") instead of arrays (["CIS"]) for array-typed parameters.
@@ -823,7 +846,7 @@ export const scsToolset: ToolsetDefinition = {
             size: "limit",
           },
           defaultQueryParams: { limit: "10" },
-          responseExtractor: scsCleanExtract,
+          responseExtractor: remediationPrListExtract,
           description: "List remediation pull requests for an artifact",
         },
         create: {
