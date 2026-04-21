@@ -432,7 +432,12 @@ export class HarnessClient {
       }
     }
 
-    const queryString = params.toString();
+    const queryParts: string[] = [];
+    params.forEach((value, key) => {
+      queryParts.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+    });
+    const queryString = queryParts.join('&');
+
     const url = queryString ? `${baseUrl}${path}?${queryString}` : `${baseUrl}${path}`;
     log.debug(`Built URL: ${url}`);
     return url;

@@ -6,7 +6,7 @@ import { jsonResult, errorResult, mixedResult } from "../utils/response-formatte
 import { isUserError, isUserFixableApiError, toMcpError, enrichErrorWithHint, HarnessApiError } from "../utils/errors.js";
 import { compactItems } from "../utils/compact.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
-import { asString, isRecord } from "../utils/type-guards.js";
+import { asString, isRecord, coerceRecord } from "../utils/type-guards.js";
 import { renderListVisual } from "../utils/svg/list-visuals.js";
 import type { ListVisualType } from "../utils/svg/list-visuals.js";
 import { createLogger } from "../utils/logger.js";
@@ -51,8 +51,11 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
         const { params, filters, ...rest } = args;
         const input = applyUrlDefaults(rest as Record<string, unknown>, args.url);
         // Spread caller-supplied params (path identifiers) and filters into the input
-        if (params) Object.assign(input, params);
-        if (filters) Object.assign(input, filters);
+        // Use coerceRecord to handle LLMs that serialize objects as JSON strings
+        const coercedParams = coerceRecord(params);
+        const coercedFilters = coerceRecord(filters);
+        if (coercedParams) Object.assign(input, coercedParams);
+        if (coercedFilters) Object.assign(input, coercedFilters);
         const resourceType = asString(input.resource_type);
         if (!resourceType) {
           return errorResult("resource_type is required. Provide it explicitly or via a Harness URL.");

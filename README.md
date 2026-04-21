@@ -465,6 +465,7 @@ The server automatically loads environment variables from a `.env` file in the p
 | `HARNESS_READ_ONLY` | No | `false` | Block all mutating operations (create, update, delete, execute). Only list and get are allowed. Useful for shared/demo environments |
 | `HARNESS_SKIP_ELICITATION` | No | `false` | Skip all elicitation confirmation prompts. When `true`, write and delete operations proceed without user approval — enabling fully autonomous agent workflows. See [Elicitation](#elicitation) |
 | `HARNESS_ALLOW_HTTP` | No | `false` | Allow non-HTTPS `HARNESS_BASE_URL`. By default, the server enforces HTTPS for security. Set to `true` only for local development against a non-TLS Harness instance |
+| `HARNESS_PIPELINE_VERSION` | No | `0` | **(Alpha)** Pipeline YAML version. Set to `"1"` to guide agents toward `pipeline_v1` (V1 YAML format) for pipeline operations. Both `pipeline` (V0) and `pipeline_v1` (V1) resource types are always available regardless of this setting |
 
 ### HTTPS Enforcement
 
@@ -873,6 +874,7 @@ Harness pipelines can be stored in three ways:
 | Resource Type | List | Get | Create | Update | Delete | Execute Actions |
 |---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
 | `pipeline` | x | x | x | x | x | `run`, `retry` |
+| `pipeline_v1` **(Alpha)** | x | x | x | x | x | `run` |
 | `execution` | x | x | | | | `interrupt` |
 | `trigger` | x | x | x | x | x | |
 | `pipeline_summary` | | x | | | | |
@@ -1216,6 +1218,7 @@ Inline PNG chart visualizations rendered from Harness data. These are metadata-o
 | `schema:///pipeline` | Harness pipeline JSON Schema | `application/schema+json` |
 | `schema:///template` | Harness template JSON Schema | `application/schema+json` |
 | `schema:///trigger` | Harness trigger JSON Schema | `application/schema+json` |
+| `schema:///pipeline_v1` **(Alpha)** | Harness V1 pipeline JSON Schema (simplified stages/steps format) | `application/schema+json` |
 | `schema:///agent-pipeline` | Harness AI agent pipeline JSON Schema | `application/schema+json` |
 
 ## Toolset Filtering
@@ -1232,7 +1235,7 @@ Available toolset names:
 | Toolset | Resource Types |
 |---------|---------------|
 | `platform` | organization, project |
-| `pipelines` | pipeline, execution, trigger, pipeline_summary, input_set, approval_instance |
+| `pipelines` | pipeline, pipeline_v1, execution, trigger, pipeline_summary, input_set, approval_instance |
 | `agent-pipelines` | agent, agent_run |
 | `services` | service |
 | `environments` | environment |
@@ -1522,7 +1525,7 @@ When enabled, **all** write and delete operations proceed without user confirmat
 
 ## Complementary Skills
 
-The Harness MCP server pairs well with **[Harness Skills](https://github.com/thisrohangupta/harness-skills)** — a collection of ready-made Claude Code skills (slash commands) designed for common Harness workflows. Install them alongside this MCP server to get high-level automation like `/deploy`, `/rollback`, `/triage`, and more without writing custom prompts.
+The Harness MCP server pairs well with **[Harness Skills](https://github.com/harness/harness-skills)** — a collection of ready-made Claude Code skills (slash commands) designed for common Harness workflows. Install them alongside this MCP server to get high-level automation like `/deploy`, `/rollback`, `/triage`, and more without writing custom prompts.
 
 ## Troubleshooting & Common Pitfalls
 

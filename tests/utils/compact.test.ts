@@ -26,6 +26,34 @@ describe("compactItems", () => {
     expect(result[0]).toEqual({ tags: ["prod"], labels: { env: "prod" }, owner: "alice", author: "bob" });
   });
 
+  it("keeps cost fields", () => {
+    const items = [{
+      cost: 150.50,
+      costTrend: 5.2,
+      idleCost: 20.0,
+      unallocatedCost: 10.5,
+      utilizedCost: 120.0,
+      forecastCost: 180.0,
+      actualCost: 145.0,
+      budgetAmount: 200.0,
+      totalMonthlyCost: 4500.0,
+      totalMonthlySaving: 300.0,
+    }];
+    const result = compactItems(items) as Record<string, unknown>[];
+    expect(result[0]).toEqual({
+      cost: 150.50,
+      costTrend: 5.2,
+      idleCost: 20.0,
+      unallocatedCost: 10.5,
+      utilizedCost: 120.0,
+      forecastCost: 180.0,
+      actualCost: 145.0,
+      budgetAmount: 200.0,
+      totalMonthlyCost: 4500.0,
+      totalMonthlySaving: 300.0,
+    });
+  });
+
   it("keeps timestamp fields matching pattern", () => {
     const items = [{ createdAt: 1000, lastModifiedTs: 2000, startTime: 3000, updatedDate: "2025-01-01" }];
     const result = compactItems(items) as Record<string, unknown>[];

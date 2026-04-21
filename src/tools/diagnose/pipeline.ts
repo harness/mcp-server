@@ -652,6 +652,58 @@ export const pipelineHandler: DiagnoseHandler = {
       currentStep++;
     }
 
+    // Auto-fetch logs for successful executions when include_logs is true but
+    // no failed steps and no explicit step was requested.  Pick the deepest
+    // (most specific) Run/Script step from the graph — this is typically the
+    // main build/test step whose output the user actually wants to read.
+    if (
+      includeLogs &&
+      failedNodes.length === 0 &&
+      !requestedStepId &&
+      graphNodeMap &&
+      !diagnostic.failed_step_logs &&
+      !diagnostic.requested_step_log
+    ) {
+      await sendProgress(extra, currentStep, totalSteps, "Fetching execution step logs...");
+
+      // Find Run/Script steps with logBaseKeys, prefer the deepest (longest key)
+      let bestNode: ExecGraphNode | undefined;
+      let bestNodeId: string | undefined;
+      for (const [nodeId, node] of Object.entries(graphNodeMap)) {
+        if (!node.logBaseKey) continue;
+        if (!bestNode || (node.logBaseKey.length > (bestNode.logBaseKey?.length ?? 0))) {
+          bestNode = node;
+          bestNodeId = nodeId;
+        }
+      }
+
+      if (bestNode?.logBaseKey) {
+        log.info("Auto-fetching log for main execution step", {
+          step_id: bestNodeId,
+          step: bestNode.identifier ?? bestNode.name,
+          status: bestNode.status,
+        });
+        try {
+          const logText = await resolveLogContent(client, bestNode.logBaseKey, { signal });
+          diagnostic.requested_step_log = {
+            step_id: bestNodeId,
+            step: bestNode.identifier ?? bestNode.name,
+            status: bestNode.status,
+            log: truncateLog(logText, logSnippetLines),
+          };
+        } catch (err) {
+          log.warn("Failed to auto-fetch step log", { step_id: bestNodeId, error: String(err) });
+          diagnostic.requested_step_log = {
+            step_id: bestNodeId,
+            step: bestNode.identifier ?? bestNode.name,
+            status: bestNode.status,
+            error: String(err),
+          };
+        }
+      }
+      currentStep++;
+    }
+
     await sendProgress(extra, totalSteps, totalSteps, isSummary ? "Report complete" : "Diagnosis complete");
     return diagnostic;
   },

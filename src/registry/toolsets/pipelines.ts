@@ -39,6 +39,99 @@ function normalizeTriggerBody(
   return { trigger: body };
 }
 
+// ---------------------------------------------------------------------------
+// V1 Pipeline body schemas and helpers
+// ---------------------------------------------------------------------------
+
+const pipelineV1CreateSchema: BodySchema = {
+  description: "V1 pipeline definition. Pass pipeline_yaml (YAML string of the v1 pipeline definition), identifier, and name. The version field defaults to '1'. Alternatively, pass a raw YAML string as body — identifier and name will be extracted from the YAML. You can also pass {pipeline: {...}} as a JSON object which will be serialized to YAML automatically.",
+  fields: [
+    { name: "pipeline_yaml", type: "string", required: true, description: "Pipeline YAML string (the v1 pipeline definition including 'pipeline:' root key)" },
+    { name: "identifier", type: "string", required: true, description: "Unique pipeline identifier" },
+    { name: "name", type: "string", required: true, description: "Pipeline display name" },
+    { name: "version", type: "string", required: false, description: "Pipeline version. Defaults to '1' for v1 pipelines" },
+    { name: "description", type: "string", required: false, description: "Pipeline description" },
+    { name: "tags", type: "object", required: false, description: "Pipeline tags as key:value pairs" },
+  ],
+};
+
+const pipelineV1UpdateSchema: BodySchema = {
+  description: "V1 pipeline definition (full replacement). Same fields as create: pipeline_yaml, identifier, name, version. Pass a raw YAML string as body, or {pipeline_yaml, identifier, name} as JSON.",
+  fields: [
+    { name: "pipeline_yaml", type: "string", required: true, description: "Pipeline YAML string (full replacement)" },
+    { name: "identifier", type: "string", required: true, description: "Pipeline identifier" },
+    { name: "name", type: "string", required: true, description: "Pipeline display name" },
+    { name: "version", type: "string", required: false, description: "Pipeline version. Defaults to '1'" },
+    { name: "description", type: "string", required: false, description: "Pipeline description" },
+    { name: "tags", type: "object", required: false, description: "Pipeline tags as key:value pairs" },
+  ],
+};
+
+/**
+ * Build the v1 JSON body for pipeline create/update.
+ * Accepts flexible input:
+ *   - Raw YAML string → pipeline_yaml, extracts identifier/name from YAML
+ *   - Object with pipeline_yaml → use directly
+ *   - Object with yamlPipeline → map to pipeline_yaml (backwards compat)
+ *   - Object with pipeline (JSON) → YAML.stringify into pipeline_yaml
+ */
+function buildV1PipelineBody(input: Record<string, unknown>): Record<string, unknown> {
+  const b = input.body as Record<string, unknown> | string | undefined;
+  if (!b) throw new Error("body is required for v1 pipeline create/update");
+
+  let pipelineYaml: string;
+  let identifier: string | undefined;
+  let name: string | undefined;
+  let description: string | undefined;
+  let tags: unknown | undefined;
+  let version = "1";
+
+  if (typeof b === "string") {
+    pipelineYaml = b;
+  } else {
+    const obj = b;
+    if (typeof obj.pipeline_yaml === "string") {
+      pipelineYaml = obj.pipeline_yaml;
+    } else if (typeof obj.yamlPipeline === "string") {
+      pipelineYaml = obj.yamlPipeline;
+    } else if (obj.pipeline !== undefined && typeof obj.pipeline === "object") {
+      pipelineYaml = YAML.stringify({ pipeline: obj.pipeline });
+    } else {
+      // Assume the object itself describes the pipeline content
+      pipelineYaml = YAML.stringify({ pipeline: b });
+    }
+    identifier = obj.identifier as string | undefined;
+    name = obj.name as string | undefined;
+    description = obj.description as string | undefined;
+    tags = obj.tags;
+    if (typeof obj.version === "string") version = obj.version;
+  }
+
+  // Extract identifier/name from YAML when not provided at top level
+  if (!identifier || !name) {
+    try {
+      const parsed = YAML.parse(pipelineYaml);
+      const p = parsed?.pipeline ?? parsed;
+      if (!identifier && p?.identifier) identifier = p.identifier;
+      if (!name && p?.name) name = p.name;
+    } catch { /* non-critical — caller can provide identifier/name explicitly */ }
+  }
+
+  const result: Record<string, unknown> = {
+    pipeline_yaml: pipelineYaml,
+    identifier,
+    name,
+    version,
+  };
+  if (description) result.description = description;
+  if (tags) result.tags = tags;
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// V0 Pipeline body schemas
+// ---------------------------------------------------------------------------
+
 const pipelineCreateSchema: BodySchema = {
   description: "Pipeline definition. Three options: (1) Pass body as a raw YAML string directly (simplest for complex pipelines with shell scripts, JEXL, special chars). (2) Pass {yamlPipeline: '<yaml string>'} for YAML inside an object. (3) Pass {pipeline: {...}} as JSON object. Storage options via params: Inline (default), External Git (store_type='REMOTE', connector_ref, repo_name, branch, file_path), Harness Code (store_type='REMOTE', is_harness_code_repo=true, repo_name, branch, file_path).",
   fields: [
@@ -296,6 +389,94 @@ export const pipelinesToolset: ToolsetDefinition = {
             fields: [
               { name: "pipelineName", type: "string", required: true, description: "Display name for the imported pipeline" },
               { name: "pipelineDescription", type: "string", required: false, description: "Description for the imported pipeline" },
+            ],
+          },
+        },
+      },
+    },
+    // ----- V1 Pipeline Resource -----
+    {
+      resourceType: "pipeline_v1",
+      displayName: "Pipeline (V1)",
+      description: "V1 pipeline definition using simplified YAML format. Use for agent pipelines and v1 YAML schema. Supports list, get, create, update, delete, and execute (run). V1 pipelines use a flatter YAML structure with direct step types (run, agent, action, approval) instead of v0's nested stage/step wrappers.",
+      toolset: "pipelines",
+      scope: "project",
+      headerBasedScoping: true,
+      identifierFields: ["pipeline_id"],
+      searchAliases: ["v1 pipeline", "agent pipeline", "v1"],
+      diagnosticHint: "Use harness_diagnose with pipeline_id or execution_id to analyze failures. V1 pipelines use the same execution engine as v0.",
+      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipelineIdentifier}/pipeline-studio",
+      operations: {
+        list: {
+          method: "GET",
+          path: "/v1/orgs/{org}/projects/{project}/pipelines",
+          pathParams: { org_id: "org", project_id: "project" },
+          queryParams: {
+            search_term: "search_term",
+            module: "module",
+            page: "page",
+            size: "limit",
+          },
+          responseExtractor: v1ListExtract(),
+          description: "List all v1 pipelines in a project",
+        },
+        get: {
+          method: "GET",
+          path: "/v1/orgs/{org}/projects/{project}/pipelines/{pipeline}",
+          pathParams: { org_id: "org", project_id: "project", pipeline_id: "pipeline" },
+          queryParams: {
+            branch: "branch_name",
+          },
+          responseExtractor: passthrough,
+          description: "Get v1 pipeline details including YAML definition",
+        },
+        create: {
+          method: "POST",
+          path: "/v1/orgs/{org}/projects/{project}/pipelines",
+          pathParams: { org_id: "org", project_id: "project" },
+          bodyBuilder: buildV1PipelineBody,
+          responseExtractor: passthrough,
+          description: "Create a new v1 pipeline. Pass pipeline_yaml (YAML string), identifier, name. Version defaults to '1'. Alternatively pass a raw YAML string as body.",
+          bodySchema: pipelineV1CreateSchema,
+        },
+        update: {
+          method: "PUT",
+          path: "/v1/orgs/{org}/projects/{project}/pipelines/{pipeline}",
+          pathParams: { org_id: "org", project_id: "project", pipeline_id: "pipeline" },
+          bodyBuilder: buildV1PipelineBody,
+          responseExtractor: passthrough,
+          description: "Update a v1 pipeline (full replacement). Same body format as create.",
+          bodySchema: pipelineV1UpdateSchema,
+        },
+        delete: {
+          method: "DELETE",
+          path: "/v1/orgs/{org}/projects/{project}/pipelines/{pipeline}",
+          pathParams: { org_id: "org", project_id: "project", pipeline_id: "pipeline" },
+          responseExtractor: passthrough,
+          description: "Delete a v1 pipeline",
+        },
+      },
+      executeActions: {
+        run: {
+          method: "POST",
+          path: "/v1/orgs/{org}/projects/{project}/pipelines/{pipeline}/execute",
+          pathParams: { org_id: "org", project_id: "project", pipeline_id: "pipeline" },
+          queryParams: {
+            module: "module",
+          },
+          bodyBuilder: (input) => {
+            const inputs = input.inputs;
+            if (!inputs) return {};
+            if (typeof inputs === "string") return { inputs_yaml: inputs };
+            // Object inputs — serialize to YAML
+            return { inputs_yaml: YAML.stringify(inputs) };
+          },
+          responseExtractor: passthrough,
+          actionDescription: "Execute a v1 pipeline. Optionally pass runtime inputs as inputs_yaml (YAML string) or as a key-value object (auto-serialized to YAML).",
+          bodySchema: {
+            description: "Runtime inputs for v1 pipeline execution. Pass inputs as a YAML string or key-value object.",
+            fields: [
+              { name: "inputs_yaml", type: "string", required: false, description: "YAML-formatted runtime inputs for the pipeline" },
             ],
           },
         },

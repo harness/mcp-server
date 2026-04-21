@@ -26,6 +26,17 @@ const OWNERSHIP_FIELDS = new Set([
   "tags", "labels", "owner", "author", "committer",
 ]);
 
+const COST_FIELDS = new Set([
+  // Core cost fields
+  "cost", "costTrend",
+  // Summary fields (from cost_summary)
+  "idleCost", "unallocatedCost", "utilizedCost", "forecastCost",
+  // Budget fields (from budget queries)
+  "actualCost", "budgetAmount",
+  // Recommendation fields
+  "totalMonthlyCost", "totalMonthlySaving",
+]);
+
 const ALWAYS_KEEP = new Set(["openInHarness"]);
 
 /** Identifier-like key pattern: pipelineIdentifier, projectId, env_id, etc. */
@@ -37,6 +48,7 @@ function isWhitelistedKey(key: string): boolean {
       STATUS_FIELDS.has(key) ||
       TYPE_FIELDS.has(key) ||
       OWNERSHIP_FIELDS.has(key) ||
+      COST_FIELDS.has(key) ||
       ALWAYS_KEEP.has(key) ||
       TIMESTAMP_PATTERN.test(key) ||
       IDENTIFIER_PATTERN.test(key)

@@ -193,6 +193,19 @@ export const runtimeInputExtract = (raw: unknown): unknown => {
 };
 
 /**
+ * Extracts CCM list responses with views/totalCount structure.
+ * Maps `data.views` → `items` and `data.totalCount` → `total`.
+ * Used by multiple CCM APIs that return this response pattern.
+ */
+export const ccmViewsExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { data?: { views?: unknown[]; totalCount?: number } };
+  return {
+    items: r.data?.views ?? [],
+    total: r.data?.totalCount ?? 0,
+  };
+};
+
+/**
  * Extracts CCM cost breakdown data from GraphQL perspectiveGrid response.
  * Maps `data.perspectiveGrid.data` → `items` and `data.perspectiveTotalCount` → `total`.
  */

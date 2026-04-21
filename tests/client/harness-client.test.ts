@@ -63,6 +63,17 @@ describe("HarnessClient", () => {
       expect(url.searchParams.get("accountIdentifier")).toBe("test-account");
     });
 
+    it("encodes query param for multi-word params", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({ path: "/gateway/ccm/perspectives", params: { search_term: "Cost Explorer" }  });
+      const urlString = fetchSpy.mock.calls[0][0] as string
+      const url = new URL(urlString);
+      expect(url.searchParams.get("search_term")).toBe("Cost Explorer");
+      expect(urlString).toContain("search_term=Cost%20Explorer");
+    });
+
     it("strips trailing slash from base URL", async () => {
       fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
       const client = new HarnessClient(makeConfig({ HARNESS_BASE_URL: "https://app.harness.io/" }));
