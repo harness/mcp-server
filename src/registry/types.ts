@@ -4,6 +4,18 @@
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
+/**
+ * Context passed to EndpointSpec.preflight hooks. Typed structurally so this
+ * module does not need to import HarnessClient/Registry (which would create a
+ * cycle). Hook implementations can cast these to the concrete types.
+ */
+export interface PreflightContext {
+  client: unknown;
+  input: Record<string, unknown>;
+  registry: unknown;
+  signal?: AbortSignal;
+}
+
 export type ToolsetName =
   | "pipelines"
   | "agent-pipelines"
@@ -177,6 +189,16 @@ export interface EndpointSpec {
    * to the handler.
    */
   injectAccountInBody?: boolean;
+  /**
+   * Optional preflight hook that runs before the request is sent.
+   * Use for server-side invariants (e.g. duplicate-check before creating a
+   * resource). Throw from the hook to block the operation — the error message
+   * is surfaced directly to the agent.
+   *
+   * Typed loosely to avoid a circular import back into the registry/dispatcher.
+   * The runtime shape is `{ client: HarnessClient, input, registry: Registry, signal? }`.
+   */
+  preflight?: (ctx: PreflightContext) => Promise<void>;
   /**
    * When true, the MCP layer controls ELK→Mongo fallback for this endpoint:
    *  1. First request sent with `enforce_elasticsearch=true` (ELK path).

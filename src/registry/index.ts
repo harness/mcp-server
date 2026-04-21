@@ -283,6 +283,11 @@ export class Registry {
     input: Record<string, unknown>,
     signal?: AbortSignal,
   ): Promise<unknown> {
+    // Run preflight hook (e.g. duplicate-check before create) before hitting the API.
+    if (spec.preflight) {
+      await spec.preflight({ client, input, registry: this, signal });
+    }
+
     // Build path with substitutions (or pathBuilder when present)
     let path: string;
     if (spec.pathBuilder) {

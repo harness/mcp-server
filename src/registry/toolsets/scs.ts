@@ -253,7 +253,11 @@ export const scsToolset: ToolsetDefinition = {
       description: "Software supply chain artifact source (registry) registered in the project. Supports list. "
         + "NOT the same as 'artifact' (Artifact Registry) or 'registry' — use this for supply chain security queries. "
         + "Retain source_id from responses — it is required to list artifacts within a source. "
-        + "Two-step flow: first list sources to get source_id, then list artifacts within that source.",
+        + "Two-step flow: first list sources to get source_id, then list artifacts within that source. "
+        + "PATH SELECTION: Use this drill-in (scs_artifact_source → artifact_security → scs_artifact_component) "
+        + "when you need canonical artifact_id values for downstream remediation, enrichment, or dependency calls. "
+        + "For 'find component X across all artifacts' discovery WITHOUT needing canonical IDs, PREFER scs_component_search "
+        + "(single call, cross-artifact) instead of iterating this drill-in for every source.",
       diagnosticHint: "If you get a 404: use harness_list(resource_type='scs_artifact_source') to discover valid source IDs. "
         + "Source IDs are required before querying artifacts, components, or compliance.",
       searchAliases: ["artifact source", "artifact registry security", "supply chain artifact", "scs artifact", "docker image source", "container registry"],
@@ -366,13 +370,19 @@ export const scsToolset: ToolsetDefinition = {
     {
       resourceType: "scs_artifact_component",
       displayName: "SCS Artifact Component",
-      description: "Software components (dependencies) within an artifact — SBOM component list. Supports list. "
+      description: "Flat inventory of software components present in an artifact — SBOM component list. Supports list. "
+        + "Returns components co-located in the artifact; this is NOT a dependency graph and does NOT imply "
+        + "dependency relationships among the listed components. Two components appearing in the same list "
+        + "does not mean one depends on the other. "
         + "Use this for dependency queries (e.g., 'show dependencies', 'find lodash', 'list direct dependencies'). "
         + "Also use this to find which components have known vulnerabilities (check vulnerability_count field in response). "
         + "Retain purl from responses — it is required for remediation lookups and dependency tree queries.",
       diagnosticHint: "If you get a 404: verify artifact_id is correct. Get artifact IDs from harness_list(resource_type='artifact_security', source_id='...'). "
         + "Use dependency_type='DIRECT' to filter for direct dependencies only. "
-        + "For dependency TREE (what a specific component depends on, transitive deps), use scs_component_dependencies instead — this resource only returns a flat list.",
+        + "For dependency TREE (what a specific component depends on, transitive deps), use scs_component_dependencies instead — this resource only returns a flat list. "
+        + "REVERSE dependencies (what depends on component X) are NOT available from any SCS endpoint. "
+        + "If asked 'what depends on X' or 'what breaks if I upgrade X', state that reverse dependency lookup is unavailable — "
+        + "do NOT infer impact from the component list, and do NOT fabricate dependency relationships from training knowledge.",
       searchAliases: ["dependency", "sbom component", "package", "library", "component list", "direct dependency", "transitive dependency"],
       relatedResources: [
         { resourceType: "artifact_security", relationship: "parent", description: "Get artifact_id needed to list components" },
@@ -419,11 +429,15 @@ export const scsToolset: ToolsetDefinition = {
     {
       resourceType: "scs_component_search",
       displayName: "Cross-Artifact Component Search",
-      description: "Search for a component by name across ALL artifacts (images and repos) in the project. "
+      description: "PREFERRED path for cross-artifact component discovery — search for a component by name across ALL artifacts "
+        + "(images and repos) in the project in a single call. "
         + "Returns matching components with their parent artifact info (artifactId, artifactName). "
-        + "Use this when the user asks 'which repos/artifacts contain dependency X' or 'find lodash across all artifacts'. "
-        + "This is a single-call alternative to iterating over every artifact and calling scs_artifact_component on each one. "
-        + "IMPORTANT: search_term is required. "
+        + "Use this when the user asks 'which repos/artifacts contain dependency X', 'find lodash across all artifacts', "
+        + "'list all components containing log4j', or any similar broad discovery question. "
+        + "Prefer this over iterating scs_artifact_source → artifact_security → scs_artifact_component for every source — "
+        + "that drill-in is only needed when you require canonical artifact_id for follow-up remediation/enrichment calls. "
+        + "IMPORTANT: search_term is required. Org/project scope is resolved automatically from session context — "
+        + "you do not need to pass org_id or project_id explicitly. "
         + "WARNING: The artifactId returned here is a search-index ID. "
         + "For remediation, enrichment, or dependency lookups you MUST resolve the artifact through "
         + "harness_list(scs_artifact_source) → harness_list(artifact_security) first, then use THAT artifact_id.",
@@ -631,7 +645,10 @@ export const scsToolset: ToolsetDefinition = {
         + "Get enforcement_id from harness_list(resource_type='artifact_security', filters={source_id:'...', artifact_id:'...'}) — "
         + "look for violations.enforcementId in the response. "
         + "If the artifact has no enforcement results, enforcement_id will be absent. "
-        + "IMPORTANT: Do NOT use scs_compliance_result for BOM/OPA enforcement violations — that resource is only for CIS/OWASP checks.",
+        + "IMPORTANT: Do NOT use scs_compliance_result for BOM/OPA enforcement violations — that resource is only for CIS/OWASP checks. "
+        + "ANTI-FABRICATION: Report each violation's exact violation_type (allow-list vs deny-list) as returned. "
+        + "Do NOT reclassify allow-list as deny-list or vice versa. If the user asks for one type, filter to only that type — "
+        + "do NOT mix types or infer a violation's classification from the license name.",
       searchAliases: ["bom violation", "policy violation", "enforcement violation", "deny list violation", "allow list violation", "sbom violation", "bom enforcement violation", "enforcement", "enforcement summary", "enforcement status", "violation counts", "violation summary", "bom enforcement", "sbom enforcement"],
       relatedResources: [
         { resourceType: "artifact_security", relationship: "parent", description: "Get enforcement_id from artifact overview (violations.enforcementId)" },
@@ -736,7 +753,10 @@ export const scsToolset: ToolsetDefinition = {
         + "To create a PR with the suggested upgrade, use scs_remediation_pr.",
       diagnosticHint: "If you get a 404: (1) verify artifact_id and purl are correct, (2) remediation works for code repo artifacts only — not container images. "
         + "Get purl values from harness_list(resource_type='scs_artifact_component', artifact_id='...'). "
-        + "Optionally pass target_version to get upgrade suggestions for a specific version.",
+        + "Optionally pass target_version to get upgrade suggestions for a specific version. "
+        + "ANTI-FABRICATION: Report ONLY the recommended_version returned by this endpoint. Do NOT supplement with 'latest' versions from training knowledge, "
+        + "do NOT infer versions from semver patterns, and if the response contains remediation_warnings indicating guidance is unavailable, "
+        + "say 'remediation not available — check the upstream project' rather than inventing a target version.",
       searchAliases: ["upgrade suggestion", "safe upgrade", "component upgrade", "fix vulnerability", "remediation suggestion", "dependency impact"],
       relatedResources: [
         { resourceType: "scs_artifact_component", relationship: "parent", description: "Get purl values needed for remediation lookup" },
@@ -771,8 +791,13 @@ export const scsToolset: ToolsetDefinition = {
       description: "Create and list remediation pull requests that upgrade vulnerable/outdated components. "
         + "WRITE OPERATION: create will open a real PR in the source repository. "
         + "Requires artifact_id. For create, also requires component purl and target_version in the body. "
-        + "Use scs_component_remediation first to review the upgrade suggestion before creating a PR. "
-        + "Closing or merging PRs is done in the source repository (or generic pull-request tools), not via this SCS resource. "
+        + "\n\nREQUIRED WORKFLOW BEFORE CREATING A PR (follow IN ORDER):\n"
+        + "  1. harness_list(resource_type='scs_remediation_pr', artifact_id='<id>') — list existing PRs for this artifact.\n"
+        + "  2. Inspect the list: if ANY existing PR has the same component purl (or matching package_name) as the one you intend to upgrade, STOP. Do NOT call harness_create. Instead, report the existing PR (its number/URL/status) to the user and ask whether they want to supersede or discard it before creating a new one.\n"
+        + "  3. Only if NO existing PR covers this component: call harness_get(resource_type='scs_component_remediation', ...) to confirm the recommended target_version.\n"
+        + "  4. Then call harness_create(resource_type='scs_remediation_pr', ...).\n\n"
+        + "Skipping step 1-2 and creating a duplicate PR for a component that already has one is a known failure mode — always check first. "
+        + "Merging or dismissing PRs is done in the source repository (or generic pull-request tools), not via this SCS resource. "
         + "USAGE: harness_create(resource_type='scs_remediation_pr', params={artifact_id: '<id>'}, body={purl: '<purl>', target_version: '<ver>'}). "
         + "Do NOT put purl/target_version in params — they must be in body.",
       diagnosticHint: "If you get a 404: verify artifact_id is correct. Use harness_get(resource_type='scs_component_remediation', artifact_id='...', purl='...') to verify the component exists. "
@@ -812,8 +837,80 @@ export const scsToolset: ToolsetDefinition = {
               ...(body.target_version || input.target_version ? { target_version: (body.target_version || input.target_version) as string } : {}),
             };
           },
+          preflight: async ({ client, input, registry, signal }) => {
+            const body = (input.body && typeof input.body === "object" ? input.body : {}) as Record<string, unknown>;
+            const purl = (body.purl ?? input.purl) as string | undefined;
+            const artifactId = input.artifact_id as string | undefined;
+            if (!purl || !artifactId) return; // let the downstream validators report missing fields
+
+            const reg = registry as {
+              dispatch: (
+                client: unknown,
+                resourceType: string,
+                operation: "list",
+                input: Record<string, unknown>,
+                signal?: AbortSignal,
+              ) => Promise<unknown>;
+            };
+            let existing: unknown;
+            try {
+              existing = await reg.dispatch(
+                client,
+                "scs_remediation_pr",
+                "list",
+                { artifact_id: artifactId, page: 0, size: 100 },
+                signal,
+              );
+            } catch {
+              // If the list call fails (e.g. transient API error) we intentionally
+              // do NOT block the create — fall through so the operator can still
+              // recover. The agent will see the create outcome directly.
+              return;
+            }
+
+            // Tolerate the many shapes our SCS extractors produce: array, { items }, { data }, { content }.
+            const pickItems = (raw: unknown): Record<string, unknown>[] => {
+              if (Array.isArray(raw)) {
+                return raw.filter((x): x is Record<string, unknown> => !!x && typeof x === "object");
+              }
+              if (raw && typeof raw === "object") {
+                for (const key of ["items", "data", "content", "results", "pull_requests"]) {
+                  const val = (raw as Record<string, unknown>)[key];
+                  if (Array.isArray(val)) {
+                    return val.filter((x): x is Record<string, unknown> => !!x && typeof x === "object");
+                  }
+                }
+              }
+              return [];
+            };
+            const items = pickItems(existing);
+            const normalize = (s: string): string => (s.split("@")[0] ?? s).toLowerCase();
+            const targetKey = normalize(purl);
+            const conflict = items.find((pr) => {
+              const prPurl = typeof pr.purl === "string" ? pr.purl : "";
+              const prPkg = typeof pr.package_name === "string" ? pr.package_name : "";
+              if (prPurl && normalize(prPurl) === targetKey) return true;
+              if (prPkg && targetKey.endsWith(`/${prPkg.toLowerCase()}`)) return true;
+              return false;
+            });
+
+            if (conflict) {
+              const ref = [
+                conflict.pull_request_url ? `url=${String(conflict.pull_request_url)}` : "",
+                conflict.pull_request_number ? `#${String(conflict.pull_request_number)}` : "",
+                conflict.status ? `status=${String(conflict.status)}` : "",
+              ].filter(Boolean).join(" ");
+              throw new Error(
+                `Duplicate remediation PR blocked: an existing PR already covers ${purl} on artifact ${artifactId} (${ref}). `
+                + `Close or supersede the existing PR before creating a new one, or confirm with the user that they want a second PR for the same component. `
+                + `Use harness_list(resource_type='scs_remediation_pr', artifact_id='${artifactId}') to review existing PRs.`,
+              );
+            }
+          },
           responseExtractor: scsCleanExtract,
-          description: "Create a remediation PR to upgrade a vulnerable component",
+          description: "Create a remediation PR to upgrade a vulnerable component. "
+            + "MCP preflight: automatically lists existing remediation PRs for this artifact "
+            + "and blocks the create with an error if any existing PR already covers the same purl/package_name.",
           bodySchema: {
             description: "Remediation PR creation payload — component PURL and target upgrade version",
             fields: [
@@ -842,19 +939,18 @@ export const scsToolset: ToolsetDefinition = {
       ],
       toolset: "scs",
       scope: "project",
+      scopeParams: { org: "org_id", project: "project_id" },
       identifierFields: [],
       operations: {
         get: {
           method: "GET",
-          path: `${SCS}/v1/orgs/{org}/projects/{project}/ssca-config/auto-pr-config`,
-          pathParams: { org_id: "org", project_id: "project" },
+          path: `${SCS}/v1/ssca-config/auto-pr-config`,
           responseExtractor: scsCleanExtract,
           description: "Get current auto-PR configuration",
         },
         update: {
           method: "PUT",
-          path: `${SCS}/v1/orgs/{org}/projects/{project}/ssca-config/auto-pr-config`,
-          pathParams: { org_id: "org", project_id: "project" },
+          path: `${SCS}/v1/ssca-config/auto-pr-config`,
           bodyBuilder: (input) => input.body,
           responseExtractor: scsCleanExtract,
           description: "Save or update auto-PR configuration",
@@ -1051,7 +1147,9 @@ export const scsToolset: ToolsetDefinition = {
         + "This is a READ-ONLY summary endpoint — for drill-down, use the specific SCS resources (artifact_security, scs_compliance_result, scs_bom_violation, etc.).",
       diagnosticHint: "If you get a 404: ensure the project has SCS enabled and artifacts have been scanned. "
         + "If all counts are zero: no artifacts have been onboarded — ensure SBOM generation steps are configured in pipelines. "
-        + "For individual artifact details, use harness_list(resource_type='artifact_security', source_id='...').",
+        + "For individual artifact details, use harness_list(resource_type='artifact_security', source_id='...'). "
+        + "ANTI-FABRICATION: Report ONLY the numbers returned by this endpoint. Do NOT calculate percentages, infer trends across time, "
+        + "or invent metrics (e.g. 'risk score', 'health grade') that are not present in the response.",
       searchAliases: [
         "security overview", "project security", "security posture", "security summary",
         "vulnerability summary", "compliance summary", "enforcement summary",
