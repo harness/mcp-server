@@ -47,6 +47,8 @@ const RawConfigSchema = z.object({
   HARNESS_ALLOW_HTTP: booleanFromEnv.default(false),
   HARNESS_FME_BASE_URL: z.string().url().default("https://api.split.io"),
   HARNESS_PIPELINE_VERSION: z.enum(["0", "1"]).optional(),
+  /** When true, only one of `pipeline` / `pipeline_v1` is registered (see HARNESS_PIPELINE_VERSION). Default false = both available. */
+  HARNESS_ENFORCE_PIPELINE_VERSION: booleanFromEnv.default(false),
 });
 
 export const ConfigSchema = RawConfigSchema.transform((data) => {

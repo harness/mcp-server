@@ -164,6 +164,18 @@ describe("ConfigSchema — boolean env var coercion", () => {
     if (result.success) expect(result.data.HARNESS_SKIP_ELICITATION).toBe(false);
   });
 
+  it("HARNESS_ENFORCE_PIPELINE_VERSION defaults to false when unset", () => {
+    const result = ConfigSchema.safeParse(validConfig);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.HARNESS_ENFORCE_PIPELINE_VERSION).toBe(false);
+  });
+
+  it("HARNESS_ENFORCE_PIPELINE_VERSION=true enables enforcement", () => {
+    const result = ConfigSchema.safeParse({ ...validConfig, HARNESS_ENFORCE_PIPELINE_VERSION: "true" });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.HARNESS_ENFORCE_PIPELINE_VERSION).toBe(true);
+  });
+
   it("HARNESS_READ_ONLY=false is actually false", () => {
     const result = ConfigSchema.safeParse({ ...validConfig, HARNESS_READ_ONLY: "false" });
     expect(result.success).toBe(true);
