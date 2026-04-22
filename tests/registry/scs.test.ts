@@ -7,11 +7,43 @@
  * - T13-v2: scsCleanExtract strips null/empty fields
  * - T14-v2: artifact_type, status, standards filter enrichment
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { scsCleanExtract, scsListExtract } from "../../src/registry/extractors.js";
 import { compactItems } from "../../src/utils/compact.js";
-import { scsToolset } from "../../src/registry/toolsets/scs.js";
-import type { ResourceDefinition, EndpointSpec } from "../../src/registry/types.js";
+import { scsToolset, normalizePurl } from "../../src/registry/toolsets/scs.js";
+import { HarnessApiError } from "../../src/utils/errors.js";
+import { Registry } from "../../src/registry/index.js";
+import type { Config } from "../../src/config.js";
+import type { HarnessClient } from "../../src/client/harness-client.js";
+import type { ResourceDefinition, EndpointSpec, PreflightContext } from "../../src/registry/types.js";
+
+/** Minimal Config factory for registry-level tests. */
+function makeConfig(overrides: Partial<Config> = {}): Config {
+  return {
+    HARNESS_API_KEY: "pat.test",
+    HARNESS_ACCOUNT_ID: "test-account",
+    HARNESS_BASE_URL: "https://app.harness.io",
+    HARNESS_ORG: "default",
+    HARNESS_PROJECT: "test-project",
+    HARNESS_API_TIMEOUT_MS: 30000,
+    HARNESS_MAX_RETRIES: 3,
+    LOG_LEVEL: "info",
+    HARNESS_MAX_BODY_SIZE_MB: 10,
+    HARNESS_RATE_LIMIT_RPS: 10,
+    HARNESS_READ_ONLY: false,
+    HARNESS_SKIP_ELICITATION: false,
+    HARNESS_ALLOW_HTTP: false,
+    HARNESS_FME_BASE_URL: "https://api.split.io",
+    ...overrides,
+  };
+}
+
+function makeClient(requestFn?: (...args: unknown[]) => unknown): HarnessClient {
+  return {
+    request: requestFn ?? vi.fn().mockResolvedValue({}),
+    account: "test-account",
+  } as unknown as HarnessClient;
+}
 
 /** Helper: find a resource definition by resourceType */
 function findResource(type: string): ResourceDefinition {
@@ -634,6 +666,43 @@ describe("P3-6: scs_remediation_pr resource", () => {
     expect(res.diagnosticHint).toBeDefined();
     expect(res.diagnosticHint!.length).toBeGreaterThan(20);
   });
+
+  it("list responseExtractor preserves PR fields and flattens {items} wrapper", () => {
+    // Regression: upstream returns { items: [{...rich PR}] }. scsCleanExtract
+    // kept the wrapper, and harness-list's compactItems then stripped every
+    // non-whitelisted field (purl/pr_number/pr_url/target_version/...) leaving
+    // each PR as {}. The replacement extractor must flatten to a bare array
+    // and retain PR-specific fields so the agent gets actionable data.
+    const spec = getOp("scs_remediation_pr", "list");
+    expect(spec.responseExtractor).toBeDefined();
+    const raw = {
+      items: [
+        {
+          id: "pr-1",
+          purl: "pkg:npm/npm@6.14.18",
+          current_version: "6.14.18",
+          target_version: "11.12.1",
+          pr_url: "/pulls/13",
+          pr_number: 13,
+          pr_status: "CREATED",
+          repo_name: "Employee-Management-System",
+          base_branch: "main",
+          remediation_branch: "harness-scs/fix-abc",
+          created_at: 1776579010782,
+          trigger_type: "AUTO",
+        },
+      ],
+    };
+    const extracted = spec.responseExtractor!(raw);
+    expect(Array.isArray(extracted)).toBe(true);
+    const items = extracted as Array<Record<string, unknown>>;
+    expect(items).toHaveLength(1);
+    expect(items[0].pr_number).toBe(13);
+    expect(items[0].purl).toBe("pkg:npm/npm@6.14.18");
+    expect(items[0].target_version).toBe("11.12.1");
+    expect(items[0].pr_status).toBe("CREATED");
+    expect(items[0].trigger_type).toBe("AUTO");
+  });
 });
 
 // ─── P3-12: Auto PR Configuration ──────────────────────────────────────────
@@ -884,7 +953,7 @@ describe("P3-11: scs_component_enrichment resource", () => {
     expect(spec.pathBuilder).toBeDefined();
     const path = spec.pathBuilder!(
       { artifact_id: "art123", org_id: "myOrg", project_id: "myProj", purl: "pkg:npm/express@4.18.0" },
-      { HARNESS_ACCOUNT_ID: "acc", HARNESS_DEFAULT_ORG_ID: "defOrg", HARNESS_DEFAULT_PROJECT_ID: "defProj" },
+      { HARNESS_ACCOUNT_ID: "acc", HARNESS_ORG: "defOrg", HARNESS_PROJECT: "defProj" },
     );
     expect(path).toContain("/v1/orgs/myOrg/projects/myProj/artifacts/art123/component/overview");
   });
@@ -893,7 +962,7 @@ describe("P3-11: scs_component_enrichment resource", () => {
     const spec = getOp("scs_component_enrichment", "get");
     const path = spec.pathBuilder!(
       { purl: "pkg:npm/express@4.18.0" },
-      { HARNESS_ACCOUNT_ID: "acc", HARNESS_DEFAULT_ORG_ID: "defOrg", HARNESS_DEFAULT_PROJECT_ID: "defProj" },
+      { HARNESS_ACCOUNT_ID: "acc", HARNESS_ORG: "defOrg", HARNESS_PROJECT: "defProj" },
     );
     expect(path).toContain("/v1/components/details");
     expect(path).not.toContain("/orgs/");
@@ -1700,5 +1769,504 @@ describe("custom SCS extractors", () => {
       // No summary item appended
       expect(result).toHaveLength(1);
     });
+  });
+});
+
+// ─── PR review: PURL normalization & remediation-PR preflight ─────────────
+
+describe("normalizePurl", () => {
+  it("strips version after @", () => {
+    expect(normalizePurl("pkg:npm/foo@1.2.3")).toBe("pkg:npm/foo");
+  });
+
+  it("is case-insensitive", () => {
+    expect(normalizePurl("pkg:NPM/Foo@1.2.3")).toBe("pkg:npm/foo");
+  });
+
+  it("strips qualifiers (?...)", () => {
+    expect(normalizePurl("pkg:npm/foo@1.2.3?classifier=sources")).toBe("pkg:npm/foo");
+  });
+
+  it("strips subpath (#...)", () => {
+    expect(normalizePurl("pkg:npm/foo@1.2.3#path/to/file")).toBe("pkg:npm/foo");
+  });
+
+  it("handles spec-compliant scoped npm purls (%40 encoded)", () => {
+    // %40 is encoded @; the last-slash heuristic finds the version @ correctly.
+    expect(normalizePurl("pkg:npm/%40angular/core@1.0.0")).toBe("pkg:npm/%40angular/core");
+    expect(normalizePurl("pkg:npm/%40angular/core@2.0.0")).toBe("pkg:npm/%40angular/core");
+  });
+
+  it("does not mis-split on @ that appears before the last /", () => {
+    // Contrived but defensive: an @ inside a namespace path would otherwise
+    // truncate the name. Our heuristic only splits on @ after the last /.
+    expect(normalizePurl("pkg:generic/ns@with-at/name@1.0")).toBe("pkg:generic/ns@with-at/name");
+  });
+
+  it("returns lowercased input when no version present", () => {
+    expect(normalizePurl("pkg:npm/Foo")).toBe("pkg:npm/foo");
+  });
+
+  it("handles docker digest versions (single @)", () => {
+    expect(normalizePurl("pkg:docker/alpine@sha256:deadbeef")).toBe("pkg:docker/alpine");
+  });
+
+  it("returns empty string for empty input", () => {
+    expect(normalizePurl("")).toBe("");
+  });
+});
+
+describe("scs_remediation_pr create preflight", () => {
+  /** Build a minimal PreflightContext with a stubbed registry.dispatch.
+   *  `dispatchImpl` signature mirrors Registry.dispatch at runtime; typed
+   *  loosely here because PreflightContext.registry is intentionally `unknown`.
+   */
+  type DispatchImpl = (
+    client: unknown,
+    resourceType: string,
+    operation: string,
+    input: Record<string, unknown>,
+    signal?: AbortSignal,
+  ) => Promise<unknown>;
+  function buildCtx(input: Record<string, unknown>, dispatchImpl: DispatchImpl): PreflightContext {
+    return {
+      client: {} as unknown,
+      input,
+      registry: { dispatch: dispatchImpl },
+    };
+  }
+
+  function getPreflight(): (ctx: PreflightContext) => Promise<void> {
+    const spec = getOp("scs_remediation_pr", "create" as "list");
+    if (!spec.preflight) throw new Error("preflight hook missing on scs_remediation_pr create");
+    return spec.preflight;
+  }
+
+  it("returns silently when purl or artifact_id are absent (defers to downstream validation)", async () => {
+    const preflight = getPreflight();
+    let called = false;
+    const dispatch = async () => { called = true; return []; };
+
+    await expect(preflight(buildCtx({}, dispatch))).resolves.toBeUndefined();
+    await expect(preflight(buildCtx({ artifact_id: "a1" }, dispatch))).resolves.toBeUndefined();
+    await expect(preflight(buildCtx({ purl: "pkg:npm/foo@1" }, dispatch))).resolves.toBeUndefined();
+    expect(called).toBe(false);
+  });
+
+  it("allows create when no existing PRs exist", async () => {
+    const preflight = getPreflight();
+    const dispatch = async () => [];
+    await expect(
+      preflight(buildCtx({ artifact_id: "a1", body: { purl: "pkg:npm/foo@1.0.0", target_version: "1.1.0" } }, dispatch)),
+    ).resolves.toBeUndefined();
+  });
+
+  it("allows create when existing PRs are for different purls", async () => {
+    const preflight = getPreflight();
+    const dispatch = async () => [
+      { id: "pr-9", purl: "pkg:npm/other@2.0.0", pr_number: 9, pr_status: "CREATED" },
+    ];
+    await expect(
+      preflight(buildCtx({ artifact_id: "a1", body: { purl: "pkg:npm/foo@1.0.0" } }, dispatch)),
+    ).resolves.toBeUndefined();
+  });
+
+  describe("active-status filtering", () => {
+    // Closed / merged / dismissed PRs are historical and must NOT block a new
+    // remediation attempt for the same component (e.g. a later CVE, or an
+    // upgrade to a different target version).
+    const TERMINAL_STATUSES = ["CLOSED", "MERGED", "DISMISSED", "REJECTED", "FAILED", "ERROR"];
+    for (const status of TERMINAL_STATUSES) {
+      it(`allows create when existing same-purl PR has terminal status "${status}"`, async () => {
+        const preflight = getPreflight();
+        const dispatch = async () => [
+          { id: "pr-old", purl: "pkg:npm/foo@1.0.0", pr_number: 1, pr_url: "/pulls/1", pr_status: status },
+        ];
+        await expect(
+          preflight(buildCtx({ artifact_id: "a1", body: { purl: "pkg:npm/foo@1.1.0" } }, dispatch)),
+        ).resolves.toBeUndefined();
+      });
+    }
+
+    const ACTIVE_STATUSES = ["OPEN", "CREATED", "PENDING", "IN_PROGRESS", "IN-PROGRESS", "DRAFT", "QUEUED"];
+    for (const status of ACTIVE_STATUSES) {
+      it(`blocks create when existing same-purl PR is active (status="${status}")`, async () => {
+        const preflight = getPreflight();
+        const dispatch = async () => [
+          { id: "pr-open", purl: "pkg:npm/foo@1.0.0", pr_number: 2, pr_url: "/pulls/2", pr_status: status },
+        ];
+        await expect(
+          preflight(buildCtx({ artifact_id: "a1", body: { purl: "pkg:npm/foo@1.1.0" } }, dispatch)),
+        ).rejects.toThrow(/Duplicate remediation PR blocked/i);
+      });
+    }
+
+    it("defaults to blocking when status is missing (assume active — err on the safe side)", async () => {
+      const preflight = getPreflight();
+      const dispatch = async () => [
+        { id: "pr-no-status", purl: "pkg:npm/foo@1.0.0", pr_number: 3 },
+      ];
+      await expect(
+        preflight(buildCtx({ artifact_id: "a1", body: { purl: "pkg:npm/foo@1.1.0" } }, dispatch)),
+      ).rejects.toThrow(/Duplicate remediation PR blocked/i);
+    });
+
+    it("reads status from either pr_status or legacy status field", async () => {
+      const preflight = getPreflight();
+      // Closed PR expressed under the legacy `status` field — also must not block.
+      const dispatch = async () => [
+        { id: "pr-legacy", purl: "pkg:npm/foo@1.0.0", pr_number: 4, status: "CLOSED" },
+      ];
+      await expect(
+        preflight(buildCtx({ artifact_id: "a1", body: { purl: "pkg:npm/foo@1.1.0" } }, dispatch)),
+      ).resolves.toBeUndefined();
+    });
+  });
+
+  describe("scope + signal propagation", () => {
+    it("propagates org_id and project_id from the outer input into the inner list dispatch", async () => {
+      const preflight = getPreflight();
+      const seen: Record<string, unknown>[] = [];
+      const dispatch: DispatchImpl = async (_c, _rt, _op, input) => {
+        seen.push(input);
+        return [];
+      };
+      await preflight(buildCtx(
+        {
+          artifact_id: "art-1",
+          org_id: "specificOrg",
+          project_id: "specificProj",
+          body: { purl: "pkg:npm/foo@1.0.0" },
+        },
+        dispatch,
+      ));
+      expect(seen).toHaveLength(1);
+      expect(seen[0]).toMatchObject({
+        artifact_id: "art-1",
+        org_id: "specificOrg",
+        project_id: "specificProj",
+      });
+    });
+
+    it("omits org_id/project_id from inner dispatch when outer input has none (lets registry fall back to config)", async () => {
+      const preflight = getPreflight();
+      const seen: Record<string, unknown>[] = [];
+      const dispatch: DispatchImpl = async (_c, _rt, _op, input) => { seen.push(input); return []; };
+      await preflight(buildCtx(
+        { artifact_id: "art-1", body: { purl: "pkg:npm/foo@1.0.0" } },
+        dispatch,
+      ));
+      expect(seen[0]).not.toHaveProperty("org_id");
+      expect(seen[0]).not.toHaveProperty("project_id");
+    });
+
+    it("forwards the AbortSignal to every paginated inner dispatch", async () => {
+      const preflight = getPreflight();
+      const controller = new AbortController();
+      const seenSignals: (AbortSignal | undefined)[] = [];
+      const fullPage = () => Array.from({ length: 100 }, (_, i) => ({
+        id: `pr-${i}`, purl: `pkg:npm/other${i}@1.0.0`, pr_number: i, pr_status: "CREATED",
+      }));
+      const dispatch: DispatchImpl = async (_c, _rt, _op, _input, signal) => {
+        seenSignals.push(signal);
+        return fullPage();
+      };
+      const ctx: PreflightContext = {
+        client: {} as unknown,
+        input: { artifact_id: "a1", body: { purl: "pkg:npm/foo@1.0.0" } },
+        registry: { dispatch },
+        signal: controller.signal,
+      };
+      await preflight(ctx);
+      expect(seenSignals).toHaveLength(5); // all 5 pages
+      for (const sig of seenSignals) expect(sig).toBe(controller.signal);
+    });
+  });
+
+  describe("purl resolution from input or body", () => {
+    it("reads purl from top-level input when body is absent", async () => {
+      const preflight = getPreflight();
+      const dispatch: DispatchImpl = async () => [
+        { id: "pr-1", purl: "pkg:npm/foo@1.0.0", pr_number: 1, pr_status: "OPEN" },
+      ];
+      await expect(
+        preflight(buildCtx({ artifact_id: "a1", purl: "pkg:npm/foo@1.1.0" }, dispatch)),
+      ).rejects.toThrow(/Duplicate remediation PR blocked/i);
+    });
+
+    it("prefers body.purl over input.purl when both are present", async () => {
+      const preflight = getPreflight();
+      const dispatch: DispatchImpl = async () => [
+        // Duplicate of body.purl but NOT input.purl — if body is preferred, this blocks.
+        { id: "pr-1", purl: "pkg:npm/bar@1.0.0", pr_number: 1, pr_status: "OPEN" },
+      ];
+      await expect(
+        preflight(buildCtx(
+          { artifact_id: "a1", purl: "pkg:npm/foo@1.1.0", body: { purl: "pkg:npm/bar@1.1.0" } },
+          dispatch,
+        )),
+      ).rejects.toThrow(/Duplicate remediation PR blocked/i);
+    });
+  });
+
+  describe("pagination", () => {
+    it("paginates the list call until a partial page is returned", async () => {
+      const preflight = getPreflight();
+      const calls: Array<{ page: number; size: number }> = [];
+      const pageOne = Array.from({ length: 100 }, (_, i) => ({
+        id: `pr-${i}`,
+        purl: `pkg:npm/other${i}@1.0.0`,
+        pr_number: i,
+        pr_status: "CREATED",
+      }));
+      const pageTwo = [
+        { id: "pr-100", purl: "pkg:npm/other100@1.0.0", pr_number: 100, pr_status: "CREATED" },
+      ];
+      const dispatch = async (_c: unknown, _rt: unknown, _op: unknown, input: Record<string, unknown>) => {
+        calls.push({ page: input.page as number, size: input.size as number });
+        if (input.page === 0) return pageOne;
+        if (input.page === 1) return pageTwo;
+        return [];
+      };
+
+      await expect(
+        preflight(buildCtx({ artifact_id: "a1", body: { purl: "pkg:npm/foo@1.0.0" } }, dispatch)),
+      ).resolves.toBeUndefined();
+
+      expect(calls).toEqual([
+        { page: 0, size: 100 },
+        { page: 1, size: 100 },
+      ]);
+    });
+
+    it("catches a duplicate that lives on page 2 (would be missed by a single-page check)", async () => {
+      const preflight = getPreflight();
+      const pageOne = Array.from({ length: 100 }, (_, i) => ({
+        id: `pr-${i}`,
+        purl: `pkg:npm/other${i}@1.0.0`,
+        pr_number: i,
+        pr_status: "CREATED",
+      }));
+      const pageTwo = [
+        { id: "pr-dup", purl: "pkg:npm/foo@1.0.0", pr_number: 999, pr_url: "/pulls/999", pr_status: "OPEN" },
+      ];
+      const dispatch = async (_c: unknown, _rt: unknown, _op: unknown, input: Record<string, unknown>) => {
+        if (input.page === 0) return pageOne;
+        if (input.page === 1) return pageTwo;
+        return [];
+      };
+
+      await expect(
+        preflight(buildCtx({ artifact_id: "a1", body: { purl: "pkg:npm/foo@1.1.0" } }, dispatch)),
+      ).rejects.toThrow(/#999/);
+    });
+
+    it("caps iteration at PREFLIGHT_MAX_PAGES (5) to bound worst-case latency", async () => {
+      const preflight = getPreflight();
+      const calls: number[] = [];
+      const fullPage = () => Array.from({ length: 100 }, (_, i) => ({
+        id: `pr-${i}`, purl: `pkg:npm/other${i}@1.0.0`, pr_number: i, pr_status: "CREATED",
+      }));
+      const dispatch = async (_c: unknown, _rt: unknown, _op: unknown, input: Record<string, unknown>) => {
+        calls.push(input.page as number);
+        return fullPage(); // always full — would loop forever without a cap
+      };
+
+      await expect(
+        preflight(buildCtx({ artifact_id: "a1", body: { purl: "pkg:npm/foo@1.0.0" } }, dispatch)),
+      ).resolves.toBeUndefined();
+      expect(calls).toEqual([0, 1, 2, 3, 4]);
+    });
+  });
+
+  it("blocks create when an existing PR matches the same purl (ignoring version)", async () => {
+    const preflight = getPreflight();
+    const dispatch = async () => [
+      { id: "pr-1", purl: "pkg:npm/foo@1.0.0", pr_number: 13, pr_url: "/pulls/13", pr_status: "CREATED" },
+    ];
+    await expect(
+      preflight(buildCtx({ artifact_id: "a1", body: { purl: "pkg:npm/foo@1.1.0" } }, dispatch)),
+    ).rejects.toThrow(/Duplicate remediation PR blocked/i);
+  });
+
+  it("conflict message populates ref from pr_url/pr_number/pr_status (the list-extractor fields)", async () => {
+    // Regression: preflight used to read pull_request_url/pull_request_number/status,
+    // which the list extractor strips — producing an empty ref. Ensure the
+    // whitelisted names are what we actually surface.
+    const preflight = getPreflight();
+    const dispatch = async () => [
+      { id: "pr-1", purl: "pkg:npm/foo@1.0.0", pr_number: 42, pr_url: "/pulls/42", pr_status: "OPEN" },
+    ];
+    await expect(
+      preflight(buildCtx({ artifact_id: "a1", body: { purl: "pkg:npm/foo@1.1.0" } }, dispatch)),
+    ).rejects.toThrow(/url=\/pulls\/42.*#42.*status=OPEN/);
+  });
+
+  it("blocks create when existing PR has no purl but matching package_name suffix", async () => {
+    const preflight = getPreflight();
+    const dispatch = async () => [
+      { id: "pr-2", package_name: "foo", pr_number: 7, pr_status: "CREATED" },
+    ];
+    await expect(
+      preflight(buildCtx({ artifact_id: "a1", body: { purl: "pkg:npm/foo@1.0.0" } }, dispatch)),
+    ).rejects.toThrow(/Duplicate remediation PR blocked/i);
+  });
+
+  it("tolerates all list response shapes (array / items / data / content / results / pull_requests)", async () => {
+    const preflight = getPreflight();
+    const hit = { id: "pr-1", purl: "pkg:npm/foo@1.0.0", pr_number: 1, pr_status: "CREATED" };
+    const shapes: unknown[] = [
+      [hit],
+      { items: [hit] },
+      { data: [hit] },
+      { content: [hit] },
+      { results: [hit] },
+      { pull_requests: [hit] },
+    ];
+    for (const shape of shapes) {
+      const dispatch = async () => shape;
+      await expect(
+        preflight(buildCtx({ artifact_id: "a1", body: { purl: "pkg:npm/foo@2.0.0" } }, dispatch)),
+      ).rejects.toThrow(/Duplicate remediation PR blocked/i);
+    }
+  });
+
+  describe("list-failure policy", () => {
+    it("fails CLOSED on 4xx from the list call", async () => {
+      const preflight = getPreflight();
+      const dispatch = async () => {
+        throw new HarnessApiError("bad request", 400);
+      };
+      await expect(
+        preflight(buildCtx({ artifact_id: "a1", body: { purl: "pkg:npm/foo@1.0.0" } }, dispatch)),
+      ).rejects.toThrow(/preflight check failed \(HTTP 400\)/i);
+    });
+
+    it("fails CLOSED on 404 from the list call (scope/artifact not found)", async () => {
+      const preflight = getPreflight();
+      const dispatch = async () => {
+        throw new HarnessApiError("not found", 404);
+      };
+      await expect(
+        preflight(buildCtx({ artifact_id: "a1", body: { purl: "pkg:npm/foo@1.0.0" } }, dispatch)),
+      ).rejects.toThrow(/HTTP 404/);
+    });
+
+    it("fails OPEN on 5xx from the list call (transient upstream)", async () => {
+      const preflight = getPreflight();
+      const dispatch = async () => {
+        throw new HarnessApiError("bad gateway", 502);
+      };
+      await expect(
+        preflight(buildCtx({ artifact_id: "a1", body: { purl: "pkg:npm/foo@1.0.0" } }, dispatch)),
+      ).resolves.toBeUndefined();
+    });
+
+    it("fails OPEN on network / non-HarnessApiError errors", async () => {
+      const preflight = getPreflight();
+      const dispatch = async () => {
+        throw new Error("ECONNRESET");
+      };
+      await expect(
+        preflight(buildCtx({ artifact_id: "a1", body: { purl: "pkg:npm/foo@1.0.0" } }, dispatch)),
+      ).resolves.toBeUndefined();
+    });
+  });
+});
+
+// ─── Registry short-circuit: preflight throws → outbound request never made ──
+
+describe("Registry dispatch — preflight short-circuits outbound request", () => {
+  it("skips client.request when scs_remediation_pr create preflight throws", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "scs" }));
+    // The preflight's internal registry.dispatch(...) call (for the duplicate
+    // list check) is the SAME registry instance — so the first client.request
+    // we observe is for the list call, and if it returns a conflict we expect
+    // the SECOND request (the create POST) to never happen.
+    const requestFn = vi.fn().mockImplementation(async (opts: { method: string; path: string }) => {
+      // List call: /remediation/pull-requests — return a same-purl active PR.
+      if (opts.method === "GET" && opts.path.includes("/remediation/pull-requests")) {
+        return {
+          items: [
+            { id: "pr-1", purl: "pkg:npm/foo@1.0.0", pr_number: 13, pr_url: "/pulls/13", pr_status: "OPEN" },
+          ],
+        };
+      }
+      // Anything else (the create POST) is an unexpected call and should fail the test.
+      throw new Error(`Unexpected outbound request: ${opts.method} ${opts.path}`);
+    });
+    const client = makeClient(requestFn);
+
+    await expect(
+      registry.dispatch(client, "scs_remediation_pr", "create" as "list", {
+        artifact_id: "art-1",
+        org_id: "myOrg",
+        project_id: "myProj",
+        body: { purl: "pkg:npm/foo@1.1.0", target_version: "1.1.0" },
+      }),
+    ).rejects.toThrow(/Duplicate remediation PR blocked/i);
+
+    // Exactly one outbound request — the LIST — and zero create-POSTs.
+    const postCalls = requestFn.mock.calls.filter((c) => {
+      const o = c[0] as { method: string };
+      return o.method === "POST";
+    });
+    expect(postCalls).toHaveLength(0);
+
+    const listCalls = requestFn.mock.calls.filter((c) => {
+      const o = c[0] as { method: string; path: string };
+      return o.method === "GET" && o.path.includes("/remediation/pull-requests");
+    });
+    expect(listCalls.length).toBeGreaterThanOrEqual(1);
+    // Scope propagation: the preflight list MUST use the outer call's org/project,
+    // not the registry's config defaults ("default" / "test-project"). Otherwise
+    // duplicate detection runs against the wrong project.
+    const firstListPath = (listCalls[0]![0] as { path: string }).path;
+    expect(firstListPath).toContain("/orgs/myOrg/");
+    expect(firstListPath).toContain("/projects/myProj/");
+    expect(firstListPath).toContain("/artifacts/art-1/");
+  });
+});
+
+// ─── P3-12: scs_auto_pr_config path + scope ─────────────────────────────────
+
+describe("scs_auto_pr_config path and scope", () => {
+  it("get uses /v1/ssca-config/auto-pr-config", () => {
+    const spec = getOp("scs_auto_pr_config", "get");
+    expect(spec.method).toBe("GET");
+    expect(spec.path).toContain("/v1/ssca-config/auto-pr-config");
+    // Path has no {org}/{project} placeholders — scope is conveyed via query params.
+    expect(spec.path).not.toMatch(/\{org\}/);
+    expect(spec.path).not.toMatch(/\{project\}/);
+  });
+
+  it("update uses /v1/ssca-config/auto-pr-config", () => {
+    const spec = getOp("scs_auto_pr_config", "update" as "list");
+    expect(spec.method).toBe("PUT");
+    expect(spec.path).toContain("/v1/ssca-config/auto-pr-config");
+  });
+
+  it("is project-scoped with scopeParams mapping to org_id / project_id query params", () => {
+    const res = findResource("scs_auto_pr_config");
+    expect(res.scope).toBe("project");
+    expect(res.scopeParams).toEqual({ org: "org_id", project: "project_id" });
+  });
+
+  it("registry dispatch sends org_id/project_id as query params (not path params)", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "scs" }));
+    const requestFn = vi.fn().mockResolvedValue({ enabled: true });
+    const client = makeClient(requestFn);
+
+    await registry.dispatch(client, "scs_auto_pr_config", "get", {
+      org_id: "myOrg",
+      project_id: "myProj",
+    });
+
+    expect(requestFn).toHaveBeenCalledOnce();
+    const call = requestFn.mock.calls[0][0] as { method: string; path: string; params?: Record<string, unknown> };
+    expect(call.method).toBe("GET");
+    expect(call.path).toContain("/v1/ssca-config/auto-pr-config");
+    // Scope travels as query params under the configured names.
+    expect(call.params).toMatchObject({ org_id: "myOrg", project_id: "myProj" });
   });
 });

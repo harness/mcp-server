@@ -64,6 +64,8 @@ function createHarnessServer(config: Config): McpServer {
         "DISCOVERY: Use harness_describe() to list all resource types, or harness_describe(resource_type='<type>') for operations and fields.",
         "SCHEMA: Use harness_schema(resource_type='<type>') to fetch the exact JSON Schema for create/update body payloads.",
         "",
+        "ENTITY SELECTION: When the user references an ordinal ('first repo', 'second artifact', 'latest execution'), pick the item at that index from the list response (0 = first, -1 = last). Do NOT substitute a different item or pick by name unless the user asks by name. If the list is empty, say so — never guess an ID.",
+        "",
         "PR RESOURCES: pull_request, pr_comment, pr_activity, pr_reviewer, pr_check — all accept URL or explicit repo_id + pr_number.",
         ...(config.HARNESS_PIPELINE_VERSION === "1"
           ? ["", "PIPELINE VERSION: This account uses v1 pipelines. Use resource_type='pipeline_v1' for all pipeline operations."]
