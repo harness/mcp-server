@@ -1,5 +1,59 @@
 import type { ToolsetDefinition } from "../types.js";
 import { scsCleanExtract, scsListExtract } from "../extractors.js";
+import { HarnessApiError } from "../../utils/errors.js";
+import { createLogger } from "../../utils/logger.js";
+
+const log = createLogger("scs-toolset");
+
+/**
+ * Normalize a PURL for duplicate-detection comparisons.
+ *
+ * PURL spec: `scheme:type/namespace/name@version?qualifiers#subpath`
+ * We want two PURLs that describe the same package (ignoring version,
+ * qualifiers, and subpath) to produce the same key.
+ *
+ * Approach:
+ *   1. Drop the subpath (`#...`) and qualifiers (`?...`).
+ *   2. Find the version separator `@`, but only if it appears AFTER the
+ *      last `/` — this prevents mis-splitting on an encoded/unencoded `@`
+ *      that might appear earlier in a namespace or qualifier value.
+ *   3. Lowercase for case-insensitive match.
+ *
+ * Spec-compliant scoped npm purls encode the `@` in the namespace as `%40`
+ * (e.g. `pkg:npm/%40angular/core@1.0.0`), so the last-slash heuristic is safe.
+ */
+export function normalizePurl(s: string): string {
+  if (!s) return "";
+  const noFragment = s.split("#", 1)[0]!;
+  const noQualifiers = noFragment.split("?", 1)[0]!;
+  const lastSlash = noQualifiers.lastIndexOf("/");
+  const atAfterSlash = noQualifiers.indexOf("@", lastSlash >= 0 ? lastSlash : 0);
+  const base = atAfterSlash === -1 ? noQualifiers : noQualifiers.slice(0, atAfterSlash);
+  return base.toLowerCase();
+}
+
+/**
+ * Remediation PR statuses that represent an ACTIVE, blocking PR. An existing
+ * PR in one of these states for the same component should prevent a new
+ * remediation PR from being created (supersede/close the old one first).
+ *
+ * Closed / merged / dismissed / error PRs are historical — they must NOT
+ * block a later attempt (e.g. a new CVE on the same component, or a
+ * superseded upgrade targeting a different version).
+ */
+const ACTIVE_REMEDIATION_PR_STATUSES = new Set([
+  "open",
+  "created",
+  "pending",
+  "in_progress",
+  "in-progress",
+  "draft",
+  "queued",
+]);
+
+/** Bounded pagination for the duplicate-PR preflight. */
+const PREFLIGHT_PAGE_SIZE = 100;
+const PREFLIGHT_MAX_PAGES = 5;
 
 // ── P2-2: Per-resource field lists for list extractors ─────────────────────
 // Only actionable fields are retained in list responses to reduce token usage.
@@ -860,6 +914,42 @@ export const scsToolset: ToolsetDefinition = {
               ...(body.target_version || input.target_version ? { target_version: (body.target_version || input.target_version) as string } : {}),
             };
           },
+          /**
+           * Duplicate-PR preflight for scs_remediation_pr.create.
+           *
+           * INTENT: prevent creating a second remediation PR for a component
+           * that already has an active PR in flight on the same artifact.
+           *
+           * POLICY SUMMARY (product-facing — confirm matches intent before merge):
+           *   • Block when an ACTIVE PR (OPEN / CREATED / PENDING / IN_PROGRESS /
+           *     DRAFT / QUEUED) exists with the same normalized PURL or a
+           *     matching `package_name` on the target artifact.
+           *   • IGNORE historical PRs in terminal states (CLOSED / MERGED /
+           *     DISMISSED / REJECTED / FAILED / ERROR) — those don't prevent a
+           *     later upgrade for the same component.
+           *   • Missing status ⇒ treat as active (err on the side of preventing
+           *     duplicates rather than silently letting them through).
+           *
+           * LIST-CALL FAILURE POLICY:
+           *   • HTTP 4xx  ⇒ fail CLOSED (throw). A client-side error (bad args,
+           *                 auth, scope) indicates a real problem; proceeding
+           *                 would silently bypass the duplicate invariant.
+           *   • HTTP 5xx / network / non-HarnessApiError ⇒ fail OPEN with a
+           *                 structured warn log. The check is best-effort and
+           *                 transient upstream issues must not permanently block
+           *                 legitimate remediation creation.
+           *
+           * SCOPE: the preflight's inner list call inherits `org_id` /
+           * `project_id` from the outer create input; it does NOT fall back
+           * to server config defaults, to prevent scanning the wrong project.
+           *
+           * PAGINATION: capped at PREFLIGHT_MAX_PAGES × PREFLIGHT_PAGE_SIZE
+           * (500 PRs) to bound worst-case preflight latency.
+           *
+           * NORMALIZATION: `normalizePurl` strips version, qualifiers, and
+           * subpath, and only splits on `@` after the last `/` so spec-compliant
+           * scoped npm purls (`pkg:npm/%40angular/core@1.0.0`) compare correctly.
+           */
           preflight: async ({ client, input, registry, signal }) => {
             const body = (input.body && typeof input.body === "object" ? input.body : {}) as Record<string, unknown>;
             const purl = (body.purl ?? input.purl) as string | undefined;
@@ -875,21 +965,6 @@ export const scsToolset: ToolsetDefinition = {
                 signal?: AbortSignal,
               ) => Promise<unknown>;
             };
-            let existing: unknown;
-            try {
-              existing = await reg.dispatch(
-                client,
-                "scs_remediation_pr",
-                "list",
-                { artifact_id: artifactId, page: 0, size: 100 },
-                signal,
-              );
-            } catch {
-              // If the list call fails (e.g. transient API error) we intentionally
-              // do NOT block the create — fall through so the operator can still
-              // recover. The agent will see the create outcome directly.
-              return;
-            }
 
             // Tolerate the many shapes our SCS extractors produce: array, { items }, { data }, { content }.
             const pickItems = (raw: unknown): Record<string, unknown>[] => {
@@ -906,22 +981,96 @@ export const scsToolset: ToolsetDefinition = {
               }
               return [];
             };
-            const items = pickItems(existing);
-            const normalize = (s: string): string => (s.split("@")[0] ?? s).toLowerCase();
-            const targetKey = normalize(purl);
-            const conflict = items.find((pr) => {
+
+            // Paginate up to PREFLIGHT_MAX_PAGES × PREFLIGHT_PAGE_SIZE entries.
+            // Bounded to cap worst-case preflight latency; artifacts with more
+            // remediation PRs than this cap are exceptionally rare and, if they
+            // exist, the active-status filter below will still reject obvious
+            // duplicates from the pages we do scan.
+            // Propagate scope from the outer create call. Without this, the
+            // preflight's list dispatch would fall back to server config
+            // defaults for org_id / project_id and potentially list PRs from
+            // the wrong project — silently missing duplicates.
+            const scopedListInput: Record<string, unknown> = {
+              artifact_id: artifactId,
+              size: PREFLIGHT_PAGE_SIZE,
+            };
+            if (input.org_id !== undefined) scopedListInput.org_id = input.org_id;
+            if (input.project_id !== undefined) scopedListInput.project_id = input.project_id;
+
+            const collected: Record<string, unknown>[] = [];
+            for (let page = 0; page < PREFLIGHT_MAX_PAGES; page++) {
+              let raw: unknown;
+              try {
+                raw = await reg.dispatch(
+                  client,
+                  "scs_remediation_pr",
+                  "list",
+                  { ...scopedListInput, page },
+                  signal,
+                );
+              } catch (err) {
+                // Duplicate-prevention policy on preflight list failure:
+                //   4xx → fail CLOSED. A client-side error (bad args, auth, scope)
+                //         indicates a real problem — creating through it would
+                //         silently bypass the duplicate invariant.
+                //   5xx / network / timeout → fail OPEN with a logged warning.
+                //         The check is best-effort; transient upstream issues
+                //         should not permanently block remediation creation.
+                const status = err instanceof HarnessApiError ? err.statusCode : undefined;
+                if (status !== undefined && status >= 400 && status < 500) {
+                  throw new Error(
+                    `Duplicate-PR preflight check failed (HTTP ${status}): ${(err as Error).message}. `
+                    + `Refusing to create a remediation PR for ${purl} on artifact ${artifactId} because existing PRs could not be listed. `
+                    + `Resolve the list error (verify artifact_id and scope) before retrying create.`,
+                  );
+                }
+                log.warn("scs_remediation_pr preflight skipped (transient error)", {
+                  artifactId,
+                  purl,
+                  page,
+                  status,
+                  error: err instanceof Error ? err.message : String(err),
+                });
+                return;
+              }
+              const batch = pickItems(raw);
+              collected.push(...batch);
+              // Exhausted — last page was partial (or empty).
+              if (batch.length < PREFLIGHT_PAGE_SIZE) break;
+            }
+
+            const targetKey = normalizePurl(purl);
+            const conflict = collected.find((pr) => {
+              // Only ACTIVE PRs block creation. A closed/merged/dismissed PR for
+              // the same component is historical and must not prevent a later
+              // remediation attempt (e.g. new CVE, or upgrade to a different
+              // version). If status is missing, fall through to the purl/pkg
+              // check — missing status is treated as "assume active" so we err
+              // on the side of the duplicate invariant rather than silently
+              // letting potential duplicates through.
+              const rawStatus = pr.pr_status ?? pr.status;
+              const statusLower = typeof rawStatus === "string" ? rawStatus.toLowerCase().trim() : "";
+              if (statusLower && !ACTIVE_REMEDIATION_PR_STATUSES.has(statusLower)) return false;
+
               const prPurl = typeof pr.purl === "string" ? pr.purl : "";
               const prPkg = typeof pr.package_name === "string" ? pr.package_name : "";
-              if (prPurl && normalize(prPurl) === targetKey) return true;
+              if (prPurl && normalizePurl(prPurl) === targetKey) return true;
               if (prPkg && targetKey.endsWith(`/${prPkg.toLowerCase()}`)) return true;
               return false;
             });
 
             if (conflict) {
+              // Field names must match REMEDIATION_PR_LIST_FIELDS above — the list
+              // extractor whitelists pr_url/pr_number/pr_status, so any other
+              // alias would be stripped before we see it here.
+              const prUrl = conflict.pr_url ?? conflict.pull_request_url;
+              const prNumber = conflict.pr_number ?? conflict.pull_request_number;
+              const prStatus = conflict.pr_status ?? conflict.status;
               const ref = [
-                conflict.pull_request_url ? `url=${String(conflict.pull_request_url)}` : "",
-                conflict.pull_request_number ? `#${String(conflict.pull_request_number)}` : "",
-                conflict.status ? `status=${String(conflict.status)}` : "",
+                prUrl ? `url=${String(prUrl)}` : "",
+                prNumber ? `#${String(prNumber)}` : "",
+                prStatus ? `status=${String(prStatus)}` : "",
               ].filter(Boolean).join(" ");
               throw new Error(
                 `Duplicate remediation PR blocked: an existing PR already covers ${purl} on artifact ${artifactId} (${ref}). `
@@ -932,8 +1081,10 @@ export const scsToolset: ToolsetDefinition = {
           },
           responseExtractor: scsCleanExtract,
           description: "Create a remediation PR to upgrade a vulnerable component. "
-            + "MCP preflight: automatically lists existing remediation PRs for this artifact "
-            + "and blocks the create with an error if any existing PR already covers the same purl/package_name.",
+            + "MCP preflight: automatically lists existing remediation PRs for this artifact and blocks the create "
+            + "if any ACTIVE PR (OPEN/CREATED/PENDING/IN_PROGRESS/DRAFT/QUEUED) already covers the same purl or package_name. "
+            + "Historical PRs in terminal states (CLOSED/MERGED/DISMISSED/REJECTED/FAILED/ERROR) are IGNORED and will not block a later upgrade. "
+            + "If the list call fails with 4xx the create is refused (fail-closed); 5xx / network errors skip the check with a warning (fail-open).",
           bodySchema: {
             description: "Remediation PR creation payload — component PURL and target upgrade version",
             fields: [
