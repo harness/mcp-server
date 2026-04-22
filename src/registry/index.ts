@@ -301,7 +301,12 @@ export class Registry {
             }
           }
           if (value === undefined || value === "") {
-            throw new Error(`Missing required field "${inputKey}" for path parameter "${pathPlaceholder}"`);
+            const scopeHint = def.scopeOptional
+              ? ` This resource supports account/org/project scope — pass "${inputKey}" via params, or use a Harness URL.`
+              : "";
+            throw new Error(
+              `Missing required field "${inputKey}" for ${def.resourceType}.${scopeHint}`,
+            );
           }
           path = path.replace(`{${pathPlaceholder}}`, encodeURIComponent(String(value)));
         }
