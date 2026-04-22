@@ -12,7 +12,10 @@ export const idpToolset: ToolsetDefinition = {
       description: "Internal Developer Portal catalog entity. Supports list and get.",
       toolset: "idp",
       scope: "account",
-      identifierFields: ["entity_id", "kind"],
+      // harness_get maps resource_id to the *last* identifierFields entry when len>1
+      // (see harness-get.ts: primaryField = identFields[identFields.length - 1]). Earlier
+      // entries are context (e.g. kind); entity_id must be last so resource_id is the name.
+      identifierFields: ["kind", "entity_id"],
       listFilterFields: [
         { name: "kind", description: "Catalog entity kind filter", enum: ["api", "component", "environment", "environmentblueprint", "group", "resource", "user", "workflow"] },
         { name: "search", description: "Search catalog entities by name or keyword" },
