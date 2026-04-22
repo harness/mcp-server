@@ -83,12 +83,6 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
  */
 export interface RegistryOptions {
   additionalToolsets?: ToolsetDefinition[];
-  /**
-   * When true (default), only the pipeline version matching HARNESS_PIPELINE_VERSION
-   * is registered (defaults to v0 when unset). When false, both pipeline and
-   * pipeline_v1 are always registered regardless of config.
-   */
-  enforcePipelineVersion?: boolean;
 }
 
 /**
@@ -105,23 +99,20 @@ export class Registry {
       ? allToolsets.filter((t) => enabledNames.has(t.name))
       : allToolsets;
 
-    const enforce = options.enforcePipelineVersion ?? true;
-    const excludedPipelineType = enforce
-      ? (this.config.HARNESS_PIPELINE_VERSION ?? "0") === "0"
+    const excludedPipelineType =
+      (this.config.HARNESS_PIPELINE_VERSION ?? "0") === "0"
         ? "pipeline_v1"
-        : "pipeline"
-      : undefined;
+        : "pipeline";
 
     for (const toolset of this.toolsets) {
       for (const resource of toolset.resources) {
-        if (excludedPipelineType && resource.resourceType === excludedPipelineType) continue;
+        if (resource.resourceType === excludedPipelineType) continue;
         this.resourceMap.set(resource.resourceType, resource);
       }
     }
 
     log.info(`Registry loaded: ${this.resourceMap.size} resource types from ${this.toolsets.length} toolsets`, {
-      ...(this.config.HARNESS_PIPELINE_VERSION ? { pipelineVersion: this.config.HARNESS_PIPELINE_VERSION } : {}),
-      enforcePipelineVersion: enforce,
+      pipelineVersion: this.config.HARNESS_PIPELINE_VERSION ?? "0",
     });
   }
 
