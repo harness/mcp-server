@@ -100,9 +100,10 @@
 - [x] Update root license file and package metadata to MIT
 - [x] Align contributor and README license text
 - [x] Verify no stale Apache 2.0 references remain for project licensing
-- [ ] Commit, push, and open docs/legal change PR
+- [x] Commit, push, and open docs/legal change PR
 
 ### Review
 - Replaced the repository's Apache 2.0 license text with the MIT license and updated the package SPDX identifier.
 - Aligned README and CONTRIBUTING so public licensing guidance matches the new MIT license.
 - Verified that remaining Apache mentions are limited to task history and test fixture/sample data, not the repository's project licensing.
+- Verified the change set with `pnpm typecheck` and `pnpm test` after installing dependencies from the existing lockfile.
