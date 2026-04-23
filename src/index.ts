@@ -61,7 +61,7 @@ function createHarnessServer(config: Config): McpServer {
         "• Run pipeline: harness_execute(url='<Harness pipeline URL>', action='run', inputs={branch: 'main'})",
         "• Diagnose failure: harness_diagnose(url='<Harness execution URL>')",
         "",
-        "DISCOVERY: Use harness_describe() to list all resource types, or harness_describe(resource_type='<type>') for operations and fields.",
+        "DISCOVERY: Use harness_describe() to list all resource types, harness_describe(search_term='...') to find types by keyword, or harness_describe(resource_type='<type>') for operations and fields. Always search before telling the user a capability is unavailable.",
         "SCHEMA: Use harness_schema(resource_type='<type>') to fetch the exact JSON Schema for create/update body payloads.",
         "",
         "ENTITY SELECTION: When the user references an ordinal ('first repo', 'second artifact', 'latest execution'), pick the item at that index from the list response (0 = first, -1 = last). Do NOT substitute a different item or pick by name unless the user asks by name. If the list is empty, say so — never guess an ID.",
