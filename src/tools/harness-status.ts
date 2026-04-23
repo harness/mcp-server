@@ -143,14 +143,15 @@ export function registerStatusTool(
 
         await sendProgress(extra, 1, 2, "Building status summary...");
 
+        const accountId = registry.getAccountId();
         const failedItems = (failed?.items ?? []).map((e) =>
-          summarizeExecution(e, config.HARNESS_BASE_URL, config.HARNESS_ACCOUNT_ID, orgId, projectId),
+          summarizeExecution(e, config.HARNESS_BASE_URL, accountId, orgId, projectId),
         );
         const runningItems = (running?.items ?? []).map((e) =>
-          summarizeExecution(e, config.HARNESS_BASE_URL, config.HARNESS_ACCOUNT_ID, orgId, projectId),
+          summarizeExecution(e, config.HARNESS_BASE_URL, accountId, orgId, projectId),
         );
         const recentItems = (recent?.items ?? []).map((e) =>
-          summarizeExecution(e, config.HARNESS_BASE_URL, config.HARNESS_ACCOUNT_ID, orgId, projectId),
+          summarizeExecution(e, config.HARNESS_BASE_URL, accountId, orgId, projectId),
         );
 
         // Compute health
@@ -172,7 +173,7 @@ export function registerStatusTool(
         try {
           deploymentsLink = buildDeepLink(
             config.HARNESS_BASE_URL,
-            config.HARNESS_ACCOUNT_ID,
+            accountId,
             "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/deployments",
             { orgIdentifier: orgId, projectIdentifier: projectId },
           );

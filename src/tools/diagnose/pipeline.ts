@@ -312,6 +312,7 @@ function buildExecutionSummary(
   execution: Record<string, unknown>,
   config: Config,
   input: Record<string, unknown>,
+  accountId: string,
 ): { summary: Record<string, unknown>; failedNodes: FailedNodeDetail[]; childRef?: { executionId: string; orgId: string; projectId: string } } {
   const pes = asRecord(execution.pipelineExecutionSummary);
   if (!pes) return { summary: execution, failedNodes: [] };
@@ -408,7 +409,7 @@ function buildExecutionSummary(
   const execId = asString(pes.planExecutionId);
   if (pipelineIdentifier && execId && orgId && projectId) {
     const base = config.HARNESS_BASE_URL.replace(/\/$/, "");
-    summary.openInHarness = `${base}/ng/account/${config.HARNESS_ACCOUNT_ID}/all/orgs/${orgId}/projects/${projectId}/pipelines/${pipelineIdentifier}/deployments/${execId}/pipeline`;
+    summary.openInHarness = `${base}/ng/account/${accountId}/all/orgs/${orgId}/projects/${projectId}/pipelines/${pipelineIdentifier}/deployments/${execId}/pipeline`;
   } else if (execution.openInHarness) {
     summary.openInHarness = execution.openInHarness;
   }
@@ -511,7 +512,7 @@ export const pipelineHandler: DiagnoseHandler = {
       graphNodeMap = isRecord(execGraph?.nodeMap) ? execGraph.nodeMap as Record<string, ExecGraphNode> : undefined;
 
       if (isSummary) {
-        const result = buildExecutionSummary(exec, config, input);
+        const result = buildExecutionSummary(exec, config, input, registry.getAccountId());
         diagnostic.execution = result.summary;
         failedNodes = result.failedNodes;
 

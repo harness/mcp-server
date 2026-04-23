@@ -114,7 +114,7 @@ export const connectorHandler: DiagnoseHandler = {
     const projectId = asString(input.project_id) ?? config.HARNESS_PROJECT;
     if (orgId && projectId) {
       const base = config.HARNESS_BASE_URL.replace(/\/$/, "");
-      diagnostic.openInHarness = `${base}/ng/account/${config.HARNESS_ACCOUNT_ID}/all/orgs/${orgId}/projects/${projectId}/setup/connectors/${connectorId}`;
+      diagnostic.openInHarness = `${base}/ng/account/${registry.getAccountId()}/all/orgs/${orgId}/projects/${projectId}/setup/connectors/${connectorId}`;
     }
 
     await sendProgress(extra, 2, 2, "Connector diagnosis complete");

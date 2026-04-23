@@ -57,7 +57,11 @@ function makeGitopsContext(overrides: {
     throw new Error(`Unmocked: ${resourceType}.${op}`);
   });
 
-  const registry = { dispatch: dispatchFn, dispatchExecute: vi.fn() } as unknown as ReturnType<typeof makeRegistry>;
+  const registry = {
+    dispatch: dispatchFn,
+    dispatchExecute: vi.fn(),
+    getAccountId: () => "test-account",
+  } as unknown as ReturnType<typeof makeRegistry>;
 
   return makeContext({ input, registry });
 }

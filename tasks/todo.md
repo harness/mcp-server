@@ -83,3 +83,27 @@
 - Aligned public inventory claims with current source of truth: 10 tools, 29 toolsets, 137 resource types.
 - Added concrete pipeline runtime-input shorthand mapping (`branch`, `tag`, `pr_number`, `commit_sha`) and documented the `inputs.build` precedence constraint.
 - Added troubleshooting guidance for shorthand non-application and linked shorthand discovery to `harness_describe(resource_type="pipeline")`.
+
+## Hosted MCP README Update (2026-04-23)
+- [x] Review current README setup and client configuration sections
+- [x] Document Harness-hosted MCP support and managed endpoint example
+- [x] Add Platform OAuth + Harness Support enablement note
+- [x] Review docs-only diff
+
+### Review
+- Added a Quick Start note so readers discover the hosted MCP option before local installation paths.
+- Added hosted MCP client config examples using the managed `https://mcp.harness.io/mcp` endpoint and `CLIENT_ID` auth stanza.
+- Explicitly documented that hosted MCP requires Harness Platform OAuth and per-account enablement/configuration by Harness Support.
+
+## License Change to MIT (2026-04-23)
+- [x] Audit repository references to Apache 2.0
+- [x] Update root license file and package metadata to MIT
+- [x] Align contributor and README license text
+- [x] Verify no stale Apache 2.0 references remain for project licensing
+- [x] Commit, push, and open docs/legal change PR
+
+### Review
+- Replaced the repository's Apache 2.0 license text with the MIT license and updated the package SPDX identifier.
+- Aligned README and CONTRIBUTING so public licensing guidance matches the new MIT license.
+- Verified that remaining Apache mentions are limited to task history and test fixture/sample data, not the repository's project licensing.
+- Verified the change set with `pnpm typecheck` and `pnpm test` after installing dependencies from the existing lockfile.

@@ -86,11 +86,13 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
 export interface RegistryOptions {
   additionalToolsets?: ToolsetDefinition[];
   /**
-   * When true (default), only the pipeline version matching HARNESS_PIPELINE_VERSION
-   * is registered (defaults to v0 when unset). When false, both pipeline and
-   * pipeline_v1 are always registered regardless of config.
+   * Optional callback that resolves the effective account ID for the current
+   * request.  Used by multi-tenant deployments (internal HTTP mode) where the
+   * account ID varies per request and is not known at startup.
+   * When provided, `registry.getAccountId()` calls this first and falls back
+   * to `config.HARNESS_ACCOUNT_ID` if it returns `undefined`.
    */
-  enforcePipelineVersion?: boolean;
+  accountIdResolver?: () => string | undefined;
 }
 
 /**
@@ -99,32 +101,35 @@ export interface RegistryOptions {
 export class Registry {
   private resourceMap: Map<string, ResourceDefinition> = new Map();
   private toolsets: ToolsetDefinition[] = [];
+  private accountIdResolver?: () => string | undefined;
 
   constructor(private config: Config, options: RegistryOptions = {}) {
+    this.accountIdResolver = options.accountIdResolver;
     const allToolsets = [...ALL_TOOLSETS, ...(options.additionalToolsets ?? [])];
     const enabledNames = this.parseToolsetFilter(allToolsets);
     this.toolsets = enabledNames
       ? allToolsets.filter((t) => enabledNames.has(t.name))
       : allToolsets;
 
-    const enforce = options.enforcePipelineVersion ?? true;
-    const excludedPipelineType = enforce
-      ? (this.config.HARNESS_PIPELINE_VERSION ?? "0") === "0"
+    const excludedPipelineType =
+      (this.config.HARNESS_PIPELINE_VERSION ?? "0") === "0"
         ? "pipeline_v1"
-        : "pipeline"
-      : undefined;
+        : "pipeline";
 
     for (const toolset of this.toolsets) {
       for (const resource of toolset.resources) {
-        if (excludedPipelineType && resource.resourceType === excludedPipelineType) continue;
+        if (resource.resourceType === excludedPipelineType) continue;
         this.resourceMap.set(resource.resourceType, resource);
       }
     }
 
     log.info(`Registry loaded: ${this.resourceMap.size} resource types from ${this.toolsets.length} toolsets`, {
-      ...(this.config.HARNESS_PIPELINE_VERSION ? { pipelineVersion: this.config.HARNESS_PIPELINE_VERSION } : {}),
-      enforcePipelineVersion: enforce,
+      pipelineVersion: this.config.HARNESS_PIPELINE_VERSION ?? "0",
     });
+  }
+
+  getAccountId(): string {
+    return this.accountIdResolver?.() ?? this.config.HARNESS_ACCOUNT_ID;
   }
 
   private parseToolsetFilter(allToolsets: ToolsetDefinition[]): Set<string> | null {
@@ -285,6 +290,11 @@ export class Registry {
     input: Record<string, unknown>,
     signal?: AbortSignal,
   ): Promise<unknown> {
+    // Run preflight hook (e.g. duplicate-check before create) before hitting the API.
+    if (spec.preflight) {
+      await spec.preflight({ client, input, registry: this, signal });
+    }
+
     // Build path with substitutions (or pathBuilder when present)
     let path: string;
     if (spec.pathBuilder) {
@@ -303,7 +313,12 @@ export class Registry {
             }
           }
           if (value === undefined || value === "") {
-            throw new Error(`Missing required field "${inputKey}" for path parameter "${pathPlaceholder}"`);
+            const scopeHint = def.scopeOptional
+              ? ` This resource supports account/org/project scope — pass "${inputKey}" via params, or use a Harness URL.`
+              : "";
+            throw new Error(
+              `Missing required field "${inputKey}" for ${def.resourceType}.${scopeHint}`,
+            );
           }
           path = path.replace(`{${pathPlaceholder}}`, encodeURIComponent(String(value)));
         }
@@ -588,7 +603,7 @@ export class Registry {
         try {
           let link = buildDeepLink(
             this.config.HARNESS_BASE_URL,
-            this.config.HARNESS_ACCOUNT_ID,
+            this.getAccountId(),
             def.deepLinkTemplate,
             baseLinkParams,
           );
@@ -675,7 +690,7 @@ export class Registry {
 
             let itemLink = buildDeepLink(
               this.config.HARNESS_BASE_URL,
-              this.config.HARNESS_ACCOUNT_ID,
+              this.getAccountId(),
               def.deepLinkTemplate,
               itemLinkParams,
             );

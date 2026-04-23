@@ -1,10 +1,13 @@
 import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { Registry } from "../registry/index.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { createLogger } from "../utils/logger.js";
 import { SCHEMAS, VALID_SCHEMAS } from "../data/schemas/index.js";
 
 const log = createLogger("tool:harness-schema");
+
+const PIPELINE_SCHEMA_NAMES = new Set(["pipeline", "pipeline_v1"]);
 
 /**
  * Resolve a $ref pointer within the schema.
@@ -122,7 +125,13 @@ function getSummary(schema: Record<string, unknown>, resourceType: string): Reco
   };
 }
 
-export function registerSchemaTool(server: McpServer): void {
+export function registerSchemaTool(server: McpServer, registry?: Registry): void {
+  const registeredTypes = registry ? new Set(registry.getAllResourceTypes()) : undefined;
+  const availableSchemas = VALID_SCHEMAS.filter((s) => {
+    if (!registeredTypes || !PIPELINE_SCHEMA_NAMES.has(s)) return true;
+    return registeredTypes.has(s);
+  });
+
   server.registerTool(
     "harness_schema",
     {
@@ -131,11 +140,11 @@ export function registerSchemaTool(server: McpServer): void {
         "so you know the exact body structure for harness_create/harness_update. " +
         "Use without path for a summary of fields and available sections. " +
         "Use with path to drill into a specific section. " +
-        `Available schemas: ${VALID_SCHEMAS.join(", ")}.`,
+        `Available schemas: ${availableSchemas.join(", ")}.`,
       inputSchema: {
         resource_type: z
-          .enum(VALID_SCHEMAS as [string, ...string[]])
-          .describe(`Schema to fetch. Available: ${VALID_SCHEMAS.join(", ")}`),
+          .enum(availableSchemas as [string, ...string[]])
+          .describe(`Schema to fetch. Available: ${availableSchemas.join(", ")}`),
         path: z
           .string()
           .optional()

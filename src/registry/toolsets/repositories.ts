@@ -10,9 +10,10 @@ export const repositoriesToolset: ToolsetDefinition = {
       resourceType: "repository",
       displayName: "Repository",
       description:
-        "Harness Code repository. Supports list, get, create, and update.",
+        "Harness Code repository. Supports list, get, create, and update. Works at account, org, or project scope — omit org_id/project_id for account-scoped repos.",
       toolset: "repositories",
-      scope: "project",
+      scope: "account",
+      scopeOptional: true,
       identifierFields: ["repo_id"],
       listFilterFields: [
         { name: "query", description: "Search repositories by name or keyword" },
@@ -26,6 +27,7 @@ export const repositoriesToolset: ToolsetDefinition = {
           path: "/code/api/v1/repos",
           queryParams: {
             query: "query",
+            search_term: "query",
             sort: "sort",
             page: "page",
             limit: "limit",
@@ -85,7 +87,8 @@ export const repositoriesToolset: ToolsetDefinition = {
       description:
         "Git branch in a Harness Code repository. Supports list, get, create, and delete.",
       toolset: "repositories",
-      scope: "project",
+      scope: "account",
+      scopeOptional: true,
       identifierFields: ["repo_id", "branch_name"],
       listFilterFields: [
         { name: "query", description: "Search branches by name or keyword" },
@@ -153,7 +156,8 @@ export const repositoriesToolset: ToolsetDefinition = {
       description:
         "Git commit in a Harness Code repository. Supports list and get.",
       toolset: "repositories",
-      scope: "project",
+      scope: "account",
+      scopeOptional: true,
       identifierFields: ["repo_id", "commit_sha"],
       listFilterFields: [
         { name: "git_ref", description: "Git reference (branch/tag) filter" },
@@ -224,7 +228,8 @@ export const repositoriesToolset: ToolsetDefinition = {
       description:
         "File or directory content from a Harness Code repository. Supports get. Use execute action 'blame' for git blame.",
       toolset: "repositories",
-      scope: "project",
+      scope: "account",
+      scopeOptional: true,
       identifierFields: ["repo_id", "path"],
       listFilterFields: [],
       operations: {
@@ -270,7 +275,8 @@ export const repositoriesToolset: ToolsetDefinition = {
       description:
         "Git tag in a Harness Code repository. Supports list, create, and delete.",
       toolset: "repositories",
-      scope: "project",
+      scope: "account",
+      scopeOptional: true,
       identifierFields: ["repo_id", "tag_name"],
       listFilterFields: [
         { name: "query", description: "Search tags by name or keyword" },
@@ -327,7 +333,8 @@ export const repositoriesToolset: ToolsetDefinition = {
       description:
         "Branch/tag/push protection rule for a Harness Code repository. Supports list, get, create, update, and delete. Rules define merge requirements, status checks, and code-owner approvals. Create/update/delete require user confirmation.",
       toolset: "repositories",
-      scope: "project",
+      scope: "account",
+      scopeOptional: true,
       identifierFields: ["repo_id", "rule_id"],
       listFilterFields: [
         { name: "query", description: "Filter rules by name or keyword" },
@@ -421,9 +428,10 @@ export const repositoriesToolset: ToolsetDefinition = {
       resourceType: "space_rule",
       displayName: "Space Protection Rule",
       description:
-        "Project/org/account-level protection rule that applies across all repositories in a space. Supports list, get, create, update, and delete. Use repo_rule for per-repository rules. Create/update/delete require user confirmation. Scope: project (default), org, or account — the endpoint uses orgIdentifier and projectIdentifier; omit project_id for org-level, omit both for account-level.",
+        "Project/org/account-level protection rule that applies across all repositories in a space. Supports list, get, create, update, and delete. Use repo_rule for per-repository rules. Create/update/delete require user confirmation. Scope: project (default), org, or account — omit project_id for org-level, omit both for account-level.",
       toolset: "repositories",
-      scope: "project",
+      scope: "account",
+      scopeOptional: true,
       identifierFields: ["rule_id"],
       listFilterFields: [
         { name: "query", description: "Filter rules by name or keyword" },

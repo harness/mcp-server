@@ -30,6 +30,14 @@ Before installing or running the server, you need a Harness API key:
 
 ## Quick Start
 
+### Option 0: Hosted Harness MCP
+
+If your Harness account has the hosted MCP service enabled, clients that support remote MCP servers can connect directly to the managed endpoint instead of running the server locally.
+
+> **Important:** The hosted MCP service uses **Harness Platform OAuth**, not `HARNESS_API_KEY`. It must also be enabled/configured per account by **Harness Support** before the endpoint can be used.
+
+See [Hosted Harness MCP](#hosted-harness-mcp) for configuration examples.
+
 ### Option 1: npx (Recommended)
 
 No install required — just run it:
@@ -134,6 +142,49 @@ curl -X DELETE http://localhost:3000/mcp \
 ### Client Configuration
 
 > **Note:** `HARNESS_ORG` and `HARNESS_PROJECT` are optional. They set the org ID and project ID used when not specified per tool call. Agents can discover orgs and projects dynamically using `harness_list(resource_type="organization")` and `harness_list(resource_type="project")`. The deprecated names `HARNESS_DEFAULT_ORG_ID` and `HARNESS_DEFAULT_PROJECT_ID` are still accepted for backward compatibility.
+
+#### Hosted Harness MCP
+
+Harness also supports a hosted MCP endpoint for accounts that have the managed service enabled. This is useful when you want a shared remote MCP endpoint instead of running `npx harness-mcp-v2` or self-hosting the HTTP transport yourself.
+
+> **Important:** Hosted MCP authentication uses **Harness Platform OAuth**. It does **not** use `HARNESS_API_KEY` in the client config. Hosted MCP availability is configured per Harness account, so you will need to work with **Harness Support** to enable/configure the setting before using it.
+
+**Hosted MCP example:**
+
+```json
+{
+  "mcpServers": {
+    "harness-prod1-mcp": {
+      "url": "https://mcp.harness.io/mcp",
+      "auth": {
+        "CLIENT_ID": "mcp-client"
+      }
+    }
+  }
+}
+```
+
+**Example with both hosted and local entries:**
+
+```json
+{
+  "mcpServers": {
+    "harness-hosted": {
+      "url": "https://mcp.harness.io/mcp",
+      "auth": {
+        "CLIENT_ID": "mcp-client"
+      }
+    },
+    "harness-local": {
+      "command": "npx",
+      "args": ["harness-mcp-v2"],
+      "env": {
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+      }
+    }
+  }
+}
+```
 
 > **Troubleshooting `npx ENOENT` or `node: No such file or directory`**
 >
@@ -1549,4 +1600,4 @@ The Harness MCP server pairs well with **[Harness Skills](https://github.com/har
 
 ## License
 
-Apache 2.0
+MIT
