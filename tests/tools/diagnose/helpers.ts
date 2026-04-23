@@ -33,6 +33,7 @@ type DispatchMap = Record<string, Record<string, unknown>>;
 export function makeRegistry(
   dispatchMap: DispatchMap = {},
   executeMap: DispatchMap = {},
+  config?: Config,
 ): Registry {
   const dispatch = vi.fn(
     async (_client: HarnessClient, resourceType: string, op: string, _input: Record<string, unknown>) => {
@@ -56,7 +57,9 @@ export function makeRegistry(
     },
   );
 
-  return { dispatch, dispatchExecute } as unknown as Registry;
+  const getAccountId = () => config?.HARNESS_ACCOUNT_ID ?? "test-account";
+
+  return { dispatch, dispatchExecute, getAccountId } as unknown as Registry;
 }
 
 export function makeExtra(): Extra {
@@ -74,7 +77,7 @@ export function makeContext(overrides: Partial<DiagnoseContext> & {
 } = {}): DiagnoseContext {
   const config = overrides.config ?? makeConfig();
   const client = overrides.client ?? makeClient();
-  const registry = overrides.registry ?? makeRegistry(overrides.dispatchMap, overrides.executeMap);
+  const registry = overrides.registry ?? makeRegistry(overrides.dispatchMap, overrides.executeMap, config);
   const extra = overrides.extra ?? makeExtra();
   const input = overrides.input ?? {};
   const args = overrides.args ?? {};
