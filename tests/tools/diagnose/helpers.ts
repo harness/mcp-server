@@ -56,7 +56,12 @@ export function makeRegistry(
     },
   );
 
-  return { dispatch, dispatchExecute } as unknown as Registry;
+  return {
+    dispatch,
+    dispatchExecute,
+    /** Matches default `HARNESS_ACCOUNT_ID` from `makeConfig()`. */
+    getAccountId: () => "test-account",
+  } as unknown as Registry;
 }
 
 export function makeExtra(): Extra {

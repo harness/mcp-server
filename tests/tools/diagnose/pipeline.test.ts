@@ -92,6 +92,14 @@ function makePipelineDispatch(
   });
 }
 
+function makePipelineRegistry(exec: unknown): Registry {
+  return {
+    dispatch: makePipelineDispatch(exec),
+    dispatchExecute: vi.fn(),
+    getAccountId: () => "test-account",
+  } as unknown as Registry;
+}
+
 describe("pipelineHandler", () => {
   it("throws when both execution_id and pipeline_id are missing", async () => {
     const ctx = makeContext({ input: {} });
@@ -100,7 +108,7 @@ describe("pipelineHandler", () => {
 
   it("returns summary for successful execution", async () => {
     const exec = makeExecution({ status: "Success" });
-    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const registry = makePipelineRegistry(exec);
 
     const ctx = makeContext({
       input: { execution_id: "exec-001" },
@@ -141,7 +149,7 @@ describe("pipelineHandler", () => {
       },
     });
 
-    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const registry = makePipelineRegistry(exec);
     const ctx = makeContext({ input: { execution_id: "exec-001" }, registry, args: { summary: true } });
 
     const result = await pipelineHandler.diagnose(ctx);
@@ -181,7 +189,7 @@ describe("pipelineHandler", () => {
       },
     });
 
-    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const registry = makePipelineRegistry(exec);
     const ctx = makeContext({ input: { execution_id: "exec-001" }, registry, args: { summary: true } });
 
     const result = await pipelineHandler.diagnose(ctx);
@@ -241,7 +249,7 @@ describe("pipelineHandler", () => {
       account: "test-account",
     } as unknown as HarnessClient;
 
-    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const registry = makePipelineRegistry(exec);
     const ctx = makeContext({ input: { execution_id: "exec-001" }, registry, client: clientMock, args: { summary: true } });
 
     const result = await pipelineHandler.diagnose(ctx);
@@ -257,7 +265,7 @@ describe("pipelineHandler", () => {
 
   it("includes pipeline YAML when include_yaml is true", async () => {
     const exec = makeExecution();
-    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const registry = makePipelineRegistry(exec);
     const ctx = makeContext({
       input: { execution_id: "exec-001" },
       registry,
@@ -286,7 +294,7 @@ describe("pipelineHandler", () => {
       },
     });
 
-    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const registry = makePipelineRegistry(exec);
     const ctx = makeContext({
       input: { execution_id: "exec-001" },
       registry,
@@ -319,7 +327,7 @@ describe("pipelineHandler", () => {
       },
     });
 
-    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const registry = makePipelineRegistry(exec);
     const ctx = makeContext({
       input: { execution_id: "exec-001" },
       registry,
@@ -351,7 +359,7 @@ describe("pipelineHandler", () => {
       },
     });
 
-    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const registry = makePipelineRegistry(exec);
     const ctx = makeContext({
       // step_id is set by the URL parser from ?step=<nodeExecutionId>
       input: { execution_id: "exec-001", step_id: "step-passed" },
@@ -394,7 +402,7 @@ describe("pipelineHandler", () => {
       },
     });
 
-    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const registry = makePipelineRegistry(exec);
     const ctx = makeContext({
       input: { execution_id: "exec-001", step_id: "step-passed" },
       registry,
@@ -414,7 +422,7 @@ describe("pipelineHandler", () => {
 
   it("returns error message when requested step_id is not in execution graph", async () => {
     const exec = makeExecution({ status: "Success" });
-    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const registry = makePipelineRegistry(exec);
     const ctx = makeContext({
       input: { execution_id: "exec-001", step_id: "non-existent-step-id" },
       registry,
@@ -444,7 +452,7 @@ describe("pipelineHandler", () => {
       },
     });
 
-    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const registry = makePipelineRegistry(exec);
     const ctx = makeContext({
       input: { execution_id: "exec-001", step_id: "step-no-key" },
       registry,
@@ -472,7 +480,7 @@ describe("pipelineHandler", () => {
       },
     });
 
-    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const registry = makePipelineRegistry(exec);
     const ctx = makeContext({
       input: { execution_id: "exec-001", step_id: "step-passed" },
       registry,
@@ -501,7 +509,7 @@ describe("pipelineHandler", () => {
       },
     });
 
-    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const registry = makePipelineRegistry(exec);
     const ctx = makeContext({
       input: { execution_id: "exec-001", step_id: "step-ok" },
       registry,
@@ -534,7 +542,7 @@ describe("pipelineHandler", () => {
       },
     });
 
-    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const registry = makePipelineRegistry(exec);
     const ctx = makeContext({
       input: { execution_id: "exec-001", step_id: "step-verbose" },
       registry,
@@ -568,7 +576,7 @@ describe("pipelineHandler", () => {
     const mockFn = resolveLogContent as ReturnType<typeof vi.fn>;
     mockFn.mockClear();
 
-    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const registry = makePipelineRegistry(exec);
     const ctx = makeContext({
       // step_id points to the same step that is also in failedNodes
       input: { execution_id: "exec-001", step_id: "step-failed" },
@@ -612,7 +620,7 @@ describe("pipelineHandler", () => {
       },
     });
 
-    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const registry = makePipelineRegistry(exec);
     const ctx = makeContext({
       // step-b is the second failed step; max_failed_steps=1 caps at step-a only
       input: { execution_id: "exec-001", step_id: "step-b" },
@@ -658,7 +666,7 @@ describe("pipelineHandler", () => {
       executionGraph: {}, // no nodeMap — as seen in remote-template pipelines
     };
 
-    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const registry = makePipelineRegistry(exec);
     const ctx = makeContext({
       input: { execution_id: "exec-001", step_id: "some-step-id" },
       registry,
@@ -691,7 +699,7 @@ describe("pipelineHandler", () => {
       },
     });
 
-    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const registry = makePipelineRegistry(exec);
     const ctx = makeContext({
       input: { execution_id: "exec-001" },
       registry,
@@ -728,7 +736,7 @@ describe("pipelineHandler", () => {
       },
     });
 
-    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const registry = makePipelineRegistry(exec);
     const ctx = makeContext({
       input: { execution_id: "exec-001" },  // no step_id
       registry,
@@ -760,7 +768,7 @@ describe("pipelineHandler", () => {
       },
     });
 
-    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const registry = makePipelineRegistry(exec);
     const ctx = makeContext({
       input: { execution_id: "exec-001" },
       registry,
@@ -789,7 +797,7 @@ describe("pipelineHandler", () => {
     const mockFn = resolveLogContent as ReturnType<typeof vi.fn>;
     mockFn.mockClear();
 
-    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const registry = makePipelineRegistry(exec);
     const ctx = makeContext({
       input: { execution_id: "exec-001" },  // no step_id
       registry,
@@ -827,7 +835,7 @@ describe("pipelineHandler", () => {
       },
     });
 
-    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const registry = makePipelineRegistry(exec);
     const ctx = makeContext({
       input: { execution_id: "exec-001" },
       registry,
@@ -865,7 +873,7 @@ describe("pipelineHandler", () => {
       executionGraph: {}, // no nodeMap
     };
 
-    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const registry = makePipelineRegistry(exec);
     const ctx = makeContext({
       input: { execution_id: "exec-001" },
       registry,
@@ -891,7 +899,7 @@ describe("pipelineHandler", () => {
       },
     });
 
-    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const registry = makePipelineRegistry(exec);
     const ctx = makeContext({
       input: { execution_id: "exec-001" },
       registry,
@@ -921,7 +929,7 @@ describe("pipelineHandler", () => {
       },
     });
 
-    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const registry = makePipelineRegistry(exec);
     const ctx = makeContext({
       // Explicit step_id — should use the requested_step path, not auto-fetch
       input: { execution_id: "exec-001", step_id: "step-a" },
@@ -954,7 +962,7 @@ describe("pipelineHandler", () => {
       },
     });
 
-    const registry = { dispatch: makePipelineDispatch(exec), dispatchExecute: vi.fn() } as unknown as Registry;
+    const registry = makePipelineRegistry(exec);
     const ctx = makeContext({
       input: { execution_id: "exec-001" },
       registry,

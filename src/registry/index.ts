@@ -83,6 +83,14 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
  */
 export interface RegistryOptions {
   additionalToolsets?: ToolsetDefinition[];
+  /**
+   * Optional callback that resolves the effective account ID for the current
+   * request.  Used by multi-tenant deployments (internal HTTP mode) where the
+   * account ID varies per request and is not known at startup.
+   * When provided, `registry.getAccountId()` calls this first and falls back
+   * to `config.HARNESS_ACCOUNT_ID` if it returns `undefined`.
+   */
+  accountIdResolver?: () => string | undefined;
 }
 
 /**
@@ -91,8 +99,10 @@ export interface RegistryOptions {
 export class Registry {
   private resourceMap: Map<string, ResourceDefinition> = new Map();
   private toolsets: ToolsetDefinition[] = [];
+  private accountIdResolver?: () => string | undefined;
 
   constructor(private config: Config, options: RegistryOptions = {}) {
+    this.accountIdResolver = options.accountIdResolver;
     const allToolsets = [...ALL_TOOLSETS, ...(options.additionalToolsets ?? [])];
     const enabledNames = this.parseToolsetFilter(allToolsets);
     this.toolsets = enabledNames
@@ -114,6 +124,10 @@ export class Registry {
     log.info(`Registry loaded: ${this.resourceMap.size} resource types from ${this.toolsets.length} toolsets`, {
       pipelineVersion: this.config.HARNESS_PIPELINE_VERSION ?? "0",
     });
+  }
+
+  getAccountId(): string {
+    return this.accountIdResolver?.() ?? this.config.HARNESS_ACCOUNT_ID;
   }
 
   private parseToolsetFilter(allToolsets: ToolsetDefinition[]): Set<string> | null {
@@ -587,7 +601,7 @@ export class Registry {
         try {
           let link = buildDeepLink(
             this.config.HARNESS_BASE_URL,
-            this.config.HARNESS_ACCOUNT_ID,
+            this.getAccountId(),
             def.deepLinkTemplate,
             baseLinkParams,
           );
@@ -674,7 +688,7 @@ export class Registry {
 
             let itemLink = buildDeepLink(
               this.config.HARNESS_BASE_URL,
-              this.config.HARNESS_ACCOUNT_ID,
+              this.getAccountId(),
               def.deepLinkTemplate,
               itemLinkParams,
             );
