@@ -30,7 +30,7 @@ import {
   descListProbes, descGetProbe,
   descListExperimentTemplates, descGetExperimentTemplate, descDeleteExperimentTemplate,
   descListExperimentVariables, descGetComponentVariable, descCreateExperiment,
-  descListLinuxInfra,
+  descListMachineInfra,
   descListLoadtests, descGetLoadtest, descCreateLoadtest, descDeleteLoadtest,
   descListK8sInfra, descGetK8sInfra,
   descListHubs, descGetHub, descCreateHub, descUpdateHub, descDeleteHub,
@@ -67,6 +67,8 @@ import {
   descHubIdentity, descInfraType,
   descExperimentName, descExperimentIdentity, descInfraRef,
   descExperimentId, descInfraStatus,
+  descInfraEnvironmentIds, descInfraName, descInfraIsActive,
+  descInfraExperimentVersion, descInfraSortField, descInfraSortAscending,
   descLoadtestName, descLoadtestType,
   descHubIdentityExact, descHubName, descHubNameUpdate,
   descHubDescription, descHubDescriptionUpdate,
@@ -836,24 +838,32 @@ export const chaosToolset: ToolsetDefinition = {
       },
     },
 
-    // ── Chaos Infrastructure — Linux / Machine ─────────────────────────
+    // ── Chaos Infrastructure — Machine (Linux / Windows / Container / CloudFoundry) ──
     {
       resourceType: "chaos_infrastructure",
-      displayName: "Chaos Infrastructure (Linux)",
+      displayName: "Chaos Infrastructure",
       description: descChaosInfrastructure,
       toolset: "chaos",
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["infra_id"],
       listFilterFields: [
+        { name: "infra_type", description: descInfraType, enum: ["Linux", "Windows", "Container", "CloudFoundry"] },
         { name: "status", description: descInfraStatus, enum: ["Active", "All"] },
+        { name: "environment_ids", description: descInfraEnvironmentIds },
+        { name: "name", description: descInfraName },
+        { name: "is_active", description: descInfraIsActive, type: "boolean" },
+        { name: "experiment_version", description: descInfraExperimentVersion },
+        { name: "sort_field", description: descInfraSortField, enum: ["NAME", "LAST_MODIFIED"] },
+        { name: "sort_ascending", description: descInfraSortAscending, type: "boolean" },
       ],
       operations: {
         list: {
           method: "POST",
           path: `${CHAOS}/rest/machine/infras`,
-          staticQueryParams: { infraType: "Linux" },
+          defaultQueryParams: { infraType: "Linux" },
           queryParams: {
+            infra_type: "infraType",
             page: "page",
             limit: "limit",
             size: "limit",
@@ -868,13 +878,27 @@ export const chaosToolset: ToolsetDefinition = {
             } else if (!statusInput) {
               filter.status = "Active";
             }
-            return {
-              filter,
-              sort: { field: "NAME", ascending: true },
+            if (input.name) filter.name = input.name;
+            if (input.is_active !== undefined) filter.isActive = input.is_active;
+            if (input.experiment_version) filter.experimentVersion = input.experiment_version;
+
+            const body: Record<string, unknown> = { filter };
+
+            if (input.environment_ids) {
+              body.environmentIDs = Array.isArray(input.environment_ids)
+                ? input.environment_ids
+                : (input.environment_ids as string).split(",").map((s: string) => s.trim());
+            }
+
+            body.sort = {
+              field: (input.sort_field as string) || "NAME",
+              ascending: input.sort_ascending !== undefined ? input.sort_ascending : true,
             };
+
+            return body;
           },
           responseExtractor: chaosInfraListExtract,
-          description: descListLinuxInfra,
+          description: descListMachineInfra,
         },
       },
     },

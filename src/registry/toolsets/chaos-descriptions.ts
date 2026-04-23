@@ -27,7 +27,7 @@ Supports list, get, delete, plus execute actions: list_revisions, get_variables,
 
 export const descChaosExperimentVariable = `Variables for a chaos experiment. List variables to discover required runtime inputs before running an experiment.`;
 
-export const descChaosInfrastructure = `Linux/machine infrastructure registered for chaos experiments and load testing. For Kubernetes infrastructure, use chaos_k8s_infrastructure. Supports list.`;
+export const descChaosInfrastructure = `Machine infrastructure (Linux, Windows, Container, CloudFoundry) registered for chaos experiments and load testing. For Kubernetes infrastructure, use chaos_k8s_infrastructure. Supports list.`;
 
 export const descChaosLoadtest = `Load test instance. Supports list, get, create, and delete. Run/stop via execute actions.`;
 
@@ -133,7 +133,7 @@ Returns a success confirmation on completion.`;
 
 export const descListExperimentVariables = `List variables for a chaos experiment (experiment-level and task-level)`;
 
-export const descListLinuxInfra = `List chaos Linux infrastructures (load runners)`;
+export const descListMachineInfra = `List chaos machine infrastructures. Defaults to Linux; pass infra_type filter to select Windows, Container, or CloudFoundry.`;
 
 export const descListLoadtests = `List load test instances`;
 export const descGetLoadtest = `Get load test instance details`;
@@ -432,6 +432,12 @@ export const descExperimentIdentity = `Experiment identity (auto-generated from 
 export const descInfraRef = `Infrastructure reference in format: environmentId/infraId. Use chaos_environment list to find environments, then chaos_k8s_infrastructure list to find infraIDs.`;
 export const descExperimentId = `Chaos experiment identifier. Accepts either the internal UUID (default, with is_identity=false) or the human-readable identity slug (set is_identity=true). Use harness_list with resource_type=chaos_experiment to find experiment IDs.`;
 export const descInfraStatus = `Filter by infra status: Active (default) or All`;
+export const descInfraEnvironmentIds = `Comma-separated environment IDs to filter infrastructures by environment`;
+export const descInfraName = `Filter by infrastructure name`;
+export const descInfraIsActive = `Filter by active status (true/false)`;
+export const descInfraExperimentVersion = `Filter by experiment version`;
+export const descInfraSortField = `Sort field: NAME (default) or LAST_MODIFIED`;
+export const descInfraSortAscending = `Sort direction: true for ascending (default), false for descending`;
 export const descLoadtestName = `Load test name`;
 export const descLoadtestType = `Load test type`;
 
