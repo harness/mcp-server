@@ -1600,4 +1600,4 @@ The Harness MCP server pairs well with **[Harness Skills](https://github.com/har
 
 ## License
 
-Apache 2.0
+MIT
