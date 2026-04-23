@@ -8,10 +8,13 @@ import { createLogger } from "../utils/logger.js";
 const log = createLogger("resource:pipeline-yaml");
 
 export function registerPipelineYamlResource(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
+  // Use the correct pipeline resource type based on version
+  const pipelineResourceType = (config.HARNESS_PIPELINE_VERSION ?? "0") === "0" ? "pipeline_v1" : "pipeline";
+
   const template = new ResourceTemplate("pipeline:///{pipelineId}", {
     list: async () => {
       try {
-        const result = await registry.dispatch(client, "pipeline", "list", {
+        const result = await registry.dispatch(client, pipelineResourceType, "list", {
           org_id: config.HARNESS_ORG,
           project_id: config.HARNESS_PROJECT ?? "",
           size: 20,
@@ -60,7 +63,7 @@ export function registerPipelineYamlResource(server: McpServer, registry: Regist
 
       log.info("Fetching pipeline YAML", { pipelineId, orgId, projectId });
 
-      const result = await registry.dispatch(client, "pipeline", "get", {
+      const result = await registry.dispatch(client, pipelineResourceType, "get", {
         pipeline_id: pipelineId,
         org_id: orgId,
         project_id: projectId,
