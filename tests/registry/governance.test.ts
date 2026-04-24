@@ -278,4 +278,98 @@ describe("P3-10: policy_evaluation resource structural integrity", () => {
     expect(spec.method).toBe("GET");
     expect(spec.path).toContain("/evaluations");
   });
+
+  // SSCA-6347 review feedback — same asymmetry used to leak into evaluation
+  // filters. The 'type' filter here matches the evaluated policy_set's type,
+  // so SBOM/SSCA enforcement must be discoverable as 'sbom'.
+  it("list filter 'type' documents 'sbom' for SBOM/SSCA enforcement (not 'sbom_enforcement')", () => {
+    const res = findResource("policy_evaluation");
+    const typeFilter = res.listFilterFields!.find((f) => f.name === "type");
+    expect(typeFilter).toBeDefined();
+    expect(typeFilter!.description).toContain("'sbom'");
+    expect(typeFilter!.description).toContain("NOT 'sbom_enforcement'");
+  });
+
+  it("list filter 'action' names the SBOM enforcement action ('onstep')", () => {
+    const res = findResource("policy_evaluation");
+    const actionFilter = res.listFilterFields!.find((f) => f.name === "action");
+    expect(actionFilter).toBeDefined();
+    expect(actionFilter!.description).toContain("onstep");
+  });
+});
+
+// ─── SSCA-6347 review feedback: machine-readable enums on type/action ────────
+
+describe("SSCA-6347 review: filter enums make asymmetry structural", () => {
+  it("policy.type filter declares an enum including 'sbom_enforcement'", () => {
+    const res = findResource("policy");
+    const typeFilter = res.listFilterFields!.find((f) => f.name === "type");
+    expect(typeFilter?.enum).toBeDefined();
+    expect(typeFilter!.enum).toContain("sbom_enforcement");
+    // The wrong value for policies must not be advertised.
+    expect(typeFilter!.enum).not.toContain("sbom");
+  });
+
+  it("policy_set.type filter declares an enum including 'sbom' but not 'sbom_enforcement'", () => {
+    const res = findResource("policy_set");
+    const typeFilter = res.listFilterFields!.find((f) => f.name === "type");
+    expect(typeFilter?.enum).toBeDefined();
+    expect(typeFilter!.enum).toContain("sbom");
+    // The two wrong values the agent used to pass must never be in the enum.
+    expect(typeFilter!.enum).not.toContain("sbom_enforcement");
+    expect(typeFilter!.enum).not.toContain("ssca_enforcement");
+  });
+
+  it("policy_set.action filter declares an enum including 'onstep'", () => {
+    const res = findResource("policy_set");
+    const actionFilter = res.listFilterFields!.find((f) => f.name === "action");
+    expect(actionFilter?.enum).toBeDefined();
+    expect(actionFilter!.enum).toEqual(
+      expect.arrayContaining(["onrun", "onsave", "onpush", "onstep", "onstepstart"]),
+    );
+  });
+
+  it("policy_evaluation.type filter declares an enum including 'sbom' but not 'sbom_enforcement'", () => {
+    const res = findResource("policy_evaluation");
+    const typeFilter = res.listFilterFields!.find((f) => f.name === "type");
+    expect(typeFilter?.enum).toBeDefined();
+    expect(typeFilter!.enum).toContain("sbom");
+    expect(typeFilter!.enum).not.toContain("sbom_enforcement");
+  });
+
+  it("policy_evaluation.action filter declares an enum including 'onstep'", () => {
+    const res = findResource("policy_evaluation");
+    const actionFilter = res.listFilterFields!.find((f) => f.name === "action");
+    expect(actionFilter?.enum).toBeDefined();
+    expect(actionFilter!.enum).toContain("onstep");
+  });
+});
+
+// ─── SSCA-6347 review feedback: body-schema type fields document 'sbom' ──────
+
+describe("SSCA-6347 review: policy_set body schemas document SBOM type", () => {
+  it("policy_set create schema's 'type' field mentions 'sbom' for SBOM enforcement", () => {
+    const spec = getOp("policy_set", "create");
+    const typeField = spec.bodySchema!.fields.find((f) => f.name === "type");
+    expect(typeField).toBeDefined();
+    expect(typeField!.description).toContain("'sbom'");
+    // Surface the asymmetry at the create surface too — a caller authoring a
+    // policy set from bodySchema alone must know policies use a different value.
+    expect(typeField!.description).toContain("sbom_enforcement");
+  });
+
+  it("policy_set update schema's 'type' field mentions 'sbom' for SBOM enforcement", () => {
+    const spec = getOp("policy_set", "update");
+    const typeField = spec.bodySchema!.fields.find((f) => f.name === "type");
+    expect(typeField).toBeDefined();
+    expect(typeField!.description).toContain("'sbom'");
+    expect(typeField!.description).toContain("sbom_enforcement");
+  });
+
+  it("policy_set create schema's 'action' field names the SBOM enforcement action", () => {
+    const spec = getOp("policy_set", "create");
+    const actionField = spec.bodySchema!.fields.find((f) => f.name === "action");
+    expect(actionField).toBeDefined();
+    expect(actionField!.description).toContain("onstep");
+  });
 });

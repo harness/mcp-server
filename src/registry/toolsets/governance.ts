@@ -30,8 +30,8 @@ const policySetCreateSchema: BodySchema = {
   fields: [
     { name: "identifier", type: "string", required: true, description: "Unique identifier for the policy set" },
     { name: "name", type: "string", required: true, description: "Display name" },
-    { name: "action", type: "string", required: true, description: "Enforcement action: onrun, onsave, onpush, etc." },
-    { name: "type", type: "string", required: true, description: "Entity type: pipeline, connector, service, environment, etc." },
+    { name: "action", type: "string", required: true, description: "Enforcement action: onrun, onsave, onpush, onstep (SBOM enforcement), onstepstart." },
+    { name: "type", type: "string", required: true, description: "Entity type. For SBOM/SSCA enforcement use 'sbom' (the policies inside this set use 'sbom_enforcement'). Other values: pipeline, connector, service, environment, secret, template, infrastructure." },
     { name: "enabled", type: "boolean", required: true, description: "Whether the policy set is enabled" },
     { name: "description", type: "string", required: false, description: "Description of the policy set" },
     { name: "policies", type: "array", required: false, description: "Policies to include: [{ identifier, severity }]", itemType: "{ identifier: string, severity: 'warning' | 'error' }" },
@@ -43,8 +43,8 @@ const policySetUpdateSchema: BodySchema = {
   description: "OPA policy set update",
   fields: [
     { name: "name", type: "string", required: false, description: "Updated display name" },
-    { name: "action", type: "string", required: false, description: "Updated enforcement action" },
-    { name: "type", type: "string", required: false, description: "Updated entity type" },
+    { name: "action", type: "string", required: false, description: "Updated enforcement action: onrun, onsave, onpush, onstep (SBOM enforcement), onstepstart." },
+    { name: "type", type: "string", required: false, description: "Updated entity type. For SBOM/SSCA enforcement use 'sbom' (policies inside use 'sbom_enforcement'). Other values: pipeline, connector, service, environment, secret, template, infrastructure." },
     { name: "enabled", type: "boolean", required: false, description: "Enable or disable the policy set" },
     { name: "description", type: "string", required: false, description: "Updated description" },
     { name: "policies", type: "array", required: false, description: "Updated policies: [{ identifier, severity }]", itemType: "{ identifier: string, severity: 'warning' | 'error' }" },
@@ -84,7 +84,7 @@ export const governanceToolset: ToolsetDefinition = {
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/governance/policies/edit/{identifier}",
       listFilterFields: [
         { name: "search_term", description: "Filter policies by name or keyword" },
-        { name: "type", description: "Filter by policy entity type. For SBOM/SSCA enforcement use 'sbom_enforcement'. Other known values: pipeline, connector, service, environment, secret, template, infrastructure. Unknown values return an empty list rather than an error." },
+        { name: "type", description: "Filter by policy entity type. For SBOM/SSCA enforcement use 'sbom_enforcement'. Unknown values return an empty list rather than an error.", enum: ["sbom_enforcement", "pipeline", "connector", "service", "environment", "secret", "template", "infrastructure"] },
         { name: "sort", description: "Sort field" },
         { name: "identifier_filter", description: "Filter by policy identifier" },
         { name: "exclude_rego", description: "Exclude rego source from list response", type: "boolean" },
@@ -165,8 +165,8 @@ export const governanceToolset: ToolsetDefinition = {
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/governance/policy-sets/{identifier}",
       listFilterFields: [
         { name: "search_term", description: "Filter policy sets by name or keyword" },
-        { name: "type", description: "Filter by policy-set entity type. For SBOM/SSCA enforcement use 'sbom' (NOT 'sbom_enforcement' or 'ssca_enforcement' — those are valid only for the policy resource and return empty on policy sets). Other known values: pipeline, connector, service, environment, secret, template, infrastructure." },
-        { name: "action", description: "Filter by enforcement action. SBOM enforcement uses 'onstep'. Other values: onrun (pipeline), onsave, onpush, onstepstart." },
+        { name: "type", description: "Filter by policy-set entity type. For SBOM/SSCA enforcement use 'sbom' (NOT 'sbom_enforcement' or 'ssca_enforcement' — those are valid only for the policy resource and return empty on policy sets).", enum: ["sbom", "pipeline", "connector", "service", "environment", "secret", "template", "infrastructure"] },
+        { name: "action", description: "Filter by enforcement action. SBOM enforcement uses 'onstep'. Other values: onrun (pipeline), onsave, onpush, onstepstart.", enum: ["onrun", "onsave", "onpush", "onstep", "onstepstart"] },
         { name: "sort", description: "Sort field" },
         { name: "identifier_filter", description: "Filter by policy set identifier" },
       ],
@@ -231,8 +231,8 @@ export const governanceToolset: ToolsetDefinition = {
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/governance/evaluation/{id}",
       listFilterFields: [
         { name: "entity", description: "Filter by entity identifier" },
-        { name: "type", description: "Filter by entity type (pipeline, connector, service, etc.)" },
-        { name: "action", description: "Filter by action (onrun, onsave, etc.)" },
+        { name: "type", description: "Filter by entity type. Matches the evaluated policy_set's type — for SBOM/SSCA enforcement use 'sbom' (NOT 'sbom_enforcement'; that is the policy-level type, not the evaluation-level type).", enum: ["sbom", "pipeline", "connector", "service", "environment", "secret", "template", "infrastructure"] },
+        { name: "action", description: "Filter by enforcement action. SBOM enforcement uses 'onstep'. Other values: onrun (pipeline), onsave, onpush, onstepstart.", enum: ["onrun", "onsave", "onpush", "onstep", "onstepstart"] },
         { name: "status", description: "Filter by evaluation status" },
         { name: "execution_id", description: "Filter by pipeline execution ID" },
         { name: "created_date_from", description: "Filter evaluations created after this date (ISO 8601)" },
