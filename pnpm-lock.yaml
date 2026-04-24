@@ -17,7 +17,7 @@ importers:
   .:
     dependencies:
       '@hono/node-server':
-        specifier: ^2.0.0
+        specifier: '>=1.19.10'
         version: 2.0.0(hono@4.12.15)
       '@modelcontextprotocol/sdk':
         specifier: ^1.27.1
@@ -32,7 +32,7 @@ importers:
         specifier: ^5.2.1
         version: 5.2.1
       hono:
-        specifier: ^4.12.15
+        specifier: '>=4.12.12'
         version: 4.12.15
       jsonwebtoken:
         specifier: ^9.0.3
