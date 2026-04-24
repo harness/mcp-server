@@ -7,7 +7,7 @@ import { buildDeepLink, appendStoreType } from "../utils/deep-links.js";
 
 // Import all toolsets
 import { pipelinesToolset } from "./toolsets/pipelines.js";
-import { agentPipelinesToolset } from "./toolsets/agent-pipelines.js";
+import { agentsToolset } from "./toolsets/agents.js";
 import { servicesToolset } from "./toolsets/services.js";
 import { environmentsToolset } from "./toolsets/environments.js";
 import { connectorsToolset } from "./toolsets/connectors.js";
@@ -46,7 +46,7 @@ const LIST_ARRAY_KEYS = ["items", "features", "content", "data", "objects"];
 /** All available toolsets */
 const ALL_TOOLSETS: ToolsetDefinition[] = [
   pipelinesToolset,
-  agentPipelinesToolset,
+  agentsToolset,
   servicesToolset,
   environmentsToolset,
   connectorsToolset,
