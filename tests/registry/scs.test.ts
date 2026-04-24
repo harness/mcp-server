@@ -1254,6 +1254,35 @@ describe("P3-1: scs_bom_violation resource", () => {
     expect(sibling!.relationship).toBe("sibling");
   });
 
+  // SSCA-6347 — the violation → policy_set → policy chain is the AC test case.
+  // Without a direct pointer to policy_set, the agent cannot discover the set that fired
+  // the violation and falls back to (wrongly) asking "no SSCA policy sets configured".
+  it("relatedResources links to governance policy_set as sibling (SSCA-6347 chain: violation → policy_set → policy)", () => {
+    const res = findResource("scs_bom_violation");
+    const sibling = res.relatedResources!.find((r) => r.resourceType === "policy_set");
+    expect(sibling).toBeDefined();
+    expect(sibling!.relationship).toBe("sibling");
+    // The sibling description must point the agent at the correct type='sbom' filter so it
+    // doesn't regress to the broken type='ssca_enforcement' / type='sbom_enforcement' query.
+    expect(sibling!.description).toContain("type='sbom'");
+    expect(sibling!.description).toMatch(/NOT 'sbom_enforcement' or 'ssca_enforcement'/);
+  });
+
+  it("governance cross-toolset chain is complete: scs_bom_violation \u2194 policy_set \u2194 policy", () => {
+    // End-to-end structural assertion for the AC chain. A broken link at any hop sends the
+    // agent back into the SSCA-6347 failure mode (empty list, "none configured" reply).
+    const violation = findResource("scs_bom_violation");
+    const violationPolicySetRef = violation.relatedResources!.find((r) => r.resourceType === "policy_set");
+    const violationPolicyRef = violation.relatedResources!.find((r) => r.resourceType === "policy");
+    expect(violationPolicySetRef).toBeDefined();
+    expect(violationPolicyRef).toBeDefined();
+
+    // policy_set → scs_bom_violation (back-edge) is asserted in governance.test.ts; here we
+    // just confirm the agent can walk both legs from the violation without leaving scs.ts.
+    expect(violationPolicySetRef!.description.length).toBeGreaterThan(0);
+    expect(violationPolicyRef!.description.length).toBeGreaterThan(0);
+  });
+
   it("artifact_security relatedResources includes scs_bom_violation", () => {
     const res = findResource("artifact_security");
     const child = res.relatedResources!.find((r) => r.resourceType === "scs_bom_violation");
