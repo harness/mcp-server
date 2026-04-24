@@ -86,6 +86,14 @@ pnpm inspect            # Test with MCP Inspector
 
 The MCPB bundle manifest lives in [`mcp-directory/`](mcp-directory/), and the bundle icon is tracked at [`icon.png`](icon.png) in the repository root. Copy `mcp-directory/manifest.json` to the bundle root after `pnpm build` so the generated archive contains root-level `manifest.json`, `icon.png`, `build/`, `package.json`, and production `node_modules/`.
 
+To keep the archive small, build MCPB packages from a staging directory:
+
+```bash
+pnpm prepare:mcpb
+```
+
+The staged package is written to `dist/mcpb/` with production dependencies installed using npm's flat layout.
+
 ### CLI Usage
 
 ```bash
