@@ -101,6 +101,23 @@ describe("ConfigSchema", () => {
     }
   });
 
+  it("treats empty optional MCPB user config values as unset", () => {
+    const result = ConfigSchema.safeParse({
+      HARNESS_API_KEY: "pat.acct123.tokenId.secret",
+      HARNESS_ACCOUNT_ID: "",
+      HARNESS_ORG: "",
+      HARNESS_PROJECT: "",
+      HARNESS_BASE_URL: "",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_ACCOUNT_ID).toBe("acct123");
+      expect(result.data.HARNESS_ORG).toBe("default");
+      expect(result.data.HARNESS_PROJECT).toBeUndefined();
+      expect(result.data.HARNESS_BASE_URL).toBe("https://app.harness.io");
+    }
+  });
+
   it("applies default timeout and retries", () => {
     const result = ConfigSchema.safeParse(validConfig);
     expect(result.success).toBe(true);
