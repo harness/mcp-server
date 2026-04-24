@@ -1,9 +1,9 @@
 node_modules/
 build/
+dist/
 .env
 *.tgz
 *.mcpb
-manifest.json
 .DS_Store
 
 # Editor files

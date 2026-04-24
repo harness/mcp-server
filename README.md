@@ -2,7 +2,6 @@
 
 An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 10 consolidated tools and 163 resource types.
 
-
 ## Why Use This MCP Server
 
 Most MCP servers map one tool per API endpoint. For a platform as broad as Harness, that means 240+ tools — and LLMs get worse at tool selection as the count grows. Context windows fill up with schemas, and every new endpoint means new code.
@@ -83,6 +82,18 @@ pnpm start:http         # HTTP transport
 pnpm inspect            # Test with MCP Inspector
 ```
 
+### Anthropic MCP Directory bundle
+
+The MCPB bundle manifest lives in [`mcp-directory/`](mcp-directory/), and the bundle icon is tracked at [`icon.png`](icon.png) in the repository root. Copy `mcp-directory/manifest.json` to the bundle root after `pnpm build` so the generated archive contains root-level `manifest.json`, `icon.png`, `build/`, `package.json`, and production `node_modules/`.
+
+To keep the archive small, build MCPB packages from a staging directory:
+
+```bash
+pnpm prepare:mcpb
+```
+
+The staged package is written to `dist/mcpb/` with production dependencies installed using npm's flat layout.
+
 ### CLI Usage
 
 ```bash
@@ -100,13 +111,15 @@ Transport defaults to `stdio` if not specified. Use `http` for remote/shared dep
 
 When running in HTTP mode, the server exposes:
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/mcp` | `POST` | MCP JSON-RPC endpoint (initialize + session requests) |
-| `/mcp` | `GET` | SSE stream for server-initiated messages (progress, elicitation) |
-| `/mcp` | `DELETE` | Terminate an active MCP session |
-| `/mcp` | `OPTIONS` | CORS preflight |
-| `/health` | `GET` | Health check — returns `{ "status": "ok", "sessions": <count> }` |
+
+| Endpoint  | Method    | Description                                                      |
+| --------- | --------- | ---------------------------------------------------------------- |
+| `/mcp`    | `POST`    | MCP JSON-RPC endpoint (initialize + session requests)            |
+| `/mcp`    | `GET`     | SSE stream for server-initiated messages (progress, elicitation) |
+| `/mcp`    | `DELETE`  | Terminate an active MCP session                                  |
+| `/mcp`    | `OPTIONS` | CORS preflight                                                   |
+| `/health` | `GET`     | Health check — returns `{ "status": "ok", "sessions": <count> }` |
+
 
 The HTTP transport runs in **session-based mode**. A new MCP session is created on `initialize`, the server returns an `mcp-session-id` header, and subsequent requests for that session must include the same header.
 
@@ -206,14 +219,14 @@ Harness also supports a hosted MCP endpoint for accounts that have the managed s
 > ```
 >
 > Find your paths with `which npx` and `which node` in a terminal, then make sure the directory containing `node` is included in the `PATH` value above. Common locations:
+>
 > - **Homebrew (macOS):** `/opt/homebrew/bin/npx`
 > - **nvm:** `~/.nvm/versions/node/v20.x.x/bin/npx` (run `nvm which current` to find the exact path)
 > - **System Node:** `/usr/local/bin/npx`
 
 #### Claude Desktop (`claude_desktop_config.json`)
 
-<details open>
-<summary>npx (zero install)</summary>
+npx (zero install)
 
 ```json
 {
@@ -229,10 +242,9 @@ Harness also supports a hosted MCP endpoint for accounts that have the managed s
 }
 ```
 
-</details>
 
-<details>
-<summary>node (local install)</summary>
+
+node (local install)
 
 ```bash
 npm install -g harness-mcp-v2
@@ -251,35 +263,32 @@ npm install -g harness-mcp-v2
 }
 ```
 
-</details>
+
 
 #### Claude Code (via `claude mcp add`)
 
-<details open>
-<summary>npx (zero install)</summary>
+npx (zero install)
 
 ```bash
 claude mcp add harness -- npx harness-mcp-v2
 ```
 
-</details>
 
-<details>
-<summary>node (local install)</summary>
+
+node (local install)
 
 ```bash
 npm install -g harness-mcp-v2
 claude mcp add harness -- harness-mcp-v2
 ```
 
-</details>
+
 
 Then set `HARNESS_API_KEY` in your environment or `.env` file.
 
 #### Cursor (`.cursor/mcp.json`)
 
-<details open>
-<summary>npx (zero install)</summary>
+npx (zero install)
 
 ```json
 {
@@ -295,10 +304,9 @@ Then set `HARNESS_API_KEY` in your environment or `.env` file.
 }
 ```
 
-</details>
 
-<details>
-<summary>node (local install)</summary>
+
+node (local install)
 
 ```bash
 npm install -g harness-mcp-v2
@@ -317,12 +325,11 @@ npm install -g harness-mcp-v2
 }
 ```
 
-</details>
+
 
 #### Windsurf (`~/.windsurf/mcp.json`)
 
-<details open>
-<summary>npx (zero install)</summary>
+npx (zero install)
 
 ```json
 {
@@ -338,10 +345,9 @@ npm install -g harness-mcp-v2
 }
 ```
 
-</details>
 
-<details>
-<summary>node (local install)</summary>
+
+node (local install)
 
 ```bash
 npm install -g harness-mcp-v2
@@ -360,10 +366,9 @@ npm install -g harness-mcp-v2
 }
 ```
 
-</details>
 
-<details>
-<summary>Using a local build from source?</summary>
+
+Using a local build from source?
 
 Replace the command with the path to your built `index.js`:
 
@@ -374,13 +379,14 @@ Replace the command with the path to your built `index.js`:
 }
 ```
 
-</details>
+
 
 ### MCP Gateway
 
 The Harness MCP server is fully compatible with MCP Gateways — reverse proxies that provide centralized authentication, governance, tool routing, and observability across multiple MCP servers. Since the server implements the standard MCP protocol with both stdio and HTTP transports, it works behind any MCP-compliant gateway with no code changes.
 
 **Why use a gateway?**
+
 - Centralized credential management — no API keys in agent configs
 - Governance & audit logging for all tool calls across teams
 - Single endpoint for agents instead of N connections to N MCP servers
@@ -536,19 +542,21 @@ The server exposes 11 MCP tools. Most API tools accept `org_id` and `project_id`
 
 **URL support:** Most API-facing tools accept a `url` parameter — paste a Harness UI URL and the server auto-extracts org, project, resource type, resource ID, pipeline ID, and execution ID. `harness_describe` does not accept `url`.
 
-| Tool | Description |
-|------|-------------|
-| `harness_describe` | Discover available resource types, operations, and fields. No API call — returns local registry metadata. |
-| `harness_schema` | Fetch exact JSON Schema definitions for creating/updating resources. Supports deep drilling via `path` parameter. |
-| `harness_list` | List resources of a given type with filtering, search, and pagination. |
-| `harness_get` | Get a single resource by its identifier. |
-| `harness_create` | Create a new resource. Supports inline and remote (Git-backed) pipelines. Prompts for user confirmation via [elicitation](#elicitation). |
-| `harness_update` | Update an existing resource. Supports inline and remote (Git-backed) pipelines. Prompts for user confirmation via [elicitation](#elicitation). |
-| `harness_delete` | Delete a resource. Prompts for user confirmation via [elicitation](#elicitation). Destructive. |
-| `harness_execute` | Execute an action on a resource (run/retry pipeline, import pipeline from Git, toggle flag, sync app). Prompts for user confirmation via [elicitation](#elicitation). For pipeline runs, use the runtime-input workflow below (supports `branch`/`tag`/`pr_number`/`commit_sha` shorthand expansion). |
-| `harness_search` | Search across multiple resource types in parallel with a single query. |
+
+| Tool               | Description                                                                                                                                                                                                                                                                                                           |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `harness_describe` | Discover available resource types, operations, and fields. No API call — returns local registry metadata.                                                                                                                                                                                                             |
+| `harness_schema`   | Fetch exact JSON Schema definitions for creating/updating resources. Supports deep drilling via `path` parameter.                                                                                                                                                                                                     |
+| `harness_list`     | List resources of a given type with filtering, search, and pagination.                                                                                                                                                                                                                                                |
+| `harness_get`      | Get a single resource by its identifier.                                                                                                                                                                                                                                                                              |
+| `harness_create`   | Create a new resource. Supports inline and remote (Git-backed) pipelines. Prompts for user confirmation via [elicitation](#elicitation).                                                                                                                                                                              |
+| `harness_update`   | Update an existing resource. Supports inline and remote (Git-backed) pipelines. Prompts for user confirmation via [elicitation](#elicitation).                                                                                                                                                                        |
+| `harness_delete`   | Delete a resource. Prompts for user confirmation via [elicitation](#elicitation). Destructive.                                                                                                                                                                                                                        |
+| `harness_execute`  | Execute an action on a resource (run/retry pipeline, import pipeline from Git, toggle flag, sync app). Prompts for user confirmation via [elicitation](#elicitation). For pipeline runs, use the runtime-input workflow below (supports `branch`/`tag`/`pr_number`/`commit_sha` shorthand expansion).                 |
+| `harness_search`   | Search across multiple resource types in parallel with a single query.                                                                                                                                                                                                                                                |
 | `harness_diagnose` | Diagnose `pipeline`, `connector`, `delegate`, and `gitops_application` resources (aliases: `execution` -> `pipeline`, `gitops_app` -> `gitops_application`). For pipelines, returns stage/step timing and failure details; for connectors/delegates/GitOps apps, returns targeted health and troubleshooting signals. |
-| `harness_status` | Get a real-time project health dashboard — recent executions, failure rates, and deep links. |
+| `harness_status`   | Get a real-time project health dashboard — recent executions, failure rates, and deep links.                                                                                                                                                                                                                          |
+
 
 ### Tool Examples
 
@@ -674,25 +682,25 @@ The server exposes 11 MCP tools. Most API tools accept `org_id` and `project_id`
 Use this sequence to reduce execution-time input errors:
 
 1. **Discover required runtime inputs**
-   - `harness_get(resource_type="runtime_input_template", resource_id="<pipeline_id>")`
-   - The returned template shows `<+input>` placeholders that need values.
+  - `harness_get(resource_type="runtime_input_template", resource_id="<pipeline_id>")`
+  - The returned template shows `<+input>` placeholders that need values.
 2. **Choose input strategy**
-   - **Simple variables:** pass flat key-value `inputs` (for example `{"branch":"main","env":"prod"}`).
-   - **Complex/structural inputs:** use `input_set_ids` (CI codebase/build blocks and nested template inputs are best handled this way).
-   - **CI codebase shorthand keys (pipeline run only):**
+  - **Simple variables:** pass flat key-value `inputs` (for example `{"branch":"main","env":"prod"}`).
+  - **Complex/structural inputs:** use `input_set_ids` (CI codebase/build blocks and nested template inputs are best handled this way).
+  - **CI codebase shorthand keys (pipeline run only):**
 
-     | Shorthand key | Expanded structure |
-     |---|---|
-     | `branch` | `build.type=branch`, `build.spec.branch=<value>` |
-     | `tag` | `build.type=tag`, `build.spec.tag=<value>` |
-     | `pr_number` | `build.type=PR`, `build.spec.number=<value>` |
-     | `commit_sha` | `build.type=commitSha`, `build.spec.commitSha=<value>` |
+    | Shorthand key | Expanded structure                                     |
+    | ------------- | ------------------------------------------------------ |
+    | `branch`      | `build.type=branch`, `build.spec.branch=<value>`       |
+    | `tag`         | `build.type=tag`, `build.spec.tag=<value>`             |
+    | `pr_number`   | `build.type=PR`, `build.spec.number=<value>`           |
+    | `commit_sha`  | `build.type=commitSha`, `build.spec.commitSha=<value>` |
 
-   - **Constraint:** shorthand expansion is skipped when `inputs.build` is already present (explicit `build` wins).
+  - **Constraint:** shorthand expansion is skipped when `inputs.build` is already present (explicit `build` wins).
 3. **Execute the run**
-   - `harness_execute(resource_type="pipeline", action="run", resource_id="<pipeline_id>", ...)`
+  - `harness_execute(resource_type="pipeline", action="run", resource_id="<pipeline_id>", ...)`
 4. **Optional: combine both**
-   - Use `input_set_ids` for the base shape and `inputs` for simple overrides.
+  - Use `input_set_ids` for the base shape and `inputs` for simple overrides.
 
 If required fields are unresolved, the tool returns a pre-flight error with expected keys and suggested input sets. You can inspect available shorthand mappings with `harness_describe(resource_type="pipeline")` (`executeActions.run.inputShorthands`).
 
@@ -720,11 +728,13 @@ If required fields are unresolved, the tool returns a pre-flight error with expe
 
 Harness pipelines can be stored in three ways:
 
-| Mode | Description | When to use |
-|------|-------------|-------------|
-| **Inline** | Pipeline YAML stored in Harness | Default. Simplest setup, no Git required. |
+
+| Mode                      | Description                                             | When to use                                                        |
+| ------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------ |
+| **Inline**                | Pipeline YAML stored in Harness                         | Default. Simplest setup, no Git required.                          |
 | **Remote (External Git)** | Pipeline YAML stored in GitHub, GitLab, Bitbucket, etc. | Teams using Git-backed pipeline-as-code with an external provider. |
-| **Remote (Harness Code)** | Pipeline YAML stored in a Harness Code repository | Teams using Harness's built-in Git hosting. |
+| **Remote (Harness Code)** | Pipeline YAML stored in a Harness Code repository       | Teams using Harness's built-in Git hosting.                        |
+
 
 **Create an inline pipeline (default):**
 
@@ -915,362 +925,432 @@ Harness pipelines can be stored in three ways:
 
 ### Platform
 
-| Resource Type | List | Get | Create | Update | Delete | Execute Actions |
-|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `organization` | x | x | x | x | x | |
-| `project` | x | x | x | x | x | |
+
+| Resource Type  | List | Get | Create | Update | Delete | Execute Actions |
+| -------------- | ---- | --- | ------ | ------ | ------ | --------------- |
+| `organization` | x    | x   | x      | x      | x      |                 |
+| `project`      | x    | x   | x      | x      | x      |                 |
+
 
 ### Pipelines
 
-| Resource Type | List | Get | Create | Update | Delete | Execute Actions |
-|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `pipeline` | x | x | x | x | x | `run`, `retry` |
-| `pipeline_v1` **(Alpha)** | x | x | x | x | x | `run` |
-| `execution` | x | x | | | | `interrupt` |
-| `trigger` | x | x | x | x | x | |
-| `pipeline_summary` | | x | | | | |
-| `input_set` | x | x | x | x | x | |
-| `runtime_input_template` | | x | | | | |
-| `approval_instance` | x | | | | | `approve`, `reject` |
+
+| Resource Type             | List | Get | Create | Update | Delete | Execute Actions     |
+| ------------------------- | ---- | --- | ------ | ------ | ------ | ------------------- |
+| `pipeline`                | x    | x   | x      | x      | x      | `run`, `retry`      |
+| `pipeline_v1` **(Alpha)** | x    | x   | x      | x      | x      | `run`               |
+| `execution`               | x    | x   |        |        |        | `interrupt`         |
+| `trigger`                 | x    | x   | x      | x      | x      |                     |
+| `pipeline_summary`        |      | x   |        |        |        |                     |
+| `input_set`               | x    | x   | x      | x      | x      |                     |
+| `runtime_input_template`  |      | x   |        |        |        |                     |
+| `approval_instance`       | x    |     |        |        |        | `approve`, `reject` |
+
 
 ### AI Agents
 
+
 | Resource Type | List | Get | Create | Update | Delete | Execute Actions |
-|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `agent` | x | x | x | x | x | |
-| `agent_run` | x | | | | | |
+| ------------- | ---- | --- | ------ | ------ | ------ | --------------- |
+| `agent`       | x    | x   | x      | x      | x      |                 |
+| `agent_run`   | x    |     |        |        |        |                 |
+
 
 ### Services
 
+
 | Resource Type | List | Get | Create | Update | Delete | Execute Actions |
-|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `service` | x | x | x | x | x | |
+| ------------- | ---- | --- | ------ | ------ | ------ | --------------- |
+| `service`     | x    | x   | x      | x      | x      |                 |
+
 
 ### Environments
 
+
 | Resource Type | List | Get | Create | Update | Delete | Execute Actions |
-|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `environment` | x | x | x | x | x | `move_configs` |
+| ------------- | ---- | --- | ------ | ------ | ------ | --------------- |
+| `environment` | x    | x   | x      | x      | x      | `move_configs`  |
+
 
 ### Connectors
 
-| Resource Type | List | Get | Create | Update | Delete | Execute Actions |
-|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `connector` | x | x | x | x | x | `test_connection` |
-| `connector_catalogue` | x | | | | | |
+
+| Resource Type         | List | Get | Create | Update | Delete | Execute Actions   |
+| --------------------- | ---- | --- | ------ | ------ | ------ | ----------------- |
+| `connector`           | x    | x   | x      | x      | x      | `test_connection` |
+| `connector_catalogue` | x    |     |        |        |        |                   |
+
 
 ### Infrastructure
 
-| Resource Type | List | Get | Create | Update | Delete | Execute Actions |
-|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `infrastructure` | x | x | x | x | x | `move_configs` |
+
+| Resource Type    | List | Get | Create | Update | Delete | Execute Actions |
+| ---------------- | ---- | --- | ------ | ------ | ------ | --------------- |
+| `infrastructure` | x    | x   | x      | x      | x      | `move_configs`  |
+
 
 ### Secrets
 
+
 | Resource Type | List | Get | Create | Update | Delete | Execute Actions |
-|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `secret` | x | x | | | | |
+| ------------- | ---- | --- | ------ | ------ | ------ | --------------- |
+| `secret`      | x    | x   |        |        |        |                 |
+
 
 ### Execution Logs
 
-| Resource Type | List | Get | Create | Update | Delete | Execute Actions |
-|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `execution_log` | | x | | | | |
+
+| Resource Type   | List | Get | Create | Update | Delete | Execute Actions |
+| --------------- | ---- | --- | ------ | ------ | ------ | --------------- |
+| `execution_log` |      | x   |        |        |        |                 |
+
 
 ### Audit Trail
 
+
 | Resource Type | List | Get | Create | Update | Delete | Execute Actions |
-|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `audit_event` | x | x | | | | |
+| ------------- | ---- | --- | ------ | ------ | ------ | --------------- |
+| `audit_event` | x    | x   |        |        |        |                 |
+
 
 ### Delegates
 
-| Resource Type | List | Get | Create | Update | Delete | Execute Actions |
-|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `delegate` | x | | | | | |
-| `delegate_token` | x | x | x | | x | `revoke`, `get_delegates` |
+
+| Resource Type    | List | Get | Create | Update | Delete | Execute Actions           |
+| ---------------- | ---- | --- | ------ | ------ | ------ | ------------------------- |
+| `delegate`       | x    |     |        |        |        |                           |
+| `delegate_token` | x    | x   | x      |        | x      | `revoke`, `get_delegates` |
+
 
 ### Code Repositories
 
-| Resource Type | List | Get | Create | Update | Delete | Execute Actions |
-|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `repository` | x | x | x | x | | |
-| `branch` | x | x | x | | x | |
-| `commit` | x | x | | | | `diff`, `diff_stats` |
-| `file_content` | | x | | | | `blame` |
-| `tag` | x | | x | | x | |
-| `repo_rule` | x | x | | | | |
-| `space_rule` | x | x | | | | |
+
+| Resource Type  | List | Get | Create | Update | Delete | Execute Actions      |
+| -------------- | ---- | --- | ------ | ------ | ------ | -------------------- |
+| `repository`   | x    | x   | x      | x      |        |                      |
+| `branch`       | x    | x   | x      |        | x      |                      |
+| `commit`       | x    | x   |        |        |        | `diff`, `diff_stats` |
+| `file_content` |      | x   |        |        |        | `blame`              |
+| `tag`          | x    |     | x      |        | x      |                      |
+| `repo_rule`    | x    | x   |        |        |        |                      |
+| `space_rule`   | x    | x   |        |        |        |                      |
+
 
 ### Artifact Registries
 
-| Resource Type | List | Get | Create | Update | Delete | Execute Actions |
-|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `registry` | x | x | | | | |
-| `artifact` | x | | | | | |
-| `artifact_version` | x | | | | | |
-| `artifact_file` | x | | | | | |
+
+| Resource Type      | List | Get | Create | Update | Delete | Execute Actions |
+| ------------------ | ---- | --- | ------ | ------ | ------ | --------------- |
+| `registry`         | x    | x   |        |        |        |                 |
+| `artifact`         | x    |     |        |        |        |                 |
+| `artifact_version` | x    |     |        |        |        |                 |
+| `artifact_file`    | x    |     |        |        |        |                 |
+
 
 ### Templates
 
+
 | Resource Type | List | Get | Create | Update | Delete | Execute Actions |
-|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `template` | x | x | x | x | x | |
+| ------------- | ---- | --- | ------ | ------ | ------ | --------------- |
+| `template`    | x    | x   | x      | x      | x      |                 |
+
 
 ### Dashboards
 
-| Resource Type | List | Get | Create | Update | Delete | Execute Actions |
-|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `dashboard` | x | x | | | | |
-| `dashboard_data` | | x | | | | |
+
+| Resource Type    | List | Get | Create | Update | Delete | Execute Actions |
+| ---------------- | ---- | --- | ------ | ------ | ------ | --------------- |
+| `dashboard`      | x    | x   |        |        |        |                 |
+| `dashboard_data` |      | x   |        |        |        |                 |
+
 
 ### Internal Developer Portal (IDP)
 
-| Resource Type | List | Get | Create | Update | Delete | Execute Actions |
-|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `idp_entity` | x | x | | | | |
-| `scorecard` | x | x | | | | |
-| `scorecard_check` | x | x | | | | |
-| `scorecard_stats` | | x | | | | |
-| `scorecard_check_stats` | | x | | | | |
-| `idp_score` | x | x | | | | |
-| `idp_workflow` | x | | | | | `execute` |
-| `idp_tech_doc` | x | | | | | |
+
+| Resource Type           | List | Get | Create | Update | Delete | Execute Actions |
+| ----------------------- | ---- | --- | ------ | ------ | ------ | --------------- |
+| `idp_entity`            | x    | x   |        |        |        |                 |
+| `scorecard`             | x    | x   |        |        |        |                 |
+| `scorecard_check`       | x    | x   |        |        |        |                 |
+| `scorecard_stats`       |      | x   |        |        |        |                 |
+| `scorecard_check_stats` |      | x   |        |        |        |                 |
+| `idp_score`             | x    | x   |        |        |        |                 |
+| `idp_workflow`          | x    |     |        |        |        | `execute`       |
+| `idp_tech_doc`          | x    |     |        |        |        |                 |
+
 
 ### Pull Requests
 
-| Resource Type | List | Get | Create | Update | Delete | Execute Actions |
-|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `pull_request` | x | x | x | x | | `merge` |
-| `pr_reviewer` | x | | x | | | `submit_review` |
-| `pr_comment` | x | | x | | | |
-| `pr_check` | x | | | | | |
-| `pr_activity` | x | | | | | |
+
+| Resource Type  | List | Get | Create | Update | Delete | Execute Actions |
+| -------------- | ---- | --- | ------ | ------ | ------ | --------------- |
+| `pull_request` | x    | x   | x      | x      |        | `merge`         |
+| `pr_reviewer`  | x    |     | x      |        |        | `submit_review` |
+| `pr_comment`   | x    |     | x      |        |        |                 |
+| `pr_check`     | x    |     |        |        |        |                 |
+| `pr_activity`  | x    |     |        |        |        |                 |
+
 
 ### Feature Flags
 
-| Resource Type | List | Get | Create | Update | Delete | Execute Actions |
-|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `fme_workspace` | x | | | | | |
-| `fme_environment` | x | | | | | |
-| `fme_feature_flag` | x | x | x | x | x | `kill`, `restore`, `archive`, `unarchive` |
-| `fme_feature_flag_definition` | | x | | | | |
-| `fme_rollout_status` | x | | | | | |
-| `fme_rule_based_segment` | x | x | x | | x | |
-| `fme_rule_based_segment_definition` | x | | | x | | `enable`, `disable`, `change_request` |
-| `feature_flag` | x | x | x | | x | `toggle` |
 
-**FME (Split.io) resources** — `fme_*` resources use the Split.io API (`api.split.io`) and are scoped by workspace ID rather than org/project. Auth uses `HARNESS_API_KEY` as a Bearer token. `fme_feature_flag` supports full lifecycle management: create (requires `traffic_type_id`), list, get, update metadata, delete, and kill/restore/archive/unarchive execute actions. `fme_rule_based_segment` provides CRUD for targeting segments, while `fme_rule_based_segment_definition` manages environment-specific segment rules with enable/disable and change request approval flows. Use `feature_flag` for the Harness CF admin API which supports environment-specific definitions, create, delete, and toggle.
+| Resource Type                       | List | Get | Create | Update | Delete | Execute Actions                           |
+| ----------------------------------- | ---- | --- | ------ | ------ | ------ | ----------------------------------------- |
+| `fme_workspace`                     | x    |     |        |        |        |                                           |
+| `fme_environment`                   | x    |     |        |        |        |                                           |
+| `fme_feature_flag`                  | x    | x   | x      | x      | x      | `kill`, `restore`, `archive`, `unarchive` |
+| `fme_feature_flag_definition`       |      | x   |        |        |        |                                           |
+| `fme_rollout_status`                | x    |     |        |        |        |                                           |
+| `fme_rule_based_segment`            | x    | x   | x      |        | x      |                                           |
+| `fme_rule_based_segment_definition` | x    |     |        | x      |        | `enable`, `disable`, `change_request`     |
+| `feature_flag`                      | x    | x   | x      |        | x      | `toggle`                                  |
+
+
+**FME (Split.io) resources** — `fme_`* resources use the Split.io API (`api.split.io`) and are scoped by workspace ID rather than org/project. Auth uses `HARNESS_API_KEY` as a Bearer token. `fme_feature_flag` supports full lifecycle management: create (requires `traffic_type_id`), list, get, update metadata, delete, and kill/restore/archive/unarchive execute actions. `fme_rule_based_segment` provides CRUD for targeting segments, while `fme_rule_based_segment_definition` manages environment-specific segment rules with enable/disable and change request approval flows. Use `feature_flag` for the Harness CF admin API which supports environment-specific definitions, create, delete, and toggle.
 
 ### GitOps
 
-| Resource Type | List | Get | Create | Update | Delete | Execute Actions |
-|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `gitops_agent` | x | x | | | | |
-| `gitops_application` | x | x | | | | `sync` |
-| `gitops_cluster` | x | x | | | | |
-| `gitops_repository` | x | x | | | | |
-| `gitops_applicationset` | x | x | | | | |
-| `gitops_repo_credential` | x | x | | | | |
-| `gitops_app_event` | x | | | | | |
-| `gitops_pod_log` | | x | | | | |
-| `gitops_managed_resource` | x | | | | | |
-| `gitops_resource_action` | x | | | | | |
-| `gitops_dashboard` | | x | | | | |
-| `gitops_app_resource_tree` | | x | | | | |
+
+| Resource Type              | List | Get | Create | Update | Delete | Execute Actions |
+| -------------------------- | ---- | --- | ------ | ------ | ------ | --------------- |
+| `gitops_agent`             | x    | x   |        |        |        |                 |
+| `gitops_application`       | x    | x   |        |        |        | `sync`          |
+| `gitops_cluster`           | x    | x   |        |        |        |                 |
+| `gitops_repository`        | x    | x   |        |        |        |                 |
+| `gitops_applicationset`    | x    | x   |        |        |        |                 |
+| `gitops_repo_credential`   | x    | x   |        |        |        |                 |
+| `gitops_app_event`         | x    |     |        |        |        |                 |
+| `gitops_pod_log`           |      | x   |        |        |        |                 |
+| `gitops_managed_resource`  | x    |     |        |        |        |                 |
+| `gitops_resource_action`   | x    |     |        |        |        |                 |
+| `gitops_dashboard`         |      | x   |        |        |        |                 |
+| `gitops_app_resource_tree` |      | x   |        |        |        |                 |
+
 
 ### Chaos Engineering
 
-| Resource Type | List | Get | Create | Update | Delete | Execute Actions |
-|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `chaos_experiment` | x | x | | | | `run` |
-| `chaos_probe` | x | x | | | | `enable`, `verify` |
-| `chaos_experiment_template` | x | | | | | `create_from_template` |
-| `chaos_infrastructure` | x | | | | | |
-| `chaos_experiment_variable` | x | | | | | |
-| `chaos_experiment_run` | x | x | | | | |
-| `chaos_loadtest` | x | x | x | | x | `run`, `stop` |
-| `chaos_k8s_infrastructure` | x | x | | | | `check_health` |
-| `chaos_hub` | x | x | | | | |
-| `chaos_fault` | x | x | | | | |
-| `chaos_network_map` | x | x | | | | |
-| `chaos_guard_condition` | x | x | | | | |
-| `chaos_guard_rule` | x | x | | | | |
-| `chaos_recommendation` | x | x | | | | |
-| `chaos_risk` | x | x | | | | |
+
+| Resource Type               | List | Get | Create | Update | Delete | Execute Actions        |
+| --------------------------- | ---- | --- | ------ | ------ | ------ | ---------------------- |
+| `chaos_experiment`          | x    | x   |        |        |        | `run`                  |
+| `chaos_probe`               | x    | x   |        |        |        | `enable`, `verify`     |
+| `chaos_experiment_template` | x    |     |        |        |        | `create_from_template` |
+| `chaos_infrastructure`      | x    |     |        |        |        |                        |
+| `chaos_experiment_variable` | x    |     |        |        |        |                        |
+| `chaos_experiment_run`      | x    | x   |        |        |        |                        |
+| `chaos_loadtest`            | x    | x   | x      |        | x      | `run`, `stop`          |
+| `chaos_k8s_infrastructure`  | x    | x   |        |        |        | `check_health`         |
+| `chaos_hub`                 | x    | x   |        |        |        |                        |
+| `chaos_fault`               | x    | x   |        |        |        |                        |
+| `chaos_network_map`         | x    | x   |        |        |        |                        |
+| `chaos_guard_condition`     | x    | x   |        |        |        |                        |
+| `chaos_guard_rule`          | x    | x   |        |        |        |                        |
+| `chaos_recommendation`      | x    | x   |        |        |        |                        |
+| `chaos_risk`                | x    | x   |        |        |        |                        |
+
 
 ### Cloud Cost Management (CCM)
 
-| Resource Type | List | Get | Create | Update | Delete | Execute Actions |
-|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `cost_perspective` | x | x | x | x | x | |
-| `cost_breakdown` | x | | | | | |
-| `cost_timeseries` | x | | | | | |
-| `cost_summary` | x | x | | | | |
-| `cost_recommendation` | x | x | | | | `update_state`, `override_savings`, `create_jira_ticket`, `create_snow_ticket` |
-| `cost_anomaly` | x | | | | | |
-| `cost_anomaly_summary` | | x | | | | |
-| `cost_category` | x | x | | | | |
-| `cost_account_overview` | | x | | | | |
-| `cost_filter_value` | x | | | | | |
-| `cost_recommendation_stats` | | x | | | | |
-| `cost_recommendation_detail` | | x | | | | |
-| `cost_commitment` | | x | | | | |
+
+| Resource Type                | List | Get | Create | Update | Delete | Execute Actions                                                                |
+| ---------------------------- | ---- | --- | ------ | ------ | ------ | ------------------------------------------------------------------------------ |
+| `cost_perspective`           | x    | x   | x      | x      | x      |                                                                                |
+| `cost_breakdown`             | x    |     |        |        |        |                                                                                |
+| `cost_timeseries`            | x    |     |        |        |        |                                                                                |
+| `cost_summary`               | x    | x   |        |        |        |                                                                                |
+| `cost_recommendation`        | x    | x   |        |        |        | `update_state`, `override_savings`, `create_jira_ticket`, `create_snow_ticket` |
+| `cost_anomaly`               | x    |     |        |        |        |                                                                                |
+| `cost_anomaly_summary`       |      | x   |        |        |        |                                                                                |
+| `cost_category`              | x    | x   |        |        |        |                                                                                |
+| `cost_account_overview`      |      | x   |        |        |        |                                                                                |
+| `cost_filter_value`          | x    |     |        |        |        |                                                                                |
+| `cost_recommendation_stats`  |      | x   |        |        |        |                                                                                |
+| `cost_recommendation_detail` |      | x   |        |        |        |                                                                                |
+| `cost_commitment`            |      | x   |        |        |        |                                                                                |
+
 
 ### Software Engineering Insights (SEI)
 
 SEI resources are consolidated for token efficiency. Use `metric` or `aspect` params for DORA, team/org-tree details, and AI insights.
 
-| Resource Type | List | Get | Create | Update | Delete | Execute Actions |
-|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `sei_metric` | x | | | | | |
-| `sei_productivity_metric` | | x | | | | |
-| `sei_dora_metric` | | x | | | | Pass `metric`: deployment_frequency, change_failure_rate, mttr, lead_time, or *_drilldown |
-| `sei_team` | x | x | | | | |
-| `sei_team_detail` | x | | | | | Pass `aspect`: integrations, developers, integration_filters |
-| `sei_org_tree` | x | x | | | | |
-| `sei_org_tree_detail` | x | x | | | | Pass `aspect`: efficiency_profile, productivity_profile, business_alignment_profile, integrations, teams |
-| `sei_business_alignment` | x | x | | | | Pass `aspect`: feature_metrics, feature_summary, drilldown for get |
-| `sei_ai_usage` | x | x | | | | Pass `aspect`: metrics, breakdown, summary, top_languages |
-| `sei_ai_adoption` | x | x | | | | Pass `aspect`: metrics, breakdown, summary |
-| `sei_ai_impact` | | x | | | | Pass `aspect`: pr_velocity, rework |
-| `sei_ai_raw_metric` | x | | | | | |
+
+| Resource Type             | List | Get | Create | Update | Delete | Execute Actions                                                                                          |
+| ------------------------- | ---- | --- | ------ | ------ | ------ | -------------------------------------------------------------------------------------------------------- |
+| `sei_metric`              | x    |     |        |        |        |                                                                                                          |
+| `sei_productivity_metric` |      | x   |        |        |        |                                                                                                          |
+| `sei_dora_metric`         |      | x   |        |        |        | Pass `metric`: deployment_frequency, change_failure_rate, mttr, lead_time, or *_drilldown                |
+| `sei_team`                | x    | x   |        |        |        |                                                                                                          |
+| `sei_team_detail`         | x    |     |        |        |        | Pass `aspect`: integrations, developers, integration_filters                                             |
+| `sei_org_tree`            | x    | x   |        |        |        |                                                                                                          |
+| `sei_org_tree_detail`     | x    | x   |        |        |        | Pass `aspect`: efficiency_profile, productivity_profile, business_alignment_profile, integrations, teams |
+| `sei_business_alignment`  | x    | x   |        |        |        | Pass `aspect`: feature_metrics, feature_summary, drilldown for get                                       |
+| `sei_ai_usage`            | x    | x   |        |        |        | Pass `aspect`: metrics, breakdown, summary, top_languages                                                |
+| `sei_ai_adoption`         | x    | x   |        |        |        | Pass `aspect`: metrics, breakdown, summary                                                               |
+| `sei_ai_impact`           |      | x   |        |        |        | Pass `aspect`: pr_velocity, rework                                                                       |
+| `sei_ai_raw_metric`       | x    |     |        |        |        |                                                                                                          |
+
 
 ### Software Supply Chain Assurance (SCS)
 
-| Resource Type | List | Get | Create | Update | Delete | Execute Actions |
-|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `scs_artifact_source` | x | | | | | |
-| `artifact_security` | x | x | | | | |
-| `scs_artifact_component` | x | | | | | |
-| `scs_artifact_remediation` | | x | | | | |
-| `scs_chain_of_custody` | | x | | | | |
-| `scs_compliance_result` | x | | | | | |
-| `code_repo_security` | x | x | | | | |
-| `scs_sbom` | | x | | | | |
+
+| Resource Type              | List | Get | Create | Update | Delete | Execute Actions |
+| -------------------------- | ---- | --- | ------ | ------ | ------ | --------------- |
+| `scs_artifact_source`      | x    |     |        |        |        |                 |
+| `artifact_security`        | x    | x   |        |        |        |                 |
+| `scs_artifact_component`   | x    |     |        |        |        |                 |
+| `scs_artifact_remediation` |      | x   |        |        |        |                 |
+| `scs_chain_of_custody`     |      | x   |        |        |        |                 |
+| `scs_compliance_result`    | x    |     |        |        |        |                 |
+| `code_repo_security`       | x    | x   |        |        |        |                 |
+| `scs_sbom`                 |      | x   |        |        |        |                 |
+
 
 ### Security Testing Orchestration (STO)
 
-| Resource Type | List | Get | Create | Update | Delete | Execute Actions |
-|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `security_issue` | x | | | | | |
-| `security_issue_filter` | x | | | | | |
-| `security_exemption` | x | | | | | `approve`, `reject`, `promote` |
+
+| Resource Type           | List | Get | Create | Update | Delete | Execute Actions                |
+| ----------------------- | ---- | --- | ------ | ------ | ------ | ------------------------------ |
+| `security_issue`        | x    |     |        |        |        |                                |
+| `security_issue_filter` | x    |     |        |        |        |                                |
+| `security_exemption`    | x    |     |        |        |        | `approve`, `reject`, `promote` |
+
 
 ### Access Control
 
-| Resource Type | List | Get | Create | Update | Delete | Execute Actions |
-|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `user` | x | x | | | | |
-| `user_group` | x | x | x | | x | |
-| `service_account` | x | x | x | | x | |
-| `role` | x | x | x | | x | |
-| `role_assignment` | x | | x | | | |
-| `resource_group` | x | x | x | | x | |
-| `permission` | x | | | | | |
+
+| Resource Type     | List | Get | Create | Update | Delete | Execute Actions |
+| ----------------- | ---- | --- | ------ | ------ | ------ | --------------- |
+| `user`            | x    | x   |        |        |        |                 |
+| `user_group`      | x    | x   | x      |        | x      |                 |
+| `service_account` | x    | x   | x      |        | x      |                 |
+| `role`            | x    | x   | x      |        | x      |                 |
+| `role_assignment` | x    |     | x      |        |        |                 |
+| `resource_group`  | x    | x   | x      |        | x      |                 |
+| `permission`      | x    |     |        |        |        |                 |
+
 
 ### Governance
 
-| Resource Type | List | Get | Create | Update | Delete | Execute Actions |
-|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `policy` | x | x | x | x | x | |
-| `policy_set` | x | x | x | x | x | |
-| `policy_evaluation` | x | x | | | | |
+
+| Resource Type       | List | Get | Create | Update | Delete | Execute Actions |
+| ------------------- | ---- | --- | ------ | ------ | ------ | --------------- |
+| `policy`            | x    | x   | x      | x      | x      |                 |
+| `policy_set`        | x    | x   | x      | x      | x      |                 |
+| `policy_evaluation` | x    | x   |        |        |        |                 |
+
 
 ### Deployment Freeze
 
-| Resource Type | List | Get | Create | Update | Delete | Execute Actions |
-|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `freeze_window` | x | x | x | x | x | `toggle_status` |
-| `global_freeze` | | x | | | | `manage` |
+
+| Resource Type   | List | Get | Create | Update | Delete | Execute Actions |
+| --------------- | ---- | --- | ------ | ------ | ------ | --------------- |
+| `freeze_window` | x    | x   | x      | x      | x      | `toggle_status` |
+| `global_freeze` |      | x   |        |        |        | `manage`        |
+
 
 ### Service Overrides
 
-| Resource Type | List | Get | Create | Update | Delete | Execute Actions |
-|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `service_override` | x | x | x | x | x | |
+
+| Resource Type      | List | Get | Create | Update | Delete | Execute Actions |
+| ------------------ | ---- | --- | ------ | ------ | ------ | --------------- |
+| `service_override` | x    | x   | x      | x      | x      |                 |
+
 
 ### Settings
 
+
 | Resource Type | List | Get | Create | Update | Delete | Execute Actions |
-|---------------|:----:|:---:|:------:|:------:|:------:|-----------------|
-| `setting` | x | | | | | |
+| ------------- | ---- | --- | ------ | ------ | ------ | --------------- |
+| `setting`     | x    |     |        |        |        |                 |
+
 
 ### Visualizations
 
 Inline PNG chart visualizations rendered from Harness data. These are metadata-only resource types with no API operations — they exist so the LLM can discover available chart types via `harness_describe`. Use `include_visual=true` on supported tools (`harness_diagnose`, `harness_list`, `harness_status`) to generate charts.
 
-| Resource Type | Description | How to Generate |
-|---------------|-------------|-----------------|
-| `visual_timeline` | Gantt chart of pipeline stage execution over time | `harness_diagnose` with `visual_type: "timeline"` |
-| `visual_stage_flow` | DAG flowchart of pipeline stages and steps | `harness_diagnose` with `visual_type: "flow"` |
-| `visual_health_dashboard` | Project health overview with status indicators | `harness_status` with `include_visual: true` |
-| `visual_pie_chart` | Donut chart of execution status breakdown | `harness_list` with `visual_type: "pie"` |
-| `visual_bar_chart` | Bar chart of execution counts by pipeline | `harness_list` with `visual_type: "bar"` |
-| `visual_timeseries` | Daily execution trend over 30 days | `harness_list` with `visual_type: "timeseries"` |
-| `visual_architecture` | Pipeline YAML architecture diagram (stages → steps) | `harness_diagnose` with `visual_type: "architecture"` |
+
+| Resource Type             | Description                                         | How to Generate                                       |
+| ------------------------- | --------------------------------------------------- | ----------------------------------------------------- |
+| `visual_timeline`         | Gantt chart of pipeline stage execution over time   | `harness_diagnose` with `visual_type: "timeline"`     |
+| `visual_stage_flow`       | DAG flowchart of pipeline stages and steps          | `harness_diagnose` with `visual_type: "flow"`         |
+| `visual_health_dashboard` | Project health overview with status indicators      | `harness_status` with `include_visual: true`          |
+| `visual_pie_chart`        | Donut chart of execution status breakdown           | `harness_list` with `visual_type: "pie"`              |
+| `visual_bar_chart`        | Bar chart of execution counts by pipeline           | `harness_list` with `visual_type: "bar"`              |
+| `visual_timeseries`       | Daily execution trend over 30 days                  | `harness_list` with `visual_type: "timeseries"`       |
+| `visual_architecture`     | Pipeline YAML architecture diagram (stages → steps) | `harness_diagnose` with `visual_type: "architecture"` |
+
 
 ## MCP Prompts
 
 ### DevOps
 
-| Prompt | Description | Parameters |
-|--------|-------------|------------|
-| `build-deploy-app` | End-to-end CI/CD workflow: scan a git repo, generate CI pipeline (build & push Docker image), discover or generate K8s manifests, create CD pipeline, and deploy — with auto-retry on CI failures (up to 5 attempts) and CD failures (up to 3 attempts with user permission). On exhausted retries, provides Harness UI deep links to all created resources for manual investigation. | `repoUrl` (required), `imageName` (required), `projectId` (optional), `namespace` (optional) |
-| `debug-pipeline-failure` | Analyze a failed execution: accepts an execution ID, pipeline ID, or Harness URL. Gets stage/step breakdown, failure details, delegate info, and failed step logs via `harness_diagnose`, then provides root cause analysis and suggested fixes. Automatically follows chained pipeline failures. | `executionId` (optional), `projectId` (optional) |
-| `create-pipeline` | Generate a new pipeline YAML from natural language requirements, reviewing existing resources for context | `description` (required), `projectId` (optional) |
-| `create-agent` | Interactively build a Harness AI agent — check existing agents, gather requirements, generate agent YAML spec using the agent-pipeline schema, confirm with user, then create or update via `harness_create`/`harness_update` | `agent_name` (required), `task_description` (required), `org_id` (optional), `project_id` (optional) |
-| `onboard-service` | Walk through onboarding a new service with environments and a deployment pipeline | `serviceName` (required), `projectId` (optional) |
-| `dora-metrics-review` | Review DORA metrics (deployment frequency, change failure rate, MTTR, lead time) with Elite/High/Medium/Low classification and improvement recommendations | `teamRefId` (optional), `dateStart` (optional), `dateEnd` (optional) |
-| `setup-gitops-application` | Guide through onboarding a GitOps application — verify agent, cluster, repo, and create the application | `agentId` (required), `projectId` (optional) |
-| `chaos-resilience-test` | Design a chaos experiment to test service resilience with fault injection, probes, and expected outcomes | `serviceName` (required), `projectId` (optional) |
-| `feature-flag-rollout` | Plan and execute a progressive feature flag rollout across environments with safety gates | `flagIdentifier` (required), `projectId` (optional) |
-| `migrate-pipeline-to-template` | Analyze an existing pipeline and extract reusable stage/step templates from it | `pipelineId` (required), `projectId` (optional) |
-| `delegate-health-check` | Check delegate connectivity, health, token status, and troubleshoot infrastructure issues | `projectId` (optional) |
-| `developer-portal-scorecard` | Review IDP scorecards for services and identify gaps to improve developer experience | `projectId` (optional) |
-| `pending-approvals` | Find pipeline executions waiting for approval, show details, and offer to approve or reject | `projectId` (optional), `orgId` (optional), `pipelineId` (optional) |
+
+| Prompt                         | Description                                                                                                                                                                                                                                                                                                                                                                           | Parameters                                                                                           |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `build-deploy-app`             | End-to-end CI/CD workflow: scan a git repo, generate CI pipeline (build & push Docker image), discover or generate K8s manifests, create CD pipeline, and deploy — with auto-retry on CI failures (up to 5 attempts) and CD failures (up to 3 attempts with user permission). On exhausted retries, provides Harness UI deep links to all created resources for manual investigation. | `repoUrl` (required), `imageName` (required), `projectId` (optional), `namespace` (optional)         |
+| `debug-pipeline-failure`       | Analyze a failed execution: accepts an execution ID, pipeline ID, or Harness URL. Gets stage/step breakdown, failure details, delegate info, and failed step logs via `harness_diagnose`, then provides root cause analysis and suggested fixes. Automatically follows chained pipeline failures.                                                                                     | `executionId` (optional), `projectId` (optional)                                                     |
+| `create-pipeline`              | Generate a new pipeline YAML from natural language requirements, reviewing existing resources for context                                                                                                                                                                                                                                                                             | `description` (required), `projectId` (optional)                                                     |
+| `create-agent`                 | Interactively build a Harness AI agent — check existing agents, gather requirements, generate agent YAML spec using the agent-pipeline schema, confirm with user, then create or update via `harness_create`/`harness_update`                                                                                                                                                         | `agent_name` (required), `task_description` (required), `org_id` (optional), `project_id` (optional) |
+| `onboard-service`              | Walk through onboarding a new service with environments and a deployment pipeline                                                                                                                                                                                                                                                                                                     | `serviceName` (required), `projectId` (optional)                                                     |
+| `dora-metrics-review`          | Review DORA metrics (deployment frequency, change failure rate, MTTR, lead time) with Elite/High/Medium/Low classification and improvement recommendations                                                                                                                                                                                                                            | `teamRefId` (optional), `dateStart` (optional), `dateEnd` (optional)                                 |
+| `setup-gitops-application`     | Guide through onboarding a GitOps application — verify agent, cluster, repo, and create the application                                                                                                                                                                                                                                                                               | `agentId` (required), `projectId` (optional)                                                         |
+| `chaos-resilience-test`        | Design a chaos experiment to test service resilience with fault injection, probes, and expected outcomes                                                                                                                                                                                                                                                                              | `serviceName` (required), `projectId` (optional)                                                     |
+| `feature-flag-rollout`         | Plan and execute a progressive feature flag rollout across environments with safety gates                                                                                                                                                                                                                                                                                             | `flagIdentifier` (required), `projectId` (optional)                                                  |
+| `migrate-pipeline-to-template` | Analyze an existing pipeline and extract reusable stage/step templates from it                                                                                                                                                                                                                                                                                                        | `pipelineId` (required), `projectId` (optional)                                                      |
+| `delegate-health-check`        | Check delegate connectivity, health, token status, and troubleshoot infrastructure issues                                                                                                                                                                                                                                                                                             | `projectId` (optional)                                                                               |
+| `developer-portal-scorecard`   | Review IDP scorecards for services and identify gaps to improve developer experience                                                                                                                                                                                                                                                                                                  | `projectId` (optional)                                                                               |
+| `pending-approvals`            | Find pipeline executions waiting for approval, show details, and offer to approve or reject                                                                                                                                                                                                                                                                                           | `projectId` (optional), `orgId` (optional), `pipelineId` (optional)                                  |
+
 
 ### FinOps
 
-| Prompt | Description | Parameters |
-|--------|-------------|------------|
-| `optimize-costs` | Analyze cloud cost data, surface recommendations and anomalies, prioritized by potential savings | `projectId` (optional) |
-| `cloud-cost-breakdown` | Deep-dive into cloud costs by service, environment, or cluster with trend analysis and anomaly detection | `perspectiveId` (optional), `projectId` (optional) |
-| `commitment-utilization-review` | Analyze reserved instance and savings plan utilization to find waste and optimize commitments | `projectId` (optional) |
-| `cost-anomaly-investigation` | Investigate cost anomalies — determine root cause, impacted resources, and remediation | `projectId` (optional) |
-| `rightsizing-recommendations` | Review and prioritize rightsizing recommendations, optionally create Jira or ServiceNow tickets | `projectId` (optional), `minSavings` (optional) |
+
+| Prompt                          | Description                                                                                              | Parameters                                         |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `optimize-costs`                | Analyze cloud cost data, surface recommendations and anomalies, prioritized by potential savings         | `projectId` (optional)                             |
+| `cloud-cost-breakdown`          | Deep-dive into cloud costs by service, environment, or cluster with trend analysis and anomaly detection | `perspectiveId` (optional), `projectId` (optional) |
+| `commitment-utilization-review` | Analyze reserved instance and savings plan utilization to find waste and optimize commitments            | `projectId` (optional)                             |
+| `cost-anomaly-investigation`    | Investigate cost anomalies — determine root cause, impacted resources, and remediation                   | `projectId` (optional)                             |
+| `rightsizing-recommendations`   | Review and prioritize rightsizing recommendations, optionally create Jira or ServiceNow tickets          | `projectId` (optional), `minSavings` (optional)    |
+
 
 ### DevSecOps
 
-| Prompt | Description | Parameters |
-|--------|-------------|------------|
-| `security-review` | Review security issues across Harness resources and suggest remediations by severity | `projectId` (optional), `severity` (optional, default: `critical,high`) |
-| `vulnerability-triage` | Triage security vulnerabilities across pipelines and artifacts, prioritize by severity and exploitability | `projectId` (optional), `severity` (optional) |
-| `sbom-compliance-check` | Audit SBOM and compliance posture for artifacts — license risks, policy violations, component vulnerabilities | `artifactId` (optional), `projectId` (optional) |
-| `supply-chain-audit` | End-to-end software supply chain security audit — provenance, chain of custody, policy compliance | `projectId` (optional) |
-| `security-exemption-review` | Review pending security exemptions and make batch approval or rejection decisions | `projectId` (optional) |
-| `access-control-audit` | Audit user permissions, over-privileged accounts, and role assignments to enforce least-privilege | `projectId` (optional), `orgId` (optional) |
+
+| Prompt                      | Description                                                                                                   | Parameters                                                              |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `security-review`           | Review security issues across Harness resources and suggest remediations by severity                          | `projectId` (optional), `severity` (optional, default: `critical,high`) |
+| `vulnerability-triage`      | Triage security vulnerabilities across pipelines and artifacts, prioritize by severity and exploitability     | `projectId` (optional), `severity` (optional)                           |
+| `sbom-compliance-check`     | Audit SBOM and compliance posture for artifacts — license risks, policy violations, component vulnerabilities | `artifactId` (optional), `projectId` (optional)                         |
+| `supply-chain-audit`        | End-to-end software supply chain security audit — provenance, chain of custody, policy compliance             | `projectId` (optional)                                                  |
+| `security-exemption-review` | Review pending security exemptions and make batch approval or rejection decisions                             | `projectId` (optional)                                                  |
+| `access-control-audit`      | Audit user permissions, over-privileged accounts, and role assignments to enforce least-privilege             | `projectId` (optional), `orgId` (optional)                              |
+
 
 ### Harness Code
 
-| Prompt | Description | Parameters |
-|--------|-------------|------------|
-| `code-review` | Review a pull request — analyze diff, commits, checks, and comments to provide structured feedback on bugs, security, performance, and style | `repoId` (required), `prNumber` (required), `projectId` (optional) |
-| `pr-summary` | Auto-generate a PR title and description from the commit history and diff of a branch | `repoId` (required), `sourceBranch` (required), `targetBranch` (optional, default: main), `projectId` (optional) |
-| `branch-cleanup` | Analyze branches in a repository and recommend stale or merged branches to delete | `repoId` (required), `projectId` (optional) |
+
+| Prompt           | Description                                                                                                                                  | Parameters                                                                                                       |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `code-review`    | Review a pull request — analyze diff, commits, checks, and comments to provide structured feedback on bugs, security, performance, and style | `repoId` (required), `prNumber` (required), `projectId` (optional)                                               |
+| `pr-summary`     | Auto-generate a PR title and description from the commit history and diff of a branch                                                        | `repoId` (required), `sourceBranch` (required), `targetBranch` (optional, default: main), `projectId` (optional) |
+| `branch-cleanup` | Analyze branches in a repository and recommend stale or merged branches to delete                                                            | `repoId` (required), `projectId` (optional)                                                                      |
+
 
 ## MCP Resources
 
-| Resource URI | Description | MIME Type |
-|--------------|-------------|-----------|
-| `pipeline:///{pipelineId}` | Pipeline YAML definition | `application/x-yaml` |
-| `pipeline:///{orgId}/{projectId}/{pipelineId}` | Pipeline YAML (with explicit scope) | `application/x-yaml` |
-| `executions:///recent` | Last 10 pipeline execution summaries | `application/json` |
-| `schema:///pipeline` | Harness pipeline JSON Schema | `application/schema+json` |
-| `schema:///template` | Harness template JSON Schema | `application/schema+json` |
-| `schema:///trigger` | Harness trigger JSON Schema | `application/schema+json` |
-| `schema:///pipeline_v1` **(Alpha)** | Harness V1 pipeline JSON Schema (simplified stages/steps format) | `application/schema+json` |
-| `schema:///agent-pipeline` | Harness AI agent pipeline JSON Schema | `application/schema+json` |
+
+| Resource URI                                   | Description                                                      | MIME Type                 |
+| ---------------------------------------------- | ---------------------------------------------------------------- | ------------------------- |
+| `pipeline:///{pipelineId}`                     | Pipeline YAML definition                                         | `application/x-yaml`      |
+| `pipeline:///{orgId}/{projectId}/{pipelineId}` | Pipeline YAML (with explicit scope)                              | `application/x-yaml`      |
+| `executions:///recent`                         | Last 10 pipeline execution summaries                             | `application/json`        |
+| `schema:///pipeline`                           | Harness pipeline JSON Schema                                     | `application/schema+json` |
+| `schema:///template`                           | Harness template JSON Schema                                     | `application/schema+json` |
+| `schema:///trigger`                            | Harness trigger JSON Schema                                      | `application/schema+json` |
+| `schema:///pipeline_v1` **(Alpha)**            | Harness V1 pipeline JSON Schema (simplified stages/steps format) | `application/schema+json` |
+| `schema:///agent-pipeline`                     | Harness AI agent pipeline JSON Schema                            | `application/schema+json` |
+
 
 ## Toolset Filtering
 
@@ -1377,15 +1457,10 @@ Available toolset names:
 ### How It Works
 
 1. **Tools** are generic verbs: `harness_list`, `harness_get`, etc. They accept a `resource_type` parameter that routes to the correct API endpoint.
-
 2. **The Registry** maps each `resource_type` to a `ResourceDefinition` — a declarative data structure specifying the HTTP method, URL path, path/query parameter mappings, and response extraction logic.
-
 3. **Dispatch** resolves the resource definition, builds the HTTP request (path substitution, query params, scope injection), calls the Harness API through `HarnessClient`, and extracts the relevant response data.
-
 4. **Toolset filtering** (`HARNESS_TOOLSETS`) controls which resource definitions are loaded into the registry at startup.
-
 5. **Deep links** are automatically appended to responses, providing direct Harness UI URLs for every resource.
-
 6. **Compact mode** strips verbose metadata from list results, keeping only actionable fields (identity, status, type, timestamps, deep links) to minimize token usage.
 
 ### Adding a New Resource Type
@@ -1547,13 +1622,15 @@ Write tools (`harness_create`, `harness_update`, `harness_delete`, `harness_exec
 
 **Client support:**
 
-| Client | Elicitation Support |
-|--------|-------------------|
-| Cursor | Yes |
-| VS Code (Copilot) | Yes |
-| Claude Desktop | Not yet |
-| Windsurf | Not yet |
-| MCP Inspector | Yes |
+
+| Client            | Elicitation Support |
+| ----------------- | ------------------- |
+| Cursor            | Yes                 |
+| VS Code (Copilot) | Yes                 |
+| Claude Desktop    | Not yet             |
+| Windsurf          | Not yet             |
+| MCP Inspector     | Yes                 |
+
 
 Elicitation behavior varies by operation severity when client support is missing:
 For clients that don't support elicitation:
@@ -1598,7 +1675,6 @@ When enabled, **all** write and delete operations proceed without user confirmat
 - **CORS restricted to same-origin.** The HTTP transport only allows same-origin requests, preventing CSRF attacks from malicious websites targeting the MCP server on localhost.
 - **HTTP rate limiting.** The HTTP transport enforces 60 requests per minute per IP to prevent request flooding.
 - **API rate limiting.** The Harness API client enforces a 10 requests/second limit to avoid hitting upstream rate limits.
-
 - **Pagination bounds enforced.** List queries are capped at 10,000 items total and 100 per page to prevent memory exhaustion.
 - **Retries with backoff.** Transient failures (HTTP 429, 5xx) are retried with exponential backoff and jitter.
 - **Localhost binding.** The HTTP transport binds to `127.0.0.1` by default — not accessible from the network.
@@ -1610,23 +1686,25 @@ The Harness MCP server pairs well with **[Harness Skills](https://github.com/har
 
 ## Troubleshooting & Common Pitfalls
 
-| Symptom | Likely Cause | What to Do |
-|---------|--------------|------------|
-| `HARNESS_ACCOUNT_ID is required when the API key is not a PAT...` | API key is not in PAT format (`pat.<accountId>.<tokenId>.<secret>`) so account ID cannot be inferred | Set `HARNESS_ACCOUNT_ID` explicitly |
-| `Unknown transport: "..."` on startup | Unsupported CLI transport arg | Use `stdio` or `http` only |
-| `Invalid HARNESS_TOOLSETS: ...` on startup | One or more toolset names are not recognized | Use only names from [Toolset Filtering](#toolset-filtering) (exact match) |
-| HTTP `mcp-session-id header is required...` | A session request was sent without session header | Send `initialize` first, then include `mcp-session-id` on `POST/GET/DELETE /mcp` |
-| HTTP `Session not found...` | Session expired (30 min idle TTL) or already closed | Re-run `initialize` to create a new session, then retry with new header |
-| HTTP `405 Method Not Allowed` on `/mcp` | Unsupported method for MCP endpoint | Use `POST`, `GET`, `DELETE`, or `OPTIONS` only |
-| HTTP `Invalid request` | Invalid JSON body or request body exceeded `HARNESS_MAX_BODY_SIZE_MB` | Validate JSON payload size/shape; increase `HARNESS_MAX_BODY_SIZE_MB` if needed |
-| `Unknown resource_type "..."` from tools | Resource type is misspelled or filtered out via `HARNESS_TOOLSETS` | Call `harness_describe` (with optional `search_term`) to discover valid types |
-| `Missing required field "... for path parameter ..."` | A project/org scoped call is missing identifiers | Set `HARNESS_ORG`/`HARNESS_PROJECT` or pass `org_id`/`project_id` per tool call |
-| `Read-only mode is enabled ... operations are not allowed` | `HARNESS_READ_ONLY=true` blocks create/update/delete/execute | Set `HARNESS_READ_ONLY=false` if write operations are intended |
-| Pipeline run fails pre-flight with unresolved required inputs | Provided `inputs` did not cover required runtime placeholders | Fetch `runtime_input_template`, supply missing simple keys, or use `input_set_ids` for structural inputs |
-| Pipeline CI shorthand (`branch`, `tag`, `pr_number`, `commit_sha`) did not apply | `inputs.build` was already provided, so shorthand expansion was intentionally skipped | Remove `inputs.build` to use shorthand expansion, or keep full explicit `build` structure |
-| `Operation declined by user` | User declined the elicitation confirmation dialog | The user chose not to proceed — verify the operation details and retry if intended |
-| `body.template_yaml (or body.yaml) is required` for template create/update | Template APIs expect full YAML payload | Provide full `template_yaml` string in `body`; for deletes, pass `version_label` to delete one version (omit to delete all versions) |
-| `HARNESS_BASE_URL must use HTTPS` on startup | `HARNESS_BASE_URL` is set to an HTTP URL | Use HTTPS, or set `HARNESS_ALLOW_HTTP=true` for local development |
+
+| Symptom                                                                          | Likely Cause                                                                                         | What to Do                                                                                                                           |
+| -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `HARNESS_ACCOUNT_ID is required when the API key is not a PAT...`                | API key is not in PAT format (`pat.<accountId>.<tokenId>.<secret>`) so account ID cannot be inferred | Set `HARNESS_ACCOUNT_ID` explicitly                                                                                                  |
+| `Unknown transport: "..."` on startup                                            | Unsupported CLI transport arg                                                                        | Use `stdio` or `http` only                                                                                                           |
+| `Invalid HARNESS_TOOLSETS: ...` on startup                                       | One or more toolset names are not recognized                                                         | Use only names from [Toolset Filtering](#toolset-filtering) (exact match)                                                            |
+| HTTP `mcp-session-id header is required...`                                      | A session request was sent without session header                                                    | Send `initialize` first, then include `mcp-session-id` on `POST/GET/DELETE /mcp`                                                     |
+| HTTP `Session not found...`                                                      | Session expired (30 min idle TTL) or already closed                                                  | Re-run `initialize` to create a new session, then retry with new header                                                              |
+| HTTP `405 Method Not Allowed` on `/mcp`                                          | Unsupported method for MCP endpoint                                                                  | Use `POST`, `GET`, `DELETE`, or `OPTIONS` only                                                                                       |
+| HTTP `Invalid request`                                                           | Invalid JSON body or request body exceeded `HARNESS_MAX_BODY_SIZE_MB`                                | Validate JSON payload size/shape; increase `HARNESS_MAX_BODY_SIZE_MB` if needed                                                      |
+| `Unknown resource_type "..."` from tools                                         | Resource type is misspelled or filtered out via `HARNESS_TOOLSETS`                                   | Call `harness_describe` (with optional `search_term`) to discover valid types                                                        |
+| `Missing required field "... for path parameter ..."`                            | A project/org scoped call is missing identifiers                                                     | Set `HARNESS_ORG`/`HARNESS_PROJECT` or pass `org_id`/`project_id` per tool call                                                      |
+| `Read-only mode is enabled ... operations are not allowed`                       | `HARNESS_READ_ONLY=true` blocks create/update/delete/execute                                         | Set `HARNESS_READ_ONLY=false` if write operations are intended                                                                       |
+| Pipeline run fails pre-flight with unresolved required inputs                    | Provided `inputs` did not cover required runtime placeholders                                        | Fetch `runtime_input_template`, supply missing simple keys, or use `input_set_ids` for structural inputs                             |
+| Pipeline CI shorthand (`branch`, `tag`, `pr_number`, `commit_sha`) did not apply | `inputs.build` was already provided, so shorthand expansion was intentionally skipped                | Remove `inputs.build` to use shorthand expansion, or keep full explicit `build` structure                                            |
+| `Operation declined by user`                                                     | User declined the elicitation confirmation dialog                                                    | The user chose not to proceed — verify the operation details and retry if intended                                                   |
+| `body.template_yaml (or body.yaml) is required` for template create/update       | Template APIs expect full YAML payload                                                               | Provide full `template_yaml` string in `body`; for deletes, pass `version_label` to delete one version (omit to delete all versions) |
+| `HARNESS_BASE_URL must use HTTPS` on startup                                     | `HARNESS_BASE_URL` is set to an HTTP URL                                                             | Use HTTPS, or set `HARNESS_ALLOW_HTTP=true` for local development                                                                    |
+
 
 ## License
 

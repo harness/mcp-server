@@ -18,7 +18,7 @@ export interface PreflightContext {
 
 export type ToolsetName =
   | "pipelines"
-  | "agent-pipelines"
+  | "agents"
   | "services"
   | "environments"
   | "infrastructure"

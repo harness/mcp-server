@@ -1,6 +1,6 @@
 {
   "name": "harness-mcp-v2",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "description": "Give AI agents full access to the Harness.io platform — manage pipelines, deployments, cloud costs, chaos engineering, feature flags, SEI, and 125+ resource types through 11 MCP tools",
   "type": "module",
   "main": "build/index.js",
@@ -16,6 +16,7 @@
     "start": "node build/index.js stdio",
     "start:http": "node build/index.js http",
     "inspect": "npx @modelcontextprotocol/inspector node build/index.js stdio",
+    "prepare:mcpb": "node scripts/prepare-mcpb.js",
     "typecheck": "tsc --noEmit",
     "sync-schemas": "node scripts/sync-schemas.js",
     "test": "vitest run",
@@ -43,10 +44,12 @@
   },
   "homepage": "https://github.com/harness/mcp-server#readme",
   "dependencies": {
+    "@hono/node-server": "^2.0.0",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@resvg/resvg-js": "^2.6.2",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
+    "hono": "^4.12.15",
     "jsonwebtoken": "^9.0.3",
     "yaml": "^2.8.3",
     "zod": "^4.0.0"

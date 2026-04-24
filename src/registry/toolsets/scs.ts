@@ -730,7 +730,8 @@ export const scsToolset: ToolsetDefinition = {
       relatedResources: [
         { resourceType: "artifact_security", relationship: "parent", description: "Get enforcement_id from artifact overview (violations.enforcementId)" },
         { resourceType: "scs_compliance_result", relationship: "sibling", description: "Compliance scan results (CIS/OWASP checks) — different from BOM enforcement violations" },
-        { resourceType: "policy", relationship: "sibling", description: "OPA policies that define enforcement rules — use governance toolset to manage" },
+        { resourceType: "policy_set", relationship: "sibling", description: "OPA policy set that fired this violation — the set referenced by the policySetRef on each violation. List via governance toolset with filter type='sbom' (NOT 'sbom_enforcement' or 'ssca_enforcement' — those return an empty list for policy sets)." },
+        { resourceType: "policy", relationship: "sibling", description: "Individual OPA policies bound to the firing policy set. List via governance toolset with filter type='sbom_enforcement'." },
       ],
       toolset: "scs",
       scope: "project",
