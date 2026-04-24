@@ -29,6 +29,7 @@ import { ccmToolset } from "./toolsets/ccm.js";
 import { seiToolset } from "./toolsets/sei.js";
 import { scsToolset } from "./toolsets/scs.js";
 import { stoToolset } from "./toolsets/sto.js";
+import { dbopsToolset } from "./toolsets/dbops.js";
 import { accessControlToolset } from "./toolsets/access-control.js";
 import { settingsToolset } from "./toolsets/settings.js";
 import { platformToolset } from "./toolsets/platform.js";
@@ -68,6 +69,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   seiToolset,
   scsToolset,
   stoToolset,
+  dbopsToolset,
   accessControlToolset,
   settingsToolset,
   platformToolset,

@@ -40,6 +40,7 @@ export type ToolsetName =
   | "sei"
   | "scs"
   | "sto"
+  | "dbops"
   | "access_control"
   | "settings"
   | "platform"
