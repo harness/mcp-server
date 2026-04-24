@@ -74,6 +74,62 @@ describe("Registry", () => {
       const desc = registry.describe() as { total_toolsets: number };
       expect(desc.total_toolsets).toBe(3);
     });
+
+    it("excludes opt-in toolsets by default", () => {
+      const registry = new Registry(makeConfig());
+      expect(() => registry.getResource("eval_dataset")).toThrow(/Unknown resource_type/);
+    });
+
+    it("enables opt-in toolset with + prefix", () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "+ai-evals" }));
+      const desc = registry.describe() as { total_toolsets: number };
+      // All defaults plus ai-evals
+      expect(desc.total_toolsets).toBeGreaterThan(20);
+      // ai-evals resource is accessible
+      const res = registry.getResource("eval_dataset");
+      expect(res.resourceType).toBe("eval_dataset");
+    });
+
+    it("+ prefix preserves default toolsets", () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "+ai-evals" }));
+      // Default toolset resource still accessible
+      const res = registry.getResource("pipeline");
+      expect(res.resourceType).toBe("pipeline");
+    });
+
+    it("- prefix removes from defaults", () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "-chaos" }));
+      expect(() => registry.getResource("chaos_experiment")).toThrow(/Unknown resource_type/);
+      // Other defaults still present
+      const res = registry.getResource("pipeline");
+      expect(res.resourceType).toBe("pipeline");
+    });
+
+    it("mixed +/- syntax", () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "+ai-evals,-chaos" }));
+      // ai-evals enabled
+      const ds = registry.getResource("eval_dataset");
+      expect(ds.resourceType).toBe("eval_dataset");
+      // chaos removed
+      expect(() => registry.getResource("chaos_experiment")).toThrow(/Unknown resource_type/);
+      // other defaults still present
+      const p = registry.getResource("pipeline");
+      expect(p.resourceType).toBe("pipeline");
+    });
+
+    it("throws for invalid names with +/- prefix", () => {
+      expect(() => new Registry(makeConfig({ HARNESS_TOOLSETS: "+badname" }))).toThrow(
+        /Invalid HARNESS_TOOLSETS: "badname"/,
+      );
+    });
+
+    it("explicit list can include opt-in toolsets", () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines,ai-evals" }));
+      const desc = registry.describe() as { total_toolsets: number };
+      expect(desc.total_toolsets).toBe(2);
+      const ds = registry.getResource("eval_dataset");
+      expect(ds.resourceType).toBe("eval_dataset");
+    });
   });
 
   describe("getResource", () => {

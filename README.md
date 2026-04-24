@@ -1,6 +1,6 @@
 ## Harness MCP Server 2.0
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 10 consolidated tools and 139 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 10 consolidated tools and 163 resource types.
 
 
 ## Why Use This MCP Server
@@ -9,8 +9,8 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **10 tools, 139 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 10 tools instead of hundreds.
-- **Full platform coverage.** 30 toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Internal Developer Portal, Software Supply Chain, Governance, Service Overrides, Visualizations, and more. Not just pipelines — the entire Harness platform.
+- **10 tools, 163 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 10 tools instead of hundreds.
+- **Full platform coverage.** 31 toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Internal Developer Portal, Software Supply Chain, Governance, Service Overrides, Visualizations, and more. Not just pipelines — the entire Harness platform.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **27 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
 - **Works everywhere.** Stdio transport for local clients (Claude Desktop, Cursor, Windsurf), HTTP transport for remote/shared deployments, Docker and Kubernetes ready.
@@ -512,7 +512,7 @@ The server automatically loads environment variables from a `.env` file in the p
 | `HARNESS_MAX_BODY_SIZE_MB` | No | `10` | Max HTTP request body size in MB for `http` transport |
 | `HARNESS_RATE_LIMIT_RPS` | No | `10` | Client-side request throttle (requests per second) to Harness APIs |
 | `LOG_LEVEL` | No | `info` | Log verbosity: `debug`, `info`, `warn`, `error` |
-| `HARNESS_TOOLSETS` | No | *(all)* | Comma-separated list of enabled toolsets (see [Toolset Filtering](#toolset-filtering)) |
+| `HARNESS_TOOLSETS` | No | *(all)* | Comma-separated toolset list. Supports `+name` to add opt-in toolsets and `-name` to remove defaults (see [Toolset Filtering](#toolset-filtering)) |
 | `HARNESS_READ_ONLY` | No | `false` | Block all mutating operations (create, update, delete, execute). Only list and get are allowed. Useful for shared/demo environments |
 | `HARNESS_SKIP_ELICITATION` | No | `false` | Skip all elicitation confirmation prompts. When `true`, write and delete operations proceed without user approval — enabling fully autonomous agent workflows. See [Elicitation](#elicitation) |
 | `HARNESS_ALLOW_HTTP` | No | `false` | Allow non-HTTPS `HARNESS_BASE_URL`. By default, the server enforces HTTPS for security. Set to `true` only for local development against a non-TLS Harness instance |
@@ -911,7 +911,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-139 resource types organized across 30 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+163 resource types organized across 31 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -1274,7 +1274,36 @@ Inline PNG chart visualizations rendered from Harness data. These are metadata-o
 
 ## Toolset Filtering
 
-By default, all 30 toolsets (and their 139 resource types) are enabled. Use `HARNESS_TOOLSETS` to expose only the toolsets you need. This reduces the resource types the LLM sees, improving tool selection accuracy.
+By default, 30 of 31 toolsets are enabled. One toolset (`ai-evals`) is opt-in — excluded by default to avoid polluting the resource list for users who don't need it.
+
+### Enabling opt-in toolsets
+
+Use the `+` prefix to add opt-in toolsets to the defaults:
+
+```bash
+# Enable ai-evals alongside all defaults
+HARNESS_TOOLSETS=+ai-evals
+```
+
+### Removing default toolsets
+
+Use the `-` prefix to exclude toolsets you don't need:
+
+```bash
+# Remove chaos and ccm from defaults
+HARNESS_TOOLSETS=-chaos,-ccm
+```
+
+### Combining + and -
+
+```bash
+# Add ai-evals, remove chaos
+HARNESS_TOOLSETS=+ai-evals,-chaos
+```
+
+### Explicit allowlist
+
+An explicit comma-separated list (no prefixes) replaces the defaults entirely. Only the listed toolsets are enabled:
 
 ```bash
 # Only expose pipelines, services, and connectors
@@ -1315,6 +1344,7 @@ Available toolset names:
 | `overrides` | service_override |
 | `settings` | setting |
 | `visualizations` | visual_timeline, visual_stage_flow, visual_health_dashboard, visual_pie_chart, visual_bar_chart, visual_timeseries, visual_architecture |
+| `ai-evals` **(opt-in)** | eval_dataset, eval_dataset_item, evaluation, eval_run, eval_run_item, eval_run_by_eval, eval_metric, eval_metric_set, eval_metric_set_entry, eval_suite, eval_suite_evaluation, eval_suite_run, eval_target, eval_model, eval_annotation, eval_analytics, eval_git_settings, eval_registry_item |
 
 ## Architecture
 
@@ -1331,8 +1361,8 @@ Available toolset names:
                           |
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
-                |  29 Toolsets      |      (data files, not code)
-                |  137 Resource Types|
+                |  31 Toolsets      |      (data files, not code)
+                |  163 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+
