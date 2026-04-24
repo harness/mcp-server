@@ -37,6 +37,7 @@ import { visualizationsToolset } from "./toolsets/visualizations.js";
 import { governanceToolset } from "./toolsets/governance.js";
 import { freezeToolset } from "./toolsets/freeze.js";
 import { overridesToolset } from "./toolsets/overrides.js";
+import { aiEvalsToolset } from "./toolsets/ai-evals.js";
 
 const log = createLogger("registry");
 
@@ -76,6 +77,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   governanceToolset,
   freezeToolset,
   overridesToolset,
+  aiEvalsToolset,
 ];
 
 /**
@@ -107,7 +109,7 @@ export class Registry {
     const enabledNames = this.parseToolsetFilter(allToolsets);
     this.toolsets = enabledNames
       ? allToolsets.filter((t) => enabledNames.has(t.name))
-      : allToolsets;
+      : allToolsets.filter((t) => !t.optIn);
 
     const excludedPipelineType =
       (this.config.HARNESS_PIPELINE_VERSION ?? "0") === "0"
@@ -130,12 +132,57 @@ export class Registry {
     return this.accountIdResolver?.() ?? this.config.HARNESS_ACCOUNT_ID;
   }
 
+  /**
+   * Parse HARNESS_TOOLSETS env var. Supports three modes:
+   *
+   *  - Explicit list:    "pipelines,services"         → only those toolsets
+   *  - Additive (+):     "+ai-evals"                  → defaults + ai-evals
+   *  - Subtractive (-):  "-chaos,-ccm"                → defaults minus chaos & ccm
+   *  - Mixed +/-:        "+ai-evals,-chaos"            → defaults + ai-evals - chaos
+   *
+   * Returns `null` when the value is empty (meaning "all defaults").
+   * Returns `"defaults"` when +/- modifiers are used (caller applies them).
+   */
   private parseToolsetFilter(allToolsets: ToolsetDefinition[]): Set<string> | null {
     const raw = this.config.HARNESS_TOOLSETS;
     if (!raw || raw.trim() === "") return null;
 
     const validNames = new Set<string>(allToolsets.map((t) => t.name));
     const parsed = raw.split(",").map((s) => s.trim()).filter(Boolean);
+
+    const hasModifiers = parsed.some((s) => s.startsWith("+") || s.startsWith("-"));
+
+    if (hasModifiers) {
+      const defaults = new Set(allToolsets.filter((t) => !t.optIn).map((t) => t.name));
+      const invalid: string[] = [];
+
+      for (const token of parsed) {
+        const op = token[0];
+        const name = (op === "+" || op === "-") ? token.slice(1) : token;
+        if (!validNames.has(name)) {
+          invalid.push(name);
+          continue;
+        }
+        if (op === "+") {
+          defaults.add(name);
+        } else if (op === "-") {
+          defaults.delete(name);
+        } else {
+          defaults.add(name);
+        }
+      }
+
+      if (invalid.length > 0) {
+        const available = Array.from(validNames).sort().join(", ");
+        throw new Error(
+          `Invalid HARNESS_TOOLSETS: ${invalid.map((n) => `"${n}"`).join(", ")}. ` +
+          `Valid toolset names: ${available}`,
+        );
+      }
+
+      return defaults;
+    }
+
     const valid: string[] = [];
     const invalid: string[] = [];
 

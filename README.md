@@ -1,6 +1,6 @@
 ## Harness MCP Server 2.0
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 10 consolidated tools and 139 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 10 consolidated tools and 163 resource types.
 
 ## Why Use This MCP Server
 
@@ -8,8 +8,8 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **10 tools, 139 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 10 tools instead of hundreds.
-- **Full platform coverage.** 30 toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Internal Developer Portal, Software Supply Chain, Governance, Service Overrides, Visualizations, and more. Not just pipelines — the entire Harness platform.
+- **10 tools, 163 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 10 tools instead of hundreds.
+- **Full platform coverage.** 31 toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Internal Developer Portal, Software Supply Chain, Governance, Service Overrides, Visualizations, and more. Not just pipelines — the entire Harness platform.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **27 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
 - **Works everywhere.** Stdio transport for local clients (Claude Desktop, Cursor, Windsurf), HTTP transport for remote/shared deployments, Docker and Kubernetes ready.
@@ -506,25 +506,23 @@ The deployment runs 2 replicas with readiness/liveness probes, resource limits, 
 
 The server automatically loads environment variables from a `.env` file in the project root if one exists. Copy `.env.example` to `.env` and fill in your values. Environment variables can also be set via your shell or MCP client config.
 
-
-| Variable                   | Required | Default                  | Description                                                                                                                                                                                                                               |
-| -------------------------- | -------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `HARNESS_API_KEY`          | Yes      | --                       | Harness personal access token or service account token                                                                                                                                                                                    |
-| `HARNESS_ACCOUNT_ID`       | No       | *(from PAT)*             | Harness account identifier. Auto-extracted from PAT tokens; only needed for non-PAT API keys                                                                                                                                              |
-| `HARNESS_BASE_URL`         | No       | `https://app.harness.io` | Base URL (override for self-managed Harness)                                                                                                                                                                                              |
-| `HARNESS_ORG`              | No       | `default`                | Organization ID. Used when `org_id` is not specified per tool call. Agents can also discover orgs dynamically via `harness_list(resource_type="organization")`                                                                            |
-| `HARNESS_PROJECT`          | No       | --                       | Project ID. Used when `project_id` is not specified per tool call. Agents can also discover projects dynamically via `harness_list(resource_type="project")`                                                                              |
-| `HARNESS_API_TIMEOUT_MS`   | No       | `30000`                  | HTTP request timeout in milliseconds                                                                                                                                                                                                      |
-| `HARNESS_MAX_RETRIES`      | No       | `3`                      | Retry count for transient failures (429, 5xx)                                                                                                                                                                                             |
-| `HARNESS_MAX_BODY_SIZE_MB` | No       | `10`                     | Max HTTP request body size in MB for `http` transport                                                                                                                                                                                     |
-| `HARNESS_RATE_LIMIT_RPS`   | No       | `10`                     | Client-side request throttle (requests per second) to Harness APIs                                                                                                                                                                        |
-| `LOG_LEVEL`                | No       | `info`                   | Log verbosity: `debug`, `info`, `warn`, `error`                                                                                                                                                                                           |
-| `HARNESS_TOOLSETS`         | No       | *(all)*                  | Comma-separated list of enabled toolsets (see [Toolset Filtering](#toolset-filtering))                                                                                                                                                    |
-| `HARNESS_READ_ONLY`        | No       | `false`                  | Block all mutating operations (create, update, delete, execute). Only list and get are allowed. Useful for shared/demo environments                                                                                                       |
-| `HARNESS_SKIP_ELICITATION` | No       | `false`                  | Skip all elicitation confirmation prompts. When `true`, write and delete operations proceed without user approval — enabling fully autonomous agent workflows. See [Elicitation](#elicitation)                                            |
-| `HARNESS_ALLOW_HTTP`       | No       | `false`                  | Allow non-HTTPS `HARNESS_BASE_URL`. By default, the server enforces HTTPS for security. Set to `true` only for local development against a non-TLS Harness instance                                                                       |
-| `HARNESS_PIPELINE_VERSION` | No       | `0`                      | **(Alpha)** Pipeline YAML version. Set to `"1"` to guide agents toward `pipeline_v1` (V1 YAML format) for pipeline operations. Both `pipeline` (V0) and `pipeline_v1` (V1) resource types are always available regardless of this setting |
-
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `HARNESS_API_KEY` | Yes | -- | Harness personal access token or service account token |
+| `HARNESS_ACCOUNT_ID` | No | *(from PAT)* | Harness account identifier. Auto-extracted from PAT tokens; only needed for non-PAT API keys |
+| `HARNESS_BASE_URL` | No | `https://app.harness.io` | Base URL (override for self-managed Harness) |
+| `HARNESS_ORG` | No | `default` | Organization ID. Used when `org_id` is not specified per tool call. Agents can also discover orgs dynamically via `harness_list(resource_type="organization")` |
+| `HARNESS_PROJECT` | No | -- | Project ID. Used when `project_id` is not specified per tool call. Agents can also discover projects dynamically via `harness_list(resource_type="project")` |
+| `HARNESS_API_TIMEOUT_MS` | No | `30000` | HTTP request timeout in milliseconds |
+| `HARNESS_MAX_RETRIES` | No | `3` | Retry count for transient failures (429, 5xx) |
+| `HARNESS_MAX_BODY_SIZE_MB` | No | `10` | Max HTTP request body size in MB for `http` transport |
+| `HARNESS_RATE_LIMIT_RPS` | No | `10` | Client-side request throttle (requests per second) to Harness APIs |
+| `LOG_LEVEL` | No | `info` | Log verbosity: `debug`, `info`, `warn`, `error` |
+| `HARNESS_TOOLSETS` | No | *(all)* | Comma-separated toolset list. Supports `+name` to add opt-in toolsets and `-name` to remove defaults (see [Toolset Filtering](#toolset-filtering)) |
+| `HARNESS_READ_ONLY` | No | `false` | Block all mutating operations (create, update, delete, execute). Only list and get are allowed. Useful for shared/demo environments |
+| `HARNESS_SKIP_ELICITATION` | No | `false` | Skip all elicitation confirmation prompts. When `true`, write and delete operations proceed without user approval — enabling fully autonomous agent workflows. See [Elicitation](#elicitation) |
+| `HARNESS_ALLOW_HTTP` | No | `false` | Allow non-HTTPS `HARNESS_BASE_URL`. By default, the server enforces HTTPS for security. Set to `true` only for local development against a non-TLS Harness instance |
+| `HARNESS_PIPELINE_VERSION` | No | `0` | **(Alpha)** Pipeline YAML version. Set to `"1"` to guide agents toward `pipeline_v1` (V1 YAML format) for pipeline operations. Both `pipeline` (V0) and `pipeline_v1` (V1) resource types are always available regardless of this setting |
 
 ### HTTPS Enforcement
 
@@ -923,7 +921,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-139 resource types organized across 30 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+163 resource types organized across 31 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -1356,7 +1354,36 @@ Inline PNG chart visualizations rendered from Harness data. These are metadata-o
 
 ## Toolset Filtering
 
-By default, all 30 toolsets (and their 139 resource types) are enabled. Use `HARNESS_TOOLSETS` to expose only the toolsets you need. This reduces the resource types the LLM sees, improving tool selection accuracy.
+By default, 30 of 31 toolsets are enabled. One toolset (`ai-evals`) is opt-in — excluded by default to avoid polluting the resource list for users who don't need it.
+
+### Enabling opt-in toolsets
+
+Use the `+` prefix to add opt-in toolsets to the defaults:
+
+```bash
+# Enable ai-evals alongside all defaults
+HARNESS_TOOLSETS=+ai-evals
+```
+
+### Removing default toolsets
+
+Use the `-` prefix to exclude toolsets you don't need:
+
+```bash
+# Remove chaos and ccm from defaults
+HARNESS_TOOLSETS=-chaos,-ccm
+```
+
+### Combining + and -
+
+```bash
+# Add ai-evals, remove chaos
+HARNESS_TOOLSETS=+ai-evals,-chaos
+```
+
+### Explicit allowlist
+
+An explicit comma-separated list (no prefixes) replaces the defaults entirely. Only the listed toolsets are enabled:
 
 ```bash
 # Only expose pipelines, services, and connectors
@@ -1365,40 +1392,39 @@ HARNESS_TOOLSETS=pipelines,services,connectors
 
 Available toolset names:
 
-
-| Toolset           | Resource Types                                                                                                                                                                                                                                                                                  |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `platform`        | organization, project                                                                                                                                                                                                                                                                           |
-| `pipelines`       | pipeline, pipeline_v1, execution, trigger, pipeline_summary, input_set, approval_instance                                                                                                                                                                                                       |
-| `agent-pipelines` | agent, agent_run                                                                                                                                                                                                                                                                                |
-| `services`        | service                                                                                                                                                                                                                                                                                         |
-| `environments`    | environment                                                                                                                                                                                                                                                                                     |
-| `connectors`      | connector, connector_catalogue                                                                                                                                                                                                                                                                  |
-| `infrastructure`  | infrastructure                                                                                                                                                                                                                                                                                  |
-| `secrets`         | secret                                                                                                                                                                                                                                                                                          |
-| `logs`            | execution_log                                                                                                                                                                                                                                                                                   |
-| `audit`           | audit_event                                                                                                                                                                                                                                                                                     |
-| `delegates`       | delegate, delegate_token                                                                                                                                                                                                                                                                        |
-| `repositories`    | repository, branch, commit, file_content, tag, repo_rule, space_rule                                                                                                                                                                                                                            |
-| `registries`      | registry, artifact, artifact_version, artifact_file                                                                                                                                                                                                                                             |
-| `templates`       | template                                                                                                                                                                                                                                                                                        |
-| `dashboards`      | dashboard, dashboard_data                                                                                                                                                                                                                                                                       |
-| `idp`             | idp_entity, scorecard, scorecard_check, scorecard_stats, scorecard_check_stats, idp_score, idp_workflow, idp_tech_doc                                                                                                                                                                           |
-| `pull-requests`   | pull_request, pr_reviewer, pr_comment, pr_check, pr_activity                                                                                                                                                                                                                                    |
-| `feature-flags`   | fme_workspace, fme_environment, fme_feature_flag, fme_feature_flag_definition, fme_rollout_status, fme_rule_based_segment, fme_rule_based_segment_definition, feature_flag                                                                                                                      |
-| `gitops`          | gitops_agent, gitops_application, gitops_cluster, gitops_repository, gitops_applicationset, gitops_repo_credential, gitops_app_event, gitops_pod_log, gitops_managed_resource, gitops_resource_action, gitops_dashboard, gitops_app_resource_tree                                               |
-| `chaos`           | chaos_experiment, chaos_probe, chaos_experiment_template, chaos_infrastructure, chaos_experiment_variable, chaos_experiment_run, chaos_loadtest, chaos_k8s_infrastructure, chaos_hub, chaos_fault, chaos_network_map, chaos_guard_condition, chaos_guard_rule, chaos_recommendation, chaos_risk |
-| `ccm`             | cost_perspective, cost_breakdown, cost_timeseries, cost_summary, cost_recommendation, cost_anomaly, cost_anomaly_summary, cost_category, cost_account_overview, cost_filter_value, cost_recommendation_stats, cost_recommendation_detail, cost_commitment                                       |
-| `sei`             | sei_metric, sei_productivity_metric, sei_dora_metric, sei_team, sei_team_detail, sei_org_tree, sei_org_tree_detail, sei_business_alignment, sei_ai_usage, sei_ai_adoption, sei_ai_impact, sei_ai_raw_metric                                                                                     |
-| `scs`             | scs_artifact_source, artifact_security, scs_artifact_component, scs_artifact_remediation, scs_chain_of_custody, scs_compliance_result, code_repo_security, scs_sbom                                                                                                                             |
-| `sto`             | security_issue, security_issue_filter, security_exemption                                                                                                                                                                                                                                       |
-| `access_control`  | user, user_group, service_account, role, role_assignment, resource_group, permission                                                                                                                                                                                                            |
-| `governance`      | policy, policy_set, policy_evaluation                                                                                                                                                                                                                                                           |
-| `freeze`          | freeze_window, global_freeze                                                                                                                                                                                                                                                                    |
-| `overrides`       | service_override                                                                                                                                                                                                                                                                                |
-| `settings`        | setting                                                                                                                                                                                                                                                                                         |
-| `visualizations`  | visual_timeline, visual_stage_flow, visual_health_dashboard, visual_pie_chart, visual_bar_chart, visual_timeseries, visual_architecture                                                                                                                                                         |
-
+| Toolset | Resource Types |
+|---------|---------------|
+| `platform` | organization, project |
+| `pipelines` | pipeline, pipeline_v1, execution, trigger, pipeline_summary, input_set, approval_instance |
+| `agents` | agent, agent_run |
+| `services` | service |
+| `environments` | environment |
+| `connectors` | connector, connector_catalogue |
+| `infrastructure` | infrastructure |
+| `secrets` | secret |
+| `logs` | execution_log |
+| `audit` | audit_event |
+| `delegates` | delegate, delegate_token |
+| `repositories` | repository, branch, commit, file_content, tag, repo_rule, space_rule |
+| `registries` | registry, artifact, artifact_version, artifact_file |
+| `templates` | template |
+| `dashboards` | dashboard, dashboard_data |
+| `idp` | idp_entity, scorecard, scorecard_check, scorecard_stats, scorecard_check_stats, idp_score, idp_workflow, idp_tech_doc |
+| `pull-requests` | pull_request, pr_reviewer, pr_comment, pr_check, pr_activity |
+| `feature-flags` | fme_workspace, fme_environment, fme_feature_flag, fme_feature_flag_definition, fme_rollout_status, fme_rule_based_segment, fme_rule_based_segment_definition, feature_flag |
+| `gitops` | gitops_agent, gitops_application, gitops_cluster, gitops_repository, gitops_applicationset, gitops_repo_credential, gitops_app_event, gitops_pod_log, gitops_managed_resource, gitops_resource_action, gitops_dashboard, gitops_app_resource_tree |
+| `chaos` | chaos_experiment, chaos_probe, chaos_experiment_template, chaos_infrastructure, chaos_experiment_variable, chaos_experiment_run, chaos_loadtest, chaos_k8s_infrastructure, chaos_hub, chaos_fault, chaos_network_map, chaos_guard_condition, chaos_guard_rule, chaos_recommendation, chaos_risk |
+| `ccm` | cost_perspective, cost_breakdown, cost_timeseries, cost_summary, cost_recommendation, cost_anomaly, cost_anomaly_summary, cost_category, cost_account_overview, cost_filter_value, cost_recommendation_stats, cost_recommendation_detail, cost_commitment |
+| `sei` | sei_metric, sei_productivity_metric, sei_dora_metric, sei_team, sei_team_detail, sei_org_tree, sei_org_tree_detail, sei_business_alignment, sei_ai_usage, sei_ai_adoption, sei_ai_impact, sei_ai_raw_metric |
+| `scs` | scs_artifact_source, artifact_security, scs_artifact_component, scs_artifact_remediation, scs_chain_of_custody, scs_compliance_result, code_repo_security, scs_sbom |
+| `sto` | security_issue, security_issue_filter, security_exemption |
+| `access_control` | user, user_group, service_account, role, role_assignment, resource_group, permission |
+| `governance` | policy, policy_set, policy_evaluation |
+| `freeze` | freeze_window, global_freeze |
+| `overrides` | service_override |
+| `settings` | setting |
+| `visualizations` | visual_timeline, visual_stage_flow, visual_health_dashboard, visual_pie_chart, visual_bar_chart, visual_timeseries, visual_architecture |
+| `ai-evals` **(opt-in)** | eval_dataset, eval_dataset_item, evaluation, eval_run, eval_run_item, eval_run_by_eval, eval_metric, eval_metric_set, eval_metric_set_entry, eval_suite, eval_suite_evaluation, eval_suite_run, eval_target, eval_model, eval_annotation, eval_analytics, eval_git_settings, eval_registry_item |
 
 ## Architecture
 
@@ -1415,8 +1441,8 @@ Available toolset names:
                           |
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
-                |  29 Toolsets      |      (data files, not code)
-                |  137 Resource Types|
+                |  31 Toolsets      |      (data files, not code)
+                |  163 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+
