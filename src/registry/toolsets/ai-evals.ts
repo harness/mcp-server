@@ -467,6 +467,56 @@ const createRunItemsSchema: BodySchema = {
   fields: [{ name: "items", type: "array", required: true, description: "Run item payloads", itemType: "object" }],
 };
 
+const generateDatasetItemsSchema: BodySchema = {
+  description: "Generate synthetic dataset items using an LLM (async via pipeline)",
+  fields: [
+    {
+      name: "strategy",
+      type: "string",
+      required: true,
+      description: "Generation strategy: use_case | rephrase | adversarial | complexity_ladder",
+    },
+    { name: "count", type: "number", required: true, description: "Number of items to generate (1-200)" },
+    { name: "model_id", type: "string", required: true, description: "UUID of registered AI model" },
+    {
+      name: "description",
+      type: "string",
+      required: false,
+      description: "Use case description (required for use_case, adversarial, complexity_ladder strategies)",
+    },
+    {
+      name: "seed_inputs",
+      type: "array",
+      required: false,
+      description: "Existing inputs to rephrase (required for rephrase strategy)",
+      itemType: "string",
+    },
+    {
+      name: "strategy_options",
+      type: "object",
+      required: false,
+      description: "Strategy-specific options, e.g. { levels: ['simple', 'complex'] }",
+    },
+  ],
+};
+
+const importEvalYamlSchema: BodySchema = {
+  description: "Import eval from YAML (creates target, dataset, metric set, and eval in one call)",
+  fields: [
+    { name: "yaml_content", type: "string", required: true, description: "Full YAML content defining target, dataset, metrics, and eval settings" },
+    { name: "auto_run", type: "boolean", required: false, description: "If true, trigger an eval run immediately after creation (default false)" },
+    { name: "dry_run", type: "boolean", required: false, description: "If true, validate the YAML without creating any entities (default false)" },
+  ],
+};
+
+const importSuiteYamlSchema: BodySchema = {
+  description: "Import suite from YAML (creates suite with member evaluations)",
+  fields: [
+    { name: "yaml_content", type: "string", required: true, description: "Full YAML content defining a suite with evaluations" },
+    { name: "dry_run", type: "boolean", required: false, description: "If true, validate the YAML without creating any entities (default false)" },
+  ],
+};
+
 /** Merge harness_execute `body` into JSON POST body */
 function bodyFromInput(input: Record<string, unknown>): unknown {
   const b = input.body;
@@ -484,6 +534,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
   displayName: "AI Evals",
   description:
     "Harness AI Evals control plane: datasets, evaluations, runs, metrics, metric sets, suites, targets, models, annotations, analytics, registry, git settings.",
+  optIn: true,
   resources: [
     // --- Datasets ---
     {
@@ -540,6 +591,53 @@ export const aiEvalsToolset: ToolsetDefinition = {
           pathBuilder: (input, config) => `${base(input, config)}/dataset/${input.dataset_id as string}`,
           responseExtractor: passthrough,
           description: "Delete dataset",
+        },
+      },
+      executeActions: {
+        get_by_identifier: {
+          method: "GET",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/dataset/by-identifier/${encodeURIComponent(input.identifier as string)}`,
+          responseExtractor: passthrough,
+          actionDescription:
+            "Get dataset by its unique identifier slug (not UUID). Pass identifier via params.identifier.",
+          bodySchema: { description: "No body", fields: [] },
+        },
+        export: {
+          method: "GET",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/dataset/${input.dataset_id as string}/export`,
+          queryParams: { format: "format" },
+          defaultQueryParams: { format: "jsonl" },
+          responseExtractor: passthrough,
+          actionDescription:
+            "Export dataset as JSONL (harness-evals Golden format). Returns newline-delimited JSON.",
+          bodySchema: { description: "No body", fields: [] },
+        },
+        generate: {
+          method: "POST",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/dataset/${input.dataset_id as string}/generate`,
+          bodyBuilder: bodyFromInput,
+          bodySchema: generateDatasetItemsSchema,
+          responseExtractor: passthrough,
+          actionDescription:
+            "Generate synthetic dataset items using an LLM (async). " +
+            "Strategies: use_case (from description), rephrase (from seed_inputs), adversarial, complexity_ladder. " +
+            "Returns job_id — poll with poll_generate action.",
+        },
+        poll_generate: {
+          method: "GET",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/dataset/${input.dataset_id as string}/generate/${input.job_id as string}`,
+          responseExtractor: passthrough,
+          actionDescription:
+            "Poll generation job status. Pass dataset_id and job_id (from generate action response).",
+          bodySchema: { description: "No body", fields: [] },
         },
       },
     },
@@ -672,6 +770,25 @@ export const aiEvalsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           actionDescription: "Trigger an eval run (pipeline or CLI). Pass optional overrides in body.",
         },
+        import_yaml: {
+          method: "POST",
+          path: "",
+          pathBuilder: (input, config) => `${base(input, config)}/evals/import-yaml`,
+          bodyBuilder: bodyFromInput,
+          bodySchema: importEvalYamlSchema,
+          responseExtractor: passthrough,
+          actionDescription:
+            "Import a YAML document to create target, dataset, metric set, and eval in one call. Set dry_run=true to validate without creating. Set auto_run=true to trigger a run immediately.",
+        },
+        export_yaml: {
+          method: "GET",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/evals/${input.eval_id as string}/export-yaml`,
+          responseExtractor: passthrough,
+          actionDescription: "Export an eval and all referenced entities as a denormalized YAML document.",
+          bodySchema: { description: "No body", fields: [] },
+        },
       },
     },
     // --- Runs ---
@@ -684,6 +801,10 @@ export const aiEvalsToolset: ToolsetDefinition = {
       scopeOptional: true,
       headerBasedScoping: true,
       identifierFields: ["run_id"],
+      listFilterFields: [
+        { name: "eval_id", description: "Filter runs by evaluation UUID" },
+        { name: "status", description: "Filter by run status" },
+      ],
       relatedResources: [
         { resourceType: "eval_run_item", relationship: "contains", description: "Per-item results" },
       ],
@@ -692,9 +813,9 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "GET",
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/runs`,
-          queryParams: listQ,
+          queryParams: { ...listQ, eval_id: "eval_id", status: "status" },
           responseExtractor: aiEvalsListExtract,
-          description: "List runs in project",
+          description: "List runs in project (filterable by eval_id, status)",
         },
         get: {
           method: "GET",
@@ -859,6 +980,24 @@ export const aiEvalsToolset: ToolsetDefinition = {
           pathBuilder: (input, config) => `${base(input, config)}/metrics/${input.metric_id as string}`,
           responseExtractor: passthrough,
           description: "Delete metric",
+        },
+      },
+      executeActions: {
+        suggestions: {
+          method: "GET",
+          path: "",
+          pathBuilder: (input, config) => `${base(input, config)}/metrics/suggestions`,
+          queryParams: {
+            target_type: "target_type",
+            dataset_fields: "dataset_fields",
+            category: "category",
+          },
+          responseExtractor: passthrough,
+          actionDescription:
+            "Get metric suggestions based on target type, dataset fields, and category. " +
+            "Params: target_type (prompt|agent|precomputed), dataset_fields (comma-separated: context,expected_output,expected_tools), " +
+            "category (correctness|groundedness|safety|trajectory|performance). All optional.",
+          bodySchema: { description: "No body", fields: [] },
         },
       },
     },
@@ -1069,6 +1208,25 @@ export const aiEvalsToolset: ToolsetDefinition = {
           responseExtractor: aiEvalsArrayExtract,
           actionDescription: "Replace ordered suite members (body.entries)",
         },
+        import_yaml: {
+          method: "POST",
+          path: "",
+          pathBuilder: (input, config) => `${base(input, config)}/suites/import-yaml`,
+          bodyBuilder: bodyFromInput,
+          bodySchema: importSuiteYamlSchema,
+          responseExtractor: passthrough,
+          actionDescription:
+            "Import a YAML document to create a suite with member evaluations. Set dry_run=true to validate without creating.",
+        },
+        export_yaml: {
+          method: "GET",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/suites/${input.suite_id as string}/export-yaml`,
+          responseExtractor: passthrough,
+          actionDescription: "Export a suite and its member evaluations as a denormalized YAML document.",
+          bodySchema: { description: "No body", fields: [] },
+        },
       },
     },
     {
@@ -1214,6 +1372,16 @@ export const aiEvalsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           actionDescription: "Upload static target outputs (JSON body)",
         },
+        list_outputs: {
+          method: "GET",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/targets/${input.target_id as string}/outputs`,
+          queryParams: listQ,
+          responseExtractor: aiEvalsListExtract,
+          actionDescription: "List uploaded static target outputs (paginated).",
+          bodySchema: { description: "No body", fields: [] },
+        },
       },
     },
     {
@@ -1353,12 +1521,12 @@ export const aiEvalsToolset: ToolsetDefinition = {
     {
       resourceType: "eval_analytics",
       displayName: "AI Evals Analytics",
-      description: "Postgres-backed analytics summary for the project.",
+      description: "Postgres-backed analytics summary for the project. Singleton — no resource_id needed for get.",
       toolset: "ai-evals",
       scope: "project",
       scopeOptional: true,
       headerBasedScoping: true,
-      identifierFields: ["report_key"],
+      identifierFields: [],
       operations: {
         get: {
           method: "GET",
@@ -1374,12 +1542,12 @@ export const aiEvalsToolset: ToolsetDefinition = {
     {
       resourceType: "eval_git_settings",
       displayName: "AI Evals Git Settings",
-      description: "Git sync settings for the project (singleton).",
+      description: "Git sync settings for the project (singleton). No resource_id needed — one per project.",
       toolset: "ai-evals",
       scope: "project",
       scopeOptional: true,
       headerBasedScoping: true,
-      identifierFields: ["settings_id"],
+      identifierFields: [],
       operations: {
         get: {
           method: "GET",

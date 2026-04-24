@@ -296,4 +296,11 @@ export interface ToolsetDefinition {
   displayName: string;
   description: string;
   resources: ResourceDefinition[];
+  /**
+   * When true, this toolset is excluded by default (when HARNESS_TOOLSETS is
+   * unset). Users must explicitly list it in HARNESS_TOOLSETS to enable it.
+   * Useful for preview/experimental toolsets that shouldn't pollute the
+   * default resource list.
+   */
+  optIn?: boolean;
 }

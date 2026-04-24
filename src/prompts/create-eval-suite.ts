@@ -10,7 +10,7 @@ export function registerCreateEvalSuitePrompt(server: McpServer): void {
       argsSchema: {
         suite_name: z.string().describe("Name for the eval suite"),
         pass_strategy: z
-          .enum(["all_must_pass", "threshold"])
+          .enum(["all_must_pass", "weighted_threshold"])
           .describe("How the suite decides pass/fail")
           .optional(),
         goal: z.string().describe("What evaluations should be included and any ordering constraints").optional(),
@@ -26,14 +26,14 @@ export function registerCreateEvalSuitePrompt(server: McpServer): void {
 
 ## Suite
 - **Name**: ${suite_name}
-- **Pass strategy**: ${pass_strategy ?? "all_must_pass (default) or set pass_threshold for threshold strategy"}
+- **Pass strategy**: ${pass_strategy ?? "all_must_pass (default) or set pass_threshold for weighted_threshold strategy"}
 - **Context**: ${goal ?? "(none)"}
 
 ## Steps
 
 1. **List existing evaluations** — \`harness_list(resource_type="evaluation")\` — pick eval IDs to include.
 
-2. **Create the suite** — \`harness_create(resource_type="eval_suite", body={ name: "${suite_name}", pass_strategy: "all_must_pass" | "threshold", pass_threshold?: number })\`
+2. **Create the suite** — \`harness_create(resource_type="eval_suite", body={ name: "${suite_name}", pass_strategy: "all_must_pass" | "weighted_threshold", pass_threshold?: number })\`
 
 3. **Add members** (choose one pattern)
    - **Add one at a time**: \`harness_create(resource_type="eval_suite_evaluation", params={ suite_id: "<SUITE_ID>" }, body={ evaluation_id: "<EVAL_ID>", is_required: true })\`
