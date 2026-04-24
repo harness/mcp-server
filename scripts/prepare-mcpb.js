@@ -35,5 +35,8 @@ copyFileSync(join(root, "mcp-directory", "manifest.json"), join(outDir, "manifes
 
 run("npm", ["install", "--omit=dev", "--ignore-scripts", "--package-lock=false"], { cwd: outDir });
 
-console.error(`[mcpb] Prepared ${outDir}`);
-console.error("[mcpb] Archive this directory so icon.png and manifest.json are at the bundle root.");
+const mcpbPath = join(root, "mcp-server.mcpb");
+rmSync(mcpbPath, { force: true });
+run("zip", ["-r", mcpbPath, "."], { cwd: outDir });
+
+console.error(`[mcpb] Bundle created: ${mcpbPath}`);
