@@ -47,6 +47,26 @@ describe("P3-10: policy resource SCS enhancements", () => {
     expect(res.description).toContain("enforcement");
   });
 
+  // SSCA-6347 — policies use type='sbom_enforcement' (asymmetric with policy_set's 'sbom').
+  it("description documents the sbom_enforcement type filter for SBOM/SSCA policies", () => {
+    const res = findResource("policy");
+    expect(res.description).toContain("type='sbom_enforcement'");
+  });
+
+  it("list operation exposes the 'type' query param (required for SBOM-enforcement filtering)", () => {
+    const spec = getOp("policy", "list");
+    // Without this param wired, the agent cannot round-trip type='sbom_enforcement' to /pm/api/v1/policies.
+    expect(spec.queryParams).toBeDefined();
+    expect(spec.queryParams!.type).toBe("type");
+  });
+
+  it("list filter includes 'type' with sbom_enforcement guidance", () => {
+    const res = findResource("policy");
+    const typeFilter = res.listFilterFields!.find((f) => f.name === "type");
+    expect(typeFilter).toBeDefined();
+    expect(typeFilter!.description).toContain("sbom_enforcement");
+  });
+
   it("has searchAliases including SCS-specific terms", () => {
     const res = findResource("policy");
     expect(res.searchAliases).toBeDefined();
@@ -127,11 +147,26 @@ describe("P3-10: policy_set resource SCS enhancements", () => {
     expect(() => findResource("policy_set")).not.toThrow();
   });
 
-  it("description mentions SCS/SBOM enforcement and ssca_enforcement type", () => {
+  // SSCA-6347 regression — this test previously asserted the buggy value 'ssca_enforcement'
+  // which baked the routing bug into the contract. Now we assert the corrected guidance:
+  // policy sets for SBOM enforcement are filterable by type='sbom', and the description must
+  // actively warn against the wrong values the agent used to pass.
+  it("description mentions SCS/SBOM enforcement with the correct type='sbom' and warns against 'ssca_enforcement'/'sbom_enforcement'", () => {
     const res = findResource("policy_set");
     expect(res.description).toContain("SCS");
     expect(res.description).toContain("SBOM");
+    expect(res.description).toContain("type='sbom'");
+    // Explicit warning against the two wrong values AIDA kept using.
     expect(res.description).toContain("ssca_enforcement");
+    expect(res.description).toContain("sbom_enforcement");
+    expect(res.description).toMatch(/Do NOT pass type='sbom_enforcement' or type='ssca_enforcement'/);
+  });
+
+  it("description documents the policy-vs-policy_set type asymmetry", () => {
+    const res = findResource("policy_set");
+    // The asymmetry is the thing that bit us: sets use 'sbom', policies use 'sbom_enforcement'.
+    // If someone flattens these back to a single value, the SSCA-6347 bug returns.
+    expect(res.description).toMatch(/IMPORTANT TYPE ASYMMETRY/i);
   });
 
   it("description explains policy set enforcement purpose", () => {
@@ -192,6 +227,31 @@ describe("P3-10: policy_set resource SCS enhancements", () => {
     const filterNames = res.listFilterFields!.map((f) => f.name);
     expect(filterNames).toContain("type");
     expect(filterNames).toContain("action");
+  });
+
+  it("list filter 'type' documents the correct SBOM value and the two wrong ones", () => {
+    const res = findResource("policy_set");
+    const typeFilter = res.listFilterFields!.find((f) => f.name === "type");
+    expect(typeFilter).toBeDefined();
+    // Filter description must surface the correct value so LLM auto-completion points it at 'sbom'.
+    expect(typeFilter!.description).toContain("'sbom'");
+    expect(typeFilter!.description).toContain("NOT 'sbom_enforcement' or 'ssca_enforcement'");
+  });
+
+  it("list filter 'action' names the SBOM enforcement action", () => {
+    const res = findResource("policy_set");
+    const actionFilter = res.listFilterFields!.find((f) => f.name === "action");
+    expect(actionFilter).toBeDefined();
+    // The SBOM enforcement step binds with action='onstep' — same value demo-plan.md uses.
+    expect(actionFilter!.description).toContain("onstep");
+  });
+
+  it("relatedResources includes scs_bom_violation sibling so the violation → policy_set → policy chain is discoverable", () => {
+    const res = findResource("policy_set");
+    const bomRef = res.relatedResources!.find((rel) => rel.resourceType === "scs_bom_violation");
+    expect(bomRef).toBeDefined();
+    expect(bomRef!.relationship).toBe("sibling");
+    expect(bomRef!.description.length).toBeGreaterThan(0);
   });
 
   it("list operation uses correct OPA service path", () => {

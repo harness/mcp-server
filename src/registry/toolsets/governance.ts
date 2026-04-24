@@ -68,7 +68,10 @@ export const governanceToolset: ToolsetDefinition = {
       displayName: "OPA Policy",
       description: "OPA Rego policy for Harness governance. Supports full CRUD. "
         + "Use this for SCS/SBOM enforcement — create deny-list or allow-list policies that control which components are permitted in your supply chain. "
-        + "Policies are written in Rego and evaluated against SBOM components during enforcement.",
+        + "Policies are written in Rego and evaluated against SBOM components during enforcement. "
+        + "To list SBOM/SSCA-enforcement policies specifically, pass filter type='sbom_enforcement' "
+        + "(note: individual policies use 'sbom_enforcement' while the policy sets that contain them use type='sbom' — "
+        + "see the policy_set resource for details on this asymmetry).",
       searchAliases: ["opa policy", "rego policy", "deny list", "allow list", "sbom policy", "governance policy", "supply chain policy"],
       relatedResources: [
         { resourceType: "policy_set", relationship: "parent", description: "Group policies into policy sets with enforcement actions" },
@@ -81,6 +84,7 @@ export const governanceToolset: ToolsetDefinition = {
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/governance/policies/edit/{identifier}",
       listFilterFields: [
         { name: "search_term", description: "Filter policies by name or keyword" },
+        { name: "type", description: "Filter by policy entity type. For SBOM/SSCA enforcement use 'sbom_enforcement'. Other known values: pipeline, connector, service, environment, secret, template, infrastructure. Unknown values return an empty list rather than an error." },
         { name: "sort", description: "Sort field" },
         { name: "identifier_filter", description: "Filter by policy identifier" },
         { name: "exclude_rego", description: "Exclude rego source from list response", type: "boolean" },
@@ -95,6 +99,7 @@ export const governanceToolset: ToolsetDefinition = {
             page: "page",
             size: "per_page",
             sort: "sort",
+            type: "type",
             identifier_filter: "identifierFilter",
             exclude_rego: "excludeRegoFromResponse",
             include_policy_set_count: "includePolicySetCount",
@@ -140,14 +145,19 @@ export const governanceToolset: ToolsetDefinition = {
     {
       resourceType: "policy_set",
       displayName: "OPA Policy Set",
-      description: "Policy set grouping OPA policies with enforcement action and entity type. Supports full CRUD. "
-        + "For SCS/SBOM enforcement, create a policy set with type 'ssca_enforcement' to apply deny-list or allow-list rules during artifact scans. "
-        + "Policy sets control when and how policies are evaluated (on pipeline run, on save, etc.).",
+      description: "Policy set grouping OPA policies with an enforcement action and an entity type. Supports full CRUD. "
+        + "For SCS/SBOM enforcement, use filter type='sbom' to list the policy sets that apply deny-list or allow-list rules during artifact scans — "
+        + "the SBOM enforcement step (e.g. action='onstep') binds these sets to the artifact pipeline. "
+        + "IMPORTANT TYPE ASYMMETRY: policy sets use type='sbom', while the individual policies they contain use type='sbom_enforcement'. "
+        + "Do NOT pass type='sbom_enforcement' or type='ssca_enforcement' when listing policy sets — both return an empty result even when "
+        + "SBOM policy sets exist in the project. Other supported types: pipeline, connector, service, environment, secret, template, infrastructure. "
+        + "Policy sets control when and how policies are evaluated (on pipeline run, on save, on step, etc.).",
       searchAliases: ["policy set", "enforcement rules", "sbom enforcement", "supply chain enforcement", "governance rules"],
       relatedResources: [
-        { resourceType: "policy", relationship: "child", description: "Individual policies contained in this set" },
+        { resourceType: "policy", relationship: "child", description: "Individual policies contained in this set (use type='sbom_enforcement' to list SBOM policies)" },
         { resourceType: "policy_evaluation", relationship: "child", description: "Evaluation results for this policy set" },
         { resourceType: "scs_compliance_result", relationship: "sibling", description: "SCS compliance results showing enforcement outcomes" },
+        { resourceType: "scs_bom_violation", relationship: "sibling", description: "BOM enforcement violations — each violation references the policy set identifier that fired it" },
       ],
       toolset: "governance",
       scope: "project",
@@ -155,8 +165,8 @@ export const governanceToolset: ToolsetDefinition = {
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/governance/policy-sets/{identifier}",
       listFilterFields: [
         { name: "search_term", description: "Filter policy sets by name or keyword" },
-        { name: "type", description: "Filter by entity type (pipeline, connector, service, environment, etc.)" },
-        { name: "action", description: "Filter by enforcement action (onrun, onsave, onpush, etc.)" },
+        { name: "type", description: "Filter by policy-set entity type. For SBOM/SSCA enforcement use 'sbom' (NOT 'sbom_enforcement' or 'ssca_enforcement' — those are valid only for the policy resource and return empty on policy sets). Other known values: pipeline, connector, service, environment, secret, template, infrastructure." },
+        { name: "action", description: "Filter by enforcement action. SBOM enforcement uses 'onstep'. Other values: onrun (pipeline), onsave, onpush, onstepstart." },
         { name: "sort", description: "Sort field" },
         { name: "identifier_filter", description: "Filter by policy set identifier" },
       ],
