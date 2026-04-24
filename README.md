@@ -84,7 +84,7 @@ pnpm inspect            # Test with MCP Inspector
 
 ### Anthropic MCP Directory bundle
 
-The MCPB bundle manifest and icon live in `[mcp-directory/](mcp-directory/)`. Copy those files to the bundle root after `pnpm build` so the generated archive contains `manifest.json`, `icon.png`, `build/`, `package.json`, and production `node_modules/`.
+The MCPB bundle manifest lives in [`mcp-directory/`](mcp-directory/), and the bundle icon is tracked at [`icon.png`](icon.png) in the repository root. Copy `mcp-directory/manifest.json` to the bundle root after `pnpm build` so the generated archive contains root-level `manifest.json`, `icon.png`, `build/`, `package.json`, and production `node_modules/`.
 
 ### CLI Usage
 
