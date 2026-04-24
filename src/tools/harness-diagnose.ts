@@ -114,7 +114,7 @@ export function registerDiagnoseTool(server: McpServer, registry: Registry, clie
             }
 
             if (archSvg) {
-              return mixedResult(result, archSvg);
+              return await mixedResult(result, archSvg);
             }
 
             // Fallback: timeline or flow from execution data
@@ -124,7 +124,7 @@ export function registerDiagnoseTool(server: McpServer, registry: Registry, clie
               const svg = visualType === "flow"
                 ? renderStageFlowSvg(summaryData, { width: visualWidth })
                 : renderTimelineSvg(summaryData, { width: visualWidth, showSteps: hasSteps });
-              return mixedResult(result, svg);
+              return await mixedResult(result, svg);
             }
           } catch (err) {
             logDiag.warn("SVG rendering failed, returning text-only", { error: String(err) });

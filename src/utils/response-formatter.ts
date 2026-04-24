@@ -31,8 +31,8 @@ export function errorResult(message: string): ToolResult {
   };
 }
 
-export function imageResult(svgString: string): ToolResult {
-  const data = svgToPngBase64(svgString);
+export async function imageResult(svgString: string): Promise<ToolResult> {
+  const data = await svgToPngBase64(svgString);
   return {
     content: [{ type: "image", data, mimeType: "image/png" }],
   };
@@ -43,9 +43,9 @@ export interface MixedResultOptions {
   scale?: number;
 }
 
-export function mixedResult(data: unknown, svgString: string, options?: MixedResultOptions): ToolResult {
+export async function mixedResult(data: unknown, svgString: string, options?: MixedResultOptions): Promise<ToolResult> {
   const scale = options?.scale ?? 3;
-  const imageData = svgToPngBase64(svgString, { scale });
+  const imageData = await svgToPngBase64(svgString, { scale });
   return {
     content: [
       { type: "text", text: JSON.stringify(data) },

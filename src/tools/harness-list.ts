@@ -82,7 +82,7 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
               const visual = renderListVisual(resourceType, items, vt);
               if (visual) {
                 (result as Record<string, unknown>).analysis = visual.analysis;
-                return mixedResult(result, visual.svg);
+                return await mixedResult(result, visual.svg);
               }
             } catch (err) {
               log.warn("Visual rendering failed, returning text-only", { error: String(err) });

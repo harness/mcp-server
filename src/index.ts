@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { randomUUID } from "node:crypto";
+import { appendFileSync } from "node:fs";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -100,8 +101,7 @@ function logToFile(message: string, data?: Record<string, unknown>): void {
     const logPath = process.env.HARNESS_MCP_LOG_FILE
       ?? (process.env.HOME ? `${process.env.HOME}/.claude/harness-mcp.log` : undefined);
     if (logPath) {
-      // Sync write — process may exit immediately after this
-      require("node:fs").appendFileSync(logPath, entry + "\n");
+      appendFileSync(logPath, entry + "\n");
     }
     // Also try stderr in case it's still alive
     console.error(entry);

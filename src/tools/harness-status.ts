@@ -217,7 +217,7 @@ export function registerStatusTool(
             const healthData = toProjectHealthData(status, orgId, projectId);
             if (healthData) {
               const svg = renderStatusSummarySvg(healthData);
-              return mixedResult(status, svg);
+              return await mixedResult(status, svg);
             }
           } catch (err) {
             log.warn("SVG rendering failed, returning text-only", { error: String(err) });
