@@ -43,10 +43,12 @@
   },
   "homepage": "https://github.com/harness/mcp-server#readme",
   "dependencies": {
+    "@hono/node-server": "^2.0.0",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@resvg/resvg-js": "^2.6.2",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
+    "hono": "^4.12.15",
     "jsonwebtoken": "^9.0.3",
     "yaml": "^2.8.3",
     "zod": "^4.0.0"

@@ -3,7 +3,7 @@ build/
 .env
 *.tgz
 *.mcpb
-manifest.json
+/manifest.json
 .DS_Store
 
 # Editor files

@@ -9,6 +9,11 @@ const booleanFromEnv = z
   .union([z.boolean(), z.string(), z.undefined()])
   .transform((val) => typeof val === "string" && ["true", "1", "yes"].includes(val.toLowerCase()));
 
+const emptyStringAsUndefined = (val: unknown): unknown => val === "" ? undefined : val;
+const optionalStringFromEnv = z.preprocess(emptyStringAsUndefined, z.string().optional());
+const urlFromEnv = (defaultValue: string) =>
+  z.preprocess(emptyStringAsUndefined, z.string().url().default(defaultValue));
+
 /**
  * Extract the account ID from a Harness PAT token.
  * PAT format: pat.<accountId>.<tokenId>.<secret>
@@ -25,27 +30,27 @@ export function extractAccountIdFromToken(apiKey: string): string | undefined {
 
 const RawConfigSchema = z.object({
   HARNESS_API_KEY: z.string().min(1, "HARNESS_API_KEY is required"),
-  HARNESS_ACCOUNT_ID: z.string().optional(),
-  HARNESS_BASE_URL: z.string().url().default("https://app.harness.io"),
+  HARNESS_ACCOUNT_ID: optionalStringFromEnv,
+  HARNESS_BASE_URL: urlFromEnv("https://app.harness.io"),
   // New names (preferred)
-  HARNESS_ORG: z.string().optional(),
-  HARNESS_PROJECT: z.string().optional(),
+  HARNESS_ORG: optionalStringFromEnv,
+  HARNESS_PROJECT: optionalStringFromEnv,
   // Deprecated names (backward compat)
-  HARNESS_DEFAULT_ORG_ID: z.string().optional(),
-  HARNESS_DEFAULT_PROJECT_ID: z.string().optional(),
+  HARNESS_DEFAULT_ORG_ID: optionalStringFromEnv,
+  HARNESS_DEFAULT_PROJECT_ID: optionalStringFromEnv,
   HARNESS_API_TIMEOUT_MS: z.coerce.number().default(30000),
   HARNESS_MAX_RETRIES: z.coerce.number().default(3),
   LOG_LEVEL: z.preprocess(
     (val) => (val === "" ? undefined : val),
     z.enum(["debug", "info", "warn", "error"]).default("info"),
   ),
-  HARNESS_TOOLSETS: z.string().optional(),
+  HARNESS_TOOLSETS: optionalStringFromEnv,
   HARNESS_MAX_BODY_SIZE_MB: z.coerce.number().default(10),
   HARNESS_RATE_LIMIT_RPS: z.coerce.number().default(10),
   HARNESS_READ_ONLY: booleanFromEnv.default(false),
   HARNESS_SKIP_ELICITATION: booleanFromEnv.default(false),
   HARNESS_ALLOW_HTTP: booleanFromEnv.default(false),
-  HARNESS_FME_BASE_URL: z.string().url().default("https://api.split.io"),
+  HARNESS_FME_BASE_URL: urlFromEnv("https://api.split.io"),
   HARNESS_PIPELINE_VERSION: z.enum(["0", "1"]).optional(),
 });
 
