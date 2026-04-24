@@ -1396,7 +1396,7 @@ Available toolset names:
 |---------|---------------|
 | `platform` | organization, project |
 | `pipelines` | pipeline, pipeline_v1, execution, trigger, pipeline_summary, input_set, approval_instance |
-| `agent-pipelines` | agent, agent_run |
+| `agents` | agent, agent_run |
 | `services` | service |
 | `environments` | environment |
 | `connectors` | connector, connector_catalogue |
