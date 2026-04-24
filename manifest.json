@@ -1,0 +1,100 @@
+{
+  "manifest_version": "0.3",
+  "name": "harness-mcp-server",
+  "display_name": "Harness MCP Server",
+  "version": "0.9.3",
+  "description": "Connect AI agents to Harness for CI/CD, code repositories, pull requests, services, environments, and feature flags.",
+  "long_description": "The Harness MCP Server gives MCP-compatible clients access to Harness platform workflows through consolidated tools, resources, and prompts. It supports local stdio usage and can be bundled as a Node-based MCPB extension.",
+  "author": {
+    "name": "Harness Inc.",
+    "url": "https://www.harness.io"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/harness/mcp-server.git"
+  },
+  "homepage": "https://github.com/harness/mcp-server#readme",
+  "documentation": "https://github.com/harness/mcp-server#readme",
+  "support": "https://github.com/harness/mcp-server/issues",
+  "icon": "icon.png",
+  "license": "MIT",
+  "privacy_policies": [
+    "https://www.harness.io/privacy",
+    "https://www.split.io/legal/privacy-policy"
+  ],
+  "keywords": [
+    "harness",
+    "mcp",
+    "ci-cd",
+    "devops",
+    "feature-flags"
+  ],
+  "tools_generated": true,
+  "prompts_generated": true,
+  "server": {
+    "type": "node",
+    "entry_point": "build/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/build/index.js",
+        "stdio"
+      ],
+      "env": {
+        "HARNESS_API_KEY": "${user_config.HARNESS_API_KEY}",
+        "HARNESS_ACCOUNT_ID": "${user_config.HARNESS_ACCOUNT_ID}",
+        "HARNESS_ORG": "${user_config.HARNESS_ORG}",
+        "HARNESS_PROJECT": "${user_config.HARNESS_PROJECT}",
+        "HARNESS_BASE_URL": "${user_config.HARNESS_BASE_URL}"
+      }
+    }
+  },
+  "compatibility": {
+    "platforms": [
+      "darwin",
+      "win32",
+      "linux"
+    ],
+    "runtimes": {
+      "node": ">=20.0.0"
+    }
+  },
+  "user_config": {
+    "HARNESS_API_KEY": {
+      "type": "string",
+      "title": "Harness API Key",
+      "description": "Personal access token or service account token used to authenticate with Harness.",
+      "required": true,
+      "sensitive": true
+    },
+    "HARNESS_ACCOUNT_ID": {
+      "type": "string",
+      "title": "Harness Account ID",
+      "description": "Harness account identifier. Optional when using a PAT because the server can extract the account ID from pat.<accountId>.<tokenId>.<secret>.",
+      "required": false,
+      "sensitive": false
+    },
+    "HARNESS_ORG": {
+      "type": "string",
+      "title": "Default Harness Organization",
+      "description": "Default Harness organization identifier. If omitted, the server uses default.",
+      "required": false,
+      "sensitive": false
+    },
+    "HARNESS_PROJECT": {
+      "type": "string",
+      "title": "Default Harness Project",
+      "description": "Default Harness project identifier for project-scoped operations.",
+      "required": false,
+      "sensitive": false
+    },
+    "HARNESS_BASE_URL": {
+      "type": "string",
+      "title": "Harness Base URL",
+      "description": "Harness base URL. Use the default for Harness SaaS unless you run a self-managed Harness installation.",
+      "default": "https://app.harness.io",
+      "required": false,
+      "sensitive": false
+    }
+  }
+}
