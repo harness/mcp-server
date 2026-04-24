@@ -16,6 +16,7 @@
     "start": "node build/index.js stdio",
     "start:http": "node build/index.js http",
     "inspect": "npx @modelcontextprotocol/inspector node build/index.js stdio",
+    "prepare:mcpb": "node scripts/prepare-mcpb.js",
     "typecheck": "tsc --noEmit",
     "sync-schemas": "node scripts/sync-schemas.js",
     "test": "vitest run",
