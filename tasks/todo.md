@@ -107,3 +107,14 @@
 - Aligned README and CONTRIBUTING so public licensing guidance matches the new MIT license.
 - Verified that remaining Apache mentions are limited to task history and test fixture/sample data, not the repository's project licensing.
 - Verified the change set with `pnpm typecheck` and `pnpm test` after installing dependencies from the existing lockfile.
+
+## Critical Bug Inspection (2026-04-25)
+- [x] Inspect recent commits for high-severity behavioral regressions
+- [x] Identify startup regression from renamed `agent-pipelines` toolset
+- [x] Add backward-compatible `HARNESS_TOOLSETS` alias handling
+- [x] Add registry regression tests for explicit and additive alias syntax
+- [ ] Run focused tests and typecheck
+
+### Review
+- Found that users with existing `HARNESS_TOOLSETS=agent-pipelines` or `+agent-pipelines` configs would fail server startup after the toolset was renamed to `agents`.
+- Added a narrow parser alias so legacy configs resolve to the current `agents` toolset without reintroducing the old public name internally.
