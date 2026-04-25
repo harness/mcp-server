@@ -75,6 +75,13 @@ describe("Registry", () => {
       expect(desc.total_toolsets).toBe(3);
     });
 
+    it("accepts legacy agent-pipelines toolset name as an alias for agents", () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "agent-pipelines" }));
+      const desc = registry.describe() as { total_toolsets: number };
+      expect(desc.total_toolsets).toBe(1);
+      expect(registry.getResource("agent").toolset).toBe("agents");
+    });
+
     it("excludes opt-in toolsets by default", () => {
       const registry = new Registry(makeConfig());
       expect(() => registry.getResource("eval_dataset")).toThrow(/Unknown resource_type/);
@@ -88,6 +95,13 @@ describe("Registry", () => {
       // ai-evals resource is accessible
       const res = registry.getResource("eval_dataset");
       expect(res.resourceType).toBe("eval_dataset");
+    });
+
+    it("accepts legacy agent-pipelines alias with + prefix", () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "+agent-pipelines" }));
+      const desc = registry.describe() as { total_toolsets: number };
+      expect(desc.total_toolsets).toBeGreaterThan(20);
+      expect(registry.getResource("agent").toolset).toBe("agents");
     });
 
     it("+ prefix preserves default toolsets", () => {

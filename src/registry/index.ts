@@ -44,6 +44,11 @@ const log = createLogger("registry");
 /** Keys under which different Harness APIs return list arrays. */
 const LIST_ARRAY_KEYS = ["items", "features", "content", "data", "objects"];
 
+/** Backward-compatible aliases for renamed public toolset names. */
+const TOOLSET_ALIASES: Record<string, string> = {
+  "agent-pipelines": "agents",
+};
+
 /** All available toolsets */
 const ALL_TOOLSETS: ToolsetDefinition[] = [
   pipelinesToolset,
@@ -158,9 +163,10 @@ export class Registry {
 
       for (const token of parsed) {
         const op = token[0];
-        const name = (op === "+" || op === "-") ? token.slice(1) : token;
+        const rawName = (op === "+" || op === "-") ? token.slice(1) : token;
+        const name = TOOLSET_ALIASES[rawName] ?? rawName;
         if (!validNames.has(name)) {
-          invalid.push(name);
+          invalid.push(rawName);
           continue;
         }
         if (op === "+") {
@@ -186,11 +192,12 @@ export class Registry {
     const valid: string[] = [];
     const invalid: string[] = [];
 
-    for (const name of parsed) {
+    for (const rawName of parsed) {
+      const name = TOOLSET_ALIASES[rawName] ?? rawName;
       if (validNames.has(name)) {
         valid.push(name);
       } else {
-        invalid.push(name);
+        invalid.push(rawName);
       }
     }
 
