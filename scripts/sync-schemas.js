@@ -1,14 +1,25 @@
 import fs from "fs";
 import path from "path";
 
-const SCHEMAS = ["pipeline", "template", "trigger"];
+/** Fetched from harness/harness-schema (v0 JSON). */
+const REMOTE_SCHEMAS = ["pipeline", "template", "trigger"];
+
+/**
+ * MCP-local schemas not published under harness-schema v0.
+ * Kept in-repo and wired into the index so VALID_SCHEMAS / schema:/// URIs stay stable.
+ */
+const LOCAL_SCHEMA_ENTRIES = [
+  { exportKey: `"pipeline_v1"`, importAs: "pipelineV1", fileBase: "pipeline-v1" },
+  { exportKey: `"agent-pipeline"`, importAs: "agentPipeline", fileBase: "agent-pipeline" },
+];
+
 const BASE_URL = "https://raw.githubusercontent.com/harness/harness-schema/main/v0";
 
 async function main() {
   const targetDir = "src/data/schemas";
   fs.mkdirSync(targetDir, { recursive: true });
 
-  for (const name of SCHEMAS) {
+  for (const name of REMOTE_SCHEMAS) {
     console.log(`Downloading ${name} schema...`);
     const res = await fetch(`${BASE_URL}/${name}.json`);
     if (!res.ok) {
@@ -27,12 +38,23 @@ async function main() {
     console.log(`Saved ${filePath}`);
   }
 
-  // Generate index.ts
+  // Generate index.ts (remote + local-only schema exports)
+  const remoteImports = REMOTE_SCHEMAS.map((name) => `import ${name} from "./${name}.js";`).join("\n");
+  const localImports = LOCAL_SCHEMA_ENTRIES.map(
+    (e) => `import ${e.importAs} from "./${e.fileBase}.js";`
+  ).join("\n");
+  const remoteProps = REMOTE_SCHEMAS.map((name) => `  ${name},`).join("\n");
+  const localProps = LOCAL_SCHEMA_ENTRIES.map(
+    (e) => `  ${e.exportKey}: ${e.importAs},`
+  ).join("\n");
+
   const indexContent = `// Auto-generated index of schemas
-${SCHEMAS.map(name => `import ${name} from "./${name}.js";`).join("\n")}
+${remoteImports}
+${localImports}
 
 export const SCHEMAS = {
-${SCHEMAS.map(name => `  ${name},`).join("\n")}
+${remoteProps}
+${localProps}
 } as const;
 
 export const VALID_SCHEMAS = Object.keys(SCHEMAS) as (keyof typeof SCHEMAS)[];
