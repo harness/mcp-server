@@ -137,7 +137,6 @@ export const dbopsToolset: ToolsetDefinition = {
 
     // ── Default LLM Pipeline ─────────────────────────────────────────────
     // NOTE: This endpoint is marked x-internal in the DBOPS OpenAPI spec.
-    // Confirm with the DBOPS team that it is safe to call via the agent.
     // The response 'metadata' map is expected to contain the pipeline identifier
     // needed for Accept & Commit — verify what key it uses (e.g. 'pipelineIdentifier').
     {
@@ -147,8 +146,7 @@ export const dbopsToolset: ToolsetDefinition = {
         "Get the default Harness pipeline configured for LLM changeset authoring " +
         "for a specific schema + instance combination. Used by the changeset skill " +
         "during Accept & Commit to find which pipeline to execute. " +
-        "IMPORTANT: This is an x-internal endpoint — confirm with the DBOPS team " +
-        "that it is accessible via the agent.",
+        "IMPORTANT: This is an x-internal endpoint",
       toolset: "dbops",
       scope: "project",
       scopeOptional: true,
