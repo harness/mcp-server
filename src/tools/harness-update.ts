@@ -8,16 +8,17 @@ import { logAudit } from "../utils/logger.js";
 import { confirmViaElicitation } from "../utils/elicitation.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, isRecord, coerceRecord } from "../utils/type-guards.js";
+import { resourceTypeSchema } from "./input-schemas.js";
 
 export function registerUpdateTool(server: McpServer, registry: Registry, client: HarnessClient): void {
-  const updatableTypes = registry.getTypesForOperation("update") as [string, ...string[]];
+  const updatableTypes = registry.getTypesForOperation("update");
 
   server.registerTool(
     "harness_update",
     {
       description: "Update an existing Harness resource. For pipelines/input sets: pass body as a YAML string directly (recommended for complex definitions), or use body.yamlPipeline/body.pipeline. You can pass a Harness URL to auto-extract identifiers. Response includes openInHarness link to the updated resource when applicable.",
       inputSchema: {
-        resource_type: z.enum(updatableTypes).describe("The type of resource to update"),
+        resource_type: resourceTypeSchema(updatableTypes, "The type of resource to update"),
         resource_id: z.string().describe("The identifier of the resource to update"),
         url: z.string().describe("A Harness UI URL — org, project, resource type, and ID are extracted automatically").optional(),
         body: z.union([

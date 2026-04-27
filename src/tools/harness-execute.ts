@@ -11,18 +11,22 @@ import { asRecord, asString, coerceRecord } from "../utils/type-guards.js";
 import { isFlatKeyValueInputs, isResolvableInputs, flattenInputs, resolveRuntimeInputs, type ResolutionResult } from "../utils/runtime-input-resolver.js";
 import { applyInputExpansions } from "../utils/input-expander.js";
 import { materializeInputSetsToRuntimeYaml } from "../utils/materialize-input-sets.js";
+import { resourceTypeSchema } from "./input-schemas.js";
 
 const log = createLogger("execute");
 
 export function registerExecuteTool(server: McpServer, registry: Registry, client: HarnessClient): void {
-  const executableTypes = registry.getTypesWithExecuteActions() as [string, ...string[]];
+  const executableTypes = registry.getTypesWithExecuteActions();
 
   server.registerTool(
     "harness_execute",
     {
       description: "Execute an action on a Harness resource: run/retry/interrupt pipelines, kill/restore FME feature flags, test connectors, sync GitOps apps, run chaos experiments. You can pass a Harness URL to auto-extract identifiers.",
       inputSchema: {
-        resource_type: z.enum(executableTypes).describe("Resource type with executable actions. Auto-detected from url.").optional(),
+        resource_type: resourceTypeSchema(
+          executableTypes,
+          "Resource type with executable actions. Auto-detected from url.",
+        ).optional(),
         url: z.string().describe("Harness UI URL — auto-extracts org, project, type, and ID").optional(),
         action: z.string().describe("Action to execute (e.g. run, retry, interrupt, toggle, test_connection, sync)"),
         resource_id: z.string().describe("Primary resource identifier").optional(),

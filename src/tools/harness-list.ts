@@ -10,6 +10,7 @@ import { asString, isRecord, coerceRecord } from "../utils/type-guards.js";
 import { renderListVisual } from "../utils/svg/list-visuals.js";
 import type { ListVisualType } from "../utils/svg/list-visuals.js";
 import { createLogger } from "../utils/logger.js";
+import { resourceTypeSchema } from "./input-schemas.js";
 
 const log = createLogger("list");
 
@@ -20,14 +21,14 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
     ? `Resource-specific filters as key-value pairs. Available keys across enabled resource types: ${allFilterNames.join(", ")}. Call harness_describe for filters available on a specific resource_type.`
     : "Resource-specific filters as key-value pairs. Call harness_describe for available filters per resource_type.";
 
-  const listableTypes = registry.getTypesForOperation("list") as [string, ...string[]];
+  const listableTypes = registry.getTypesForOperation("list");
 
   server.registerTool(
     "harness_list",
     {
       description: "List Harness resources with filtering and pagination. Accepts a Harness URL to auto-extract scope.",
       inputSchema: {
-        resource_type: z.enum(listableTypes).describe("Resource type to list. Auto-detected from url.").optional(),
+        resource_type: resourceTypeSchema(listableTypes, "Resource type to list. Auto-detected from url.").optional(),
         url: z.string().describe("Harness UI URL — auto-extracts org, project, and type").optional(),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),

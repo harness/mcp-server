@@ -3,6 +3,7 @@ import { Registry } from "../../src/registry/index.js";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import { HarnessApiError } from "../../src/utils/errors.js";
+import { registerAllTools } from "../../src/tools/index.js";
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -143,6 +144,21 @@ describe("Registry", () => {
       expect(desc.total_toolsets).toBe(2);
       const ds = registry.getResource("eval_dataset");
       expect(ds.resourceType).toBe("eval_dataset");
+    });
+
+    it("registers tools when enabled toolsets have no resources for some operations", () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "logs" }));
+      const server = {
+        registerTool: vi.fn(),
+      };
+
+      expect(() => registerAllTools(
+        server as never,
+        registry,
+        makeClient(),
+        makeConfig({ HARNESS_TOOLSETS: "logs" }),
+      )).not.toThrow();
+      expect(server.registerTool).toHaveBeenCalled();
     });
   });
 
