@@ -124,10 +124,10 @@
 - [x] Trace account ID resolution through registry dispatch and client request paths
 - [x] Route resolved account IDs into path builders, custom scope params, and body injection
 - [x] Add regression tests for resolver-backed account ID propagation
-- [ ] Run focused tests and typecheck
-- [ ] Commit and push the fix
+- [x] Run focused tests and typecheck
+- [x] Commit and push the fix
 
 ### Review
 - Found that resolver-aware deployments used the resolved account ID for client query params and deep links, but registry request assembly still passed static config into HAR path builders, custom account scope params, and accountIdentifier body injection.
-- Updated registry dispatch to use one resolved account ID consistently across path builders, custom account params, body injection, and generated deep links.
-- Verification pending dependency install; initial focused test command was blocked by missing `node_modules`.
+- Updated registry dispatch to use one resolved account ID consistently across path builders, custom account params, body injection, and generated deep links; aligned `Harness-Account` headers with the client resolver.
+- Verified with `pnpm test tests/registry/registry.test.ts tests/client/harness-client.test.ts` and `pnpm typecheck`.

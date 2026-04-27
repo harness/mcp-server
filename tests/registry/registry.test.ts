@@ -472,7 +472,7 @@ describe("Registry", () => {
   describe("resolved account ID propagation", () => {
     it("passes the resolved account ID to pathBuilder and deep links", async () => {
       const mockRequest = vi.fn().mockResolvedValue({
-        registries: [{ identifier: "reg1", name: "reg1" }],
+        data: { registries: [{ identifier: "reg1", name: "reg1" }] },
       });
       const client = makeClient(mockRequest);
       const registry = new Registry(
@@ -483,11 +483,11 @@ describe("Registry", () => {
       const result = (await registry.dispatch(client, "registry", "list", {
         org_id: "org1",
         project_id: "proj1",
-      })) as { registries: Array<Record<string, unknown>> };
+      })) as { items: Array<Record<string, unknown>> };
 
       const call = mockRequest.mock.calls[0][0];
       expect(call.path).toBe("/har/api/v1/spaces/resolved-account/org1/proj1/+/registries");
-      expect(result.registries[0].openInHarness).toContain("/ng/account/resolved-account/");
+      expect(result.items[0].openInHarness).toContain("/ng/account/resolved-account/");
     });
 
     it("uses the resolved account ID for custom account scope params", async () => {
