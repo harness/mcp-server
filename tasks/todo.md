@@ -119,3 +119,15 @@
 - Found that users with existing `HARNESS_TOOLSETS=agent-pipelines` or `+agent-pipelines` configs would fail server startup after the toolset was renamed to `agents`.
 - Added a narrow parser alias so legacy configs resolve to the current `agents` toolset without reintroducing the old public name internally.
 - Verified with `pnpm test tests/registry/registry.test.ts` and `pnpm typecheck`.
+
+## Documentation Alignment Automation (2026-04-27)
+- [x] Audit recent registry/config changes against public docs
+- [x] Align README tool counts and pipeline version semantics
+- [x] Refresh `.env.example` with current operational config
+- [x] Run docs consistency checks
+- [ ] Commit and push docs-only changes
+
+### Review
+- README now matches `src/tools/index.ts` with 11 generic tools and documents that `HARNESS_PIPELINE_VERSION` selects either `pipeline` or `pipeline_v1`, not both.
+- HTTP transport docs now mention the per-session `x-harness-pipeline-version` initialize header from `src/index.ts`.
+- `.env.example` now covers operational config from `src/config.ts` and clarifies default vs opt-in toolset filtering, including the legacy `agent-pipelines` alias.
