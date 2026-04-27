@@ -469,6 +469,62 @@ describe("Registry", () => {
     });
   });
 
+  describe("resolved account ID propagation", () => {
+    it("passes the resolved account ID to pathBuilder and deep links", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        registries: [{ identifier: "reg1", name: "reg1" }],
+      });
+      const client = makeClient(mockRequest);
+      const registry = new Registry(
+        makeConfig({ HARNESS_TOOLSETS: "registries", HARNESS_ACCOUNT_ID: "static-account" }),
+        { accountIdResolver: () => "resolved-account" },
+      );
+
+      const result = (await registry.dispatch(client, "registry", "list", {
+        org_id: "org1",
+        project_id: "proj1",
+      })) as { registries: Array<Record<string, unknown>> };
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/har/api/v1/spaces/resolved-account/org1/proj1/+/registries");
+      expect(result.registries[0].openInHarness).toContain("/ng/account/resolved-account/");
+    });
+
+    it("uses the resolved account ID for custom account scope params", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: [] });
+      const client = makeClient(mockRequest);
+      const registry = new Registry(
+        makeConfig({ HARNESS_TOOLSETS: "sto", HARNESS_ACCOUNT_ID: "static-account" }),
+        { accountIdResolver: () => "resolved-account" },
+      );
+
+      await registry.dispatch(client, "security_issue", "list", {
+        org_id: "org1",
+        project_id: "proj1",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params.accountId).toBe("resolved-account");
+    });
+
+    it("uses the resolved account ID when injecting accountIdentifier into request bodies", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ applications: [] });
+      const client = makeClient(mockRequest);
+      const registry = new Registry(
+        makeConfig({ HARNESS_TOOLSETS: "gitops", HARNESS_ACCOUNT_ID: "static-account" }),
+        { accountIdResolver: () => "resolved-account" },
+      );
+
+      await registry.dispatch(client, "gitops_application", "list", {
+        org_id: "org1",
+        project_id: "proj1",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.accountIdentifier).toBe("resolved-account");
+    });
+  });
+
   describe("read-only mode", () => {
     let registry: Registry;
     beforeEach(() => {

@@ -119,3 +119,15 @@
 - Found that users with existing `HARNESS_TOOLSETS=agent-pipelines` or `+agent-pipelines` configs would fail server startup after the toolset was renamed to `agents`.
 - Added a narrow parser alias so legacy configs resolve to the current `agents` toolset without reintroducing the old public name internally.
 - Verified with `pnpm test tests/registry/registry.test.ts` and `pnpm typecheck`.
+
+## Resolved Account ID Scoping Fix (2026-04-27)
+- [x] Trace account ID resolution through registry dispatch and client request paths
+- [x] Route resolved account IDs into path builders, custom scope params, and body injection
+- [x] Add regression tests for resolver-backed account ID propagation
+- [ ] Run focused tests and typecheck
+- [ ] Commit and push the fix
+
+### Review
+- Found that resolver-aware deployments used the resolved account ID for client query params and deep links, but registry request assembly still passed static config into HAR path builders, custom account scope params, and accountIdentifier body injection.
+- Updated registry dispatch to use one resolved account ID consistently across path builders, custom account params, body injection, and generated deep links.
+- Verification pending dependency install; initial focused test command was blocked by missing `node_modules`.
