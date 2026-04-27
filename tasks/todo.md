@@ -121,11 +121,14 @@
 - Verified with `pnpm test tests/registry/registry.test.ts` and `pnpm typecheck`.
 
 ## Critical Bug Inspection (2026-04-27)
-- [ ] Inspect recent commits for high-severity behavioral regressions
-- [ ] Reproduce filtered-toolset startup crash for operation-less dynamic enums
-- [ ] Add minimal helper so disabled operations accept no resource types without startup failure
-- [ ] Add focused regression coverage
-- [ ] Run focused tests and typecheck
+- [x] Inspect recent commits for high-severity behavioral regressions
+- [x] Reproduce filtered-toolset startup crash for operation-less dynamic enums
+- [x] Add minimal helper so disabled operations accept no resource types without startup failure
+- [x] Add focused regression coverage
+- [x] Run focused tests, typecheck, full tests, build, and startup probe
 
 ### Review
-- Pending.
+- Found that narrow `HARNESS_TOOLSETS` selections such as `logs` could leave list/create/update/delete/execute resource type arrays empty. Tool registration cast those arrays to non-empty tuples for `z.enum(...)`, which could throw during MCP startup before the server became available.
+- Added a shared `resourceTypeSchema` helper that preserves enum validation when resource types exist and uses a non-throwing schema that rejects all values when none support the operation.
+- Added a regression test that registers every MCP tool with `HARNESS_TOOLSETS=logs`.
+- Verified with `pnpm test tests/registry/registry.test.ts`, `pnpm typecheck`, `pnpm test`, `pnpm build`, and `HARNESS_API_KEY=pat.test-account.token.secret HARNESS_TOOLSETS=logs timeout 3s node build/index.js stdio`.
