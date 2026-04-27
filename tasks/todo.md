@@ -119,3 +119,13 @@
 - Found that users with existing `HARNESS_TOOLSETS=agent-pipelines` or `+agent-pipelines` configs would fail server startup after the toolset was renamed to `agents`.
 - Added a narrow parser alias so legacy configs resolve to the current `agents` toolset without reintroducing the old public name internally.
 - Verified with `pnpm test tests/registry/registry.test.ts` and `pnpm typecheck`.
+
+## Critical Bug Inspection (2026-04-27)
+- [ ] Inspect recent commits for high-severity behavioral regressions
+- [ ] Reproduce filtered-toolset startup crash for operation-less dynamic enums
+- [ ] Add minimal helper so disabled operations accept no resource types without startup failure
+- [ ] Add focused regression coverage
+- [ ] Run focused tests and typecheck
+
+### Review
+- Pending.

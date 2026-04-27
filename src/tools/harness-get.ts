@@ -8,16 +8,17 @@ import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, coerceRecord } from "../utils/type-guards.js";
 import { resolveLogContent } from "../utils/log-resolver.js";
 import { buildLogPrefixFromExecution } from "../utils/log-prefix.js";
+import { resourceTypeSchema } from "./input-schemas.js";
 
 export function registerGetTool(server: McpServer, registry: Registry, client: HarnessClient): void {
-  const gettableTypes = registry.getTypesForOperation("get") as [string, ...string[]];
+  const gettableTypes = registry.getTypesForOperation("get");
 
   server.registerTool(
     "harness_get",
     {
       description: "Get a Harness resource by ID. Accepts a Harness URL to auto-extract identifiers. For failure analysis, prefer harness_diagnose.",
       inputSchema: {
-        resource_type: z.enum(gettableTypes).describe("Resource type to retrieve. Auto-detected from url.").optional(),
+        resource_type: resourceTypeSchema(gettableTypes, "Resource type to retrieve. Auto-detected from url.").optional(),
         resource_id: z.string().describe("Primary resource identifier. Auto-detected from url.").optional(),
         url: z.string().describe("Harness UI URL — auto-extracts org, project, type, and ID").optional(),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
