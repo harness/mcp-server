@@ -3,11 +3,12 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { createLogger } from "../utils/logger.js";
-import { SCHEMAS, VALID_SCHEMAS } from "../data/schemas/index.js";
+import { SCHEMAS, VALID_SCHEMAS, V0_SCHEMA_KEYS, V1_SCHEMA_KEYS } from "../data/schemas/index.js";
 
 const log = createLogger("tool:harness-schema");
 
-const PIPELINE_SCHEMA_NAMES = new Set(["pipeline", "pipeline_v1"]);
+const V0_ONLY = new Set<string>(V0_SCHEMA_KEYS);
+const V1_ONLY = new Set<string>(V1_SCHEMA_KEYS);
 
 /**
  * Resolve a $ref pointer within the schema.
@@ -127,9 +128,17 @@ function getSummary(schema: Record<string, unknown>, resourceType: string): Reco
 
 export function registerSchemaTool(server: McpServer, registry?: Registry): void {
   const registeredTypes = registry ? new Set(registry.getAllResourceTypes()) : undefined;
+
+  // Determine which version set to exclude based on registry's pipeline version.
+  // If pipeline_v1 is registered → v1 account → hide v0-only schemas.
+  // If pipeline is registered → v0 account → hide v1-only schemas.
+  // Local schemas (agent-pipeline) are always available.
+  const excludeSet = registeredTypes?.has("pipeline_v1") ? V0_ONLY : V1_ONLY;
+
   const availableSchemas = VALID_SCHEMAS.filter((s) => {
-    if (!registeredTypes || !PIPELINE_SCHEMA_NAMES.has(s)) return true;
-    return registeredTypes.has(s);
+    if (!registeredTypes) return true;
+    if (V0_ONLY.has(s) || V1_ONLY.has(s)) return !excludeSet.has(s);
+    return true; // local schemas always pass
   });
 
   server.registerTool(
