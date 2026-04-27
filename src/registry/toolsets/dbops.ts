@@ -29,7 +29,7 @@ export const dbopsToolset: ToolsetDefinition = {
         },
       ],
       deepLinkTemplate:
-        "/ng/account/{accountId}/all/orgs/{org}/projects/{project}/dbdevops/schema/{dbschema}",
+        "/ng/account/{accountId}/all/dbops/orgs/{org}/projects/{project}/db-schemas/{dbschema}",
       relatedResources: [
         {
           resourceType: "database_instance",
@@ -44,7 +44,7 @@ export const dbopsToolset: ToolsetDefinition = {
           path: "/dbops/v1/orgs/{org}/projects/{project}/dbschema",
           pathParams: { org_id: "org", project_id: "project" },
           queryParams: {
-            search_term: "searchTerm",
+            search_term: "search_term",
             migration_type: "migrationType",
             page: "page",
             size: "limit",
@@ -89,7 +89,7 @@ export const dbopsToolset: ToolsetDefinition = {
         { name: "search_term", description: "Search instances by name" },
       ],
       deepLinkTemplate:
-        "/ng/account/{accountId}/all/orgs/{org}/projects/{project}/dbdevops/schema/{dbschema}/instance/{dbinstance}",
+        "/ng/account/{accountId}/all/dbops/orgs/{org}/projects/{project}/db-schemas/{dbschema}/instances/{dbinstance}/migrationstate",
       relatedResources: [
         {
           resourceType: "database_schema",
@@ -110,7 +110,7 @@ export const dbopsToolset: ToolsetDefinition = {
             dbschema_id: "dbschema",
           },
           queryParams: {
-            search_term: "searchTerm",
+            search_term: "search_term",
             page: "page",
             size: "limit",
           },
