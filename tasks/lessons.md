@@ -32,3 +32,8 @@
 - **Pass criteria**: If the first element of page 2 matches across both servers → pagination parity ✓
 - **Fail criteria**: If they differ (same scope) → investigate (API params, sort order, date filters, etc.)
 - **Rule**: Apply this pattern to all tools when testing pagination across MCP v1 and v2.
+
+## Multi-Tenant Account Scoping
+- **Issue**: Hosted/internal deployments can resolve the effective account ID per request while `Config.HARNESS_ACCOUNT_ID` remains a placeholder such as `internal`.
+- **Fix**: Every outbound account scope carrier must use the resolver: query params (`accountIdentifier`/`accountID`), path builders, injected request bodies, deep links, and the `Harness-Account` header.
+- **Rule**: When adding account scoping or header-based APIs, add regression tests with `HARNESS_ACCOUNT_ID="internal"` and `accountIdResolver()` returning a real account ID.

@@ -131,3 +131,20 @@
 - README now matches `src/tools/index.ts` with 11 generic tools and documents that `HARNESS_PIPELINE_VERSION` selects either `pipeline` or `pipeline_v1`, not both.
 - HTTP transport docs now mention the per-session `x-harness-pipeline-version` initialize header from `src/index.ts`.
 - `.env.example` now covers operational config from `src/config.ts` and clarifies default vs opt-in toolset filtering, including the legacy `agent-pipelines` alias.
+
+## Prod Chatbot Reply Inconsistency Triage (2026-04-28)
+- [x] Read Slack thread context
+- [x] Investigate environment-sensitive MCP v2 response paths
+- [x] Fix resolved account ID usage in client headers
+- [x] Run focused tests and typecheck
+- [x] Run full test suite
+- [x] Commit and push fix
+- [ ] Open PR
+- [ ] Report outcome in original Slack thread if channel is available
+
+### Review
+- Identified inconsistent per-request account handling: URL query/path scoping could use the resolved account ID, while `Harness-Account` still used the static config account.
+- Updated `HarnessClient` so normal and streaming requests use the same resolved account ID for `Harness-Account`.
+- Added regression tests for standard query scoping, header-only scoping, and stream requests.
+- Verified with `pnpm test tests/client/harness-client.test.ts` and `pnpm typecheck`.
+- Verified the broader suite with `pnpm test`.

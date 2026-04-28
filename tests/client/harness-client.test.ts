@@ -159,6 +159,32 @@ describe("HarnessClient", () => {
       expect(headers["Harness-Account"]).toBe("test-account");
     });
 
+    it("uses the resolved account ID for Harness-Account and query scoping", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_ACCOUNT_ID: "internal" }));
+      client.setAccountIdResolver(() => "resolved-account");
+
+      await client.request({ path: "/ng/api/projects" });
+
+      const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
+      expect(headers["Harness-Account"]).toBe("resolved-account");
+      const url = new URL(fetchSpy.mock.calls[0][0] as string);
+      expect(url.searchParams.get("accountIdentifier")).toBe("resolved-account");
+    });
+
+    it("uses the resolved account ID for header-based scoping", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_ACCOUNT_ID: "internal" }));
+      client.setAccountIdResolver(() => "resolved-account");
+
+      await client.request({ path: "/gateway/sei/api/v2/test", headerBasedScoping: true });
+
+      const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
+      expect(headers["Harness-Account"]).toBe("resolved-account");
+      const url = new URL(fetchSpy.mock.calls[0][0] as string);
+      expect(url.searchParams.has("accountIdentifier")).toBe(false);
+    });
+
     it("sets Content-Type to application/json for object body", async () => {
       fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
       const client = new HarnessClient(makeConfig());
@@ -491,6 +517,23 @@ describe("HarnessClient", () => {
 
       const result = await client.request<{ data: string }>({ path: "/test" });
       expect(result.data).toBe("ok");
+    });
+  });
+
+  describe("requestStream — headers", () => {
+    it("uses the resolved account ID for Harness-Account", async () => {
+      fetchSpy.mockResolvedValue(new Response("stream body", { status: 200 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_ACCOUNT_ID: "internal" }));
+      client.setAccountIdResolver(() => "resolved-account");
+
+      const response = await client.requestStream({ path: "/gateway/log-service/blob/download" });
+
+      expect(response.status).toBe(200);
+      const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
+      expect(headers["Harness-Account"]).toBe("resolved-account");
+      const url = new URL(fetchSpy.mock.calls[0][0] as string);
+      expect(url.searchParams.get("accountIdentifier")).toBe("resolved-account");
+      expect(url.searchParams.get("accountID")).toBe("resolved-account");
     });
   });
 
