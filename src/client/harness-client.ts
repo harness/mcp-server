@@ -149,8 +149,9 @@ export class HarnessClient {
     const method = options.method ?? "GET";
     const url = this.buildUrl(options);
     const isFme = options.product === "fme";
+    const accountId = this.resolveAccountId();
     const headers: Record<string, string> = {
-      "Harness-Account": this.accountId,
+      "Harness-Account": accountId,
       ...options.headers,
     };
 
@@ -308,8 +309,9 @@ export class HarnessClient {
     const method = options.method ?? "POST";
     const url = this.buildUrl(options);
     const isFme = options.product === "fme";
+    const accountId = this.resolveAccountId();
     const headers: Record<string, string> = {
-      "Harness-Account": this.accountId,
+      "Harness-Account": accountId,
       ...options.headers,
     };
 
