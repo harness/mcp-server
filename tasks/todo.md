@@ -137,7 +137,9 @@
 - [x] Investigate environment-sensitive MCP v2 response paths
 - [x] Fix resolved account ID usage in client headers
 - [x] Run focused tests and typecheck
-- [ ] Commit, push, and open PR
+- [x] Run full test suite
+- [x] Commit and push fix
+- [ ] Open PR
 - [ ] Report outcome in original Slack thread if channel is available
 
 ### Review
@@ -145,3 +147,4 @@
 - Updated `HarnessClient` so normal and streaming requests use the same resolved account ID for `Harness-Account`.
 - Added regression tests for standard query scoping, header-only scoping, and stream requests.
 - Verified with `pnpm test tests/client/harness-client.test.ts` and `pnpm typecheck`.
+- Verified the broader suite with `pnpm test`.
