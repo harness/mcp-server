@@ -10,6 +10,9 @@ const log = createLogger("tool:harness-schema");
 const V0_ONLY = new Set<string>(V0_SCHEMA_KEYS);
 const V1_ONLY = new Set<string>(V1_SCHEMA_KEYS);
 
+const MAX_RESPONSE_BYTES = 40_960;
+const VARIANT_SUMMARY_THRESHOLD = 4;
+
 /**
  * Resolve a $ref pointer within the schema.
  * E.g. "#/definitions/trigger/trigger_source" → schema.definitions.trigger.trigger_source
@@ -28,34 +31,124 @@ function resolveRef(schema: Record<string, unknown>, ref: string): unknown {
   return current;
 }
 
+function extractRefLabel(ref: string): string {
+  const match = ref.match(/^#\/definitions\/[^/]+\/(.+)$/);
+  return match?.[1] ?? ref.replace(/^#\//, "");
+}
+
+function summarizeVariants(
+  variants: unknown[],
+): Record<string, unknown> {
+  const items: Array<Record<string, string>> = [];
+  for (const v of variants) {
+    if (!v || typeof v !== "object") continue;
+    const obj = v as Record<string, unknown>;
+    const entry: Record<string, string> = {};
+    if (typeof obj["$ref"] === "string") {
+      entry.ref = extractRefLabel(obj["$ref"]);
+    }
+    if (typeof obj.title === "string") {
+      entry.title = obj.title;
+    } else if (obj.properties && typeof obj.properties === "object") {
+      const keys = Object.keys(obj.properties as Record<string, unknown>);
+      const discriminator = keys.find((k) =>
+        (((obj.properties as Record<string, unknown>)[k] as Record<string, unknown>)?.enum as unknown[])?.length === 1,
+      );
+      if (discriminator) {
+        const enumVal = (((obj.properties as Record<string, unknown>)[discriminator] as Record<string, unknown>).enum as string[])[0];
+        entry.title = String(enumVal);
+      }
+    }
+    if (Object.keys(entry).length > 0) items.push(entry);
+  }
+  return {
+    _summary: `${variants.length} variants — use a more specific path to drill into one`,
+    variants: items,
+  };
+}
+
+function compactSummary(
+  node: unknown,
+  resourceType: string,
+  path: string,
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {
+    resource_type: resourceType,
+    path,
+    _note: "Response was too large; showing compact summary. Use a more specific path to see full detail.",
+  };
+
+  if (!node || typeof node !== "object" || Array.isArray(node)) return result;
+  const obj = node as Record<string, unknown>;
+
+  if (obj.properties && typeof obj.properties === "object") {
+    const props = obj.properties as Record<string, unknown>;
+    const required = (obj.required as string[]) ?? [];
+    result.properties = Object.entries(props).map(([name, spec]) => {
+      const s = spec as Record<string, unknown>;
+      const entry: Record<string, unknown> = { name };
+      if (s.type) entry.type = s.type;
+      if (s["$ref"]) entry.type = "object ($ref)";
+      if (s.enum) entry.enum = s.enum;
+      if (required.includes(name)) entry.required = true;
+      return entry;
+    });
+  }
+
+  for (const unionKey of ["oneOf", "anyOf"] as const) {
+    if (Array.isArray(obj[unionKey])) {
+      result[unionKey] = summarizeVariants(obj[unionKey] as unknown[]);
+    }
+  }
+
+  const subSections = Object.keys(obj).filter(
+    (k) => !["properties", "type", "required", "title", "description", "oneOf", "anyOf", "allOf", "$schema"].includes(k)
+      && typeof (obj[k]) === "object" && obj[k] !== null,
+  );
+  if (subSections.length > 0) result.available_sub_sections = subSections;
+
+  return result;
+}
+
 /**
- * Inline $ref references one level deep so the returned schema fragment
- * is self-contained and useful without chasing references.
+ * Inline $ref references so the returned schema fragment is self-contained.
+ * Summarizes oneOf/anyOf arrays that exceed VARIANT_SUMMARY_THRESHOLD.
  */
-function inlineRefs(schema: Record<string, unknown>, node: unknown, depth = 0): unknown {
-  if (depth > 3) return node; // prevent infinite recursion
+function inlineRefs(
+  schema: Record<string, unknown>,
+  node: unknown,
+  depth = 0,
+  maxDepth = 2,
+): unknown {
+  if (depth > maxDepth) return node;
   if (!node || typeof node !== "object") return node;
 
   if (Array.isArray(node)) {
-    return node.map((item) => inlineRefs(schema, item, depth));
+    return node.map((item) => inlineRefs(schema, item, depth, maxDepth));
   }
 
   const obj = node as Record<string, unknown>;
 
-  // If this node is a $ref, resolve it
   if (typeof obj["$ref"] === "string") {
     const resolved = resolveRef(schema, obj["$ref"]);
     if (resolved && typeof resolved === "object") {
-      return inlineRefs(schema, resolved, depth + 1);
+      return inlineRefs(schema, resolved, depth + 1, maxDepth);
     }
     return obj;
   }
 
-  // Recurse into child properties
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
-    if (key === "$schema") continue; // strip noise
-    result[key] = inlineRefs(schema, value, depth + 1);
+    if (key === "$schema") continue;
+    if (
+      (key === "oneOf" || key === "anyOf") &&
+      Array.isArray(value) &&
+      value.length > VARIANT_SUMMARY_THRESHOLD
+    ) {
+      result[key] = summarizeVariants(value);
+    } else {
+      result[key] = inlineRefs(schema, value, depth + 1, maxDepth);
+    }
   }
   return result;
 }
@@ -149,6 +242,8 @@ export function registerSchemaTool(server: McpServer, registry?: Registry): void
         "so you know the exact body structure for harness_create/harness_update. " +
         "Use without path for a summary of fields and available sections. " +
         "Use with path to drill into a specific section. " +
+        "Large sections (stages, steps) return a compact summary with available_sub_sections — " +
+        "drill into a specific sub-section for full detail. " +
         `Available schemas: ${availableSchemas.join(", ")}.`,
       inputSchema: {
         resource_type: z
@@ -161,6 +256,13 @@ export function registerSchemaTool(server: McpServer, registry?: Registry): void
             "Dot-separated path to drill into a specific definition section. " +
             "Omit for a top-level summary showing all available sections.",
           ),
+        max_depth: z
+          .number()
+          .min(1)
+          .max(3)
+          .default(2)
+          .optional()
+          .describe("How many levels deep to inline $ref references (1-3). Lower = smaller response. Default: 2."),
       },
       annotations: {
         title: "Harness YAML Schema",
@@ -188,8 +290,13 @@ export function registerSchemaTool(server: McpServer, registry?: Registry): void
           );
         }
 
-        // Inline $ref references so the result is self-contained
-        const resolved = inlineRefs(schema, node);
+        const maxDepth = (args.max_depth as number | undefined) ?? 2;
+        const resolved = inlineRefs(schema, node, 0, maxDepth);
+        const serialized = JSON.stringify({ resource_type: args.resource_type, path: args.path, schema: resolved });
+
+        if (serialized.length > MAX_RESPONSE_BYTES) {
+          return jsonResult(compactSummary(node, args.resource_type, args.path));
+        }
 
         return jsonResult({
           resource_type: args.resource_type,
