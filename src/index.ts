@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { randomUUID } from "node:crypto";
+import { config as loadDotenv } from "dotenv";
 import { appendFileSync } from "node:fs";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -465,9 +466,21 @@ async function startHttp(config: Config, port: number): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  // Global error handlers — must be installed before anything else.
+  // Parse CLI args first to get env file path
+  const { transport, port, envFile } = parseArgs();
+
+  // Load .env file (custom path if specified, otherwise .env in current directory)
+  if (envFile) {
+    loadDotenv({ path: envFile });
+  } else {
+    loadDotenv(); // loads .env from current directory if it exists
+  }
+
+  // Global error handlers for runtime errors.
   // Node 20+ defaults --unhandled-rejections=throw, so unhandled rejections
   // crash the process. We catch them to log context before exiting.
+  // Note: CLI parsing and .env loading happen before these handlers are installed,
+  // which is intentional — CLI errors should fail fast.
   process.on("unhandledRejection", (reason) => {
     const data = { error: String(reason), stack: (reason as Error)?.stack };
     log.error("Unhandled promise rejection — exiting", data);
@@ -483,8 +496,6 @@ async function main(): Promise<void> {
 
   const config = loadConfig();
   setLogLevel(config.LOG_LEVEL);
-
-  const { transport, port } = parseArgs();
 
   log.info("Starting harness-mcp-server", {
     transport,
