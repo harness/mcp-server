@@ -350,7 +350,10 @@ export class Registry {
     // Build path with substitutions (or pathBuilder when present)
     let path: string;
     if (spec.pathBuilder) {
-      path = spec.pathBuilder(input, this.config);
+      // Use the resolved per-request account ID so path-based scoping (e.g. HAR
+      // APIs) picks up the real account instead of the static config placeholder.
+      const pathConfig = { ...this.config, HARNESS_ACCOUNT_ID: this.getAccountId() };
+      path = spec.pathBuilder(input, pathConfig);
     } else {
       path = spec.path;
       if (spec.pathParams) {
@@ -405,7 +408,7 @@ export class Registry {
     // Inject custom account param when scopeParams.account is set
     // (in addition to the client's default accountIdentifier)
     if (def.scopeParams?.account) {
-      params[def.scopeParams.account] = this.config.HARNESS_ACCOUNT_ID;
+      params[def.scopeParams.account] = this.getAccountId();
     }
 
     // Account-scoped resources sometimes still need orgIdentifier in query params (NG /ng/api/projects).
@@ -473,8 +476,8 @@ export class Registry {
           : bodyRecord;
       // Only inject accountIdentifier when the endpoint explicitly requires it
       // (gRPC-gateway APIs with body:"*" need it in the body, not just query params)
-      if (spec.injectAccountInBody && this.config.HARNESS_ACCOUNT_ID && !targetRecord.accountIdentifier) {
-        targetRecord.accountIdentifier = this.config.HARNESS_ACCOUNT_ID;
+      if (spec.injectAccountInBody && this.getAccountId() && !targetRecord.accountIdentifier) {
+        targetRecord.accountIdentifier = this.getAccountId();
       }
       if (params.orgIdentifier && !targetRecord.orgIdentifier) {
         targetRecord.orgIdentifier = params.orgIdentifier;
