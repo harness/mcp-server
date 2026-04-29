@@ -161,3 +161,66 @@
 - Found HTTP startup ignored `PORT` from a specified `--env-file` because `parseArgs()` resolved the port before dotenv loaded the file.
 - Added `resolvePort()` so `src/index.ts` loads dotenv first, then resolves the final HTTP port while preserving `--port` precedence.
 - Verified with `pnpm test tests/utils/cli.test.ts` and `pnpm typecheck`.
+
+## PR 102 Review Follow-up (2026-04-29)
+- [x] Verify each review comment against the current PR branch
+- [x] Move malformed `HARNESS_MCP_ALLOWED_HOSTS` validation into startup config parsing
+- [x] Preserve real Express Host-header accept/reject coverage
+- [x] Preserve behavioral dotenv stdout regression coverage
+- [x] Run focused tests and typecheck
+- [ ] Commit, push, and update PR
+
+### Plan
+- Add a config-level validator for `HARNESS_MCP_ALLOWED_HOSTS` using the same hostname parsing rules as HTTP host resolution.
+- Keep host resolution responsible for producing MCP Express options, not discovering config typos late.
+- Run focused tests for config, HTTP transport, env loading, and CLI parsing before full typecheck.
+
+### Review
+- Moved malformed `HARNESS_MCP_ALLOWED_HOSTS` handling into `ConfigSchema`, where startup config validation fails loudly and stores a normalized, de-duplicated allowlist.
+- Kept `resolveHttpHostValidationOptions()` focused on producing Express adapter options from validated config.
+- Confirmed request-level host behavior through the real `createMcpExpressApp()` adapter and behavioral dotenv stdout tests.
+- Verified with focused tests, full `pnpm test`, and `pnpm typecheck`.
+
+## Slack Bug Triage: MCP Connections Failing (2026-04-29)
+- [x] Read the Slack report thread and capture available symptoms
+- [x] Reproduce MCP connection startup/initialize behavior locally
+- [x] Identify the root cause from code and recent changes
+- [x] Add a focused regression test before implementation
+- [x] Implement the minimal fix
+- [x] Run focused and broader verification
+- [x] Commit, push, open PR, and reply in the original Slack thread
+
+### Plan
+- Start with the stdio and HTTP connection paths in `src/index.ts`, `src/config.ts`, and the MCP SDK integration tests because the report is connection-level and the Slack thread has no detailed error text.
+- Use recent commits plus local startup tests to narrow whether this is a startup crash, config parsing issue, or session initialization regression.
+- If a repo bug is found, write the smallest regression test that fails on current code, then fix only the implicated path.
+
+### Review
+- The Slack thread had no screenshots or concrete error details, so investigation focused on the HTTP connection path and recent SDK/config changes.
+- Found that `createMcpExpressApp({ host: "127.0.0.1" })` enables SDK Host-header validation for only localhost names. That is safe for local use but rejects the documented hosted MCP hostname (`mcp.harness.io`) when the server sits behind a public proxy while binding locally.
+- Added `resolveHttpHostValidationOptions()` to preserve SDK DNS-rebinding protection while allowing the hosted MCP hostname by default and optional proxy/custom hostnames through `HARNESS_MCP_ALLOWED_HOSTS`.
+- Verified with `pnpm test tests/utils/http-hosts.test.ts`, `pnpm test tests/integration/http-transport.test.ts`, and `pnpm typecheck` using a temporary Node toolchain because the automation image did not have Node on `PATH`.
+
+## Follow-up: Stdio Dotenv Banner (2026-04-29)
+- [x] Reproduce stdout contamination from dotenv during stdio startup
+- [x] Add quiet dotenv loading for default and `--env-file` paths
+- [x] Add regression coverage for quiet dotenv invocation
+- [x] Verify focused CLI test, build, stdio stdout, typecheck, and related HTTP tests
+
+### Review
+- Reproduced current 0.9.5 behavior: `dotenv@17.3.1` printed `[dotenv@17.3.1] injecting env ...` to stdout before MCP JSON-RPC when starting `node build/index.js stdio --env-file ...`.
+- Added `quiet: true` to both `loadDotenv({ path: envFile })` and default `loadDotenv()` calls in `src/index.ts`.
+- Verified after rebuild that the same stdio startup produced `stdout bytes=0`, preserving stdout for JSON-RPC.
+
+## PR #102 Review Follow-up (2026-04-29)
+- [x] Fetch PR review comments
+- [x] Split localhost bind-host detection from Host-header allowlist values
+- [x] Fail loudly on malformed `HARNESS_MCP_ALLOWED_HOSTS`
+- [x] Add request-level SDK Host-header validation coverage
+- [x] Run focused HTTP tests, CLI tests, typecheck, and build
+
+### Review
+- Added `::1` as a localhost bind host while keeping `[::1]` as the Host-header allowlist value expected by the SDK middleware.
+- `HARNESS_MCP_ALLOWED_HOSTS` now throws with the malformed entries instead of silently dropping them.
+- Added an integration test that runs the real SDK Express Host-header middleware and verifies `Host: mcp.harness.io` is accepted while an unexpected host is rejected.
+- Replaced the source-text dotenv assertion with behavioral `loadEnvFile()` tests that verify custom and default dotenv loading do not write through `console.log`.

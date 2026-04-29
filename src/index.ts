@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import { randomUUID } from "node:crypto";
-import { config as loadDotenv } from "dotenv";
 import { appendFileSync } from "node:fs";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -16,6 +15,8 @@ import { registerAllResources } from "./resources/index.js";
 import { registerAllPrompts } from "./prompts/index.js";
 import { parseArgs, resolvePort } from "./utils/cli.js";
 import { configureElicitation } from "./utils/elicitation.js";
+import { resolveHttpHostValidationOptions } from "./utils/http-hosts.js";
+import { loadEnvFile } from "./utils/env.js";
 
 const log = createLogger("main");
 
@@ -193,7 +194,7 @@ const REAP_INTERVAL_MS = 60_000;    // check every minute
  */
 async function startHttp(config: Config, port: number): Promise<void> {
   const host = process.env.HOST || "127.0.0.1";
-  const app = createMcpExpressApp({ host });
+  const app = createMcpExpressApp(resolveHttpHostValidationOptions(host, config));
 
   const maxBodySize = config.HARNESS_MAX_BODY_SIZE_MB * 1024 * 1024;
   const { json } = await import("express");
@@ -470,11 +471,7 @@ async function main(): Promise<void> {
   const { transport, envFile } = parseArgs();
 
   // Load .env file (custom path if specified, otherwise .env in current directory)
-  if (envFile) {
-    loadDotenv({ path: envFile });
-  } else {
-    loadDotenv(); // loads .env from current directory if it exists
-  }
+  loadEnvFile(envFile);
 
   // Resolve the HTTP port after dotenv is loaded so --env-file PORT is honored.
   const port = resolvePort();
