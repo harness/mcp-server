@@ -120,14 +120,14 @@
 - Added a narrow parser alias so legacy configs resolve to the current `agents` toolset without reintroducing the old public name internally.
 - Verified with `pnpm test tests/registry/registry.test.ts` and `pnpm typecheck`.
 
-## Resolved Account ID Scoping Fix (2026-04-27)
-- [x] Trace account ID resolution through registry dispatch and client request paths
-- [x] Route resolved account IDs into path builders, custom scope params, and body injection
-- [x] Add regression tests for resolver-backed account ID propagation
-- [x] Run focused tests and typecheck
-- [x] Commit and push the fix
+## Documentation Alignment Automation (2026-04-27)
+- [x] Audit recent registry/config changes against public docs
+- [x] Align README tool counts and pipeline version semantics
+- [x] Refresh `.env.example` with current operational config
+- [x] Run docs consistency checks
+- [ ] Commit and push docs-only changes
 
 ### Review
-- Found that resolver-aware deployments used the resolved account ID for client query params and deep links, but registry request assembly still passed static config into HAR path builders, custom account scope params, and accountIdentifier body injection.
-- Updated registry dispatch to use one resolved account ID consistently across path builders, custom account params, body injection, and generated deep links; aligned `Harness-Account` headers with the client resolver.
-- Verified with `pnpm test tests/registry/registry.test.ts tests/client/harness-client.test.ts` and `pnpm typecheck`.
+- README now matches `src/tools/index.ts` with 11 generic tools and documents that `HARNESS_PIPELINE_VERSION` selects either `pipeline` or `pipeline_v1`, not both.
+- HTTP transport docs now mention the per-session `x-harness-pipeline-version` initialize header from `src/index.ts`.
+- `.env.example` now covers operational config from `src/config.ts` and clarifies default vs opt-in toolset filtering, including the legacy `agent-pipelines` alias.

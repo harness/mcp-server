@@ -1,6 +1,6 @@
 ## Harness MCP Server 2.0
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 10 consolidated tools and 163 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 163 resource types.
 
 ## Why Use This MCP Server
 
@@ -8,7 +8,7 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **10 tools, 163 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 10 tools instead of hundreds.
+- **11 tools, 163 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
 - **Full platform coverage.** 31 toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Internal Developer Portal, Software Supply Chain, Governance, Service Overrides, Visualizations, and more. Not just pipelines — the entire Harness platform.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **27 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
@@ -131,6 +131,7 @@ Operational constraints in HTTP mode:
 - Idle sessions are reaped after 30 minutes.
 - `GET /health` is the only non-MCP endpoint.
 - Request body size is capped by `HARNESS_MAX_BODY_SIZE_MB` (default `10` MB).
+- Set `x-harness-pipeline-version: 0` or `1` on the `initialize` request to select V0 or V1 pipeline resources for that HTTP session.
 
 ```bash
 # Health check
@@ -518,11 +519,12 @@ The server automatically loads environment variables from a `.env` file in the p
 | `HARNESS_MAX_BODY_SIZE_MB` | No | `10` | Max HTTP request body size in MB for `http` transport |
 | `HARNESS_RATE_LIMIT_RPS` | No | `10` | Client-side request throttle (requests per second) to Harness APIs |
 | `LOG_LEVEL` | No | `info` | Log verbosity: `debug`, `info`, `warn`, `error` |
-| `HARNESS_TOOLSETS` | No | *(all)* | Comma-separated toolset list. Supports `+name` to add opt-in toolsets and `-name` to remove defaults (see [Toolset Filtering](#toolset-filtering)) |
+| `HARNESS_TOOLSETS` | No | *(defaults)* | Comma-separated toolset list. Empty loads default toolsets and excludes opt-in toolsets such as `ai-evals`. Supports `+name` to add opt-in toolsets and `-name` to remove defaults (see [Toolset Filtering](#toolset-filtering)) |
 | `HARNESS_READ_ONLY` | No | `false` | Block all mutating operations (create, update, delete, execute). Only list and get are allowed. Useful for shared/demo environments |
 | `HARNESS_SKIP_ELICITATION` | No | `false` | Skip all elicitation confirmation prompts. When `true`, write and delete operations proceed without user approval — enabling fully autonomous agent workflows. See [Elicitation](#elicitation) |
 | `HARNESS_ALLOW_HTTP` | No | `false` | Allow non-HTTPS `HARNESS_BASE_URL`. By default, the server enforces HTTPS for security. Set to `true` only for local development against a non-TLS Harness instance |
-| `HARNESS_PIPELINE_VERSION` | No | `0` | **(Alpha)** Pipeline YAML version. Set to `"1"` to guide agents toward `pipeline_v1` (V1 YAML format) for pipeline operations. Both `pipeline` (V0) and `pipeline_v1` (V1) resource types are always available regardless of this setting |
+| `HARNESS_PIPELINE_VERSION` | No | `0` | **(Alpha)** Pipeline YAML version. `0` loads the `pipeline` resource type and excludes `pipeline_v1`; `1` loads `pipeline_v1` and excludes `pipeline`. HTTP sessions can override this at initialize time with `x-harness-pipeline-version: 0` or `1` |
+| `HARNESS_MCP_LOG_FILE` | No | `~/.claude/harness-mcp.log` | File used for stdio disconnect/crash diagnostics when stderr may no longer be available |
 
 ### HTTPS Enforcement
 
@@ -946,6 +948,8 @@ Harness pipelines can be stored in three ways:
 | `runtime_input_template`  |      | x   |        |        |        |                     |
 | `approval_instance`       | x    |     |        |        |        | `approve`, `reject` |
 
+
+Only one pipeline YAML resource type is loaded at startup. By default `HARNESS_PIPELINE_VERSION=0` exposes `pipeline` and hides `pipeline_v1`; set `HARNESS_PIPELINE_VERSION=1` to expose `pipeline_v1` and hide `pipeline`. In HTTP mode, include `x-harness-pipeline-version: 0` or `1` on the `initialize` request to choose the version for that session.
 
 ### AI Agents
 
@@ -1436,7 +1440,7 @@ Available toolset names:
                           |  MCP (stdio or HTTP)
                  +--------v---------+
                 |    MCP Server     |
-                | 10 Generic Tools  |
+                | 11 Generic Tools  |
                  +--------+---------+
                           |
                  +--------v---------+

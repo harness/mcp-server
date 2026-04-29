@@ -8,8 +8,7 @@ import { createLogger } from "../utils/logger.js";
 const log = createLogger("resource:pipeline-yaml");
 
 export function registerPipelineYamlResource(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
-  // Use the correct pipeline resource type based on version
-  const pipelineResourceType = (config.HARNESS_PIPELINE_VERSION ?? "0") === "0" ? "pipeline_v1" : "pipeline";
+  const pipelineResourceType = (config.HARNESS_PIPELINE_VERSION ?? "0") === "0" ? "pipeline" : "pipeline_v1";
 
   const template = new ResourceTemplate("pipeline:///{pipelineId}", {
     list: async () => {
