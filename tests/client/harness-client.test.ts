@@ -36,6 +36,12 @@ describe("HarnessClient", () => {
       const client = new HarnessClient(makeConfig());
       expect(client.account).toBe("test-account");
     });
+
+    it("uses resolved account ID when resolver is set", () => {
+      const client = new HarnessClient(makeConfig());
+      client.setAccountIdResolver(() => "resolved-account");
+      expect(client.account).toBe("resolved-account");
+    });
   });
 
   describe("request — URL building", () => {

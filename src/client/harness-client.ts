@@ -136,7 +136,7 @@ export class HarnessClient {
   }
 
   get account(): string {
-    return this.accountId;
+    return this.resolveAccountId();
   }
 
   get baseURL(): string {
