@@ -1,4 +1,5 @@
-const LOCALHOST_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
+const LOCALHOST_BIND_HOSTS = ["localhost", "127.0.0.1", "::1"];
+const LOCALHOST_ALLOWED_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
 const HOSTED_MCP_HOST = "mcp.harness.io";
 
 interface HostEnv {
@@ -27,12 +28,21 @@ function configuredAllowedHosts(env: HostEnv): string[] {
   if (!raw) return [];
 
   const hosts: string[] = [];
+  const invalidHosts: string[] = [];
   for (const value of raw.split(",")) {
     const hostname = normalizeHostname(value);
-    if (hostname && !hosts.includes(hostname)) {
+    if (!hostname) {
+      invalidHosts.push(value.trim());
+    } else if (!hosts.includes(hostname)) {
       hosts.push(hostname);
     }
   }
+
+  if (invalidHosts.length > 0) {
+    const quotedHosts = invalidHosts.map((host) => `"${host}"`).join(", ");
+    throw new Error(`Invalid HARNESS_MCP_ALLOWED_HOSTS entries: ${quotedHosts}`);
+  }
+
   return hosts;
 }
 
@@ -42,10 +52,10 @@ export function resolveHttpHostValidationOptions(
 ): McpExpressHostOptions {
   const configuredHosts = configuredAllowedHosts(env);
 
-  if (LOCALHOST_HOSTS.includes(host)) {
+  if (LOCALHOST_BIND_HOSTS.includes(host)) {
     return {
       host,
-      allowedHosts: [...new Set([...LOCALHOST_HOSTS, HOSTED_MCP_HOST, ...configuredHosts])],
+      allowedHosts: [...new Set([...LOCALHOST_ALLOWED_HOSTS, HOSTED_MCP_HOST, ...configuredHosts])],
     };
   }
 

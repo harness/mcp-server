@@ -8,10 +8,60 @@
  * without starting a real HTTP server — we test the route logic directly.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import type { Express } from "express";
+import { request as httpRequest } from "node:http";
+import type { AddressInfo } from "node:net";
+import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
+import { resolveHttpHostValidationOptions } from "../../src/utils/http-hosts.js";
 
 // We can't easily test the full HTTP server without starting it,
 // so we test the session management patterns and transport lifecycle
 // by verifying the key behaviors through direct function testing.
+
+async function withListeningApp(app: Express, fn: (baseUrl: string) => Promise<void>): Promise<void> {
+  const server = app.listen(0, "127.0.0.1");
+  await new Promise<void>((resolve, reject) => {
+    server.once("listening", resolve);
+    server.once("error", reject);
+  });
+
+  try {
+    const address = server.address() as AddressInfo;
+    await fn(`http://127.0.0.1:${address.port}`);
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      server.close((err) => err ? reject(err) : resolve());
+    });
+  }
+}
+
+async function getWithHost(baseUrl: string, host: string): Promise<{ status: number; body: unknown }> {
+  const url = new URL("/probe", baseUrl);
+  return new Promise((resolve, reject) => {
+    const req = httpRequest(
+      {
+        hostname: url.hostname,
+        port: url.port,
+        path: url.pathname,
+        method: "GET",
+        headers: { Host: host },
+      },
+      (res) => {
+        let rawBody = "";
+        res.setEncoding("utf8");
+        res.on("data", (chunk) => { rawBody += chunk; });
+        res.on("end", () => {
+          resolve({
+            status: res.statusCode ?? 0,
+            body: rawBody ? JSON.parse(rawBody) : undefined,
+          });
+        });
+      },
+    );
+    req.on("error", reject);
+    req.end();
+  });
+}
 
 describe("HTTP transport session management", () => {
   describe("session store behavior", () => {
@@ -134,6 +184,27 @@ describe("HTTP transport session management", () => {
       expect(headers["Access-Control-Allow-Methods"]).toContain("DELETE");
       expect(headers["Access-Control-Allow-Headers"]).toContain("mcp-session-id");
       expect(headers["Access-Control-Expose-Headers"]).toContain("mcp-session-id");
+    });
+  });
+
+  describe("SDK Host-header validation", () => {
+    it("accepts hosted MCP host and rejects unexpected hosts for localhost binds", async () => {
+      const app = createMcpExpressApp(resolveHttpHostValidationOptions("127.0.0.1", {}));
+      app.get("/probe", (_req, res) => {
+        res.json({ ok: true });
+      });
+
+      await withListeningApp(app, async (baseUrl) => {
+        const accepted = await getWithHost(baseUrl, "mcp.harness.io");
+        expect(accepted.status).toBe(200);
+        expect(accepted.body).toEqual({ ok: true });
+
+        const rejected = await getWithHost(baseUrl, "evil.example.com");
+        expect(rejected.status).toBe(403);
+        expect(rejected.body).toMatchObject({
+          error: { message: "Invalid Host: evil.example.com" },
+        });
+      });
     });
   });
 

@@ -11,6 +11,15 @@ describe("resolveHttpHostValidationOptions", () => {
     });
   });
 
+  it("allows hosted MCP hostname when binding to IPv6 localhost", () => {
+    const options = resolveHttpHostValidationOptions("::1", {});
+
+    expect(options).toEqual({
+      host: "::1",
+      allowedHosts: ["localhost", "127.0.0.1", "[::1]", "mcp.harness.io"],
+    });
+  });
+
   it("adds configured hostnames without ports or duplicates", () => {
     const options = resolveHttpHostValidationOptions("127.0.0.1", {
       HARNESS_MCP_ALLOWED_HOSTS: "https://mcp.example.com, mcp.example.com:443, localhost",
@@ -29,5 +38,13 @@ describe("resolveHttpHostValidationOptions", () => {
     const options = resolveHttpHostValidationOptions("0.0.0.0", {});
 
     expect(options).toEqual({ host: "0.0.0.0" });
+  });
+
+  it("throws on malformed configured hosts", () => {
+    expect(() =>
+      resolveHttpHostValidationOptions("0.0.0.0", {
+        HARNESS_MCP_ALLOWED_HOSTS: "mcp.example.com, http://",
+      }),
+    ).toThrow('Invalid HARNESS_MCP_ALLOWED_HOSTS entries: "http://"');
   });
 });

@@ -192,3 +192,15 @@
 - Reproduced current 0.9.5 behavior: `dotenv@17.3.1` printed `[dotenv@17.3.1] injecting env ...` to stdout before MCP JSON-RPC when starting `node build/index.js stdio --env-file ...`.
 - Added `quiet: true` to both `loadDotenv({ path: envFile })` and default `loadDotenv()` calls in `src/index.ts`.
 - Verified after rebuild that the same stdio startup produced `stdout bytes=0`, preserving stdout for JSON-RPC.
+
+## PR #102 Review Follow-up (2026-04-29)
+- [x] Fetch PR review comments
+- [x] Split localhost bind-host detection from Host-header allowlist values
+- [x] Fail loudly on malformed `HARNESS_MCP_ALLOWED_HOSTS`
+- [x] Add request-level SDK Host-header validation coverage
+- [x] Run focused HTTP tests, CLI tests, typecheck, and build
+
+### Review
+- Added `::1` as a localhost bind host while keeping `[::1]` as the Host-header allowlist value expected by the SDK middleware.
+- `HARNESS_MCP_ALLOWED_HOSTS` now throws with the malformed entries instead of silently dropping them.
+- Added an integration test that runs the real SDK Express Host-header middleware and verifies `Host: mcp.harness.io` is accepted while an unexpected host is rejected.
