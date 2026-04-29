@@ -342,6 +342,9 @@ export class Registry {
     input: Record<string, unknown>,
     signal?: AbortSignal,
   ): Promise<unknown> {
+    const resolvedAccountId = this.getAccountId();
+    const resolvedConfig: Config = { ...this.config, HARNESS_ACCOUNT_ID: resolvedAccountId };
+
     // Run preflight hook (e.g. duplicate-check before create) before hitting the API.
     if (spec.preflight) {
       await spec.preflight({ client, input, registry: this, signal });
@@ -350,7 +353,7 @@ export class Registry {
     // Build path with substitutions (or pathBuilder when present)
     let path: string;
     if (spec.pathBuilder) {
-      path = spec.pathBuilder(input, this.config);
+      path = spec.pathBuilder(input, resolvedConfig);
     } else {
       path = spec.path;
       if (spec.pathParams) {
@@ -405,7 +408,7 @@ export class Registry {
     // Inject custom account param when scopeParams.account is set
     // (in addition to the client's default accountIdentifier)
     if (def.scopeParams?.account) {
-      params[def.scopeParams.account] = this.config.HARNESS_ACCOUNT_ID;
+      params[def.scopeParams.account] = resolvedAccountId;
     }
 
     // Account-scoped resources sometimes still need orgIdentifier in query params (NG /ng/api/projects).
@@ -471,10 +474,14 @@ export class Registry {
         typeof bodyRecord[spec.bodyWrapperKey] === "object"
           ? (bodyRecord[spec.bodyWrapperKey] as Record<string, unknown>)
           : bodyRecord;
-      // Only inject accountIdentifier when the endpoint explicitly requires it
+      // Only inject account ID when the endpoint explicitly requires it
       // (gRPC-gateway APIs with body:"*" need it in the body, not just query params)
-      if (spec.injectAccountInBody && this.config.HARNESS_ACCOUNT_ID && !targetRecord.accountIdentifier) {
-        targetRecord.accountIdentifier = this.config.HARNESS_ACCOUNT_ID;
+      // When injectAccountInBody is a string, use it as the field name (e.g. "accountId" for CCM APIs).
+      if (spec.injectAccountInBody && resolvedAccountId) {
+        const accountField = typeof spec.injectAccountInBody === "string" ? spec.injectAccountInBody : "accountIdentifier";
+        if (!targetRecord[accountField]) {
+          targetRecord[accountField] = resolvedAccountId;
+        }
       }
       if (params.orgIdentifier && !targetRecord.orgIdentifier) {
         targetRecord.orgIdentifier = params.orgIdentifier;
@@ -655,7 +662,7 @@ export class Registry {
         try {
           let link = buildDeepLink(
             this.config.HARNESS_BASE_URL,
-            this.getAccountId(),
+            resolvedAccountId,
             def.deepLinkTemplate,
             baseLinkParams,
           );
@@ -742,7 +749,7 @@ export class Registry {
 
             let itemLink = buildDeepLink(
               this.config.HARNESS_BASE_URL,
-              this.getAccountId(),
+              resolvedAccountId,
               def.deepLinkTemplate,
               itemLinkParams,
             );

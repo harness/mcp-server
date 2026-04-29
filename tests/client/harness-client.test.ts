@@ -36,6 +36,12 @@ describe("HarnessClient", () => {
       const client = new HarnessClient(makeConfig());
       expect(client.account).toBe("test-account");
     });
+
+    it("uses resolved account ID when resolver is set", () => {
+      const client = new HarnessClient(makeConfig());
+      client.setAccountIdResolver(() => "resolved-account");
+      expect(client.account).toBe("resolved-account");
+    });
   });
 
   describe("request — URL building", () => {
@@ -157,6 +163,17 @@ describe("HarnessClient", () => {
       const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
       expect(headers["x-api-key"]).toBe("pat.test-account.token.secret");
       expect(headers["Harness-Account"]).toBe("test-account");
+    });
+
+    it("uses resolved account ID for Harness-Account header", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+      client.setAccountIdResolver(() => "resolved-account");
+
+      await client.request({ path: "/test" });
+
+      const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
+      expect(headers["Harness-Account"]).toBe("resolved-account");
     });
 
     it("sets Content-Type to application/json for object body", async () => {

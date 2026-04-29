@@ -58,8 +58,9 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
         if (!elicit.proceed) {
           return errorResult(`Operation ${elicit.reason} by user.`);
         }
-        const { params, ...rest } = args;
-        const input = applyUrlDefaults(rest as Record<string, unknown>, args.url);
+        const { params, body, ...rest } = args;
+        const coercedBody = typeof body === "string" ? (coerceRecord(body) ?? body) : body;
+        const input = applyUrlDefaults({ ...rest, body: coercedBody } as Record<string, unknown>, args.url);
         const coercedParams = coerceRecord(params);
         if (coercedParams) Object.assign(input, coercedParams);
         const identFields = def.identifierFields;

@@ -790,7 +790,7 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
       resourceType: "cost_category",
       displayName: "Cost Category",
       description:
-        "Cost categories (business mappings) for organizing cloud costs into business units. Use harness_list to see all categories, harness_get with category_id for details.",
+        "Cost categories (business mappings) for organizing cloud costs into business units. Use harness_list to see all categories, harness_get with category_id for details. Use harness_create to create a new cost category with cost targets and rules.",
       toolset: "ccm",
       scope: "account",
       identifierFields: ["category_id"],
@@ -819,6 +819,41 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
           pathParams: { category_id: "costCategoryId" },
           responseExtractor: ngExtract,
           description: "Get cost category details by ID",
+        },
+        create: {
+          method: "POST",
+          path: "/ccm/api/business-mapping",
+          injectAccountInBody: "accountId",
+          bodyBuilder: (input) => input.body,
+          bodySchema: {
+            description: "Cost category (business mapping) definition with cost targets and rules",
+            fields: [
+              { name: "name", type: "string", required: true, description: "Cost category display name" },
+              { name: "costTargets", type: "array", required: true, description: "Array of cost target buckets", itemType: "CostTarget", fields: [
+                { name: "name", type: "string", required: true, description: "Bucket display name (e.g. 'Development', 'Production')" },
+                { name: "rules", type: "array", required: true, description: "Array of rules for this bucket. Typically one rule with multiple viewConditions.", itemType: "Rule", fields: [
+                  { name: "viewConditions", type: "array", required: true, description: "Array of conditions (one per label key). All conditions in a rule are ANDed.", itemType: "ViewCondition", fields: [
+                    { name: "type", type: "string", required: true, description: "Always 'VIEW_ID_CONDITION'" },
+                    { name: "viewField", type: "object", required: true, description: "Label field reference", fields: [
+                      { name: "fieldId", type: "string", required: true, description: "Always 'labels.value'" },
+                      { name: "fieldName", type: "string", required: true, description: "The label key name (e.g. 'env', 'Environment', 'team')" },
+                      { name: "identifierName", type: "string", required: true, description: "Always 'Label V2'" },
+                      { name: "identifier", type: "string", required: true, description: "Always 'LABEL_V2'" },
+                    ]},
+                    { name: "viewOperator", type: "string", required: true, description: "'IN' for exact match, 'LIKE' for pattern/regex match (e.g. 'prod-' matches all values starting with 'prod-')" },
+                    { name: "values", type: "array", required: true, description: "Label values. For IN: exact values (e.g. ['dev', 'qa']). For LIKE: patterns (e.g. ['prod-'])", itemType: "string" },
+                  ]},
+                ]},
+              ]},
+              { name: "sharedCosts", type: "array", required: false, description: "Shared cost definitions (default: empty array)", itemType: "SharedCost" },
+              { name: "unallocatedCost", type: "object", required: false, description: "Unallocated cost config. Strategy: HIDE (default), DISPLAY_NAME, or SHARE", fields: [
+                { name: "label", type: "string", required: true, description: "Display label (default: 'Unattributed')" },
+                { name: "strategy", type: "string", required: true, description: "Strategy: 'HIDE', 'DISPLAY_NAME', or 'SHARE'" },
+              ]},
+            ],
+          },
+          responseExtractor: ngExtract,
+          description: "Create a new cost category (business mapping). The accountId is injected automatically. Body must include name and costTargets array with label-based rules.",
         },
       },
     },

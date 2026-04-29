@@ -132,3 +132,32 @@
 - Added a shared `resourceTypeSchema` helper that preserves enum validation when resource types exist and uses a non-throwing schema that rejects all values when none support the operation.
 - Added a regression test that registers every MCP tool with `HARNESS_TOOLSETS=logs`.
 - Verified with `pnpm test tests/registry/registry.test.ts`, `pnpm typecheck`, `pnpm test`, `pnpm build`, and `HARNESS_API_KEY=pat.test-account.token.secret HARNESS_TOOLSETS=logs timeout 3s node build/index.js stdio`.
+
+## Documentation Alignment Automation (2026-04-27)
+- [x] Audit recent registry/config changes against public docs
+- [x] Align README tool counts and pipeline version semantics
+- [x] Refresh `.env.example` with current operational config
+- [x] Run docs consistency checks
+- [ ] Commit and push docs-only changes
+
+### Review
+- README now matches `src/tools/index.ts` with 11 generic tools and documents that `HARNESS_PIPELINE_VERSION` selects either `pipeline` or `pipeline_v1`, not both.
+- HTTP transport docs now mention the per-session `x-harness-pipeline-version` initialize header from `src/index.ts`.
+- `.env.example` now covers operational config from `src/config.ts` and clarifies default vs opt-in toolset filtering, including the legacy `agent-pipelines` alias.
+
+## Critical Bug Inspection (2026-04-29)
+- [x] Inspect recent commits for high-severity behavioral regressions
+- [x] Confirm `--env-file` loads before config values except HTTP `PORT`
+- [x] Fix HTTP port resolution so env-file `PORT` is honored
+- [x] Add focused regression coverage
+- [x] Run tests/typecheck, commit, push, and open PR
+
+### Plan
+- Split CLI parsing so transport/env-file discovery remains early, but final port resolution can happen after dotenv loads.
+- Preserve precedence: `--port` > loaded `PORT` env var > `3000`.
+- Keep the change scoped to CLI startup behavior and focused tests.
+
+### Review
+- Found HTTP startup ignored `PORT` from a specified `--env-file` because `parseArgs()` resolved the port before dotenv loaded the file.
+- Added `resolvePort()` so `src/index.ts` loads dotenv first, then resolves the final HTTP port while preserving `--port` precedence.
+- Verified with `pnpm test tests/utils/cli.test.ts` and `pnpm typecheck`.
