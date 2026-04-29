@@ -189,7 +189,7 @@ export interface EndpointSpec {
    * JSON body IS the proto message — query-param-only accountIdentifier is invisible
    * to the handler.
    */
-  injectAccountInBody?: boolean;
+  injectAccountInBody?: boolean | string;
   /**
    * Optional preflight hook that runs before the request is sent.
    * Use for server-side invariants (e.g. duplicate-check before creating a
