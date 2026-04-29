@@ -131,3 +131,20 @@
 - README now matches `src/tools/index.ts` with 11 generic tools and documents that `HARNESS_PIPELINE_VERSION` selects either `pipeline` or `pipeline_v1`, not both.
 - HTTP transport docs now mention the per-session `x-harness-pipeline-version` initialize header from `src/index.ts`.
 - `.env.example` now covers operational config from `src/config.ts` and clarifies default vs opt-in toolset filtering, including the legacy `agent-pipelines` alias.
+
+## Critical Bug Inspection (2026-04-29)
+- [x] Inspect recent commits for high-severity behavioral regressions
+- [x] Confirm `--env-file` loads before config values except HTTP `PORT`
+- [x] Fix HTTP port resolution so env-file `PORT` is honored
+- [x] Add focused regression coverage
+- [x] Run tests/typecheck, commit, push, and open PR
+
+### Plan
+- Split CLI parsing so transport/env-file discovery remains early, but final port resolution can happen after dotenv loads.
+- Preserve precedence: `--port` > loaded `PORT` env var > `3000`.
+- Keep the change scoped to CLI startup behavior and focused tests.
+
+### Review
+- Found HTTP startup ignored `PORT` from a specified `--env-file` because `parseArgs()` resolved the port before dotenv loaded the file.
+- Added `resolvePort()` so `src/index.ts` loads dotenv first, then resolves the final HTTP port while preserving `--port` precedence.
+- Verified with `pnpm test tests/utils/cli.test.ts` and `pnpm typecheck`.

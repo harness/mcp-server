@@ -67,7 +67,7 @@ export function parseArgs(argv: string[] = process.argv.slice(2)): CliArgs {
   }
 
   const transport = parseTransport(argv);
-  const port = parsePort(argv);
+  const port = resolvePort(argv);
   const envFile = parseEnvFile(argv);
   return { transport, port, envFile };
 }
@@ -92,7 +92,7 @@ function parseTransport(argv: string[]): Transport {
   return "stdio";
 }
 
-function parsePort(argv: string[]): number {
+export function resolvePort(argv: string[] = process.argv.slice(2)): number {
   // Check --port flag first
   const portFlagIndex = argv.indexOf("--port");
   if (portFlagIndex !== -1 && portFlagIndex + 1 < argv.length) {
