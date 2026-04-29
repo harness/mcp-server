@@ -131,3 +131,13 @@
 - README now matches `src/tools/index.ts` with 11 generic tools and documents that `HARNESS_PIPELINE_VERSION` selects either `pipeline` or `pipeline_v1`, not both.
 - HTTP transport docs now mention the per-session `x-harness-pipeline-version` initialize header from `src/index.ts`.
 - `.env.example` now covers operational config from `src/config.ts` and clarifies default vs opt-in toolset filtering, including the legacy `agent-pipelines` alias.
+
+## CCM Cost Category Create Fix (2026-04-29)
+- [x] Confirm Slack thread context and PR branch signal
+- [x] Add cost category create support with resolver-aware account body injection
+- [x] Coerce JSON-string create/update bodies before registry dispatch
+- [x] Add focused regression tests for accountId injection and JSON-string body handling
+- [ ] Run focused tests plus typecheck
+
+### Review
+- Pending.

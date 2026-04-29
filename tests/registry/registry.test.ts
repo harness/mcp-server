@@ -467,6 +467,69 @@ describe("Registry", () => {
         }),
       ).rejects.toThrow(/body must be a YAML string/);
     });
+
+    it("cost category create injects accountId into the request body", async () => {
+      registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "ccm" }));
+      const mockRequest = vi.fn().mockResolvedValue({ data: { uuid: "category-1" } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_category", "create", {
+        body: {
+          name: "Engineering",
+          costTargets: [
+            {
+              name: "Development",
+              rules: [
+                {
+                  viewConditions: [
+                    {
+                      type: "VIEW_ID_CONDITION",
+                      viewField: {
+                        fieldId: "labels.value",
+                        fieldName: "env",
+                        identifierName: "Label V2",
+                        identifier: "LABEL_V2",
+                      },
+                      viewOperator: "IN",
+                      values: ["dev"],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      });
+
+      expect(mockRequest).toHaveBeenCalledOnce();
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("POST");
+      expect(call.path).toBe("/ccm/api/business-mapping");
+      expect(call.body).toMatchObject({
+        accountId: "test-account",
+        name: "Engineering",
+      });
+      expect(call.body.accountIdentifier).toBeUndefined();
+    });
+
+    it("cost category create uses the resolved account ID for body injection", async () => {
+      registry = new Registry(makeConfig({ HARNESS_ACCOUNT_ID: "internal", HARNESS_TOOLSETS: "ccm" }), {
+        accountIdResolver: () => "resolved-account",
+      });
+      const mockRequest = vi.fn().mockResolvedValue({ data: { uuid: "category-1" } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_category", "create", {
+        body: {
+          name: "Engineering",
+          costTargets: [{ name: "Development", rules: [] }],
+        },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.accountId).toBe("resolved-account");
+      expect(call.body.accountId).not.toBe("internal");
+    });
   });
 
   describe("read-only mode", () => {
