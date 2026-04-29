@@ -28917,7 +28917,24 @@ const schema: Record<string, any> = {
             "type": "object",
             "properties": {
               "size": {
-                "type": "string"
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "xsmall",
+                      "flex",
+                      "small",
+                      "medium",
+                      "large",
+                      "xlarge",
+                      "xxlarge",
+                      "xxxlarge"
+                    ]
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
               },
               "imageName": {
                 "type": "string"
