@@ -37,8 +37,11 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
     },
     async (args) => {
       try {
-        const { params, ...rest } = args;
-        const input = applyUrlDefaults(rest as Record<string, unknown>, args.url);
+        const { params, body, ...rest } = args;
+        // LLMs often serialize JSON bodies as strings — coerce back to object
+        // so the HTTP client sends Content-Type: application/json (not yaml).
+        const coercedBody = typeof body === "string" ? (coerceRecord(body) ?? body) : body;
+        const input = applyUrlDefaults({ ...rest, body: coercedBody } as Record<string, unknown>, args.url);
         const coercedParams = coerceRecord(params);
         if (coercedParams) Object.assign(input, coercedParams);
 

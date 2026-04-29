@@ -176,7 +176,7 @@ export interface EndpointSpec {
    * JSON body IS the proto message — query-param-only accountIdentifier is invisible
    * to the handler.
    */
-  injectAccountInBody?: boolean;
+  injectAccountInBody?: boolean | string;
   /**
    * When true, the MCP layer controls ELK→Mongo fallback for this endpoint:
    *  1. First request sent with `enforce_elasticsearch=true` (ELK path).
