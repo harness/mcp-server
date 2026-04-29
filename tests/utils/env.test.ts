@@ -2,6 +2,7 @@ import { chdir, cwd } from "node:process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import * as dotenv from "dotenv";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadEnvFile } from "../../src/utils/env.js";
 
@@ -25,11 +26,13 @@ describe("loadEnvFile", () => {
     const envPath = join(tempDir, ".env");
     writeFileSync(envPath, `${envKey}=loaded\n`);
     const stdoutSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const dotenvSpy = vi.spyOn(dotenv, "config");
 
     loadEnvFile(envPath);
 
     expect(process.env[envKey]).toBe("loaded");
     expect(stdoutSpy).not.toHaveBeenCalled();
+    expect(dotenvSpy).toHaveBeenCalledWith({ path: envPath, quiet: true });
   });
 
   it("loads default .env without writing dotenv output to stdout", () => {
@@ -37,10 +40,12 @@ describe("loadEnvFile", () => {
     writeFileSync(join(tempDir, ".env"), `${envKey}=loaded-default\n`);
     chdir(tempDir);
     const stdoutSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const dotenvSpy = vi.spyOn(dotenv, "config");
 
     loadEnvFile();
 
     expect(process.env[envKey]).toBe("loaded-default");
     expect(stdoutSpy).not.toHaveBeenCalled();
+    expect(dotenvSpy).toHaveBeenCalledWith({ quiet: true });
   });
 });

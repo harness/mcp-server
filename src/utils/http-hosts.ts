@@ -23,8 +23,11 @@ function normalizeHostname(rawHost: string): string | undefined {
   }
 }
 
-function configuredAllowedHosts(env: HostEnv): string[] {
-  const raw = env.HARNESS_MCP_ALLOWED_HOSTS;
+/**
+ * Parse comma-separated hostnames from HARNESS_MCP_ALLOWED_HOSTS.
+ * Throws on malformed entries so mis-typed allowlists fail at startup (config load), not silently.
+ */
+export function parseMcpAllowedHostnames(raw: string | undefined): string[] {
   if (!raw) return [];
 
   const hosts: string[] = [];
@@ -50,7 +53,7 @@ export function resolveHttpHostValidationOptions(
   host: string,
   env: HostEnv,
 ): McpExpressHostOptions {
-  const configuredHosts = configuredAllowedHosts(env);
+  const configuredHosts = parseMcpAllowedHostnames(env.HARNESS_MCP_ALLOWED_HOSTS);
 
   if (LOCALHOST_BIND_HOSTS.includes(host)) {
     return {

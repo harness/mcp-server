@@ -206,6 +206,29 @@ describe("HTTP transport session management", () => {
         });
       });
     });
+
+    it("accepts only configured hosts when binding to all interfaces", async () => {
+      const app = createMcpExpressApp(
+        resolveHttpHostValidationOptions("0.0.0.0", {
+          HARNESS_MCP_ALLOWED_HOSTS: "mcp.example.com",
+        }),
+      );
+      app.get("/probe", (_req, res) => {
+        res.json({ ok: true });
+      });
+
+      await withListeningApp(app, async (baseUrl) => {
+        const accepted = await getWithHost(baseUrl, "mcp.example.com");
+        expect(accepted.status).toBe(200);
+        expect(accepted.body).toEqual({ ok: true });
+
+        const rejected = await getWithHost(baseUrl, "mcp.harness.io");
+        expect(rejected.status).toBe(403);
+        expect(rejected.body).toMatchObject({
+          error: { message: "Invalid Host: mcp.harness.io" },
+        });
+      });
+    });
   });
 
   describe("graceful shutdown behavior", () => {

@@ -155,6 +155,26 @@ describe("ConfigSchema", () => {
       expect(result.data.HARNESS_TOOLSETS).toBeUndefined();
     }
   });
+
+  it("rejects malformed HARNESS_MCP_ALLOWED_HOSTS at parse time", () => {
+    expect(() =>
+      ConfigSchema.parse({
+        ...validConfig,
+        HARNESS_MCP_ALLOWED_HOSTS: "mcp.example.com, http://",
+      }),
+    ).toThrow('Invalid HARNESS_MCP_ALLOWED_HOSTS entries: "http://"');
+  });
+
+  it("accepts valid HARNESS_MCP_ALLOWED_HOSTS", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      HARNESS_MCP_ALLOWED_HOSTS: "https://mcp.example.com, mcp.example.com:443",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_MCP_ALLOWED_HOSTS).toBe("https://mcp.example.com, mcp.example.com:443");
+    }
+  });
 });
 
 describe("ConfigSchema — boolean env var coercion", () => {

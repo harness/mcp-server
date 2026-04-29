@@ -1,5 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { resolveHttpHostValidationOptions } from "../../src/utils/http-hosts.js";
+import { parseMcpAllowedHostnames, resolveHttpHostValidationOptions } from "../../src/utils/http-hosts.js";
+
+describe("parseMcpAllowedHostnames", () => {
+  it("returns empty list when unset", () => {
+    expect(parseMcpAllowedHostnames(undefined)).toEqual([]);
+  });
+
+  it("parses comma-separated hostnames", () => {
+    expect(parseMcpAllowedHostnames("a.example.com, b.example.com")).toEqual(["a.example.com", "b.example.com"]);
+  });
+
+  it("throws on malformed entries", () => {
+    expect(() => parseMcpAllowedHostnames("good.example.com, http://")).toThrow(
+      'Invalid HARNESS_MCP_ALLOWED_HOSTS entries: "http://"',
+    );
+  });
+});
 
 describe("resolveHttpHostValidationOptions", () => {
   it("allows the hosted MCP hostname when binding to localhost", () => {

@@ -1,4 +1,5 @@
 import * as z from "zod/v4";
+import { parseMcpAllowedHostnames } from "./utils/http-hosts.js";
 
 /**
  * Coerce a string env var to a boolean.
@@ -62,6 +63,8 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
       "HARNESS_ACCOUNT_ID is required when the API key is not a PAT (pat.<accountId>.<tokenId>.<secret>)",
     );
   }
+
+  parseMcpAllowedHostnames(data.HARNESS_MCP_ALLOWED_HOSTS);
 
   if (!data.HARNESS_BASE_URL.startsWith("https://") && !data.HARNESS_ALLOW_HTTP) {
     throw new Error(
