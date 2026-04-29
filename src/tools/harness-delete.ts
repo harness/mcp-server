@@ -18,7 +18,7 @@ export function registerDeleteTool(server: McpServer, registry: Registry, client
     {
       description: "Delete a Harness resource. You can pass a Harness URL to auto-extract identifiers. This is destructive and cannot be undone.",
       inputSchema: {
-        resource_type: resourceTypeSchema(deletableTypes, "The type of resource to delete"),
+        resource_type: resourceTypeSchema(deletableTypes).describe("The type of resource to delete"),
         resource_id: z.string().describe("The identifier of the resource to delete"),
         url: z.string().describe("A Harness UI URL — org, project, resource type, and ID are extracted automatically").optional(),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),

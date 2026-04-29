@@ -23,10 +23,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
     {
       description: "Execute an action on a Harness resource: run/retry/interrupt pipelines, kill/restore FME feature flags, test connectors, sync GitOps apps, run chaos experiments. You can pass a Harness URL to auto-extract identifiers.",
       inputSchema: {
-        resource_type: resourceTypeSchema(
-          executableTypes,
-          "Resource type with executable actions. Auto-detected from url.",
-        ).optional(),
+        resource_type: resourceTypeSchema(executableTypes).optional().describe("Resource type with executable actions. Auto-detected from url."),
         url: z.string().describe("Harness UI URL — auto-extracts org, project, type, and ID").optional(),
         action: z.string().describe("Action to execute (e.g. run, retry, interrupt, toggle, test_connection, sync)"),
         resource_id: z.string().describe("Primary resource identifier").optional(),

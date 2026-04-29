@@ -18,7 +18,7 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
     {
       description: "Create a Harness resource. For pipelines/input sets: pass body as a YAML string directly (recommended for complex definitions), or use body.yamlPipeline (YAML string), or body.pipeline (JSON object). For remote pipelines, pass git details in params: external Git (store_type='REMOTE', connector_ref, repo_name, branch, file_path) or Harness Code (store_type='REMOTE', is_harness_code_repo=true, repo_name, branch, file_path). For others: call harness_describe for the body format.",
       inputSchema: {
-        resource_type: resourceTypeSchema(creatableTypes, "The type of resource to create"),
+        resource_type: resourceTypeSchema(creatableTypes).describe("The type of resource to create"),
         body: z.union([
           z.record(z.string(), z.unknown()),
           z.string(),

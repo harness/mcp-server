@@ -18,7 +18,7 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
     {
       description: "Get a Harness resource by ID. Accepts a Harness URL to auto-extract identifiers. For failure analysis, prefer harness_diagnose.",
       inputSchema: {
-        resource_type: resourceTypeSchema(gettableTypes, "Resource type to retrieve. Auto-detected from url.").optional(),
+        resource_type: resourceTypeSchema(gettableTypes).optional().describe("Resource type to retrieve. Auto-detected from url."),
         resource_id: z.string().describe("Primary resource identifier. Auto-detected from url.").optional(),
         url: z.string().describe("Harness UI URL — auto-extracts org, project, type, and ID").optional(),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),

@@ -28,7 +28,7 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
     {
       description: "List Harness resources with filtering and pagination. Accepts a Harness URL to auto-extract scope.",
       inputSchema: {
-        resource_type: resourceTypeSchema(listableTypes, "Resource type to list. Auto-detected from url.").optional(),
+        resource_type: resourceTypeSchema(listableTypes).optional().describe("Resource type to list. Auto-detected from url."),
         url: z.string().describe("Harness UI URL — auto-extracts org, project, and type").optional(),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
