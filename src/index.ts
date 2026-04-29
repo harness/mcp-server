@@ -472,9 +472,9 @@ async function main(): Promise<void> {
 
   // Load .env file (custom path if specified, otherwise .env in current directory)
   if (envFile) {
-    loadDotenv({ path: envFile });
+    loadDotenv({ path: envFile, quiet: true });
   } else {
-    loadDotenv(); // loads .env from current directory if it exists
+    loadDotenv({ quiet: true }); // loads .env from current directory if it exists
   }
 
   // Resolve the HTTP port after dotenv is loaded so --env-file PORT is honored.

@@ -181,3 +181,14 @@
 - Found that `createMcpExpressApp({ host: "127.0.0.1" })` enables SDK Host-header validation for only localhost names. That is safe for local use but rejects the documented hosted MCP hostname (`mcp.harness.io`) when the server sits behind a public proxy while binding locally.
 - Added `resolveHttpHostValidationOptions()` to preserve SDK DNS-rebinding protection while allowing the hosted MCP hostname by default and optional proxy/custom hostnames through `HARNESS_MCP_ALLOWED_HOSTS`.
 - Verified with `pnpm test tests/utils/http-hosts.test.ts`, `pnpm test tests/integration/http-transport.test.ts`, and `pnpm typecheck` using a temporary Node toolchain because the automation image did not have Node on `PATH`.
+
+## Follow-up: Stdio Dotenv Banner (2026-04-29)
+- [x] Reproduce stdout contamination from dotenv during stdio startup
+- [x] Add quiet dotenv loading for default and `--env-file` paths
+- [x] Add regression coverage for quiet dotenv invocation
+- [x] Verify focused CLI test, build, stdio stdout, typecheck, and related HTTP tests
+
+### Review
+- Reproduced current 0.9.5 behavior: `dotenv@17.3.1` printed `[dotenv@17.3.1] injecting env ...` to stdout before MCP JSON-RPC when starting `node build/index.js stdio --env-file ...`.
+- Added `quiet: true` to both `loadDotenv({ path: envFile })` and default `loadDotenv()` calls in `src/index.ts`.
+- Verified after rebuild that the same stdio startup produced `stdout bytes=0`, preserving stdout for JSON-RPC.

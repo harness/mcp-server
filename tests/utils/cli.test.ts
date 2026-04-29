@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { parseArgs, resolvePort } from "../../src/utils/cli.js";
 
@@ -117,5 +118,14 @@ describe("parseArgs", () => {
   it("accepts port 65535 (maximum)", () => {
     const args = parseArgs(["--port", "65535"]);
     expect(args.port).toBe(65535);
+  });
+
+  it("loads dotenv quietly to keep stdio stdout reserved for JSON-RPC", () => {
+    const source = readFileSync("src/index.ts", "utf8");
+
+    expect(source).toContain("loadDotenv({ path: envFile, quiet: true })");
+    expect(source).toContain("loadDotenv({ quiet: true })");
+    expect(source).not.toContain("loadDotenv({ path: envFile });");
+    expect(source).not.toContain("loadDotenv();");
   });
 });
