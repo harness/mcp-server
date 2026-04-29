@@ -137,7 +137,10 @@
 - [x] Add cost category create support with resolver-aware account body injection
 - [x] Coerce JSON-string create/update bodies before registry dispatch
 - [x] Add focused regression tests for accountId injection and JSON-string body handling
-- [ ] Run focused tests plus typecheck
+- [x] Run focused tests plus typecheck
 
 ### Review
-- Pending.
+- Added `cost_category.create` for `/ccm/api/business-mapping` with `accountId` injected into the request body.
+- Extended registry account body injection to support custom field names while preserving resolver-aware account IDs.
+- Coerced JSON-string create/update bodies before dispatch so non-pipeline JSON resources are sent as objects.
+- Verified with `pnpm test tests/registry/registry.test.ts tests/tools/tool-handlers.test.ts` and `pnpm typecheck`.
