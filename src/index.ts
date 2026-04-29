@@ -16,6 +16,7 @@ import { registerAllResources } from "./resources/index.js";
 import { registerAllPrompts } from "./prompts/index.js";
 import { parseArgs, resolvePort } from "./utils/cli.js";
 import { configureElicitation } from "./utils/elicitation.js";
+import { resolveHttpHostValidationOptions } from "./utils/http-hosts.js";
 
 const log = createLogger("main");
 
@@ -193,7 +194,7 @@ const REAP_INTERVAL_MS = 60_000;    // check every minute
  */
 async function startHttp(config: Config, port: number): Promise<void> {
   const host = process.env.HOST || "127.0.0.1";
-  const app = createMcpExpressApp({ host });
+  const app = createMcpExpressApp(resolveHttpHostValidationOptions(host, config));
 
   const maxBodySize = config.HARNESS_MAX_BODY_SIZE_MB * 1024 * 1024;
   const { json } = await import("express");

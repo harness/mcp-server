@@ -161,3 +161,23 @@
 - Found HTTP startup ignored `PORT` from a specified `--env-file` because `parseArgs()` resolved the port before dotenv loaded the file.
 - Added `resolvePort()` so `src/index.ts` loads dotenv first, then resolves the final HTTP port while preserving `--port` precedence.
 - Verified with `pnpm test tests/utils/cli.test.ts` and `pnpm typecheck`.
+
+## Slack Bug Triage: MCP Connections Failing (2026-04-29)
+- [x] Read the Slack report thread and capture available symptoms
+- [x] Reproduce MCP connection startup/initialize behavior locally
+- [x] Identify the root cause from code and recent changes
+- [x] Add a focused regression test before implementation
+- [x] Implement the minimal fix
+- [x] Run focused and broader verification
+- [ ] Commit, push, open PR, and reply in the original Slack thread
+
+### Plan
+- Start with the stdio and HTTP connection paths in `src/index.ts`, `src/config.ts`, and the MCP SDK integration tests because the report is connection-level and the Slack thread has no detailed error text.
+- Use recent commits plus local startup tests to narrow whether this is a startup crash, config parsing issue, or session initialization regression.
+- If a repo bug is found, write the smallest regression test that fails on current code, then fix only the implicated path.
+
+### Review
+- The Slack thread had no screenshots or concrete error details, so investigation focused on the HTTP connection path and recent SDK/config changes.
+- Found that `createMcpExpressApp({ host: "127.0.0.1" })` enables SDK Host-header validation for only localhost names. That is safe for local use but rejects the documented hosted MCP hostname (`mcp.harness.io`) when the server sits behind a public proxy while binding locally.
+- Added `resolveHttpHostValidationOptions()` to preserve SDK DNS-rebinding protection while allowing the hosted MCP hostname by default and optional proxy/custom hostnames through `HARNESS_MCP_ALLOWED_HOSTS`.
+- Verified with `pnpm test tests/utils/http-hosts.test.ts`, `pnpm test tests/integration/http-transport.test.ts`, and `pnpm typecheck` using a temporary Node toolchain because the automation image did not have Node on `PATH`.

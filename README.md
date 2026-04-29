@@ -524,6 +524,7 @@ The server automatically loads environment variables from a `.env` file in the p
 | `HARNESS_SKIP_ELICITATION` | No | `false` | Skip all elicitation confirmation prompts. When `true`, write and delete operations proceed without user approval — enabling fully autonomous agent workflows. See [Elicitation](#elicitation) |
 | `HARNESS_ALLOW_HTTP` | No | `false` | Allow non-HTTPS `HARNESS_BASE_URL`. By default, the server enforces HTTPS for security. Set to `true` only for local development against a non-TLS Harness instance |
 | `HARNESS_PIPELINE_VERSION` | No | `0` | **(Alpha)** Pipeline YAML version. `0` loads the `pipeline` resource type and excludes `pipeline_v1`; `1` loads `pipeline_v1` and excludes `pipeline`. HTTP sessions can override this at initialize time with `x-harness-pipeline-version: 0` or `1` |
+| `HARNESS_MCP_ALLOWED_HOSTS` | No | -- | Comma-separated hostnames allowed by HTTP transport Host-header validation. `mcp.harness.io` is allowed by default for localhost binds; add proxy/custom domains here |
 | `HARNESS_MCP_LOG_FILE` | No | `~/.claude/harness-mcp.log` | File used for stdio disconnect/crash diagnostics when stderr may no longer be available |
 
 ### HTTPS Enforcement

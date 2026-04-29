@@ -126,7 +126,7 @@ describe("HTTP transport session management", () => {
       // Simulate CORS middleware
       headers["Access-Control-Allow-Origin"] = `http://${host}:${port}`;
       headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS";
-      headers["Access-Control-Allow-Headers"] = "Content-Type, mcp-session-id";
+      headers["Access-Control-Allow-Headers"] = "Content-Type, mcp-session-id, x-harness-pipeline-version";
       headers["Access-Control-Expose-Headers"] = "mcp-session-id";
 
       expect(headers["Access-Control-Allow-Origin"]).toBe("http://127.0.0.1:3000");

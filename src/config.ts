@@ -50,6 +50,7 @@ const RawConfigSchema = z.object({
   HARNESS_READ_ONLY: booleanFromEnv.default(false),
   HARNESS_SKIP_ELICITATION: booleanFromEnv.default(false),
   HARNESS_ALLOW_HTTP: booleanFromEnv.default(false),
+  HARNESS_MCP_ALLOWED_HOSTS: optionalStringFromEnv,
   HARNESS_FME_BASE_URL: urlFromEnv("https://api.split.io"),
   HARNESS_PIPELINE_VERSION: z.enum(["0", "1"]).optional(),
 });
