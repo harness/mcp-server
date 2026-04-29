@@ -14,7 +14,7 @@ import { Registry } from "./registry/index.js";
 import { registerAllTools } from "./tools/index.js";
 import { registerAllResources } from "./resources/index.js";
 import { registerAllPrompts } from "./prompts/index.js";
-import { parseArgs } from "./utils/cli.js";
+import { parseArgs, resolvePort } from "./utils/cli.js";
 import { configureElicitation } from "./utils/elicitation.js";
 
 const log = createLogger("main");
@@ -467,7 +467,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
 
 async function main(): Promise<void> {
   // Parse CLI args first to get env file path
-  const { transport, port, envFile } = parseArgs();
+  const { transport, envFile } = parseArgs();
 
   // Load .env file (custom path if specified, otherwise .env in current directory)
   if (envFile) {
@@ -475,6 +475,9 @@ async function main(): Promise<void> {
   } else {
     loadDotenv(); // loads .env from current directory if it exists
   }
+
+  // Resolve the HTTP port after dotenv is loaded so --env-file PORT is honored.
+  const port = resolvePort();
 
   // Global error handlers for runtime errors.
   // Node 20+ defaults --unhandled-rejections=throw, so unhandled rejections
