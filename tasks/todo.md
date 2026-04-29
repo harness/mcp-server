@@ -204,3 +204,4 @@
 - Added `::1` as a localhost bind host while keeping `[::1]` as the Host-header allowlist value expected by the SDK middleware.
 - `HARNESS_MCP_ALLOWED_HOSTS` now throws with the malformed entries instead of silently dropping them.
 - Added an integration test that runs the real SDK Express Host-header middleware and verifies `Host: mcp.harness.io` is accepted while an unexpected host is rejected.
+- Replaced the source-text dotenv assertion with behavioral `loadEnvFile()` tests that verify custom and default dotenv loading do not write through `console.log`.

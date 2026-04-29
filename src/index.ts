@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import { randomUUID } from "node:crypto";
-import { config as loadDotenv } from "dotenv";
 import { appendFileSync } from "node:fs";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -17,6 +16,7 @@ import { registerAllPrompts } from "./prompts/index.js";
 import { parseArgs, resolvePort } from "./utils/cli.js";
 import { configureElicitation } from "./utils/elicitation.js";
 import { resolveHttpHostValidationOptions } from "./utils/http-hosts.js";
+import { loadEnvFile } from "./utils/env.js";
 
 const log = createLogger("main");
 
@@ -471,11 +471,7 @@ async function main(): Promise<void> {
   const { transport, envFile } = parseArgs();
 
   // Load .env file (custom path if specified, otherwise .env in current directory)
-  if (envFile) {
-    loadDotenv({ path: envFile, quiet: true });
-  } else {
-    loadDotenv({ quiet: true }); // loads .env from current directory if it exists
-  }
+  loadEnvFile(envFile);
 
   // Resolve the HTTP port after dotenv is loaded so --env-file PORT is honored.
   const port = resolvePort();
