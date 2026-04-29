@@ -169,7 +169,7 @@
 - [x] Add a focused regression test before implementation
 - [x] Implement the minimal fix
 - [x] Run focused and broader verification
-- [ ] Commit, push, open PR, and reply in the original Slack thread
+- [x] Commit, push, open PR, and reply in the original Slack thread
 
 ### Plan
 - Start with the stdio and HTTP connection paths in `src/index.ts`, `src/config.ts`, and the MCP SDK integration tests because the report is connection-level and the Slack thread has no detailed error text.
