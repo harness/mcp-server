@@ -58,8 +58,6 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
           return errorResult(`Operation ${elicit.reason} by user.`);
         }
         const { params, body, ...rest } = args;
-        // LLMs often serialize JSON bodies as strings — coerce back to object
-        // so the HTTP client sends Content-Type: application/json (not yaml).
         const coercedBody = typeof body === "string" ? (coerceRecord(body) ?? body) : body;
         const input = applyUrlDefaults({ ...rest, body: coercedBody } as Record<string, unknown>, args.url);
         const coercedParams = coerceRecord(params);
