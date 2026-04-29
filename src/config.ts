@@ -1,4 +1,5 @@
 import * as z from "zod/v4";
+import { normalizeHttpAllowedHost } from "./utils/http-hosts.js";
 
 /**
  * Coerce a string env var to a boolean.
@@ -13,6 +14,28 @@ const emptyStringAsUndefined = (val: unknown): unknown => val === "" ? undefined
 const optionalStringFromEnv = z.preprocess(emptyStringAsUndefined, z.string().optional());
 const urlFromEnv = (defaultValue: string) =>
   z.preprocess(emptyStringAsUndefined, z.string().url().default(defaultValue));
+
+function validateAllowedHosts(rawHosts: string | undefined): string | undefined {
+  if (rawHosts === undefined) return undefined;
+
+  const hosts: string[] = [];
+  const invalidHosts: string[] = [];
+  for (const value of rawHosts.split(",")) {
+    const hostname = normalizeHttpAllowedHost(value);
+    if (!hostname) {
+      invalidHosts.push(value.trim());
+    } else if (!hosts.includes(hostname)) {
+      hosts.push(hostname);
+    }
+  }
+
+  if (invalidHosts.length > 0) {
+    const quotedHosts = invalidHosts.map((host) => `"${host}"`).join(", ");
+    throw new Error(`Invalid HARNESS_MCP_ALLOWED_HOSTS entries: ${quotedHosts}`);
+  }
+
+  return hosts.join(",");
+}
 
 /**
  * Extract the account ID from a Harness PAT token.
@@ -50,7 +73,7 @@ const RawConfigSchema = z.object({
   HARNESS_READ_ONLY: booleanFromEnv.default(false),
   HARNESS_SKIP_ELICITATION: booleanFromEnv.default(false),
   HARNESS_ALLOW_HTTP: booleanFromEnv.default(false),
-  HARNESS_MCP_ALLOWED_HOSTS: optionalStringFromEnv,
+  HARNESS_MCP_ALLOWED_HOSTS: optionalStringFromEnv.transform(validateAllowedHosts),
   HARNESS_FME_BASE_URL: urlFromEnv("https://api.split.io"),
   HARNESS_PIPELINE_VERSION: z.enum(["0", "1"]).optional(),
 });

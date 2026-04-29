@@ -162,6 +162,25 @@
 - Added `resolvePort()` so `src/index.ts` loads dotenv first, then resolves the final HTTP port while preserving `--port` precedence.
 - Verified with `pnpm test tests/utils/cli.test.ts` and `pnpm typecheck`.
 
+## PR 102 Review Follow-up (2026-04-29)
+- [x] Verify each review comment against the current PR branch
+- [x] Move malformed `HARNESS_MCP_ALLOWED_HOSTS` validation into startup config parsing
+- [x] Preserve real Express Host-header accept/reject coverage
+- [x] Preserve behavioral dotenv stdout regression coverage
+- [x] Run focused tests and typecheck
+- [ ] Commit, push, and update PR
+
+### Plan
+- Add a config-level validator for `HARNESS_MCP_ALLOWED_HOSTS` using the same hostname parsing rules as HTTP host resolution.
+- Keep host resolution responsible for producing MCP Express options, not discovering config typos late.
+- Run focused tests for config, HTTP transport, env loading, and CLI parsing before full typecheck.
+
+### Review
+- Moved malformed `HARNESS_MCP_ALLOWED_HOSTS` handling into `ConfigSchema`, where startup config validation fails loudly and stores a normalized, de-duplicated allowlist.
+- Kept `resolveHttpHostValidationOptions()` focused on producing Express adapter options from validated config.
+- Confirmed request-level host behavior through the real `createMcpExpressApp()` adapter and behavioral dotenv stdout tests.
+- Verified with focused tests, full `pnpm test`, and `pnpm typecheck`.
+
 ## Slack Bug Triage: MCP Connections Failing (2026-04-29)
 - [x] Read the Slack report thread and capture available symptoms
 - [x] Reproduce MCP connection startup/initialize behavior locally

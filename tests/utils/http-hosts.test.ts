@@ -40,11 +40,14 @@ describe("resolveHttpHostValidationOptions", () => {
     expect(options).toEqual({ host: "0.0.0.0" });
   });
 
-  it("throws on malformed configured hosts", () => {
-    expect(() =>
-      resolveHttpHostValidationOptions("0.0.0.0", {
-        HARNESS_MCP_ALLOWED_HOSTS: "mcp.example.com, http://",
-      }),
-    ).toThrow('Invalid HARNESS_MCP_ALLOWED_HOSTS entries: "http://"');
+  it("resolves configured hosts from already-validated config values", () => {
+    const options = resolveHttpHostValidationOptions("0.0.0.0", {
+      HARNESS_MCP_ALLOWED_HOSTS: "mcp.example.com, https://mcp.internal.example",
+    });
+
+    expect(options).toEqual({
+      host: "0.0.0.0",
+      allowedHosts: ["mcp.example.com", "mcp.internal.example"],
+    });
   });
 });

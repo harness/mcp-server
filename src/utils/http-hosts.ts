@@ -11,7 +11,7 @@ interface McpExpressHostOptions {
   allowedHosts?: string[];
 }
 
-function normalizeHostname(rawHost: string): string | undefined {
+export function normalizeHttpAllowedHost(rawHost: string): string | undefined {
   const trimmed = rawHost.trim();
   if (!trimmed) return undefined;
 
@@ -28,19 +28,11 @@ function configuredAllowedHosts(env: HostEnv): string[] {
   if (!raw) return [];
 
   const hosts: string[] = [];
-  const invalidHosts: string[] = [];
   for (const value of raw.split(",")) {
-    const hostname = normalizeHostname(value);
-    if (!hostname) {
-      invalidHosts.push(value.trim());
-    } else if (!hosts.includes(hostname)) {
+    const hostname = normalizeHttpAllowedHost(value);
+    if (hostname && !hosts.includes(hostname)) {
       hosts.push(hostname);
     }
-  }
-
-  if (invalidHosts.length > 0) {
-    const quotedHosts = invalidHosts.map((host) => `"${host}"`).join(", ");
-    throw new Error(`Invalid HARNESS_MCP_ALLOWED_HOSTS entries: ${quotedHosts}`);
   }
 
   return hosts;
