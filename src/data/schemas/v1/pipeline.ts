@@ -1372,7 +1372,8 @@ const schema: Record<string, any> = {
             "input-timeout",
             "approval-rejection",
             "delegate-restart",
-            "user-mark-fail"
+            "user-mark-fail",
+            "proceed-with-default"
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
         },

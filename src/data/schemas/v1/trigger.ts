@@ -733,46 +733,6 @@ const schema: Record<string, any> = {
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
-        "system_event_trigger": {
-          "title": "system_event_trigger",
-          "allOf": [
-            {
-              "$ref": "#/definitions/trigger_v1/trigger_spec"
-            },
-            {
-              "type": "object",
-              "required": [
-                "type",
-                "spec"
-              ],
-              "properties": {
-                "type": {
-                  "type": "string",
-                  "enum": [
-                    "pipeline"
-                  ]
-                }
-              }
-            },
-            {
-              "if": {
-                "properties": {
-                  "type": {
-                    "const": "pipeline"
-                  }
-                }
-              },
-              "then": {
-                "properties": {
-                  "spec": {
-                    "$ref": "#/definitions/trigger_v1/system_event_trigger/pipeline_system_event_spec"
-                  }
-                }
-              }
-            }
-          ],
-          "$schema": "http://json-schema.org/draft-07/schema#"
-        },
         "webhook_trigger": {
           "title": "webhook_trigger",
           "allOf": [
@@ -908,6 +868,46 @@ const schema: Record<string, any> = {
                 "properties": {
                   "spec": {
                     "$ref": "#/definitions/trigger_v1/webhook_trigger/harness_spec"
+                  }
+                }
+              }
+            }
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "system_event_trigger": {
+          "title": "system_event_trigger",
+          "allOf": [
+            {
+              "$ref": "#/definitions/trigger_v1/trigger_spec"
+            },
+            {
+              "type": "object",
+              "required": [
+                "type",
+                "spec"
+              ],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "pipeline"
+                  ]
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "type": {
+                    "const": "pipeline"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "spec": {
+                    "$ref": "#/definitions/trigger_v1/system_event_trigger/pipeline_system_event_spec"
                   }
                 }
               }
@@ -2055,62 +2055,6 @@ const schema: Record<string, any> = {
           "title": "scheduled_trigger_spec",
           "type": "object",
           "discriminator": "type",
-          "$schema": "http://json-schema.org/draft-07/schema#"
-        }
-      },
-      "system_event_trigger": {
-        "pipeline_system_event_spec": {
-          "title": "pipeline_system_event_spec",
-          "type": "object",
-          "required": [
-            "eventType"
-          ],
-          "properties": {
-            "eventType": {
-              "type": "string",
-              "enum": [
-                "pipeline-failure",
-                "pipeline-success"
-              ]
-            },
-            "payloadConditions": {
-              "type": "array",
-              "description": "Optional conditions on the event payload. Supported key: 'sourcePipeline'. Supports all operators: equals, not-equals, in, not-in, regex, starts-with, ends-with, contains, does-not-contain. ALL conditions must pass. Empty list = match any source pipeline.",
-              "items": {
-                "type": "object",
-                "required": [
-                  "key",
-                  "operator",
-                  "value"
-                ],
-                "properties": {
-                  "key": {
-                    "type": "string",
-                    "description": "The field to evaluate. Supported value: 'sourcePipeline'."
-                  },
-                  "operator": {
-                    "type": "string",
-                    "enum": [
-                      "equals",
-                      "not-equals",
-                      "in",
-                      "not-in",
-                      "regex",
-                      "starts-with",
-                      "ends-with",
-                      "contains",
-                      "does-not-contain"
-                    ],
-                    "description": "The comparison operator."
-                  },
-                  "value": {
-                    "type": "string",
-                    "description": "The value to compare against."
-                  }
-                }
-              }
-            }
-          },
           "$schema": "http://json-schema.org/draft-07/schema#"
         }
       },
@@ -3381,6 +3325,33 @@ const schema: Record<string, any> = {
               }
             }
           ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        }
+      },
+      "system_event_trigger": {
+        "pipeline_system_event_spec": {
+          "title": "pipeline_system_event_spec",
+          "type": "object",
+          "required": [
+            "eventType"
+          ],
+          "properties": {
+            "eventType": {
+              "description": "The pipeline event type to react to",
+              "type": "string",
+              "enum": [
+                "pipeline-success",
+                "pipeline-failure"
+              ]
+            },
+            "payloadConditions": {
+              "description": "Optional conditions on the event payload. Supported key is \"sourcePipeline\". Empty list matches any source pipeline.",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/trigger_v1/trigger_event_data"
+              }
+            }
+          },
           "$schema": "http://json-schema.org/draft-07/schema#"
         }
       }
