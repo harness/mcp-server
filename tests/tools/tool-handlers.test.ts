@@ -436,6 +436,30 @@ describe("harness_create", () => {
     expect(parsed.openInHarness).toBeDefined();
     expect(parsed.openInHarness).not.toContain("storeType=");
   });
+
+  it("coerces JSON-string bodies before dispatch", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "ccm" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { uuid: "category-1" } });
+    client = makeClient(mockRequest);
+    const ccmServer = makeMcpServer("accept");
+    const { registerCreateTool } = await import("../../src/tools/harness-create.js");
+    registerCreateTool(ccmServer, registry, client);
+
+    const result = await ccmServer.call("harness_create", {
+      resource_type: "cost_category",
+      body: JSON.stringify({
+        name: "Engineering",
+        costTargets: [{ name: "Development", rules: [] }],
+      }),
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { body: Record<string, unknown> };
+    expect(callArgs.body).toMatchObject({
+      accountId: "test-account",
+      name: "Engineering",
+    });
+  });
 });
 
 describe("harness_update", () => {
@@ -490,6 +514,28 @@ describe("harness_update", () => {
     });
     expect(result.isError).toBeUndefined();
     expect(mockRequest).toHaveBeenCalledOnce();
+  });
+
+  it("coerces JSON-string bodies before dispatch", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "platform" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "proj1" } });
+    client = makeClient(mockRequest);
+    const platformServer = makeMcpServer("accept");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(platformServer, registry, client);
+
+    const result = await platformServer.call("harness_update", {
+      resource_type: "project",
+      resource_id: "proj1",
+      body: JSON.stringify({ name: "Project One", identifier: "proj1" }),
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { body: { project?: Record<string, unknown> } };
+    expect(callArgs.body.project).toMatchObject({
+      name: "Project One",
+      identifier: "proj1",
+    });
   });
 });
 
