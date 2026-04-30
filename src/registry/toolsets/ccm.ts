@@ -278,6 +278,41 @@ function gqlPath(input: Record<string, unknown>): string {
   return "/ccm/api/graphql";
 }
 
+/**
+ * Normalizes REST cost_category responses into the same {values} shape
+ * that perspectiveFilters returns, so callers get a uniform interface.
+ *
+ * - No value_sub_type → list endpoint → extract category names from the list
+ * - With value_sub_type → get endpoint → extract costTarget bucket names
+ */
+function extractBusinessMappingValues(raw: unknown, valueSubType?: string): unknown {
+  if (valueSubType) {
+    // Single category GET: { resource: { costTargets: [{ name }] } } or NG-unwrapped
+    const r = raw as { resource?: Record<string, unknown>; costTargets?: unknown[] };
+    const entity = r.resource ?? raw as Record<string, unknown>;
+    const targets = (entity as Record<string, unknown>).costTargets as Array<{ name?: string }> | undefined;
+    return {
+      values: targets?.map(t => t.name).filter(Boolean) ?? [],
+    };
+  }
+  // List all categories: { resource: { businessMappings: [{ uuid, name }] } } or NG-unwrapped
+  const r = raw as { resource?: Record<string, unknown> };
+  const data = r.resource ?? raw;
+  const mappings = (data as Record<string, unknown>).businessMappings as Array<{ uuid?: string; name?: string }> | undefined;
+  if (Array.isArray(mappings)) {
+    return {
+      values: mappings.map(m => m.name).filter(Boolean),
+    };
+  }
+  // Fallback: if it's already an array (ngExtract may have unwrapped)
+  if (Array.isArray(data)) {
+    return {
+      values: (data as Array<{ name?: string }>).map(m => m.name).filter(Boolean),
+    };
+  }
+  return { values: [] };
+}
+
 // ---------------------------------------------------------------------------
 // Toolset definition: 6 resource types covering REST + GraphQL
 // ---------------------------------------------------------------------------
@@ -336,7 +371,11 @@ export const ccmToolset: ToolsetDefinition = {
             fields: [
               { name: "name", type: "string", required: true, description: "Perspective name" },
               { name: "viewVisualization", type: "object", required: false, description: "Chart type and group by configuration" },
-              { name: "viewRules", type: "array", required: false, description: "Filter rules for the perspective", itemType: "rule object" },
+              {
+                name: "viewRules", type: "array", required: false,
+                description: "Filter rules. Multiple rules are OR-ed. Each rule has viewConditions (AND-ed). Each ViewIdCondition: { type: 'VIEW_ID_CONDITION', viewField: { fieldId, fieldName, identifier (COMMON|AWS|GCP|AZURE|CLUSTER|LABEL|LABEL_V2), identifierName }, viewOperator: 'IN'|'NOT_NULL'|'NULL', values: string[] }",
+                itemType: "{ viewConditions: [{ type: 'VIEW_ID_CONDITION', viewField: { fieldId: string, fieldName: string, identifier: string, identifierName: string }, viewOperator: 'IN' | 'NOT_NULL' | 'NULL', values: string[] }] }",
+              },
               { name: "viewTimeRange", type: "object", required: false, description: "Time range settings" },
             ],
           },
@@ -348,12 +387,16 @@ export const ccmToolset: ToolsetDefinition = {
           path: "/ccm/api/perspective",
           bodyBuilder: (input) => input.body,
           bodySchema: {
-            description: "Cost perspective update",
+            description: "Cost perspective update. Fetch the existing perspective via harness_get first, modify the fields, and send the full object back.",
             fields: [
               { name: "uuid", type: "string", required: true, description: "Perspective UUID (from get)" },
               { name: "name", type: "string", required: true, description: "Perspective name" },
               { name: "viewVisualization", type: "object", required: false, description: "Chart type and group by configuration" },
-              { name: "viewRules", type: "array", required: false, description: "Filter rules", itemType: "rule object" },
+              {
+                name: "viewRules", type: "array", required: false,
+                description: "Filter rules. Multiple rules are OR-ed. Each rule has viewConditions (AND-ed). Each ViewIdCondition: { type: 'VIEW_ID_CONDITION', viewField: { fieldId, fieldName, identifier (COMMON|AWS|GCP|AZURE|CLUSTER|LABEL|LABEL_V2), identifierName }, viewOperator: 'IN'|'NOT_NULL'|'NULL', values: string[] }",
+                itemType: "{ viewConditions: [{ type: 'VIEW_ID_CONDITION', viewField: { fieldId: string, fieldName: string, identifier: string, identifierName: string }, viewOperator: 'IN' | 'NOT_NULL' | 'NULL', values: string[] }] }",
+              },
               { name: "viewTimeRange", type: "object", required: false, description: "Time range settings" },
             ],
           },
@@ -826,34 +869,71 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
           injectAccountInBody: "accountId",
           bodyBuilder: (input) => input.body,
           bodySchema: {
-            description: "Cost category (business mapping) definition with cost targets and rules",
+            description: "Cost category (business mapping) definition. costTargets are cost buckets — each bucket has a name and rules that determine which costs fall into it. Rules use the same ViewIdCondition structure as perspectives.",
             fields: [
-              { name: "name", type: "string", required: true, description: "Cost category display name" },
-              { name: "costTargets", type: "array", required: true, description: "Array of cost target buckets", itemType: "CostTarget", fields: [
-                { name: "name", type: "string", required: true, description: "Bucket display name (e.g. 'Development', 'Production')" },
-                { name: "rules", type: "array", required: true, description: "Array of rules for this bucket. Typically one rule with multiple viewConditions.", itemType: "Rule", fields: [
-                  { name: "viewConditions", type: "array", required: true, description: "Array of conditions (one per label key). All conditions in a rule are ANDed.", itemType: "ViewCondition", fields: [
-                    { name: "type", type: "string", required: true, description: "Always 'VIEW_ID_CONDITION'" },
-                    { name: "viewField", type: "object", required: true, description: "Label field reference", fields: [
-                      { name: "fieldId", type: "string", required: true, description: "Always 'labels.value'" },
-                      { name: "fieldName", type: "string", required: true, description: "The label key name (e.g. 'env', 'Environment', 'team')" },
-                      { name: "identifierName", type: "string", required: true, description: "Always 'Label V2'" },
-                      { name: "identifier", type: "string", required: true, description: "Always 'LABEL_V2'" },
-                    ]},
-                    { name: "viewOperator", type: "string", required: true, description: "'IN' for exact match, 'LIKE' for pattern/regex match (e.g. 'prod-' matches all values starting with 'prod-')" },
-                    { name: "values", type: "array", required: true, description: "Label values. For IN: exact values (e.g. ['dev', 'qa']). For LIKE: patterns (e.g. ['prod-'])", itemType: "string" },
-                  ]},
-                ]},
-              ]},
-              { name: "sharedCosts", type: "array", required: false, description: "Shared cost definitions (default: empty array)", itemType: "SharedCost" },
-              { name: "unallocatedCost", type: "object", required: false, description: "Unallocated cost config. Strategy: HIDE (default), DISPLAY_NAME, or SHARE", fields: [
-                { name: "label", type: "string", required: true, description: "Display label (default: 'Unattributed')" },
-                { name: "strategy", type: "string", required: true, description: "Strategy: 'HIDE', 'DISPLAY_NAME', or 'SHARE'" },
-              ]},
+              { name: "name", type: "string", required: true, description: "Cost category name" },
+              {
+                name: "costTargets", type: "array", required: true,
+                description: "Cost buckets. Each has a name and rules array. Multiple rules are OR-ed; conditions within a rule are AND-ed.",
+                itemType: "{ name: string, rules: [{ viewConditions: [ViewIdCondition] }] }",
+              },
+              {
+                name: "sharedCosts", type: "array", required: false,
+                description: "Shared cost buckets with allocation strategy. Each has a name, rules, strategy (PROPORTIONAL or FIXED), and optional splits for FIXED strategy.",
+                itemType: "{ name: string, rules: [...], strategy: 'PROPORTIONAL' | 'FIXED', splits?: [{ costTargetName: string, percentageContribution: number }] }",
+              },
+              {
+                name: "unallocatedCost", type: "object", required: false,
+                description: "How to handle costs not matching any bucket",
+                fields: [
+                  { name: "strategy", type: "string", required: true, description: "DISPLAY_NAME (show with label), SHARE (distribute), or HIDE" },
+                  { name: "label", type: "string", required: false, description: "Display label when strategy is DISPLAY_NAME (e.g. 'Unattributed')" },
+                ],
+              },
             ],
           },
           responseExtractor: ngExtract,
-          description: "Create a new cost category (business mapping). The accountId is injected automatically. Body must include name and costTargets array with label-based rules.",
+          description: "Create a new cost category (business mapping). The accountId is injected automatically.",
+        },
+        update: {
+          method: "PUT",
+          path: "/ccm/api/business-mapping",
+          injectAccountInBody: "accountId",
+          bodyBuilder: (input) => input.body,
+          bodySchema: {
+            description: "Cost category update (full replacement). Fetch the existing category via harness_get first, modify the fields, and send the full object back.",
+            fields: [
+              { name: "uuid", type: "string", required: true, description: "Cost category UUID (from harness_get)" },
+              { name: "name", type: "string", required: true, description: "Cost category name" },
+              {
+                name: "costTargets", type: "array", required: true,
+                description: "Cost buckets. Each has a name and rules array. Multiple rules are OR-ed; conditions within a rule are AND-ed.",
+                itemType: "{ name: string, rules: [{ viewConditions: [ViewIdCondition] }] }",
+              },
+              {
+                name: "sharedCosts", type: "array", required: false,
+                description: "Shared cost buckets with allocation strategy",
+                itemType: "{ name: string, rules: [...], strategy: 'PROPORTIONAL' | 'FIXED', splits?: [{ costTargetName: string, percentageContribution: number }] }",
+              },
+              {
+                name: "unallocatedCost", type: "object", required: false,
+                description: "How to handle costs not matching any bucket",
+                fields: [
+                  { name: "strategy", type: "string", required: true, description: "DISPLAY_NAME, SHARE, or HIDE" },
+                  { name: "label", type: "string", required: false, description: "Display label when strategy is DISPLAY_NAME" },
+                ],
+              },
+            ],
+          },
+          responseExtractor: ngExtract,
+          description: "Update an existing cost category (full replacement)",
+        },
+        delete: {
+          method: "DELETE",
+          path: "/ccm/api/business-mapping/{costCategoryId}",
+          pathParams: { category_id: "costCategoryId" },
+          responseExtractor: ngExtract,
+          description: "Delete a cost category",
         },
       },
     },
@@ -915,8 +995,8 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
       identifierFields: [],
       listFilterFields: [
         { name: "perspective_id", description: "Cost perspective identifier (optional for some value types)" },
-        { name: "value_type", description: "Type of values to fetch: 'label_v2_key' (label keys), 'label_v2' (label values), 'region', 'product', 'awsUsageaccountid', 'cloudProvider', etc.", required: true },
-        { name: "value_sub_type", description: "Sub-type for label_v2: the specific label key name to get values for (e.g. 'env', 'team')" },
+        { name: "value_type", description: "Type of values to fetch: 'label_v2_key' (label keys), 'label_v2' (label values), 'business_mapping' (cost category names or bucket names), 'region', 'product', 'awsUsageaccountid', 'cloudProvider', etc.", required: true },
+        { name: "value_sub_type", description: "Sub-type qualifier. For label_v2: the label key name (e.g. 'env'). For business_mapping: the cost category UUID to get bucket names (omit to list all categories)." },
         { name: "time_filter", description: "Time filter for the query", enum: [...VALID_TIME_FILTERS] },
         { name: "offset", description: "Pagination offset", type: "number" },
         { name: "limit", description: "Result limit (default 1000)", type: "number" },
@@ -926,9 +1006,25 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
       operations: {
         list: {
           method: "POST",
+          methodBuilder: (input) =>
+            (input.value_type as string) === "business_mapping" ? "GET" : "POST",
           path: "/ccm/api/graphql",
+          pathBuilder: (input) => {
+            if ((input.value_type as string) === "business_mapping") {
+              const sub = input.value_sub_type as string | undefined;
+              if (sub) {
+                return `/ccm/api/business-mapping/${encodeURIComponent(sub)}`;
+              }
+              return "/ccm/api/business-mapping";
+            }
+            return "/ccm/api/graphql";
+          },
           bodyBuilder: (input) => {
             const valueType = input.value_type as string;
+
+            // business_mapping routes through REST — no body needed
+            if (valueType === "business_mapping") return undefined;
+
             const valueSubType = input.value_sub_type as string | undefined;
             const timeFilter = (input.time_filter as string) || "LAST_30_DAYS";
 
@@ -969,21 +1065,6 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
                 fieldName: valueSubType, // The specific label key name
                 identifier: "LABEL",
                 identifierName: "Label",
-              };
-              filters.push({
-                idFilter: {
-                  values: [""],
-                  operator: "IN",
-                  field: fieldOut,
-                },
-              });
-            } else if (valueType === "business_mapping") {
-              // Cost category / business mapping
-              const fieldOut = {
-                fieldId: "businessMapping.costCategoryName",
-                fieldName: valueSubType || "Cost Category",
-                identifier: "BUSINESS_MAPPING",
-                identifierName: "Business Mapping",
               };
               filters.push({
                 idFilter: {
@@ -1041,8 +1122,14 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
               },
             };
           },
-          responseExtractor: gqlExtract("perspectiveFilters"),
-          description: "Fetch perspective filter values. Examples: value_type='label_v2_key' returns all label keys; value_type='label_v2' with value_sub_type='env' returns all values for 'env' label; value_type='region' returns all regions.",
+          responseExtractor: (raw: unknown, input?: Record<string, unknown>): unknown => {
+            const valueType = input?.value_type as string | undefined;
+            if (valueType === "business_mapping") {
+              return extractBusinessMappingValues(raw, input?.value_sub_type as string | undefined);
+            }
+            return gqlExtract("perspectiveFilters")(raw);
+          },
+          description: "Fetch perspective filter values. Examples: value_type='label_v2_key' returns all label keys; value_type='label_v2' with value_sub_type='env' returns all values for 'env' label; value_type='region' returns all regions; value_type='business_mapping' returns cost category names; value_type='business_mapping' with value_sub_type='<category_id>' returns bucket names.",
         },
       },
     },
