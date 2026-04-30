@@ -1,6 +1,6 @@
 ## Harness MCP Server 2.0
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 163 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 166 resource types.
 
 ## Why Use This MCP Server
 
@@ -8,8 +8,8 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **11 tools, 163 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
-- **Full platform coverage.** 31 toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Internal Developer Portal, Software Supply Chain, Governance, Service Overrides, Visualizations, and more. Not just pipelines — the entire Harness platform.
+- **11 tools, 166 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, Database DevOps schemas and instances, and more. The LLM picks from 11 tools instead of hundreds.
+- **Full platform coverage.** 31 toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Governance, Service Overrides, Visualizations, and more. Not just pipelines — the entire Harness platform.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **27 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
 - **Works everywhere.** Stdio transport for local clients (Claude Desktop, Cursor, Windsurf), HTTP transport for remote/shared deployments, Docker and Kubernetes ready.
@@ -680,6 +680,24 @@ The server exposes 11 MCP tools. Most API tools accept `org_id` and `project_id`
 { "org_id": "default", "project_id": "my-project", "limit": 5 }
 ```
 
+**List database schemas filtered by migration type:**
+
+```json
+{ "resource_type": "database_schema", "migration_type": "Liquibase" }
+```
+
+**List database instances for a schema:**
+
+```json
+{ "resource_type": "database_instance", "dbschema_id": "my_schema" }
+```
+
+**Get the resolved LLM authoring pipeline for a schema and instance:**
+
+```json
+{ "resource_type": "database_llm_authoring_pipeline", "resource_id": "my_schema", "dbinstance_id": "prod_db" }
+```
+
 ### Pipeline Run Workflow (Recommended)
 
 Use this sequence to reduce execution-time input errors:
@@ -924,7 +942,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-163 resource types organized across 31 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+166 resource types organized across 31 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -1067,6 +1085,16 @@ Only one pipeline YAML resource type is loaded at startup. By default `HARNESS_P
 | ---------------- | ---- | --- | ------ | ------ | ------ | --------------- |
 | `dashboard`      | x    | x   |        |        |        |                 |
 | `dashboard_data` |      | x   |        |        |        |                 |
+
+
+### Database DevOps
+
+
+| Resource Type              | List | Get | Create | Update | Delete | Execute Actions |
+| -------------------------- | ---- | --- | ------ | ------ | ------ | --------------- |
+| `database_schema`          | x    | x   |        |        |        |                 |
+| `database_instance`        | x    | x   |        |        |        |                 |
+| `database_llm_authoring_pipeline` |      | x   |        |        |        |                 |
 
 
 ### Internal Developer Portal (IDP)
@@ -1423,6 +1451,7 @@ Available toolset names:
 | `sei` | sei_metric, sei_productivity_metric, sei_dora_metric, sei_team, sei_team_detail, sei_org_tree, sei_org_tree_detail, sei_business_alignment, sei_ai_usage, sei_ai_adoption, sei_ai_impact, sei_ai_raw_metric |
 | `scs` | scs_artifact_source, artifact_security, scs_artifact_component, scs_artifact_remediation, scs_chain_of_custody, scs_compliance_result, code_repo_security, scs_sbom |
 | `sto` | security_issue, security_issue_filter, security_exemption |
+| `dbops` | database_schema, database_instance, database_llm_authoring_pipeline |
 | `access_control` | user, user_group, service_account, role, role_assignment, resource_group, permission |
 | `governance` | policy, policy_set, policy_evaluation |
 | `freeze` | freeze_window, global_freeze |
@@ -1447,7 +1476,7 @@ Available toolset names:
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
                 |  31 Toolsets      |      (data files, not code)
-                |  163 Resource Types|
+                |  166 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+

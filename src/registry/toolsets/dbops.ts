@@ -18,7 +18,6 @@ export const dbopsToolset: ToolsetDefinition = {
         "The DB engine (MySQL, PostgreSQL, etc.) is stored in the connector linked to each instance.",
       toolset: "dbops",
       scope: "project",
-      scopeOptional: true,
       identifierFields: ["dbschema_id"],
       listFilterFields: [
         { name: "search_term", description: "Search schemas by name" },
@@ -29,7 +28,7 @@ export const dbopsToolset: ToolsetDefinition = {
         },
       ],
       deepLinkTemplate:
-        "/ng/account/{accountId}/all/dbops/orgs/{org}/projects/{project}/db-schemas/{dbschema}",
+        "/ng/account/{accountId}/module/dbops/orgs/{orgIdentifier}/projects/{projectIdentifier}/dbops/db-schemas/{dbschema}",
       relatedResources: [
         {
           resourceType: "database_instance",
@@ -78,7 +77,6 @@ export const dbopsToolset: ToolsetDefinition = {
         "(MySQL, PostgreSQL, etc.) is determined by that connector.",
       toolset: "dbops",
       scope: "project",
-      scopeOptional: true,
       identifierFields: ["dbinstance_id"],
       listFilterFields: [
         {
@@ -89,7 +87,7 @@ export const dbopsToolset: ToolsetDefinition = {
         { name: "search_term", description: "Search instances by name" },
       ],
       deepLinkTemplate:
-        "/ng/account/{accountId}/all/dbops/orgs/{org}/projects/{project}/db-schemas/{dbschema}/instances/{dbinstance}/migrationstate",
+        "/ng/account/{accountId}/module/dbops/orgs/{orgIdentifier}/projects/{projectIdentifier}/dbops/db-schemas/{dbschema}/instances/{dbinstance}/migrationstate",
       relatedResources: [
         {
           resourceType: "database_schema",
@@ -135,28 +133,23 @@ export const dbopsToolset: ToolsetDefinition = {
       },
     },
 
-    // ── Default LLM Pipeline ─────────────────────────────────────────────
+    // ── LLM Authoring Pipeline ───────────────────────────────────────────
     // NOTE: This endpoint is marked x-internal in the DBOPS OpenAPI spec.
     // The response 'metadata' map is expected to contain the pipeline identifier
     // needed for Accept & Commit — verify what key it uses (e.g. 'pipelineIdentifier').
     {
-      resourceType: "database_llm_pipeline",
-      displayName: "Database LLM Pipeline",
+      resourceType: "database_llm_authoring_pipeline",
+      displayName: "Database LLM Authoring Pipeline",
       description:
-        "Get the default Harness pipeline configured for LLM changeset authoring " +
-        "for a specific schema + instance combination. Used by the changeset skill " +
-        "during Accept & Commit to find which pipeline to execute. " +
-        "IMPORTANT: This is an x-internal endpoint",
+        "Returns the resolved pipeline used for LLM changeset authoring for a specific schema + instance. " +
+        "Harness resolves this as the product default unless a project-level override is configured in " +
+        "project Database DevOps settings — in which case the override is returned instead. " +
+        "Used by the changeset skill during Accept & Commit to find which pipeline to execute. " +
+        "IMPORTANT: This is an x-internal endpoint.",
       toolset: "dbops",
       scope: "project",
-      scopeOptional: true,
-      identifierFields: [],
+      identifierFields: ["dbschema_id"],
       listFilterFields: [
-        {
-          name: "dbschema_id",
-          description: "Schema identifier",
-          required: true,
-        },
         {
           name: "dbinstance_id",
           description: "Instance identifier",
@@ -164,7 +157,7 @@ export const dbopsToolset: ToolsetDefinition = {
         },
       ],
       operations: {
-        list: {
+        get: {
           method: "GET",
           path: "/dbops/v1/orgs/{org}/projects/{project}/default-llm-pipeline",
           pathParams: { org_id: "org", project_id: "project" },
@@ -174,7 +167,8 @@ export const dbopsToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           description:
-            "Get default LLM pipeline for a schema+instance pair. " +
+            "Get the resolved LLM authoring pipeline for a schema+instance pair. " +
+            "Returns the product default unless overridden in project Database DevOps settings. " +
             "Returns PipelineStatusOutput: {status, response, metadata}. " +
             "The metadata map may contain 'pipelineIdentifier' or similar — inspect the response.",
         },
