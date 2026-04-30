@@ -92004,6 +92004,9 @@ const schema: Record<string, any> = {
                   },
                   "preExecution": {
                     "type": "string"
+                  },
+                  "diffPath": {
+                    "type": "string"
                   }
                 }
               }
@@ -92062,6 +92065,9 @@ const schema: Record<string, any> = {
                 ]
               },
               "preExecution": {
+                "type": "string"
+              },
+              "diffPath": {
                 "type": "string"
               },
               "description": {
