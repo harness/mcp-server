@@ -112,6 +112,8 @@ export class HarnessClient {
   private readonly maxRetries: number;
   private readonly rateLimiter: RateLimiter;
   private accountIdResolver?: AccountIdResolver;
+  private currentUserId?: string;
+  private currentUserPromise?: Promise<string>;
 
   constructor(config: Config) {
     this.baseUrl = config.HARNESS_BASE_URL.replace(/\/$/, "");
@@ -141,6 +143,42 @@ export class HarnessClient {
 
   get baseURL(): string {
     return this.baseUrl;
+  }
+
+  /**
+   * Resolve the UUID of the user authenticated by the current PAT.
+   * Cached for the lifetime of the process and inflight-deduped so concurrent
+   * callers share a single GET /ng/api/user/currentUser request.
+   *
+   * Used by callers (e.g. STO exemption approve/reject/promote) that need to
+   * stamp the authenticated user as the actor without forcing the LLM to ask
+   * the human for a UUID.
+   */
+  async getCurrentUserId(): Promise<string> {
+    if (this.currentUserId) return this.currentUserId;
+    if (this.currentUserPromise) return this.currentUserPromise;
+    this.currentUserPromise = (async () => {
+      const resp = await this.request<{ data?: { uuid?: string } }>({
+        method: "GET",
+        path: "/ng/api/user/currentUser",
+      });
+      const uuid = resp?.data?.uuid;
+      if (!uuid) {
+        throw new HarnessApiError(
+          "Could not resolve current user UUID via /ng/api/user/currentUser. " +
+          "The PAT may belong to a service account without a user identity.",
+          500,
+        );
+      }
+      this.currentUserId = uuid;
+      return uuid;
+    })();
+    try {
+      return await this.currentUserPromise;
+    } catch (err) {
+      this.currentUserPromise = undefined;
+      throw err;
+    }
   }
 
   async request<T>(options: RequestOptions): Promise<T> {

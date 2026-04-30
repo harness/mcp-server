@@ -1,5 +1,6 @@
 import type { ToolsetDefinition } from "../types.js";
 import { passthrough } from "../extractors.js";
+import type { HarnessClient } from "../../client/harness-client.js";
 
 /**
  * STO scope override — STO API uses accountId / orgId / projectId
@@ -118,17 +119,28 @@ export const stoToolset: ToolsetDefinition = {
           method: "PUT",
           path: "/sto/api/v2/exemptions/{exemptionId}/approve",
           pathParams: { exemption_id: "exemptionId" },
-          bodyBuilder: (input) => ({
-            approverId: input.approver_id,
-            ...(input.comment ? { comment: input.comment } : {}),
-          }),
+          preflight: async ({ client, input }) => {
+            const harnessClient = client as HarnessClient;
+            const body = ((input.body as Record<string, unknown> | undefined) ?? {});
+            if (!body.approver_id) {
+              body.approver_id = await harnessClient.getCurrentUserId();
+              input.body = body;
+            }
+          },
+          bodyBuilder: (input) => {
+            const b = (input.body as Record<string, unknown> | undefined) ?? {};
+            return {
+              approverId: b.approver_id,
+              ...(b.comment ? { comment: b.comment } : {}),
+            };
+          },
           responseExtractor: passthrough,
-          actionDescription: "Approve a security exemption",
+          actionDescription: "Approve a security exemption. approver_id is auto-derived from the authenticated user when not supplied.",
           bodySchema: {
             description: "Exemption approval details",
             fields: [
-              { name: "approver_id", type: "string", required: true, description: "User UUID of the approver" },
-              { name: "comment", type: "string", required: false, description: "Optional approval comment" },
+              { name: "approver_id", type: "string", required: false, description: "User UUID of the approver. Auto-derived from the authenticated PAT via /ng/api/user/currentUser if omitted." },
+              { name: "comment",     type: "string", required: false, description: "Optional approval comment"},
             ],
           },
         },
@@ -136,17 +148,28 @@ export const stoToolset: ToolsetDefinition = {
           method: "PUT",
           path: "/sto/api/v2/exemptions/{exemptionId}/reject",
           pathParams: { exemption_id: "exemptionId" },
-          bodyBuilder: (input) => ({
-            approverId: input.approver_id,
-            ...(input.comment ? { comment: input.comment } : {}),
-          }),
+          preflight: async ({ client, input }) => {
+            const harnessClient = client as HarnessClient;
+            const body = ((input.body as Record<string, unknown> | undefined) ?? {});
+            if (!body.approver_id) {
+              body.approver_id = await harnessClient.getCurrentUserId();
+              input.body = body;
+            }
+          },
+          bodyBuilder: (input) => {
+            const b = (input.body as Record<string, unknown> | undefined) ?? {};
+            return {
+              approverId: b.approver_id,
+              ...(b.comment ? { comment: b.comment } : {}),
+            };
+          },
           responseExtractor: passthrough,
-          actionDescription: "Reject a security exemption",
+          actionDescription: "Reject a security exemption. approver_id is auto-derived from the authenticated user when not supplied.",
           bodySchema: {
             description: "Exemption rejection details",
             fields: [
-              { name: "approver_id", type: "string", required: true, description: "User UUID of the rejector" },
-              { name: "comment", type: "string", required: false, description: "Optional rejection comment" },
+              { name: "approver_id", type: "string", required: false, description: "User UUID of the rejector. Auto-derived from the authenticated PAT via /ng/api/user/currentUser if omitted." },
+              { name: "comment",     type: "string", required: false, description: "Optional rejection comment" },
             ],
           },
         },
@@ -154,21 +177,32 @@ export const stoToolset: ToolsetDefinition = {
           method: "PUT",
           path: "/sto/api/v2/exemptions/{exemptionId}/promote",
           pathParams: { exemption_id: "exemptionId" },
-          bodyBuilder: (input) => ({
-            approverId: input.approver_id,
-            ...(input.comment ? { comment: input.comment } : {}),
-            ...(input.pipeline_id ? { pipelineId: input.pipeline_id } : {}),
-            ...(input.target_id ? { targetId: input.target_id } : {}),
-          }),
+          preflight: async ({ client, input }) => {
+            const harnessClient = client as HarnessClient;
+            const body = ((input.body as Record<string, unknown> | undefined) ?? {});
+            if (!body.approver_id) {
+              body.approver_id = await harnessClient.getCurrentUserId();
+              input.body = body;
+            }
+          },
+          bodyBuilder: (input) => {
+            const b = (input.body as Record<string, unknown> | undefined) ?? {};
+            return {
+              approverId: b.approver_id,
+              ...(b.comment     ? { comment:    b.comment }     : {}),
+              ...(b.pipeline_id ? { pipelineId: b.pipeline_id } : {}),
+              ...(b.target_id   ? { targetId:   b.target_id }   : {}),
+            };
+          },
           responseExtractor: passthrough,
-          actionDescription: "Promote a security exemption to organization or account level",
+          actionDescription: "Promote a security exemption to organization or account level. approver_id is auto-derived when not supplied.",
           bodySchema: {
             description: "Exemption promotion details",
             fields: [
-              { name: "approver_id", type: "string", required: true, description: "User UUID of the approver" },
-              { name: "comment", type: "string", required: false, description: "Optional comment" },
+              { name: "approver_id", type: "string", required: false, description: "User UUID of the approver. Auto-derived from the authenticated PAT via /ng/api/user/currentUser if omitted." },
+              { name: "comment",     type: "string", required: false, description: "Optional comment" },
               { name: "pipeline_id", type: "string", required: false, description: "Pipeline ID to scope promotion" },
-              { name: "target_id", type: "string", required: false, description: "Target ID to scope promotion" },
+              { name: "target_id",   type: "string", required: false, description: "Target ID to scope promotion" },
             ],
           },
         },

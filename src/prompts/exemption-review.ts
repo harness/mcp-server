@@ -35,7 +35,33 @@ Steps:
    - **Reject**: High-risk without adequate mitigation
    - **Needs review**: Insufficient justification or missing context
 
-To take action, I can use harness_execute with resource_type="security_exemption" and action="approve", "reject", or "promote" — but only after you confirm each decision.`,
+To take action, I can use harness_execute with resource_type="security_exemption" and action="approve", "reject", or "promote" — but only after you confirm each decision.
+
+## Suggested next steps
+
+After presenting the review table, append a final section titled
+"## Suggested next steps" containing 3–5 personalized follow-up prompts the
+user can click to send back. Use human-readable titles (vulnerability name,
+issue type, target name, severity) — NEVER raw UUIDs or exemption IDs in the
+visible text. Mix single-entity actions with bulk actions when patterns emerge
+across multiple exemptions.
+
+Format: a markdown bullet list of complete, send-as-is sentences.
+
+Example shape (use real titles/types/targets from your output, not these literals):
+- Approve: SQL injection in payment-api (Critical, mitigation in place)
+- Reject: Hardcoded API key in auth-service (no justification)
+- Reject all Pending SECRET-type exemptions for target payment-api
+- Approve all Pending Low-severity SCA exemptions for target shared-libs
+- Show all Approved exemptions for target auth-service
+
+Rules:
+- Use vulnerability titles / issue types / target names visible to the user; never paste UUIDs
+- Prefer bulk actions ("Reject all SECRET-type", "Approve all Low SCA") when 3+ exemptions share a pattern
+- Maximum 5 suggestions; mix at least one bulk action when applicable
+- Each line is a single, complete imperative sentence
+- Order: high-confidence approves first, then rejects, then bulk, then info-gathering
+- Omit the section entirely if no exemptions were returned`,
           },
         }],
       };
