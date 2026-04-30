@@ -5,7 +5,6 @@ import type { ResourceDefinition, ToolsetDefinition, ToolsetName, OperationName,
 import { createLogger } from "../utils/logger.js";
 import { buildDeepLink, appendStoreType } from "../utils/deep-links.js";
 
-// Import all toolsets
 import { pipelinesToolset } from "./toolsets/pipelines.js";
 import { agentsToolset } from "./toolsets/agents.js";
 import { servicesToolset } from "./toolsets/services.js";
@@ -39,6 +38,29 @@ import { governanceToolset } from "./toolsets/governance.js";
 import { freezeToolset } from "./toolsets/freeze.js";
 import { overridesToolset } from "./toolsets/overrides.js";
 import { aiEvalsToolset } from "./toolsets/ai-evals.js";
+
+/**
+ * Coerce API values to a string for deep-link placeholders. Objects (e.g. nested
+ * `project: { identifier }` in list rows) must not become "[object Object]".
+ */
+function scalarForDeepLink(value: unknown): string | undefined {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  return undefined;
+}
+
+/**
+ * Many templates use `{org}` / `{project}` while request scope uses `orgIdentifier` /
+ * `projectIdentifier`. Mirror values so all placeholder names resolve.
+ */
+function applyDeepLinkParamAliases(params: Record<string, string>): void {
+  if (!params.org && params.orgIdentifier) params.org = params.orgIdentifier;
+  if (!params.project && params.projectIdentifier) params.project = params.projectIdentifier;
+  if (!params.orgIdentifier && params.org) params.orgIdentifier = params.org;
+  if (!params.projectIdentifier && params.project) params.projectIdentifier = params.project;
+}
 
 const log = createLogger("registry");
 
@@ -636,8 +658,9 @@ export class Registry {
             }
           }
         }
-        if (value) {
-          baseLinkParams[pathParamName] = String(value);
+        const scalar = scalarForDeepLink(value);
+        if (scalar) {
+          baseLinkParams[pathParamName] = scalar;
         }
       }
       // Resolve remaining {placeholder} tokens directly from response fields.
@@ -648,11 +671,13 @@ export class Registry {
         for (const token of remaining) {
           const key = token.slice(1, -1);
           if (key === "accountId" || baseLinkParams[key]) continue;
-          if (resultRecord[key] !== undefined) {
-            baseLinkParams[key] = String(resultRecord[key]);
+          const fromResult = scalarForDeepLink(resultRecord[key]);
+          if (fromResult !== undefined) {
+            baseLinkParams[key] = fromResult;
           }
         }
       }
+      applyDeepLinkParamAliases(baseLinkParams);
 
       // Only attach top-level openInHarness for single-item results (get/create/update),
       // not for list results where there's no single entity to link to.
@@ -696,14 +721,12 @@ export class Registry {
               const getPathParam = def.operations.get?.pathParams?.[field];
               const pathParamName = spec.pathParams?.[field] ?? getPathParam ?? field;
               // Look for the API param name directly in the item (e.g., pipelineIdentifier, identifier)
-              if (itemRecord[pathParamName] !== undefined) {
-                itemLinkParams[pathParamName] = String(itemRecord[pathParamName]);
-              } else if (itemRecord.identifier !== undefined) {
-                // Fall back to the generic "identifier" field for the primary identifier
-                itemLinkParams[pathParamName] = String(itemRecord.identifier);
-              } else if (itemRecord.name !== undefined) {
-                // Some APIs use "name" as the identifier (e.g., registry)
-                itemLinkParams[pathParamName] = String(itemRecord.name);
+              const topScalar =
+                scalarForDeepLink(itemRecord[pathParamName]) ??
+                scalarForDeepLink(itemRecord.identifier) ??
+                scalarForDeepLink(itemRecord.name);
+              if (topScalar !== undefined) {
+                itemLinkParams[pathParamName] = topScalar;
               } else {
                 // Check for nested wrapper objects (e.g., connector.identifier, service.identifier)
                 // Common wrapper keys used by Harness NG APIs
@@ -712,11 +735,11 @@ export class Registry {
                   const nested = itemRecord[wrapperKey];
                   if (nested && typeof nested === "object") {
                     const nestedRecord = nested as Record<string, unknown>;
-                    if (nestedRecord[pathParamName] !== undefined) {
-                      itemLinkParams[pathParamName] = String(nestedRecord[pathParamName]);
-                      break;
-                    } else if (nestedRecord.identifier !== undefined) {
-                      itemLinkParams[pathParamName] = String(nestedRecord.identifier);
+                    const nestedScalar =
+                      scalarForDeepLink(nestedRecord[pathParamName]) ??
+                      scalarForDeepLink(nestedRecord.identifier);
+                    if (nestedScalar !== undefined) {
+                      itemLinkParams[pathParamName] = nestedScalar;
                       break;
                     }
                   }
@@ -730,8 +753,9 @@ export class Registry {
             let match;
             while ((match = placeholderRegex.exec(def.deepLinkTemplate)) !== null) {
               const placeholder = match[1];
-              if (placeholder && !itemLinkParams[placeholder] && itemRecord[placeholder] !== undefined) {
-                itemLinkParams[placeholder] = String(itemRecord[placeholder]);
+              if (placeholder && !itemLinkParams[placeholder]) {
+                const s = scalarForDeepLink(itemRecord[placeholder]);
+                if (s !== undefined) itemLinkParams[placeholder] = s;
               }
             }
 
@@ -743,11 +767,12 @@ export class Registry {
               for (const token of remaining) {
                 const key = token.slice(1, -1); // strip { }
                 if (key === "accountId" || itemLinkParams[key]) continue;
-                if (itemRecord[key] !== undefined) {
-                  itemLinkParams[key] = String(itemRecord[key]);
-                }
+                const s = scalarForDeepLink(itemRecord[key]);
+                if (s !== undefined) itemLinkParams[key] = s;
               }
             }
+
+            applyDeepLinkParamAliases(itemLinkParams);
 
             let itemLink = buildDeepLink(
               this.config.HARNESS_BASE_URL,

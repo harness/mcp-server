@@ -965,6 +965,53 @@ describe("Registry", () => {
       const call = mockRequest.mock.calls[0][0];
       expect(call.params?.orgIdentifier).toBeUndefined();
     });
+
+    it("project list: openInHarness substitutes org and project (nested project row + org_id)", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: {
+          content: [
+            {
+              project: { identifier: "quantum-lab", name: "Quantum Lab" },
+            },
+          ],
+          totalElements: 1,
+        },
+      });
+      const client = makeClient(mockRequest);
+      const registry = new Registry(
+        makeConfig({ HARNESS_TOOLSETS: "platform", HARNESS_ACCOUNT_ID: "acct1" }),
+      );
+
+      const result = (await registry.dispatch(client, "project", "list", {
+        org_id: "sandbox",
+        page: 0,
+        size: 10,
+      })) as { items: Array<Record<string, unknown>> };
+
+      const link = String(result.items[0].openInHarness);
+      expect(link).toContain("/orgs/sandbox/projects/quantum-lab");
+      expect(link).not.toContain("%5Bobject%20Object%5D");
+      expect(link).not.toContain("{org}");
+    });
+
+    it("project list: openInHarness uses flat identifier when row is not nested", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: {
+          content: [{ identifier: "flat-proj", name: "Flat" }],
+          totalElements: 1,
+        },
+      });
+      const client = makeClient(mockRequest);
+      const registry = new Registry(
+        makeConfig({ HARNESS_TOOLSETS: "platform", HARNESS_ACCOUNT_ID: "acct1" }),
+      );
+
+      const result = (await registry.dispatch(client, "project", "list", {
+        org_id: "myorg",
+      })) as { items: Array<Record<string, unknown>> };
+
+      expect(String(result.items[0].openInHarness)).toContain("/orgs/myorg/projects/flat-proj");
+    });
   });
 
 });
