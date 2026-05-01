@@ -224,3 +224,20 @@
 - `HARNESS_MCP_ALLOWED_HOSTS` now throws with the malformed entries instead of silently dropping them.
 - Added an integration test that runs the real SDK Express Host-header middleware and verifies `Host: mcp.harness.io` is accepted while an unexpected host is rejected.
 - Replaced the source-text dotenv assertion with behavioral `loadEnvFile()` tests that verify custom and default dotenv loading do not write through `console.log`.
+
+## Slack Bug Triage: MCP Down Again (2026-05-01)
+- [x] Read the triggered Slack thread and related prior context
+- [x] Verify current npm release status and repository fixes
+- [x] Identify why users still see the outage after PR #102 merged
+- [x] Add a release/version regression check
+- [x] Bump package and bundle metadata for a patch release
+- [ ] Run focused verification
+- [ ] Commit, push, open PR, and reply in the Slack thread
+
+### Plan
+- Treat the sparse report as the same user/environment until contradicted by thread context, then verify against npm and current repo state.
+- Add a small release metadata test that fails when `package.json`, root `manifest.json`, and `mcp-directory/manifest.json` drift.
+- Bump the patch version so the already-merged stdio/hosted MCP fixes can actually ship through `npx harness-mcp-v2@latest`.
+
+### Review
+- Pending.
