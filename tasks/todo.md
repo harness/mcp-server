@@ -231,7 +231,7 @@
 - [x] Identify why users still see the outage after PR #102 merged
 - [x] Add a release/version regression check
 - [x] Bump package and bundle metadata for a patch release
-- [ ] Run focused verification
+- [x] Run focused verification
 - [ ] Commit, push, open PR, and reply in the Slack thread
 
 ### Plan
@@ -240,4 +240,7 @@
 - Bump the patch version so the already-merged stdio/hosted MCP fixes can actually ship through `npx harness-mcp-v2@latest`.
 
 ### Review
-- Pending.
+- Slack thread had no new details, but the same reporter's previous thread identified `harness-mcp-v2@0.9.5` stdio stdout contamination as the concrete failure.
+- Confirmed npm `latest` still serves `0.9.5`, so users running `npx harness-mcp-v2@latest` can still receive the known-bad build even though PR #102 is merged.
+- Bumped `package.json`, root `manifest.json`, and `mcp-directory/manifest.json` to `0.9.6` and added `tests/release-metadata.test.ts` to keep patch release metadata synchronized.
+- Verified with focused release/env/HTTP tests, `pnpm typecheck`, `pnpm build`, and a stdio startup smoke test showing `stdout bytes=0`.
