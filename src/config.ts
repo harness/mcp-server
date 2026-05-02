@@ -81,6 +81,11 @@ const RawConfigSchema = z.object({
   HARNESS_FME_BASE_URL: urlFromEnv("https://api.split.io"),
   HARNESS_LOG_UNSAFE_BODIES: booleanFromEnv.default(false),
   HARNESS_PIPELINE_VERSION: z.enum(["0", "1"]).optional(),
+  HARNESS_AUDIT_FILE: optionalStringFromEnv,
+  HARNESS_AUDIT_WEBHOOK_URL: z.preprocess(emptyStringAsUndefined, z.string().url().optional()),
+  HARNESS_AUDIT_WEBHOOK_TOKEN: optionalStringFromEnv,
+  HARNESS_AUDIT_WEBHOOK_BATCH_SIZE: z.coerce.number().default(10),
+  HARNESS_AUDIT_WEBHOOK_FLUSH_MS: z.coerce.number().default(5000),
 });
 
 export const ConfigSchema = RawConfigSchema.transform((data) => {

@@ -17,6 +17,7 @@ import { parseArgs, resolvePort, getVersion } from "./utils/cli.js";
 import { configureElicitation } from "./utils/elicitation.js";
 import { resolveHttpHostValidationOptions } from "./utils/http-hosts.js";
 import { loadEnvFile } from "./utils/env.js";
+import { createAuditManager, type AuditManager } from "./audit/index.js";
 
 const log = createLogger("main");
 
@@ -35,12 +36,18 @@ function mergeConfigWithPipelineVersion(baseConfig: Config, req: import("express
   return { ...baseConfig, HARNESS_PIPELINE_VERSION: pv };
 }
 
+interface HarnessServerResult {
+  server: McpServer;
+  auditManager: AuditManager;
+}
+
 /**
  * Create a fully-configured MCP server instance with all tools, resources, and prompts.
  */
-function createHarnessServer(config: Config): McpServer {
+function createHarnessServer(config: Config): HarnessServerResult {
+  const auditManager = createAuditManager(config);
   const client = new HarnessClient(config);
-  const registry = new Registry(config);
+  const registry = new Registry(config, { auditManager });
 
   const server = new McpServer(
     {
@@ -82,7 +89,7 @@ function createHarnessServer(config: Config): McpServer {
   registerAllResources(server, registry, client, config);
   registerAllPrompts(server);
 
-  return server;
+  return { server, auditManager };
 }
 
 /**
@@ -116,7 +123,7 @@ function logToFile(message: string, data?: Record<string, unknown>): void {
  * Start the server in stdio mode — single persistent connection.
  */
 async function startStdio(config: Config): Promise<void> {
-  const server = createHarnessServer(config);
+  const { server, auditManager } = createHarnessServer(config);
   const transport = new StdioServerTransport();
   await server.connect(transport);
   log.info("harness-mcp-server connected via stdio", {
@@ -161,6 +168,7 @@ async function startStdio(config: Config): Promise<void> {
       idle_ms: Date.now() - lastActivityTs,
       uptime_s: Math.round(process.uptime()),
     });
+    await auditManager.close();
     await transport.close();
     await server.close();
     log.info("Stdio server closed");
@@ -177,6 +185,7 @@ async function startStdio(config: Config): Promise<void> {
 interface Session {
   server: McpServer;
   transport: StreamableHTTPServerTransport;
+  auditManager: AuditManager;
   lastActivity: number;
 }
 
@@ -241,6 +250,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
     const session = sessions.get(sessionId);
     if (!session) return;
     sessions.delete(sessionId);
+    session.auditManager.close().catch(() => {});
     session.transport.close().catch(() => {});
     session.server.close().catch(() => {});
     log.info("Session destroyed", { sessionId, remaining: sessions.size });
@@ -305,13 +315,16 @@ async function startHttp(config: Config, port: number): Promise<void> {
     // No session header — must be an initialize request. Create a new session.
     let server: McpServer | undefined;
     let transport: StreamableHTTPServerTransport | undefined;
+    let sessionAuditManager: AuditManager | undefined;
     try {
       const sessionConfig = mergeConfigWithPipelineVersion(config, req);
-      server = createHarnessServer(sessionConfig);
+      const result = createHarnessServer(sessionConfig);
+      server = result.server;
+      sessionAuditManager = result.auditManager;
       transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (id) => {
-          sessions.set(id, { server: server!, transport: transport!, lastActivity: Date.now() });
+          sessions.set(id, { server: server!, transport: transport!, auditManager: sessionAuditManager!, lastActivity: Date.now() });
           log.info("Session created", { sessionId: id, total: sessions.size });
         },
       });
