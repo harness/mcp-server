@@ -179,4 +179,14 @@ describe("OTelSink", () => {
     const sink = new OTelSink();
     await expect(sink.flush()).resolves.toBeUndefined();
   });
+
+  it("close resolves without error", async () => {
+    const sink = new OTelSink();
+    await expect(sink.close()).resolves.toBeUndefined();
+  });
+
+  it("has the correct name", () => {
+    const sink = new OTelSink();
+    expect(sink.name).toBe("otel");
+  });
 });
