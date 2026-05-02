@@ -294,7 +294,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/environments/{environmentId}",
-          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          operationPolicy: { risk: "medium_write", retryPolicy: "safe" },
           pathParams: {
             workspace_id: "wsId",
             feature_flag_name: "featureFlagName",
@@ -401,7 +401,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/internal/api/v2/rule-based-segments/ws/{wsId}/{rbSegmentName}/environments/{environmentId}",
-          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          operationPolicy: { risk: "medium_write", retryPolicy: "safe" },
           pathParams: { workspace_id: "wsId", segment_name: "rbSegmentName", environment_id: "environmentId" },
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
