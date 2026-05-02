@@ -430,6 +430,57 @@ describe("Toolset structural validation", () => {
     });
   });
 
+  describe("write quality contract", () => {
+    it("every create operation has bodySchema", () => {
+      const missing: string[] = [];
+      for (const type of allTypes) {
+        const def = registry.getResource(type);
+        if (def.operations.create && !def.operations.create.bodySchema) {
+          missing.push(`${type}.create`);
+        }
+      }
+      expect(missing, `Missing bodySchema on create:\n${missing.join("\n")}`).toEqual([]);
+    });
+
+    it("every update operation has bodySchema", () => {
+      const missing: string[] = [];
+      for (const type of allTypes) {
+        const def = registry.getResource(type);
+        if (def.operations.update && !def.operations.update.bodySchema) {
+          missing.push(`${type}.update`);
+        }
+      }
+      expect(missing, `Missing bodySchema on update:\n${missing.join("\n")}`).toEqual([]);
+    });
+
+    it("every high_write/destructive execute action has actionDescription", () => {
+      const missing: string[] = [];
+      for (const type of allTypes) {
+        const def = registry.getResource(type);
+        for (const [action, spec] of Object.entries(def.executeActions ?? {})) {
+          const risk = spec.operationPolicy?.risk;
+          if ((risk === "high_write" || risk === "destructive") && !spec.actionDescription) {
+            missing.push(`${type}.${action}`);
+          }
+        }
+      }
+      expect(missing, `Missing actionDescription on high-risk actions:\n${missing.join("\n")}`).toEqual([]);
+    });
+
+    it("every execute action has actionDescription or description", () => {
+      const missing: string[] = [];
+      for (const type of allTypes) {
+        const def = registry.getResource(type);
+        for (const [action, spec] of Object.entries(def.executeActions ?? {})) {
+          if (!spec.actionDescription && !spec.description) {
+            missing.push(`${type}.${action}`);
+          }
+        }
+      }
+      expect(missing, `Missing description on execute actions:\n${missing.join("\n")}`).toEqual([]);
+    });
+  });
+
   describe("description completeness", () => {
     it("every resource type has a non-empty description", () => {
       const empty: string[] = [];
