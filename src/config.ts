@@ -72,6 +72,10 @@ const RawConfigSchema = z.object({
   HARNESS_RATE_LIMIT_RPS: z.coerce.number().default(10),
   HARNESS_READ_ONLY: booleanFromEnv.default(false),
   HARNESS_SKIP_ELICITATION: booleanFromEnv.default(false),
+  HARNESS_AUTO_APPROVE_RISK: z.preprocess(
+    emptyStringAsUndefined,
+    z.enum(["none", "low_write", "medium_write", "high_write", "all"]).optional(),
+  ),
   HARNESS_ALLOW_HTTP: booleanFromEnv.default(false),
   HARNESS_MCP_ALLOWED_HOSTS: optionalStringFromEnv.transform(validateAllowedHosts),
   HARNESS_FME_BASE_URL: urlFromEnv("https://api.split.io"),
@@ -104,10 +108,20 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
   const HARNESS_ORG = data.HARNESS_ORG ?? data.HARNESS_DEFAULT_ORG_ID ?? "default";
   const HARNESS_PROJECT = data.HARNESS_PROJECT ?? data.HARNESS_DEFAULT_PROJECT_ID;
 
+  // Resolve auto-approve risk: prefer new name, fall back to deprecated SKIP_ELICITATION
+  let HARNESS_AUTO_APPROVE_RISK = data.HARNESS_AUTO_APPROVE_RISK ?? "none";
+  if (!data.HARNESS_AUTO_APPROVE_RISK && data.HARNESS_SKIP_ELICITATION) {
+    console.error(
+      '[DEPRECATION] HARNESS_SKIP_ELICITATION is deprecated. Use HARNESS_AUTO_APPROVE_RISK instead.\n' +
+      '  HARNESS_SKIP_ELICITATION=true is equivalent to HARNESS_AUTO_APPROVE_RISK=all.',
+    );
+    HARNESS_AUTO_APPROVE_RISK = "all";
+  }
+
   // Remove deprecated keys from output, expose only the canonical names
   const { HARNESS_DEFAULT_ORG_ID: _oldOrg, HARNESS_DEFAULT_PROJECT_ID: _oldProject, ...rest } = data;
 
-  return { ...rest, HARNESS_ACCOUNT_ID: accountId, HARNESS_ORG, HARNESS_PROJECT };
+  return { ...rest, HARNESS_ACCOUNT_ID: accountId, HARNESS_ORG, HARNESS_PROJECT, HARNESS_AUTO_APPROVE_RISK };
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

@@ -6,7 +6,6 @@ import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
 import { logAudit } from "../utils/logger.js";
 import { confirmViaElicitation } from "../utils/elicitation.js";
-import { isBlockingRisk } from "../registry/types.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { coerceRecord } from "../utils/type-guards.js";
 import { resourceTypeSchema } from "./input-schemas.js";
@@ -59,7 +58,7 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
           server,
           toolName: "harness_create",
           message: `Create ${args.resource_type}?\n\n${bodyPreview}`,
-          destructive: isBlockingRisk(risk),
+          risk,
         });
         if (!elicit.proceed) {
           return errorResult(`Operation ${elicit.reason} by user.`);

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { clientSupportsElicitation, confirmViaElicitation, configureElicitation } from "../../src/utils/elicitation.js";
-import { isBlockingRisk } from "../../src/registry/types.js";
-import type { RiskLevel } from "../../src/registry/types.js";
+import { isBlockingRisk, requiresConfirmation, shouldAutoApprove } from "../../src/registry/types.js";
+import type { RiskLevel, AutoApproveRisk } from "../../src/registry/types.js";
 
 /** Minimal stub of the Server class (only the methods we use). */
 function makeServerStub(capabilities: unknown, elicitResult?: unknown) {
@@ -12,7 +12,7 @@ function makeServerStub(capabilities: unknown, elicitResult?: unknown) {
   return { server } as any;
 }
 
-describe("isBlockingRisk", () => {
+describe("isBlockingRisk (deprecated)", () => {
   it.each<[RiskLevel, boolean]>([
     ["read", false],
     ["low_write", false],
@@ -21,6 +21,41 @@ describe("isBlockingRisk", () => {
     ["destructive", true],
   ])("isBlockingRisk(%s) → %s", (risk, expected) => {
     expect(isBlockingRisk(risk)).toBe(expected);
+  });
+});
+
+describe("requiresConfirmation", () => {
+  it.each<[RiskLevel, boolean]>([
+    ["read", false],
+    ["low_write", false],
+    ["medium_write", true],
+    ["high_write", true],
+    ["destructive", true],
+  ])("requiresConfirmation(%s) → %s", (risk, expected) => {
+    expect(requiresConfirmation(risk)).toBe(expected);
+  });
+});
+
+describe("shouldAutoApprove", () => {
+  it.each<[RiskLevel, AutoApproveRisk, boolean]>([
+    ["read", "none", false],
+    ["low_write", "none", false],
+    ["destructive", "none", false],
+    ["read", "low_write", true],
+    ["low_write", "low_write", true],
+    ["medium_write", "low_write", false],
+    ["high_write", "low_write", false],
+    ["read", "medium_write", true],
+    ["low_write", "medium_write", true],
+    ["medium_write", "medium_write", true],
+    ["high_write", "medium_write", false],
+    ["destructive", "medium_write", false],
+    ["high_write", "high_write", true],
+    ["destructive", "high_write", false],
+    ["read", "all", true],
+    ["destructive", "all", true],
+  ])("shouldAutoApprove(%s, %s) → %s", (risk, threshold, expected) => {
+    expect(shouldAutoApprove(risk, threshold)).toBe(expected);
   });
 });
 
@@ -48,16 +83,16 @@ describe("clientSupportsElicitation", () => {
 
 describe("confirmViaElicitation", () => {
   afterEach(() => {
-    // Reset skip flag after each test
-    configureElicitation({ skip: false });
+    configureElicitation({ autoApproveRisk: "none" });
   });
 
-  it("proceeds when client does not support elicitation (non-destructive)", async () => {
+  it("proceeds when client does not support elicitation (low_write)", async () => {
     const mcpServer = makeServerStub(undefined);
     const result = await confirmViaElicitation({
       server: mcpServer,
       toolName: "harness_create",
       message: "Create pipeline?",
+      risk: "low_write",
     });
     expect(result).toEqual({ proceed: true });
     expect(mcpServer.server.elicitInput).not.toHaveBeenCalled();
@@ -69,10 +104,21 @@ describe("confirmViaElicitation", () => {
       server: mcpServer,
       toolName: "harness_delete",
       message: "Delete pipeline?",
-      destructive: true,
+      risk: "destructive",
     });
     expect(result).toEqual({ proceed: false, reason: "declined" });
     expect(mcpServer.server.elicitInput).not.toHaveBeenCalled();
+  });
+
+  it("blocks when client does not support elicitation (medium_write)", async () => {
+    const mcpServer = makeServerStub(undefined);
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_create",
+      message: "Create repo rule?",
+      risk: "medium_write",
+    });
+    expect(result).toEqual({ proceed: false, reason: "declined" });
   });
 
   it("proceeds when user accepts", async () => {
@@ -84,6 +130,7 @@ describe("confirmViaElicitation", () => {
       server: mcpServer,
       toolName: "harness_create",
       message: "Create service?",
+      risk: "low_write",
     });
     expect(result).toEqual({ proceed: true });
     expect(mcpServer.server.elicitInput).toHaveBeenCalledOnce();
@@ -98,6 +145,7 @@ describe("confirmViaElicitation", () => {
       server: mcpServer,
       toolName: "harness_delete",
       message: "Delete connector?",
+      risk: "destructive",
     });
     expect(result).toEqual({ proceed: false, reason: "declined" });
   });
@@ -111,17 +159,19 @@ describe("confirmViaElicitation", () => {
       server: mcpServer,
       toolName: "harness_execute",
       message: "Run pipeline?",
+      risk: "high_write",
     });
     expect(result).toEqual({ proceed: false, reason: "cancelled" });
   });
 
-  it("proceeds when elicitInput throws (non-destructive)", async () => {
+  it("proceeds when elicitInput throws (low_write)", async () => {
     const mcpServer = makeServerStub({ elicitation: { form: {} } });
     mcpServer.server.elicitInput.mockRejectedValue(new Error("not implemented"));
     const result = await confirmViaElicitation({
       server: mcpServer,
       toolName: "harness_create",
       message: "Create service?",
+      risk: "low_write",
     });
     expect(result).toEqual({ proceed: true });
   });
@@ -133,7 +183,19 @@ describe("confirmViaElicitation", () => {
       server: mcpServer,
       toolName: "harness_delete",
       message: "Delete service?",
-      destructive: true,
+      risk: "destructive",
+    });
+    expect(result).toEqual({ proceed: false, reason: "cancelled" });
+  });
+
+  it("blocks when elicitInput throws (medium_write)", async () => {
+    const mcpServer = makeServerStub({ elicitation: { form: {} } });
+    mcpServer.server.elicitInput.mockRejectedValue(new Error("not implemented"));
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_create",
+      message: "Create repo rule?",
+      risk: "medium_write",
     });
     expect(result).toEqual({ proceed: false, reason: "cancelled" });
   });
@@ -147,6 +209,7 @@ describe("confirmViaElicitation", () => {
       server: mcpServer,
       toolName: "harness_delete",
       message: "Delete pipeline 'my-pipe'?",
+      risk: "destructive",
     });
     const call = mcpServer.server.elicitInput.mock.calls[0][0];
     expect(call.mode).toBe("form");
@@ -154,8 +217,8 @@ describe("confirmViaElicitation", () => {
     expect(call.requestedSchema.properties).toEqual({});
   });
 
-  it("skips elicitation entirely when HARNESS_SKIP_ELICITATION is set", async () => {
-    configureElicitation({ skip: true });
+  it("auto-approves when risk is within AUTO_APPROVE_RISK threshold", async () => {
+    configureElicitation({ autoApproveRisk: "all" });
     const mcpServer = makeServerStub(
       { elicitation: { form: {} } },
       { action: "decline" },
@@ -164,19 +227,44 @@ describe("confirmViaElicitation", () => {
       server: mcpServer,
       toolName: "harness_delete",
       message: "Delete pipeline?",
-      destructive: true,
+      risk: "destructive",
     });
     expect(result).toEqual({ proceed: true });
     expect(mcpServer.server.elicitInput).not.toHaveBeenCalled();
   });
 
-  it("skips elicitation for non-destructive ops when HARNESS_SKIP_ELICITATION is set", async () => {
-    configureElicitation({ skip: true });
+  it("auto-approves low_write when threshold is low_write", async () => {
+    configureElicitation({ autoApproveRisk: "low_write" });
     const mcpServer = makeServerStub(undefined);
     const result = await confirmViaElicitation({
       server: mcpServer,
       toolName: "harness_create",
       message: "Create service?",
+      risk: "low_write",
+    });
+    expect(result).toEqual({ proceed: true });
+  });
+
+  it("does not auto-approve high_write when threshold is low_write", async () => {
+    configureElicitation({ autoApproveRisk: "low_write" });
+    const mcpServer = makeServerStub(undefined);
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_execute",
+      message: "Run pipeline?",
+      risk: "high_write",
+    });
+    expect(result).toEqual({ proceed: false, reason: "declined" });
+  });
+
+  it("skips elicitation for non-destructive ops when auto-approve is 'all'", async () => {
+    configureElicitation({ autoApproveRisk: "all" });
+    const mcpServer = makeServerStub(undefined);
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_create",
+      message: "Create service?",
+      risk: "low_write",
     });
     expect(result).toEqual({ proceed: true });
     expect(mcpServer.server.elicitInput).not.toHaveBeenCalled();
