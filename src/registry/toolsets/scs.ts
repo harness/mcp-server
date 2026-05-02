@@ -354,6 +354,7 @@ export const scsToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: `${SCS}/v1/orgs/{org}/projects/{project}/artifact-sources`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { org_id: "org", project_id: "project" },
           queryParams: {
             page: "page",
@@ -413,6 +414,7 @@ export const scsToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: `${SCS}/v1/orgs/{org}/projects/{project}/artifact-sources/{source}/artifacts`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { org_id: "org", project_id: "project", source_id: "source" },
           queryParams: {
             page: "page",
@@ -431,6 +433,7 @@ export const scsToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: `${SCS}/v1/orgs/{org}/projects/{project}/artifact-sources/{source}/artifacts/{artifact}/overview`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: {
             org_id: "org",
             project_id: "project",
@@ -482,6 +485,7 @@ export const scsToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: `${SCS}/v1/orgs/{org}/projects/{project}/artifacts/{artifact}/components`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { org_id: "org", project_id: "project", artifact_id: "artifact" },
           queryParams: {
             page: "page",
@@ -538,6 +542,7 @@ export const scsToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: `${SCS}/v1/orgs/{org}/projects/{project}/components/search`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { org_id: "org", project_id: "project" },
           queryParams: {
             page: "page",
@@ -588,6 +593,7 @@ export const scsToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: `${SCS}/v1/orgs/{org}/projects/{project}/artifacts/{artifact}/component/dependencies`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { org_id: "org", project_id: "project", artifact_id: "artifact" },
           queryParams: {
             purl: "purl",
@@ -623,6 +629,7 @@ export const scsToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: `${SCS}/v1/orgs/{org}/projects/{project}/artifacts/{artifact}/component/remediation`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { org_id: "org", project_id: "project", artifact_id: "artifact" },
           queryParams: {
             purl: "purl",
@@ -654,6 +661,7 @@ export const scsToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: `${SCS}/v2/orgs/{org}/projects/{project}/artifacts/{artifact}/chain-of-custody`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { org_id: "org", project_id: "project", artifact_id: "artifact" },
           responseExtractor: scsCleanExtract,
           description: "Get chain of custody events for an artifact",
@@ -689,6 +697,7 @@ export const scsToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: `${SCS}/v1/orgs/{org}/projects/{project}/artifact/{artifact}/compliance-results/list`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { org_id: "org", project_id: "project", artifact_id: "artifact" },
           queryParams: {
             page: "page",
@@ -744,6 +753,7 @@ export const scsToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: `${SCS}/v1/org/{org}/project/{project}/enforcement/{enforcement}/policy-violations`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { org_id: "org", project_id: "project", enforcement_id: "enforcement" },
           queryParams: {
             page: "page",
@@ -759,6 +769,7 @@ export const scsToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: `${SCS}/v1/org/{org}/project/{project}/enforcement/{enforcement}/summary`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { org_id: "org", project_id: "project", enforcement_id: "enforcement" },
           responseExtractor: scsCleanExtract,
           description: "Get enforcement summary with violation counts by type",
@@ -795,6 +806,7 @@ export const scsToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: `${SCS}/v1/orgs/{org}/projects/{project}/code-repos/list`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { org_id: "org", project_id: "project" },
           queryParams: {
             page: "page",
@@ -811,6 +823,7 @@ export const scsToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: `${SCS}/v1/orgs/{org}/projects/{project}/code-repos/{codeRepo}/overview`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { org_id: "org", project_id: "project", repo_id: "codeRepo" },
           responseExtractor: scsCleanExtract,
           description: "Get code repository security overview",
@@ -851,6 +864,7 @@ export const scsToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: `${SCS}/v1/orgs/{org}/projects/{project}/artifacts/{artifact}/component/remediation`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { org_id: "org", project_id: "project", artifact_id: "artifact" },
           queryParams: {
             purl: "purl",
@@ -895,6 +909,7 @@ export const scsToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: `${SCS}/v1/orgs/{org}/projects/{project}/artifacts/{artifact}/component/remediation/pull-requests`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { org_id: "org", project_id: "project", artifact_id: "artifact" },
           queryParams: {
             page: "page",
@@ -907,6 +922,7 @@ export const scsToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: `${SCS}/v1/orgs/{org}/projects/{project}/artifacts/{artifact}/component/remediation/create-pull-request`,
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           pathParams: { org_id: "org", project_id: "project", artifact_id: "artifact" },
           bodyBuilder: (input) => {
             const body = (input.body && typeof input.body === "object" ? input.body : {}) as Record<string, unknown>;
@@ -1120,12 +1136,14 @@ export const scsToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: `${SCS}/v1/ssca-config/auto-pr-config`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: scsCleanExtract,
           description: "Get current auto-PR configuration",
         },
         update: {
           method: "PUT",
           path: `${SCS}/v1/ssca-config/auto-pr-config`,
+          operationPolicy: { risk: "medium_write", retryPolicy: "safe" },
           bodyBuilder: (input) => input.body,
           responseExtractor: scsCleanExtract,
           description: "Save or update auto-PR configuration",
@@ -1195,6 +1213,7 @@ export const scsToolset: ToolsetDefinition = {
             // Account-scoped fallback: enrichment data only
             return `${SCS}/v1/components/details`;
           },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             purl: "purl",
           },
@@ -1258,6 +1277,7 @@ export const scsToolset: ToolsetDefinition = {
             }
             return `${SCS}/v1/components/vulnerabilities`;
           },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             purl: "purl",
             page: "page",
@@ -1301,6 +1321,7 @@ export const scsToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: `${SCS}/v1/orgs/{org}/projects/{project}/oss-risks/summary`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { org_id: "org", project_id: "project" },
           responseExtractor: scsCleanExtract,
           description: "Get project-level OSS risk summary with aggregate counts and per-artifact breakdown",
@@ -1345,6 +1366,7 @@ export const scsToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: `${SCS}/v1/orgs/{org}/projects/{project}/security-overview`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { org_id: "org", project_id: "project" },
           responseExtractor: projectSecurityOverviewExtract,
           description: "Get comprehensive project-level security posture overview",
@@ -1393,6 +1415,7 @@ export const scsToolset: ToolsetDefinition = {
         calculate: {
           method: "POST",
           path: `${SCS}/v1/orgs/{org}/projects/{project}/orchestration/{orchestration}/sbom-drift`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { org_id: "org", project_id: "project", orchestration_id: "orchestration" },
           bodyBuilder: (input) => ({
             base: (input.base as string) || "last_generated_sbom",
@@ -1445,6 +1468,7 @@ export const scsToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: `${SCS}/v1/orgs/{org}/projects/{project}/sbom-drift/{drift}/components`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { org_id: "org", project_id: "project", drift_id: "drift" },
           queryParams: {
             page: "page",
@@ -1478,6 +1502,7 @@ export const scsToolset: ToolsetDefinition = {
           method: "GET",
           // Note: this endpoint uses singular org/project (no 's') — API inconsistency
           path: `${SCS}/v1/org/{org}/project/{project}/orchestration/{orchestrationId}/sbom-download`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { org_id: "org", project_id: "project", orchestration_id: "orchestrationId" },
           responseExtractor: scsCleanExtract,
           description: "Get SBOM download URL for an orchestration run",

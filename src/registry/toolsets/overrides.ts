@@ -83,6 +83,7 @@ export const overridesToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/ng/api/environmentsV2/serviceOverrides",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             environment_id: "environmentIdentifier",
             service_id: "serviceIdentifier",
@@ -96,6 +97,7 @@ export const overridesToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/ng/api/serviceOverrides/{identifier}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { override_id: "identifier" },
           responseExtractor: ngExtract,
           description: "Get a service override by identifier. Returns full YAML configuration and details including impacted service, environment, infrastructure, and override type.",
@@ -103,6 +105,7 @@ export const overridesToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/ng/api/serviceOverrides",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: overrideBodyBuilder,
           responseExtractor: ngExtract,
           bodySchema: overrideCreateSchema,
@@ -111,6 +114,7 @@ export const overridesToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/ng/api/serviceOverrides",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           bodyBuilder: buildBodyNormalized({
             injectIdentifier: { inputField: "override_id", bodyField: "identifier" },
             injectFields: [
@@ -125,6 +129,7 @@ export const overridesToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/ng/api/serviceOverrides/{identifier}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { override_id: "identifier" },
           responseExtractor: ngExtract,
           description: "Delete a service override by identifier.",

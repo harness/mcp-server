@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { clientSupportsElicitation, confirmViaElicitation, configureElicitation } from "../../src/utils/elicitation.js";
+import { isBlockingRisk } from "../../src/registry/types.js";
+import type { RiskLevel } from "../../src/registry/types.js";
 
 /** Minimal stub of the Server class (only the methods we use). */
 function makeServerStub(capabilities: unknown, elicitResult?: unknown) {
@@ -9,6 +11,18 @@ function makeServerStub(capabilities: unknown, elicitResult?: unknown) {
   };
   return { server } as any;
 }
+
+describe("isBlockingRisk", () => {
+  it.each<[RiskLevel, boolean]>([
+    ["read", false],
+    ["low_write", false],
+    ["medium_write", false],
+    ["high_write", true],
+    ["destructive", true],
+  ])("isBlockingRisk(%s) → %s", (risk, expected) => {
+    expect(isBlockingRisk(risk)).toBe(expected);
+  });
+});
 
 describe("clientSupportsElicitation", () => {
   it("returns false when capabilities are undefined", () => {

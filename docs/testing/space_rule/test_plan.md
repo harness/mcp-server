@@ -40,6 +40,6 @@
 - `space_rule` applies across all repositories in a space (project/org/account level)
 - Unlike `repo_rule`, does NOT require `repo_id` — it is scoped to project/org/account
 - Scope is determined by provided `org_id`/`project_id`: omit `project_id` for org-level, omit both for account-level
-- Create, update, and delete operations require user confirmation (`blockWithoutConfirmation: true`)
+- Create, update, and delete operations require user confirmation (`operationPolicy.risk: "high_write"` or `"destructive"`)
 - Same rule types (`branch`, `tag`, `push`) and states (`active`, `disabled`, `monitor`) as `repo_rule`
 - Sort fields: `created_at`, `identifier`, `updated_at`

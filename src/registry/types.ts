@@ -4,15 +4,67 @@
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
+// ---------------------------------------------------------------------------
+// OperationPolicy — risk + retry contract for every endpoint spec
+// ---------------------------------------------------------------------------
+
+export type RiskLevel =
+  | "read"
+  | "low_write"
+  | "medium_write"
+  | "high_write"
+  | "destructive";
+
+export type RetryPolicy =
+  | "safe"
+  | "idempotency_key_required"
+  | "do_not_retry";
+
+export interface OperationPolicy {
+  risk: RiskLevel;
+  retryPolicy: RetryPolicy;
+}
+
 /**
- * Context passed to EndpointSpec.preflight hooks. Typed structurally so this
- * module does not need to import HarnessClient/Registry (which would create a
- * cycle). Hook implementations can cast these to the concrete types.
+ * Returns true when the risk level requires blocking the operation
+ * if user confirmation cannot be obtained (e.g. client lacks elicitation).
+ */
+export function isBlockingRisk(risk: RiskLevel): boolean {
+  return risk === "high_write" || risk === "destructive";
+}
+
+// ---------------------------------------------------------------------------
+// Minimal interfaces for PreflightContext (avoids circular imports).
+// The concrete HarnessClient and Registry satisfy these structurally.
+// Preflight hooks that need concrete-only methods (e.g. getCurrentUserId)
+// can narrow via `(client as unknown as HarnessClient)`.
+// ---------------------------------------------------------------------------
+
+export interface HarnessClientInterface {
+  readonly account: string;
+}
+
+export interface RegistryDispatchInterface {
+  dispatch(
+    client: HarnessClientInterface,
+    resourceType: string,
+    operation: string,
+    input: Record<string, unknown>,
+    signal?: AbortSignal,
+  ): Promise<unknown>;
+  getResource(resourceType: string): ResourceDefinition;
+}
+
+/**
+ * Context passed to EndpointSpec.preflight hooks. Uses structural interfaces
+ * so this module does not import HarnessClient/Registry (which would create a
+ * cycle). Hooks that need concrete-only methods can narrow:
+ *   `const hc = client as unknown as HarnessClient;`
  */
 export interface PreflightContext {
-  client: unknown;
+  client: HarnessClientInterface;
   input: Record<string, unknown>;
-  registry: unknown;
+  registry: RegistryDispatchInterface;
   signal?: AbortSignal;
 }
 
@@ -163,12 +215,8 @@ export interface EndpointSpec {
    * so required-field validation checks the inner object, not the wrapper.
    */
   bodyWrapperKey?: string;
-  /**
-   * When true, block the operation if user confirmation cannot be obtained
-   * (e.g. elicitation unavailable). Used for high-risk operations like
-   * protection rules. Default: false (create/update proceed without confirmation).
-   */
-  blockWithoutConfirmation?: boolean;
+  /** Declares the risk level and retry behavior for this operation. */
+  operationPolicy: OperationPolicy;
   /**
    * Declarative input expansion rules. When present, matching shorthand keys
    * in user input are expanded into full nested structures before resolution.

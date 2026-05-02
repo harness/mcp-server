@@ -23,6 +23,7 @@ export const settingsToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/ng/api/settings",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             category: "category",
             group: "group",

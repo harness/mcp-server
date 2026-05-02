@@ -319,6 +319,117 @@ describe("Toolset structural validation", () => {
     });
   });
 
+  describe("operationPolicy contract", () => {
+    const VALID_RISK_LEVELS = new Set(["read", "low_write", "medium_write", "high_write", "destructive"]);
+    const VALID_RETRY_POLICIES = new Set(["safe", "idempotency_key_required", "do_not_retry"]);
+
+    it("every operation endpoint spec has operationPolicy", () => {
+      const missing: string[] = [];
+      for (const type of allTypes) {
+        const def = registry.getResource(type);
+        for (const [op, spec] of Object.entries(def.operations)) {
+          if (!spec.operationPolicy) {
+            missing.push(`${type}.${op}`);
+          }
+        }
+      }
+      expect(missing, `Missing operationPolicy:\n${missing.join("\n")}`).toEqual([]);
+    });
+
+    it("every executeAction endpoint spec has operationPolicy", () => {
+      const missing: string[] = [];
+      for (const type of allTypes) {
+        const def = registry.getResource(type);
+        for (const [action, spec] of Object.entries(def.executeActions ?? {})) {
+          if (!spec.operationPolicy) {
+            missing.push(`${type}.${action}`);
+          }
+        }
+      }
+      expect(missing, `Missing operationPolicy on executeActions:\n${missing.join("\n")}`).toEqual([]);
+    });
+
+    it("operationPolicy.risk is a valid RiskLevel", () => {
+      const issues: string[] = [];
+      for (const type of allTypes) {
+        const def = registry.getResource(type);
+        for (const [op, spec] of Object.entries(def.operations)) {
+          if (spec.operationPolicy && !VALID_RISK_LEVELS.has(spec.operationPolicy.risk)) {
+            issues.push(`${type}.${op}: invalid risk "${spec.operationPolicy.risk}"`);
+          }
+        }
+        for (const [action, spec] of Object.entries(def.executeActions ?? {})) {
+          if (spec.operationPolicy && !VALID_RISK_LEVELS.has(spec.operationPolicy.risk)) {
+            issues.push(`${type}.${action}: invalid risk "${spec.operationPolicy.risk}"`);
+          }
+        }
+      }
+      expect(issues, `Invalid risk levels:\n${issues.join("\n")}`).toEqual([]);
+    });
+
+    it("operationPolicy.retryPolicy is a valid RetryPolicy", () => {
+      const issues: string[] = [];
+      for (const type of allTypes) {
+        const def = registry.getResource(type);
+        for (const [op, spec] of Object.entries(def.operations)) {
+          if (spec.operationPolicy && !VALID_RETRY_POLICIES.has(spec.operationPolicy.retryPolicy)) {
+            issues.push(`${type}.${op}: invalid retryPolicy "${spec.operationPolicy.retryPolicy}"`);
+          }
+        }
+        for (const [action, spec] of Object.entries(def.executeActions ?? {})) {
+          if (spec.operationPolicy && !VALID_RETRY_POLICIES.has(spec.operationPolicy.retryPolicy)) {
+            issues.push(`${type}.${action}: invalid retryPolicy "${spec.operationPolicy.retryPolicy}"`);
+          }
+        }
+      }
+      expect(issues, `Invalid retry policies:\n${issues.join("\n")}`).toEqual([]);
+    });
+
+    it("all delete operations have risk: destructive", () => {
+      const issues: string[] = [];
+      for (const type of allTypes) {
+        const def = registry.getResource(type);
+        const deleteSpec = def.operations.delete;
+        if (deleteSpec?.operationPolicy && deleteSpec.operationPolicy.risk !== "destructive") {
+          issues.push(`${type}.delete: risk is "${deleteSpec.operationPolicy.risk}", expected "destructive"`);
+        }
+      }
+      expect(issues, `Delete ops without destructive risk:\n${issues.join("\n")}`).toEqual([]);
+    });
+
+    it("all list and get operations have risk: read", () => {
+      const issues: string[] = [];
+      for (const type of allTypes) {
+        const def = registry.getResource(type);
+        for (const op of ["list", "get"] as const) {
+          const spec = def.operations[op];
+          if (spec?.operationPolicy && spec.operationPolicy.risk !== "read") {
+            issues.push(`${type}.${op}: risk is "${spec.operationPolicy.risk}", expected "read"`);
+          }
+        }
+      }
+      expect(issues, `Read ops without read risk:\n${issues.join("\n")}`).toEqual([]);
+    });
+
+    it("no endpoint spec has blockWithoutConfirmation (removed field)", () => {
+      const found: string[] = [];
+      for (const type of allTypes) {
+        const def = registry.getResource(type);
+        for (const [op, spec] of Object.entries(def.operations)) {
+          if ("blockWithoutConfirmation" in spec) {
+            found.push(`${type}.${op}`);
+          }
+        }
+        for (const [action, spec] of Object.entries(def.executeActions ?? {})) {
+          if ("blockWithoutConfirmation" in spec) {
+            found.push(`${type}.${action}`);
+          }
+        }
+      }
+      expect(found, `Specs still have blockWithoutConfirmation:\n${found.join("\n")}`).toEqual([]);
+    });
+  });
+
   describe("description completeness", () => {
     it("every resource type has a non-empty description", () => {
       const empty: string[] = [];

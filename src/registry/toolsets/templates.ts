@@ -23,6 +23,7 @@ export const templatesToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: "/template/api/templates/list",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search_term: "searchTerm",
             page: "page",
@@ -41,6 +42,7 @@ export const templatesToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/template/api/templates/{templateIdentifier}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { template_id: "templateIdentifier" },
           queryParams: { version_label: "versionLabel" },
           responseExtractor: ngExtract,
@@ -49,6 +51,7 @@ export const templatesToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/v1/orgs/{org}/projects/{project}/templates/{template}/versions/{version}",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { org_id: "org", project_id: "project", template_id: "template", version_label: "version" },
           bodyBuilder: (input) => {
             const b = (input.body as Record<string, unknown>) ?? {};
@@ -80,6 +83,7 @@ export const templatesToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/v1/orgs/{org}/projects/{project}/templates",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: { org_id: "org", project_id: "project" },
           bodyBuilder: (input) => {
             const b = (input.body as Record<string, unknown>) ?? {};
@@ -128,6 +132,7 @@ export const templatesToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/template/api/templates/{templateIdentifier}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { template_id: "templateIdentifier" },
           queryParams: { version_label: "versionLabel" },
           responseExtractor: ngExtract,

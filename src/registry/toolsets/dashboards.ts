@@ -23,6 +23,7 @@ export const dashboardsToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/dashboard/v1/search",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search_term: "searchTerm",
             folder_id: "folderId",
@@ -55,6 +56,7 @@ export const dashboardsToolset: ToolsetDefinition = {
           method: "GET",
           path: "/dashboard/download/dashboards/{dashboardId}/csv",
           pathParams: { dashboard_id: "dashboardId" },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             reporting_timeframe: "filters",
             expanded_tables: "expanded_tables",
