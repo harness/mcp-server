@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 
 /**
- * Smoke test: starts the MCP server in-process, lists tools, and validates
- * expectations based on environment variables (HARNESS_TOOLSETS, HARNESS_READ_ONLY).
+ * Smoke test: loads the registry, verifies resource types and toolsets are
+ * populated, and validates HARNESS_TOOLSETS filtering and HARNESS_READ_ONLY
+ * write-blocking behavior.
  *
- * Used in CI to verify startup across deployment patterns.
+ * Does NOT start an MCP server or list MCP tools — this validates the
+ * registry layer only. Used in CI to verify config-driven behavior.
  *
  * Exit 0 = pass, exit 1 = failure.
  */

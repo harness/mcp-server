@@ -34,9 +34,18 @@ async function getCounts() {
   const resourceTypes = reg.getAllResourceTypes().length;
   const defaultToolsets = reg.getAllToolsets().length;
 
-  // Load again with opt-in toolsets to get total count
-  const configWithOptIn = { ...config, HARNESS_TOOLSETS: "+ai-evals" };
-  const regAll = new Registry(configWithOptIn);
+  // Discover opt-in toolset names dynamically: add every toolset that
+  // isn't already loaded. This avoids hardcoding opt-in names.
+  const defaultNames = new Set(reg.getAllToolsets().map((t) => t.name));
+  const { ALL_TOOLSET_NAMES } = await import(join(ROOT, "build", "registry", "index.js"));
+  const optInNames = ALL_TOOLSET_NAMES
+    ? ALL_TOOLSET_NAMES.filter((n) => !defaultNames.has(n))
+    : [];
+  const additive = optInNames.map((n) => `+${n}`).join(",");
+  const configAll = additive
+    ? { ...config, HARNESS_TOOLSETS: additive }
+    : config;
+  const regAll = additive ? new Registry(configAll) : reg;
   const totalToolsets = regAll.getAllToolsets().length;
 
   const { registerAllPrompts } = await import(join(ROOT, "build", "prompts", "index.js"));
