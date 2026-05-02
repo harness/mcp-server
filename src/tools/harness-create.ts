@@ -5,7 +5,6 @@ import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
 import { confirmViaElicitation } from "../utils/elicitation.js";
-import type { ConfirmationMethod } from "../audit/types.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { coerceRecord } from "../utils/type-guards.js";
 import { resourceTypeSchema } from "./input-schemas.js";
@@ -64,8 +63,7 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
           return errorResult(`Operation ${elicit.reason} by user.`);
         }
 
-        const confirmation: ConfirmationMethod = elicit.proceed ? "elicited" : "blocked";
-        const result = await registry.dispatch(client, args.resource_type, "create", input, { tool: "harness_create", confirmation });
+        const result = await registry.dispatch(client, args.resource_type, "create", input, { tool: "harness_create", confirmation: elicit.method });
         return jsonResult(result);
       } catch (err) {
         if (isUserError(err)) return errorResult(err.message);

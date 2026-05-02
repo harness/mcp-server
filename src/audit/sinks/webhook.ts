@@ -69,8 +69,10 @@ export class WebhookSink implements AuditSink {
         });
       }
     } catch (err) {
+      let host: string | undefined;
+      try { host = new URL(this.url).origin; } catch { /* ignore */ }
       log.warn("Webhook POST failed", {
-        url: this.url,
+        ...(host ? { host } : {}),
         eventCount: batch.length,
         error: String(err),
       });

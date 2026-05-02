@@ -67,6 +67,8 @@ export class OTelSink implements AuditSink {
   private provider: any = null;
   private ready = false;
   private initPromise: Promise<void>;
+  private pendingEvents: AuditEvent[] = [];
+  private static readonly MAX_PENDING = 100;
 
   constructor() {
     this.initPromise = this.init();
@@ -80,18 +82,17 @@ export class OTelSink implements AuditSink {
     }
     this.api = api;
 
-    // Check if a TracerProvider was already registered by a host application
-    // before the MCP server starts. The default no-op provider returns a
-    // ProxyTracerProvider — a real provider is anything else.
-    const existingProvider = api.trace?.getTracerProvider?.();
-    const hasExternalProvider = existingProvider
-      && existingProvider.constructor?.name !== "ProxyTracerProvider"
-      && existingProvider.constructor?.name !== "NoopTracerProvider";
+    // Detect if a host application already registered a real TracerProvider.
+    // In OTel JS, `trace.getTracerProvider()` always returns a ProxyTracerProvider.
+    // After `setGlobalTracerProvider()`, the proxy's delegate points to the real
+    // SDK provider. We check for a delegate to avoid constructor-name matching.
+    const globalProvider = api.trace?.getTracerProvider?.();
+    const delegate = globalProvider?.getDelegate?.();
+    const hasExternalProvider = delegate
+      && delegate !== globalProvider
+      && typeof delegate.getTracer === "function";
 
     if (hasExternalProvider) {
-      // Another system owns the TracerProvider — use it. At emit() time, if there's
-      // an active span (per-request), we attach as a span event; otherwise we create
-      // a child-less root span via this tracer.
       this.tracer = api.trace.getTracer("harness-mcp-audit");
       this.ready = true;
       log.debug("OTel audit sink using external TracerProvider");
@@ -151,10 +152,30 @@ export class OTelSink implements AuditSink {
     } catch (err) {
       log.error("Failed to bootstrap OTel TracerProvider", { error: String(err) });
     }
+
+    this.drainPending();
+  }
+
+  private drainPending(): void {
+    if (!this.ready || this.pendingEvents.length === 0) return;
+    const events = this.pendingEvents.splice(0);
+    for (const event of events) {
+      this.emitSpan(event);
+    }
   }
 
   emit(event: AuditEvent): void {
-    if (!this.ready || !this.api || !this.tracer) return;
+    if (!this.ready) {
+      if (this.pendingEvents.length < OTelSink.MAX_PENDING) {
+        this.pendingEvents.push(event);
+      }
+      return;
+    }
+    this.emitSpan(event);
+  }
+
+  private emitSpan(event: AuditEvent): void {
+    if (!this.api || !this.tracer) return;
 
     // Path 1: if there's an active span, add as a span event (embedded mode)
     const activeSpan = this.api.trace?.getActiveSpan?.();

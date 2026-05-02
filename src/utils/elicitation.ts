@@ -10,6 +10,8 @@ export interface ElicitationResult {
   proceed: boolean;
   /** Why the operation was stopped, if applicable. */
   reason?: "declined" | "cancelled";
+  /** How the confirmation was resolved — maps directly to ConfirmationMethod for audit. */
+  method: "elicited" | "auto_approved" | "not_required" | "blocked" | "skipped";
 }
 
 /** Module-level auto-approve threshold (set via HARNESS_AUTO_APPROVE_RISK). */
@@ -55,16 +57,16 @@ export async function confirmViaElicitation({
 }): Promise<ElicitationResult> {
   if (shouldAutoApprove(risk, _autoApproveRisk)) {
     log.debug("Auto-approved (risk within autonomous threshold)", { toolName, risk, threshold: _autoApproveRisk });
-    return { proceed: true };
+    return { proceed: true, method: "auto_approved" };
   }
 
   if (!clientSupportsElicitation(server.server)) {
     if (requiresConfirmation(risk)) {
       log.warn("Client does not support elicitation, blocking operation", { toolName, risk });
-      return { proceed: false, reason: "declined" };
+      return { proceed: false, reason: "declined", method: "blocked" };
     }
     log.debug("Client does not support elicitation, proceeding (low risk)", { toolName, risk });
-    return { proceed: true };
+    return { proceed: true, method: "not_required" };
   }
 
   try {
@@ -80,12 +82,12 @@ export async function confirmViaElicitation({
     log.info("Elicitation response", { toolName, action: result.action });
 
     if (result.action === "accept") {
-      return { proceed: true };
+      return { proceed: true, method: "elicited" };
     }
     if (result.action === "decline") {
-      return { proceed: false, reason: "declined" };
+      return { proceed: false, reason: "declined", method: "elicited" };
     }
-    return { proceed: false, reason: "cancelled" };
+    return { proceed: false, reason: "cancelled", method: "elicited" };
   } catch (err) {
     if (requiresConfirmation(risk)) {
       log.warn("Elicitation failed, blocking operation", {
@@ -93,13 +95,13 @@ export async function confirmViaElicitation({
         risk,
         error: String(err),
       });
-      return { proceed: false, reason: "cancelled" };
+      return { proceed: false, reason: "cancelled", method: "blocked" };
     }
     log.warn("Elicitation failed, proceeding without confirmation (low risk)", {
       toolName,
       risk,
       error: String(err),
     });
-    return { proceed: true };
+    return { proceed: true, method: "skipped" };
   }
 }

@@ -41,7 +41,12 @@ export function createAuditManager(config: Config): AuditManager {
       batchSize,
       flushIntervalMs: flushMs,
     }));
-    log.info("Webhook audit sink enabled", { url: webhookUrl });
+    try {
+      const origin = new URL(webhookUrl).origin;
+      log.info("Webhook audit sink enabled", { host: origin });
+    } catch {
+      log.info("Webhook audit sink enabled");
+    }
   }
 
   if (process.env.OTEL_EXPORTER_OTLP_ENDPOINT) {

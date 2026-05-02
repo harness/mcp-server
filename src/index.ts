@@ -149,7 +149,7 @@ async function startStdio(config: Config): Promise<void> {
       uptime_s: Math.round(process.uptime()),
       memory_mb: Math.round(process.memoryUsage.rss() / 1024 / 1024),
     });
-    process.exit(0);
+    auditManager.close().catch(() => {}).finally(() => process.exit(0));
   });
 
   process.stdout.on("error", (err: NodeJS.ErrnoException) => {
@@ -159,7 +159,7 @@ async function startStdio(config: Config): Promise<void> {
       uptime_s: Math.round(process.uptime()),
     });
     if (err.code === "EPIPE" || err.code === "ERR_STREAM_DESTROYED") {
-      process.exit(0);
+      auditManager.close().catch(() => {}).finally(() => process.exit(0));
     }
   });
 
@@ -246,13 +246,13 @@ async function startHttp(config: Config, port: number): Promise<void> {
   // ---- Session store ----
   const sessions = new Map<string, Session>();
 
-  function destroySession(sessionId: string): void {
+  async function destroySession(sessionId: string): Promise<void> {
     const session = sessions.get(sessionId);
     if (!session) return;
     sessions.delete(sessionId);
-    session.auditManager.close().catch(() => {});
-    session.transport.close().catch(() => {});
-    session.server.close().catch(() => {});
+    await session.auditManager.close().catch(() => {});
+    await session.transport.close().catch(() => {});
+    await session.server.close().catch(() => {});
     log.info("Session destroyed", { sessionId, remaining: sessions.size });
   }
 
@@ -346,6 +346,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
           id: null,
         });
       }
+      await sessionAuditManager?.close().catch(() => {});
       await transport?.close();
       await server?.close();
     }
@@ -429,7 +430,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
 
   let draining = false;
 
-  const shutdown = (signal: string): void => {
+  const shutdown = async (signal: string): Promise<void> => {
     if (draining) return; // prevent double-shutdown
     draining = true;
     log.info(`Received ${signal}, draining...`);
@@ -450,9 +451,9 @@ async function startHttp(config: Config, port: number): Promise<void> {
 
     // 3. Close all sessions (terminates SSE streams, notifies transports)
     clearInterval(reaper);
-    for (const [id] of sessions) {
-      destroySession(id);
-    }
+    await Promise.allSettled(
+      [...sessions.keys()].map((id) => destroySession(id)),
+    );
 
     // 4. Allow in-flight responses to flush, then exit
     const DRAIN_TIMEOUT_MS = 10_000;

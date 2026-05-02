@@ -5,7 +5,6 @@ import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
 import { confirmViaElicitation } from "../utils/elicitation.js";
-import type { ConfirmationMethod } from "../audit/types.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, isRecord, coerceRecord } from "../utils/type-guards.js";
 import { resourceTypeSchema } from "./input-schemas.js";
@@ -78,8 +77,7 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
           input.version_label = "v1";
         }
 
-        const confirmation: ConfirmationMethod = "elicited";
-        const result = await registry.dispatch(client, args.resource_type, "update", input, { tool: "harness_update", confirmation, resource_id: args.resource_id });
+        const result = await registry.dispatch(client, args.resource_type, "update", input, { tool: "harness_update", confirmation: elicit.method, resource_id: args.resource_id });
         return jsonResult(result);
       } catch (err) {
         if (isUserError(err)) return errorResult(err.message);

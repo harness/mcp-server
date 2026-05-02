@@ -6,7 +6,6 @@ import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError, HarnessApiError } from "../utils/errors.js";
 import { confirmViaElicitation } from "../utils/elicitation.js";
 import { createLogger } from "../utils/logger.js";
-import type { ConfirmationMethod } from "../audit/types.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asRecord, asString, coerceRecord } from "../utils/type-guards.js";
 import { isFlatKeyValueInputs, isResolvableInputs, flattenInputs, resolveRuntimeInputs, type ResolutionResult } from "../utils/runtime-input-resolver.js";
@@ -199,8 +198,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           }
         }
 
-        const confirmation: ConfirmationMethod = "elicited";
-        const auditCtx = { tool: "harness_execute" as const, confirmation, resource_id: resourceId, action: args.action };
+        const auditCtx = { tool: "harness_execute" as const, confirmation: elicit.method, resource_id: resourceId, action: args.action };
 
         let result: unknown;
         try {
