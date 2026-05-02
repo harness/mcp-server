@@ -34,7 +34,7 @@ Options:
 Transport defaults to "stdio" if not specified.
 `.trim();
 
-function getVersion(): string {
+export function getVersion(): string {
   try {
     const thisDir = dirname(fileURLToPath(import.meta.url));
     const pkgPath = resolve(thisDir, "..", "..", "package.json");
