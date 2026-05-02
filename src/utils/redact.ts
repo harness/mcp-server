@@ -1,4 +1,4 @@
-const SENSITIVE_KEY_PATTERN = /^(token|secret|password|authorization|bearer|credential|webhook|private_?key|client_?secret|api[_-]?key|secret[_-]?key|access[_-]?key|ssh[_-]?key|passphrase|encrypted)$/i;
+const SENSITIVE_KEY_PATTERN = /^(token|secret|password|authorization|bearer|credentials?|webhook|private_?key|client_?secret|api[_-]?key|secret[_-]?key|access[_-]?key|ssh[_-]?key|passphrase|encrypted|access_?token|refresh_?token|id_?token|session_?token|cookie)$/i;
 
 const REDACTED = "[REDACTED]";
 
@@ -7,7 +7,7 @@ const REDACTED = "[REDACTED]";
  * Returns a new object — the original is never mutated.
  */
 export function redactSensitiveFields(obj: unknown, depth = 0): unknown {
-  if (depth > 10) return obj;
+  if (depth > 10) return REDACTED;
 
   if (typeof obj === "string") return obj;
   if (obj === null || obj === undefined) return obj;
@@ -31,8 +31,17 @@ export function redactSensitiveFields(obj: unknown, depth = 0): unknown {
 }
 
 /**
+ * Inline pattern for key-value pairs in non-JSON text that might contain secrets.
+ * Matches patterns like: "token": "...", token=..., etc.
+ */
+const INLINE_SECRET_PATTERN = new RegExp(
+  `(["']?(?:token|secret|password|authorization|bearer|credentials?|api[_-]?key|access[_-]?key|private[_-]?key|client[_-]?secret|passphrase|access_?token|refresh_?token|id_?token|session_?token|cookie)["']?)\\s*[:=]\\s*(["']?)([^"'\\s,}{\\]]+)\\2`,
+  "gi",
+);
+
+/**
  * Redact sensitive fields in a JSON string. Returns the redacted string.
- * If parsing fails, returns the original string truncated.
+ * If parsing fails, applies inline secret scrubbing to prevent leaks.
  */
 export function redactJsonString(jsonStr: string, maxLen = 1000): string {
   try {
@@ -41,6 +50,7 @@ export function redactJsonString(jsonStr: string, maxLen = 1000): string {
     const out = JSON.stringify(redacted);
     return out.length > maxLen ? out.slice(0, maxLen) + "..." : out;
   } catch {
-    return jsonStr.slice(0, maxLen);
+    const scrubbed = jsonStr.replace(INLINE_SECRET_PATTERN, `$1: ${REDACTED}`);
+    return scrubbed.length > maxLen ? scrubbed.slice(0, maxLen) + "..." : scrubbed;
   }
 }

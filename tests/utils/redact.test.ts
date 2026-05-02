@@ -14,15 +14,24 @@ describe("redactSensitiveFields", () => {
     const input = {
       connector: {
         name: "test",
-        spec: { authentication: { credentials: { password: "s3cret", username: "admin" } } },
+        spec: { authentication: { config: { password: "s3cret", username: "admin" } } },
       },
     };
     const result = redactSensitiveFields(input) as Record<string, unknown>;
-    const creds = (result.connector as Record<string, unknown>).spec as Record<string, unknown>;
-    const auth = creds.authentication as Record<string, unknown>;
-    const credObj = auth.credentials as Record<string, unknown>;
-    expect(credObj.password).toBe("[REDACTED]");
-    expect(credObj.username).toBe("admin");
+    const spec = (result.connector as Record<string, unknown>).spec as Record<string, unknown>;
+    const auth = spec.authentication as Record<string, unknown>;
+    const config = auth.config as Record<string, unknown>;
+    expect(config.password).toBe("[REDACTED]");
+    expect(config.username).toBe("admin");
+  });
+
+  it("redacts credentials key entirely", () => {
+    const input = {
+      authentication: { credentials: { password: "s3cret", username: "admin" } },
+    };
+    const result = redactSensitiveFields(input) as Record<string, unknown>;
+    const auth = result.authentication as Record<string, unknown>;
+    expect(auth.credentials).toBe("[REDACTED]");
   });
 
   it("redacts various key patterns case-insensitively", () => {
@@ -82,13 +91,28 @@ describe("redactSensitiveFields", () => {
     expect(input.token).toBe("secret-value");
   });
 
-  it("handles deeply nested objects up to depth limit", () => {
+  it("redacts objects beyond depth limit instead of leaking", () => {
     let obj: Record<string, unknown> = { token: "deep-secret" };
     for (let i = 0; i < 15; i++) {
       obj = { nested: obj };
     }
     const result = JSON.stringify(redactSensitiveFields(obj));
-    expect(result).toContain("deep-secret");
+    expect(result).not.toContain("deep-secret");
+    expect(result).toContain("[REDACTED]");
+  });
+
+  it("redacts token-style keys: access_token, refresh_token, id_token, credentials", () => {
+    const input = {
+      access_token: "at_123",
+      refresh_token: "rt_456",
+      id_token: "idt_789",
+      credentials: "cred_abc",
+      session_token: "st_def",
+    };
+    const result = redactSensitiveFields(input) as Record<string, unknown>;
+    for (const key of Object.keys(input)) {
+      expect(result[key]).toBe("[REDACTED]");
+    }
   });
 });
 
@@ -108,8 +132,16 @@ describe("redactJsonString", () => {
     expect(result.endsWith("...")).toBe(true);
   });
 
-  it("returns truncated input on parse failure", () => {
+  it("scrubs inline secrets on parse failure", () => {
+    const raw = 'token: "my-secret-value", name: "safe"';
+    const result = redactJsonString(raw);
+    expect(result).not.toContain("my-secret-value");
+    expect(result).toContain("[REDACTED]");
+    expect(result).toContain("safe");
+  });
+
+  it("truncates scrubbed non-JSON output", () => {
     const result = redactJsonString("not-json{{{", 5);
-    expect(result).toBe("not-j");
+    expect(result.length).toBeLessThanOrEqual(8); // 5 + "..."
   });
 });
