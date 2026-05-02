@@ -533,6 +533,7 @@ export class Registry {
       ...(spec.responseType ? { responseType: spec.responseType } : {}),
       ...(product !== "harness" ? { product } : {}),
       ...(spec.headerBasedScoping || def.headerBasedScoping ? { headerBasedScoping: true } : {}),
+      ...(spec.operationPolicy?.retryPolicy ? { retryPolicy: spec.operationPolicy.retryPolicy } : {}),
       signal,
     };
 

@@ -277,7 +277,11 @@ export class HarnessClient {
             parsed.correlationId,
           );
 
-          if (RETRYABLE_STATUS_CODES.has(response.status) && attempt < this.maxRetries) {
+          if (
+            RETRYABLE_STATUS_CODES.has(response.status) &&
+            attempt < this.maxRetries &&
+            options.retryPolicy !== "do_not_retry"
+          ) {
             lastError = error;
             continue;
           }
@@ -327,9 +331,9 @@ export class HarnessClient {
           if (options.signal?.aborted) {
             throw new HarnessApiError("Request cancelled", 499, undefined, undefined, err);
           }
-          // Timeout — retry if allowed
+          // Timeout — retry if allowed (and policy permits)
           lastError = new HarnessApiError("Request timed out", 408, undefined, undefined, err);
-          if (attempt < this.maxRetries) continue;
+          if (attempt < this.maxRetries && options.retryPolicy !== "do_not_retry") continue;
           throw lastError;
         }
         throw new HarnessApiError(
@@ -415,7 +419,11 @@ export class HarnessClient {
           const message = enrichErrorMessage(rawMessage, parsed, options.path);
           const error = new HarnessApiError(message, response.status, parsed.code, parsed.correlationId);
 
-          if (RETRYABLE_STATUS_CODES.has(response.status) && attempt < this.maxRetries) {
+          if (
+            RETRYABLE_STATUS_CODES.has(response.status) &&
+            attempt < this.maxRetries &&
+            options.retryPolicy !== "do_not_retry"
+          ) {
             lastError = error;
             continue;
           }
@@ -430,7 +438,7 @@ export class HarnessClient {
             throw new HarnessApiError("Request cancelled", 499, undefined, undefined, err);
           }
           lastError = new HarnessApiError("Request timed out", 408, undefined, undefined, err);
-          if (attempt < this.maxRetries) continue;
+          if (attempt < this.maxRetries && options.retryPolicy !== "do_not_retry") continue;
           throw lastError;
         }
         throw new HarnessApiError(

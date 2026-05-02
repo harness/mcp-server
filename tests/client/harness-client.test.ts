@@ -376,6 +376,36 @@ describe("HarnessClient", () => {
       // initial + 1 retry = 2 calls
       expect(fetchSpy).toHaveBeenCalledTimes(2);
     });
+
+    it("does not retry on 500 when retryPolicy is 'do_not_retry'", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({ message: "fail" }), { status: 500 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 2 }));
+
+      await expect(client.request({ path: "/test", retryPolicy: "do_not_retry" })).rejects.toThrow(HarnessApiError);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("retries on 500 when retryPolicy is 'safe'", async () => {
+      fetchSpy
+        .mockResolvedValueOnce(new Response(JSON.stringify({ message: "fail" }), { status: 500 }))
+        .mockResolvedValueOnce(new Response(JSON.stringify({ data: "ok" }), { status: 200 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 2 }));
+
+      const result = await client.request<{ data: string }>({ path: "/test", retryPolicy: "safe" });
+      expect(result.data).toBe("ok");
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it("retries when retryPolicy is undefined (default behavior)", async () => {
+      fetchSpy
+        .mockResolvedValueOnce(new Response(JSON.stringify({ message: "fail" }), { status: 502 }))
+        .mockResolvedValueOnce(new Response(JSON.stringify({ data: "ok" }), { status: 200 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 2 }));
+
+      const result = await client.request<{ data: string }>({ path: "/test" });
+      expect(result.data).toBe("ok");
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe("request — timeout", () => {
