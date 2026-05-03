@@ -238,7 +238,7 @@ describe("Elicitation flow: harness_execute", () => {
     });
   });
 
-  it("proceeds without elicitation when client does not support it", async () => {
+  it("blocks high_write action when client does not support elicitation", async () => {
     const server = makeMcpServer({ supportsElicitation: false });
     const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
     registerExecuteTool(server, registry, client);
@@ -249,12 +249,13 @@ describe("Elicitation flow: harness_execute", () => {
       resource_id: "my-pipe",
     });
 
-    // Execute is non-destructive → proceeds without elicitation
-    expect(result.isError).toBeUndefined();
+    // pipeline.run is high_write → blocked without elicitation
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("declined") });
     expect(server._elicitInput).not.toHaveBeenCalled();
   });
 
-  it("confirms and proceeds on accept", async () => {
+  it("confirms and proceeds on accept for high_write action", async () => {
     const server = makeMcpServer({ supportsElicitation: true, elicitAction: "accept" });
     const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
     registerExecuteTool(server, registry, client);
@@ -282,6 +283,23 @@ describe("Elicitation flow: harness_execute", () => {
 
     expect(result.isError).toBe(true);
     expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("declined") });
+  });
+
+  it("proceeds without elicitation for low_write action on non-elicitation client", async () => {
+    const server = makeMcpServer({ supportsElicitation: false });
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(server, registry, client);
+
+    // pipeline import is low_write — should proceed without elicitation
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "import",
+      resource_id: "my-pipe",
+      body: { pipelineName: "Test", pipelineDescription: "" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(server._elicitInput).not.toHaveBeenCalled();
   });
 });
 

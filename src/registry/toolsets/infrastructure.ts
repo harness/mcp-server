@@ -25,6 +25,7 @@ export const infrastructureToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/ng/api/infrastructures",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             environment_id: "environmentIdentifier",
             search_term: "searchTerm",
@@ -40,6 +41,7 @@ export const infrastructureToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/ng/api/infrastructures/{infraIdentifier}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { infrastructure_id: "infraIdentifier" },
           queryParams: { environment_id: "environmentIdentifier" },
           responseExtractor: ngExtract,
@@ -48,6 +50,7 @@ export const infrastructureToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/ng/api/infrastructures",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => input.body,
           bodySchema: {
             description: "Infrastructure definition",
@@ -66,6 +69,7 @@ export const infrastructureToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/ng/api/infrastructures",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           bodyBuilder: (input) => input.body,
           bodySchema: {
             description: "Infrastructure definition update",
@@ -83,6 +87,7 @@ export const infrastructureToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/ng/api/infrastructures/{infraIdentifier}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { infrastructure_id: "infraIdentifier" },
           queryParams: { environment_id: "environmentIdentifier" },
           responseExtractor: ngExtract,
@@ -93,6 +98,7 @@ export const infrastructureToolset: ToolsetDefinition = {
         move_configs: {
           method: "POST",
           path: "/ng/api/infrastructures/move-config/{infraIdentifier}",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: { infrastructure_id: "infraIdentifier" },
           queryParams: {
             environment_id: "environmentIdentifier",

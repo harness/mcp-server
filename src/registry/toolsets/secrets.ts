@@ -27,6 +27,7 @@ export const secretsToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: "/ng/api/v2/secrets/list/secrets",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search_term: "searchTerm",
             page: "pageIndex",
@@ -55,6 +56,7 @@ export const secretsToolset: ToolsetDefinition = {
           method: "GET",
           path: "/ng/api/v2/secrets/{secretIdentifier}",
           pathParams: { secret_id: "secretIdentifier" },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: ngExtract,
           description: "Get secret metadata (value never exposed)",
         },

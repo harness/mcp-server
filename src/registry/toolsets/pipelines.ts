@@ -196,6 +196,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: "/pipeline/api/pipelines/list",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search_term: "searchTerm",
             module: "module",
@@ -211,6 +212,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/pipeline/api/pipelines/{pipelineIdentifier}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { pipeline_id: "pipelineIdentifier" },
           queryParams: {
             branch: "branch",
@@ -224,6 +226,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/pipeline/api/pipelines/v2",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           headers: { "Content-Type": "application/yaml" },
           queryParams: {
             store_type: "storeType",
@@ -255,6 +258,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/pipeline/api/pipelines/v2/{pipelineIdentifier}",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { pipeline_id: "pipelineIdentifier" },
           headers: { "Content-Type": "application/yaml" },
           queryParams: {
@@ -289,6 +293,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/pipeline/api/pipelines/{pipelineIdentifier}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { pipeline_id: "pipelineIdentifier" },
           responseExtractor: ngExtract,
           description: "Delete a pipeline",
@@ -298,6 +303,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         run: {
           method: "POST",
           path: "/pipeline/api/pipeline/execute/{pipelineIdentifier}",
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: { pipeline_id: "pipelineIdentifier" },
           queryParams: {
             module: "module",
@@ -354,6 +360,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         retry: {
           method: "PUT",
           path: "/pipeline/api/pipeline/execute/retry/{planExecutionId}",
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: { execution_id: "planExecutionId" },
           queryParams: { module: "module" },
           bodyBuilder: () => ({}),
@@ -367,6 +374,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         import: {
           method: "POST",
           path: "/pipeline/api/pipelines/import",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           queryParams: {
             connector_ref: "connectorRef",
             repo_name: "repoName",
@@ -410,6 +418,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/v1/orgs/{org}/projects/{project}/pipelines",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { org_id: "org", project_id: "project" },
           queryParams: {
             search_term: "search_term",
@@ -423,6 +432,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/v1/orgs/{org}/projects/{project}/pipelines/{pipeline}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { org_id: "org", project_id: "project", pipeline_id: "pipeline" },
           queryParams: {
             branch: "branch_name",
@@ -433,6 +443,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/v1/orgs/{org}/projects/{project}/pipelines",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: { org_id: "org", project_id: "project" },
           bodyBuilder: buildV1PipelineBody,
           responseExtractor: passthrough,
@@ -442,6 +453,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/v1/orgs/{org}/projects/{project}/pipelines/{pipeline}",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { org_id: "org", project_id: "project", pipeline_id: "pipeline" },
           bodyBuilder: buildV1PipelineBody,
           responseExtractor: passthrough,
@@ -451,6 +463,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/v1/orgs/{org}/projects/{project}/pipelines/{pipeline}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { org_id: "org", project_id: "project", pipeline_id: "pipeline" },
           responseExtractor: passthrough,
           description: "Delete a v1 pipeline",
@@ -460,6 +473,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         run: {
           method: "POST",
           path: "/v1/orgs/{org}/projects/{project}/pipelines/{pipeline}/execute",
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: { org_id: "org", project_id: "project", pipeline_id: "pipeline" },
           queryParams: {
             module: "module",
@@ -503,6 +517,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: "/pipeline/api/pipelines/execution/summary",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search_term: "searchTerm",
             pipeline_id: "pipelineIdentifier",
@@ -522,6 +537,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/pipeline/api/pipelines/execution/v2/{planExecutionId}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { execution_id: "planExecutionId" },
           queryParams: { render_full_graph: "renderFullBottomGraph" },
           responseExtractor: ngExtract,
@@ -532,6 +548,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         interrupt: {
           method: "PUT",
           path: "/pipeline/api/pipeline/execute/interrupt/{planExecutionId}",
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           pathParams: { execution_id: "planExecutionId" },
           queryParams: { interrupt_type: "interruptType" },
           bodyBuilder: () => ({}),
@@ -557,6 +574,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/pipeline/api/triggers",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             pipeline_id: "targetIdentifier",
             search_term: "searchTerm",
@@ -569,6 +587,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/pipeline/api/triggers/{triggerIdentifier}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { trigger_id: "triggerIdentifier" },
           queryParams: { pipeline_id: "targetIdentifier" },
           responseExtractor: ngExtract,
@@ -577,6 +596,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/pipeline/api/triggers",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           queryParams: { pipeline_id: "targetIdentifier" },
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | undefined;
@@ -596,6 +616,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/pipeline/api/triggers/{triggerIdentifier}",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { trigger_id: "triggerIdentifier" },
           queryParams: { pipeline_id: "targetIdentifier" },
           bodyBuilder: (input) => {
@@ -616,6 +637,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/pipeline/api/triggers/{triggerIdentifier}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { trigger_id: "triggerIdentifier" },
           responseExtractor: ngExtract,
           description: "Delete a pipeline trigger",
@@ -634,6 +656,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/pipeline/api/pipelines/summary/{pipelineIdentifier}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { pipeline_id: "pipelineIdentifier" },
           responseExtractor: ngExtract,
           description: "Get a lightweight pipeline summary (without full YAML)",
@@ -655,6 +678,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/pipeline/api/inputSets",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             pipeline_id: "pipelineIdentifier",
             page: "page",
@@ -666,6 +690,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/pipeline/api/inputSets/{inputSetIdentifier}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { input_set_id: "inputSetIdentifier" },
           queryParams: { pipeline_id: "pipelineIdentifier" },
           responseExtractor: ngExtract,
@@ -674,6 +699,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/pipeline/api/inputSets",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           headers: { "Content-Type": "application/yaml" },
           queryParams: {
             pipeline_id: "pipelineIdentifier",
@@ -703,6 +729,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/pipeline/api/inputSets/{inputSetIdentifier}",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { input_set_id: "inputSetIdentifier" },
           headers: { "Content-Type": "application/yaml" },
           queryParams: {
@@ -735,6 +762,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/pipeline/api/inputSets/{inputSetIdentifier}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { input_set_id: "inputSetIdentifier" },
           queryParams: {
             pipeline_id: "pipelineIdentifier",
@@ -759,6 +787,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         get: {
           method: "POST",
           path: "/pipeline/api/inputSets/template",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             pipeline_id: "pipelineIdentifier",
             branch: "branch",
@@ -787,6 +816,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/pipeline/api/v1/orgs/{org}/projects/{project}/approvals/execution/{executionId}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { org_id: "org", project_id: "project", execution_id: "executionId" },
           queryParams: {
             approval_status: "approval_status",
@@ -801,6 +831,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         approve: {
           method: "POST",
           path: "/pipeline/api/approvals/{approvalInstanceId}/harness/activity",
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: { approval_id: "approvalInstanceId" },
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | undefined;
@@ -825,6 +856,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         reject: {
           method: "POST",
           path: "/pipeline/api/approvals/{approvalInstanceId}/harness/activity",
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: { approval_id: "approvalInstanceId" },
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | undefined;

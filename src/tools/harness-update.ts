@@ -6,6 +6,7 @@ import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
 import { logAudit } from "../utils/logger.js";
 import { confirmViaElicitation } from "../utils/elicitation.js";
+import { isBlockingRisk } from "../registry/types.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, isRecord, coerceRecord } from "../utils/type-guards.js";
 import { resourceTypeSchema } from "./input-schemas.js";
@@ -45,7 +46,7 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
           return errorResult(`Resource "${args.resource_type}" does not support "update". Supported: ${Object.keys(def.operations).join(", ")}`);
         }
 
-        const blockWithoutConfirmation = !!def.operations.update?.blockWithoutConfirmation;
+        const risk = def.operations.update!.operationPolicy.risk;
         const bodyPreview = typeof args.body === "string"
           ? (args.body.length > 500 ? args.body.slice(0, 500) + "\n...(truncated)" : args.body)
           : JSON.stringify(args.body, null, 2);
@@ -53,7 +54,7 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
           server,
           toolName: "harness_update",
           message: `Update ${args.resource_type} "${args.resource_id}"?\n\n${bodyPreview}`,
-          destructive: blockWithoutConfirmation,
+          destructive: isBlockingRisk(risk),
         });
         if (!elicit.proceed) {
           return errorResult(`Operation ${elicit.reason} by user.`);

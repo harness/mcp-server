@@ -40,6 +40,7 @@ export const auditToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: "/audit/api/audits/list",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: { page: "pageIndex", size: "pageSize" },
           bodyBuilder: (input) => {
             const { startTime: defaultStart, endTime: defaultEnd } = defaultAuditTimeWindow();
@@ -61,6 +62,7 @@ export const auditToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/audit/api/auditYaml",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: { audit_id: "auditId" },
           responseExtractor: ngExtract,
           description: "Get audit event YAML diff",

@@ -25,6 +25,7 @@ export const repositoriesToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/code/api/v1/repos",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             query: "query",
             search_term: "query",
@@ -38,6 +39,7 @@ export const repositoriesToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/code/api/v1/repos/{repoIdentifier}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { repo_id: "repoIdentifier" },
           responseExtractor: passthrough,
           description: "Get repository details",
@@ -45,6 +47,7 @@ export const repositoriesToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/code/api/v1/repos",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
           description:
@@ -65,6 +68,7 @@ export const repositoriesToolset: ToolsetDefinition = {
         update: {
           method: "PATCH",
           path: "/code/api/v1/repos/{repoIdentifier}",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { repo_id: "repoIdentifier" },
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
@@ -101,6 +105,7 @@ export const repositoriesToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/code/api/v1/repos/{repoIdentifier}/branches",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { repo_id: "repoIdentifier" },
           queryParams: {
             query: "query",
@@ -115,6 +120,7 @@ export const repositoriesToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/code/api/v1/repos/{repoIdentifier}/branches/{branchName}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: {
             repo_id: "repoIdentifier",
             branch_name: "branchName",
@@ -125,6 +131,7 @@ export const repositoriesToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/code/api/v1/repos/{repoIdentifier}/branches",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: { repo_id: "repoIdentifier" },
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
@@ -141,6 +148,7 @@ export const repositoriesToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/code/api/v1/repos/{repoIdentifier}/branches/{branchName}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: {
             repo_id: "repoIdentifier",
             branch_name: "branchName",
@@ -170,6 +178,7 @@ export const repositoriesToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/code/api/v1/repos/{repoIdentifier}/commits",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { repo_id: "repoIdentifier" },
           queryParams: {
             git_ref: "git_ref",
@@ -187,6 +196,7 @@ export const repositoriesToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/code/api/v1/repos/{repoIdentifier}/commits/{commitSha}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: {
             repo_id: "repoIdentifier",
             commit_sha: "commitSha",
@@ -199,6 +209,7 @@ export const repositoriesToolset: ToolsetDefinition = {
         diff: {
           method: "GET",
           path: "/code/api/v1/repos/{repoIdentifier}/diff/{range}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: {
             repo_id: "repoIdentifier",
             range: "range",
@@ -211,6 +222,7 @@ export const repositoriesToolset: ToolsetDefinition = {
         diff_stats: {
           method: "GET",
           path: "/code/api/v1/repos/{repoIdentifier}/diff-stats/{range}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: {
             repo_id: "repoIdentifier",
             range: "range",
@@ -236,6 +248,7 @@ export const repositoriesToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/code/api/v1/repos/{repoIdentifier}/content/{filePath}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: {
             repo_id: "repoIdentifier",
             path: "filePath",
@@ -253,6 +266,7 @@ export const repositoriesToolset: ToolsetDefinition = {
         blame: {
           method: "GET",
           path: "/code/api/v1/repos/{repoIdentifier}/blame/{filePath}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: {
             repo_id: "repoIdentifier",
             path: "filePath",
@@ -287,6 +301,7 @@ export const repositoriesToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/code/api/v1/repos/{repoIdentifier}/tags",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { repo_id: "repoIdentifier" },
           queryParams: {
             query: "query",
@@ -301,6 +316,7 @@ export const repositoriesToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/code/api/v1/repos/{repoIdentifier}/tags",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: { repo_id: "repoIdentifier" },
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
@@ -318,6 +334,7 @@ export const repositoriesToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/code/api/v1/repos/{repoIdentifier}/tags/{tagName}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: {
             repo_id: "repoIdentifier",
             tag_name: "tagName",
@@ -347,6 +364,7 @@ export const repositoriesToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/code/api/v1/repos/{repoIdentifier}/rules",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { repo_id: "repoIdentifier" },
           queryParams: {
             query: "query",
@@ -364,6 +382,7 @@ export const repositoriesToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/code/api/v1/repos/{repoIdentifier}/rules/{ruleIdentifier}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: {
             repo_id: "repoIdentifier",
             rule_id: "ruleIdentifier",
@@ -374,11 +393,11 @@ export const repositoriesToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/code/api/v1/repos/{repoIdentifier}/rules",
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           pathParams: { repo_id: "repoIdentifier" },
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
           description: "Create a protection rule for a repository. Requires user confirmation.",
-          blockWithoutConfirmation: true,
           bodySchema: {
             description: "Protection rule definition. Use harness_get on an existing rule to see the full structure.",
             fields: [
@@ -394,6 +413,7 @@ export const repositoriesToolset: ToolsetDefinition = {
         update: {
           method: "PATCH",
           path: "/code/api/v1/repos/{repoIdentifier}/rules/{ruleIdentifier}",
+          operationPolicy: { risk: "high_write", retryPolicy: "safe" },
           pathParams: {
             repo_id: "repoIdentifier",
             rule_id: "ruleIdentifier",
@@ -401,7 +421,6 @@ export const repositoriesToolset: ToolsetDefinition = {
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
           description: "Update a protection rule. Only include fields you want to change. Requires user confirmation.",
-          blockWithoutConfirmation: true,
           bodySchema: {
             description: "Partial rule update. Only provided fields are changed.",
             fields: [
@@ -415,6 +434,7 @@ export const repositoriesToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/code/api/v1/repos/{repoIdentifier}/rules/{ruleIdentifier}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: {
             repo_id: "repoIdentifier",
             rule_id: "ruleIdentifier",
@@ -444,6 +464,7 @@ export const repositoriesToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/code/api/v1/rules",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             query: "query",
             sort: "sort",
@@ -460,6 +481,7 @@ export const repositoriesToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/code/api/v1/rules/{ruleIdentifier}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: {
             rule_id: "ruleIdentifier",
           },
@@ -469,10 +491,10 @@ export const repositoriesToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/code/api/v1/rules",
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
           description: "Create a project/org/account-level protection rule. Requires user confirmation.",
-          blockWithoutConfirmation: true,
           bodySchema: {
             description: "Protection rule definition. Use harness_get on an existing rule to see the full structure.",
             fields: [
@@ -488,13 +510,13 @@ export const repositoriesToolset: ToolsetDefinition = {
         update: {
           method: "PATCH",
           path: "/code/api/v1/rules/{ruleIdentifier}",
+          operationPolicy: { risk: "high_write", retryPolicy: "safe" },
           pathParams: {
             rule_id: "ruleIdentifier",
           },
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
           description: "Update a space-level protection rule. Only include fields you want to change. Requires user confirmation.",
-          blockWithoutConfirmation: true,
           bodySchema: {
             description: "Partial rule update. Only provided fields are changed.",
             fields: [
@@ -508,6 +530,7 @@ export const repositoriesToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/code/api/v1/rules/{ruleIdentifier}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: {
             rule_id: "ruleIdentifier",
           },

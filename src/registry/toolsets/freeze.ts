@@ -54,6 +54,7 @@ export const freezeToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: "/ng/api/freeze/list",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             page: "page",
             size: "size",
@@ -74,6 +75,7 @@ export const freezeToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/ng/api/freeze/{freezeIdentifier}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { freeze_id: "freezeIdentifier" },
           responseExtractor: ngExtract,
           description: "Get freeze window details by identifier",
@@ -81,6 +83,7 @@ export const freezeToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/ng/api/freeze",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           headers: { "Content-Type": "application/yaml" },
           bodyBuilder: (input) => {
             const b = input.body as Record<string, unknown> | undefined;
@@ -96,6 +99,7 @@ export const freezeToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/ng/api/freeze/{freezeIdentifier}",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { freeze_id: "freezeIdentifier" },
           headers: { "Content-Type": "application/yaml" },
           bodyBuilder: (input) => {
@@ -112,6 +116,7 @@ export const freezeToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/ng/api/freeze/{freezeIdentifier}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { freeze_id: "freezeIdentifier" },
           responseExtractor: ngExtract,
           description: "Delete a deployment freeze window",
@@ -121,6 +126,7 @@ export const freezeToolset: ToolsetDefinition = {
         toggle_status: {
           method: "POST",
           path: "/ng/api/freeze/updateFreezeStatus",
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           queryParams: { status: "status" },
           bodyBuilder: (input) => {
             const b = input.body as Record<string, unknown> | undefined;
@@ -154,6 +160,7 @@ export const freezeToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/ng/api/freeze/getGlobalFreeze",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: ngExtract,
           description: "Get the current global freeze status and configuration",
         },
@@ -162,6 +169,7 @@ export const freezeToolset: ToolsetDefinition = {
         manage: {
           method: "POST",
           path: "/ng/api/freeze/manageGlobalFreeze",
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           headers: { "Content-Type": "application/yaml" },
           bodyBuilder: (input) => {
             const b = input.body as Record<string, unknown> | undefined;

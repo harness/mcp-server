@@ -210,6 +210,7 @@ export const seiToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/sei/api/v1/metrics",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: { page: "page", size: "size" },
           responseExtractor: passthrough,
           description: "List SEI metrics",
@@ -239,6 +240,7 @@ export const seiToolset: ToolsetDefinition = {
         get: {
           method: "POST",
           path: `${SEI}/v2/productivityv3/feature_metrics`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           bodyBuilder: (input) => {
             const refId = parseTeamRefId(input.team_ref_id);
             return {
@@ -277,6 +279,7 @@ export const seiToolset: ToolsetDefinition = {
           method: "POST",
           path: `${SEI}/v2/insights/efficiency/deploymentFrequency`,
           pathBuilder: doraPathBuilder,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           bodyBuilder: doraBuildBody,
           responseExtractor: passthrough,
           description: "Get DORA metric. Pass metric (deployment_frequency, change_failure_rate, mttr, lead_time, or *_drilldown variants), team_ref_id, date_start, date_end, granularity.",
@@ -298,6 +301,7 @@ export const seiToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: `${SEI}/v2/teams/list`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           description: "List SEI teams",
         },
@@ -305,6 +309,7 @@ export const seiToolset: ToolsetDefinition = {
           method: "GET",
           path: `${SEI}/v2/teams/{teamRefId}/team_info`,
           pathParams: { team_ref_id: "teamRefId" },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           description: "Get SEI team info",
         },
@@ -334,6 +339,7 @@ export const seiToolset: ToolsetDefinition = {
           method: "GET",
           path: `${SEI}/v2/teams`,
           pathBuilder: teamDetailPathBuilder,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           queryParams: { integration_type: "integrationType" },
           description: "List team integrations, developers, or integration filters. Pass team_ref_id and aspect.",
@@ -355,6 +361,7 @@ export const seiToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: `${SEI}/v2/org-trees`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           description: "List SEI organizational trees",
         },
@@ -362,6 +369,7 @@ export const seiToolset: ToolsetDefinition = {
           method: "GET",
           path: `${SEI}/v2/org-trees/{orgTreeId}`,
           pathParams: { org_tree_id: "orgTreeId" },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           description: "Get SEI organizational tree details",
         },
@@ -390,6 +398,7 @@ export const seiToolset: ToolsetDefinition = {
           method: "GET",
           path: `${SEI}/v2/org-trees`,
           pathBuilder: orgTreeDetailPathBuilder,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           description: "Get org tree efficiency/profile/integrations/teams. Pass org_tree_id and aspect.",
         },
@@ -397,6 +406,7 @@ export const seiToolset: ToolsetDefinition = {
           method: "GET",
           path: `${SEI}/v2/org-trees`,
           pathBuilder: orgTreeDetailPathBuilder,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           description: "List org tree integrations or teams. Pass org_tree_id and aspect (integrations or teams).",
         },
@@ -419,6 +429,7 @@ export const seiToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: `${SEI}/v2/insights/ba/profiles`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           description: "List business alignment profiles",
         },
@@ -426,6 +437,7 @@ export const seiToolset: ToolsetDefinition = {
           method: "POST",
           path: `${SEI}/v2/insights/ba/feature_metrics`,
           pathBuilder: baPathBuilder,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           bodyBuilder: baBuildBody,
           responseExtractor: passthrough,
           description: "Get BA feature metrics, feature summary, or drilldown. Pass aspect, profile_id, team_ref_id, date_start, date_end.",
@@ -460,6 +472,7 @@ export const seiToolset: ToolsetDefinition = {
           method: "POST",
           path: `${SEI}/v2/insights/coding-assistant/usage/metrics`,
           pathBuilder: aiUsagePathBuilder,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           bodyBuilder: aiInsightBuildBody,
           responseExtractor: passthrough,
           description: "Get AI usage metrics or summary. Pass aspect (metrics|summary), team_ref_id, date_start, date_end.",
@@ -468,6 +481,7 @@ export const seiToolset: ToolsetDefinition = {
           method: "POST",
           path: `${SEI}/v2/insights/coding-assistant/usage/metrics`,
           pathBuilder: aiUsagePathBuilder,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           bodyBuilder: aiInsightBuildBody,
           responseExtractor: passthrough,
           description: "List AI usage breakdown or top languages. Pass aspect (breakdown|top_languages), team_ref_id, date_start, date_end.",
@@ -499,6 +513,7 @@ export const seiToolset: ToolsetDefinition = {
           method: "POST",
           path: `${SEI}/v2/insights/coding-assistant/adoptions`,
           pathBuilder: aiAdoptionPathBuilder,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           bodyBuilder: aiInsightBuildBody,
           responseExtractor: passthrough,
           description: "Get AI adoption metrics or summary. Pass aspect (metrics|summary), team_ref_id, date_start, date_end.",
@@ -507,6 +522,7 @@ export const seiToolset: ToolsetDefinition = {
           method: "POST",
           path: `${SEI}/v2/insights/coding-assistant/adoptions`,
           pathBuilder: aiAdoptionPathBuilder,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           bodyBuilder: aiInsightBuildBody,
           responseExtractor: passthrough,
           description: "List AI adoption breakdown. Pass aspect=breakdown, team_ref_id, date_start, date_end.",
@@ -538,6 +554,7 @@ export const seiToolset: ToolsetDefinition = {
           method: "POST",
           path: `${SEI}/v2/insights/coding-assistant/pr-velocity/summary`,
           pathBuilder: aiImpactPathBuilder,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           bodyBuilder: aiInsightBuildBody,
           responseExtractor: passthrough,
           description: "Get AI impact on PR velocity or rework. Pass aspect (pr_velocity|rework), team_ref_id, date_start, date_end.",
@@ -560,6 +577,7 @@ export const seiToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: `${SEI}/v2/insights/coding-assistant/raw_metrics/v2`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           bodyBuilder: (input) => ({
             ...aiInsightBuildBody(input),
             pagination: {
