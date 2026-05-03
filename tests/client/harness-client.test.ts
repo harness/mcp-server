@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { HarnessClient } from "../../src/client/harness-client.js";
 import { HarnessApiError } from "../../src/utils/errors.js";
+import { setLogLevel } from "../../src/utils/logger.js";
 import type { Config } from "../../src/config.js";
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
@@ -126,6 +127,31 @@ describe("HarnessClient", () => {
       expect(url).not.toContain("app.harness.io");
     });
 
+    it("omits accountIdentifier query param for product='fme'", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({
+        path: "/internal/api/v2/splits/ws/ws-123",
+        baseUrl: "https://api.split.io",
+        product: "fme",
+      });
+
+      const url = new URL(fetchSpy.mock.calls[0][0] as string);
+      expect(url.searchParams.has("accountIdentifier")).toBe(false);
+      expect(url.searchParams.has("accountID")).toBe(false);
+    });
+
+    it("still injects accountIdentifier for non-fme product (default Harness)", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({ path: "/ng/api/projects" });
+
+      const url = new URL(fetchSpy.mock.calls[0][0] as string);
+      expect(url.searchParams.get("accountIdentifier")).toBe("test-account");
+    });
+
     it("omits undefined and empty params", async () => {
       fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
       const client = new HarnessClient(makeConfig());
@@ -174,6 +200,20 @@ describe("HarnessClient", () => {
 
       const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
       expect(headers["Harness-Account"]).toBe("resolved-account");
+    });
+
+    it("omits Harness-Account header for product='fme' (Split.io API)", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({
+        path: "/internal/api/v2/splits/ws/ws-123",
+        baseUrl: "https://api.split.io",
+        product: "fme",
+      });
+
+      const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
+      expect(headers["Harness-Account"]).toBeUndefined();
     });
 
     it("sets Content-Type to application/json for object body", async () => {
@@ -554,6 +594,74 @@ describe("HarnessClient", () => {
       expect(headers["Content-Type"]).toBe("application/yaml");
       const url = new URL(fetchSpy.mock.calls[0][0] as string);
       expect(url.searchParams.get("inputSetIdentifiers")).toBe("mcp_default_runtime_inputs");
+    });
+  });
+
+  describe("debug log redaction (HARNESS_LOG_UNSAFE_BODIES toggle)", () => {
+    let stderrSpy: ReturnType<typeof vi.spyOn>;
+    let originalLogLevel: string | undefined;
+
+    beforeEach(() => {
+      // Logger writes via console.error; vitest's vi.spyOn handles capture.
+      stderrSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      originalLogLevel = process.env.LOG_LEVEL;
+      setLogLevel("debug");
+    });
+
+    afterEach(() => {
+      stderrSpy.mockRestore();
+      setLogLevel((originalLogLevel as "debug" | "info" | "warn" | "error") ?? "error");
+    });
+
+    function getLoggedBodies(): string[] {
+      return stderrSpy.mock.calls
+        .map((c) => String(c[0] ?? ""))
+        .filter((line) => line.includes('"msg":"Request body"') || line.includes('"msg":"Response body"'));
+    }
+
+    it("redacts sensitive request body fields by default", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({ status: "SUCCESS" }), { status: 200 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_LOG_UNSAFE_BODIES: false }));
+
+      await client.request({
+        method: "POST",
+        path: "/ng/api/connectors",
+        body: { name: "my-connector", token: "ghp_supersecret123", apiKey: "ak_xyz" },
+      });
+
+      const logged = getLoggedBodies().join("\n");
+      expect(logged).toContain("[REDACTED]");
+      expect(logged).not.toContain("ghp_supersecret123");
+      expect(logged).not.toContain("ak_xyz");
+      expect(logged).toContain("my-connector"); // non-sensitive fields preserved
+    });
+
+    it("redacts sensitive response body fields by default", async () => {
+      fetchSpy.mockResolvedValue(
+        new Response(JSON.stringify({ data: { name: "got", password: "leaked-pw" } }), { status: 200 }),
+      );
+      const client = new HarnessClient(makeConfig({ HARNESS_LOG_UNSAFE_BODIES: false }));
+
+      await client.request({ path: "/ng/api/test" });
+
+      const logged = getLoggedBodies().join("\n");
+      expect(logged).toContain("[REDACTED]");
+      expect(logged).not.toContain("leaked-pw");
+    });
+
+    it("logs raw request body when HARNESS_LOG_UNSAFE_BODIES=true", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({ status: "SUCCESS" }), { status: 200 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_LOG_UNSAFE_BODIES: true }));
+
+      await client.request({
+        method: "POST",
+        path: "/ng/api/connectors",
+        body: { name: "my-connector", token: "ghp_rawvalue123" },
+      });
+
+      const logged = getLoggedBodies().join("\n");
+      expect(logged).toContain("ghp_rawvalue123");
+      expect(logged).not.toContain("[REDACTED]");
     });
   });
 });
