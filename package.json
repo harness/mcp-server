@@ -20,6 +20,8 @@
     "typecheck": "tsc --noEmit",
     "sync-schemas": "node scripts/sync-schemas.js",
     "check-schema-coverage": "node scripts/check-schema-coverage.js",
+    "docs:generate": "node scripts/generate-docs.js",
+    "docs:check": "node scripts/generate-docs.js --check",
     "test": "vitest run",
     "test:watch": "vitest",
     "docker:build": "docker build -t harness-mcp-server .",

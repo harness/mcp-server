@@ -50,7 +50,6 @@ const TOOLSET_ALIASES: Record<string, string> = {
   "agent-pipelines": "agents",
 };
 
-/** All available toolsets */
 const ALL_TOOLSETS: ToolsetDefinition[] = [
   pipelinesToolset,
   agentsToolset,
@@ -86,6 +85,9 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   overridesToolset,
   aiEvalsToolset,
 ];
+
+/** All available toolset names — used by docs generation to discover opt-in toolsets. */
+export const ALL_TOOLSET_NAMES: string[] = ALL_TOOLSETS.map((t) => t.name);
 
 /**
  * Options for extending the Registry with additional toolsets.
