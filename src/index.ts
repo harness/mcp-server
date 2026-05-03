@@ -77,7 +77,7 @@ function createHarnessServer(config: Config): McpServer {
     },
   );
 
-  configureElicitation({ skip: config.HARNESS_SKIP_ELICITATION });
+  configureElicitation({ autoApproveRisk: config.HARNESS_AUTO_APPROVE_RISK as import("./registry/types.js").AutoApproveRisk });
   registerAllTools(server, registry, client, config);
   registerAllResources(server, registry, client, config);
   registerAllPrompts(server);

@@ -5,7 +5,6 @@ import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError, HarnessApiError } from "../utils/errors.js";
 import { confirmViaElicitation } from "../utils/elicitation.js";
-import { isBlockingRisk } from "../registry/types.js";
 import { createLogger, logAudit } from "../utils/logger.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asRecord, asString, coerceRecord } from "../utils/type-guards.js";
@@ -70,7 +69,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           server,
           toolName: "harness_execute",
           message: `Execute "${args.action}" on ${resourceType}${resourceId ? ` "${resourceId}"` : ""}?`,
-          destructive: isBlockingRisk(risk),
+          risk,
         });
         if (!elicit.proceed) {
           return errorResult(`Operation ${elicit.reason} by user.`);

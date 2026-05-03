@@ -241,7 +241,7 @@ export const chaosToolset: ToolsetDefinition = {
         stop: {
           method: "POST",
           path: `${CHAOS}/rest/v2/experiment/{experimentId}/stop`,
-          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: { experiment_id: "experimentId" },
           queryParams: {
             experiment_run_id: "experimentRunId",
@@ -892,7 +892,7 @@ export const chaosToolset: ToolsetDefinition = {
         stop: {
           method: "POST",
           path: `${CHAOS_LOADTEST}/v1/runs/{runId}/stop`,
-          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: { run_id: "runId" },
           bodyBuilder: () => ({}),
           responseExtractor: passthrough,

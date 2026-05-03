@@ -45,7 +45,7 @@ export function registerDeleteTool(server: McpServer, registry: Registry, client
           server,
           toolName: "harness_delete",
           message: `Delete ${args.resource_type} "${args.resource_id}"?\n\nThis is destructive and cannot be undone.`,
-          destructive: true,
+          risk: "destructive",
         });
         if (!elicit.proceed) {
           return errorResult(`Operation ${elicit.reason} by user.`);
