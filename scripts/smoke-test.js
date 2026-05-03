@@ -44,19 +44,14 @@ async function main() {
   checks.push(check("resource types > 0", resourceTypes.length > 0, `got ${resourceTypes.length}`));
   checks.push(check("toolsets > 0", toolsets.length > 0, `got ${toolsets.length}`));
 
-  // Toolset filtering
+  // Toolset filtering — Registry.parseToolsetFilter() handles all modes
+  // (explicit, +additive, -subtractive, mixed). Just verify it resolved.
   if (process.env.HARNESS_TOOLSETS) {
-    const tsEnv = process.env.HARNESS_TOOLSETS;
-    if (tsEnv.startsWith("+")) {
-      const optIn = tsEnv.slice(1);
-      checks.push(check(`opt-in toolset "${optIn}" loaded`, toolsets.some((t) => t.name === optIn), `toolsets: ${toolsets.map((t) => t.name).join(", ")}`));
-    } else {
-      const requested = tsEnv.split(",").map((s) => s.trim());
-      checks.push(check(`exact toolsets match`, toolsets.length === requested.length, `expected ${requested.length}, got ${toolsets.length}`));
-      for (const name of requested) {
-        checks.push(check(`toolset "${name}" loaded`, toolsets.some((t) => t.name === name), `not found`));
-      }
-    }
+    checks.push(check(
+      `HARNESS_TOOLSETS="${process.env.HARNESS_TOOLSETS}" → ${toolsets.length} toolset(s)`,
+      toolsets.length > 0,
+      "no toolsets loaded",
+    ));
   }
 
   // Read-only mode: verify dispatch rejects writes

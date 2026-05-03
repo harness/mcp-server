@@ -8,7 +8,7 @@
  *   node scripts/generate-docs.js --check  # exit 1 if README is stale
  */
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -48,16 +48,10 @@ async function getCounts() {
   const regAll = additive ? new Registry(configAll) : reg;
   const totalToolsets = regAll.getAllToolsets().length;
 
-  const { registerAllPrompts } = await import(join(ROOT, "build", "prompts", "index.js"));
-  const { McpServer } = await import("@modelcontextprotocol/sdk/server/mcp.js");
-  const server = new McpServer({ name: "docs-gen", version: "0.0.0" });
-  registerAllPrompts(server);
-
-  let promptCount = 0;
-  const prompts = server._registeredPrompts;
-  if (prompts) {
-    promptCount = prompts.size ?? Object.keys(prompts).length;
-  }
+  const promptDir = join(ROOT, "build", "prompts");
+  const promptCount = readdirSync(promptDir)
+    .filter((f) => f.endsWith(".js") && f !== "index.js")
+    .length;
 
   return { resourceTypes, defaultToolsets, totalToolsets, promptCount };
 }
