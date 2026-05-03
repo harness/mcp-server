@@ -5,7 +5,7 @@
  * and general correctness across all 60+ resource types.
  */
 import { describe, it, expect } from "vitest";
-import { Registry } from "../../src/registry/index.js";
+import { Registry, ALL_TOOLSET_NAMES } from "../../src/registry/index.js";
 import type { Config } from "../../src/config.js";
 import type { EndpointSpec, ResourceDefinition } from "../../src/registry/types.js";
 
@@ -31,6 +31,32 @@ function extractPathPlaceholders(path: string): string[] {
 describe("Toolset structural validation", () => {
   const registry = new Registry(makeConfig());
   const allTypes = registry.getAllResourceTypes();
+
+  /** Defaults plus every opt-in toolset — used for universal write-metadata checks. */
+  const fullRegistryV0 = new Registry({
+    ...makeConfig(),
+    HARNESS_TOOLSETS: ALL_TOOLSET_NAMES.map((n) => `+${n}`).join(","),
+    HARNESS_PIPELINE_VERSION: "0",
+  } as Config);
+  const fullRegistryV1 = new Registry({
+    ...makeConfig(),
+    HARNESS_TOOLSETS: ALL_TOOLSET_NAMES.map((n) => `+${n}`).join(","),
+    HARNESS_PIPELINE_VERSION: "1",
+  } as Config);
+
+  // Union of both pipeline versions — ensures both pipeline and pipeline_v1 are covered
+  const allFullTypes = [
+    ...new Set([...fullRegistryV0.getAllResourceTypes(), ...fullRegistryV1.getAllResourceTypes()]),
+  ];
+
+  /** Get resource def from whichever full registry includes this type (pipeline version split). */
+  function getFullResource(type: string): ResourceDefinition {
+    try {
+      return fullRegistryV0.getResource(type);
+    } catch {
+      return fullRegistryV1.getResource(type);
+    }
+  }
 
   describe("path/param consistency", () => {
     it("every path placeholder has a matching pathParams entry", () => {
@@ -433,8 +459,8 @@ describe("Toolset structural validation", () => {
   describe("write quality contract", () => {
     it("every create operation has bodySchema", () => {
       const missing: string[] = [];
-      for (const type of allTypes) {
-        const def = registry.getResource(type);
+      for (const type of allFullTypes) {
+        const def = getFullResource(type);
         if (def.operations.create && !def.operations.create.bodySchema) {
           missing.push(`${type}.create`);
         }
@@ -444,8 +470,8 @@ describe("Toolset structural validation", () => {
 
     it("every update operation has bodySchema", () => {
       const missing: string[] = [];
-      for (const type of allTypes) {
-        const def = registry.getResource(type);
+      for (const type of allFullTypes) {
+        const def = getFullResource(type);
         if (def.operations.update && !def.operations.update.bodySchema) {
           missing.push(`${type}.update`);
         }
@@ -453,24 +479,40 @@ describe("Toolset structural validation", () => {
       expect(missing, `Missing bodySchema on update:\n${missing.join("\n")}`).toEqual([]);
     });
 
-    it("every high_write/destructive execute action has actionDescription", () => {
+    it("every medium_write/high_write/destructive execute action has actionDescription", () => {
       const missing: string[] = [];
-      for (const type of allTypes) {
-        const def = registry.getResource(type);
+      const RISKY = new Set(["medium_write", "high_write", "destructive"]);
+      for (const type of allFullTypes) {
+        const def = getFullResource(type);
         for (const [action, spec] of Object.entries(def.executeActions ?? {})) {
           const risk = spec.operationPolicy?.risk;
-          if ((risk === "high_write" || risk === "destructive") && !spec.actionDescription) {
+          if (risk && RISKY.has(risk) && !spec.actionDescription) {
             missing.push(`${type}.${action}`);
           }
         }
       }
-      expect(missing, `Missing actionDescription on high-risk actions:\n${missing.join("\n")}`).toEqual([]);
+      expect(missing, `Missing actionDescription on medium/high-risk actions:\n${missing.join("\n")}`).toEqual([]);
+    });
+
+    it("every medium_write/high_write/destructive execute action has bodySchema", () => {
+      const missing: string[] = [];
+      const RISKY = new Set(["medium_write", "high_write", "destructive"]);
+      for (const type of allFullTypes) {
+        const def = getFullResource(type);
+        for (const [action, spec] of Object.entries(def.executeActions ?? {})) {
+          const risk = spec.operationPolicy?.risk;
+          if (risk && RISKY.has(risk) && !spec.bodySchema) {
+            missing.push(`${type}.${action}`);
+          }
+        }
+      }
+      expect(missing, `Missing bodySchema on risky execute actions:\n${missing.join("\n")}`).toEqual([]);
     });
 
     it("every execute action has actionDescription or description", () => {
       const missing: string[] = [];
-      for (const type of allTypes) {
-        const def = registry.getResource(type);
+      for (const type of allFullTypes) {
+        const def = getFullResource(type);
         for (const [action, spec] of Object.entries(def.executeActions ?? {})) {
           if (!spec.actionDescription && !spec.description) {
             missing.push(`${type}.${action}`);
@@ -503,5 +545,89 @@ describe("Toolset structural validation", () => {
       }
       expect(empty).toEqual([]);
     });
+  });
+});
+
+describe("Opt-in toolset structural validation", () => {
+  const defaultRegistry = new Registry(makeConfig());
+  const defaultNames = new Set(defaultRegistry.getAllToolsets().map((t) => t.name));
+  const optInNames = ALL_TOOLSET_NAMES.filter((n) => !defaultNames.has(n));
+
+  if (optInNames.length === 0) return;
+
+  const additive = optInNames.map((n) => `+${n}`).join(",");
+  const expandedRegistry = new Registry({ ...makeConfig(), HARNESS_TOOLSETS: additive });
+  const expandedTypes = expandedRegistry.getAllResourceTypes();
+
+  it("expanded registry includes more resource types than defaults", () => {
+    const defaultTypes = defaultRegistry.getAllResourceTypes();
+    expect(expandedTypes.length).toBeGreaterThan(defaultTypes.length);
+  });
+
+  it("expanded registry includes all opt-in toolsets", () => {
+    const loadedNames = new Set(expandedRegistry.getAllToolsets().map((t) => t.name));
+    const missing = optInNames.filter((n) => !loadedNames.has(n));
+    expect(missing, `Opt-in toolsets not loaded: ${missing.join(", ")}`).toEqual([]);
+  });
+
+  it("every opt-in resource type has identifierFields defined", () => {
+    const missing: string[] = [];
+    for (const type of expandedTypes) {
+      const def = expandedRegistry.getResource(type);
+      if (!def.identifierFields) {
+        missing.push(type);
+      }
+    }
+    expect(missing, `Missing identifierFields: ${missing.join(", ")}`).toEqual([]);
+  });
+
+  it("every opt-in operation has a responseExtractor", () => {
+    const missing: string[] = [];
+    for (const type of expandedTypes) {
+      const def = expandedRegistry.getResource(type);
+      for (const [op, spec] of Object.entries(def.operations)) {
+        if (!spec.responseExtractor) missing.push(`${type}.${op}`);
+      }
+      for (const [action, spec] of Object.entries(def.executeActions ?? {})) {
+        if (!spec.responseExtractor) missing.push(`${type}.${action}`);
+      }
+    }
+    expect(missing, `Missing responseExtractor: ${missing.join(", ")}`).toEqual([]);
+  });
+
+  it("every opt-in operation has operationPolicy", () => {
+    const missing: string[] = [];
+    for (const type of expandedTypes) {
+      const def = expandedRegistry.getResource(type);
+      for (const [op, spec] of Object.entries(def.operations)) {
+        if (!spec.operationPolicy) missing.push(`${type}.${op}`);
+      }
+      for (const [action, spec] of Object.entries(def.executeActions ?? {})) {
+        if (!spec.operationPolicy) missing.push(`${type}.${action}`);
+      }
+    }
+    expect(missing, `Missing operationPolicy:\n${missing.join("\n")}`).toEqual([]);
+  });
+
+  it("every opt-in resource has a valid scope", () => {
+    const validScopes = new Set(["project", "org", "account"]);
+    const invalid: string[] = [];
+    for (const type of expandedTypes) {
+      const def = expandedRegistry.getResource(type);
+      if (!validScopes.has(def.scope)) {
+        invalid.push(`${type}: scope="${def.scope}"`);
+      }
+    }
+    expect(invalid).toEqual([]);
+  });
+
+  it("every opt-in resource has a non-empty description and displayName", () => {
+    const empty: string[] = [];
+    for (const type of expandedTypes) {
+      const def = expandedRegistry.getResource(type);
+      if (!def.description?.trim()) empty.push(`${type}: missing description`);
+      if (!def.displayName?.trim()) empty.push(`${type}: missing displayName`);
+    }
+    expect(empty).toEqual([]);
   });
 });

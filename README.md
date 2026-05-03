@@ -1423,6 +1423,7 @@ Available toolset names:
 | `sei` | sei_metric, sei_productivity_metric, sei_dora_metric, sei_team, sei_team_detail, sei_org_tree, sei_org_tree_detail, sei_business_alignment, sei_ai_usage, sei_ai_adoption, sei_ai_impact, sei_ai_raw_metric |
 | `scs` | scs_artifact_source, artifact_security, scs_artifact_component, scs_artifact_remediation, scs_chain_of_custody, scs_compliance_result, code_repo_security, scs_sbom |
 | `sto` | security_issue, security_issue_filter, security_exemption |
+| `dbops` | database_schema, database_instance, database_llm_pipeline |
 | `access_control` | user, user_group, service_account, role, role_assignment, resource_group, permission |
 | `governance` | policy, policy_set, policy_evaluation |
 | `freeze` | freeze_window, global_freeze |
@@ -1446,7 +1447,7 @@ Available toolset names:
                           |
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
-                |  31 Toolsets      |      (data files, not code)
+                |  32 Toolsets      |      (data files, not code)
                 |  165 Resource Types|
                  +--------+---------+
                           |

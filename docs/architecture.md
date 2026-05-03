@@ -7,7 +7,7 @@ This document describes the design and architecture of the OperationPolicy syste
 ## Design Goals
 
 1. **Every operation declares its risk.** No implicit defaults. The registry contract is absolute — `operationPolicy` is required on every `EndpointSpec`.
-2. **Risk drives confirmation behavior.** Tool handlers derive `destructive` from `operationPolicy.risk` instead of ad-hoc booleans. High-risk operations block on clients without MCP elicitation.
+2. **Risk drives confirmation behavior.** Tool handlers pass `risk: RiskLevel` from `operationPolicy` into `confirmViaElicitation`, which applies `requiresConfirmation()` (failure path on clients without elicitation) and `shouldAutoApprove()` (`HARNESS_AUTO_APPROVE_RISK` / autonomous mode).
 3. **Retry policy is per-operation.** Non-idempotent POSTs are marked `do_not_retry`; idempotent GETs and PUTs are `safe`. The HTTP client will read this in a future spec (P5).
 4. **Zero code in toolset files.** Risk classification is pure data on each `EndpointSpec` — no functions, no imports, no conditional logic.
 
@@ -62,35 +62,36 @@ Agent calls tool (e.g. harness_execute)
 Tool handler validates resource_type + action
   │
   ▼
-Reads operationPolicy from EndpointSpec
-  │  actionSpec.operationPolicy.risk
+confirmViaElicitation({
+  risk: endpoint.operationPolicy.risk   // execute: per-action; delete: destructive
+})
   │
   ▼
-isBlockingRisk(risk)?
+shouldAutoApprove(risk, HARNESS_AUTO_APPROVE_RISK)?
+  │  └─ yes → proceed (no confirmation; CI/autonomous mode)
   │
-  ├─ false (read, low_write, medium_write)
-  │    │
-  │    ▼
-  │  confirmViaElicitation(destructive: false)
-  │    ├─ client supports elicitation → prompt, proceed on accept
-  │    └─ client lacks elicitation → proceed silently
+  ▼
+Client supports MCP form elicitation?
   │
-  └─ true (high_write, destructive)
-       │
-       ▼
-     confirmViaElicitation(destructive: true)
-       ├─ client supports elicitation → prompt, block on decline
-       └─ client lacks elicitation → BLOCK (return error)
+  ├─ no  &&  requiresConfirmation(risk)?  (medium_write, high_write, destructive)
+  │       └─ BLOCK (return declined)
+  │
+  ├─ no  &&  !requiresConfirmation(risk)?  (read, low_write)
+  │       └─ proceed silently
+  │
+  └─ yes → prompt user (form elicitation)
+            ├─ accept → proceed
+            └─ decline / cancel → BLOCK
 ```
 
 ### Per-Tool Behavior
 
-| Tool | How risk is read | Destructive gate |
+| Tool | How risk is read | Confirmation gate |
 |---|---|---|
-| `harness_create` | `def.operations.create!.operationPolicy.risk` | `isBlockingRisk(risk)` |
-| `harness_update` | `def.operations.update!.operationPolicy.risk` | `isBlockingRisk(risk)` |
-| `harness_execute` | `actionSpec.operationPolicy.risk` (per action) | `isBlockingRisk(risk)` |
-| `harness_delete` | Hardcoded `destructive: true` | Always blocks without confirmation |
+| `harness_create` | `def.operations.create!.operationPolicy.risk` | Passed to `confirmViaElicitation`; `requiresConfirmation(risk)` when client lacks elicitation |
+| `harness_update` | `def.operations.update!.operationPolicy.risk` | Same |
+| `harness_execute` | `actionSpec.operationPolicy.risk` (per action) | Same |
+| `harness_delete` | Hardcoded `risk: "destructive"` | Same (always confirms unless auto-approved) |
 
 ---
 
@@ -120,7 +121,6 @@ These actions have production blast radius and block on clients without elicitat
 - **Freeze:** `freeze_window.toggle_status`, `global_freeze.manage`
 - **STO:** `security_exemption.approve`, `security_exemption.reject`, `security_exemption.promote`
 - **IDP:** `idp_workflow.execute`
-- **SCS:** `scs_sbom_drift.calculate`
 
 ---
 
@@ -128,24 +128,28 @@ These actions have production blast radius and block on clients without elicitat
 
 ```
 src/registry/types.ts         ← defines RiskLevel, RetryPolicy, OperationPolicy,
-                                 isBlockingRisk(), EndpointSpec, PreflightContext
+                                 requiresConfirmation(), shouldAutoApprove(),
+                                 isBlockingRisk() (deprecated), EndpointSpec,
+                                 PreflightContext
 
-src/registry/toolsets/*.ts    ← 31 toolset files; each EndpointSpec declares
+src/registry/toolsets/*.ts    ← toolset modules; each EndpointSpec declares
                                  operationPolicy as pure data (no imports needed)
 
 src/registry/index.ts         ← Registry class; dispatch() passes specs to
-                                 executeSpec(); does NOT read operationPolicy
-                                 (that's for tool handlers and future P5)
+                                 executeSpec(); does NOT read operationPolicy for
+                                 elicitation (that's for tool handlers and future P5)
 
 src/tools/harness-create.ts   ┐
-src/tools/harness-update.ts   ├─ import { isBlockingRisk } from types.ts
-src/tools/harness-execute.ts  ┘  read operationPolicy.risk, derive destructive
+src/tools/harness-update.ts   ├─ pass operationPolicy.risk to confirmViaElicitation({ risk })
+src/tools/harness-execute.ts   │
+src/tools/harness-delete.ts   ┘
 
-src/utils/elicitation.ts      ← confirmViaElicitation(destructive: boolean)
-                                 unchanged; receives derived boolean from handlers
+src/utils/elicitation.ts      ← confirmViaElicitation({ risk: RiskLevel })
+                                 uses requiresConfirmation(), shouldAutoApprove(),
+                                 clientSupportsElicitation(server)
 ```
 
-Key design choice: the elicitation module (`src/utils/elicitation.ts`) does NOT know about `RiskLevel`. It continues to accept a plain `destructive: boolean`. The risk→boolean mapping happens in tool handlers via `isBlockingRisk()`. This keeps the elicitation module decoupled from the registry type system.
+Key design choice: tool handlers thread `risk: RiskLevel` from the endpoint spec directly into `confirmViaElicitation`. The elicitation module imports confirmation helpers from `types.ts`, so failure behavior stays aligned with the registry contract (including `medium_write` blocking without elicitation). `isBlockingRisk()` remains in `types.ts` as deprecated and is not used for this gate anymore.
 
 ---
 
@@ -169,15 +173,14 @@ These tests run on every `pnpm test` invocation and validate all ~500+ endpoint 
 
 ### Elicitation Module (`src/utils/elicitation.ts`)
 
-No changes. The `destructive` boolean parameter stays. Tool handlers call `isBlockingRisk(operationPolicy.risk)` to produce the boolean. The module's behavior:
+Confirmation is driven by `risk: RiskLevel` plus optional auto-approve level from config (`HARNESS_AUTO_APPROVE_RISK`; deprecated `HARNESS_SKIP_ELICITATION` maps to approving all risks at startup).
 
-| `destructive` | Client supports elicitation | Behavior |
+| Risk level | Client supports elicitation | Behavior |
 |---|---|---|
-| `false` | Yes | Prompt user, proceed on accept |
-| `false` | No | Proceed silently |
-| `true` | Yes | Prompt user, block on decline |
-| `true` | No | **Block** (return declined) |
-| any | — | If `HARNESS_SKIP_ELICITATION=true`, always proceed |
+| `read`, `low_write` | any | Proceed silently (no confirmation) |
+| `medium_write`, `high_write`, `destructive` | Yes | Prompt user; proceed on accept, block on decline/cancel/error |
+| `medium_write`, `high_write`, `destructive` | No | **Block** |
+| Any risk at or below `HARNESS_AUTO_APPROVE_RISK` | any | Auto-approve — proceed without prompt |
 
 ### Preflight Hooks
 

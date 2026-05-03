@@ -8,7 +8,7 @@
  *   node scripts/generate-docs.js --check  # exit 1 if README is stale
  */
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -34,20 +34,29 @@ async function getCounts() {
   const resourceTypes = reg.getAllResourceTypes().length;
   const defaultToolsets = reg.getAllToolsets().length;
 
-  // Load again with opt-in toolsets to get total count
-  const configWithOptIn = { ...config, HARNESS_TOOLSETS: "+ai-evals" };
-  const regAll = new Registry(configWithOptIn);
+  // Discover opt-in toolset names dynamically: add every toolset that
+  // isn't already loaded. This avoids hardcoding opt-in names.
+  const defaultNames = new Set(reg.getAllToolsets().map((t) => t.name));
+  const { ALL_TOOLSET_NAMES } = await import(join(ROOT, "build", "registry", "index.js"));
+  const optInNames = ALL_TOOLSET_NAMES
+    ? ALL_TOOLSET_NAMES.filter((n) => !defaultNames.has(n))
+    : [];
+  const additive = optInNames.map((n) => `+${n}`).join(",");
+  const configAll = additive
+    ? { ...config, HARNESS_TOOLSETS: additive }
+    : config;
+  const regAll = additive ? new Registry(configAll) : reg;
   const totalToolsets = regAll.getAllToolsets().length;
 
-  const { registerAllPrompts } = await import(join(ROOT, "build", "prompts", "index.js"));
-  const { McpServer } = await import("@modelcontextprotocol/sdk/server/mcp.js");
-  const server = new McpServer({ name: "docs-gen", version: "0.0.0" });
-  registerAllPrompts(server);
+  // Prompt count: count built prompt modules under build/prompts/ (excludes index bundler).
+  // Resource/toolset counts above come from Registry (same surface as the running server).
+  const promptDir = join(ROOT, "build", "prompts");
+  const promptCount = readdirSync(promptDir)
+    .filter((f) => f.endsWith(".js") && f !== "index.js")
+    .length;
 
-  let promptCount = 0;
-  const prompts = server._registeredPrompts;
-  if (prompts) {
-    promptCount = prompts.size ?? Object.keys(prompts).length;
+  if (promptCount === 0) {
+    console.error("WARNING: No prompt files found in build/prompts/ — expected at least 1");
   }
 
   return { resourceTypes, defaultToolsets, totalToolsets, promptCount };
