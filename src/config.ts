@@ -103,9 +103,16 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
     );
   }
 
-  if (!data.HARNESS_FME_BASE_URL.startsWith("https://") && !data.HARNESS_ALLOW_HTTP) {
+  if (data.HARNESS_FME_BASE_URL && !data.HARNESS_FME_BASE_URL.startsWith("https://") && !data.HARNESS_ALLOW_HTTP) {
     throw new Error(
       `HARNESS_FME_BASE_URL must use HTTPS (got "${data.HARNESS_FME_BASE_URL}"). ` +
+      "If you need HTTP for local development, set HARNESS_ALLOW_HTTP=true.",
+    );
+  }
+
+  if (data.HARNESS_AUDIT_WEBHOOK_URL && !data.HARNESS_AUDIT_WEBHOOK_URL.startsWith("https://") && !data.HARNESS_ALLOW_HTTP) {
+    throw new Error(
+      `HARNESS_AUDIT_WEBHOOK_URL must use HTTPS (got "${data.HARNESS_AUDIT_WEBHOOK_URL}"). ` +
       "If you need HTTP for local development, set HARNESS_ALLOW_HTTP=true.",
     );
   }

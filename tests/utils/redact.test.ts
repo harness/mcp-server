@@ -199,9 +199,16 @@ describe("redactJsonString", () => {
     expect(result).toContain("safe");
   });
 
-  it("truncates scrubbed non-JSON output", () => {
+  it("returns truncated scrubbed input on parse failure", () => {
     const result = redactJsonString("not-json{{{", 5);
-    expect(result.length).toBeLessThanOrEqual(8);
+    expect(result).toBe("not-j...");
+  });
+
+  it("scrubs inline sensitive pairs on parse failure", () => {
+    const malformed = '{"name":"x","password":"secret123" trailing garbage';
+    const result = redactJsonString(malformed, 500);
+    expect(result).toContain("[REDACTED]");
+    expect(result).not.toContain("secret123");
   });
 
   it("redacts kebab-case keys in non-JSON text", () => {

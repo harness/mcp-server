@@ -70,9 +70,9 @@ describe("clientSupportsElicitation", () => {
     expect(clientSupportsElicitation(server)).toBe(false);
   });
 
-  it("returns false when elicitation.form is absent", () => {
+  it("returns true when elicitation is present as empty object (form is default)", () => {
     const server = { getClientCapabilities: () => ({ elicitation: {} }) } as any;
-    expect(clientSupportsElicitation(server)).toBe(false);
+    expect(clientSupportsElicitation(server)).toBe(true);
   });
 
   it("returns true when elicitation.form is present", () => {

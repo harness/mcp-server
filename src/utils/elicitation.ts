@@ -29,7 +29,7 @@ export function configureElicitation(opts: { autoApproveRisk?: AutoApproveRisk }
  */
 export function clientSupportsElicitation(server: Server): boolean {
   const caps = server.getClientCapabilities();
-  return !!caps?.elicitation?.form;
+  return !!caps?.elicitation;
 }
 
 /**
