@@ -402,12 +402,12 @@ export class Registry {
       resource_type: resourceType,
       resource_id: auditCtx?.resource_id ?? (input.resource_id as string | undefined),
       action: auditCtx?.action,
-      org_id: def.scopeOptional
-        ? (input.org_id as string | undefined)
-        : (input.org_id as string | undefined) ?? this.config.HARNESS_ORG,
-      project_id: def.scopeOptional
-        ? (input.project_id as string | undefined)
-        : (input.project_id as string | undefined) ?? this.config.HARNESS_PROJECT,
+      org_id: def.scope === "account"
+        ? undefined
+        : (input.org_id as string | undefined) ?? (def.scopeOptional ? undefined : this.config.HARNESS_ORG),
+      project_id: def.scope === "account" || def.scope === "org"
+        ? undefined
+        : (input.project_id as string | undefined) ?? (def.scopeOptional ? undefined : this.config.HARNESS_PROJECT),
       account_id: this.getAccountId(),
       risk: spec.operationPolicy?.risk ?? "read",
       confirmation: auditCtx?.confirmation,

@@ -20,6 +20,7 @@ export class WebhookSink implements AuditSink {
   readonly name = "webhook";
 
   private buffer: AuditEvent[] = [];
+  private inflightFlush: Promise<void> | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly url: string;
   private readonly token?: string;
@@ -52,7 +53,16 @@ export class WebhookSink implements AuditSink {
 
   async flush(): Promise<void> {
     if (this.buffer.length === 0) return;
+    const p = this.doFlush();
+    this.inflightFlush = p;
+    try {
+      await p;
+    } finally {
+      this.inflightFlush = null;
+    }
+  }
 
+  private async doFlush(): Promise<void> {
     const batch = this.buffer.splice(0);
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (this.token) headers["Authorization"] = `Bearer ${this.token}`;
@@ -93,6 +103,9 @@ export class WebhookSink implements AuditSink {
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
+    }
+    if (this.inflightFlush) {
+      await this.inflightFlush.catch(() => {});
     }
     await this.flush();
   }

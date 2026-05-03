@@ -66,6 +66,7 @@ export class OTelSink implements AuditSink {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private provider: any = null;
   private ready = false;
+  private disabled = false;
   private initPromise: Promise<void>;
   private pendingEvents: AuditEvent[] = [];
   private static readonly MAX_PENDING = 100;
@@ -75,85 +76,93 @@ export class OTelSink implements AuditSink {
   }
 
   private async init(): Promise<void> {
-    const api = await tryImport("@opentelemetry/api");
-    if (!api) {
-      log.debug("@opentelemetry/api not available, OTel audit sink inactive");
-      return;
-    }
-    this.api = api;
-
-    // Detect if a host application registered a real SDK TracerProvider.
-    // ProxyTracerProvider.getDelegate() returns NoopTracerProvider by default,
-    // which only has getTracer(). Real SDK providers also expose forceFlush().
-    const globalProvider = api.trace?.getTracerProvider?.();
-    const delegate = globalProvider?.getDelegate?.();
-    const hasExternalProvider = delegate
-      && typeof delegate.getTracer === "function"
-      && typeof delegate.forceFlush === "function";
-
-    if (hasExternalProvider) {
-      this.tracer = api.trace.getTracer("harness-mcp-audit");
-      this.ready = true;
-      log.debug("OTel audit sink using external TracerProvider");
-      this.drainPending();
-      return;
-    }
-
-    // No external provider — try to bootstrap our own for standalone mode
-    const [sdkTrace, exporter, resources] = await Promise.all([
-      tryImport("@opentelemetry/sdk-trace-node"),
-      tryImport("@opentelemetry/exporter-trace-otlp-http"),
-      tryImport("@opentelemetry/resources"),
-    ]);
-
-    if (!sdkTrace || !exporter) {
-      log.warn(
-        "OTEL_EXPORTER_OTLP_ENDPOINT is set but OTel SDK packages are missing. " +
-        "Install @opentelemetry/sdk-trace-node and @opentelemetry/exporter-trace-otlp-http " +
-        "to enable the OTel audit sink.",
-      );
-      return;
-    }
-
     try {
-      const serviceName = process.env.OTEL_SERVICE_NAME || "harness-mcp-server";
-      const resourceAttrs: Record<string, string> = {
-        "service.name": serviceName,
-        "service.version": process.env.npm_package_version || "unknown",
-      };
+      const api = await tryImport("@opentelemetry/api");
+      if (!api) {
+        log.debug("@opentelemetry/api not available, OTel audit sink inactive");
+        return;
+      }
+      this.api = api;
 
-      // OTEL_RESOURCE_ATTRIBUTES=key1=val1,key2=val2
-      const envAttrs = process.env.OTEL_RESOURCE_ATTRIBUTES;
-      if (envAttrs) {
-        for (const pair of envAttrs.split(",")) {
-          const eq = pair.indexOf("=");
-          if (eq > 0) {
-            resourceAttrs[pair.slice(0, eq).trim()] = pair.slice(eq + 1).trim();
-          }
-        }
+      // Detect if a host application registered a real SDK TracerProvider.
+      // ProxyTracerProvider.getDelegate() returns NoopTracerProvider by default,
+      // which only has getTracer(). Real SDK providers also expose forceFlush().
+      const globalProvider = api.trace?.getTracerProvider?.();
+      const delegate = globalProvider?.getDelegate?.();
+      const hasExternalProvider = delegate
+        && typeof delegate.getTracer === "function"
+        && typeof delegate.forceFlush === "function";
+
+      if (hasExternalProvider) {
+        this.tracer = api.trace.getTracer("harness-mcp-audit");
+        this.ready = true;
+        log.debug("OTel audit sink using external TracerProvider");
+        return;
       }
 
-      const resource = resources?.resourceFromAttributes
-        ? resources.resourceFromAttributes(resourceAttrs)
-        : undefined;
+      // No external provider — try to bootstrap our own for standalone mode
+      const [sdkTrace, exporter, resources] = await Promise.all([
+        tryImport("@opentelemetry/sdk-trace-node"),
+        tryImport("@opentelemetry/exporter-trace-otlp-http"),
+        tryImport("@opentelemetry/resources"),
+      ]);
 
-      const otlpExporter = new exporter.OTLPTraceExporter();
+      if (!sdkTrace || !exporter) {
+        log.warn(
+          "OTEL_EXPORTER_OTLP_ENDPOINT is set but OTel SDK packages are missing. " +
+          "Install @opentelemetry/sdk-trace-node and @opentelemetry/exporter-trace-otlp-http " +
+          "to enable the OTel audit sink.",
+        );
+        return;
+      }
 
-      this.provider = new sdkTrace.NodeTracerProvider({
-        resource,
-        spanProcessors: [new sdkTrace.BatchSpanProcessor(otlpExporter)],
-      });
-      this.provider.register();
-      this.tracer = this.provider.getTracer("harness-mcp-audit");
-      this.ready = true;
-      log.info("OTel audit sink bootstrapped standalone TracerProvider", {
-        endpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT,
-      });
-    } catch (err) {
-      log.error("Failed to bootstrap OTel TracerProvider", { error: String(err) });
+      try {
+        const serviceName = process.env.OTEL_SERVICE_NAME || "harness-mcp-server";
+        const resourceAttrs: Record<string, string> = {
+          "service.name": serviceName,
+          "service.version": process.env.npm_package_version || "unknown",
+        };
+
+        // OTEL_RESOURCE_ATTRIBUTES=key1=val1,key2=val2
+        const envAttrs = process.env.OTEL_RESOURCE_ATTRIBUTES;
+        if (envAttrs) {
+          for (const pair of envAttrs.split(",")) {
+            const eq = pair.indexOf("=");
+            if (eq > 0) {
+              resourceAttrs[pair.slice(0, eq).trim()] = pair.slice(eq + 1).trim();
+            }
+          }
+        }
+
+        const resource = resources?.resourceFromAttributes
+          ? resources.resourceFromAttributes(resourceAttrs)
+          : undefined;
+
+        const otlpExporter = new exporter.OTLPTraceExporter();
+
+        this.provider = new sdkTrace.NodeTracerProvider({
+          resource,
+          spanProcessors: [new sdkTrace.BatchSpanProcessor(otlpExporter)],
+        });
+        this.provider.register();
+        this.tracer = this.provider.getTracer("harness-mcp-audit");
+        this.ready = true;
+        let endpointHost: string | undefined;
+        try { endpointHost = new URL(process.env.OTEL_EXPORTER_OTLP_ENDPOINT || "").origin; } catch { /* ignore */ }
+        log.info("OTel audit sink bootstrapped standalone TracerProvider", {
+          ...(endpointHost ? { endpoint: endpointHost } : {}),
+        });
+      } catch (err) {
+        log.error("Failed to bootstrap OTel TracerProvider", { error: String(err) });
+      }
+    } finally {
+      this.drainPending();
+      if (!this.ready) {
+        this.disabled = true;
+        this.pendingEvents = [];
+        log.debug("OTel audit sink disabled — init could not activate");
+      }
     }
-
-    this.drainPending();
   }
 
   private drainPending(): void {
@@ -165,6 +174,7 @@ export class OTelSink implements AuditSink {
   }
 
   emit(event: AuditEvent): void {
+    if (this.disabled) return;
     if (!this.ready) {
       if (this.pendingEvents.length < OTelSink.MAX_PENDING) {
         this.pendingEvents.push(event);

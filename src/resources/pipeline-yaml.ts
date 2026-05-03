@@ -18,7 +18,7 @@ export function registerPipelineYamlResource(server: McpServer, registry: Regist
           project_id: config.HARNESS_PROJECT ?? "",
           size: 20,
           page: 0,
-        });
+        }, { tool: "pipeline_yaml_resource" });
         const r = result as { items?: Array<{ identifier?: string; name?: string }> };
         return {
           resources: (r.items ?? [])
@@ -66,7 +66,7 @@ export function registerPipelineYamlResource(server: McpServer, registry: Regist
         pipeline_id: pipelineId,
         org_id: orgId,
         project_id: projectId,
-      });
+      }, { tool: "pipeline_yaml_resource" });
 
       const data = result as Record<string, unknown>;
       const yamlContent = data?.yamlPipeline ?? data?.yaml ?? JSON.stringify(data, null, 2);
