@@ -114,6 +114,21 @@ describe("redactSensitiveFields", () => {
       expect(result[key]).toBe("[REDACTED]");
     }
   });
+
+  it("redacts kebab-case sensitive keys", () => {
+    const input = {
+      "private-key": "ssh-rsa AAAA",
+      "client-secret": "abc123",
+      "access-token": "eyJhbG",
+      "refresh-token": "rt_kebab",
+      "id-token": "idt_kebab",
+      "session-token": "st_kebab",
+    };
+    const result = redactSensitiveFields(input) as Record<string, unknown>;
+    for (const key of Object.keys(input)) {
+      expect(result[key]).toBe("[REDACTED]");
+    }
+  });
 });
 
 describe("redactJsonString", () => {
@@ -169,5 +184,22 @@ describe("redactJsonString", () => {
   it("truncates scrubbed non-JSON output", () => {
     const result = redactJsonString("not-json{{{", 5);
     expect(result.length).toBeLessThanOrEqual(8);
+  });
+
+  it("redacts kebab-case keys in non-JSON text", () => {
+    const raw = "private-key: ssh-rsa AAAA, client-secret: abc123, access-token: eyJhbG";
+    const result = redactJsonString(raw);
+    expect(result).not.toContain("ssh-rsa AAAA");
+    expect(result).not.toContain("abc123");
+    expect(result).not.toContain("eyJhbG");
+    expect(result).toContain("[REDACTED]");
+  });
+
+  it("redacts kebab-case keys in JSON objects", () => {
+    const json = JSON.stringify({ "private-key": "secret_value", name: "safe" });
+    const result = redactJsonString(json);
+    expect(result).not.toContain("secret_value");
+    expect(result).toContain("[REDACTED]");
+    expect(result).toContain("safe");
   });
 });
