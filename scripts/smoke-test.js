@@ -3,9 +3,8 @@
 /**
  * Smoke test: loads the registry (toolsets, optional read-only dispatch checks),
  * then boots the compiled MCP server on stdio, sends initialize +
- * notifications/initialized + tools/list using newline-delimited JSON-RPC,
- * and asserts tools come back — catching bootstrap issues that Registry-only
- * checks miss.
+ * notifications/initialized + tools/list + tools/call harness_describe using newline-delimited JSON-RPC,
+ * and asserts tools + live resource type count — catching bootstrap issues and toolset filtering regressions.
  *
  * Exit 0 = pass, exit 1 = failure.
  */
@@ -20,7 +19,7 @@ const ROOT = join(__dirname, "..");
 async function main() {
   const { Registry } = await import(join(ROOT, "build", "registry", "index.js"));
 
-  const config = {
+  const baseConfig = {
     HARNESS_API_KEY: "pat.smoke.test.token",
     HARNESS_ACCOUNT_ID: "smoke-test",
     HARNESS_BASE_URL: "https://app.harness.io",
@@ -29,8 +28,13 @@ async function main() {
     HARNESS_API_TIMEOUT_MS: 30000,
     HARNESS_MAX_RETRIES: 3,
     LOG_LEVEL: "error",
+  };
+
+  const config = {
+    ...baseConfig,
     ...(process.env.HARNESS_TOOLSETS ? { HARNESS_TOOLSETS: process.env.HARNESS_TOOLSETS } : {}),
     ...(process.env.HARNESS_READ_ONLY ? { HARNESS_READ_ONLY: process.env.HARNESS_READ_ONLY === "true" } : {}),
+    ...(process.env.HARNESS_PIPELINE_VERSION ? { HARNESS_PIPELINE_VERSION: process.env.HARNESS_PIPELINE_VERSION } : {}),
   };
 
   const registry = new Registry(config);
@@ -51,6 +55,15 @@ async function main() {
       `HARNESS_TOOLSETS="${process.env.HARNESS_TOOLSETS}" → ${toolsets.length} toolset(s)`,
       toolsets.length > 0,
       "no toolsets loaded",
+    ));
+    const { HARNESS_TOOLSETS: _ignoreToolsets, ...registryConfigWithoutToolsets } = config;
+    const baseRegistry = new Registry(registryConfigWithoutToolsets);
+    const baseTypes = baseRegistry.getAllResourceTypes();
+    const filtered = resourceTypes.length !== baseTypes.length;
+    checks.push(check(
+      `HARNESS_TOOLSETS filtering: ${resourceTypes.length} types (base ${baseTypes.length})`,
+      filtered,
+      `filtering had no effect (${resourceTypes.length} = ${baseTypes.length})`,
     ));
   }
 
@@ -96,7 +109,7 @@ async function main() {
 
   // Real MCP server over stdio (catches bootstrap / transport regressions)
   const serverPath = join(ROOT, "build", "index.js");
-  const startupOk = await checkServerStartup(serverPath, serverEnv);
+  const startupOk = await checkServerStartup(serverPath, serverEnv, resourceTypes.length);
   checks.push(startupOk);
   if (!startupOk) pass = false;
 
@@ -124,10 +137,11 @@ function mcpNdjson(message) {
 }
 
 /**
- * Spawn build/index.js, send initialize → notifications/initialized → tools/list, verify tools.
+ * Spawn build/index.js, send initialize → notifications/initialized → tools/list → harness_describe, verify counts.
+ * @param {number} expectedResourceCount — from Registry.getAllResourceTypes().length with same env as child
  * @returns {Promise<boolean>}
  */
-function checkServerStartup(serverPath, env) {
+function checkServerStartup(serverPath, env, expectedResourceCount) {
   return new Promise((resolve) => {
     let settled = false;
     /** @type {import("node:child_process").ChildProcessWithoutNullStreams | undefined} */
@@ -145,7 +159,7 @@ function checkServerStartup(serverPath, env) {
         }
       }
       if (ok) {
-        console.error("  [+] MCP server startup + tools/list");
+        console.error("  [+] MCP server startup + tools/list + harness_describe");
         resolve(true);
       } else {
         console.error(`  [-] MCP server startup (${detail})`);
@@ -263,6 +277,44 @@ function checkServerStartup(serverPath, env) {
           }
           if (tools.length === 0) {
             finish(false, "tools/list returned no tools");
+            return;
+          }
+          phase = "describe";
+          child.stdin.write(
+            mcpNdjson({
+              jsonrpc: "2.0",
+              id: 3,
+              method: "tools/call",
+              params: {
+                name: "harness_describe",
+                arguments: {},
+              },
+            }),
+          );
+          continue;
+        }
+
+        if (phase === "describe" && msg.id === 3) {
+          if (msg.error) {
+            finish(false, msg.error.message || "tools/call harness_describe error");
+            return;
+          }
+          const text = msg.result?.content?.[0]?.text;
+          let liveTypes = -1;
+          if (typeof text === "string" && text) {
+            try {
+              const parsed = JSON.parse(text);
+              liveTypes = parsed.total_resource_types ?? parsed.resource_types?.length ?? -1;
+            } catch {
+              finish(false, "harness_describe returned non-JSON text");
+              return;
+            }
+          } else {
+            finish(false, "harness_describe missing text content");
+            return;
+          }
+          if (liveTypes !== expectedResourceCount) {
+            finish(false, `resource type mismatch: live=${liveTypes} expected=${expectedResourceCount}`);
             return;
           }
           finish(true);
