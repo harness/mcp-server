@@ -373,8 +373,8 @@ export const ccmToolset: ToolsetDefinition = {
               { name: "viewVisualization", type: "object", required: false, description: "Chart type and group by configuration" },
               {
                 name: "viewRules", type: "array", required: false,
-                description: "Filter rules. Multiple rules are OR-ed. Each rule has viewConditions (AND-ed). Each ViewIdCondition: { type: 'VIEW_ID_CONDITION', viewField: { fieldId, fieldName, identifier (COMMON|AWS|GCP|AZURE|CLUSTER|LABEL|LABEL_V2), identifierName }, viewOperator: 'IN'|'NOT_NULL'|'NULL', values: string[] }",
-                itemType: "{ viewConditions: [{ type: 'VIEW_ID_CONDITION', viewField: { fieldId: string, fieldName: string, identifier: string, identifierName: string }, viewOperator: 'IN' | 'NOT_NULL' | 'NULL', values: string[] }] }",
+                description: "Filter rules. Multiple rules are OR-ed. Each rule has viewConditions (AND-ed). Each ViewIdCondition: { type: 'VIEW_ID_CONDITION', viewField: { fieldId, fieldName, identifier (COMMON|AWS|GCP|AZURE|CLUSTER|LABEL|LABEL_V2|BUSINESS_MAPPING|EXTERNAL_DATA), identifierName }, viewOperator: 'IN'|'NOT_IN'|'LIKE'|'NOT_NULL'|'NULL', values: string[] }",
+                itemType: "{ viewConditions: [{ type: 'VIEW_ID_CONDITION', viewField: { fieldId: string, fieldName: string, identifier: string, identifierName: string }, viewOperator: 'IN' | 'NOT_IN' | 'LIKE' | 'NOT_NULL' | 'NULL', values: string[] }] }",
               },
               { name: "viewTimeRange", type: "object", required: false, description: "Time range settings" },
             ],
@@ -394,8 +394,8 @@ export const ccmToolset: ToolsetDefinition = {
               { name: "viewVisualization", type: "object", required: false, description: "Chart type and group by configuration" },
               {
                 name: "viewRules", type: "array", required: false,
-                description: "Filter rules. Multiple rules are OR-ed. Each rule has viewConditions (AND-ed). Each ViewIdCondition: { type: 'VIEW_ID_CONDITION', viewField: { fieldId, fieldName, identifier (COMMON|AWS|GCP|AZURE|CLUSTER|LABEL|LABEL_V2), identifierName }, viewOperator: 'IN'|'NOT_NULL'|'NULL', values: string[] }",
-                itemType: "{ viewConditions: [{ type: 'VIEW_ID_CONDITION', viewField: { fieldId: string, fieldName: string, identifier: string, identifierName: string }, viewOperator: 'IN' | 'NOT_NULL' | 'NULL', values: string[] }] }",
+                description: "Filter rules. Multiple rules are OR-ed. Each rule has viewConditions (AND-ed). Each ViewIdCondition: { type: 'VIEW_ID_CONDITION', viewField: { fieldId, fieldName, identifier (COMMON|AWS|GCP|AZURE|CLUSTER|LABEL|LABEL_V2|BUSINESS_MAPPING|EXTERNAL_DATA), identifierName }, viewOperator: 'IN'|'NOT_IN'|'LIKE'|'NOT_NULL'|'NULL', values: string[] }",
+                itemType: "{ viewConditions: [{ type: 'VIEW_ID_CONDITION', viewField: { fieldId: string, fieldName: string, identifier: string, identifierName: string }, viewOperator: 'IN' | 'NOT_IN' | 'LIKE' | 'NOT_NULL' | 'NULL', values: string[] }] }",
               },
               { name: "viewTimeRange", type: "object", required: false, description: "Time range settings" },
             ],
