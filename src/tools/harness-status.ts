@@ -109,15 +109,15 @@ export function registerStatusTool(
           registry.dispatch(client, "execution", "list", {
             ...baseInput,
             status: "Failed",
-          }, signal),
+          }, { tool: "harness_status" }, signal),
           registry.dispatch(client, "execution", "list", {
             ...baseInput,
             status: "Running",
-          }, signal),
+          }, { tool: "harness_status" }, signal),
           registry.dispatch(client, "execution", "list", {
             ...baseInput,
             size: Math.min(limit * 2, 20),
-          }, signal),
+          }, { tool: "harness_status" }, signal),
         ]);
 
         // Extract results with graceful degradation

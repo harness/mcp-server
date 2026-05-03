@@ -159,6 +159,7 @@ These are the actions with production blast radius. They must block on clients w
 - **Freeze:** `freeze_window.toggle_status`, `global_freeze.manage`
 - **STO:** `security_exemption.approve`, `security_exemption.reject`, `security_exemption.promote`
 - **IDP:** `idp_workflow.execute`
+- **SCS:** `scs_sbom_drift.calculate`
 - ~~**Chaos DR:** `chaos_dr_test.create`~~ — reclassified to `low_write`: the create endpoint scaffolds a DR test definition (name, identifier, description) but does NOT trigger execution; running the test requires executing the backing pipeline separately
 
 ## Behavioral Changes

@@ -25,6 +25,10 @@ export interface Logger {
   error: (msg: string, data?: Record<string, unknown>) => void;
 }
 
+/**
+ * @deprecated Use `AuditEvent` from `../audit/types.js` instead.
+ * Kept for backward compatibility with external consumers.
+ */
 export interface AuditEntry {
   operation: string;
   resource_type: string;
@@ -44,6 +48,11 @@ const auditLogger = {
   },
 };
 
+/**
+ * @deprecated Use `AuditManager` from `../audit/index.js` instead.
+ * This function writes directly to stderr and does not fan out to
+ * configured audit sinks. Kept for backward compatibility.
+ */
 export function logAudit(entry: AuditEntry): void {
   const { outcome, error, ...rest } = entry;
   const data: Record<string, unknown> = { ...rest, outcome };

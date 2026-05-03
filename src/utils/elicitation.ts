@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { createLogger } from "./logger.js";
+import { type RiskLevel, type AutoApproveRisk, shouldAutoApprove, requiresConfirmation } from "../registry/types.js";
 
 const log = createLogger("elicitation");
 
@@ -9,16 +10,18 @@ export interface ElicitationResult {
   proceed: boolean;
   /** Why the operation was stopped, if applicable. */
   reason?: "declined" | "cancelled";
+  /** How the confirmation was resolved — maps directly to ConfirmationMethod for audit. */
+  method: "elicited" | "auto_approved" | "not_required" | "blocked" | "skipped";
 }
 
-/** Module-level flag to skip elicitation entirely (set via HARNESS_SKIP_ELICITATION). */
-let _skipElicitation = false;
+/** Module-level auto-approve threshold (set via HARNESS_AUTO_APPROVE_RISK). */
+let _autoApproveRisk: AutoApproveRisk = "none";
 
 /**
  * Configure the elicitation module. Call once at startup.
  */
-export function configureElicitation(opts: { skip?: boolean }): void {
-  if (opts.skip !== undefined) _skipElicitation = opts.skip;
+export function configureElicitation(opts: { autoApproveRisk?: AutoApproveRisk }): void {
+  if (opts.autoApproveRisk !== undefined) _autoApproveRisk = opts.autoApproveRisk;
 }
 
 /**
@@ -32,40 +35,38 @@ export function clientSupportsElicitation(server: Server): boolean {
 /**
  * Prompt the user to confirm a write operation via MCP form elicitation.
  *
- * Shows a message with the operation details — the user simply accepts or
- * declines. No form fields or checkboxes.
- *
- * When `destructive` is true (e.g. deletes), the operation is **blocked** if
- * the client doesn't support elicitation or the elicitation call fails.
- * Non-destructive writes proceed silently in those cases.
- *
- * When `HARNESS_SKIP_ELICITATION` is true, all elicitation is bypassed and
- * operations proceed immediately — including destructive ones.
+ * Decision flow:
+ *  1. If the operation risk is at or below `HARNESS_AUTO_APPROVE_RISK`, proceed
+ *     immediately (autonomous mode for CI/CD agents).
+ *  2. If the client supports elicitation, prompt the user.
+ *  3. If the client lacks elicitation:
+ *     - `read` / `low_write` → proceed silently.
+ *     - `medium_write` / `high_write` / `destructive` → BLOCK.
  */
 export async function confirmViaElicitation({
   server,
   toolName,
   message,
-  destructive = false,
+  risk,
 }: {
   server: McpServer;
   toolName: string;
   message: string;
-  /** When true, block the operation if confirmation cannot be obtained. */
-  destructive?: boolean;
+  /** The risk level of the operation (from operationPolicy). */
+  risk: RiskLevel;
 }): Promise<ElicitationResult> {
-  if (_skipElicitation) {
-    log.debug("Elicitation skipped (HARNESS_SKIP_ELICITATION=true), proceeding", { toolName });
-    return { proceed: true };
+  if (shouldAutoApprove(risk, _autoApproveRisk)) {
+    log.debug("Auto-approved (risk within autonomous threshold)", { toolName, risk, threshold: _autoApproveRisk });
+    return { proceed: true, method: "auto_approved" };
   }
 
   if (!clientSupportsElicitation(server.server)) {
-    if (destructive) {
-      log.warn("Client does not support elicitation, blocking destructive operation", { toolName });
-      return { proceed: false, reason: "declined" };
+    if (requiresConfirmation(risk)) {
+      log.warn("Client does not support elicitation, blocking operation", { toolName, risk });
+      return { proceed: false, reason: "declined", method: "blocked" };
     }
-    log.debug("Client does not support elicitation, proceeding", { toolName });
-    return { proceed: true };
+    log.debug("Client does not support elicitation, proceeding (low risk)", { toolName, risk });
+    return { proceed: true, method: "not_required" };
   }
 
   try {
@@ -81,24 +82,26 @@ export async function confirmViaElicitation({
     log.info("Elicitation response", { toolName, action: result.action });
 
     if (result.action === "accept") {
-      return { proceed: true };
+      return { proceed: true, method: "elicited" };
     }
     if (result.action === "decline") {
-      return { proceed: false, reason: "declined" };
+      return { proceed: false, reason: "declined", method: "elicited" };
     }
-    return { proceed: false, reason: "cancelled" };
+    return { proceed: false, reason: "cancelled", method: "elicited" };
   } catch (err) {
-    if (destructive) {
-      log.warn("Elicitation failed, blocking destructive operation", {
+    if (requiresConfirmation(risk)) {
+      log.warn("Elicitation failed, blocking operation", {
         toolName,
+        risk,
         error: String(err),
       });
-      return { proceed: false, reason: "cancelled" };
+      return { proceed: false, reason: "cancelled", method: "blocked" };
     }
-    log.warn("Elicitation failed, proceeding without confirmation", {
+    log.warn("Elicitation failed, proceeding without confirmation (low risk)", {
       toolName,
+      risk,
       error: String(err),
     });
-    return { proceed: true };
+    return { proceed: true, method: "skipped" };
   }
 }

@@ -120,6 +120,7 @@ These actions have production blast radius and block on clients without elicitat
 - **Freeze:** `freeze_window.toggle_status`, `global_freeze.manage`
 - **STO:** `security_exemption.approve`, `security_exemption.reject`, `security_exemption.promote`
 - **IDP:** `idp_workflow.execute`
+- **SCS:** `scs_sbom_drift.calculate`
 
 ---
 
