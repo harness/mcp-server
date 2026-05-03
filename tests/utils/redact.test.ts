@@ -140,8 +140,34 @@ describe("redactJsonString", () => {
     expect(result).toContain("safe");
   });
 
+  it("redacts full bearer token including dots in non-JSON text", () => {
+    const raw = "authorization: Bearer abc.def.ghi";
+    const result = redactJsonString(raw);
+    expect(result).not.toContain("abc.def.ghi");
+    expect(result).not.toContain("Bearer");
+    expect(result).toContain("[REDACTED]");
+  });
+
+  it("redacts webhook, encrypted, secret_key, ssh_key in non-JSON text", () => {
+    const raw = "webhook=https://hook.example.com, encrypted=ciphertext123, secret_key=sk_live_abc, ssh_key=AAAA";
+    const result = redactJsonString(raw);
+    expect(result).not.toContain("https://hook.example.com");
+    expect(result).not.toContain("ciphertext123");
+    expect(result).not.toContain("sk_live_abc");
+    expect(result).not.toContain("AAAA");
+    expect(result).toContain("[REDACTED]");
+  });
+
+  it("redacts quoted values with spaces in non-JSON text", () => {
+    const raw = 'token: "my secret value", name: "safe"';
+    const result = redactJsonString(raw);
+    expect(result).not.toContain("my secret value");
+    expect(result).toContain("[REDACTED]");
+    expect(result).toContain("safe");
+  });
+
   it("truncates scrubbed non-JSON output", () => {
     const result = redactJsonString("not-json{{{", 5);
-    expect(result.length).toBeLessThanOrEqual(8); // 5 + "..."
+    expect(result.length).toBeLessThanOrEqual(8);
   });
 });

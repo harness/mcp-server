@@ -94,6 +94,13 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
     );
   }
 
+  if (!data.HARNESS_FME_BASE_URL.startsWith("https://") && !data.HARNESS_ALLOW_HTTP) {
+    throw new Error(
+      `HARNESS_FME_BASE_URL must use HTTPS (got "${data.HARNESS_FME_BASE_URL}"). ` +
+      "If you need HTTP for local development, set HARNESS_ALLOW_HTTP=true.",
+    );
+  }
+
   // Resolve org/project: prefer new names, fall back to deprecated names
   if (!data.HARNESS_ORG && data.HARNESS_DEFAULT_ORG_ID) {
     console.error('[DEPRECATION] HARNESS_DEFAULT_ORG_ID is deprecated. Use HARNESS_ORG instead.');

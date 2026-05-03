@@ -1,4 +1,7 @@
-const SENSITIVE_KEY_PATTERN = /^(token|secret|password|authorization|bearer|credentials?|webhook|private_?key|client_?secret|api[_-]?key|secret[_-]?key|access[_-]?key|ssh[_-]?key|passphrase|encrypted|access_?token|refresh_?token|id_?token|session_?token|cookie)$/i;
+const SENSITIVE_KEYS =
+  "token|secret|password|authorization|bearer|credentials?|webhook|private_?key|client_?secret|api[_-]?key|secret[_-]?key|access[_-]?key|ssh[_-]?key|passphrase|encrypted|access_?token|refresh_?token|id_?token|session_?token|cookie";
+
+const SENSITIVE_KEY_PATTERN = new RegExp(`^(${SENSITIVE_KEYS})$`, "i");
 
 const REDACTED = "[REDACTED]";
 
@@ -32,10 +35,11 @@ export function redactSensitiveFields(obj: unknown, depth = 0): unknown {
 
 /**
  * Inline pattern for key-value pairs in non-JSON text that might contain secrets.
- * Matches patterns like: "token": "...", token=..., etc.
+ * Matches patterns like: "token": "...", token=..., authorization: Bearer abc.def, etc.
+ * Value capture handles quoted strings (double or single) and unquoted values up to the next delimiter.
  */
 const INLINE_SECRET_PATTERN = new RegExp(
-  `(["']?(?:token|secret|password|authorization|bearer|credentials?|api[_-]?key|access[_-]?key|private[_-]?key|client[_-]?secret|passphrase|access_?token|refresh_?token|id_?token|session_?token|cookie)["']?)\\s*[:=]\\s*(["']?)([^"'\\s,}{\\]]+)\\2`,
+  `(["']?(?:${SENSITIVE_KEYS})["']?)\\s*[:=]\\s*("[^"]*"|'[^']*'|[^,\\n}{\\]]+)`,
   "gi",
 );
 
