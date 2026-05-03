@@ -252,6 +252,38 @@ describe("ConfigSchema — HTTPS enforcement", () => {
       expect(result.data.HARNESS_BASE_URL).toBe("https://custom.harness.io");
     }
   });
+
+  it("rejects http:// FME base URL by default", () => {
+    expect(() =>
+      ConfigSchema.parse({
+        ...validConfig,
+        HARNESS_FME_BASE_URL: "http://localhost:9090",
+      }),
+    ).toThrow("HARNESS_FME_BASE_URL must use HTTPS");
+  });
+
+  it("accepts http:// FME base URL when HARNESS_ALLOW_HTTP=true", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      HARNESS_FME_BASE_URL: "http://localhost:9090",
+      HARNESS_ALLOW_HTTP: "true",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_FME_BASE_URL).toBe("http://localhost:9090");
+    }
+  });
+
+  it("always accepts https:// FME base URL", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      HARNESS_FME_BASE_URL: "https://custom.split.io",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_FME_BASE_URL).toBe("https://custom.split.io");
+    }
+  });
 });
 
 describe("loadConfig — account ID extraction", () => {

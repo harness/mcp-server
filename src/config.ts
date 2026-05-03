@@ -75,6 +75,7 @@ const RawConfigSchema = z.object({
   HARNESS_ALLOW_HTTP: booleanFromEnv.default(false),
   HARNESS_MCP_ALLOWED_HOSTS: optionalStringFromEnv.transform(validateAllowedHosts),
   HARNESS_FME_BASE_URL: urlFromEnv("https://api.split.io"),
+  HARNESS_LOG_UNSAFE_BODIES: booleanFromEnv.default(false),
   HARNESS_PIPELINE_VERSION: z.enum(["0", "1"]).optional(),
 });
 
@@ -89,6 +90,13 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
   if (!data.HARNESS_BASE_URL.startsWith("https://") && !data.HARNESS_ALLOW_HTTP) {
     throw new Error(
       `HARNESS_BASE_URL must use HTTPS (got "${data.HARNESS_BASE_URL}"). ` +
+      "If you need HTTP for local development, set HARNESS_ALLOW_HTTP=true.",
+    );
+  }
+
+  if (!data.HARNESS_FME_BASE_URL.startsWith("https://") && !data.HARNESS_ALLOW_HTTP) {
+    throw new Error(
+      `HARNESS_FME_BASE_URL must use HTTPS (got "${data.HARNESS_FME_BASE_URL}"). ` +
       "If you need HTTP for local development, set HARNESS_ALLOW_HTTP=true.",
     );
   }
@@ -111,16 +119,13 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
 
 export type Config = z.infer<typeof ConfigSchema>;
 
-/** FME (Split.io) API base URL — always api.split.io, not configurable. */
-const FME_BASE_URL = "https://api.split.io";
-
 /**
  * Resolve the base URL for a given product backend.
  * - "harness" → undefined (uses the default client base URL)
- * - "fme"     → https://api.split.io
+ * - "fme"     → HARNESS_FME_BASE_URL from config (defaults to https://api.split.io)
  */
-export function resolveProductBaseUrl(_config: Config, product: "harness" | "fme"): string | undefined {
-  if (product === "fme") return FME_BASE_URL;
+export function resolveProductBaseUrl(config: Config, product: "harness" | "fme"): string | undefined {
+  if (product === "fme") return config.HARNESS_FME_BASE_URL;
   return undefined;
 }
 

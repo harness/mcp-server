@@ -13,7 +13,7 @@ import { Registry } from "./registry/index.js";
 import { registerAllTools } from "./tools/index.js";
 import { registerAllResources } from "./resources/index.js";
 import { registerAllPrompts } from "./prompts/index.js";
-import { parseArgs, resolvePort } from "./utils/cli.js";
+import { parseArgs, resolvePort, getVersion } from "./utils/cli.js";
 import { configureElicitation } from "./utils/elicitation.js";
 import { resolveHttpHostValidationOptions } from "./utils/http-hosts.js";
 import { loadEnvFile } from "./utils/env.js";
@@ -45,7 +45,7 @@ function createHarnessServer(config: Config): McpServer {
   const server = new McpServer(
     {
       name: "harness-mcp-server",
-      version: "2.0.0",
+      version: getVersion(),
       icons: [{ src: "https://app.harness.io/favicon.ico" }],
       websiteUrl: "https://harness.io",
     },
