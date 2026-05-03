@@ -1,5 +1,5 @@
 const SENSITIVE_KEYS =
-  "token|secret|password|authorization|bearer|credentials?|webhook|private[_-]?key|client[_-]?secret|api[_-]?key|secret[_-]?key|access[_-]?key|ssh[_-]?key|passphrase|encrypted|access[_-]?token|refresh[_-]?token|id[_-]?token|session[_-]?token|cookie";
+  "token|secret|password|authorization|bearer|credentials?|webhook|webhook[_-]?url|callback[_-]?url|endpoint[_-]?url|private[_-]?key|client[_-]?secret|api[_-]?key|secret[_-]?key|access[_-]?key|ssh[_-]?key|passphrase|encrypted|access[_-]?token|refresh[_-]?token|id[_-]?token|session[_-]?token|cookie";
 
 const SENSITIVE_KEY_PATTERN = new RegExp(`^(${SENSITIVE_KEYS})$`, "i");
 

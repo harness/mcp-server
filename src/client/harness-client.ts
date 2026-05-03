@@ -192,7 +192,7 @@ export class HarnessClient {
     const isFme = options.product === "fme";
     const accountId = this.resolveAccountId();
     const headers: Record<string, string> = {
-      "Harness-Account": accountId,
+      ...(isFme ? {} : { "Harness-Account": accountId }),
       ...options.headers,
     };
 
@@ -358,7 +358,7 @@ export class HarnessClient {
     const isFme = options.product === "fme";
     const accountId = this.resolveAccountId();
     const headers: Record<string, string> = {
-      "Harness-Account": accountId,
+      ...(isFme ? {} : { "Harness-Account": accountId }),
       ...options.headers,
     };
 
@@ -455,8 +455,9 @@ export class HarnessClient {
 
     // Inject accountIdentifier into query params (used by most Harness APIs).
     // Some APIs (e.g. SEI) use only the Harness-Account header — skip when told.
+    // FME/Split API uses neither Harness account query params nor Harness-Account header.
     const params = new URLSearchParams();
-    if (!options.headerBasedScoping) {
+    if (!options.headerBasedScoping && options.product !== "fme") {
       const accountId = this.resolveAccountId();
       params.set("accountIdentifier", accountId);
 

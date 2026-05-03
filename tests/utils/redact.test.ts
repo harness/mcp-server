@@ -34,6 +34,24 @@ describe("redactSensitiveFields", () => {
     expect(auth.credentials).toBe("[REDACTED]");
   });
 
+  it("redacts webhookUrl and similar compound URL keys", () => {
+    const input = {
+      webhookUrl: "https://hooks.example.com/secret",
+      webhook_url: "https://hooks.example.com/w2",
+      "webhook-url": "https://hooks.example.com/w3",
+      callbackUrl: "https://cb.example.com/c1",
+      endpointUrl: "https://api.example.com/e1",
+      name: "safe",
+    };
+    const result = redactSensitiveFields(input) as Record<string, unknown>;
+    expect(result.webhookUrl).toBe("[REDACTED]");
+    expect(result.webhook_url).toBe("[REDACTED]");
+    expect(result["webhook-url"]).toBe("[REDACTED]");
+    expect(result.callbackUrl).toBe("[REDACTED]");
+    expect(result.endpointUrl).toBe("[REDACTED]");
+    expect(result.name).toBe("safe");
+  });
+
   it("redacts various key patterns case-insensitively", () => {
     const input = {
       apiKey: "key1",
