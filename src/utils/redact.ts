@@ -5,10 +5,6 @@ const SENSITIVE_KEY_PATTERN = new RegExp(`^(${SENSITIVE_KEYS})$`, "i");
 
 const REDACTED = "[REDACTED]";
 
-/** JSON-like `"key":"value"` pairs for sensitive keys (parse-fallback path). */
-const INLINE_SECRET_PATTERN =
-  /("(?:token|secret|password|authorization|bearer|credential|webhook|private_?key|client_?secret|api[_-]?key|secret[_-]?key|access[_-]?key|ssh[_-]?key|passphrase|encrypted)")\s*:\s*"(?:[^"\\]|\\.)*"/gi;
-
 /**
  * Recursively redact values whose keys match sensitive patterns.
  * Returns a new object — the original is never mutated.
