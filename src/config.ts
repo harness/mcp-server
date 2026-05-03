@@ -84,8 +84,8 @@ const RawConfigSchema = z.object({
   HARNESS_AUDIT_FILE: optionalStringFromEnv,
   HARNESS_AUDIT_WEBHOOK_URL: z.preprocess(emptyStringAsUndefined, z.string().url().optional()),
   HARNESS_AUDIT_WEBHOOK_TOKEN: optionalStringFromEnv,
-  HARNESS_AUDIT_WEBHOOK_BATCH_SIZE: z.coerce.number().default(10),
-  HARNESS_AUDIT_WEBHOOK_FLUSH_MS: z.coerce.number().default(5000),
+  HARNESS_AUDIT_WEBHOOK_BATCH_SIZE: z.preprocess(emptyStringAsUndefined, z.coerce.number().min(1).default(10)),
+  HARNESS_AUDIT_WEBHOOK_FLUSH_MS: z.preprocess(emptyStringAsUndefined, z.coerce.number().min(1).default(5000)),
 });
 
 export const ConfigSchema = RawConfigSchema.transform((data) => {

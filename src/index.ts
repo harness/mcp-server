@@ -43,9 +43,10 @@ interface HarnessServerResult {
 
 /**
  * Create a fully-configured MCP server instance with all tools, resources, and prompts.
+ * @param sharedAuditManager When set (HTTP mode), reuse this manager instead of creating one per session.
  */
-function createHarnessServer(config: Config): HarnessServerResult {
-  const auditManager = createAuditManager(config);
+function createHarnessServer(config: Config, sharedAuditManager?: AuditManager): HarnessServerResult {
+  const auditManager = sharedAuditManager ?? createAuditManager(config);
   const client = new HarnessClient(config);
   const registry = new Registry(config, { auditManager });
 
@@ -185,7 +186,6 @@ async function startStdio(config: Config): Promise<void> {
 interface Session {
   server: McpServer;
   transport: StreamableHTTPServerTransport;
-  auditManager: AuditManager;
   lastActivity: number;
 }
 
@@ -245,12 +245,12 @@ async function startHttp(config: Config, port: number): Promise<void> {
 
   // ---- Session store ----
   const sessions = new Map<string, Session>();
+  const sharedAuditManager = createAuditManager(config);
 
   async function destroySession(sessionId: string): Promise<void> {
     const session = sessions.get(sessionId);
     if (!session) return;
     sessions.delete(sessionId);
-    await session.auditManager.close().catch(() => {});
     await session.transport.close().catch(() => {});
     await session.server.close().catch(() => {});
     log.info("Session destroyed", { sessionId, remaining: sessions.size });
@@ -315,16 +315,14 @@ async function startHttp(config: Config, port: number): Promise<void> {
     // No session header — must be an initialize request. Create a new session.
     let server: McpServer | undefined;
     let transport: StreamableHTTPServerTransport | undefined;
-    let sessionAuditManager: AuditManager | undefined;
     try {
       const sessionConfig = mergeConfigWithPipelineVersion(config, req);
-      const result = createHarnessServer(sessionConfig);
+      const result = createHarnessServer(sessionConfig, sharedAuditManager);
       server = result.server;
-      sessionAuditManager = result.auditManager;
       transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (id) => {
-          sessions.set(id, { server: server!, transport: transport!, auditManager: sessionAuditManager!, lastActivity: Date.now() });
+          sessions.set(id, { server: server!, transport: transport!, lastActivity: Date.now() });
           log.info("Session created", { sessionId: id, total: sessions.size });
         },
       });
@@ -346,7 +344,6 @@ async function startHttp(config: Config, port: number): Promise<void> {
           id: null,
         });
       }
-      await sessionAuditManager?.close().catch(() => {});
       await transport?.close();
       await server?.close();
     }
@@ -454,6 +451,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
     await Promise.allSettled(
       [...sessions.keys()].map((id) => destroySession(id)),
     );
+    await sharedAuditManager.close().catch(() => {});
 
     // 4. Allow in-flight responses to flush, then exit
     const DRAIN_TIMEOUT_MS = 10_000;

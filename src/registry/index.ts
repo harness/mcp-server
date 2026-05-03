@@ -371,16 +371,17 @@ export class Registry {
     const startTime = Date.now();
     try {
       const result = await this.executeSpec(client, def, spec, input, signal);
-      this.emitAuditEvent(spec, operation, resourceType, input, auditCtx, "success", Date.now() - startTime);
+      this.emitAuditEvent(def, spec, operation, resourceType, input, auditCtx, "success", Date.now() - startTime);
       return result;
     } catch (err) {
       const httpStatus = err instanceof HarnessApiError ? err.statusCode : undefined;
-      this.emitAuditEvent(spec, operation, resourceType, input, auditCtx, "error", Date.now() - startTime, String(err), httpStatus);
+      this.emitAuditEvent(def, spec, operation, resourceType, input, auditCtx, "error", Date.now() - startTime, String(err), httpStatus);
       throw err;
     }
   }
 
   private emitAuditEvent(
+    def: ResourceDefinition,
     spec: EndpointSpec,
     operation: string,
     resourceType: string,
@@ -401,8 +402,12 @@ export class Registry {
       resource_type: resourceType,
       resource_id: auditCtx?.resource_id ?? (input.resource_id as string | undefined),
       action: auditCtx?.action,
-      org_id: (input.org_id as string | undefined) ?? this.config.HARNESS_ORG,
-      project_id: (input.project_id as string | undefined) ?? this.config.HARNESS_PROJECT,
+      org_id: def.scopeOptional
+        ? (input.org_id as string | undefined)
+        : (input.org_id as string | undefined) ?? this.config.HARNESS_ORG,
+      project_id: def.scopeOptional
+        ? (input.project_id as string | undefined)
+        : (input.project_id as string | undefined) ?? this.config.HARNESS_PROJECT,
       account_id: this.getAccountId(),
       risk: spec.operationPolicy?.risk ?? "read",
       confirmation: auditCtx?.confirmation,

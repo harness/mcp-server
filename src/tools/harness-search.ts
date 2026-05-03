@@ -93,7 +93,7 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
                   size: args.max_per_type ?? 5,
                   limit: args.max_per_type ?? 5,
                   page: 0,
-                }, signal);
+                }, { tool: "harness_search" }, signal);
                 return { rt, result, error: null };
               } catch (err) {
                 log.debug(`Search failed for ${rt}`, { error: String(err) });
