@@ -94,7 +94,7 @@ describe("confirmViaElicitation", () => {
       message: "Create pipeline?",
       risk: "low_write",
     });
-    expect(result).toEqual({ proceed: true });
+    expect(result).toEqual({ proceed: true, method: "not_required" });
     expect(mcpServer.server.elicitInput).not.toHaveBeenCalled();
   });
 
@@ -106,7 +106,7 @@ describe("confirmViaElicitation", () => {
       message: "Delete pipeline?",
       risk: "destructive",
     });
-    expect(result).toEqual({ proceed: false, reason: "declined" });
+    expect(result).toEqual({ proceed: false, reason: "declined", method: "blocked" });
     expect(mcpServer.server.elicitInput).not.toHaveBeenCalled();
   });
 
@@ -118,7 +118,7 @@ describe("confirmViaElicitation", () => {
       message: "Create repo rule?",
       risk: "medium_write",
     });
-    expect(result).toEqual({ proceed: false, reason: "declined" });
+    expect(result).toEqual({ proceed: false, reason: "declined", method: "blocked" });
   });
 
   it("proceeds when user accepts", async () => {
@@ -132,7 +132,7 @@ describe("confirmViaElicitation", () => {
       message: "Create service?",
       risk: "low_write",
     });
-    expect(result).toEqual({ proceed: true });
+    expect(result).toEqual({ proceed: true, method: "elicited" });
     expect(mcpServer.server.elicitInput).toHaveBeenCalledOnce();
   });
 
@@ -147,7 +147,7 @@ describe("confirmViaElicitation", () => {
       message: "Delete connector?",
       risk: "destructive",
     });
-    expect(result).toEqual({ proceed: false, reason: "declined" });
+    expect(result).toEqual({ proceed: false, reason: "declined", method: "elicited" });
   });
 
   it("returns cancelled when user cancels", async () => {
@@ -161,7 +161,7 @@ describe("confirmViaElicitation", () => {
       message: "Run pipeline?",
       risk: "high_write",
     });
-    expect(result).toEqual({ proceed: false, reason: "cancelled" });
+    expect(result).toEqual({ proceed: false, reason: "cancelled", method: "elicited" });
   });
 
   it("proceeds when elicitInput throws (low_write)", async () => {
@@ -173,7 +173,7 @@ describe("confirmViaElicitation", () => {
       message: "Create service?",
       risk: "low_write",
     });
-    expect(result).toEqual({ proceed: true });
+    expect(result).toEqual({ proceed: true, method: "skipped" });
   });
 
   it("blocks when elicitInput throws (destructive)", async () => {
@@ -185,7 +185,7 @@ describe("confirmViaElicitation", () => {
       message: "Delete service?",
       risk: "destructive",
     });
-    expect(result).toEqual({ proceed: false, reason: "cancelled" });
+    expect(result).toEqual({ proceed: false, reason: "cancelled", method: "blocked" });
   });
 
   it("blocks when elicitInput throws (medium_write)", async () => {
@@ -197,7 +197,7 @@ describe("confirmViaElicitation", () => {
       message: "Create repo rule?",
       risk: "medium_write",
     });
-    expect(result).toEqual({ proceed: false, reason: "cancelled" });
+    expect(result).toEqual({ proceed: false, reason: "cancelled", method: "blocked" });
   });
 
   it("passes message to elicitInput with empty schema", async () => {
@@ -229,7 +229,7 @@ describe("confirmViaElicitation", () => {
       message: "Delete pipeline?",
       risk: "destructive",
     });
-    expect(result).toEqual({ proceed: true });
+    expect(result).toEqual({ proceed: true, method: "auto_approved" });
     expect(mcpServer.server.elicitInput).not.toHaveBeenCalled();
   });
 
@@ -242,7 +242,7 @@ describe("confirmViaElicitation", () => {
       message: "Create service?",
       risk: "low_write",
     });
-    expect(result).toEqual({ proceed: true });
+    expect(result).toEqual({ proceed: true, method: "auto_approved" });
   });
 
   it("does not auto-approve high_write when threshold is low_write", async () => {
@@ -254,7 +254,7 @@ describe("confirmViaElicitation", () => {
       message: "Run pipeline?",
       risk: "high_write",
     });
-    expect(result).toEqual({ proceed: false, reason: "declined" });
+    expect(result).toEqual({ proceed: false, reason: "declined", method: "blocked" });
   });
 
   it("skips elicitation for non-destructive ops when auto-approve is 'all'", async () => {
@@ -266,7 +266,7 @@ describe("confirmViaElicitation", () => {
       message: "Create service?",
       risk: "low_write",
     });
-    expect(result).toEqual({ proceed: true });
+    expect(result).toEqual({ proceed: true, method: "auto_approved" });
     expect(mcpServer.server.elicitInput).not.toHaveBeenCalled();
   });
 });

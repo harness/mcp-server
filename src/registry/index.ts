@@ -1,7 +1,10 @@
+import { randomUUID } from "node:crypto";
 import { type Config, resolveProductBaseUrl } from "../config.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import { HarnessApiError } from "../utils/errors.js";
 import type { ResourceDefinition, ToolsetDefinition, ToolsetName, OperationName, EndpointSpec, FilterFieldSpec } from "./types.js";
+import type { AuditManager } from "../audit/manager.js";
+import type { AuditContext, AuditEvent } from "../audit/types.js";
 import { createLogger } from "../utils/logger.js";
 import { buildDeepLink, appendStoreType } from "../utils/deep-links.js";
 
@@ -102,6 +105,8 @@ export interface RegistryOptions {
    * to `config.HARNESS_ACCOUNT_ID` if it returns `undefined`.
    */
   accountIdResolver?: () => string | undefined;
+  /** When provided, every dispatch emits an AuditEvent to all registered sinks. */
+  auditManager?: AuditManager;
 }
 
 /**
@@ -111,9 +116,11 @@ export class Registry {
   private resourceMap: Map<string, ResourceDefinition> = new Map();
   private toolsets: ToolsetDefinition[] = [];
   private accountIdResolver?: () => string | undefined;
+  private auditManager?: AuditManager;
 
   constructor(private config: Config, options: RegistryOptions = {}) {
     this.accountIdResolver = options.accountIdResolver;
+    this.auditManager = options.auditManager;
     const allToolsets = [...ALL_TOOLSETS, ...(options.additionalToolsets ?? [])];
     const enabledNames = this.parseToolsetFilter(allToolsets);
     this.toolsets = enabledNames
@@ -288,8 +295,12 @@ export class Registry {
     resourceType: string,
     operation: OperationName,
     input: Record<string, unknown>,
+    signalOrAudit?: AbortSignal | AuditContext,
     signal?: AbortSignal,
   ): Promise<unknown> {
+    const auditCtx = signalOrAudit instanceof AbortSignal ? undefined : signalOrAudit;
+    const abortSignal = signalOrAudit instanceof AbortSignal ? signalOrAudit : signal;
+
     if (this.config.HARNESS_READ_ONLY && !Registry.READ_OPERATIONS.has(operation)) {
       throw new Error(`Read-only mode is enabled (HARNESS_READ_ONLY=true). "${operation}" operations are not allowed.`);
     }
@@ -301,7 +312,6 @@ export class Registry {
       throw new Error(`Resource "${resourceType}" does not support "${operation}". Supported: ${supported}`);
     }
 
-    // Validate required listFilterFields for list operations before hitting the API
     if (operation === "list" && def.listFilterFields) {
       const missing = def.listFilterFields
         .filter(f => f.required && input[f.name] === undefined)
@@ -314,7 +324,7 @@ export class Registry {
       }
     }
 
-    return this.executeSpec(client, def, spec, input, signal);
+    return this.executeSpecWithAudit(client, def, spec, operation, resourceType, input, auditCtx, abortSignal);
   }
 
   /** Dispatch an execute action to the Harness API. */
@@ -323,8 +333,12 @@ export class Registry {
     resourceType: string,
     action: string,
     input: Record<string, unknown>,
+    signalOrAudit?: AbortSignal | AuditContext,
     signal?: AbortSignal,
   ): Promise<unknown> {
+    const auditCtx = signalOrAudit instanceof AbortSignal ? undefined : signalOrAudit;
+    const abortSignal = signalOrAudit instanceof AbortSignal ? signalOrAudit : signal;
+
     if (this.config.HARNESS_READ_ONLY) {
       throw new Error(`Read-only mode is enabled (HARNESS_READ_ONLY=true). Execute actions are not allowed.`);
     }
@@ -336,7 +350,78 @@ export class Registry {
       throw new Error(`Resource "${resourceType}" has no execute action "${action}". Available: ${available}`);
     }
 
-    return this.executeSpec(client, def, actionSpec, input, signal);
+    return this.executeSpecWithAudit(client, def, actionSpec, "execute", resourceType, input, { ...auditCtx, tool: auditCtx?.tool ?? "harness_execute", action }, abortSignal);
+  }
+
+  /**
+   * Wraps executeSpec with timing and audit event emission.
+   */
+  private async executeSpecWithAudit(
+    client: HarnessClient,
+    def: ResourceDefinition,
+    spec: EndpointSpec,
+    operation: string,
+    resourceType: string,
+    input: Record<string, unknown>,
+    auditCtx?: AuditContext,
+    signal?: AbortSignal,
+  ): Promise<unknown> {
+    if (!this.auditManager) {
+      return this.executeSpec(client, def, spec, input, signal);
+    }
+
+    const startTime = Date.now();
+    try {
+      const result = await this.executeSpec(client, def, spec, input, signal);
+      this.emitAuditEvent(def, spec, operation, resourceType, input, auditCtx, "success", Date.now() - startTime);
+      return result;
+    } catch (err) {
+      const httpStatus = err instanceof HarnessApiError ? err.statusCode : undefined;
+      this.emitAuditEvent(def, spec, operation, resourceType, input, auditCtx, "error", Date.now() - startTime, String(err), httpStatus);
+      throw err;
+    }
+  }
+
+  private emitAuditEvent(
+    def: ResourceDefinition,
+    spec: EndpointSpec,
+    operation: string,
+    resourceType: string,
+    input: Record<string, unknown>,
+    auditCtx: AuditContext | undefined,
+    outcome: "success" | "error",
+    durationMs: number,
+    error?: string,
+    httpStatus?: number,
+  ): void {
+    if (!this.auditManager) return;
+
+    const event: AuditEvent = {
+      event_id: randomUUID(),
+      timestamp: new Date().toISOString(),
+      tool: auditCtx?.tool ?? `harness_${operation}`,
+      operation,
+      resource_type: resourceType,
+      resource_id: auditCtx?.resource_id ?? (input.resource_id as string | undefined),
+      action: auditCtx?.action,
+      org_id: def.scope === "account"
+        ? undefined
+        : (input.org_id as string | undefined) ?? (def.scopeOptional ? undefined : this.config.HARNESS_ORG),
+      project_id: def.scope === "account" || def.scope === "org"
+        ? undefined
+        : (input.project_id as string | undefined) ?? (def.scopeOptional ? undefined : this.config.HARNESS_PROJECT),
+      account_id: this.getAccountId(),
+      risk: spec.operationPolicy?.risk ?? "read",
+      confirmation: auditCtx?.confirmation,
+      outcome,
+      duration_ms: durationMs,
+      http_method: spec.method,
+      http_path: spec.path,
+      ...(error ? { error } : {}),
+      ...(httpStatus ? { http_status: httpStatus } : {}),
+    };
+
+    this.auditManager.emit(event);
   }
 
   private async executeSpec(

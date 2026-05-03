@@ -100,7 +100,7 @@ export function registerDiagnoseTool(server: McpServer, registry: Registry, clie
               const pipelineId = asString(mergedArgs.pipeline_id) ?? asString(input.pipeline_id);
               if (pipelineId) {
                 try {
-                  const pipelineResp = await registry.dispatch(client, "pipeline", "get", { ...input, pipeline_id: pipelineId }, extra.signal);
+                  const pipelineResp = await registry.dispatch(client, "pipeline", "get", { ...input, pipeline_id: pipelineId }, { tool: "harness_diagnose" }, extra.signal);
                   const resp = asRecord(pipelineResp);
                   if (resp?.yamlPipeline && typeof resp.yamlPipeline === "string") {
                     const YAML = await import("yaml");

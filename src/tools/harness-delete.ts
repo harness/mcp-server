@@ -4,7 +4,6 @@ import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
-import { logAudit } from "../utils/logger.js";
 import { confirmViaElicitation } from "../utils/elicitation.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { coerceRecord } from "../utils/type-guards.js";
@@ -62,11 +61,9 @@ export function registerDeleteTool(server: McpServer, registry: Registry, client
           input[primaryField] = args.resource_id;
         }
 
-        const result = await registry.dispatch(client, args.resource_type, "delete", input);
-        logAudit({ operation: "delete", resource_type: args.resource_type, resource_id: args.resource_id, org_id: input.org_id as string, project_id: input.project_id as string, outcome: "success" });
+        const result = await registry.dispatch(client, args.resource_type, "delete", input, { tool: "harness_delete", confirmation: elicit.method, resource_id: args.resource_id });
         return jsonResult({ deleted: true, resource_type: args.resource_type, resource_id: args.resource_id, ...((typeof result === "object" && result !== null) ? result : {}) });
       } catch (err) {
-        logAudit({ operation: "delete", resource_type: args.resource_type, resource_id: args.resource_id, outcome: "error", error: String(err) });
         if (isUserError(err)) return errorResult(err.message);
         if (isUserFixableApiError(err)) return errorResult(err.message);
         throw toMcpError(err);
