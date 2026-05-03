@@ -82,20 +82,20 @@ export class OTelSink implements AuditSink {
     }
     this.api = api;
 
-    // Detect if a host application already registered a real TracerProvider.
-    // In OTel JS, `trace.getTracerProvider()` always returns a ProxyTracerProvider.
-    // After `setGlobalTracerProvider()`, the proxy's delegate points to the real
-    // SDK provider. We check for a delegate to avoid constructor-name matching.
+    // Detect if a host application registered a real SDK TracerProvider.
+    // ProxyTracerProvider.getDelegate() returns NoopTracerProvider by default,
+    // which only has getTracer(). Real SDK providers also expose forceFlush().
     const globalProvider = api.trace?.getTracerProvider?.();
     const delegate = globalProvider?.getDelegate?.();
     const hasExternalProvider = delegate
-      && delegate !== globalProvider
-      && typeof delegate.getTracer === "function";
+      && typeof delegate.getTracer === "function"
+      && typeof delegate.forceFlush === "function";
 
     if (hasExternalProvider) {
       this.tracer = api.trace.getTracer("harness-mcp-audit");
       this.ready = true;
       log.debug("OTel audit sink using external TracerProvider");
+      this.drainPending();
       return;
     }
 

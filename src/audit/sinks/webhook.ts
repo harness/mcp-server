@@ -12,7 +12,9 @@ export interface WebhookSinkOptions {
 
 /**
  * POSTs audit events to an HTTP endpoint. Events are batched and flushed
- * periodically. Failures are logged but never block tool execution.
+ * periodically. Delivery is best-effort: failed batches are re-enqueued once
+ * (up to 5x batch capacity), then dropped with a warning. Failures never
+ * block tool execution.
  */
 export class WebhookSink implements AuditSink {
   readonly name = "webhook";
@@ -55,6 +57,7 @@ export class WebhookSink implements AuditSink {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (this.token) headers["Authorization"] = `Bearer ${this.token}`;
 
+    let delivered = false;
     try {
       const response = await fetch(this.url, {
         method: "POST",
@@ -62,6 +65,7 @@ export class WebhookSink implements AuditSink {
         body: JSON.stringify({ events: batch }),
         signal: AbortSignal.timeout(10_000),
       });
+      delivered = response.ok;
       if (!response.ok) {
         log.warn("Webhook returned non-OK status", {
           status: response.status,
@@ -76,6 +80,12 @@ export class WebhookSink implements AuditSink {
         eventCount: batch.length,
         error: String(err),
       });
+    }
+
+    if (!delivered && this.buffer.length + batch.length <= this.batchSize * 5) {
+      this.buffer.unshift(...batch);
+    } else if (!delivered) {
+      log.warn("Webhook buffer full, dropping failed batch", { eventCount: batch.length });
     }
   }
 

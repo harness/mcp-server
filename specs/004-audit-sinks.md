@@ -119,6 +119,8 @@ No configuration required.
 | `HARNESS_AUDIT_WEBHOOK_BATCH_SIZE` | 10 | Events per batch before auto-flush |
 | `HARNESS_AUDIT_WEBHOOK_FLUSH_MS` | 5000 | Timer-based flush interval (ms) |
 
+**Delivery guarantee**: Best-effort with bounded retry. Failed batches are re-enqueued for the next flush cycle, up to 5x the configured batch size. Events exceeding this capacity are dropped with a warning. This prevents unbounded memory growth while giving transient failures a second chance.
+
 ### 4. OTelSink (`src/audit/sinks/otel.ts`)
 
 **Activates when `OTEL_EXPORTER_OTLP_ENDPOINT` is set and `@opentelemetry/api` is importable.**

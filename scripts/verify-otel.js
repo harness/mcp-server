@@ -18,6 +18,12 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const buildDir = join(__dirname, "..", "build");
 
 const endpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
 if (!endpoint) {
@@ -28,6 +34,13 @@ if (!endpoint) {
   console.error("");
   console.error("If your Jaeger is in-cluster, port-forward first:");
   console.error("  kubectl port-forward svc/jaeger-otlp-http 4318:4318 -n <namespace>");
+  process.exit(1);
+}
+
+if (!existsSync(join(buildDir, "audit", "sinks", "otel.js"))) {
+  console.error("ERROR: Build artifacts not found. Run `pnpm build` first.");
+  console.error("");
+  console.error("  pnpm build && node scripts/verify-otel.js");
   process.exit(1);
 }
 
