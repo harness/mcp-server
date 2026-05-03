@@ -56,11 +56,23 @@ export interface OperationPolicy {
 
 ### Helper
 
+Confirmation gating uses `requiresConfirmation(risk)`. `isBlockingRisk(risk)` also exists but is deprecated (it excludes `medium_write`; do not use it for elicitation).
+
 ```typescript
 /**
- * Returns true when the risk level requires blocking the operation
- * if user confirmation cannot be obtained (e.g. client lacks elicitation).
+ * Returns true when the operation must not proceed on clients without
+ * MCP elicitation support (until auto-approve thresholds are applied via
+ * `shouldAutoApprove` inside `confirmViaElicitation`).
  */
+export function requiresConfirmation(risk: RiskLevel): boolean {
+  return risk === "medium_write" || risk === "high_write" || risk === "destructive";
+}
+```
+
+`isBlockingRisk` is retained only for backwards compatibility (`high_write` \| `destructive`); tooling and docs should prefer `requiresConfirmation`.
+
+```typescript
+/** @deprecated — use requiresConfirmation(); threshold no longer excludes medium_write */
 export function isBlockingRisk(risk: RiskLevel): boolean {
   return risk === "high_write" || risk === "destructive";
 }
@@ -85,7 +97,7 @@ export function isBlockingRisk(risk: RiskLevel): boolean {
 
 `operationPolicy` is **required**, not optional. Every endpoint spec — read, write, and execute — must declare its policy. This is deliberate: the dispatch code can always rely on the field without null checks, and the contract is absolute.
 
-`blockWithoutConfirmation` is **removed**. Its semantics are fully captured by `operationPolicy.risk >= "high_write"`.
+`blockWithoutConfirmation` is **removed**. Its semantics are fully captured by `operationPolicy.risk` together with `requiresConfirmation()` plus auto-approve settings (see `src/utils/elicitation.ts`).
 
 ## Changes to PreflightContext
 
@@ -176,17 +188,17 @@ These are the actions with production blast radius. They must block on clients w
     toolName: "harness_create",
     message: `Create ${def.displayName}...`,
 -   destructive: blockWithoutConfirmation,
-+   destructive: isBlockingRisk(risk),
++   risk,
   });
 ```
 
 #### `harness-update.ts`
 
-Same pattern — replace `blockWithoutConfirmation` with `isBlockingRisk(operationPolicy.risk)`.
+Same pattern — replace `blockWithoutConfirmation` with `risk: operationPolicy.risk` passed to `confirmViaElicitation`.
 
 #### `harness-execute.ts`
 
-This is the **biggest behavioral change**. Currently execute actions do not pass `destructive`, so they always proceed on clients without elicitation.
+This is the **biggest behavioral change**. Currently execute actions do not pass confirmation context, so they always proceed on clients without elicitation.
 
 ```diff
 + const actionSpec = def.executeActions?.[args.action];
@@ -196,19 +208,19 @@ This is the **biggest behavioral change**. Currently execute actions do not pass
     server,
     toolName: "harness_execute",
     message: `Execute ${args.action} on ${def.displayName}...`,
-+   destructive: isBlockingRisk(risk),
++   risk,
   });
 ```
 
-After this change, `pipeline.run`, `gitops_application.sync`, `fme_feature_flag.kill`, and other high-risk actions will block on Claude Desktop and Windsurf unless confirmed.
+After this change, `pipeline.run`, `gitops_application.sync`, `fme_feature_flag.kill`, `medium_write` executes (e.g. `execution.interrupt`), and similar actions will block on Claude Desktop and Windsurf unless confirmed or auto-approved.
 
 #### `harness-delete.ts`
 
-No change. Already hardcodes `destructive: true`, consistent with all deletes being `risk: "destructive"`.
+Passes `risk: "destructive"` directly to `confirmViaElicitation`, consistent with all deletes being `risk: "destructive"`.
 
 ### Elicitation module
 
-`src/utils/elicitation.ts` — no changes required. The `destructive` boolean parameter stays as-is. Tool handlers derive it from `isBlockingRisk(operationPolicy.risk)`.
+`src/utils/elicitation.ts` accepts **`risk: RiskLevel`**. Auto-approve is evaluated first via `shouldAutoApprove(risk, threshold)` (`HARNESS_AUTO_APPROVE_RISK`). When not auto-approved and the client lacks elicitation support, **`requiresConfirmation(risk)`** controls fail-closed behavior (`medium_write` and above blocks).
 
 ### Registry dispatch
 
@@ -303,19 +315,25 @@ Add assertions:
 
 ### Elicitation unit tests (`tests/utils/elicitation.test.ts`)
 
-Add tests for `isBlockingRisk`:
+Add tests for **`requiresConfirmation`** (the live confirmation gate):
+
 - `"read"` → false
 - `"low_write"` → false
-- `"medium_write"` → false
+- `"medium_write"` → true
 - `"high_write"` → true
 - `"destructive"` → true
+
+`isBlockingRisk` unit tests remain optional/back-compat only (different threshold).
 
 ### Integration tests (`tests/integration/elicitation-flow.test.ts`)
 
 Add scenarios:
+
 - `harness_create` with `high_write` resource + no elicitation → blocked
+- `harness_create` with `medium_write` resource + no elicitation → blocked
 - `harness_create` with `low_write` resource + no elicitation → proceeds
 - `harness_execute` with `high_write` action + no elicitation → blocked (new behavior)
+- `harness_execute` with `medium_write` action + no elicitation → blocked
 - `harness_execute` with `low_write` action + no elicitation → proceeds
 - `harness_execute` with `high_write` action + elicitation accepted → proceeds
 
@@ -326,19 +344,19 @@ Add scenarios:
 
 ## Migration Checklist
 
-- [ ] Add `RiskLevel`, `RetryPolicy`, `OperationPolicy`, `isBlockingRisk` to `src/registry/types.ts`
+- [ ] Add `RiskLevel`, `RetryPolicy`, `OperationPolicy`, `requiresConfirmation`, `shouldAutoApprove` to `src/registry/types.ts`
 - [ ] Add `HarnessClientInterface`, `RegistryDispatchInterface` to `src/registry/types.ts`
 - [ ] Update `PreflightContext` to use typed interfaces
 - [ ] Add required `operationPolicy` to `EndpointSpec`
 - [ ] Remove `blockWithoutConfirmation` from `EndpointSpec`
-- [ ] Update `harness-create.ts` to use `isBlockingRisk(operationPolicy.risk)`
-- [ ] Update `harness-update.ts` to use `isBlockingRisk(operationPolicy.risk)`
+- [ ] Update `harness-create.ts` — pass `risk` to `confirmViaElicitation`
+- [ ] Update `harness-update.ts` — pass `risk` to `confirmViaElicitation`
 - [ ] Update `harness-execute.ts` to read risk from action spec and gate accordingly
 - [ ] Backfill Group A: read-only toolsets (8 files)
 - [ ] Backfill Group B: simple write toolsets (10 files)
 - [ ] Backfill Group C: complex toolsets with execute actions (13 files)
 - [ ] Add structural validation tests
-- [ ] Add `isBlockingRisk` unit tests
+- [ ] Add `requiresConfirmation` / `shouldAutoApprove` unit tests (`isBlockingRisk` optional / deprecated coverage)
 - [ ] Add integration tests for risk-gated elicitation
 - [ ] Update test plan docs
 - [ ] Build + typecheck + full test run passes

@@ -236,8 +236,13 @@ export const featureFlagsToolset: ToolsetDefinition = {
             feature_flag_name: "featureFlagName",
             environment_id: "environmentId",
           },
+          bodyBuilder: () => ({}),
           responseExtractor: passthrough,
           actionDescription: "Kill (turn off) a feature flag in a specific environment. Requires workspace_id, feature_flag_name, and environment_id.",
+          bodySchema: {
+            description: "No body required — identifiers are in path/query params.",
+            fields: [],
+          },
         },
         restore: {
           method: "PUT",
@@ -248,24 +253,39 @@ export const featureFlagsToolset: ToolsetDefinition = {
             feature_flag_name: "featureFlagName",
             environment_id: "environmentId",
           },
+          bodyBuilder: () => ({}),
           responseExtractor: passthrough,
           actionDescription: "Restore (re-enable) a killed feature flag in a specific environment. Requires workspace_id, feature_flag_name, and environment_id.",
+          bodySchema: {
+            description: "No body required — identifiers are in path/query params.",
+            fields: [],
+          },
         },
         archive: {
           method: "POST",
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/archive",
           operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: { workspace_id: "wsId", feature_flag_name: "featureFlagName" },
+          bodyBuilder: () => ({}),
           responseExtractor: passthrough,
           actionDescription: "Archive a feature flag. Requires workspace_id and feature_flag_name. Subject to OPA policy checks (409 on failure).",
+          bodySchema: {
+            description: "No body required for this action.",
+            fields: [],
+          },
         },
         unarchive: {
           method: "POST",
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/unarchive",
           operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: { workspace_id: "wsId", feature_flag_name: "featureFlagName" },
+          bodyBuilder: () => ({}),
           responseExtractor: passthrough,
           actionDescription: "Unarchive a previously archived feature flag. Requires workspace_id and feature_flag_name. Returns 409 if the flag has dependent objects.",
+          bodySchema: {
+            description: "No body required for this action.",
+            fields: [],
+          },
         },
       },
     },
@@ -294,7 +314,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/environments/{environmentId}",
-          operationPolicy: { risk: "medium_write", retryPolicy: "safe" },
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: {
             workspace_id: "wsId",
             feature_flag_name: "featureFlagName",
@@ -401,7 +421,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/internal/api/v2/rule-based-segments/ws/{wsId}/{rbSegmentName}/environments/{environmentId}",
-          operationPolicy: { risk: "medium_write", retryPolicy: "safe" },
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { workspace_id: "wsId", segment_name: "rbSegmentName", environment_id: "environmentId" },
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
@@ -427,6 +447,10 @@ export const featureFlagsToolset: ToolsetDefinition = {
           pathParams: { environment_id: "environmentId", segment_name: "rbSegmentName" },
           responseExtractor: passthrough,
           actionDescription: "Disable (remove) a rule-based segment from a specific environment. Workspace-level metadata is preserved.",
+          bodySchema: {
+            description: "No body required for this action.",
+            fields: [],
+          },
         },
         change_request: {
           method: "POST",

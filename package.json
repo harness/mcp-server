@@ -20,6 +20,8 @@
     "typecheck": "tsc --noEmit",
     "sync-schemas": "node scripts/sync-schemas.js",
     "check-schema-coverage": "node scripts/check-schema-coverage.js",
+    "docs:generate": "node scripts/generate-docs.js",
+    "docs:check": "node scripts/generate-docs.js --check",
     "test": "vitest run",
     "test:watch": "vitest",
     "docker:build": "docker build -t harness-mcp-server .",
@@ -55,7 +57,31 @@
     "yaml": "^2.8.3",
     "zod": "^4.0.0"
   },
+  "peerDependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.200.0",
+    "@opentelemetry/resources": "^2.0.0",
+    "@opentelemetry/sdk-trace-node": "^2.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@opentelemetry/api": {
+      "optional": true
+    },
+    "@opentelemetry/sdk-trace-node": {
+      "optional": true
+    },
+    "@opentelemetry/exporter-trace-otlp-http": {
+      "optional": true
+    },
+    "@opentelemetry/resources": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.216.0",
+    "@opentelemetry/resources": "^2.7.1",
+    "@opentelemetry/sdk-trace-node": "^2.7.1",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.13.5",

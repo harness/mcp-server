@@ -4,9 +4,7 @@ import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
-import { logAudit } from "../utils/logger.js";
 import { confirmViaElicitation } from "../utils/elicitation.js";
-import { isBlockingRisk } from "../registry/types.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { coerceRecord } from "../utils/type-guards.js";
 import { resourceTypeSchema } from "./input-schemas.js";
@@ -59,17 +57,15 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
           server,
           toolName: "harness_create",
           message: `Create ${args.resource_type}?\n\n${bodyPreview}`,
-          destructive: isBlockingRisk(risk),
+          risk,
         });
         if (!elicit.proceed) {
           return errorResult(`Operation ${elicit.reason} by user.`);
         }
 
-        const result = await registry.dispatch(client, args.resource_type, "create", input);
-        logAudit({ operation: "create", resource_type: args.resource_type, org_id: input.org_id as string, project_id: input.project_id as string, outcome: "success" });
+        const result = await registry.dispatch(client, args.resource_type, "create", input, { tool: "harness_create", confirmation: elicit.method });
         return jsonResult(result);
       } catch (err) {
-        logAudit({ operation: "create", resource_type: args.resource_type, outcome: "error", error: String(err) });
         if (isUserError(err)) return errorResult(err.message);
         if (isUserFixableApiError(err)) return errorResult(err.message);
         throw toMcpError(err);

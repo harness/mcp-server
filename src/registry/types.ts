@@ -26,11 +26,47 @@ export interface OperationPolicy {
 }
 
 /**
- * Returns true when the risk level requires blocking the operation
- * if user confirmation cannot be obtained (e.g. client lacks elicitation).
+ * @deprecated Use `requiresConfirmation()` instead. After the P3 elicitation
+ * refactor, the blocking threshold is `medium_write` (not just `high_write`).
+ * This function remains for backward compatibility only.
  */
 export function isBlockingRisk(risk: RiskLevel): boolean {
   return risk === "high_write" || risk === "destructive";
+}
+
+// ---------------------------------------------------------------------------
+// Risk severity ordering + auto-approve / confirmation helpers
+// ---------------------------------------------------------------------------
+
+/** Explicit numeric ordering of risk levels. */
+export const RISK_SEVERITY: ReadonlyMap<RiskLevel, number> = new Map([
+  ["read", 0],
+  ["low_write", 1],
+  ["medium_write", 2],
+  ["high_write", 3],
+  ["destructive", 4],
+]);
+
+export type AutoApproveRisk = "none" | RiskLevel | "all";
+
+/**
+ * Returns true when the operation risk is at or below the auto-approve
+ * threshold, meaning it should proceed without user confirmation.
+ */
+export function shouldAutoApprove(opRisk: RiskLevel, threshold: AutoApproveRisk): boolean {
+  if (threshold === "none") return false;
+  if (threshold === "all") return true;
+  const opSeverity = RISK_SEVERITY.get(opRisk) ?? 999;
+  const thresholdSeverity = RISK_SEVERITY.get(threshold as RiskLevel) ?? -1;
+  return opSeverity <= thresholdSeverity;
+}
+
+/**
+ * Returns true when the risk level requires blocking the operation on clients
+ * that lack elicitation support (medium_write and above).
+ */
+export function requiresConfirmation(risk: RiskLevel): boolean {
+  return risk === "medium_write" || risk === "high_write" || risk === "destructive";
 }
 
 // ---------------------------------------------------------------------------

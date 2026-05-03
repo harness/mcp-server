@@ -13,10 +13,11 @@ import { Registry } from "./registry/index.js";
 import { registerAllTools } from "./tools/index.js";
 import { registerAllResources } from "./resources/index.js";
 import { registerAllPrompts } from "./prompts/index.js";
-import { parseArgs, resolvePort } from "./utils/cli.js";
+import { parseArgs, resolvePort, getVersion } from "./utils/cli.js";
 import { configureElicitation } from "./utils/elicitation.js";
 import { resolveHttpHostValidationOptions } from "./utils/http-hosts.js";
 import { loadEnvFile } from "./utils/env.js";
+import { createAuditManager, type AuditManager } from "./audit/index.js";
 
 const log = createLogger("main");
 
@@ -35,17 +36,24 @@ function mergeConfigWithPipelineVersion(baseConfig: Config, req: import("express
   return { ...baseConfig, HARNESS_PIPELINE_VERSION: pv };
 }
 
+interface HarnessServerResult {
+  server: McpServer;
+  auditManager: AuditManager;
+}
+
 /**
  * Create a fully-configured MCP server instance with all tools, resources, and prompts.
+ * @param sharedAuditManager When set (HTTP mode), reuse this manager instead of creating one per session.
  */
-function createHarnessServer(config: Config): McpServer {
+function createHarnessServer(config: Config, sharedAuditManager?: AuditManager): HarnessServerResult {
+  const auditManager = sharedAuditManager ?? createAuditManager(config);
   const client = new HarnessClient(config);
-  const registry = new Registry(config);
+  const registry = new Registry(config, { auditManager });
 
   const server = new McpServer(
     {
       name: "harness-mcp-server",
-      version: "2.0.0",
+      version: getVersion(),
       icons: [{ src: "https://app.harness.io/favicon.ico" }],
       websiteUrl: "https://harness.io",
     },
@@ -77,12 +85,12 @@ function createHarnessServer(config: Config): McpServer {
     },
   );
 
-  configureElicitation({ skip: config.HARNESS_SKIP_ELICITATION });
+  configureElicitation({ autoApproveRisk: config.HARNESS_AUTO_APPROVE_RISK as import("./registry/types.js").AutoApproveRisk });
   registerAllTools(server, registry, client, config);
   registerAllResources(server, registry, client, config);
   registerAllPrompts(server);
 
-  return server;
+  return { server, auditManager };
 }
 
 /**
@@ -116,7 +124,7 @@ function logToFile(message: string, data?: Record<string, unknown>): void {
  * Start the server in stdio mode — single persistent connection.
  */
 async function startStdio(config: Config): Promise<void> {
-  const server = createHarnessServer(config);
+  const { server, auditManager } = createHarnessServer(config);
   const transport = new StdioServerTransport();
   await server.connect(transport);
   log.info("harness-mcp-server connected via stdio", {
@@ -142,7 +150,7 @@ async function startStdio(config: Config): Promise<void> {
       uptime_s: Math.round(process.uptime()),
       memory_mb: Math.round(process.memoryUsage.rss() / 1024 / 1024),
     });
-    process.exit(0);
+    auditManager.close().catch(() => {}).finally(() => process.exit(0));
   });
 
   process.stdout.on("error", (err: NodeJS.ErrnoException) => {
@@ -152,7 +160,7 @@ async function startStdio(config: Config): Promise<void> {
       uptime_s: Math.round(process.uptime()),
     });
     if (err.code === "EPIPE" || err.code === "ERR_STREAM_DESTROYED") {
-      process.exit(0);
+      auditManager.close().catch(() => {}).finally(() => process.exit(0));
     }
   });
 
@@ -161,6 +169,7 @@ async function startStdio(config: Config): Promise<void> {
       idle_ms: Date.now() - lastActivityTs,
       uptime_s: Math.round(process.uptime()),
     });
+    await auditManager.close();
     await transport.close();
     await server.close();
     log.info("Stdio server closed");
@@ -236,13 +245,14 @@ async function startHttp(config: Config, port: number): Promise<void> {
 
   // ---- Session store ----
   const sessions = new Map<string, Session>();
+  const sharedAuditManager = createAuditManager(config);
 
-  function destroySession(sessionId: string): void {
+  async function destroySession(sessionId: string): Promise<void> {
     const session = sessions.get(sessionId);
     if (!session) return;
     sessions.delete(sessionId);
-    session.transport.close().catch(() => {});
-    session.server.close().catch(() => {});
+    await session.transport.close().catch(() => {});
+    await session.server.close().catch(() => {});
     log.info("Session destroyed", { sessionId, remaining: sessions.size });
   }
 
@@ -307,7 +317,8 @@ async function startHttp(config: Config, port: number): Promise<void> {
     let transport: StreamableHTTPServerTransport | undefined;
     try {
       const sessionConfig = mergeConfigWithPipelineVersion(config, req);
-      server = createHarnessServer(sessionConfig);
+      const result = createHarnessServer(sessionConfig, sharedAuditManager);
+      server = result.server;
       transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (id) => {
@@ -416,7 +427,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
 
   let draining = false;
 
-  const shutdown = (signal: string): void => {
+  const shutdown = async (signal: string): Promise<void> => {
     if (draining) return; // prevent double-shutdown
     draining = true;
     log.info(`Received ${signal}, draining...`);
@@ -437,9 +448,10 @@ async function startHttp(config: Config, port: number): Promise<void> {
 
     // 3. Close all sessions (terminates SSE streams, notifies transports)
     clearInterval(reaper);
-    for (const [id] of sessions) {
-      destroySession(id);
-    }
+    await Promise.allSettled(
+      [...sessions.keys()].map((id) => destroySession(id)),
+    );
+    await sharedAuditManager.close().catch(() => {});
 
     // 4. Allow in-flight responses to flush, then exit
     const DRAIN_TIMEOUT_MS = 10_000;

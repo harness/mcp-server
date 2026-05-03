@@ -478,7 +478,7 @@ export const gitopsToolset: ToolsetDefinition = {
         cancel_operation: {
           method: "DELETE",
           path: "/gitops/api/v1/agents/{agentIdentifier}/applications/{appName}/operation",
-          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: {
             agent_id: "agentIdentifier",
             app_name: "appName",
