@@ -521,7 +521,8 @@ The server automatically loads environment variables from a `.env` file in the p
 | `LOG_LEVEL` | No | `info` | Log verbosity: `debug`, `info`, `warn`, `error` |
 | `HARNESS_TOOLSETS` | No | *(defaults)* | Comma-separated toolset list. Empty loads default toolsets and excludes opt-in toolsets such as `ai-evals`. Supports `+name` to add opt-in toolsets and `-name` to remove defaults (see [Toolset Filtering](#toolset-filtering)) |
 | `HARNESS_READ_ONLY` | No | `false` | Block all mutating operations (create, update, delete, execute). Only list and get are allowed. Useful for shared/demo environments |
-| `HARNESS_SKIP_ELICITATION` | No | `false` | Skip all elicitation confirmation prompts. When `true`, write and delete operations proceed without user approval — enabling fully autonomous agent workflows. See [Elicitation](#elicitation) |
+| `HARNESS_AUTO_APPROVE_RISK` | No | `none` | Risk-based auto-approve threshold for autonomous workflows. Operations at or below this risk proceed without confirmation. Values: `none`, `low_write`, `medium_write`, `high_write`, `all`. See [Elicitation](#elicitation) |
+| `HARNESS_SKIP_ELICITATION` | No | `false` | **Deprecated** — use `HARNESS_AUTO_APPROVE_RISK=all` instead. Kept for backward compatibility |
 | `HARNESS_ALLOW_HTTP` | No | `false` | Allow non-HTTPS `HARNESS_BASE_URL`. By default, the server enforces HTTPS for security. Set to `true` only for local development against a non-TLS Harness instance |
 | `HARNESS_PIPELINE_VERSION` | No | `0` | **(Alpha)** Pipeline YAML version. `0` loads the `pipeline` resource type and excludes `pipeline_v1`; `1` loads `pipeline_v1` and excludes `pipeline`. HTTP sessions can override this at initialize time with `x-harness-pipeline-version: 0` or `1` |
 | `HARNESS_MCP_ALLOWED_HOSTS` | No | -- | Comma-separated hostnames allowed by HTTP transport Host-header validation. `mcp.harness.io` is allowed by default for localhost binds; add proxy/custom domains here |
@@ -1638,20 +1639,27 @@ Write tools (`harness_create`, `harness_update`, `harness_delete`, `harness_exec
 | MCP Inspector     | Yes                 |
 
 
-Elicitation behavior varies by operation severity when client support is missing:
-For clients that don't support elicitation:
+Elicitation behavior varies by operation risk when client support is missing:
 
-- `harness_create`, `harness_update`, and `harness_execute` proceed without a dialog (best effort).
-- Destructive operations are blocked if confirmation cannot be obtained (`harness_delete`).
+| Risk Level | Client supports elicitation | Behavior |
+|---|---|---|
+| `read`, `low_write` | any | Proceed silently (no confirmation needed) |
+| `medium_write`, `high_write`, `destructive` | Yes | Prompt user — proceed on accept, block on decline |
+| `medium_write`, `high_write`, `destructive` | No | **BLOCK** (return error) |
+| any (at or below `HARNESS_AUTO_APPROVE_RISK`) | any | Auto-approve without prompting |
 
-If elicitation fails at runtime, the same rules apply: non-destructive writes continue, destructive writes are blocked.
+If elicitation fails at runtime, operations at `medium_write` or above are blocked.
 
-### Skipping Elicitation for Autonomous Workflows
+### Auto-Approve for Autonomous Workflows
 
-For fully autonomous agent workflows (CI/CD bots, headless agents, batch automation), elicitation prompts can be disabled entirely:
+For CI/CD bots, headless agents, or batch automation, use `HARNESS_AUTO_APPROVE_RISK` to auto-approve operations up to a given risk level:
 
 ```bash
-HARNESS_SKIP_ELICITATION=true
+# Auto-approve everything (equivalent to old HARNESS_SKIP_ELICITATION=true)
+HARNESS_AUTO_APPROVE_RISK=all
+
+# Auto-approve only low-risk writes, still prompt for medium+
+HARNESS_AUTO_APPROVE_RISK=low_write
 ```
 
 Or in your MCP client config:
@@ -1664,20 +1672,22 @@ Or in your MCP client config:
       "args": ["harness-mcp-v2"],
       "env": {
         "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
-        "HARNESS_SKIP_ELICITATION": "true"
+        "HARNESS_AUTO_APPROVE_RISK": "all"
       }
     }
   }
 }
 ```
 
-When enabled, **all** write and delete operations proceed without user confirmation — including destructive operations like `harness_delete`. Use with caution and consider pairing with `HARNESS_TOOLSETS` to restrict which resource types are available.
+> **Migration note:** `HARNESS_SKIP_ELICITATION=true` is still supported and maps to `HARNESS_AUTO_APPROVE_RISK=all`. A deprecation warning is logged to stderr. If both are set, `HARNESS_AUTO_APPROVE_RISK` takes precedence.
+
+When set to `all`, **all** write and delete operations proceed without user confirmation — including destructive operations like `harness_delete`. Use with caution and consider pairing with `HARNESS_TOOLSETS` to restrict which resource types are available.
 
 ## Safety
 
 - **Secrets are never exposed.** The `secret` resource type returns metadata only (name, type, scope) — secret values are never included in any response.
 - **Write operations use elicitation when available.** `harness_create`, `harness_update`, `harness_delete`, and `harness_execute` attempt MCP elicitation before proceeding (see [Elicitation](#elicitation)).
-- **Destructive writes fail closed.** If confirmation cannot be obtained, `harness_delete` is blocked instead of executing blindly. Override with `HARNESS_SKIP_ELICITATION=true` for autonomous workflows.
+- **Medium-risk and above fail closed.** If confirmation cannot be obtained for `medium_write`, `high_write`, or `destructive` operations, they are blocked instead of executing blindly. Override with `HARNESS_AUTO_APPROVE_RISK` for autonomous workflows.
 - **CORS restricted to same-origin.** The HTTP transport only allows same-origin requests, preventing CSRF attacks from malicious websites targeting the MCP server on localhost.
 - **HTTP rate limiting.** The HTTP transport enforces 60 requests per minute per IP to prevent request flooding.
 - **API rate limiting.** The Harness API client enforces a 10 requests/second limit to avoid hitting upstream rate limits.
