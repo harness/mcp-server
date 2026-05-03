@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 
 /**
- * Smoke test: loads the registry, verifies resource types and toolsets are
- * populated, and validates HARNESS_TOOLSETS filtering and HARNESS_READ_ONLY
- * write-blocking behavior.
- *
- * Does NOT start an MCP server or list MCP tools — this validates the
- * registry layer only. Used in CI to verify config-driven behavior.
+ * Smoke test: loads the registry (toolsets, optional read-only dispatch checks),
+ * then boots the compiled MCP server on stdio, sends initialize +
+ * notifications/initialized + tools/list using newline-delimited JSON-RPC,
+ * and asserts tools come back — catching bootstrap issues that Registry-only
+ * checks miss.
  *
  * Exit 0 = pass, exit 1 = failure.
  */
 
+import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -79,6 +79,27 @@ async function main() {
     }
   }
 
+  const serverEnv = {
+    ...process.env,
+    HARNESS_API_KEY: "pat.smoke.test.token",
+    HARNESS_ACCOUNT_ID: "smoke-test",
+    HARNESS_BASE_URL: "https://app.harness.io",
+    HARNESS_ORG: "default",
+    HARNESS_PROJECT: "smoke",
+    HARNESS_API_TIMEOUT_MS: "30000",
+    HARNESS_MAX_RETRIES: "3",
+    LOG_LEVEL: "error",
+    ...(process.env.HARNESS_TOOLSETS ? { HARNESS_TOOLSETS: process.env.HARNESS_TOOLSETS } : {}),
+    ...(process.env.HARNESS_READ_ONLY ? { HARNESS_READ_ONLY: process.env.HARNESS_READ_ONLY } : {}),
+    ...(process.env.HARNESS_PIPELINE_VERSION ? { HARNESS_PIPELINE_VERSION: process.env.HARNESS_PIPELINE_VERSION } : {}),
+  };
+
+  // Real MCP server over stdio (catches bootstrap / transport regressions)
+  const serverPath = join(ROOT, "build", "index.js");
+  const startupOk = await checkServerStartup(serverPath, serverEnv);
+  checks.push(startupOk);
+  if (!startupOk) pass = false;
+
   // Summary
   console.error("");
   console.error(`Smoke test: ${checks.filter((c) => c).length}/${checks.length} passed`);
@@ -95,6 +116,174 @@ async function main() {
     if (!condition) pass = false;
     return condition;
   }
+}
+
+/** MCP stdio transport: one JSON-RPC object per line (see sdk shared/stdio.js). */
+function mcpNdjson(message) {
+  return `${JSON.stringify(message)}\n`;
+}
+
+/**
+ * Spawn build/index.js, send initialize → notifications/initialized → tools/list, verify tools.
+ * @returns {Promise<boolean>}
+ */
+function checkServerStartup(serverPath, env) {
+  return new Promise((resolve) => {
+    let settled = false;
+    /** @type {import("node:child_process").ChildProcessWithoutNullStreams | undefined} */
+    let child;
+
+    const finish = (ok, detail) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (child && !child.killed) {
+        try {
+          child.kill("SIGTERM");
+        } catch {
+          // ignore
+        }
+      }
+      if (ok) {
+        console.error("  [+] MCP server startup + tools/list");
+        resolve(true);
+      } else {
+        console.error(`  [-] MCP server startup (${detail})`);
+        resolve(false);
+      }
+    };
+
+    const timer = setTimeout(() => {
+      if (child && !child.killed) {
+        try {
+          child.kill("SIGKILL");
+        } catch {
+          // ignore
+        }
+      }
+      finish(false, "timed out after 15s");
+    }, 15_000);
+
+    let stdoutBuf = "";
+    let stderrBuf = "";
+    let phase = "init";
+
+    try {
+      child = spawn(
+        process.execPath,
+        [serverPath],
+        {
+          cwd: ROOT,
+          env,
+          stdio: ["pipe", "pipe", "pipe"],
+        },
+      );
+    } catch (err) {
+      clearTimeout(timer);
+      console.error(`  [-] MCP server startup (${err instanceof Error ? err.message : String(err)})`);
+      resolve(false);
+      return;
+    }
+
+    child.on("error", (err) => {
+      finish(false, err.message);
+    });
+
+    child.on("exit", (code, signal) => {
+      if (settled) return;
+      const tail = stderrBuf.trim().slice(-500);
+      if (code !== 0 && code !== null) {
+        finish(false, `exit ${code}${tail ? ` — ${tail}` : ""}`);
+      } else if (signal) {
+        finish(false, `signal ${signal}`);
+      }
+    });
+
+    child.stderr?.on("data", (chunk) => {
+      stderrBuf += chunk.toString();
+      if (stderrBuf.length > 8000) {
+        stderrBuf = stderrBuf.slice(-8000);
+      }
+    });
+
+    child.stdout?.on("data", (chunk) => {
+      stdoutBuf += chunk.toString();
+
+      while (true) {
+        const nl = stdoutBuf.indexOf("\n");
+        if (nl === -1) break;
+
+        const line = stdoutBuf.slice(0, nl).replace(/\r$/, "").trim();
+        stdoutBuf = stdoutBuf.slice(nl + 1);
+        if (!line) continue;
+
+        let msg;
+        try {
+          msg = JSON.parse(line);
+        } catch {
+          finish(false, `non-JSON on stdout: ${line.slice(0, 120)}`);
+          return;
+        }
+
+        if (phase === "init" && msg.id === 1) {
+          if (msg.error) {
+            finish(false, msg.error.message || "initialize error");
+            return;
+          }
+          if (msg.result?.serverInfo) {
+            phase = "tools";
+            child.stdin.write(
+              mcpNdjson({
+                jsonrpc: "2.0",
+                method: "notifications/initialized",
+                params: {},
+              }),
+            );
+            child.stdin.write(
+              mcpNdjson({
+                jsonrpc: "2.0",
+                id: 2,
+                method: "tools/list",
+                params: {},
+              }),
+            );
+          }
+          continue;
+        }
+
+        if (phase === "tools" && msg.id === 2) {
+          if (msg.error) {
+            finish(false, msg.error.message || "tools/list error");
+            return;
+          }
+          const tools = msg.result?.tools;
+          if (!Array.isArray(tools)) {
+            finish(false, "tools/list missing tools array");
+            return;
+          }
+          if (tools.length === 0) {
+            finish(false, "tools/list returned no tools");
+            return;
+          }
+          finish(true);
+          return;
+        }
+      }
+    });
+
+    child.stdin.write(
+      mcpNdjson({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-03-26",
+          capabilities: {},
+          clientInfo: { name: "smoke-test", version: "1.0.0" },
+        },
+      }),
+    );
+  });
 }
 
 main().catch((err) => {

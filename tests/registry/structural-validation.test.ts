@@ -32,6 +32,13 @@ describe("Toolset structural validation", () => {
   const registry = new Registry(makeConfig());
   const allTypes = registry.getAllResourceTypes();
 
+  /** Defaults plus every opt-in toolset — used for universal write-metadata checks. */
+  const fullRegistry = new Registry({
+    ...makeConfig(),
+    HARNESS_TOOLSETS: ALL_TOOLSET_NAMES.map((n) => `+${n}`).join(","),
+  } as Config);
+  const allFullTypes = fullRegistry.getAllResourceTypes();
+
   describe("path/param consistency", () => {
     it("every path placeholder has a matching pathParams entry", () => {
       const issues: string[] = [];
@@ -433,8 +440,8 @@ describe("Toolset structural validation", () => {
   describe("write quality contract", () => {
     it("every create operation has bodySchema", () => {
       const missing: string[] = [];
-      for (const type of allTypes) {
-        const def = registry.getResource(type);
+      for (const type of allFullTypes) {
+        const def = fullRegistry.getResource(type);
         if (def.operations.create && !def.operations.create.bodySchema) {
           missing.push(`${type}.create`);
         }
@@ -444,8 +451,8 @@ describe("Toolset structural validation", () => {
 
     it("every update operation has bodySchema", () => {
       const missing: string[] = [];
-      for (const type of allTypes) {
-        const def = registry.getResource(type);
+      for (const type of allFullTypes) {
+        const def = fullRegistry.getResource(type);
         if (def.operations.update && !def.operations.update.bodySchema) {
           missing.push(`${type}.update`);
         }
@@ -456,8 +463,8 @@ describe("Toolset structural validation", () => {
     it("every medium_write/high_write/destructive execute action has actionDescription", () => {
       const missing: string[] = [];
       const RISKY = new Set(["medium_write", "high_write", "destructive"]);
-      for (const type of allTypes) {
-        const def = registry.getResource(type);
+      for (const type of allFullTypes) {
+        const def = fullRegistry.getResource(type);
         for (const [action, spec] of Object.entries(def.executeActions ?? {})) {
           const risk = spec.operationPolicy?.risk;
           if (risk && RISKY.has(risk) && !spec.actionDescription) {
@@ -470,8 +477,8 @@ describe("Toolset structural validation", () => {
 
     it("every execute action has actionDescription or description", () => {
       const missing: string[] = [];
-      for (const type of allTypes) {
-        const def = registry.getResource(type);
+      for (const type of allFullTypes) {
+        const def = fullRegistry.getResource(type);
         for (const [action, spec] of Object.entries(def.executeActions ?? {})) {
           if (!spec.actionDescription && !spec.description) {
             missing.push(`${type}.${action}`);
