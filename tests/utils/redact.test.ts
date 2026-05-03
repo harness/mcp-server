@@ -220,6 +220,22 @@ describe("redactJsonString", () => {
     expect(result).toContain("[REDACTED]");
   });
 
+  it("redacts YAML block scalars in non-JSON text", () => {
+    const raw = `name: deploy
+privateKey: |
+  line-one-secret
+  line-two-secret
+command: echo safe`;
+
+    const result = redactJsonString(raw);
+
+    expect(result).toContain("name: deploy");
+    expect(result).toContain("[REDACTED]");
+    expect(result).toContain("command: echo safe");
+    expect(result).not.toContain("line-one-secret");
+    expect(result).not.toContain("line-two-secret");
+  });
+
   it("redacts kebab-case keys in JSON objects", () => {
     const json = JSON.stringify({ "private-key": "secret_value", name: "safe" });
     const result = redactJsonString(json);
