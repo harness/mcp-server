@@ -244,3 +244,15 @@
 - Confirmed npm `latest` still serves `0.9.5`, so users running `npx harness-mcp-v2@latest` can still receive the known-bad build even though PR #102 is merged.
 - Bumped `package.json`, root `manifest.json`, and `mcp-directory/manifest.json` to `0.9.6` and added `tests/release-metadata.test.ts` to keep patch release metadata synchronized.
 - Verified with focused release/env/HTTP tests, `pnpm typecheck`, `pnpm build`, and a stdio startup smoke test showing `stdout bytes=0`.
+
+## Documentation Alignment Automation (2026-05-04)
+- [x] Audit recent registry/audit subsystem changes against public docs
+- [x] Identify stale README audit logging guidance
+- [x] Document audit event coverage, sink configuration, and operator constraints
+- [ ] Run docs consistency checks
+- [ ] Commit, push, and open docs-only PR
+
+### Plan
+- Keep the change focused on `README.md` because `.env.example` and specs already describe the audit sink knobs, while the public README configuration table and audit blurb are stale.
+- Verify claims against `src/config.ts`, `src/audit/*`, `src/registry/index.ts`, and `tests/audit/registry-audit.test.ts`.
+- Document both behavior and constraints: registry-mediated list/get/write/execute calls emit events; stderr is always on; JSONL, webhook, and OpenTelemetry sinks are opt-in; webhook and OTel delivery are best-effort and never block tool execution.

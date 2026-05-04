@@ -510,6 +510,11 @@ The server automatically loads environment variables from a `.env` file in the p
 | `HARNESS_PIPELINE_VERSION`  | No       | `0`                         | **(Alpha)** Pipeline YAML version. `0` loads the `pipeline` resource type and excludes `pipeline_v1`; `1` loads `pipeline_v1` and excludes `pipeline`. HTTP sessions can override this at initialize time with `x-harness-pipeline-version: 0` or `1` |
 | `HARNESS_MCP_ALLOWED_HOSTS` | No       | --                          | Comma-separated hostnames allowed by HTTP transport Host-header validation. `mcp.harness.io` is allowed by default for localhost binds; add proxy/custom domains here                                                                                 |
 | `HARNESS_MCP_LOG_FILE`      | No       | `~/.claude/harness-mcp.log` | File used for stdio disconnect/crash diagnostics when stderr may no longer be available                                                                                                                                                               |
+| `HARNESS_AUDIT_FILE`        | No       | --                          | Append registry audit events to a newline-delimited JSON file. Parent directories are created automatically                                                                                                                                             |
+| `HARNESS_AUDIT_WEBHOOK_URL` | No       | --                          | HTTPS endpoint that receives batched audit events as `{ "events": [...] }`. Non-HTTPS URLs require `HARNESS_ALLOW_HTTP=true`                                                                                                                           |
+| `HARNESS_AUDIT_WEBHOOK_TOKEN` | No     | --                          | Optional bearer token for audit webhook delivery                                                                                                                                                                                                       |
+| `HARNESS_AUDIT_WEBHOOK_BATCH_SIZE` | No | `10`                        | Number of audit events buffered before webhook flush                                                                                                                                                                                                   |
+| `HARNESS_AUDIT_WEBHOOK_FLUSH_MS` | No   | `5000`                      | Timer-based audit webhook flush interval in milliseconds                                                                                                                                                                                               |
 
 
 ### HTTPS Enforcement
@@ -522,7 +527,20 @@ HARNESS_BASE_URL must use HTTPS (got "http://..."). If you need HTTP for local d
 
 ### Audit Logging
 
-All write operations (`harness_create`, `harness_update`, `harness_delete`, `harness_execute`) emit structured audit log entries to stderr. Each entry includes the tool name, resource type, operation, identifiers, and timestamp. This provides an audit trail without requiring external logging infrastructure.
+The registry emits a structured audit event for every registry-mediated Harness API call, including `list`, `get`, `create`, `update`, `delete`, and `execute` operations. This covers the generic API tools (`harness_list`, `harness_get`, `harness_create`, `harness_update`, `harness_delete`, `harness_execute`) and records both successful and failed calls.
+
+Each audit event includes an event ID, timestamp, tool name, operation, resource type, resource ID when known, action name for execute calls, account/org/project scope, risk level, confirmation method, outcome, duration, HTTP method, and endpoint path. Failed calls also include the error text and HTTP status when the Harness API returned one.
+
+Audit sinks are configured at startup:
+
+| Sink | How to enable | Behavior |
+| ---- | ------------- | -------- |
+| Stderr | Always enabled | Writes each event through the server logger. Success events log at `info`; failed calls log at `warn`. |
+| JSONL file | Set `HARNESS_AUDIT_FILE=/path/to/audit.ndjson` | Appends one JSON object per line and creates parent directories automatically. |
+| Webhook | Set `HARNESS_AUDIT_WEBHOOK_URL=https://collector.example/audit` | POSTs batches as `{ "events": [...] }`. `HARNESS_AUDIT_WEBHOOK_TOKEN` adds `Authorization: Bearer <token>`. Batch size and flush interval are controlled by `HARNESS_AUDIT_WEBHOOK_BATCH_SIZE` and `HARNESS_AUDIT_WEBHOOK_FLUSH_MS`. |
+| OpenTelemetry | Set `OTEL_EXPORTER_OTLP_ENDPOINT` and install the optional OpenTelemetry peer packages | Adds audit data to an active span when a host tracer is present, or creates standalone `audit.<operation>.<resource_type>` spans. |
+
+Audit delivery is best-effort and isolated from tool execution: sink failures are logged, but they do not fail the original MCP tool call. In HTTP mode, all sessions share one audit manager; in stdio mode, the audit manager is created for the single process and flushed during shutdown.
 
 ## Tools Reference
 
