@@ -199,6 +199,7 @@ export const dbopsToolset: ToolsetDefinition = {
             dbschema_id: "dbschema",
             dbinstance_id: "dbinstance",
           },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             object_type: "objectType",
             page: "page",
@@ -220,6 +221,7 @@ export const dbopsToolset: ToolsetDefinition = {
             dbschema_id: "dbschema",
             dbinstance_id: "dbinstance",
           },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           bodyBuilder: (input) => {
             const names = input.object_names;
             if (!Array.isArray(names) || names.length === 0) {
