@@ -84,7 +84,7 @@ pnpm inspect            # Test with MCP Inspector
 
 ### Anthropic MCP Directory bundle
 
-The MCPB bundle manifest lives in [`mcp-directory/`](mcp-directory/), and the bundle icon is tracked at [`icon.png`](icon.png) in the repository root. Copy `mcp-directory/manifest.json` to the bundle root after `pnpm build` so the generated archive contains root-level `manifest.json`, `icon.png`, `build/`, `package.json`, and production `node_modules/`.
+The MCPB bundle manifest lives in `[mcp-directory/](mcp-directory/)`, and the bundle icon is tracked at `[icon.png](icon.png)` in the repository root. Copy `mcp-directory/manifest.json` to the bundle root after `pnpm build` so the generated archive contains root-level `manifest.json`, `icon.png`, `build/`, `package.json`, and production `node_modules/`.
 
 To keep the archive small, build MCPB packages from a staging directory:
 
@@ -243,8 +243,6 @@ npx (zero install)
 }
 ```
 
-
-
 node (local install)
 
 ```bash
@@ -264,8 +262,6 @@ npm install -g harness-mcp-v2
 }
 ```
 
-
-
 #### Claude Code (via `claude mcp add`)
 
 npx (zero install)
@@ -274,16 +270,12 @@ npx (zero install)
 claude mcp add harness -- npx harness-mcp-v2
 ```
 
-
-
 node (local install)
 
 ```bash
 npm install -g harness-mcp-v2
 claude mcp add harness -- harness-mcp-v2
 ```
-
-
 
 Then set `HARNESS_API_KEY` in your environment or `.env` file.
 
@@ -305,8 +297,6 @@ npx (zero install)
 }
 ```
 
-
-
 node (local install)
 
 ```bash
@@ -325,8 +315,6 @@ npm install -g harness-mcp-v2
   }
 }
 ```
-
-
 
 #### Windsurf (`~/.windsurf/mcp.json`)
 
@@ -346,8 +334,6 @@ npx (zero install)
 }
 ```
 
-
-
 node (local install)
 
 ```bash
@@ -367,8 +353,6 @@ npm install -g harness-mcp-v2
 }
 ```
 
-
-
 Using a local build from source?
 
 Replace the command with the path to your built `index.js`:
@@ -379,8 +363,6 @@ Replace the command with the path to your built `index.js`:
   "args": ["/absolute/path/to/harness-mcp-v2/build/index.js", "stdio"]
 }
 ```
-
-
 
 ### MCP Gateway
 
@@ -507,26 +489,28 @@ The deployment runs 2 replicas with readiness/liveness probes, resource limits, 
 
 The server automatically loads environment variables from a `.env` file in the project root if one exists. Copy `.env.example` to `.env` and fill in your values. Environment variables can also be set via your shell or MCP client config.
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `HARNESS_API_KEY` | Yes | -- | Harness personal access token or service account token |
-| `HARNESS_ACCOUNT_ID` | No | *(from PAT)* | Harness account identifier. Auto-extracted from PAT tokens; only needed for non-PAT API keys |
-| `HARNESS_BASE_URL` | No | `https://app.harness.io` | Base URL (override for self-managed Harness) |
-| `HARNESS_ORG` | No | `default` | Organization ID. Used when `org_id` is not specified per tool call. Agents can also discover orgs dynamically via `harness_list(resource_type="organization")` |
-| `HARNESS_PROJECT` | No | -- | Project ID. Used when `project_id` is not specified per tool call. Agents can also discover projects dynamically via `harness_list(resource_type="project")` |
-| `HARNESS_API_TIMEOUT_MS` | No | `30000` | HTTP request timeout in milliseconds |
-| `HARNESS_MAX_RETRIES` | No | `3` | Retry count for transient failures (429, 5xx) |
-| `HARNESS_MAX_BODY_SIZE_MB` | No | `10` | Max HTTP request body size in MB for `http` transport |
-| `HARNESS_RATE_LIMIT_RPS` | No | `10` | Client-side request throttle (requests per second) to Harness APIs |
-| `LOG_LEVEL` | No | `info` | Log verbosity: `debug`, `info`, `warn`, `error` |
-| `HARNESS_TOOLSETS` | No | *(defaults)* | Comma-separated toolset list. Empty loads default toolsets and excludes opt-in toolsets such as `ai-evals`. Supports `+name` to add opt-in toolsets and `-name` to remove defaults (see [Toolset Filtering](#toolset-filtering)) |
-| `HARNESS_READ_ONLY` | No | `false` | Block all mutating operations (create, update, delete, execute). Only list and get are allowed. Useful for shared/demo environments |
-| `HARNESS_AUTO_APPROVE_RISK` | No | `none` | Risk-based auto-approve threshold for autonomous workflows. Operations at or below this risk proceed without confirmation. Values: `none`, `low_write`, `medium_write`, `high_write`, `all`. See [Elicitation](#elicitation) |
-| `HARNESS_SKIP_ELICITATION` | No | `false` | **Deprecated** — use `HARNESS_AUTO_APPROVE_RISK=all` instead. Kept for backward compatibility |
-| `HARNESS_ALLOW_HTTP` | No | `false` | Allow non-HTTPS `HARNESS_BASE_URL`. By default, the server enforces HTTPS for security. Set to `true` only for local development against a non-TLS Harness instance |
-| `HARNESS_PIPELINE_VERSION` | No | `0` | **(Alpha)** Pipeline YAML version. `0` loads the `pipeline` resource type and excludes `pipeline_v1`; `1` loads `pipeline_v1` and excludes `pipeline`. HTTP sessions can override this at initialize time with `x-harness-pipeline-version: 0` or `1` |
-| `HARNESS_MCP_ALLOWED_HOSTS` | No | -- | Comma-separated hostnames allowed by HTTP transport Host-header validation. `mcp.harness.io` is allowed by default for localhost binds; add proxy/custom domains here |
-| `HARNESS_MCP_LOG_FILE` | No | `~/.claude/harness-mcp.log` | File used for stdio disconnect/crash diagnostics when stderr may no longer be available |
+
+| Variable                    | Required | Default                     | Description                                                                                                                                                                                                                                           |
+| --------------------------- | -------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HARNESS_API_KEY`           | Yes      | --                          | Harness personal access token or service account token                                                                                                                                                                                                |
+| `HARNESS_ACCOUNT_ID`        | No       | *(from PAT)*                | Harness account identifier. Auto-extracted from PAT tokens; only needed for non-PAT API keys                                                                                                                                                          |
+| `HARNESS_BASE_URL`          | No       | `https://app.harness.io`    | Base URL (override for self-managed Harness)                                                                                                                                                                                                          |
+| `HARNESS_ORG`               | No       | `default`                   | Organization ID. Used when `org_id` is not specified per tool call. Agents can also discover orgs dynamically via `harness_list(resource_type="organization")`                                                                                        |
+| `HARNESS_PROJECT`           | No       | --                          | Project ID. Used when `project_id` is not specified per tool call. Agents can also discover projects dynamically via `harness_list(resource_type="project")`                                                                                          |
+| `HARNESS_API_TIMEOUT_MS`    | No       | `30000`                     | HTTP request timeout in milliseconds                                                                                                                                                                                                                  |
+| `HARNESS_MAX_RETRIES`       | No       | `3`                         | Retry count for transient failures (429, 5xx)                                                                                                                                                                                                         |
+| `HARNESS_MAX_BODY_SIZE_MB`  | No       | `10`                        | Max HTTP request body size in MB for `http` transport                                                                                                                                                                                                 |
+| `HARNESS_RATE_LIMIT_RPS`    | No       | `10`                        | Client-side request throttle (requests per second) to Harness APIs                                                                                                                                                                                    |
+| `LOG_LEVEL`                 | No       | `info`                      | Log verbosity: `debug`, `info`, `warn`, `error`                                                                                                                                                                                                       |
+| `HARNESS_TOOLSETS`          | No       | *(defaults)*                | Comma-separated toolset list. Empty loads default toolsets and excludes opt-in toolsets such as `ai-evals`. Supports `+name` to add opt-in toolsets and `-name` to remove defaults (see [Toolset Filtering](#toolset-filtering))                      |
+| `HARNESS_READ_ONLY`         | No       | `false`                     | Block all mutating operations (create, update, delete, execute). Only list and get are allowed. Useful for shared/demo environments                                                                                                                   |
+| `HARNESS_AUTO_APPROVE_RISK` | No       | `none`                      | Risk-based auto-approve threshold for autonomous workflows. Operations at or below this risk proceed without confirmation. Values: `none`, `low_write`, `medium_write`, `high_write`, `all`. See [Elicitation](#elicitation)                          |
+| `HARNESS_SKIP_ELICITATION`  | No       | `false`                     | **Deprecated** — use `HARNESS_AUTO_APPROVE_RISK=all` instead. Kept for backward compatibility                                                                                                                                                         |
+| `HARNESS_ALLOW_HTTP`        | No       | `false`                     | Allow non-HTTPS `HARNESS_BASE_URL`. By default, the server enforces HTTPS for security. Set to `true` only for local development against a non-TLS Harness instance                                                                                   |
+| `HARNESS_PIPELINE_VERSION`  | No       | `0`                         | **(Alpha)** Pipeline YAML version. `0` loads the `pipeline` resource type and excludes `pipeline_v1`; `1` loads `pipeline_v1` and excludes `pipeline`. HTTP sessions can override this at initialize time with `x-harness-pipeline-version: 0` or `1` |
+| `HARNESS_MCP_ALLOWED_HOSTS` | No       | --                          | Comma-separated hostnames allowed by HTTP transport Host-header validation. `mcp.harness.io` is allowed by default for localhost binds; add proxy/custom domains here                                                                                 |
+| `HARNESS_MCP_LOG_FILE`      | No       | `~/.claude/harness-mcp.log` | File used for stdio disconnect/crash diagnostics when stderr may no longer be available                                                                                                                                                               |
+
 
 ### HTTPS Enforcement
 
@@ -697,6 +681,31 @@ The server exposes 11 MCP tools. Most API tools accept `org_id` and `project_id`
 
 ```json
 { "resource_type": "database_llm_authoring_pipeline", "resource_id": "my_schema", "dbinstance_id": "prod_db" }
+```
+
+**List snapshot object names (e.g. tables) for a schema instance:**
+
+```json
+{
+  "resource_type": "database_snapshot_object",
+  "dbschema_id": "my_schema",
+  "dbinstance_id": "prod_db",
+  "object_type": "Table"
+}
+```
+
+**Get full snapshot metadata for specific named objects:**
+
+```json
+{
+  "resource_type": "database_snapshot_object",
+  "resource_id": "prod_db",
+  "params": {
+    "dbschema_id": "my_schema",
+    "object_type": "Table",
+    "object_names": ["users", "orders"]
+  }
+}
 ```
 
 ### Pipeline Run Workflow (Recommended)
@@ -1091,10 +1100,11 @@ Only one pipeline YAML resource type is loaded at startup. By default `HARNESS_P
 ### Database DevOps
 
 
-| Resource Type              | List | Get | Create | Update | Delete | Execute Actions |
-| -------------------------- | ---- | --- | ------ | ------ | ------ | --------------- |
-| `database_schema`          | x    | x   |        |        |        |                 |
-| `database_instance`        | x    | x   |        |        |        |                 |
+| Resource Type                     | List | Get | Create | Update | Delete | Execute Actions |
+| --------------------------------- | ---- | --- | ------ | ------ | ------ | --------------- |
+| `database_schema`                 | x    | x   |        |        |        |                 |
+| `database_instance`               | x    | x   |        |        |        |                 |
+| `database_snapshot_object`        | x    | x   |        |        |        |                 |
 | `database_llm_authoring_pipeline` |      | x   |        |        |        |                 |
 
 
@@ -1426,40 +1436,42 @@ HARNESS_TOOLSETS=pipelines,services,connectors
 
 Available toolset names:
 
-| Toolset | Resource Types |
-|---------|---------------|
-| `platform` | organization, project |
-| `pipelines` | pipeline, pipeline_v1, execution, trigger, pipeline_summary, input_set, approval_instance |
-| `agents` | agent, agent_run |
-| `services` | service |
-| `environments` | environment |
-| `connectors` | connector, connector_catalogue |
-| `infrastructure` | infrastructure |
-| `secrets` | secret |
-| `logs` | execution_log |
-| `audit` | audit_event |
-| `delegates` | delegate, delegate_token |
-| `repositories` | repository, branch, commit, file_content, tag, repo_rule, space_rule |
-| `registries` | registry, artifact, artifact_version, artifact_file |
-| `templates` | template |
-| `dashboards` | dashboard, dashboard_data |
-| `idp` | idp_entity, scorecard, scorecard_check, scorecard_stats, scorecard_check_stats, idp_score, idp_workflow, idp_tech_doc |
-| `pull-requests` | pull_request, pr_reviewer, pr_comment, pr_check, pr_activity |
-| `feature-flags` | fme_workspace, fme_environment, fme_feature_flag, fme_feature_flag_definition, fme_rollout_status, fme_rule_based_segment, fme_rule_based_segment_definition, feature_flag |
-| `gitops` | gitops_agent, gitops_application, gitops_cluster, gitops_repository, gitops_applicationset, gitops_repo_credential, gitops_app_event, gitops_pod_log, gitops_managed_resource, gitops_resource_action, gitops_dashboard, gitops_app_resource_tree |
-| `chaos` | chaos_experiment, chaos_probe, chaos_experiment_template, chaos_infrastructure, chaos_experiment_variable, chaos_experiment_run, chaos_loadtest, chaos_k8s_infrastructure, chaos_hub, chaos_fault, chaos_network_map, chaos_guard_condition, chaos_guard_rule, chaos_recommendation, chaos_risk |
-| `ccm` | cost_perspective, cost_breakdown, cost_timeseries, cost_summary, cost_recommendation, cost_anomaly, cost_anomaly_summary, cost_category, cost_account_overview, cost_filter_value, cost_recommendation_stats, cost_recommendation_detail, cost_commitment |
-| `sei` | sei_metric, sei_productivity_metric, sei_dora_metric, sei_team, sei_team_detail, sei_org_tree, sei_org_tree_detail, sei_business_alignment, sei_ai_usage, sei_ai_adoption, sei_ai_impact, sei_ai_raw_metric |
-| `scs` | scs_artifact_source, artifact_security, scs_artifact_component, scs_artifact_remediation, scs_chain_of_custody, scs_compliance_result, code_repo_security, scs_sbom |
-| `sto` | security_issue, security_issue_filter, security_exemption |
-| `dbops` | database_schema, database_instance, database_llm_authoring_pipeline |
-| `access_control` | user, user_group, service_account, role, role_assignment, resource_group, permission |
-| `governance` | policy, policy_set, policy_evaluation |
-| `freeze` | freeze_window, global_freeze |
-| `overrides` | service_override |
-| `settings` | setting |
-| `visualizations` | visual_timeline, visual_stage_flow, visual_health_dashboard, visual_pie_chart, visual_bar_chart, visual_timeseries, visual_architecture |
+
+| Toolset                 | Resource Types                                                                                                                                                                                                                                                                                  |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `platform`              | organization, project                                                                                                                                                                                                                                                                           |
+| `pipelines`             | pipeline, pipeline_v1, execution, trigger, pipeline_summary, input_set, approval_instance                                                                                                                                                                                                       |
+| `agents`                | agent, agent_run                                                                                                                                                                                                                                                                                |
+| `services`              | service                                                                                                                                                                                                                                                                                         |
+| `environments`          | environment                                                                                                                                                                                                                                                                                     |
+| `connectors`            | connector, connector_catalogue                                                                                                                                                                                                                                                                  |
+| `infrastructure`        | infrastructure                                                                                                                                                                                                                                                                                  |
+| `secrets`               | secret                                                                                                                                                                                                                                                                                          |
+| `logs`                  | execution_log                                                                                                                                                                                                                                                                                   |
+| `audit`                 | audit_event                                                                                                                                                                                                                                                                                     |
+| `delegates`             | delegate, delegate_token                                                                                                                                                                                                                                                                        |
+| `repositories`          | repository, branch, commit, file_content, tag, repo_rule, space_rule                                                                                                                                                                                                                            |
+| `registries`            | registry, artifact, artifact_version, artifact_file                                                                                                                                                                                                                                             |
+| `templates`             | template                                                                                                                                                                                                                                                                                        |
+| `dashboards`            | dashboard, dashboard_data                                                                                                                                                                                                                                                                       |
+| `idp`                   | idp_entity, scorecard, scorecard_check, scorecard_stats, scorecard_check_stats, idp_score, idp_workflow, idp_tech_doc                                                                                                                                                                           |
+| `pull-requests`         | pull_request, pr_reviewer, pr_comment, pr_check, pr_activity                                                                                                                                                                                                                                    |
+| `feature-flags`         | fme_workspace, fme_environment, fme_feature_flag, fme_feature_flag_definition, fme_rollout_status, fme_rule_based_segment, fme_rule_based_segment_definition, feature_flag                                                                                                                      |
+| `gitops`                | gitops_agent, gitops_application, gitops_cluster, gitops_repository, gitops_applicationset, gitops_repo_credential, gitops_app_event, gitops_pod_log, gitops_managed_resource, gitops_resource_action, gitops_dashboard, gitops_app_resource_tree                                               |
+| `chaos`                 | chaos_experiment, chaos_probe, chaos_experiment_template, chaos_infrastructure, chaos_experiment_variable, chaos_experiment_run, chaos_loadtest, chaos_k8s_infrastructure, chaos_hub, chaos_fault, chaos_network_map, chaos_guard_condition, chaos_guard_rule, chaos_recommendation, chaos_risk |
+| `ccm`                   | cost_perspective, cost_breakdown, cost_timeseries, cost_summary, cost_recommendation, cost_anomaly, cost_anomaly_summary, cost_category, cost_account_overview, cost_filter_value, cost_recommendation_stats, cost_recommendation_detail, cost_commitment                                       |
+| `sei`                   | sei_metric, sei_productivity_metric, sei_dora_metric, sei_team, sei_team_detail, sei_org_tree, sei_org_tree_detail, sei_business_alignment, sei_ai_usage, sei_ai_adoption, sei_ai_impact, sei_ai_raw_metric                                                                                     |
+| `scs`                   | scs_artifact_source, artifact_security, scs_artifact_component, scs_artifact_remediation, scs_chain_of_custody, scs_compliance_result, code_repo_security, scs_sbom                                                                                                                             |
+| `sto`                   | security_issue, security_issue_filter, security_exemption                                                                                                                                                                                                                                       |
+| `dbops`                 | database_schema, database_instance, database_snapshot_object, database_llm_authoring_pipeline                                                                                                                                                                                                   |
+| `access_control`        | user, user_group, service_account, role, role_assignment, resource_group, permission                                                                                                                                                                                                            |
+| `governance`            | policy, policy_set, policy_evaluation                                                                                                                                                                                                                                                           |
+| `freeze`                | freeze_window, global_freeze                                                                                                                                                                                                                                                                    |
+| `overrides`             | service_override                                                                                                                                                                                                                                                                                |
+| `settings`              | setting                                                                                                                                                                                                                                                                                         |
+| `visualizations`        | visual_timeline, visual_stage_flow, visual_health_dashboard, visual_pie_chart, visual_bar_chart, visual_timeseries, visual_architecture                                                                                                                                                         |
 | `ai-evals` **(opt-in)** | eval_dataset, eval_dataset_item, evaluation, eval_run, eval_run_item, eval_run_by_eval, eval_metric, eval_metric_set, eval_metric_set_entry, eval_suite, eval_suite_evaluation, eval_suite_run, eval_target, eval_model, eval_annotation, eval_analytics, eval_git_settings, eval_registry_item |
+
 
 ## Architecture
 
@@ -1669,12 +1681,14 @@ Write tools (`harness_create`, `harness_update`, `harness_delete`, `harness_exec
 
 Elicitation behavior varies by operation risk when client support is missing:
 
-| Risk Level | Client supports elicitation | Behavior |
-|---|---|---|
-| `read`, `low_write` | any | Proceed silently (no confirmation needed) |
-| `medium_write`, `high_write`, `destructive` | Yes | Prompt user — proceed on accept, block on decline |
-| `medium_write`, `high_write`, `destructive` | No | **BLOCK** (return error) |
-| any (at or below `HARNESS_AUTO_APPROVE_RISK`) | any | Auto-approve without prompting |
+
+| Risk Level                                    | Client supports elicitation | Behavior                                          |
+| --------------------------------------------- | --------------------------- | ------------------------------------------------- |
+| `read`, `low_write`                           | any                         | Proceed silently (no confirmation needed)         |
+| `medium_write`, `high_write`, `destructive`   | Yes                         | Prompt user — proceed on accept, block on decline |
+| `medium_write`, `high_write`, `destructive`   | No                          | **BLOCK** (return error)                          |
+| any (at or below `HARNESS_AUTO_APPROVE_RISK`) | any                         | Auto-approve without prompting                    |
+
 
 If elicitation fails at runtime, operations at `medium_write` or above are blocked.
 
