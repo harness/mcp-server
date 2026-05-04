@@ -15,11 +15,16 @@ function makeClient(
   } as unknown as HarnessClient;
 }
 
+interface BuildZipOptions {
+  declaredUncompressedSize?: number;
+}
+
 /** Build a minimal ZIP file with a single entry. */
-function buildZip(fileName: string, content: string): Buffer {
+function buildZip(fileName: string, content: string, options?: BuildZipOptions): Buffer {
   const fileNameBuf = Buffer.from(fileName, "utf-8");
   const uncompressed = Buffer.from(content, "utf-8");
   const compressed = deflateRawSync(uncompressed);
+  const uncompressedSize = options?.declaredUncompressedSize ?? uncompressed.length;
 
   // Local file header (30 + nameLen + compressed)
   const localHeader = Buffer.alloc(30);
@@ -29,7 +34,7 @@ function buildZip(fileName: string, content: string): Buffer {
   localHeader.writeUInt16LE(8, 8);           // method: DEFLATE
   localHeader.writeUInt32LE(0, 14);          // crc32 (simplified)
   localHeader.writeUInt32LE(compressed.length, 18);   // compressed size
-  localHeader.writeUInt32LE(uncompressed.length, 22); // uncompressed size
+  localHeader.writeUInt32LE(uncompressedSize, 22);    // uncompressed size
   localHeader.writeUInt16LE(fileNameBuf.length, 26);  // file name length
   localHeader.writeUInt16LE(0, 28);                   // extra length
 
@@ -170,5 +175,33 @@ describe("resolveLogContent", () => {
     await expect(
       resolveLogContent(client, "prefix", { maxLogSizeBytes: 1024 }),
     ).rejects.toThrow(/too large/);
+  });
+
+  it("throws when gzip log output expands beyond max size", async () => {
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link: "https://logs.example.com/gzip-bomb" }));
+    const gzipped = gzipSync(Buffer.from("x".repeat(2048)));
+    fetchSpy.mockResolvedValue(new Response(gzipped, { status: 200 }));
+
+    await expect(
+      resolveLogContent(client, "prefix", { maxLogSizeBytes: 1024 }),
+    ).rejects.toThrow(/too large/i);
+  });
+
+  it("throws when ZIP log output expands beyond max size", async () => {
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link: "https://logs.example.com/zip-bomb" }));
+    fetchSpy.mockResolvedValue(new Response(buildZip("logs.txt", "x".repeat(2048)), { status: 200 }));
+
+    await expect(
+      resolveLogContent(client, "prefix", { maxLogSizeBytes: 1024 }),
+    ).rejects.toThrow(/too large/i);
+  });
+
+  it("throws when ZIP entry declares output beyond max size", async () => {
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link: "https://logs.example.com/zip-declared-too-large" }));
+    fetchSpy.mockResolvedValue(new Response(buildZip("logs.txt", "small", { declaredUncompressedSize: 2048 }), { status: 200 }));
+
+    await expect(
+      resolveLogContent(client, "prefix", { maxLogSizeBytes: 1024 }),
+    ).rejects.toThrow(/too large/i);
   });
 });

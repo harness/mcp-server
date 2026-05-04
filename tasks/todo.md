@@ -244,3 +244,22 @@
 - Confirmed npm `latest` still serves `0.9.5`, so users running `npx harness-mcp-v2@latest` can still receive the known-bad build even though PR #102 is merged.
 - Bumped `package.json`, root `manifest.json`, and `mcp-directory/manifest.json` to `0.9.6` and added `tests/release-metadata.test.ts` to keep patch release metadata synchronized.
 - Verified with focused release/env/HTTP tests, `pnpm typecheck`, `pnpm build`, and a stdio startup smoke test showing `stdout bytes=0`.
+
+## Slack Bug Triage: PR 471 Security Findings (2026-05-04)
+- [x] Read the triggered Slack thread and confirm available context
+- [x] Fetch and inspect the referenced PR branch without leaving the assigned branch
+- [x] Add failing regression tests for compressed log decompression limits
+- [x] Implement minimal decompression hardening
+- [x] Run focused verification and typecheck
+- [ ] Commit, push, open PR, and report back
+
+### Plan
+- Keep the fix scoped to compressed log extraction, where the existing `maxLogSizeBytes` option already defines the intended safety boundary.
+- Enforce limits on decompressed output, not just raw downloaded bytes, so gzip/ZIP bombs cannot bypass `maxLogSizeBytes`.
+- Add focused tests that fail on the current branch before changing production code.
+
+### Review
+- Found no Slack screenshots or follow-up bug details; the only actionable context was PR #471's decompression-hardening diff.
+- Root cause: `resolveLogContent()` checked compressed download size before decompression, but gzip/ZIP data could expand beyond `maxLogSizeBytes` in memory.
+- Added regression coverage for gzip expansion, ZIP expansion, and ZIP entries that declare an oversized output.
+- Verified with `pnpm test tests/utils/log-resolver.test.ts` and `pnpm typecheck`.

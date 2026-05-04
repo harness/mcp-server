@@ -128,6 +128,19 @@ interface ZipEntry {
   data: Buffer;
 }
 
+function formatBytes(bytes: number): string {
+  const mb = bytes / 1024 / 1024;
+  return `${mb >= 1 ? Math.round(mb) : mb.toFixed(2)}MB`;
+}
+
+function tooLargeError(actualBytes: number, maxBytes: number): Error {
+  return new Error(`Log file too large (${formatBytes(actualBytes)}). Maximum: ${formatBytes(maxBytes)}.`);
+}
+
+function isSizeLimitError(err: unknown): boolean {
+  return err instanceof Error && /too large|maxOutputLength|Cannot create a Buffer larger/i.test(err.message);
+}
+
 const EOCD_SIG = 0x06054b50; // PK\x05\x06 — End of Central Directory record signature
 const CD_SIG = 0x02014b50;   // PK\x01\x02 — Central Directory file header signature
 
@@ -142,7 +155,21 @@ const CD_SIG = 0x02014b50;   // PK\x01\x02 — Central Directory file header sig
  *
  * Only supports DEFLATE (method 8) and STORED (method 0) entries.
  */
-function extractZipEntries(buf: Buffer): ZipEntry[] {
+function inflateZipEntry(compressedData: Buffer, maxOutputBytes: number, fileName: string): Buffer {
+  try {
+    return inflateRawSync(compressedData, { maxOutputLength: maxOutputBytes });
+  } catch (err) {
+    if (isSizeLimitError(err)) {
+      throw new Error(
+        `Log file too large while decompressing ZIP entry "${fileName}". Maximum: ${formatBytes(maxOutputBytes)}.`,
+        { cause: err },
+      );
+    }
+    throw err;
+  }
+}
+
+function extractZipEntries(buf: Buffer, maxOutputBytes: number): ZipEntry[] {
   // Step 1: Find the End of Central Directory (EOCD) record by scanning backwards.
   // The EOCD is always the last record in a ZIP. Its minimum size is 22 bytes:
   //   4 (signature) + 2 (disk#) + 2 (disk w/ CD) + 2 (CD entries this disk)
@@ -158,7 +185,7 @@ function extractZipEntries(buf: Buffer): ZipEntry[] {
 
   if (eocdOffset === -1) {
     log.warn("ZIP EOCD not found, falling back to local-header-only parsing");
-    return extractZipEntriesFromLocalHeaders(buf);
+    return extractZipEntriesFromLocalHeaders(buf, maxOutputBytes);
   }
 
   // Step 2: Read Central Directory location from the EOCD record.
@@ -169,12 +196,13 @@ function extractZipEntries(buf: Buffer): ZipEntry[] {
 
   if (cdOffset + cdSize > buf.length) {
     log.warn("ZIP Central Directory extends beyond buffer", { cdOffset, cdSize, bufferLength: buf.length });
-    return extractZipEntriesFromLocalHeaders(buf);
+    return extractZipEntriesFromLocalHeaders(buf, maxOutputBytes);
   }
 
   // Step 3: Parse Central Directory entries to get accurate sizes and local header offsets
   const entries: ZipEntry[] = [];
   let pos = cdOffset;
+  let decompressedBytes = 0;
 
   // Each CD entry has a 46-byte fixed header followed by variable-length fields.
   // Key offsets within the CD entry:
@@ -218,6 +246,10 @@ function extractZipEntries(buf: Buffer): ZipEntry[] {
       continue;
     }
 
+    if (uncompressedSize > maxOutputBytes - decompressedBytes) {
+      throw tooLargeError(decompressedBytes + uncompressedSize, maxOutputBytes);
+    }
+
     const compressedData = buf.subarray(dataStart, dataStart + compressedSize);
 
     let fileData: Buffer;
@@ -227,9 +259,12 @@ function extractZipEntries(buf: Buffer): ZipEntry[] {
     } else if (method === 8) {
       // DEFLATE — decompress using raw inflate (no zlib header)
       try {
-        fileData = inflateRawSync(compressedData, { maxOutputLength: uncompressedSize || undefined });
+        fileData = inflateZipEntry(compressedData, maxOutputBytes - decompressedBytes, fileName);
       } catch (err) {
         log.warn("Failed to decompress ZIP entry", { fileName, method, compressedSize, uncompressedSize, error: String(err) });
+        if (isSizeLimitError(err)) {
+          throw err;
+        }
         continue;
       }
     } else {
@@ -237,6 +272,10 @@ function extractZipEntries(buf: Buffer): ZipEntry[] {
       continue;
     }
 
+    decompressedBytes += fileData.length;
+    if (decompressedBytes > maxOutputBytes) {
+      throw tooLargeError(decompressedBytes, maxOutputBytes);
+    }
     entries.push({ fileName, data: fileData });
   }
 
@@ -246,9 +285,10 @@ function extractZipEntries(buf: Buffer): ZipEntry[] {
 /**
  * Fallback: parse ZIP using local file headers only (no data-descriptor support).
  */
-function extractZipEntriesFromLocalHeaders(buf: Buffer): ZipEntry[] {
+function extractZipEntriesFromLocalHeaders(buf: Buffer, maxOutputBytes: number): ZipEntry[] {
   const entries: ZipEntry[] = [];
   let offset = 0;
+  let decompressedBytes = 0;
 
   while (offset + 30 <= buf.length) {
     const sig = buf.readUInt32LE(offset);
@@ -265,14 +305,21 @@ function extractZipEntriesFromLocalHeaders(buf: Buffer): ZipEntry[] {
     if (dataStart + compressedSize > buf.length) break;
     const compressedData = buf.subarray(dataStart, dataStart + compressedSize);
 
+    if (uncompressedSize > maxOutputBytes - decompressedBytes) {
+      throw tooLargeError(decompressedBytes + uncompressedSize, maxOutputBytes);
+    }
+
     let fileData: Buffer;
     if (method === 0) {
       fileData = compressedData;
     } else if (method === 8) {
       try {
-        fileData = inflateRawSync(compressedData, { maxOutputLength: uncompressedSize || undefined });
+        fileData = inflateZipEntry(compressedData, maxOutputBytes - decompressedBytes, fileName);
       } catch (err) {
         log.warn("Failed to decompress ZIP entry (fallback)", { fileName, error: String(err) });
+        if (isSizeLimitError(err)) {
+          throw err;
+        }
         offset = dataStart + compressedSize;
         continue;
       }
@@ -281,6 +328,10 @@ function extractZipEntriesFromLocalHeaders(buf: Buffer): ZipEntry[] {
       continue;
     }
 
+    decompressedBytes += fileData.length;
+    if (decompressedBytes > maxOutputBytes) {
+      throw tooLargeError(decompressedBytes, maxOutputBytes);
+    }
     entries.push({ fileName, data: fileData });
     offset = dataStart + compressedSize;
   }
@@ -291,21 +342,36 @@ function extractZipEntriesFromLocalHeaders(buf: Buffer): ZipEntry[] {
 /**
  * Decompress a downloaded blob — handles gzip, zip, or plain text.
  */
-function decompressBlob(buf: Buffer): string {
+function decompressBlob(buf: Buffer, maxOutputBytes: number): string {
   if (buf.length === 0) return "";
 
   // Gzip
   if (buf[0] === GZIP_MAGIC_0 && buf[1] === GZIP_MAGIC_1) {
-    const decompressed = gunzipSync(buf);
+    let decompressed: Buffer;
+    try {
+      decompressed = gunzipSync(buf, { maxOutputLength: maxOutputBytes });
+    } catch (err) {
+      if (isSizeLimitError(err)) {
+        throw new Error(`Log file too large while decompressing gzip. Maximum: ${formatBytes(maxOutputBytes)}.`, { cause: err });
+      }
+      throw err;
+    }
+    if (decompressed.length > maxOutputBytes) {
+      throw tooLargeError(decompressed.length, maxOutputBytes);
+    }
     return decompressed.toString("utf-8");
   }
 
   // ZIP
   if (buf.length >= 4 && buf.readUInt32LE(0) === ZIP_MAGIC) {
-    const entries = extractZipEntries(buf);
+    const entries = extractZipEntries(buf, maxOutputBytes);
     // Sort by filename (typically contains timestamps)
     entries.sort((a, b) => a.fileName.localeCompare(b.fileName));
-    return entries.map((e) => e.data.toString("utf-8")).join("\n");
+    const rawText = entries.map((e) => e.data.toString("utf-8")).join("\n");
+    if (Buffer.byteLength(rawText, "utf-8") > maxOutputBytes) {
+      throw tooLargeError(Buffer.byteLength(rawText, "utf-8"), maxOutputBytes);
+    }
+    return rawText;
   }
 
   // Plain text
@@ -384,12 +450,12 @@ export async function resolveLogContent(
 
   const contentLength = Number(response.headers.get("content-length") ?? 0);
   if (contentLength > maxBytes) {
-    throw new Error(`Log file too large (${Math.round(contentLength / 1024 / 1024)}MB). Maximum: ${Math.round(maxBytes / 1024 / 1024)}MB.`);
+    throw tooLargeError(contentLength, maxBytes);
   }
 
   const arrayBuf = await response.arrayBuffer();
   if (arrayBuf.byteLength > maxBytes) {
-    throw new Error(`Log file too large (${Math.round(arrayBuf.byteLength / 1024 / 1024)}MB). Maximum: ${Math.round(maxBytes / 1024 / 1024)}MB.`);
+    throw tooLargeError(arrayBuf.byteLength, maxBytes);
   }
   const buf = Buffer.from(arrayBuf);
 
@@ -400,7 +466,7 @@ export async function resolveLogContent(
   });
 
   // Step 4 & 5: Extract and parse
-  const rawText = decompressBlob(buf);
+  const rawText = decompressBlob(buf, maxBytes);
   const parsed = parseLogLines(rawText);
 
   if (!parsed.trim()) {
