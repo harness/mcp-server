@@ -25,9 +25,10 @@ Steps:
 1. **Get SBOM**: Call harness_list with resource_type="scs_sbom"${projectFilter}${artifactFilter} to retrieve the SBOM for the artifact(s)
 2. **Check compliance**: Call harness_list with resource_type="scs_compliance_result"${projectFilter} to see policy compliance results
 3. **List components**: Call harness_list with resource_type="scs_artifact_component"${projectFilter}${artifactFilter} to see all dependencies
-4. **Check policies**: Call harness_list with resource_type="scs_opa_policy"${projectFilter} to see OPA policies governing compliance
-5. **Check remediation**: Call harness_list with resource_type="scs_artifact_remediation"${projectFilter}${artifactFilter} to see available fixes
-6. **Analyze and report**:
+4. **Check OPA policies**: Call harness_list with resource_type="policy"${projectFilter} to see Rego policies governing compliance
+5. **Check policy sets**: Call harness_list with resource_type="policy_set"${projectFilter} to see enforcement groups and actions
+6. **Check remediation**: Call harness_list with resource_type="scs_artifact_remediation"${projectFilter}${artifactFilter} to see available fixes
+7. **Analyze and report**:
    - **Component count**: Total dependencies, direct vs transitive
    - **License breakdown**: Group by license type, flag copyleft or unknown licenses
    - **Policy violations**: List all failed compliance checks with details

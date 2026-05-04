@@ -244,3 +244,16 @@
 - Confirmed npm `latest` still serves `0.9.5`, so users running `npx harness-mcp-v2@latest` can still receive the known-bad build even though PR #102 is merged.
 - Bumped `package.json`, root `manifest.json`, and `mcp-directory/manifest.json` to `0.9.6` and added `tests/release-metadata.test.ts` to keep patch release metadata synchronized.
 - Verified with focused release/env/HTTP tests, `pnpm typecheck`, `pnpm build`, and a stdio startup smoke test showing `stdout bytes=0`.
+
+## Slack Bug Triage: OPA Policy MCP Support (2026-05-04)
+- [x] Read the Slack thread and confirm available context
+- [x] Inspect governance and SCS registry support for OPA policies
+- [x] Add prompt regression coverage for valid policy resource types
+- [x] Fix stale DevSecOps prompt resource references
+- [ ] Run focused tests and typecheck
+- [ ] Commit, push, open PR, and reply in the Slack thread
+
+### Plan
+- Confirm whether OPA policy access/create is supported by existing registry resources before changing code.
+- Cover the prompt bug with focused tests that fail when prompts reference nonexistent `scs_opa_policy`.
+- Update only the affected prompt guidance to point agents at `policy`, `policy_set`, and existing compliance/evaluation resources.

@@ -25,9 +25,10 @@ Steps:
 3. **Chain of custody**: Call harness_list with resource_type="scs_chain_of_custody"${projectFilter} to verify artifact provenance and build attestation
 4. **SBOM coverage**: Call harness_list with resource_type="scs_sbom"${projectFilter} to check which artifacts have SBOMs generated
 5. **Compliance results**: Call harness_list with resource_type="scs_compliance_result"${projectFilter} to check policy compliance
-6. **OPA policies**: Call harness_list with resource_type="scs_opa_policy"${projectFilter} to review active governance policies
-7. **Remediation status**: Call harness_list with resource_type="scs_artifact_remediation"${projectFilter} to see outstanding remediation items
-8. **Generate audit report**:
+6. **OPA policies**: Call harness_list with resource_type="policy"${projectFilter} to review Rego governance policies
+7. **Policy sets**: Call harness_list with resource_type="policy_set"${projectFilter} to review enforcement groupings and actions
+8. **Remediation status**: Call harness_list with resource_type="scs_artifact_remediation"${projectFilter} to see outstanding remediation items
+9. **Generate audit report**:
    - **Supply chain integrity score**: Overall health (0-100)
    - **Provenance gaps**: Artifacts without verified build provenance
    - **Unsigned artifacts**: Missing signatures or attestation
