@@ -251,6 +251,12 @@ export interface EndpointSpec {
    * so required-field validation checks the inner object, not the wrapper.
    */
   bodyWrapperKey?: string;
+  /**
+   * When true, do not copy resolved org/project query-scope fields into POST/PUT
+   * request bodies. Use for path-scoped APIs whose JSON body schema does not
+   * accept NG scope fields.
+   */
+  skipScopeBodyInjection?: boolean;
   /** Declares the risk level and retry behavior for this operation. */
   operationPolicy: OperationPolicy;
   /**

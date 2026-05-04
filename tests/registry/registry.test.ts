@@ -552,6 +552,60 @@ describe("Registry", () => {
     });
   });
 
+  describe("DBOPS path-scoped POST bodies", () => {
+    it("does not inject org/project fields into database instance list body", async () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "dbops" }));
+      const mockRequest = vi.fn().mockResolvedValue({ data: [] });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "database_instance", "list", {
+        org_id: "org1",
+        project_id: "proj1",
+        dbschema_id: "schema1",
+      });
+
+      expect(mockRequest).toHaveBeenCalledOnce();
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("POST");
+      expect(call.path).toBe("/dbops/v1/orgs/org1/projects/proj1/dbschema/schema1/instancelist");
+      expect(call.params).toMatchObject({
+        orgIdentifier: "org1",
+        projectIdentifier: "proj1",
+      });
+      expect(call.body).toEqual({});
+    });
+
+    it("does not inject org/project fields into snapshot object value body", async () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "dbops" }));
+      const mockRequest = vi.fn().mockResolvedValue({ data: [] });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "database_snapshot_object", "get", {
+        org_id: "org1",
+        project_id: "proj1",
+        dbschema_id: "schema1",
+        dbinstance_id: "instance1",
+        object_type: "Table",
+        object_names: ["users"],
+      });
+
+      expect(mockRequest).toHaveBeenCalledOnce();
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("POST");
+      expect(call.path).toBe(
+        "/dbops/v1/orgs/org1/projects/proj1/dbschema/schema1/dbinstance/instance1/snapshot-object-values",
+      );
+      expect(call.params).toMatchObject({
+        orgIdentifier: "org1",
+        projectIdentifier: "proj1",
+      });
+      expect(call.body).toEqual({
+        objectType: "Table",
+        objectNames: ["users"],
+      });
+    });
+  });
+
   describe("resolved account ID propagation", () => {
     it("passes the resolved account ID to pathBuilder and deep links", async () => {
       const mockRequest = vi.fn().mockResolvedValue({

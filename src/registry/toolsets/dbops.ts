@@ -124,6 +124,7 @@ export const dbopsToolset: ToolsetDefinition = {
             size: "limit",
           },
           bodyBuilder: () => ({}),
+          skipScopeBodyInjection: true,
           responseExtractor: passthrough,
           description:
             "List instances for a schema (POST with empty body). Requires dbschema_id in filters. " +
@@ -222,6 +223,7 @@ export const dbopsToolset: ToolsetDefinition = {
             dbinstance_id: "dbinstance",
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
           bodyBuilder: (input) => {
             const names = input.object_names;
             if (!Array.isArray(names) || names.length === 0) {

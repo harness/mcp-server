@@ -244,3 +244,21 @@
 - Confirmed npm `latest` still serves `0.9.5`, so users running `npx harness-mcp-v2@latest` can still receive the known-bad build even though PR #102 is merged.
 - Bumped `package.json`, root `manifest.json`, and `mcp-directory/manifest.json` to `0.9.6` and added `tests/release-metadata.test.ts` to keep patch release metadata synchronized.
 - Verified with focused release/env/HTTP tests, `pnpm typecheck`, `pnpm build`, and a stdio startup smoke test showing `stdout bytes=0`.
+
+## Critical Bug Inspection (2026-05-04)
+- [x] Inspect recent commits for high-severity behavioral regressions
+- [x] Trace DBOPS snapshot/instance POST read request bodies
+- [x] Add endpoint-level opt-out for strict path-scoped POST bodies
+- [x] Add focused registry regression coverage
+- [ ] Run focused tests and typecheck
+- [ ] Commit, push, open PR, and report results
+
+### Plan
+- Keep the fix scoped to DBOPS read endpoints that require strict POST bodies.
+- Preserve existing NG scope-body injection for APIs that rely on it.
+- Verify the exact request body/params emitted by the registry dispatcher.
+
+### Review
+- Found that newly added DBOPS POST read endpoints were inheriting global `orgIdentifier`/`projectIdentifier` body injection even though their API docs describe path-scoped bodies only.
+- Added `skipScopeBodyInjection` on `EndpointSpec` and enabled it for DBOPS instance list and snapshot object value fetch.
+- Added regression tests asserting the request path/query scope remains present while the JSON bodies stay `{}` or `{ objectType, objectNames }`.
