@@ -250,7 +250,8 @@
 - [x] Identify stale README audit logging guidance
 - [x] Document audit event coverage, sink configuration, and operator constraints
 - [x] Run docs consistency checks
-- [x] Commit, push, and open docs-only PR
+- [x] Commit and push docs-only changes
+- [x] Attempt to open docs-only PR
 
 ### Plan
 - Keep the change focused on `README.md` because `.env.example` and specs already describe the audit sink knobs, while the public README configuration table and audit blurb are stale.
@@ -262,3 +263,4 @@
 - Confirmed the coverage claim against `Registry.executeSpecWithAudit()`: registry-mediated `list`, `get`, `create`, `update`, `delete`, and `execute` calls emit success/error events when an `AuditManager` is configured.
 - Verified the committed change set is docs-only with `git show --stat --oneline HEAD`.
 - Attempted `pnpm docs:check`, but this automation image has neither `pnpm` nor `node` on `PATH` (`pnpm: command not found`, `node: command not found`). Source-backed `rg` checks confirmed the new README audit claims match `src/config.ts`, `src/audit/*`, and `src/registry/index.ts`.
+- Pushed `cursor/documentation-automation-system-ab98`; `OpenGitPr` could not create or find a PR despite the branch existing on the remote.
