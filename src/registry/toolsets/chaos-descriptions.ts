@@ -16,7 +16,8 @@ Supports get.`;
 export const descChaosProbe = `Chaos resilience probe — declarative health checker that monitors application health before, during, and after a fault and determines the fault outcome.
 Types: HTTP, CMD, Prometheus, K8s, SLO, Datadog, Dynatrace, Container, APM. Infra: Kubernetes, Linux, Windows.
 Must be disabled before deleting; default (system) probes cannot be deleted or disabled.
-Supports list, get, delete, and execute actions: enable, verify, get_manifest.`;
+Supports list, get, delete, and execute actions: enable, verify, get_manifest.
+Note: server caps page size at 50; values above 50 are silently clipped.`;
 
 export const descChaosExperimentTemplate = `Reusable, versioned chaos experiment template stored in a ChaosHub (Git-backed repository).
 Templates are pre-configured experiment blueprints that standardize chaos practices across teams — they support version control, revision history, typed input variables, and rendered YAML.
@@ -115,7 +116,7 @@ Returns probe type, infrastructure type, enabled/verified status, tags, run prop
 
 export const descSearchProbes = `Search probes by name (case-insensitive).`;
 export const descProbeIds = `Comma-separated probe IDs for bulk lookup (e.g. "id1,id2,id3").`;
-export const descProbeSortField = `Field to sort probe results by. Values: NAME, TIME, ENABLED. Defaults to TIME.`;
+export const descProbeSortField = `Field to sort probe results by. Accepted values: NAME, TIME, ENABLED. Defaults to TIME server-side.`;
 
 export const descListExperimentTemplates = `List chaos experiment templates from chaos hubs.
 Returns a paginated list of templates with identity, name, description, tags, revision, infraType, hub identity, and audit info.
@@ -374,17 +375,20 @@ NOTES:
   `;
 
 export const descListRevisions = `List revision history for a template.
-Returns all revisions with their identifiers, timestamps, and change descriptions. Use to track template evolution or find a specific revision for comparison.`;
+Returns all revisions with their identifiers, timestamps, and change descriptions. Use to track template evolution or find a specific revision for comparison.
+Pass via params (NOT body): template_id (path — template identity, required), hub_identity (query — hub the template belongs to, required).`;
 
 export const descGetVariables = `Get the input variables defined in a template.
 Returns variable definitions including names, types, default values, and descriptions. Use before create_from_template to discover required inputs.
-Optionally specify a revision to get variables from a specific version.`;
+Pass via params (NOT body): template_id (path — template identity, required), hub_identity (query — hub the template belongs to, required), revision (query — specific version, optional; omit for default/latest).`;
 
 export const descGetYaml = `Get the full YAML representation of a template.
-Returns the rendered YAML for inspection or export. Optionally specify a revision for a specific version.`;
+Returns the rendered YAML for inspection or export.
+Pass via params (NOT body): template_id (path — template identity, required), hub_identity (query — hub the template belongs to, required), revision (query — specific version, optional; omit for default/latest).`;
 
 export const descCompareRevisions = `Compare two revisions of a template.
-Returns a diff showing what changed between revision1 and revision2. Both revision identifiers are required — use list_revisions to discover available revisions.`;
+Returns a diff showing what changed between revision1 and revision2. Use list_revisions to discover available revisions.
+Pass via params (NOT body): template_id (path — template identity, required), hub_identity (query — hub the template belongs to, required), revision1 (query — required), revision2 (query — required).`;
 
 export const descRunLoadtest = `Run a load test instance`;
 export const descStopLoadtest = `Stop a running load test`;
@@ -477,7 +481,7 @@ export const descExperimentTags = `Optional tags for the experiment as an array 
 
 // Probe/action template fields
 
-export const descEntityTypeProbe = `Probe entity type filter (e.g. httpProbe, cmdProbe, promProbe, k8sProbe, sloProbe, datadogProbe, dynatraceProbe, containerProbe, apmProbe).`;
+export const descEntityTypeProbe = `Probe entity type filter. Accepts a comma-separated list (e.g. "httpProbe,cmdProbe"). Common values: httpProbe, cmdProbe, promProbe, k8sProbe, sloProbe, datadogProbe, dynatraceProbe, containerProbe, apmProbe.`;
 export const descEntityTypeAction = `Action entity type filter (e.g. delay, customScript, container).`;
 
 // Hub faults fields
@@ -629,6 +633,14 @@ export const descExperimentRunIds = `List of experiment run IDs to fetch probe d
 export const descNotifyIds = `List of notify IDs (pipeline-triggered run identifiers) to fetch probe details for. Matches any notify ID in the list (OR within).`;
 export const descFaultIdentityParam = `Unique identity of the fault. Use chaos_fault list to find fault identities.`;
 export const descIsEnterpriseFilter = `When true, filter for enterprise faults only. Defaults to false.`;
+export const descFaultSearch = `Search faults by name (case-insensitive substring match).`;
+export const descFaultListType = `Filter faults by type (exact match on the fault's type field).`;
+export const descFaultListInfraType = `Filter faults by infrastructure type. Backend currently supports "Kubernetes".`;
+export const descFaultListInfrastructure = `Filter faults by specific infrastructure (e.g. "KubernetesV2"). Matches faults whose infras array includes this value.`;
+export const descFaultListTags = `Comma-separated list of tags. Returns only faults that have ALL specified tags (AND match).`;
+export const descFaultListCategory = `Comma-separated list of categories. Returns only faults whose categories include ALL specified values (AND match).`;
+export const descFaultListSortField = `Field to sort by. Backend honors only "name" and "lastUpdated"; other values fall through to the default (no sort).`;
+export const descFaultListSortAscending = `When true, sort ascending. Defaults to false (descending).`;
 export const descIsEnterpriseGet = `When true, get an enterprise fault. Defaults to false.`;
 export const descIsEnterpriseYaml = `When true, get YAML for an enterprise fault. Defaults to false.`;
 export const descIsEnterpriseVars = `When true, get variables for an enterprise fault. Defaults to false.`;
@@ -672,7 +684,7 @@ Supports pagination (page, limit) and sorting (sort).
 
 Constraints:
 - Pagination and sort apply to the underlying pipeline list, not individual DR Test stages — a page of N pipelines may yield more or fewer DR Tests since one pipeline can contain multiple DRTest stages.
-- The response has no server-side pagination metadata; total count is derived from the returned array length.
+- The response includes server-side pagination metadata (totalItems, totalPages) in a pagination object.
 - recentRuns are at the pipeline level — all DRTest stages from the same pipeline share the same recent execution history.
 - Only pipelines tagged module=drtest are returned; this filter is hardcoded and not user-configurable.
 - The search parameter is accepted without error but has no effect — it is inherited from a shared query type but not wired in the backend.`;
@@ -764,33 +776,125 @@ export const descComponentHubReference = `Optional ChaosHub reference for hub-im
 
 // ── Chaos Experiment Create ─────────────────────────────────────────
 
-export const descCreateExperiment = `Create a new chaos experiment (POST /rest/v2/experiment).
-Requires name, manifest (JSON string with valid apiVersion), infraId, and infraType.
-Identity is optional — auto-generated from name if omitted (lowercase slug, max 47 chars, ^[a-z0-9-]*$, no leading/trailing dash).
+export const descCreateExperiment = `Create or update a chaos experiment (POST /rest/v2/experiment — upsert). When body id matches an existing experiment, it updates; otherwise creates new.
+Requires name, manifest (JSON string with valid apiVersion), infra_id, and infra_type.
+Identity is optional for create (auto-generated from name if omitted), required for update (must be the existing identity — immutable, never regenerate).
 Both identity and name must be unique within the project scope.
 The manifest must be a valid JSON string containing apiVersion (suffix /v1alpha1, /v1alpha2, or /v1beta1).
 For Kubernetes v1beta1, at least one fault is required in spec.faultRef.
-infraType must be one of: Kubernetes, KubernetesV2, Linux, Windows, CloudFoundry, Container — empty/invalid errors.
-For Kubernetes, infraId must be in 'environmentId/infraId' format.
+infra_type must be one of: Kubernetes, KubernetesV2, Linux, Windows, CloudFoundry, Container — empty/invalid errors.
+For Kubernetes, infra_id must be in 'environmentId/infraId' format.
 To create from a template instead, use the create_from_template action on chaos_experiment_template.
-Note: This endpoint is used to create a new chaos experiment from scratch (without using a template), but if user wants to create a new chaos experiment from a template, use the create_from_template action on chaos_experiment_template.
+Note: This endpoint is an upsert — it creates or updates depending on whether the id matches an existing experiment. To create from a template instead, use the create_from_template action on chaos_experiment_template.
 `;
 
-export const descBodyExperimentCreate = `Request body for creating a chaos experiment.
+export const descBodyExperimentCreate = `Request body for creating or updating a chaos experiment (upsert — id match triggers update).
 
 Required fields: name, manifest, infra_id, infra_type.
-Optional: identity (auto-generated if omitted), description, tags, cron_syntax, experiment_type.
+Optional: description, tags, cron_syntax, experiment_type.
+identity: optional for create (auto-generated from name if omitted), required for edit (use existing identity — immutable, never regenerate).
 
 Validation rules:
 - identity: ^[a-z0-9-]*$, no leading/trailing dash, max 47 chars, unique in project
 - name: must be unique within account/org/project
-- manifest: valid JSON string with apiVersion (/v1alpha1, /v1alpha2, or /v1beta1); K8s v1beta1 needs >= 1 fault
+- manifest: valid JSON string with apiVersion (litmuschaos.io/v1beta1); K8s v1beta1 needs >= 1 fault
 - infra_id + infra_type: both required, must be provided together
 - infra_id: always composite format '{environmentIdentifier}/{infrastructureIdentifier}' (e.g. 'demo/qaauto1') — applies to ALL infra types
 - infra_type (case-sensitive enum): Kubernetes | KubernetesV2 | Linux | Windows | windows (backward-compat alias) | CloudFoundry | Container
 
-Example:
-{"id":"bdea40df-20f7-4280-a6f2-65f02885dc4d","identity":"demo-exp-00000001","infraId":"demo/qaauto1","isSingleRunCronEnabled":false,"description":"","infraType":"KubernetesV2","name":"demo-exp-00000001","manifest":"{\"apiVersion\":\"litmuschaos.io/v1beta1\",\"kind\":\"ChaosExperiment\",\"metadata\":{\"name\":\"demo-exp-00000001\",\"namespace\":\"hce\"},\"spec\":{\"cleanupPolicy\":\"delete\",\"experimentId\":\"bdea40df-20f7-4280-a6f2-65f02885dc4d\",\"experimentRunId\":\"\",\"faultRef\":[{\"authEnabled\":false,\"identity\":\"pod-cpu-hog\",\"infraId\":\"demo/qaauto1\",\"isEnterprise\":true,\"name\":\"pod-cpu-hog-56m\",\"values\":[{\"name\":\"TARGET_WORKLOAD_KIND\",\"value\":\"deployment\"},{\"name\":\"TARGET_WORKLOAD_NAMESPACE\",\"value\":\"boutique\"},{\"name\":\"TARGET_WORKLOAD_LABELS\",\"value\":\"app=cartservice\"}]}],\"infraId\":\"demo/qaauto1\",\"infraType\":\"KubernetesV2\",\"serviceAccountName\":\"litmus\",\"vertices\":[{\"name\":\"v-57o\",\"start\":{\"faults\":[{\"name\":\"pod-cpu-hog-56m\"}]}},{\"end\":{\"faults\":[{\"name\":\"pod-cpu-hog-56m\"}]},\"name\":\"v-end\"}]}}","tags":["fault=pod-cpu-hog"]}`;
+Field derivation:
+- id: from spec.experimentId in the manifest (UUID v4, generate new for create)
+- identity: from experiment name — lowercase, strip all non [a-z0-9] chars, max 47 chars (e.g. 'try-exp-creation-01' -> 'tryexpcreation01')
+- manifest: experiment YAML parsed to JSON object, then serialized to a compact JSON string
+- tags: user tags + auto-generated 'fault=<faultRef.identity>' and 'probe=<probeRef.identity>' for each unique fault/probe
+
+Example — KubernetesV2 experiment YAML (fault + probe + action):
+apiVersion: litmuschaos.io/v1beta1
+kind: ChaosExperiment
+metadata:
+  name: try-exp-creation-01
+  namespace: hce
+spec:
+  actionRef:
+    - continueOnCompletion: false
+      identity: test-action-008
+      infraId: qaauto1
+      name: test-action-008-86c
+      values:
+        - name: DURATION
+          value: <+input>
+        - name: VARIABLES_0_variable1
+          value: <+input>
+  cleanupPolicy: delete
+  experimentId: 218b1053-e0d6-40d6-bf00-1fecc0fc0faf
+  experimentRunId: ""
+  faultRef:
+    - authEnabled: false
+      identity: gcp-vm-service-kill
+      infraId: qaauto1
+      isEnterprise: true
+      name: gcp-vm-service-kill-acu
+      values:
+        - name: TOTAL_CHAOS_DURATION
+          value: 90
+        - name: NODE_LABEL
+          value: Node_Some_Vlaue
+        - name: VM_INSTANCE_NAME
+          value: <+input>
+        - name: SERVICE_NAME
+          value: <+input>
+        - name: VM_USERNAME
+          value: <+input>
+        - name: ZONE
+          value: <+input>
+        - name: GCP_PROJECT_ID
+          value: <+input>
+  infraId: demo/qaauto1
+  infraType: KubernetesV2
+  probeRef:
+    - duration: 30s
+      identity: new-cmd-probe-source-826
+      infraId: qaauto1
+      name: new-cmd-probe-source-ot6-0xd
+      values:
+        - name: COMPARATOR_VALUE
+          value: <+input>
+      weightage: 10
+  serviceAccountName: litmus
+  vertices:
+    - name: v-ae8
+      start:
+        faults:
+          - name: gcp-vm-service-kill-acu
+    - end:
+        faults:
+          - name: gcp-vm-service-kill-acu
+      name: v-0z5
+      start:
+        probes:
+          - name: new-cmd-probe-source-ot6-0xd
+    - end:
+        probes:
+          - name: new-cmd-probe-source-ot6-0xd
+      name: v-886
+      start:
+        actions:
+          - name: test-action-008-86c
+    - end:
+        actions:
+          - name: test-action-008-86c
+      name: v-end
+
+harness_create body for above (snake_case keys — manifest is the above YAML as a compact JSON string):
+{"id":"218b1053-e0d6-40d6-bf00-1fecc0fc0faf","identity":"tryexpcreation01","name":"try-exp-creation-01","manifest":"{\\"apiVersion\\":\\"litmuschaos.io/v1beta1\\",\\"kind\\":\\"ChaosExperiment\\",\\"metadata\\":{\\"name\\":\\"try-exp-creation-01\\",\\"namespace\\":\\"hce\\"},\\"spec\\":{\\"actionRef\\":[{\\"continueOnCompletion\\":false,\\"identity\\":\\"test-action-008\\",\\"infraId\\":\\"qaauto1\\",\\"name\\":\\"test-action-008-86c\\",\\"values\\":[{\\"name\\":\\"DURATION\\",\\"value\\":\\"<+input>\\"},{\\"name\\":\\"VARIABLES_0_variable1\\",\\"value\\":\\"<+input>\\"}]}],\\"cleanupPolicy\\":\\"delete\\",\\"experimentId\\":\\"218b1053-e0d6-40d6-bf00-1fecc0fc0faf\\",\\"experimentRunId\\":\\"\\",\\"faultRef\\":[{\\"authEnabled\\":false,\\"identity\\":\\"gcp-vm-service-kill\\",\\"infraId\\":\\"qaauto1\\",\\"isEnterprise\\":true,\\"name\\":\\"gcp-vm-service-kill-acu\\",\\"values\\":[{\\"name\\":\\"TOTAL_CHAOS_DURATION\\",\\"value\\":90},{\\"name\\":\\"NODE_LABEL\\",\\"value\\":\\"Node_Some_Vlaue\\"},{\\"name\\":\\"VM_INSTANCE_NAME\\",\\"value\\":\\"<+input>\\"},{\\"name\\":\\"SERVICE_NAME\\",\\"value\\":\\"<+input>\\"},{\\"name\\":\\"VM_USERNAME\\",\\"value\\":\\"<+input>\\"},{\\"name\\":\\"ZONE\\",\\"value\\":\\"<+input>\\"},{\\"name\\":\\"GCP_PROJECT_ID\\",\\"value\\":\\"<+input>\\"}]}],\\"infraId\\":\\"demo/qaauto1\\",\\"infraType\\":\\"KubernetesV2\\",\\"probeRef\\":[{\\"duration\\":\\"30s\\",\\"identity\\":\\"new-cmd-probe-source-826\\",\\"infraId\\":\\"qaauto1\\",\\"name\\":\\"new-cmd-probe-source-ot6-0xd\\",\\"values\\":[{\\"name\\":\\"COMPARATOR_VALUE\\",\\"value\\":\\"<+input>\\"}],\\"weightage\\":10}],\\"serviceAccountName\\":\\"litmus\\",\\"vertices\\":[{\\"name\\":\\"v-ae8\\",\\"start\\":{\\"faults\\":[{\\"name\\":\\"gcp-vm-service-kill-acu\\"}]}},{\\"end\\":{\\"faults\\":[{\\"name\\":\\"gcp-vm-service-kill-acu\\"}]},\\"name\\":\\"v-0z5\\",\\"start\\":{\\"probes\\":[{\\"name\\":\\"new-cmd-probe-source-ot6-0xd\\"}]}},{\\"end\\":{\\"probes\\":[{\\"name\\":\\"new-cmd-probe-source-ot6-0xd\\"}]},\\"name\\":\\"v-886\\",\\"start\\":{\\"actions\\":[{\\"name\\":\\"test-action-008-86c\\"}]}},{\\"end\\":{\\"actions\\":[{\\"name\\":\\"test-action-008-86c\\"}]},\\"name\\":\\"v-end\\"}]}}","infra_id":"demo/qaauto1","infra_type":"KubernetesV2","description":"description for experiment","is_single_run_cron":false,"tags":["tag:1","tag:2","fault=gcp-vm-service-kill","probe=new-cmd-probe-source-826"]}
+
+Linux/Windows manifest differences (infra_id body field is always composite for all types):
+- metadata.namespace: absent (K8s only)
+- spec.serviceAccountName: absent (K8s only)
+- spec.experimentRunId: absent (K8s only, set to "" initially)
+- spec.infraId: UUID alone (K8s uses composite envId/infraId)
+- spec.infraType: 'Linux' or 'Windows' instead of 'KubernetesV2'
+- faultRef/probeRef/actionRef infraId: same UUID as spec.infraId (K8s uses short ID e.g. 'qaauto1')`;
 
 export const descExperimentManifest = `Full experiment specification as a JSON string. Must contain a valid apiVersion field with suffix /v1alpha1, /v1alpha2, or /v1beta1. For Kubernetes v1beta1 experiments, spec.faultRef must contain at least one fault — empty faultRef array is rejected. Empty string or invalid JSON will fail.`;
 
@@ -814,5 +918,42 @@ If infra_id is not already known, discover it:
   Step 3 — Build infra_id: combine as "{environmentIdentifier}/{infraID}" (e.g. environment "demo" + infra "qaauto1" = "demo/qaauto1").`;
 
 export const descExperimentCronSyntax = `Optional cron expression for scheduling recurring experiment runs (e.g. '0 0 * * *' for daily). When provided, the experiment type is automatically set to CronExperimentV2. NOT validated at save time — invalid cron will fail when the schedule is actually enabled. Omit for one-time experiments.`;
+
+// ── Service Discovery ───────────────────────────────────────────────────
+//
+// Service Discovery (SD) is a Chaos sub-feature. An SD agent runs in a
+// Kubernetes cluster and continuously inventories the cluster using the
+// Kubernetes API plus eBPF (kprobe) for real-time network traffic. The
+// inventory is persisted to the Harness `servicediscovery` backend and
+// consumed by Chaos Engineering to pick targets, fault types, and
+// validations. All read endpoints return read-only snapshots from the
+// agent's last sync.
+
+// Shared filter / behavior descriptions
+export const descSDAgentIdentity = `Service Discovery agent identity — the path segment shown in the SD UI URL (e.g. 'chaosinfra'). Each agent is bound to one Harness environment and one Kubernetes cluster.`;
+
+export const descSDEnvironmentId = `Harness environment identifier the SD agent is bound to (e.g. 'dev'). Required by SD's AgentAccessCheck middleware to resolve the agent — the same agent identity may exist in multiple environments.`;
+
+export const descSDFetchAll = `When true, fetch every result and ignore page/limit (the API returns the full unpaginated list). Useful for small/medium clusters; avoid on very large clusters.`;
+
+export const descSDAgentDiagnostic = `404 from SD endpoints almost always means agent_identity or environment_id is wrong — both are required for AgentAccessCheck to resolve the agent. Both can be confirmed from the SD UI URL or (when added) the discovered_agent list.`;
+
+// discovered_namespace
+export const descDiscoveredNamespace = `Read-only snapshot of a Kubernetes Namespace recorded by a Service Discovery agent — includes the namespace name, UID, resource version, labels, annotations, owner references, and the full corev1.NamespaceSpec/Status from the cluster's last sync. Use namespaces as the scope boundary when listing discovered_service or future discovered_workload/discovered_connection resources for the same agent.`;
+
+export const descListDiscoveredNamespaces = `List Kubernetes namespaces snapshotted by a Service Discovery agent. Requires agent_identity (path) and environment_id (query). Returns soft-deleted-aware results (only live namespaces). Optional name filter (exact match, NOT substring — see name field doc). Supports page/limit pagination or all=true to fetch everything.`;
+
+export const descSDNamespaceNameFilter = `Filter namespaces by name — EXACT case-sensitive equality match against the Kubernetes namespace name (the SD backend wraps this in a Mongo equality filter, not a regex). For partial/fuzzy lookup, list all namespaces (use 'all=true') and filter client-side. Note: this differs from discovered_service's 'search' param, which IS case-insensitive substring.`;
+
+// discovered_service
+export const descDiscoveredService = `Read-only snapshot of a logical 'service' discovered by an SD agent. NOT limited to Kubernetes Services — the same resource type covers K8s Services / Workloads / Nodes, AWS load balancers (ALB/NLB/CLB), EC2 instances, Lambda functions, RDS, Linux/Windows VMs, Linux/Windows VM processes, and a generic 'Other' catch-all. The 'type' field discriminates which 'spec.*' block is populated. For Kubernetes services, 'spec.kubernetes' carries the K8s Service (cluster IPs, ports, type, external name) plus backing workloads (Deployment/StatefulSet/DaemonSet/Job/CronJob/RC) and pod replicas with phase, plus an optional cross-link to a Harness CD service.`;
+
+export const descListDiscoveredServices = `List logical services discovered by an SD agent — covers Kubernetes Services/Workloads, AWS resources (ALB/NLB/CLB, EC2, Lambda, RDS), VMs, and VM processes. Requires agent_identity (path) and environment_id (query). Optional namespace filter applies an equality match on spec.kubernetes.namespace (useful for K8s-typed records). Optional search applies a case-insensitive regex on the service name. To inspect L4 network edges between services, use the future discovered_connection / discovered_service_connection resources.
+
+IMPORTANT — pass compact: false on this call. The actionable payload lives inside spec.kubernetes.* (backing workloads with kind/uid, pod replicas with phase, service ports, cluster IPs, GKE NEG annotations) which the default compact mode strips because spec is not in the generic whitelist. The compacted view will silently drop these fields without indicating they exist.`;
+
+export const descSDNamespaceFilter = `Filter discovered services by Kubernetes namespace (exact match on spec.kubernetes.namespace). Only meaningful for records with a Kubernetes-typed spec; non-K8s records (Lambda, EC2, VMs) won't match.`;
+
+export const descSDSearchFilter = `Case-insensitive substring search on the discovered service's name field.`;
 
 export const descExperimentIdUUID = `Experiment UUID (v4). Required — generate a new random UUID for create. For update, pass the exact id from harness_get to avoid creating a duplicate.`;
