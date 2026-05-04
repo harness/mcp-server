@@ -250,10 +250,16 @@
 - [x] Inspect governance and SCS registry support for OPA policies
 - [x] Add prompt regression coverage for valid policy resource types
 - [x] Fix stale DevSecOps prompt resource references
-- [ ] Run focused tests and typecheck
+- [x] Run focused tests and typecheck
 - [ ] Commit, push, open PR, and reply in the Slack thread
 
 ### Plan
 - Confirm whether OPA policy access/create is supported by existing registry resources before changing code.
 - Cover the prompt bug with focused tests that fail when prompts reference nonexistent `scs_opa_policy`.
 - Update only the affected prompt guidance to point agents at `policy`, `policy_set`, and existing compliance/evaluation resources.
+
+### Review
+- Confirmed OPA/governance policy access and creation already exist through `resource_type="policy"` and `resource_type="policy_set"` in the governance registry.
+- Found stale DevSecOps prompt guidance referencing nonexistent `resource_type="scs_opa_policy"`, which would route agents to an unsupported type despite policy CRUD support existing.
+- Updated `sbom-compliance-check` and `supply-chain-audit` prompts to list `policy` and `policy_set` explicitly, and added regression coverage for those prompt outputs.
+- Verified with `pnpm test tests/prompts/devsecops-policy-prompts.test.ts`, `pnpm test tests/registry/governance.test.ts`, and `pnpm typecheck`.
