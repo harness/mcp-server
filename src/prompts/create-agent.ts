@@ -5,7 +5,7 @@ export function registerCreateAgentPrompt(server: McpServer): void {
   server.registerPrompt(
     "create-agent",
     {
-      description: "Guide to create a custom AI agent with rules, skills, MCP servers, and multi-stage execution",
+      description: "Create and update Harness AI agent instances - standalone templates used as building blocks in pipelines. Agents contain a single agent step with connector-driven architecture requiring llmConnector (LLM access) and optional mcpConnectors (GitHub, Slack, Harness platform). Supports runtime inputs and task/rules-based instruction.",
       argsSchema: {
         agent_name: z.string().describe("Name for the custom agent"),
         task_description: z.string().describe("What the agent should do"),
@@ -18,7 +18,7 @@ export function registerCreateAgentPrompt(server: McpServer): void {
         role: "user" as const,
         content: {
           type: "text" as const,
-          text: `Create or update a custom AI agent pipeline for:
+          text: `Create or update a custom AI agent for:
 
 **Agent Name**: ${agent_name}
 **Task**: ${task_description}
@@ -40,14 +40,6 @@ export function registerCreateAgentPrompt(server: McpServer): void {
    - Review the current \`spec\`, \`name\`, \`description\`, and other fields
    - Identify what needs to be changed (spec, name, description, wiki, logo)
    - Use \`harness_update\` (not \`harness_create\`) to update the agent with only the fields that need modification
-
-3. **Refer to agent schema when needed** — If you're not sure about the YAML structure, use \`harness_schema\` with \`resource_type="agent-pipeline"\` to explore available fields and sections
-   - **Use the \`path\` parameter to avoid context pollution**: The full schema is 4k+ lines. Load only what you need:
-     - \`harness_schema(resource_type="agent-pipeline")\` → Top-level summary (shows available sections)
-     - \`harness_schema(resource_type="agent-pipeline", path="Agent")\` → Agent structure only
-     - \`harness_schema(resource_type="agent-pipeline", path="stages")\` → Stage definitions only
-   - **For operations/API metadata**: Use \`harness_describe(resource_type="agent")\` to see supported operations, filters, and execute actions
-   - **CRITICAL**: The agent spec uses first-class \`agent\` format (version: 1, agent:, stages:, etc.), NOT \`pipeline\` format
 
 ---
 
@@ -119,309 +111,99 @@ Based on the requirements gathered in Step 1, recommend specific configurations 
    - Be specific and actionable
    - Example: Add \`## RULES\\n- Use idiomatic Go code\\n- Do not modify existing tests\\n- Keep COVERAGE.md under 10000 characters\` at the end of the task
 
-4. **MCP servers** (\`mcp_servers\` in spec):
-   - Identify which external services the agent needs to interact with
-   - GitHub? → Recommend GitHub Copilot MCP: \`https://api.githubcopilot.com/mcp/\`
-   - Harness platform? → Recommend Harness MCP URL
-   - Slack/notifications? → Recommend notification MCP
-   - Recommend MCPs based on the user's task or workflows
-
-5. **Secrets** (via \`<+secrets.getValue("key")\`):
-   - List all secrets needed for authentication (GitHub PAT, API keys, tokens)
-   - Remind user to create these in Harness UI before running the agent
-   - Example: \`bedrock_api_key\`, \`github_pat\`, \`slack_token\`
-
-6. **Connectors**:
-   - GitHub/GitLab/Bitbucket connector for repository access
-   - Container registry connector for custom images (if needed)
-   - Cloud connectors (if agent interacts with AWS/GCP/Azure)
-
-7. **Tools** (\`with.allowed_tools\`):
-   - Recommend tools based on what the agent needs to do
-   - File operations: \`Read\`, \`Write\`, \`Grep\`, \`Glob\`
-   - MCP tools: \`mcp__github__*\`, \`mcp__harness__*\` (use \`*\` for all tools from that MCP)
-   - Shell: \`Bash\`
+4. **Connectors**:
+   - LLM connector for model access (required for all agents) - User must create via Harness UI or MCP
+   - MCP connectors for external services (GitHub, Slack, Harness platform, etc.) - only if needed
+   - All authentication and secrets are managed within the connectors
 
 **Present this recommended configuration to the user and iterate until confirmed.**
 
-### 3. Default Configuration
+### 3. Default Configuration & Inputs
 
-**Use these defaults unless user specifies otherwise:**
+**Agent Structure:** Agents use \`agent.step.run\` format with a single step.
 
-**Repository clone:**
-- Only add this section if the task depends on a repository
-\`\`\`yaml
-clone:
-  depth: 1000
-  ref:
-    type: branch
-    name: main
-  repo: <repo>
-  connector: <connector>
-\`\`\`
-
-**Platform:**
-\`\`\`yaml
-platform:
-  os: linux
-  arch: arm64
-\`\`\`
-
-**Container image:**
-- The Claude Code plugin is packaged via this image
+**Default container image:**
 \`\`\`yaml
 container:
-  image: pkg.harness.io/vrvdt5ius7uwygso8s0bia/harness-agents/claude-code-plugin:main
+  image: pkg.harness.io/vrvdt5ius7uwygso8s0bia/harness-agents/harness-ai-agent:latest
 \`\`\`
 
-**Environment variables (Bedrock configuration):**
+**Required environment variables:**
 \`\`\`yaml
 env:
-  ANTHROPIC_MODEL: arn:aws:bedrock:us-east-1:587817102444:application-inference-profile/7p8sn93lhspw
-  AWS_BEARER_TOKEN_BEDROCK: <+secrets.getValue("bedrock_api_key")>
-  AWS_REGION: us-east-1
-  CLAUDE_CODE_USE_BEDROCK: "1"
+  ANTHROPIC_MODEL: <+inputs.anthropicModel>           # Points to anthropicModel input field
+  PLUGIN_HARNESS_CONNECTOR: <+inputs.llmConnector.id> # Points to llmConnector input's id property
 \`\`\`
 
-**Max turns:**
-- Depending on task complexity, adjust this in the range from 100 to 200
+**Default max_turns:**
 \`\`\`yaml
-max_turns: 150
+max_turns: 150  # Adjust 100-200 based on task complexity
 \`\`\`
 
-### 4. MCP Servers
-
-Based on the MCPs needed (clarified with the user), configure MCP server connections:
-
-**How to Connect MCP Servers?**
-
-**Remote MCP Server:**
-- If your MCP server is publicly accessible, connect it directly using a Personal Access Token (PAT)
-- Create a secret in Harness for the PAT and reference it in the agent YAML
-
-Example — Remote MCP Server:
+**MCP configuration (only if external services needed):**
 \`\`\`yaml
-mcp_servers:
-  harness:
-    url: https://<your-ngrok-url>/mcp
-  github:
-    url: https://api.githubcopilot.com/mcp/
-    headers:
-      Authorization: Bearer <+secrets.getValue("github_pat")>
+mcp_format: harness
+mcp_servers: <+connectorInputs.resolveList(<+inputs.mcpConnectors>)>  # Points to mcpConnectors input field
 \`\`\`
 
-**Local MCP Server:**
-- Use ngrok to expose your local MCP server so the Harness runner can reach it
-
-Example — Single MCP Server:
-\`\`\`yaml
-mcp_servers:
-  harness:
-    url: https://<your-ngrok-url>/mcp
-\`\`\`
-
-**Allowing MCP Tools:**
-- To allow the coding agent to use MCP tools, add \`mcp__name__*\` in \`allowed_tools\`
-- Optionally specify a \`log_file\` for debugging MCP interactions
-\`\`\`yaml
-mcp_servers:
-  harness:
-    url: https://<your-ngrok-url>/mcp
-with:
-  allowed_tools: Read,Edit,Bash,Glob,Grep,Write,mcp__harness__*
-  log_file: .agent/output/mcp-test-log.jsonl
-\`\`\`
-
-**Common MCP servers:**
-- **GitHub/Code/PRs**: \`https://api.githubcopilot.com/mcp/\` with \`Bearer <+secrets.getValue("github_pat")>\`
-- **Harness platform**: \`https://<your-harness-mcp-url>/mcp\` with Bearer token
-- **Slack/Notifications**: \`https://<your-slack-mcp-url>/mcp\` with Bearer token
-- **Grafana**: \`https://<your-grafana-mcp-url>/mcp\` (dashboards, alerts, annotations) with Bearer token
-- **Datadog**: \`https://<your-datadog-mcp-url>/mcp\` with Bearer token
-- **Jira**: \`https://<your-jira-mcp-url>/mcp\` with Bearer token
-- **PagerDuty**: \`https://<your-pagerduty-mcp-url>/mcp\` with Bearer token
-
-### 5. MCP Tool Access
-- **All tools**: \`mcp__harness__*,mcp__github__*,Read,Edit,Bash,Glob,Grep,Write\`
-- **Specific tools**: \`mcp__github__create_pr,mcp__github__list_files,Read,Write\`
-
-### 6. Runtime Inputs (optional)
-**Only add \`inputs\` section in the agent spec if user confirms it's needed.**
-
-## Inputs
-
+**Required inputs (always include):**
 \`\`\`yaml
 agent:
   inputs:
-    branch:
-      type: string
-      default: main
-    version:
+    llmConnector:
+      type: connector
+      required: true
+      default: your_llm_connector_id  # User must replace with actual connector ID
+
+    anthropicModel:
       type: string
       required: true
-    deploy_env:
-      type: string
-      enum: [dev, staging, prod]
-    api_key:
-      type: secret
-      default: account.my_secret
+      default: arn:aws:bedrock:us-east-1:587817102444:application-inference-profile/7p8sn93lhspw # User may replace with their preferred model
 \`\`\`
 
-**Input types:** \`string\`, \`secret\`, \`boolean\`
-
-**Reference inputs with:** \`\${{ inputs.branch }}\`
-
-Common input examples:
-- \`repo\` (string): Repository identifier
-- \`llmKey\` (secret): LLM API key
-- \`executionId\` (string): Pipeline execution ID
-- \`branch\` (string): Branch to analyze
-
-**Expression syntax:**
+**Optional inputs (add as needed):**
 \`\`\`yaml
-# Input references
-<+inputs.variableName>
+    # MCP connectors - only if agent needs external services
+    mcpConnectors:
+      type: array
+      default:
+        - your_github_mcp_connector  # User must replace
+        - your_slack_mcp_connector   # User must replace
 
-# Connector token
-<+inputs.connectorName.token>
-
-# Step outputs
-<+pipeline.stages.STAGE.steps.STEP.output.outputVariables.VAR>
-
-# Environment variables
-<+env.HARNESS_ACCOUNT_ID>
-<+env.HARNESS_ORG_ID>
-<+env.HARNESS_PROJECT_ID>
-
-# Alternative syntax for inputs in env blocks
-\${{inputs.repo}}
+    # Custom parameters
+    repo_name:
+      type: string
+      default: my-org/my-repo
 \`\`\`
+
+**Supported input types:** \`string\`, \`secret\`, \`boolean\`, \`connector\`, \`array\`
+
+**IMPORTANT:** Users must create connectors via Harness UI or \`harness_create\` with \`resource_type="connector"\` before running the agent.
 
 ---
 
 ## Phase 3: Generate Agent Spec
 
-Using the requirements from Phase 2 and defaults from section 3-6, assemble the complete agent YAML specification (\`spec\` field):
+Assemble the complete agent YAML specification (\`spec\` field):
 
 1. Start with \`version: 1\` and \`agent:\` structure
-2. Add \`clone:\` section if task depends on repository
-3. Create \`stages:\` with platform (linux/arm64) and steps
-4. For each step, include:
-   - Container image and connector
-   - Environment variables (Bedrock configuration)
-   - \`task:\` field with step-by-step instructions AND a \`## RULES\` section at the end containing user preferences
-   - \`mcp_servers:\` based on external services needed
-   - \`with.allowed_tools:\` and \`with.log_file:\`
-   - \`max_turns:\` adjusted for task complexity (100-200)
-5. Add \`inputs:\` section only if confirmed with user (reference with \`\${{ inputs.fieldName }}\`)
+2. Create \`agent.step.run\` block with:
+   - \`container.image: pkg.harness.io/vrvdt5ius7uwygso8s0bia/harness-agents/harness-ai-agent:latest\`
+   - \`with\` section:
+     - \`task:\` with step-by-step instructions and \`## RULES\` section
+     - \`max_turns: 150\` (adjust 100-200 based on complexity)
+     - \`mcp_format: harness\` (only if MCPs needed)
+     - \`mcp_servers: <+connectorInputs.resolveList(<+inputs.mcpConnectors>)>\` (only if MCPs needed)
+   - \`env\` section:
+     - \`ANTHROPIC_MODEL: <+inputs.anthropicModel>\`
+     - \`PLUGIN_HARNESS_CONNECTOR: <+inputs.llmConnector.id>\`
+3. Add \`agent.inputs\` section with:
+   - \`llmConnector\` (required - use placeholder ID)
+   - \`anthropicModel\` (required - use default ARN, but user may update)
+   - \`mcpConnectors\` (optional - only if needed)
+   - Custom inputs (as needed)
 
-Generate complete, valid YAML ready to be used as the \`spec\` value.
-
----
-
-## Working Example (for your reference): Code Coverage & Review Agent
-
-\`\`\`yaml
-version: 1
-agent:
-  clone:
-    depth: 1000
-    ref:
-      type: branch
-      name: main
-    repo: <username>/<repo-name>
-    connector: <connector_github_id>
-  stages:
-    - name: Coverage and Review
-      id: coverage_and_review
-      platform:
-        os: linux
-        arch: arm64
-      steps:
-        - id: run_code_coverage_agent
-          name: Run Code Coverage Agent
-          agent:
-            container:
-              connector: account.harnessImage
-              image: pkg.harness.io/vrvdt5ius7uwygso8s0bia/harness-agents/claude-code-plugin:main
-            env:
-              ANTHROPIC_MODEL: <model-arn-profile>
-              AWS_BEARER_TOKEN_BEDROCK: <+secrets.getValue("bedrock_api_key")>
-              AWS_REGION: us-east-1
-              CLAUDE_CODE_USE_BEDROCK: "1"
-            task: |
-              You are a code coverage agent. The repository has already been cloned into the current working directory. It is a Go project. If go is not installed then install the latest version of go.
-              1. Measure the current test coverage. Parse the output to determine overall and per-file coverage percentages.
-              2. Identify all Go packages and source files below 80% coverage (or with no tests).
-              3. Generate comprehensive unit tests to bring overall coverage to ≥80%:
-                - Write idiomatic Go test functions in *_test.go files in the same package.
-                - Cover all exported functions, edge cases, error paths, and boundary conditions.
-                - Use table-driven tests where appropriate.
-                - Do not delete or modify existing tests.
-              4. Re-run coverage to confirm ≥80%. If not, continue adding tests.
-              5. Generate COVERAGE.md (under 10000 chars) with: overall before/after, per-file summary table, key improvements.
-              6. Use GitHub MCP tools to:
-                a. Create branch "code-coverage-agent-<unique-suffix>" from current branch.
-                b. Commit all new/modified test files and COVERAGE.md.
-                c. Open a PR titled "Code Coverage: Automated coverage increase by Harness AI".
-                d. Post COVERAGE.md contents as a PR comment under "## Code Coverage Report".
-              7. Write INFO.md with PR url, repo, branch, and PR number.
-            max_turns: 150
-            rules:                       # User preferences and constraints
-              - Use idiomatic Go code with table-driven tests
-              - Do not modify or delete existing tests
-              - Keep COVERAGE.md under 10000 characters
-            mcp_servers:
-              harness:
-                url: https://<your-ngrok-url>/mcp
-              github:
-                url: https://api.githubcopilot.com/mcp/
-                headers:
-                  Authorization: Bearer <+secrets.getValue("github_pat")>
-            with:
-              allowed_tools: mcp__harness__*,mcp__github__*
-              log_file: .agent/output/mcp-test-log.jsonl
-
-        - id: run_code_review_agent
-          name: Run Code Review Agent
-          agent:
-            container:
-              connector: account.harnessImage
-              image: pkg.harness.io/vrvdt5ius7uwygso8s0bia/harness-agents/claude-code-plugin:main
-            env:
-              ANTHROPIC_MODEL: <model-arn-profile>
-              AWS_BEARER_TOKEN_BEDROCK: <+secrets.getValue("bedrock_api_key")>
-              AWS_REGION: us-east-1
-              CLAUDE_CODE_USE_BEDROCK: "1"
-            task: |
-              Read PR url and info from INFO.md in the current directory.
-              You are a code review agent. Review the pull request by:
-              1. Analyzing all changed files for correctness, code quality, security issues, performance, and best practices.
-              2. Posting inline review comments via GitHub MCP tools for any issues or suggestions.
-              3. Posting a final summary comment with: key issues found, suggestions made, and overall verdict (Approve / Request Changes).
-            max_turns: 150
-            rules:                       # User preferences and constraints
-              - Focus on security vulnerabilities first
-              - Check test coverage for new code
-              - Provide constructive feedback only
-            mcp_servers:
-              harness:
-                url: https://<your-ngrok-url>/mcp
-              github:
-                url: https://api.githubcopilot.com/mcp/
-                headers:
-                  Authorization: Bearer <+secrets.getValue("github_pat")>
-            with:
-              allowed_tools: mcp__harness__*,mcp__github__*
-              log_file: .agent/output/mcp-test-log.jsonl
-  inputs:                          # Optional: Runtime inputs passed via harness_execute
-    executionId:
-      type: string
-      description: Pipeline execution ID to analyze
-    llmKey:
-      type: secret
-      description: LLM API key for the agent
-\`\`\`
+**Always notify users to create connectors and replace placeholder IDs before running the agent.**
 
 ---
 
@@ -430,7 +212,7 @@ agent:
 Present the complete agent configuration to the user:
 - Agent metadata (name, description, uid)
 - Full spec YAML
-- Required secrets and connectors
+- Required connectors
 
 **Wait for explicit confirmation before creating/updating the agent.**
 
@@ -461,7 +243,7 @@ Parameters:
 - \`uid\` (required): Unique identifier. Auto-generated from \`name\` if not provided (e.g. "Code Coverage Agent" → "code_coverage_agent")
 - \`name\` (required): Display name for the agent
 - \`description\` (optional): Brief description
-- \`spec\` (required): The full agent YAML specification as a string (includes \`version: 1\`, \`agent:\`, \`stages:\`, etc.)
+- \`spec\` (required): The full agent YAML specification as a string (includes \`version: 1\`, \`agent:\`, etc.)
 - \`wiki\` (optional): Markdown documentation for the agent
 
 ### Updating an Existing Agent
@@ -489,194 +271,59 @@ Parameters:
 
 ---
 
-## Agent YAML Extends Pipeline Constructs
-
-**CRITICAL UNDERSTANDING: Agent YAML extends the traditional Harness pipeline schema. You can use BOTH agent-specific features AND traditional pipeline steps.**
-
-### What This Means
-
-1. **Agent-specific features** (new):
-   - \`agent\` step type with \`task\`, \`rules\`, \`mcp_servers\`, \`max_turns\`
-   - Claude Code plugin integration
-   - MCP server connections
-   - AI-powered autonomous execution
-
-2. **Traditional pipeline features** (still valid):
-   - Shell script steps (\`run.shell\`, \`run.script\`)
-   - Container plugin steps (\`run.container\`)
-   - Step groups
-   - Parallel execution
-   - Environment variables
-   - Conditional execution
-   - All other standard pipeline constructs
-   - **Only use these when the requirement needs them or user explicitly requests them — don't add unnecessarily**
-   - **For traditional pipeline constructs**: Reference the \`/create-pipeline-v1\` skill to look up native actions, templates, and step syntax if it's available
-
-### When to Use Traditional Steps
-
-- **Shell scripts**: For running git commands, file operations, or custom scripts
-- **Container plugins**: For integrating with existing Harness plugins (SonarQube, Snyk, etc.)
-- **Mixed workflows**: Combine agent steps with traditional steps in the same pipeline
-
-### Example: Mixed Agent and Shell Steps
+## Example: Code Review Agent
 
 \`\`\`yaml
 version: 1
 agent:
-  stages:
-    - name: Build and Analyze
-      id: build_analyze
-      platform:
-        os: linux
-        arch: arm64
-      steps:
-        # Traditional shell step
-        - name: Run Tests
-          run:
-            shell: bash
-            script: |-
-              go test -cover ./...
-              echo "Tests completed"
-
-        # Agent step (AI-powered)
-        - id: analyze_coverage
-          name: Analyze Coverage with AI
-          agent:
-            container:
-              image: pkg.harness.io/vrvdt5ius7uwygso8s0bia/harness-agents/claude-code-plugin:main
-            env:
-              ANTHROPIC_MODEL: arn:aws:bedrock:us-east-1:587817102444:application-inference-profile/7p8sn93lhspw
-              AWS_BEARER_TOKEN_BEDROCK: <+secrets.getValue("bedrock_api_key")>
-              AWS_REGION: us-east-1
-              CLAUDE_CODE_USE_BEDROCK: "1"
-            task: |
-              Analyze the test coverage output and generate improvement recommendations.
-
-              ## RULES
-              - Focus on actionable recommendations
-              - Prioritize high-impact improvements
-            max_turns: 100
-\`\`\`
-
-### Schema Validation
-
-All agent specs are validated using \`harness_schema(resource_type="agent-pipeline")\` which supports BOTH:
-- Agent-specific constructs (use \`path="Agent"\` to explore)
-- Traditional pipeline constructs (use \`path="stages"\`, \`path="steps"\` to explore)
-
-**If a user asks to add shell steps, container steps, or any traditional pipeline feature, it's perfectly valid to include them in the agent spec.**
-
-### Chaining Agents Together
-
-**⚠️ ADVANCED FEATURE: THIS IS FOR ADVANCED USERS ONLY. BUILD SINGLE-AGENT WORKFLOWS FIRST AND ONLY USE AGENT CHAINING WHEN YOU HAVE PUSHED A SINGLE AGENT TO ITS ABSOLUTE LIMIT. SINGLE AGENTS ARE EXTREMELY POWERFUL AND EFFICIENT — MOST TASKS DO NOT REQUIRE CHAINING.**
-
-**Agents can pass data to each other by writing outputs to fixed file locations and reading from those locations in subsequent steps.**
-
-#### How Agent Chaining Works
-
-1. **Agent 1** outputs its results to a fixed file location using \`with.log_file\`
-2. **Agent 2** reads from that file location in its \`task\` instructions
-3. This creates a sequential chain where each agent builds on the previous agent's work
-
-#### Key Pattern
-
-\`\`\`yaml
-steps:
-  # First agent - outputs to fixed location
-  - id: analyzer
-    name: Analyze Code
-    agent:
-      task: |
-        Analyze the codebase and write findings to analysis-report.md
+  step:
+    run:
+      container:
+        image: pkg.harness.io/vrvdt5ius7uwygso8s0bia/harness-agents/harness-ai-agent:latest
       with:
-        allowed_tools: Read,Write,Grep,Glob
-        log_file: .agent/output/analyzer-log.jsonl  # ← Agent 1 outputs here
-      max_turns: 100
+        task: |
+          Review the pull request for repository <+inputs.repo_name> on branch <+inputs.branch>.
 
-  # Second agent - reads from first agent's output
-  - id: recommender
-    name: Generate Recommendations
-    agent:
-      task: |
-        Read the analysis from .agent/output/analyzer-log.jsonl  # ← Agent 2 reads here
-        and generate actionable recommendations.
-      with:
-        allowed_tools: Read,Write
-        log_file: .agent/output/recommender-log.jsonl
-      max_turns: 50
+          1. Analyze code changes for security vulnerabilities
+          2. Check for code quality issues
+          3. Verify test coverage
+          4. Post review comments using GitHub MCP tools
+
+          ## RULES
+          - Focus on critical security issues first
+          - Be constructive in feedback
+          - Suggest specific code improvements
+        max_turns: 150
+        mcp_format: harness
+        mcp_servers: <+connectorInputs.resolveList(<+inputs.mcpConnectors>)>
+      env:
+        ANTHROPIC_MODEL: <+inputs.anthropicModel>
+        PLUGIN_HARNESS_CONNECTOR: <+inputs.llmConnector.id>
+
+  inputs:
+    llmConnector:
+      type: connector
+      required: true
+      default: your_llm_connector_id  # User must replace with actual connector ID
+
+    anthropicModel:
+      type: string
+      required: true
+      default: arn:aws:bedrock:us-east-1:587817102444:application-inference-profile/7p8sn93lhspw
+
+    mcpConnectors:
+      type: array
+      default:
+        - your_github_mcp_connector  # User must replace with actual connector ID
+
+    repo_name:
+      type: string
+      default: my-org/my-repo
+
+    branch:
+      type: string
+      default: main
 \`\`\`
-
-**Important:** The file path (\`.agent/output/analyzer-log.jsonl\`) must match exactly between the first agent's \`log_file\` and the second agent's \`task\` instructions. This creates the handoff between agents.
-
-### Adding Custom Skills to Agents
-
-**IMPORTANT: This is NOT a default feature. Only add custom skills when the user explicitly insists on it.**
-
-By default, agents work with the task instructions provided in the \`task\` field. Custom skills are an advanced feature and should only be added if the user specifically requests them.
-
-**Example: Adding a Custom Skill**
-
-\`\`\`yaml
-version: 1
-agent:
-  stages:
-    - name: Setup and Execute
-      id: setup_execute
-      platform:
-        os: linux
-        arch: arm64
-      steps:
-        # Step 1: Create custom skill (runs BEFORE agent step)
-        - id: create_skill
-          name: Setup Hello World Skill
-          run:
-            shell: bash
-            script: |
-              mkdir -p /harness/.claude/skills/hello-world
-              cat > /harness/.claude/skills/hello-world/SKILL.md << 'EOF'
-              ---
-              name: hello-world
-              description: Responds to greetings with a funny joke
-              triggers:
-                - hi
-                - hello
-                - hii claude
-              ---
-
-              You are a greeting assistant.
-
-              When the user says "hi", "hello", or "hii claude":
-              - Respond with "Hi!"
-              - Include a short funny joke
-
-              Keep responses short and fun.
-              EOF
-
-        # Step 2: Agent step (can now use the custom skill)
-        - id: run_agent
-          name: Run Agent with Custom Skill
-          agent:
-            container:
-              image: pkg.harness.io/vrvdt5ius7uwygso8s0bia/harness-agents/claude-code-plugin:main
-            env:
-              ANTHROPIC_MODEL: arn:aws:bedrock:us-east-1:587817102444:application-inference-profile/7p8sn93lhspw
-              AWS_BEARER_TOKEN_BEDROCK: <+secrets.getValue("bedrock_api_key")>
-              AWS_REGION: us-east-1
-              CLAUDE_CODE_USE_BEDROCK: "1"
-            task: |
-              Execute the task using the available skills.
-
-              ## RULES
-              - Use the hello-world skill when appropriate
-            max_turns: 100
-\`\`\`
-
-**Key Points:**
-- The working directory for the agent is \`/harness\`
-- Skills path format: \`/harness/.claude/skills/<skill-name>/SKILL.md\`
-- Use heredoc (\`<< 'EOF'\`) to write multi-line skill files
-- The skill file must include valid frontmatter and instructions
-- Multiple skills can be created in the same step by repeating the mkdir/cat commands
 
 ---
 
@@ -684,32 +331,29 @@ agent:
 
 **These are essential rules you MUST follow when creating/updating agents:**
 
-| Guideline                | Rule                                                                                                                                     |
-| --------------------------| ------------------------------------------------------------------------------------------------------------------------------------------|
-| **Check existing first** | Always call \`harness_list(resource_type="agent")\` to see if an existing agent can solve the use case before creating new                 |
-| **Updating agents**      | Use \`harness_get\` to retrieve current config, then \`harness_update\` (not \`harness_create\`) to modify. Only custom agents can be updated. |
-| **Use schema tool**      | Use \`harness_schema(resource_type="agent-pipeline", path="...")\` for YAML structure. Use \`path\` parameter to load specific sections only |
-| **Agent spec format**    | The \`spec\` field contains agent YAML (version: 1, agent:, stages:, etc.) — this is NOT pipeline format                                   |
-| **Secrets**              | Reference as \`<+secrets.getValue("key")>\` — user must create in Harness UI                                                               |
-| **Connectors**           | Reference by identifier (e.g. \`connector_github_id\`, \`account.harnessImage\`) — must exist before agent execution                         |
-| **Multi-stage**          | Steps run sequentially — pass state between stages via files (e.g. INFO.md)                                                              |
-| **Quality first**        | Agent quality is paramount — verify YAML structure, validate all references, ensure complete task instructions before creating           |
+| Guideline                  | Rule                                                                                                                                     |
+| ----------------------------| ------------------------------------------------------------------------------------------------------------------------------------------|
+| **Check existing first**   | Always call \`harness_list(resource_type="agent")\` to see if an existing agent can solve the use case before creating new                 |
+| **Updating agents**        | Use \`harness_get\` to retrieve current config, then \`harness_update\` (not \`harness_create\`) to modify. Only custom agents can be updated. |
+| **Agent spec format**      | The \`spec\` field contains standalone agent YAML (version: 1, agent:, step:, run:, inputs:)                                           |
+| **Connectors required**    | All agents require \`llmConnector\` (required) and optional \`mcpConnectors\` (array) in the inputs section — users must create these first  |
+| **Connector placeholders** | Always use placeholders like \`your_llm_connector_id\` and notify users to replace with actual connector IDs                               |
+| **Prefer inputs**          | Use \`inputs\` for configuration instead of environment variables — reference with \`<+inputs.variableName>\`                            |
+| **No clone/platform**      | Do NOT add \`clone\`, \`platform\`, \`os\`, \`arch\`, \`stages\`, or \`allowed_tools\` sections — agents are standalone with simplified structure              |
+| **Quality first**          | Agent quality is paramount — verify YAML structure, validate all references, ensure complete task instructions before creating           |
 
 
 ---
 
 ## Best Practices
 
-- Never hardcode secrets -- use \`type: secret\` inputs
-- Use \`type: connector\` for authentication rather than raw tokens
+- Use \`type: connector\` for LLM and MCP access
+- **Prefer inputs over environment variables** for all configuration
 - Include meaningful descriptions on all inputs
-- Keep stages focused on single responsibilities
-- Always include the SCM detection pattern for multi-provider support
-- Store secret outputs with \`$HARNESS_OUTPUT_SECRET_FILE\`, not \`$DRONE_OUTPUT\`
-- Set \`depth: 1000\` for PR clones to ensure full diff history
-- Set \`depth: 1\` for branch clones to minimize clone time
-- Provide detailed step-by-step instructions in \`task\` field
-- Increase \`max_turns\` in the spec (default: 150) if task is complex.`
+- Provide detailed step-by-step instructions in \`task\` field with \`## RULES\` section
+- Adjust \`max_turns\` based on task complexity (100-200)
+- Always use placeholder connector IDs and notify users to replace them
+- Create connectors via Harness UI or \`harness_create\` with \`resource_type="connector"\``
         }
       }]
     })

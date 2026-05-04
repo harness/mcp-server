@@ -1,13 +1,16 @@
+import { randomUUID } from "node:crypto";
 import { type Config, resolveProductBaseUrl } from "../config.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import { HarnessApiError } from "../utils/errors.js";
 import type { ResourceDefinition, ToolsetDefinition, ToolsetName, OperationName, EndpointSpec, FilterFieldSpec } from "./types.js";
+import type { AuditManager } from "../audit/manager.js";
+import type { AuditContext, AuditEvent } from "../audit/types.js";
 import { createLogger } from "../utils/logger.js";
 import { buildDeepLink, appendStoreType } from "../utils/deep-links.js";
 
 // Import all toolsets
 import { pipelinesToolset } from "./toolsets/pipelines.js";
-import { agentPipelinesToolset } from "./toolsets/agent-pipelines.js";
+import { agentsToolset } from "./toolsets/agents.js";
 import { servicesToolset } from "./toolsets/services.js";
 import { environmentsToolset } from "./toolsets/environments.js";
 import { connectorsToolset } from "./toolsets/connectors.js";
@@ -29,6 +32,7 @@ import { ccmToolset } from "./toolsets/ccm.js";
 import { seiToolset } from "./toolsets/sei.js";
 import { scsToolset } from "./toolsets/scs.js";
 import { stoToolset } from "./toolsets/sto.js";
+import { dbopsToolset } from "./toolsets/dbops.js";
 import { accessControlToolset } from "./toolsets/access-control.js";
 import { settingsToolset } from "./toolsets/settings.js";
 import { platformToolset } from "./toolsets/platform.js";
@@ -37,16 +41,21 @@ import { visualizationsToolset } from "./toolsets/visualizations.js";
 import { governanceToolset } from "./toolsets/governance.js";
 import { freezeToolset } from "./toolsets/freeze.js";
 import { overridesToolset } from "./toolsets/overrides.js";
+import { aiEvalsToolset } from "./toolsets/ai-evals.js";
 
 const log = createLogger("registry");
 
 /** Keys under which different Harness APIs return list arrays. */
 const LIST_ARRAY_KEYS = ["items", "features", "content", "data", "objects"];
 
-/** All available toolsets */
+/** Backward-compatible aliases for renamed public toolset names. */
+const TOOLSET_ALIASES: Record<string, string> = {
+  "agent-pipelines": "agents",
+};
+
 const ALL_TOOLSETS: ToolsetDefinition[] = [
   pipelinesToolset,
-  agentPipelinesToolset,
+  agentsToolset,
   servicesToolset,
   environmentsToolset,
   connectorsToolset,
@@ -68,6 +77,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   seiToolset,
   scsToolset,
   stoToolset,
+  dbopsToolset,
   accessControlToolset,
   settingsToolset,
   platformToolset,
@@ -76,13 +86,27 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   governanceToolset,
   freezeToolset,
   overridesToolset,
+  aiEvalsToolset,
 ];
+
+/** All available toolset names — used by docs generation to discover opt-in toolsets. */
+export const ALL_TOOLSET_NAMES: string[] = ALL_TOOLSETS.map((t) => t.name);
 
 /**
  * Options for extending the Registry with additional toolsets.
  */
 export interface RegistryOptions {
   additionalToolsets?: ToolsetDefinition[];
+  /**
+   * Optional callback that resolves the effective account ID for the current
+   * request.  Used by multi-tenant deployments (internal HTTP mode) where the
+   * account ID varies per request and is not known at startup.
+   * When provided, `registry.getAccountId()` calls this first and falls back
+   * to `config.HARNESS_ACCOUNT_ID` if it returns `undefined`.
+   */
+  accountIdResolver?: () => string | undefined;
+  /** When provided, every dispatch emits an AuditEvent to all registered sinks. */
+  auditManager?: AuditManager;
 }
 
 /**
@@ -91,37 +115,100 @@ export interface RegistryOptions {
 export class Registry {
   private resourceMap: Map<string, ResourceDefinition> = new Map();
   private toolsets: ToolsetDefinition[] = [];
+  private accountIdResolver?: () => string | undefined;
+  private auditManager?: AuditManager;
 
   constructor(private config: Config, options: RegistryOptions = {}) {
+    this.accountIdResolver = options.accountIdResolver;
+    this.auditManager = options.auditManager;
     const allToolsets = [...ALL_TOOLSETS, ...(options.additionalToolsets ?? [])];
     const enabledNames = this.parseToolsetFilter(allToolsets);
     this.toolsets = enabledNames
       ? allToolsets.filter((t) => enabledNames.has(t.name))
-      : allToolsets;
+      : allToolsets.filter((t) => !t.optIn);
+
+    const excludedPipelineType =
+      (this.config.HARNESS_PIPELINE_VERSION ?? "0") === "0"
+        ? "pipeline_v1"
+        : "pipeline";
 
     for (const toolset of this.toolsets) {
       for (const resource of toolset.resources) {
+        if (resource.resourceType === excludedPipelineType) continue;
         this.resourceMap.set(resource.resourceType, resource);
       }
     }
 
-    log.info(`Registry loaded: ${this.resourceMap.size} resource types from ${this.toolsets.length} toolsets`);
+    log.info(`Registry loaded: ${this.resourceMap.size} resource types from ${this.toolsets.length} toolsets`, {
+      pipelineVersion: this.config.HARNESS_PIPELINE_VERSION ?? "0",
+    });
   }
 
+  getAccountId(): string {
+    return this.accountIdResolver?.() ?? this.config.HARNESS_ACCOUNT_ID;
+  }
+
+  /**
+   * Parse HARNESS_TOOLSETS env var. Supports three modes:
+   *
+   *  - Explicit list:    "pipelines,services"         → only those toolsets
+   *  - Additive (+):     "+ai-evals"                  → defaults + ai-evals
+   *  - Subtractive (-):  "-chaos,-ccm"                → defaults minus chaos & ccm
+   *  - Mixed +/-:        "+ai-evals,-chaos"            → defaults + ai-evals - chaos
+   *
+   * Returns `null` when the value is empty (meaning "all defaults").
+   * Returns `"defaults"` when +/- modifiers are used (caller applies them).
+   */
   private parseToolsetFilter(allToolsets: ToolsetDefinition[]): Set<string> | null {
     const raw = this.config.HARNESS_TOOLSETS;
     if (!raw || raw.trim() === "") return null;
 
     const validNames = new Set<string>(allToolsets.map((t) => t.name));
     const parsed = raw.split(",").map((s) => s.trim()).filter(Boolean);
+
+    const hasModifiers = parsed.some((s) => s.startsWith("+") || s.startsWith("-"));
+
+    if (hasModifiers) {
+      const defaults = new Set(allToolsets.filter((t) => !t.optIn).map((t) => t.name));
+      const invalid: string[] = [];
+
+      for (const token of parsed) {
+        const op = token[0];
+        const rawName = (op === "+" || op === "-") ? token.slice(1) : token;
+        const name = TOOLSET_ALIASES[rawName] ?? rawName;
+        if (!validNames.has(name)) {
+          invalid.push(rawName);
+          continue;
+        }
+        if (op === "+") {
+          defaults.add(name);
+        } else if (op === "-") {
+          defaults.delete(name);
+        } else {
+          defaults.add(name);
+        }
+      }
+
+      if (invalid.length > 0) {
+        const available = Array.from(validNames).sort().join(", ");
+        throw new Error(
+          `Invalid HARNESS_TOOLSETS: ${invalid.map((n) => `"${n}"`).join(", ")}. ` +
+          `Valid toolset names: ${available}`,
+        );
+      }
+
+      return defaults;
+    }
+
     const valid: string[] = [];
     const invalid: string[] = [];
 
-    for (const name of parsed) {
+    for (const rawName of parsed) {
+      const name = TOOLSET_ALIASES[rawName] ?? rawName;
       if (validNames.has(name)) {
         valid.push(name);
       } else {
-        invalid.push(name);
+        invalid.push(rawName);
       }
     }
 
@@ -208,8 +295,12 @@ export class Registry {
     resourceType: string,
     operation: OperationName,
     input: Record<string, unknown>,
+    signalOrAudit?: AbortSignal | AuditContext,
     signal?: AbortSignal,
   ): Promise<unknown> {
+    const auditCtx = signalOrAudit instanceof AbortSignal ? undefined : signalOrAudit;
+    const abortSignal = signalOrAudit instanceof AbortSignal ? signalOrAudit : signal;
+
     if (this.config.HARNESS_READ_ONLY && !Registry.READ_OPERATIONS.has(operation)) {
       throw new Error(`Read-only mode is enabled (HARNESS_READ_ONLY=true). "${operation}" operations are not allowed.`);
     }
@@ -221,7 +312,6 @@ export class Registry {
       throw new Error(`Resource "${resourceType}" does not support "${operation}". Supported: ${supported}`);
     }
 
-    // Validate required listFilterFields for list operations before hitting the API
     if (operation === "list" && def.listFilterFields) {
       const missing = def.listFilterFields
         .filter(f => f.required && input[f.name] === undefined)
@@ -234,7 +324,7 @@ export class Registry {
       }
     }
 
-    return this.executeSpec(client, def, spec, input, signal);
+    return this.executeSpecWithAudit(client, def, spec, operation, resourceType, input, auditCtx, abortSignal);
   }
 
   /** Dispatch an execute action to the Harness API. */
@@ -243,8 +333,12 @@ export class Registry {
     resourceType: string,
     action: string,
     input: Record<string, unknown>,
+    signalOrAudit?: AbortSignal | AuditContext,
     signal?: AbortSignal,
   ): Promise<unknown> {
+    const auditCtx = signalOrAudit instanceof AbortSignal ? undefined : signalOrAudit;
+    const abortSignal = signalOrAudit instanceof AbortSignal ? signalOrAudit : signal;
+
     if (this.config.HARNESS_READ_ONLY) {
       throw new Error(`Read-only mode is enabled (HARNESS_READ_ONLY=true). Execute actions are not allowed.`);
     }
@@ -256,7 +350,78 @@ export class Registry {
       throw new Error(`Resource "${resourceType}" has no execute action "${action}". Available: ${available}`);
     }
 
-    return this.executeSpec(client, def, actionSpec, input, signal);
+    return this.executeSpecWithAudit(client, def, actionSpec, "execute", resourceType, input, { ...auditCtx, tool: auditCtx?.tool ?? "harness_execute", action }, abortSignal);
+  }
+
+  /**
+   * Wraps executeSpec with timing and audit event emission.
+   */
+  private async executeSpecWithAudit(
+    client: HarnessClient,
+    def: ResourceDefinition,
+    spec: EndpointSpec,
+    operation: string,
+    resourceType: string,
+    input: Record<string, unknown>,
+    auditCtx?: AuditContext,
+    signal?: AbortSignal,
+  ): Promise<unknown> {
+    if (!this.auditManager) {
+      return this.executeSpec(client, def, spec, input, signal);
+    }
+
+    const startTime = Date.now();
+    try {
+      const result = await this.executeSpec(client, def, spec, input, signal);
+      this.emitAuditEvent(def, spec, operation, resourceType, input, auditCtx, "success", Date.now() - startTime);
+      return result;
+    } catch (err) {
+      const httpStatus = err instanceof HarnessApiError ? err.statusCode : undefined;
+      this.emitAuditEvent(def, spec, operation, resourceType, input, auditCtx, "error", Date.now() - startTime, String(err), httpStatus);
+      throw err;
+    }
+  }
+
+  private emitAuditEvent(
+    def: ResourceDefinition,
+    spec: EndpointSpec,
+    operation: string,
+    resourceType: string,
+    input: Record<string, unknown>,
+    auditCtx: AuditContext | undefined,
+    outcome: "success" | "error",
+    durationMs: number,
+    error?: string,
+    httpStatus?: number,
+  ): void {
+    if (!this.auditManager) return;
+
+    const event: AuditEvent = {
+      event_id: randomUUID(),
+      timestamp: new Date().toISOString(),
+      tool: auditCtx?.tool ?? `harness_${operation}`,
+      operation,
+      resource_type: resourceType,
+      resource_id: auditCtx?.resource_id ?? (input.resource_id as string | undefined),
+      action: auditCtx?.action,
+      org_id: def.scope === "account"
+        ? undefined
+        : (input.org_id as string | undefined) ?? (def.scopeOptional ? undefined : this.config.HARNESS_ORG),
+      project_id: def.scope === "account" || def.scope === "org"
+        ? undefined
+        : (input.project_id as string | undefined) ?? (def.scopeOptional ? undefined : this.config.HARNESS_PROJECT),
+      account_id: this.getAccountId(),
+      risk: spec.operationPolicy?.risk ?? "read",
+      confirmation: auditCtx?.confirmation,
+      outcome,
+      duration_ms: durationMs,
+      http_method: spec.method,
+      http_path: spec.path,
+      ...(error ? { error } : {}),
+      ...(httpStatus ? { http_status: httpStatus } : {}),
+    };
+
+    this.auditManager.emit(event);
   }
 
   private async executeSpec(
@@ -266,10 +431,18 @@ export class Registry {
     input: Record<string, unknown>,
     signal?: AbortSignal,
   ): Promise<unknown> {
+    const resolvedAccountId = this.getAccountId();
+    const resolvedConfig: Config = { ...this.config, HARNESS_ACCOUNT_ID: resolvedAccountId };
+
+    // Run preflight hook (e.g. duplicate-check before create) before hitting the API.
+    if (spec.preflight) {
+      await spec.preflight({ client, input, registry: this, signal });
+    }
+
     // Build path with substitutions (or pathBuilder when present)
     let path: string;
     if (spec.pathBuilder) {
-      path = spec.pathBuilder(input, this.config);
+      path = spec.pathBuilder(input, resolvedConfig);
     } else {
       path = spec.path;
       if (spec.pathParams) {
@@ -284,7 +457,12 @@ export class Registry {
             }
           }
           if (value === undefined || value === "") {
-            throw new Error(`Missing required field "${inputKey}" for path parameter "${pathPlaceholder}"`);
+            const scopeHint = def.scopeOptional
+              ? ` This resource supports account/org/project scope — pass "${inputKey}" via params, or use a Harness URL.`
+              : "";
+            throw new Error(
+              `Missing required field "${inputKey}" for ${def.resourceType}.${scopeHint}`,
+            );
           }
           path = path.replace(`{${pathPlaceholder}}`, encodeURIComponent(String(value)));
         }
@@ -319,7 +497,7 @@ export class Registry {
     // Inject custom account param when scopeParams.account is set
     // (in addition to the client's default accountIdentifier)
     if (def.scopeParams?.account) {
-      params[def.scopeParams.account] = this.config.HARNESS_ACCOUNT_ID;
+      params[def.scopeParams.account] = resolvedAccountId;
     }
 
     // Account-scoped resources sometimes still need orgIdentifier in query params (NG /ng/api/projects).
@@ -385,10 +563,14 @@ export class Registry {
         typeof bodyRecord[spec.bodyWrapperKey] === "object"
           ? (bodyRecord[spec.bodyWrapperKey] as Record<string, unknown>)
           : bodyRecord;
-      // Only inject accountIdentifier when the endpoint explicitly requires it
+      // Only inject account ID when the endpoint explicitly requires it
       // (gRPC-gateway APIs with body:"*" need it in the body, not just query params)
-      if (spec.injectAccountInBody && this.config.HARNESS_ACCOUNT_ID && !targetRecord.accountIdentifier) {
-        targetRecord.accountIdentifier = this.config.HARNESS_ACCOUNT_ID;
+      // When injectAccountInBody is a string, use it as the field name (e.g. "accountId" for CCM APIs).
+      if (spec.injectAccountInBody && resolvedAccountId) {
+        const accountField = typeof spec.injectAccountInBody === "string" ? spec.injectAccountInBody : "accountIdentifier";
+        if (!targetRecord[accountField]) {
+          targetRecord[accountField] = resolvedAccountId;
+        }
       }
       if (params.orgIdentifier && !targetRecord.orgIdentifier) {
         targetRecord.orgIdentifier = params.orgIdentifier;
@@ -438,6 +620,7 @@ export class Registry {
       ...(spec.responseType ? { responseType: spec.responseType } : {}),
       ...(product !== "harness" ? { product } : {}),
       ...(spec.headerBasedScoping || def.headerBasedScoping ? { headerBasedScoping: true } : {}),
+      ...(spec.operationPolicy?.retryPolicy ? { retryPolicy: spec.operationPolicy.retryPolicy } : {}),
       signal,
     };
 
@@ -569,7 +752,7 @@ export class Registry {
         try {
           let link = buildDeepLink(
             this.config.HARNESS_BASE_URL,
-            this.config.HARNESS_ACCOUNT_ID,
+            resolvedAccountId,
             def.deepLinkTemplate,
             baseLinkParams,
           );
@@ -656,7 +839,7 @@ export class Registry {
 
             let itemLink = buildDeepLink(
               this.config.HARNESS_BASE_URL,
-              this.config.HARNESS_ACCOUNT_ID,
+              resolvedAccountId,
               def.deepLinkTemplate,
               itemLinkParams,
             );

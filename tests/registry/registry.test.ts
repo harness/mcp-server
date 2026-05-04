@@ -3,6 +3,7 @@ import { Registry } from "../../src/registry/index.js";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import { HarnessApiError } from "../../src/utils/errors.js";
+import { registerAllTools } from "../../src/tools/index.js";
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -73,6 +74,91 @@ describe("Registry", () => {
       const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines,services,connectors" }));
       const desc = registry.describe() as { total_toolsets: number };
       expect(desc.total_toolsets).toBe(3);
+    });
+
+    it("accepts legacy agent-pipelines toolset name as an alias for agents", () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "agent-pipelines" }));
+      const desc = registry.describe() as { total_toolsets: number };
+      expect(desc.total_toolsets).toBe(1);
+      expect(registry.getResource("agent").toolset).toBe("agents");
+    });
+
+    it("excludes opt-in toolsets by default", () => {
+      const registry = new Registry(makeConfig());
+      expect(() => registry.getResource("eval_dataset")).toThrow(/Unknown resource_type/);
+    });
+
+    it("enables opt-in toolset with + prefix", () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "+ai-evals" }));
+      const desc = registry.describe() as { total_toolsets: number };
+      // All defaults plus ai-evals
+      expect(desc.total_toolsets).toBeGreaterThan(20);
+      // ai-evals resource is accessible
+      const res = registry.getResource("eval_dataset");
+      expect(res.resourceType).toBe("eval_dataset");
+    });
+
+    it("accepts legacy agent-pipelines alias with + prefix", () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "+agent-pipelines" }));
+      const desc = registry.describe() as { total_toolsets: number };
+      expect(desc.total_toolsets).toBeGreaterThan(20);
+      expect(registry.getResource("agent").toolset).toBe("agents");
+    });
+
+    it("+ prefix preserves default toolsets", () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "+ai-evals" }));
+      // Default toolset resource still accessible
+      const res = registry.getResource("pipeline");
+      expect(res.resourceType).toBe("pipeline");
+    });
+
+    it("- prefix removes from defaults", () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "-chaos" }));
+      expect(() => registry.getResource("chaos_experiment")).toThrow(/Unknown resource_type/);
+      // Other defaults still present
+      const res = registry.getResource("pipeline");
+      expect(res.resourceType).toBe("pipeline");
+    });
+
+    it("mixed +/- syntax", () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "+ai-evals,-chaos" }));
+      // ai-evals enabled
+      const ds = registry.getResource("eval_dataset");
+      expect(ds.resourceType).toBe("eval_dataset");
+      // chaos removed
+      expect(() => registry.getResource("chaos_experiment")).toThrow(/Unknown resource_type/);
+      // other defaults still present
+      const p = registry.getResource("pipeline");
+      expect(p.resourceType).toBe("pipeline");
+    });
+
+    it("throws for invalid names with +/- prefix", () => {
+      expect(() => new Registry(makeConfig({ HARNESS_TOOLSETS: "+badname" }))).toThrow(
+        /Invalid HARNESS_TOOLSETS: "badname"/,
+      );
+    });
+
+    it("explicit list can include opt-in toolsets", () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines,ai-evals" }));
+      const desc = registry.describe() as { total_toolsets: number };
+      expect(desc.total_toolsets).toBe(2);
+      const ds = registry.getResource("eval_dataset");
+      expect(ds.resourceType).toBe("eval_dataset");
+    });
+
+    it("registers tools when enabled toolsets have no resources for some operations", () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "logs" }));
+      const server = {
+        registerTool: vi.fn(),
+      };
+
+      expect(() => registerAllTools(
+        server as never,
+        registry,
+        makeClient(),
+        makeConfig({ HARNESS_TOOLSETS: "logs" }),
+      )).not.toThrow();
+      expect(server.registerTool).toHaveBeenCalled();
     });
   });
 
@@ -396,6 +482,129 @@ describe("Registry", () => {
           body: {},
         }),
       ).rejects.toThrow(/body must be a YAML string/);
+    });
+  });
+
+  describe("cost category create — account body injection", () => {
+    let registry: Registry;
+
+    it("injects accountId into the request body", async () => {
+      registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "ccm" }));
+      const mockRequest = vi.fn().mockResolvedValue({ data: { uuid: "category-1" } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_category", "create", {
+        body: {
+          name: "Engineering",
+          costTargets: [
+            {
+              name: "Development",
+              rules: [
+                {
+                  viewConditions: [
+                    {
+                      type: "VIEW_ID_CONDITION",
+                      viewField: {
+                        fieldId: "labels.value",
+                        fieldName: "env",
+                        identifierName: "Label V2",
+                        identifier: "LABEL_V2",
+                      },
+                      viewOperator: "IN",
+                      values: ["dev"],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      });
+
+      expect(mockRequest).toHaveBeenCalledOnce();
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("POST");
+      expect(call.path).toBe("/ccm/api/business-mapping");
+      expect(call.body).toMatchObject({
+        accountId: "test-account",
+        name: "Engineering",
+      });
+      expect(call.body.accountIdentifier).toBeUndefined();
+    });
+
+    it("uses the resolved account ID for body injection", async () => {
+      registry = new Registry(makeConfig({ HARNESS_ACCOUNT_ID: "internal", HARNESS_TOOLSETS: "ccm" }), {
+        accountIdResolver: () => "resolved-account",
+      });
+      const mockRequest = vi.fn().mockResolvedValue({ data: { uuid: "category-1" } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_category", "create", {
+        body: {
+          name: "Engineering",
+          costTargets: [{ name: "Development", rules: [] }],
+        },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.accountId).toBe("resolved-account");
+      expect(call.body.accountId).not.toBe("internal");
+    });
+  });
+
+  describe("resolved account ID propagation", () => {
+    it("passes the resolved account ID to pathBuilder and deep links", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: { registries: [{ identifier: "reg1", name: "reg1" }] },
+      });
+      const client = makeClient(mockRequest);
+      const registry = new Registry(
+        makeConfig({ HARNESS_TOOLSETS: "registries", HARNESS_ACCOUNT_ID: "static-account" }),
+        { accountIdResolver: () => "resolved-account" },
+      );
+
+      const result = (await registry.dispatch(client, "registry", "list", {
+        org_id: "org1",
+        project_id: "proj1",
+      })) as { items: Array<Record<string, unknown>> };
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/har/api/v1/spaces/resolved-account/org1/proj1/+/registries");
+      expect(result.items[0].openInHarness).toContain("/ng/account/resolved-account/");
+    });
+
+    it("uses the resolved account ID for custom account scope params", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: [] });
+      const client = makeClient(mockRequest);
+      const registry = new Registry(
+        makeConfig({ HARNESS_TOOLSETS: "sto", HARNESS_ACCOUNT_ID: "static-account" }),
+        { accountIdResolver: () => "resolved-account" },
+      );
+
+      await registry.dispatch(client, "security_issue", "list", {
+        org_id: "org1",
+        project_id: "proj1",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params.accountId).toBe("resolved-account");
+    });
+
+    it("uses the resolved account ID when injecting accountIdentifier into request bodies", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ applications: [] });
+      const client = makeClient(mockRequest);
+      const registry = new Registry(
+        makeConfig({ HARNESS_TOOLSETS: "gitops", HARNESS_ACCOUNT_ID: "static-account" }),
+        { accountIdResolver: () => "resolved-account" },
+      );
+
+      await registry.dispatch(client, "gitops_application", "list", {
+        org_id: "org1",
+        project_id: "proj1",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.accountIdentifier).toBe("resolved-account");
     });
   });
 

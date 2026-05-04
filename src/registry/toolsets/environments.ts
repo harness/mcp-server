@@ -48,6 +48,7 @@ export const environmentsToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/ng/api/environmentsV2",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search_term: "searchTerm",
             env_type: "envType",
@@ -62,6 +63,7 @@ export const environmentsToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/ng/api/environmentsV2/{environmentIdentifier}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { environment_id: "environmentIdentifier" },
           responseExtractor: ngExtract,
           description: "Get environment details",
@@ -69,6 +71,7 @@ export const environmentsToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/ng/api/environmentsV2",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: buildBodyNormalized({ unwrapKey: "environment" }),
           responseExtractor: ngExtract,
           description: "Create a new environment",
@@ -77,6 +80,7 @@ export const environmentsToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/ng/api/environmentsV2",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           bodyBuilder: buildBodyNormalized({
             unwrapKey: "environment",
             injectIdentifier: { inputField: "environment_id", bodyField: "identifier" },
@@ -88,6 +92,7 @@ export const environmentsToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/ng/api/environmentsV2/{environmentIdentifier}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { environment_id: "environmentIdentifier" },
           responseExtractor: ngExtract,
           description: "Delete an environment",
@@ -97,6 +102,7 @@ export const environmentsToolset: ToolsetDefinition = {
         move_configs: {
           method: "POST",
           path: "/ng/api/environmentsV2/move-config/{environmentIdentifier}",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: { environment_id: "environmentIdentifier" },
           queryParams: {
             connector_ref: "connectorRef",

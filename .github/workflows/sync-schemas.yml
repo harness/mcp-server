@@ -2,8 +2,8 @@ name: Sync Harness Schemas
 
 on:
   schedule:
-    # Run weekly on Sunday at midnight
-    - cron: '0 0 * * 0'
+    # Run daily at midnight UTC
+    - cron: '0 0 * * *'
   workflow_dispatch: # Allow manual trigger
 
 jobs:
@@ -18,6 +18,11 @@ jobs:
         with:
           node-version: 20
 
+      - name: Check schema coverage
+        run: node scripts/check-schema-coverage.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Run sync script
         run: node scripts/sync-schemas.js
 
@@ -29,7 +34,7 @@ jobs:
           body: |
             Automated schema synchronization from `harness/harness-schema`.
 
-            This PR updates the local static JSON schemas used by the MCP server to match the latest API definitions.
+            This PR updates both v0 and v1 JSON schemas used by the MCP server to match the latest definitions upstream.
           branch: chore/sync-schemas
           delete-branch: true
           labels: dependencies, schemas

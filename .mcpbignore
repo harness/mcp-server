@@ -1,0 +1,33 @@
+# Exclude repository and development files when packing directly from repo root.
+# Preferred flow: pnpm prepare:mcpb, then create the .mcpb from dist/mcpb/.
+
+.git/
+.github/
+.cursor/
+tasks/
+docs/
+k8s/
+scripts/
+src/
+tests/
+node_modules/
+dist/
+coverage/
+pipelines/
+
+AGENTS.md
+CLAUDE.md
+CONTRIBUTING.md
+Dockerfile
+NOTICE
+README.md
+gemini-extension.json
+pnpm-lock.yaml
+tsconfig.json
+vitest.config.ts
+
+*.log
+*.tgz
+*.mcpb
+*.map
+*.tsbuildinfo

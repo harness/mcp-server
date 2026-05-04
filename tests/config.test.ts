@@ -101,6 +101,23 @@ describe("ConfigSchema", () => {
     }
   });
 
+  it("treats empty optional MCPB user config values as unset", () => {
+    const result = ConfigSchema.safeParse({
+      HARNESS_API_KEY: "pat.acct123.tokenId.secret",
+      HARNESS_ACCOUNT_ID: "",
+      HARNESS_ORG: "",
+      HARNESS_PROJECT: "",
+      HARNESS_BASE_URL: "",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_ACCOUNT_ID).toBe("acct123");
+      expect(result.data.HARNESS_ORG).toBe("default");
+      expect(result.data.HARNESS_PROJECT).toBeUndefined();
+      expect(result.data.HARNESS_BASE_URL).toBe("https://app.harness.io");
+    }
+  });
+
   it("applies default timeout and retries", () => {
     const result = ConfigSchema.safeParse(validConfig);
     expect(result.success).toBe(true);
@@ -137,6 +154,27 @@ describe("ConfigSchema", () => {
     if (result.success) {
       expect(result.data.HARNESS_TOOLSETS).toBeUndefined();
     }
+  });
+
+  it("normalizes configured MCP allowed hosts during config validation", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      HARNESS_MCP_ALLOWED_HOSTS: "https://mcp.example.com, mcp.example.com:443, localhost",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_MCP_ALLOWED_HOSTS).toBe("mcp.example.com,localhost");
+    }
+  });
+
+  it("rejects malformed MCP allowed host entries during config validation", () => {
+    expect(() =>
+      ConfigSchema.parse({
+        ...validConfig,
+        HARNESS_MCP_ALLOWED_HOSTS: "mcp.example.com, http://",
+      }),
+    ).toThrow('Invalid HARNESS_MCP_ALLOWED_HOSTS entries: "http://"');
   });
 });
 
@@ -212,6 +250,38 @@ describe("ConfigSchema — HTTPS enforcement", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.HARNESS_BASE_URL).toBe("https://custom.harness.io");
+    }
+  });
+
+  it("rejects http:// FME base URL by default", () => {
+    expect(() =>
+      ConfigSchema.parse({
+        ...validConfig,
+        HARNESS_FME_BASE_URL: "http://localhost:9090",
+      }),
+    ).toThrow("HARNESS_FME_BASE_URL must use HTTPS");
+  });
+
+  it("accepts http:// FME base URL when HARNESS_ALLOW_HTTP=true", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      HARNESS_FME_BASE_URL: "http://localhost:9090",
+      HARNESS_ALLOW_HTTP: "true",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_FME_BASE_URL).toBe("http://localhost:9090");
+    }
+  });
+
+  it("always accepts https:// FME base URL", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      HARNESS_FME_BASE_URL: "https://custom.split.io",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_FME_BASE_URL).toBe("https://custom.split.io");
     }
   });
 });

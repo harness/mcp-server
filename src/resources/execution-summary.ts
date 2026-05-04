@@ -24,7 +24,7 @@ export function registerExecutionSummaryResource(server: McpServer, registry: Re
           project_id: config.HARNESS_PROJECT ?? "",
           size: 10,
           page: 0,
-        });
+        }, { tool: "execution_summary_resource" });
 
         return {
           contents: [{

@@ -20,6 +20,45 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: node -e "import('@hono/node-server')"
       - run: pnpm build
       - run: pnpm test
       - run: pnpm typecheck
+      - run: pnpm docs:check
+
+  smoke-test:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: default
+            toolsets: ""
+            read_only: "false"
+          - name: read-only
+            toolsets: ""
+            read_only: "true"
+          - name: single-toolset
+            toolsets: "pipelines"
+            read_only: "false"
+          - name: multi-toolset
+            toolsets: "pipelines,repositories,services"
+            read_only: "false"
+          - name: opt-in-toolset
+            toolsets: "+ai-evals"
+            read_only: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: "Smoke test: ${{ matrix.name }}"
+        run: node scripts/smoke-test.js
+        env:
+          HARNESS_TOOLSETS: ${{ matrix.toolsets }}
+          HARNESS_READ_ONLY: ${{ matrix.read_only }}

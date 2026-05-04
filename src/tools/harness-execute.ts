@@ -5,24 +5,25 @@ import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError, HarnessApiError } from "../utils/errors.js";
 import { confirmViaElicitation } from "../utils/elicitation.js";
-import { createLogger, logAudit } from "../utils/logger.js";
+import { createLogger } from "../utils/logger.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asRecord, asString, coerceRecord } from "../utils/type-guards.js";
 import { isFlatKeyValueInputs, isResolvableInputs, flattenInputs, resolveRuntimeInputs, type ResolutionResult } from "../utils/runtime-input-resolver.js";
 import { applyInputExpansions } from "../utils/input-expander.js";
 import { materializeInputSetsToRuntimeYaml } from "../utils/materialize-input-sets.js";
+import { resourceTypeSchema } from "./input-schemas.js";
 
 const log = createLogger("execute");
 
 export function registerExecuteTool(server: McpServer, registry: Registry, client: HarnessClient): void {
-  const executableTypes = registry.getTypesWithExecuteActions() as [string, ...string[]];
+  const executableTypes = registry.getTypesWithExecuteActions();
 
   server.registerTool(
     "harness_execute",
     {
       description: "Execute an action on a Harness resource: run/retry/interrupt pipelines, kill/restore FME feature flags, test connectors, sync GitOps apps, run chaos experiments. You can pass a Harness URL to auto-extract identifiers.",
       inputSchema: {
-        resource_type: z.enum(executableTypes).describe("Resource type with executable actions. Auto-detected from url.").optional(),
+        resource_type: resourceTypeSchema(executableTypes).optional().describe("Resource type with executable actions. Auto-detected from url."),
         url: z.string().describe("Harness UI URL — auto-extracts org, project, type, and ID").optional(),
         action: z.string().describe("Action to execute (e.g. run, retry, interrupt, toggle, test_connection, sync)"),
         resource_id: z.string().describe("Primary resource identifier").optional(),
@@ -61,10 +62,14 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           return errorResult(`Resource "${resourceType}" has no execute action "${args.action}". Available: ${available}`);
         }
 
+        const actionSpec = def.executeActions?.[args.action];
+        const risk = actionSpec?.operationPolicy.risk ?? "low_write";
+
         const elicit = await confirmViaElicitation({
           server,
           toolName: "harness_execute",
           message: `Execute "${args.action}" on ${resourceType}${resourceId ? ` "${resourceId}"` : ""}?`,
+          risk,
         });
         if (!elicit.proceed) {
           return errorResult(`Operation ${elicit.reason} by user.`);
@@ -193,13 +198,12 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           }
         }
 
-        const auditBase = { operation: "execute", resource_type: resourceType, resource_id: resourceId, action: args.action, org_id: input.org_id as string, project_id: input.project_id as string };
+        const auditCtx = { tool: "harness_execute" as const, confirmation: elicit.method, resource_id: resourceId, action: args.action };
 
         let result: unknown;
         try {
-          result = await registry.dispatchExecute(client, resourceType, args.action, input);
+          result = await registry.dispatchExecute(client, resourceType, args.action, input, auditCtx);
         } catch (err) {
-          // If retry fails with 405, fall back to a fresh pipeline run
           if (
             args.action === "retry" &&
             resourceType === "pipeline" &&
@@ -224,14 +228,11 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
             }
 
             input.pipeline_id = pipelineId;
-            result = await registry.dispatchExecute(client, "pipeline", "run", input);
-            logAudit({ ...auditBase, action: "run (retry fallback)", outcome: "success" });
+            result = await registry.dispatchExecute(client, "pipeline", "run", input, { ...auditCtx, action: "run (retry fallback)" });
             return jsonResult({ ...(asRecord(result) ?? {}), _note: "Retry was not available (405). Executed a fresh pipeline run instead." });
           }
           throw err;
         }
-
-        logAudit({ ...auditBase, outcome: "success" });
 
         if (resolved) {
           return jsonResult({
@@ -246,7 +247,6 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
 
         return jsonResult(result);
       } catch (err) {
-        logAudit({ operation: "execute", resource_type: args.resource_type ?? "unknown", resource_id: args.resource_id, action: args.action, outcome: "error", error: String(err) });
         if (isUserError(err)) return errorResult(err.message);
         if (isUserFixableApiError(err)) return errorResult(err.message);
         throw toMcpError(err);

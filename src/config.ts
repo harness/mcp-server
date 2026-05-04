@@ -1,4 +1,5 @@
 import * as z from "zod/v4";
+import { normalizeHttpAllowedHost } from "./utils/http-hosts.js";
 
 /**
  * Coerce a string env var to a boolean.
@@ -8,6 +9,33 @@ import * as z from "zod/v4";
 const booleanFromEnv = z
   .union([z.boolean(), z.string(), z.undefined()])
   .transform((val) => typeof val === "string" && ["true", "1", "yes"].includes(val.toLowerCase()));
+
+const emptyStringAsUndefined = (val: unknown): unknown => val === "" ? undefined : val;
+const optionalStringFromEnv = z.preprocess(emptyStringAsUndefined, z.string().optional());
+const urlFromEnv = (defaultValue: string) =>
+  z.preprocess(emptyStringAsUndefined, z.string().url().default(defaultValue));
+
+function validateAllowedHosts(rawHosts: string | undefined): string | undefined {
+  if (rawHosts === undefined) return undefined;
+
+  const hosts: string[] = [];
+  const invalidHosts: string[] = [];
+  for (const value of rawHosts.split(",")) {
+    const hostname = normalizeHttpAllowedHost(value);
+    if (!hostname) {
+      invalidHosts.push(value.trim());
+    } else if (!hosts.includes(hostname)) {
+      hosts.push(hostname);
+    }
+  }
+
+  if (invalidHosts.length > 0) {
+    const quotedHosts = invalidHosts.map((host) => `"${host}"`).join(", ");
+    throw new Error(`Invalid HARNESS_MCP_ALLOWED_HOSTS entries: ${quotedHosts}`);
+  }
+
+  return hosts.join(",");
+}
 
 /**
  * Extract the account ID from a Harness PAT token.
@@ -25,28 +53,39 @@ export function extractAccountIdFromToken(apiKey: string): string | undefined {
 
 const RawConfigSchema = z.object({
   HARNESS_API_KEY: z.string().min(1, "HARNESS_API_KEY is required"),
-  HARNESS_ACCOUNT_ID: z.string().optional(),
-  HARNESS_BASE_URL: z.string().url().default("https://app.harness.io"),
+  HARNESS_ACCOUNT_ID: optionalStringFromEnv,
+  HARNESS_BASE_URL: urlFromEnv("https://app.harness.io"),
   // New names (preferred)
-  HARNESS_ORG: z.string().optional(),
-  HARNESS_PROJECT: z.string().optional(),
+  HARNESS_ORG: optionalStringFromEnv,
+  HARNESS_PROJECT: optionalStringFromEnv,
   // Deprecated names (backward compat)
-  HARNESS_DEFAULT_ORG_ID: z.string().optional(),
-  HARNESS_DEFAULT_PROJECT_ID: z.string().optional(),
+  HARNESS_DEFAULT_ORG_ID: optionalStringFromEnv,
+  HARNESS_DEFAULT_PROJECT_ID: optionalStringFromEnv,
   HARNESS_API_TIMEOUT_MS: z.coerce.number().default(30000),
   HARNESS_MAX_RETRIES: z.coerce.number().default(3),
   LOG_LEVEL: z.preprocess(
     (val) => (val === "" ? undefined : val),
     z.enum(["debug", "info", "warn", "error"]).default("info"),
   ),
-  HARNESS_TOOLSETS: z.string().optional(),
+  HARNESS_TOOLSETS: optionalStringFromEnv,
   HARNESS_MAX_BODY_SIZE_MB: z.coerce.number().default(10),
   HARNESS_RATE_LIMIT_RPS: z.coerce.number().default(10),
   HARNESS_READ_ONLY: booleanFromEnv.default(false),
   HARNESS_SKIP_ELICITATION: booleanFromEnv.default(false),
+  HARNESS_AUTO_APPROVE_RISK: z.preprocess(
+    emptyStringAsUndefined,
+    z.enum(["none", "low_write", "medium_write", "high_write", "all"]).optional(),
+  ),
   HARNESS_ALLOW_HTTP: booleanFromEnv.default(false),
-  HARNESS_FME_BASE_URL: z.string().url().default("https://api.split.io"),
-  HARNESS_PIPELINE_VERSION: z.enum(["0", "1"]).default("0"),
+  HARNESS_MCP_ALLOWED_HOSTS: optionalStringFromEnv.transform(validateAllowedHosts),
+  HARNESS_FME_BASE_URL: urlFromEnv("https://api.split.io"),
+  HARNESS_LOG_UNSAFE_BODIES: booleanFromEnv.default(false),
+  HARNESS_PIPELINE_VERSION: z.enum(["0", "1"]).optional(),
+  HARNESS_AUDIT_FILE: optionalStringFromEnv,
+  HARNESS_AUDIT_WEBHOOK_URL: z.preprocess(emptyStringAsUndefined, z.string().url().optional()),
+  HARNESS_AUDIT_WEBHOOK_TOKEN: optionalStringFromEnv,
+  HARNESS_AUDIT_WEBHOOK_BATCH_SIZE: z.preprocess(emptyStringAsUndefined, z.coerce.number().min(1).default(10)),
+  HARNESS_AUDIT_WEBHOOK_FLUSH_MS: z.preprocess(emptyStringAsUndefined, z.coerce.number().min(1).default(5000)),
 });
 
 export const ConfigSchema = RawConfigSchema.transform((data) => {
@@ -64,6 +103,20 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
     );
   }
 
+  if (data.HARNESS_FME_BASE_URL && !data.HARNESS_FME_BASE_URL.startsWith("https://") && !data.HARNESS_ALLOW_HTTP) {
+    throw new Error(
+      `HARNESS_FME_BASE_URL must use HTTPS (got "${data.HARNESS_FME_BASE_URL}"). ` +
+      "If you need HTTP for local development, set HARNESS_ALLOW_HTTP=true.",
+    );
+  }
+
+  if (data.HARNESS_AUDIT_WEBHOOK_URL && !data.HARNESS_AUDIT_WEBHOOK_URL.startsWith("https://") && !data.HARNESS_ALLOW_HTTP) {
+    throw new Error(
+      `HARNESS_AUDIT_WEBHOOK_URL must use HTTPS (got "${data.HARNESS_AUDIT_WEBHOOK_URL}"). ` +
+      "If you need HTTP for local development, set HARNESS_ALLOW_HTTP=true.",
+    );
+  }
+
   // Resolve org/project: prefer new names, fall back to deprecated names
   if (!data.HARNESS_ORG && data.HARNESS_DEFAULT_ORG_ID) {
     console.error('[DEPRECATION] HARNESS_DEFAULT_ORG_ID is deprecated. Use HARNESS_ORG instead.');
@@ -74,24 +127,31 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
   const HARNESS_ORG = data.HARNESS_ORG ?? data.HARNESS_DEFAULT_ORG_ID ?? "default";
   const HARNESS_PROJECT = data.HARNESS_PROJECT ?? data.HARNESS_DEFAULT_PROJECT_ID;
 
+  // Resolve auto-approve risk: prefer new name, fall back to deprecated SKIP_ELICITATION
+  let HARNESS_AUTO_APPROVE_RISK = data.HARNESS_AUTO_APPROVE_RISK ?? "none";
+  if (!data.HARNESS_AUTO_APPROVE_RISK && data.HARNESS_SKIP_ELICITATION) {
+    console.error(
+      '[DEPRECATION] HARNESS_SKIP_ELICITATION is deprecated. Use HARNESS_AUTO_APPROVE_RISK instead.\n' +
+      '  HARNESS_SKIP_ELICITATION=true is equivalent to HARNESS_AUTO_APPROVE_RISK=all.',
+    );
+    HARNESS_AUTO_APPROVE_RISK = "all";
+  }
+
   // Remove deprecated keys from output, expose only the canonical names
   const { HARNESS_DEFAULT_ORG_ID: _oldOrg, HARNESS_DEFAULT_PROJECT_ID: _oldProject, ...rest } = data;
 
-  return { ...rest, HARNESS_ACCOUNT_ID: accountId, HARNESS_ORG, HARNESS_PROJECT };
+  return { ...rest, HARNESS_ACCOUNT_ID: accountId, HARNESS_ORG, HARNESS_PROJECT, HARNESS_AUTO_APPROVE_RISK };
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
 
-/** FME (Split.io) API base URL — always api.split.io, not configurable. */
-const FME_BASE_URL = "https://api.split.io";
-
 /**
  * Resolve the base URL for a given product backend.
  * - "harness" → undefined (uses the default client base URL)
- * - "fme"     → https://api.split.io
+ * - "fme"     → HARNESS_FME_BASE_URL from config (defaults to https://api.split.io)
  */
-export function resolveProductBaseUrl(_config: Config, product: "harness" | "fme"): string | undefined {
-  if (product === "fme") return FME_BASE_URL;
+export function resolveProductBaseUrl(config: Config, product: "harness" | "fme"): string | undefined {
+  if (product === "fme") return config.HARNESS_FME_BASE_URL;
   return undefined;
 }
 

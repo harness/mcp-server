@@ -25,6 +25,25 @@ export const pageExtract = (raw: unknown): { items: unknown[]; total: number } =
 export const passthrough = (raw: unknown): unknown => raw;
 
 /**
+ * AI Evals control plane — paginated list: `{ data, page, limit, total_elements }`.
+ */
+export const aiEvalsListExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { data?: unknown[]; total_elements?: number };
+  return {
+    items: r.data ?? [],
+    total: r.total_elements ?? 0,
+  };
+};
+
+/**
+ * AI Evals — bare array response (e.g. suite evaluations, metric set entries list).
+ */
+export const aiEvalsArrayExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const arr = Array.isArray(raw) ? raw : [];
+  return { items: arr, total: arr.length };
+};
+
+/**
  * SCS-specific extractor — strips null, undefined, empty string, empty array,
  * and empty object fields recursively from API responses. SCS payloads contain
  * ~40% empty/null fields; removing them yields significant token savings.

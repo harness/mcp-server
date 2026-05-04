@@ -257,7 +257,7 @@ export const gitopsApplicationHandler: DiagnoseHandler = {
     const projectId = asString(input.project_id) ?? config.HARNESS_PROJECT;
     if (orgId && projectId) {
       const base = config.HARNESS_BASE_URL.replace(/\/$/, "");
-      diagnostic.openInHarness = `${base}/ng/account/${config.HARNESS_ACCOUNT_ID}/all/orgs/${orgId}/projects/${projectId}/gitops/applications/${encodeURIComponent(appName)}`;
+      diagnostic.openInHarness = `${base}/ng/account/${registry.getAccountId()}/all/orgs/${orgId}/projects/${projectId}/gitops/applications/${encodeURIComponent(appName)}`;
     }
 
     await sendProgress(extra, 3, 3, "GitOps application diagnosis complete");

@@ -1,6 +1,6 @@
 {
   "name": "harness-mcp-v2",
-  "version": "0.9.0",
+  "version": "0.9.6",
   "description": "Give AI agents full access to the Harness.io platform — manage pipelines, deployments, cloud costs, chaos engineering, feature flags, SEI, and 125+ resource types through 11 MCP tools",
   "type": "module",
   "main": "build/index.js",
@@ -16,8 +16,12 @@
     "start": "node build/index.js stdio",
     "start:http": "node build/index.js http",
     "inspect": "npx @modelcontextprotocol/inspector node build/index.js stdio",
+    "prepare:mcpb": "node scripts/prepare-mcpb.js",
     "typecheck": "tsc --noEmit",
     "sync-schemas": "node scripts/sync-schemas.js",
+    "check-schema-coverage": "node scripts/check-schema-coverage.js",
+    "docs:generate": "node scripts/generate-docs.js",
+    "docs:check": "node scripts/generate-docs.js --check",
     "test": "vitest run",
     "test:watch": "vitest",
     "docker:build": "docker build -t harness-mcp-server .",
@@ -33,7 +37,7 @@
     "ai-agent",
     "devops"
   ],
-  "license": "Apache-2.0",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/harness/mcp-server.git"
@@ -43,15 +47,41 @@
   },
   "homepage": "https://github.com/harness/mcp-server#readme",
   "dependencies": {
+    "@hono/node-server": "^2.0.0",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@resvg/resvg-js": "^2.6.2",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
+    "hono": "^4.12.15",
     "jsonwebtoken": "^9.0.3",
     "yaml": "^2.8.3",
     "zod": "^4.0.0"
   },
+  "peerDependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.200.0",
+    "@opentelemetry/resources": "^2.0.0",
+    "@opentelemetry/sdk-trace-node": "^2.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@opentelemetry/api": {
+      "optional": true
+    },
+    "@opentelemetry/sdk-trace-node": {
+      "optional": true
+    },
+    "@opentelemetry/exporter-trace-otlp-http": {
+      "optional": true
+    },
+    "@opentelemetry/resources": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.216.0",
+    "@opentelemetry/resources": "^2.7.1",
+    "@opentelemetry/sdk-trace-node": "^2.7.1",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.13.5",

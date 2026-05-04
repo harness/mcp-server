@@ -11,6 +11,7 @@ export type Transport = "stdio" | "http";
 export interface CliArgs {
   transport: Transport;
   port: number;
+  envFile?: string;
 }
 
 const VALID_TRANSPORTS = new Set<string>(["stdio", "http"]);
@@ -25,14 +26,15 @@ Usage:
   harness-mcp-server [stdio|http] [options]
 
 Options:
-  --port <number>  Port for HTTP transport (default: 3000, or PORT env var)
-  --help           Show this help message and exit
-  --version        Print version and exit
+  --port <number>       Port for HTTP transport (default: 3000, or PORT env var)
+  --env-file <path>     Path to .env file (default: .env in current directory)
+  --help                Show this help message and exit
+  --version             Print version and exit
 
 Transport defaults to "stdio" if not specified.
 `.trim();
 
-function getVersion(): string {
+export function getVersion(): string {
   try {
     const thisDir = dirname(fileURLToPath(import.meta.url));
     const pkgPath = resolve(thisDir, "..", "..", "package.json");
@@ -65,16 +67,17 @@ export function parseArgs(argv: string[] = process.argv.slice(2)): CliArgs {
   }
 
   const transport = parseTransport(argv);
-  const port = parsePort(argv);
-  return { transport, port };
+  const port = resolvePort(argv);
+  const envFile = parseEnvFile(argv);
+  return { transport, port, envFile };
 }
 
 function parseTransport(argv: string[]): Transport {
   // First positional arg that isn't a flag or flag value
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!;
-    if (arg === "--port") {
-      i++; // skip the value after --port
+    if (arg === "--port" || arg === "--env-file") {
+      i++; // skip the value after the flag
       continue;
     }
     if (arg.startsWith("-")) continue;
@@ -89,7 +92,7 @@ function parseTransport(argv: string[]): Transport {
   return "stdio";
 }
 
-function parsePort(argv: string[]): number {
+export function resolvePort(argv: string[] = process.argv.slice(2)): number {
   // Check --port flag first
   const portFlagIndex = argv.indexOf("--port");
   if (portFlagIndex !== -1 && portFlagIndex + 1 < argv.length) {
@@ -109,4 +112,23 @@ function parsePort(argv: string[]): number {
 
 function isValidPort(n: number): boolean {
   return Number.isInteger(n) && n >= MIN_PORT && n <= MAX_PORT;
+}
+
+function parseEnvFile(argv: string[]): string | undefined {
+  // Check --env-file flag (supports both space-separated and = syntax)
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]!;
+
+    // Handle --env-file=path
+    if (arg.startsWith("--env-file=")) {
+      return arg.slice("--env-file=".length);
+    }
+
+    // Handle --env-file path 
+    if ((arg === "--env-file") && i + 1 < argv.length) {
+      return argv[i + 1]!;
+    }
+  }
+
+  return undefined;
 }

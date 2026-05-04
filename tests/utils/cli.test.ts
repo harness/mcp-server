@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { parseArgs } from "../../src/utils/cli.js";
+import { parseArgs, resolvePort } from "../../src/utils/cli.js";
 
 describe("parseArgs", () => {
   let originalPort: string | undefined;
@@ -66,6 +66,15 @@ describe("parseArgs", () => {
     process.env.PORT = "4000";
     const args = parseArgs(["http"]);
     expect(args.port).toBe(4000);
+  });
+
+  it("resolves PORT after env-file variables are loaded", () => {
+    const args = parseArgs(["http", "--env-file", "/tmp/harness.env"]);
+    expect(args.envFile).toBe("/tmp/harness.env");
+
+    process.env.PORT = "4100";
+
+    expect(resolvePort(["http", "--env-file", "/tmp/harness.env"])).toBe(4100);
   });
 
   it("--port flag takes precedence over PORT env var", () => {

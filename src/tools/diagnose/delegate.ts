@@ -110,7 +110,7 @@ export const delegateHandler: DiagnoseHandler = {
       return {
         total_delegates: 0,
         note: "No delegates returned by the API for this account.",
-        openInHarness: `${config.HARNESS_BASE_URL.replace(/\/$/, "")}/ng/account/${config.HARNESS_ACCOUNT_ID}/settings/resources/delegates`,
+        openInHarness: `${config.HARNESS_BASE_URL.replace(/\/$/, "")}/ng/account/${registry.getAccountId()}/settings/resources/delegates`,
       };
     }
 
@@ -158,7 +158,7 @@ export const delegateHandler: DiagnoseHandler = {
     }
 
     const base = config.HARNESS_BASE_URL.replace(/\/$/, "");
-    diagnostic.openInHarness = `${base}/ng/account/${config.HARNESS_ACCOUNT_ID}/settings/resources/delegates`;
+    diagnostic.openInHarness = `${base}/ng/account/${registry.getAccountId()}/settings/resources/delegates`;
 
     await sendProgress(extra, 1, 1, "Delegate diagnosis complete");
     return diagnostic;

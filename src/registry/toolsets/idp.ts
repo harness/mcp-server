@@ -23,6 +23,7 @@ export const idpToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/v1/entities",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             kind: "kind",
             search: "search_term",
@@ -52,6 +53,7 @@ export const idpToolset: ToolsetDefinition = {
             const entityId = input.entity_id as string;
             return `/v1/entities/${encodeURIComponent(scope)}/${encodeURIComponent(kind)}/${encodeURIComponent(namespace)}/${encodeURIComponent(entityId)}`;
           },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: ngExtract,
           description: "Get IDP catalog entity details by scope, kind, namespace, and name (entity_ref format: kind:namespace/name)",
         },
@@ -69,6 +71,7 @@ export const idpToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/v1/scorecards",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             page: "page",
             size: "limit",
@@ -79,6 +82,7 @@ export const idpToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/v1/scorecards/{scorecardIdentifier}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { scorecard_id: "scorecardIdentifier" },
           responseExtractor: ngExtract,
           description: "Get scorecard details",
@@ -96,6 +100,7 @@ export const idpToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/v1/checks",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             page: "page",
             size: "limit",
@@ -106,6 +111,7 @@ export const idpToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/v1/checks/{checkIdentifier}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { check_id: "checkIdentifier" },
           queryParams: { is_custom: "custom" },
           responseExtractor: ngExtract,
@@ -125,6 +131,7 @@ export const idpToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/v1/scorecards/{scorecardIdentifier}/stats",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { scorecard_id: "scorecardIdentifier" },
           responseExtractor: ngExtract,
           description: "Get aggregate statistics for a scorecard",
@@ -143,6 +150,7 @@ export const idpToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/v1/checks/{checkIdentifier}/stats",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { check_id: "checkIdentifier" },
           queryParams: { is_custom: "custom" },
           defaultQueryParams: { custom: "false" },
@@ -165,6 +173,7 @@ export const idpToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/v1/scores",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             page: "page",
             size: "limit",
@@ -180,6 +189,7 @@ export const idpToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/v1/scores/{entityId}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { entity_id: "entityId" },
           responseExtractor: ngExtract,
           description: "Get score summary for an entity",
@@ -200,6 +210,7 @@ export const idpToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/v1/entities",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             scope_level: "scope_level",
           },
@@ -212,6 +223,7 @@ export const idpToolset: ToolsetDefinition = {
         execute: {
           method: "POST",
           path: "/v1/scaffolder/tasks",
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => input.body ?? {},
           responseExtractor: ngExtract,
           actionDescription: "Execute an IDP self-service workflow",
@@ -238,6 +250,7 @@ export const idpToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: "/v1/tech-docs/semantic-search",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           bodyBuilder: (input) => ({ query: input.query ?? input.search_term ?? "" }),
           responseExtractor: v1ListExtract(),
           description: "Search IDP TechDocs via semantic search",

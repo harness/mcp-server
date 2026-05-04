@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { randomUUID } from "node:crypto";
+import { appendFileSync } from "node:fs";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -12,22 +13,47 @@ import { Registry } from "./registry/index.js";
 import { registerAllTools } from "./tools/index.js";
 import { registerAllResources } from "./resources/index.js";
 import { registerAllPrompts } from "./prompts/index.js";
-import { parseArgs } from "./utils/cli.js";
+import { parseArgs, resolvePort, getVersion } from "./utils/cli.js";
 import { configureElicitation } from "./utils/elicitation.js";
+import { resolveHttpHostValidationOptions } from "./utils/http-hosts.js";
+import { loadEnvFile } from "./utils/env.js";
+import { createAuditManager, type AuditManager } from "./audit/index.js";
 
 const log = createLogger("main");
 
+const PIPELINE_VERSION_HEADER = "x-harness-pipeline-version";
+
+function parsePipelineVersionHeader(req: import("express").Request): "0" | "1" | undefined {
+  const raw = req.headers[PIPELINE_VERSION_HEADER];
+  const s = Array.isArray(raw) ? raw[0] : raw;
+  if (s === "0" || s === "1") return s;
+  return undefined;
+}
+
+function mergeConfigWithPipelineVersion(baseConfig: Config, req: import("express").Request): Config {
+  const pv = parsePipelineVersionHeader(req);
+  if (pv === undefined) return baseConfig;
+  return { ...baseConfig, HARNESS_PIPELINE_VERSION: pv };
+}
+
+interface HarnessServerResult {
+  server: McpServer;
+  auditManager: AuditManager;
+}
+
 /**
  * Create a fully-configured MCP server instance with all tools, resources, and prompts.
+ * @param sharedAuditManager When set (HTTP mode), reuse this manager instead of creating one per session.
  */
-function createHarnessServer(config: Config): McpServer {
+function createHarnessServer(config: Config, sharedAuditManager?: AuditManager): HarnessServerResult {
+  const auditManager = sharedAuditManager ?? createAuditManager(config);
   const client = new HarnessClient(config);
-  const registry = new Registry(config);
+  const registry = new Registry(config, { auditManager });
 
   const server = new McpServer(
     {
       name: "harness-mcp-server",
-      version: "2.0.0",
+      version: getVersion(),
       icons: [{ src: "https://app.harness.io/favicon.ico" }],
       websiteUrl: "https://harness.io",
     },
@@ -46,23 +72,25 @@ function createHarnessServer(config: Config): McpServer {
         "• Run pipeline: harness_execute(url='<Harness pipeline URL>', action='run', inputs={branch: 'main'})",
         "• Diagnose failure: harness_diagnose(url='<Harness execution URL>')",
         "",
-        "DISCOVERY: Use harness_describe() to list all resource types, or harness_describe(resource_type='<type>') for operations and fields.",
+        "DISCOVERY: Use harness_describe() to list all resource types, harness_describe(search_term='...') to find types by keyword, or harness_describe(resource_type='<type>') for operations and fields. Always search before telling the user a capability is unavailable.",
         "SCHEMA: Use harness_schema(resource_type='<type>') to fetch the exact JSON Schema for create/update body payloads.",
+        "",
+        "ENTITY SELECTION: When the user references an ordinal ('first repo', 'second artifact', 'latest execution'), pick the item at that index from the list response (0 = first, -1 = last). Do NOT substitute a different item or pick by name unless the user asks by name. If the list is empty, say so — never guess an ID.",
         "",
         "PR RESOURCES: pull_request, pr_comment, pr_activity, pr_reviewer, pr_check — all accept URL or explicit repo_id + pr_number.",
         ...(config.HARNESS_PIPELINE_VERSION === "1"
-          ? ["", "V1 PIPELINES: For pipeline operations, prefer resource_type='pipeline_v1' (v1 YAML format — simplified stages/steps, agent pipelines). Use resource_type='pipeline' for legacy v0 pipelines."]
-          : []),
+          ? ["", "PIPELINE VERSION: This account uses v1 pipelines. Use resource_type='pipeline_v1' for all pipeline operations."]
+          : ["", "PIPELINE VERSION: This account uses v0 pipelines. Use resource_type='pipeline' for all pipeline operations."]),
       ].join("\n"),
     },
   );
 
-  configureElicitation({ skip: config.HARNESS_SKIP_ELICITATION });
+  configureElicitation({ autoApproveRisk: config.HARNESS_AUTO_APPROVE_RISK as import("./registry/types.js").AutoApproveRisk });
   registerAllTools(server, registry, client, config);
   registerAllResources(server, registry, client, config);
   registerAllPrompts(server);
 
-  return server;
+  return { server, auditManager };
 }
 
 /**
@@ -83,8 +111,7 @@ function logToFile(message: string, data?: Record<string, unknown>): void {
     const logPath = process.env.HARNESS_MCP_LOG_FILE
       ?? (process.env.HOME ? `${process.env.HOME}/.claude/harness-mcp.log` : undefined);
     if (logPath) {
-      // Sync write — process may exit immediately after this
-      require("node:fs").appendFileSync(logPath, entry + "\n");
+      appendFileSync(logPath, entry + "\n");
     }
     // Also try stderr in case it's still alive
     console.error(entry);
@@ -97,7 +124,7 @@ function logToFile(message: string, data?: Record<string, unknown>): void {
  * Start the server in stdio mode — single persistent connection.
  */
 async function startStdio(config: Config): Promise<void> {
-  const server = createHarnessServer(config);
+  const { server, auditManager } = createHarnessServer(config);
   const transport = new StdioServerTransport();
   await server.connect(transport);
   log.info("harness-mcp-server connected via stdio", {
@@ -123,7 +150,7 @@ async function startStdio(config: Config): Promise<void> {
       uptime_s: Math.round(process.uptime()),
       memory_mb: Math.round(process.memoryUsage.rss() / 1024 / 1024),
     });
-    process.exit(0);
+    auditManager.close().catch(() => {}).finally(() => process.exit(0));
   });
 
   process.stdout.on("error", (err: NodeJS.ErrnoException) => {
@@ -133,7 +160,7 @@ async function startStdio(config: Config): Promise<void> {
       uptime_s: Math.round(process.uptime()),
     });
     if (err.code === "EPIPE" || err.code === "ERR_STREAM_DESTROYED") {
-      process.exit(0);
+      auditManager.close().catch(() => {}).finally(() => process.exit(0));
     }
   });
 
@@ -142,6 +169,7 @@ async function startStdio(config: Config): Promise<void> {
       idle_ms: Date.now() - lastActivityTs,
       uptime_s: Math.round(process.uptime()),
     });
+    await auditManager.close();
     await transport.close();
     await server.close();
     log.info("Stdio server closed");
@@ -175,7 +203,7 @@ const REAP_INTERVAL_MS = 60_000;    // check every minute
  */
 async function startHttp(config: Config, port: number): Promise<void> {
   const host = process.env.HOST || "127.0.0.1";
-  const app = createMcpExpressApp({ host });
+  const app = createMcpExpressApp(resolveHttpHostValidationOptions(host, config));
 
   const maxBodySize = config.HARNESS_MAX_BODY_SIZE_MB * 1024 * 1024;
   const { json } = await import("express");
@@ -185,7 +213,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
   app.use((_req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", `http://${host}:${port}`);
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, mcp-session-id");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, mcp-session-id, x-harness-pipeline-version");
     res.setHeader("Access-Control-Expose-Headers", "mcp-session-id");
     next();
   });
@@ -217,13 +245,14 @@ async function startHttp(config: Config, port: number): Promise<void> {
 
   // ---- Session store ----
   const sessions = new Map<string, Session>();
+  const sharedAuditManager = createAuditManager(config);
 
-  function destroySession(sessionId: string): void {
+  async function destroySession(sessionId: string): Promise<void> {
     const session = sessions.get(sessionId);
     if (!session) return;
     sessions.delete(sessionId);
-    session.transport.close().catch(() => {});
-    session.server.close().catch(() => {});
+    await session.transport.close().catch(() => {});
+    await session.server.close().catch(() => {});
     log.info("Session destroyed", { sessionId, remaining: sessions.size });
   }
 
@@ -287,7 +316,9 @@ async function startHttp(config: Config, port: number): Promise<void> {
     let server: McpServer | undefined;
     let transport: StreamableHTTPServerTransport | undefined;
     try {
-      server = createHarnessServer(config);
+      const sessionConfig = mergeConfigWithPipelineVersion(config, req);
+      const result = createHarnessServer(sessionConfig, sharedAuditManager);
+      server = result.server;
       transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (id) => {
@@ -396,7 +427,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
 
   let draining = false;
 
-  const shutdown = (signal: string): void => {
+  const shutdown = async (signal: string): Promise<void> => {
     if (draining) return; // prevent double-shutdown
     draining = true;
     log.info(`Received ${signal}, draining...`);
@@ -417,9 +448,10 @@ async function startHttp(config: Config, port: number): Promise<void> {
 
     // 3. Close all sessions (terminates SSE streams, notifies transports)
     clearInterval(reaper);
-    for (const [id] of sessions) {
-      destroySession(id);
-    }
+    await Promise.allSettled(
+      [...sessions.keys()].map((id) => destroySession(id)),
+    );
+    await sharedAuditManager.close().catch(() => {});
 
     // 4. Allow in-flight responses to flush, then exit
     const DRAIN_TIMEOUT_MS = 10_000;
@@ -447,9 +479,20 @@ async function startHttp(config: Config, port: number): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  // Global error handlers — must be installed before anything else.
+  // Parse CLI args first to get env file path
+  const { transport, envFile } = parseArgs();
+
+  // Load .env file (custom path if specified, otherwise .env in current directory)
+  loadEnvFile(envFile);
+
+  // Resolve the HTTP port after dotenv is loaded so --env-file PORT is honored.
+  const port = resolvePort();
+
+  // Global error handlers for runtime errors.
   // Node 20+ defaults --unhandled-rejections=throw, so unhandled rejections
   // crash the process. We catch them to log context before exiting.
+  // Note: CLI parsing and .env loading happen before these handlers are installed,
+  // which is intentional — CLI errors should fail fast.
   process.on("unhandledRejection", (reason) => {
     const data = { error: String(reason), stack: (reason as Error)?.stack };
     log.error("Unhandled promise rejection — exiting", data);
@@ -465,8 +508,6 @@ async function main(): Promise<void> {
 
   const config = loadConfig();
   setLogLevel(config.LOG_LEVEL);
-
-  const { transport, port } = parseArgs();
 
   log.info("Starting harness-mcp-server", {
     transport,

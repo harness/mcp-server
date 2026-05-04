@@ -201,6 +201,7 @@ export const gitopsToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/gitops/api/v1/agents",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search_term: "searchTerm",
             type: "type",
@@ -213,6 +214,7 @@ export const gitopsToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/gitops/api/v1/agents/{agentIdentifier}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { agent_id: "agentIdentifier" },
           responseExtractor: passthrough,
           description: "Get GitOps agent details",
@@ -248,6 +250,7 @@ export const gitopsToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: "/gitops/api/v1/applications",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           injectAccountInBody: true,
           bodyBuilder: (input) => gitopsListBody(input, { metadataOnly: true }),
           responseExtractor: passthrough,
@@ -256,6 +259,7 @@ export const gitopsToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/gitops/api/v1/agents/{agentIdentifier}/applications/{appName}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: {
             agent_id: "agentIdentifier",
             app_name: "appName",
@@ -266,6 +270,7 @@ export const gitopsToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/gitops/api/v1/agents/{agentIdentifier}/applications",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: {
             agent_id: "agentIdentifier",
           },
@@ -332,6 +337,7 @@ export const gitopsToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/gitops/api/v1/agents/{agentIdentifier}/applications/{appName}",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: {
             agent_id: "agentIdentifier",
             app_name: "appName",
@@ -384,6 +390,7 @@ export const gitopsToolset: ToolsetDefinition = {
         sync: {
           method: "POST",
           path: "/gitops/api/v1/agents/{agentIdentifier}/applications/{appName}/sync",
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: {
             agent_id: "agentIdentifier",
             app_name: "appName",
@@ -403,6 +410,7 @@ export const gitopsToolset: ToolsetDefinition = {
         refresh: {
           method: "POST",
           path: "/gitops/api/v1/applications/bulk/refresh",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           bodyBuilder: (input) => {
             const body = (input.body ?? {}) as Record<string, unknown>;
             return {
@@ -428,6 +436,7 @@ export const gitopsToolset: ToolsetDefinition = {
         bulk_sync: {
           method: "POST",
           path: "/gitops/api/v1/applications/bulk/sync",
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => {
             const body = (input.body ?? {}) as Record<string, unknown>;
             const targets = buildBulkTargets(input, "Bulk sync");
@@ -469,6 +478,7 @@ export const gitopsToolset: ToolsetDefinition = {
         cancel_operation: {
           method: "DELETE",
           path: "/gitops/api/v1/agents/{agentIdentifier}/applications/{appName}/operation",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: {
             agent_id: "agentIdentifier",
             app_name: "appName",
@@ -488,6 +498,7 @@ export const gitopsToolset: ToolsetDefinition = {
         run_resource_action: {
           method: "POST",
           path: "/gitops/api/v1/agents/{agentIdentifier}/applications/{appName}/resource/actions",
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: {
             agent_id: "agentIdentifier",
             app_name: "appName",
@@ -567,6 +578,7 @@ export const gitopsToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: "/gitops/api/v1/clusters",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           injectAccountInBody: true,
           bodyBuilder: (input) => gitopsListBody(input),
           responseExtractor: passthrough,
@@ -575,6 +587,7 @@ export const gitopsToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/gitops/api/v1/agents/{agentIdentifier}/clusters/{clusterIdentifier}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: {
             agent_id: "agentIdentifier",
             cluster_id: "clusterIdentifier",
@@ -610,6 +623,7 @@ export const gitopsToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: "/gitops/api/v1/repositories",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           injectAccountInBody: true,
           bodyBuilder: (input) => gitopsListBody(input, { repoCredsId: input.repo_creds_id ?? "" }),
           responseExtractor: passthrough,
@@ -618,6 +632,7 @@ export const gitopsToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/gitops/api/v1/agents/{agentIdentifier}/repositories/{repoIdentifier}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: {
             agent_id: "agentIdentifier",
             repo_id: "repoIdentifier",
@@ -657,6 +672,7 @@ export const gitopsToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: "/gitops/api/v1/applicationsets",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           injectAccountInBody: true,
           bodyBuilder: (input) => gitopsListBody(input, input.agent_id ? { agentIdentifier: input.agent_id } : {}),
           responseExtractor: passthrough,
@@ -666,6 +682,7 @@ export const gitopsToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/gitops/api/v1/applicationset/{identifier}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: {
             appset_id: "identifier",
           },
@@ -682,6 +699,7 @@ export const gitopsToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/gitops/api/v1/applicationset",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           queryParams: {
             agent_id: "agentIdentifier",
           },
@@ -770,6 +788,7 @@ export const gitopsToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/gitops/api/v1/applicationset",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           queryParams: {
             agent_id: "agentIdentifier",
           },
@@ -853,6 +872,7 @@ export const gitopsToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: "/gitops/api/v1/repocreds",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           injectAccountInBody: true,
           bodyBuilder: (input) => gitopsListBody(input, input.agent_id ? { agentIdentifier: input.agent_id } : {}),
           responseExtractor: passthrough,
@@ -862,6 +882,7 @@ export const gitopsToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/gitops/api/v1/agents/{agentIdentifier}/repocreds/{credentialId}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: {
             agent_id: "agentIdentifier",
             credential_id: "credentialId",
@@ -892,6 +913,7 @@ export const gitopsToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/gitops/api/v1/agents/{agentIdentifier}/applications/{appName}/events",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: {
             agent_id: "agentIdentifier",
             app_name: "appName",
@@ -924,6 +946,7 @@ export const gitopsToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/gitops/api/v1/agents/{agentIdentifier}/applications/{appName}/logs",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: {
             agent_id: "agentIdentifier",
             app_name: "appName",
@@ -960,6 +983,7 @@ export const gitopsToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/gitops/api/v1/agents/{agentIdentifier}/applications/{appName}/managed-resources",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: {
             agent_id: "agentIdentifier",
             app_name: "appName",
@@ -993,6 +1017,7 @@ export const gitopsToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/gitops/api/v1/agents/{agentIdentifier}/applications/{appName}/resource/actions",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: {
             agent_id: "agentIdentifier",
             app_name: "appName",
@@ -1021,6 +1046,7 @@ export const gitopsToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/gitops/api/v1/dashboard/overview",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           description: "Get GitOps dashboard overview with summary metrics",
         },
@@ -1042,6 +1068,7 @@ export const gitopsToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/gitops/api/v1/agents/{agentIdentifier}/applications/{appName}/resource-tree",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: {
             agent_id: "agentIdentifier",
             app_name: "appName",
@@ -1083,6 +1110,7 @@ export const gitopsToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/ng/api/gitops/clusters",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             environment_id: "environmentIdentifier",
             search_term: "searchTerm",
@@ -1100,6 +1128,7 @@ export const gitopsToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/ng/api/gitops/clusters",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => {
             const body = (input.body ?? {}) as Record<string, unknown>;
             const { identifier, envRef, agentIdentifier, scope } = body;
@@ -1131,6 +1160,7 @@ export const gitopsToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/ng/api/gitops/clusters/{clusterIdentifier}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: {
             cluster_id: "clusterIdentifier",
           },
