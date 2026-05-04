@@ -19,6 +19,19 @@ const fmeFeatureFlagCreateSchema: BodySchema = {
   ],
 };
 
+const fmeFeatureFlagDefinitionCreateSchema: BodySchema = {
+  description: "Create a feature flag definition in a specific environment (initial treatments, rules, and default rule required)",
+  fields: [
+    { name: "treatments", type: "array", required: true, description: "Array of treatment objects with name (string) and optional configurations (JSON string). Required.", itemType: "object" },
+    { name: "defaultTreatment", type: "string", required: true, description: "The treatment to serve when no rules match or the flag is killed. Must match a treatment name. Required." },
+    { name: "defaultRule", type: "array", required: true, description: "Default rule buckets (treatment/size pairs) applied when no targeting rules match. Required.", itemType: "object" },
+    { name: "rules", type: "array", required: false, description: "Targeting rules array — each rule has buckets (treatment/size pairs) and a condition (combiner + matchers)", itemType: "object" },
+    { name: "baselineTreatment", type: "string", required: false, description: "The baseline (control) treatment for experimentation" },
+    { name: "trafficAllocation", type: "number", required: false, description: "Percentage of traffic to include (0–100)" },
+    { name: "comment", type: "string", required: false, description: "Comment describing the change" },
+  ],
+};
+
 const fmeFeatureFlagDefinitionUpdateSchema: BodySchema = {
   description: "Update a feature flag definition in a specific environment (treatments, rules, targeting, traffic allocation)",
   fields: [
@@ -293,7 +306,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_feature_flag_definition",
       displayName: "FME Feature Flag Definition",
       description:
-        "Detailed definition of a feature flag in a specific environment, including treatments, rules, targeting, and traffic allocation. Supports get and update (PUT with treatments, rules, defaultRule, trafficAllocation, etc.).",
+        "Detailed definition of a feature flag in a specific environment, including treatments, rules, targeting, and traffic allocation. Supports create, get, and update. Create requires treatments, defaultTreatment, and defaultRule.",
       toolset: "feature-flags",
       scope: "account",
       identifierFields: ["workspace_id", "feature_flag_name", "environment_id"],
@@ -310,6 +323,20 @@ export const featureFlagsToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           description: "Get feature flag definition in a specific environment (treatments, rules, default rule, traffic allocation)",
+        },
+        create: {
+          method: "POST",
+          path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/environments/{environmentId}",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          pathParams: {
+            workspace_id: "wsId",
+            feature_flag_name: "featureFlagName",
+            environment_id: "environmentId",
+          },
+          bodyBuilder: (input) => input.body,
+          responseExtractor: passthrough,
+          bodySchema: fmeFeatureFlagDefinitionCreateSchema,
+          description: "Create a feature flag definition in a specific environment. Requires treatments (array of treatment objects), defaultTreatment (string matching a treatment name), and defaultRule (array of bucket objects). Optional: rules, baselineTreatment, trafficAllocation, comment.",
         },
         update: {
           method: "PUT",
