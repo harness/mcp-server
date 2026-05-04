@@ -15,7 +15,9 @@ export const dbopsToolset: ToolsetDefinition = {
         "Harness DBOPS schema entity. Defines how database migrations are managed (Liquibase or Flyway), " +
         "the source of migration scripts, and the set of linked instances. " +
         "NOTE: 'type' field is the schema source type (Repository/Script), NOT the database engine. " +
-        "The DB engine (MySQL, PostgreSQL, etc.) is stored in the connector linked to each instance.",
+        "The DB engine type (MySQL, PostgreSQL, etc.) is NOT stored on the schema — it is on the JDBC " +
+        "connector referenced by each instance. Use the 'connector' field from database_instance with the " +
+        "connectors toolset to look it up when you need the engine type.",
       toolset: "dbops",
       scope: "project",
       identifierFields: ["dbschema_id"],
@@ -74,7 +76,8 @@ export const dbopsToolset: ToolsetDefinition = {
         "A database instance linked to a schema. Connects the schema's migration scripts " +
         "to a specific database via a Harness connector. " +
         "The 'connector' field holds the connector identifier — the DB engine type " +
-        "(MySQL, PostgreSQL, etc.) is determined by that connector.",
+        "(MySQL, PostgreSQL, etc.) is determined by that connector. " +
+        "Use the connectors toolset to look up the connector when you need the exact engine type or JDBC details.",
       toolset: "dbops",
       scope: "project",
       identifierFields: ["dbinstance_id"],
@@ -93,6 +96,11 @@ export const dbopsToolset: ToolsetDefinition = {
           resourceType: "database_schema",
           relationship: "child",
           description: "Instance belongs to exactly one schema",
+        },
+        {
+          resourceType: "database_snapshot_object",
+          relationship: "child",
+          description: "Snapshot objects (Table, etc.) captured for this instance",
         },
       ],
       diagnosticHint:
@@ -129,6 +137,125 @@ export const dbopsToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           description: "Get a single database instance by identifier",
+        },
+      },
+    },
+
+    // ── Database Snapshot Object ───────────────────────────────────────────
+    {
+      resourceType: "database_snapshot_object",
+      displayName: "Database Snapshot Object",
+      description:
+        "A database object (e.g. Table) captured in the latest snapshot for a schema instance. " +
+        "Use harness_list to discover all object names for a given type, then harness_get to retrieve " +
+        "the complete JSON metadata (columns, constraints, indexes) for specific named objects. " +
+        "Both dbschema_id and dbinstance_id are required.",
+      toolset: "dbops",
+      scope: "project",
+      identifierFields: ["dbschema_id", "dbinstance_id"],
+      listFilterFields: [
+        {
+          name: "dbschema_id",
+          description: "Schema identifier — required",
+          required: true,
+        },
+        {
+          name: "dbinstance_id",
+          description: "Instance identifier — required",
+          required: true,
+        },
+        {
+          name: "object_type",
+          description: "Type of object to list (e.g. Table) — required for list",
+          required: true,
+        },
+      ],
+      diagnosticHint:
+        "Both dbschema_id and dbinstance_id are required for all operations. " +
+        "For harness_get, pass object_names (array of names from harness_list) in params.",
+      relatedResources: [
+        {
+          resourceType: "database_instance",
+          relationship: "parent",
+          description: "Instance whose snapshot is being queried",
+        },
+        {
+          resourceType: "database_schema",
+          relationship: "parent",
+          description: "Schema the instance belongs to",
+        },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "/dbops/v1/orgs/{org}/projects/{project}/dbschema/{dbschema}/dbinstance/{dbinstance}/snapshot-object-names",
+          pathParams: {
+            org_id: "org",
+            project_id: "project",
+            dbschema_id: "dbschema",
+            dbinstance_id: "dbinstance",
+          },
+          queryParams: {
+            object_type: "objectType",
+            page: "page",
+            size: "limit",
+          },
+          responseExtractor: passthrough,
+          description:
+            "Discover what objects exist in the latest database snapshot for a given instance. " +
+            "Returns { data: string[] } — a list of object names of the specified type " +
+            "(e.g. table names when object_type='Table'). " +
+            "Use this to explore the database structure before fetching full object definitions.",
+        },
+        get: {
+          method: "POST",
+          path: "/dbops/v1/orgs/{org}/projects/{project}/dbschema/{dbschema}/dbinstance/{dbinstance}/snapshot-object-values",
+          pathParams: {
+            org_id: "org",
+            project_id: "project",
+            dbschema_id: "dbschema",
+            dbinstance_id: "dbinstance",
+          },
+          bodyBuilder: (input) => {
+            const names = input.object_names;
+            if (!Array.isArray(names) || names.length === 0) {
+              throw new Error(
+                "object_names is required (non-empty string array) for database_snapshot_object. " +
+                  "Pass via params, e.g. params: { dbschema_id: '...', object_names: ['users'], object_type: 'Table' }. " +
+                  "Use harness_list(resource_type='database_snapshot_object', filters=...) to discover names first.",
+              );
+            }
+            return {
+              objectType: (input.object_type as string) ?? "Table",
+              objectNames: names as string[],
+            };
+          },
+          responseExtractor: passthrough,
+          description:
+            "Retrieves the complete JSON metadata of specified objects from the latest database snapshot. " +
+            "For a table, returns full metadata including columns, constraints, indexes, etc. " +
+            "Use harness_list(resource_type='database_snapshot_object') first to discover available object names, " +
+            "then call this to fetch their definitions. " +
+            "Requires object_names (non-empty array) and object_type in params. " +
+            "Returns { data: [{ objectName, objectValue }] } where objectValue is the complete JSON definition.",
+          bodySchema: {
+            description: "Object type and list of names to retrieve full metadata for",
+            fields: [
+              {
+                name: "objectType",
+                type: "string",
+                required: true,
+                description: "Type of object — e.g. 'Table'",
+              },
+              {
+                name: "objectNames",
+                type: "array",
+                required: true,
+                description: "Array of object names to fetch",
+                itemType: "string",
+              },
+            ],
+          },
         },
       },
     },
