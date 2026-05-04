@@ -249,10 +249,16 @@
 - [x] Audit recent registry/audit subsystem changes against public docs
 - [x] Identify stale README audit logging guidance
 - [x] Document audit event coverage, sink configuration, and operator constraints
-- [ ] Run docs consistency checks
-- [ ] Commit, push, and open docs-only PR
+- [x] Run docs consistency checks
+- [x] Commit, push, and open docs-only PR
 
 ### Plan
 - Keep the change focused on `README.md` because `.env.example` and specs already describe the audit sink knobs, while the public README configuration table and audit blurb are stale.
 - Verify claims against `src/config.ts`, `src/audit/*`, `src/registry/index.ts`, and `tests/audit/registry-audit.test.ts`.
 - Document both behavior and constraints: registry-mediated list/get/write/execute calls emit events; stderr is always on; JSONL, webhook, and OpenTelemetry sinks are opt-in; webhook and OTel delivery are best-effort and never block tool execution.
+
+### Review
+- Updated `README.md` configuration and Audit Logging sections with the audit env vars and sink behavior implemented in `src/config.ts` and `src/audit/*`.
+- Confirmed the coverage claim against `Registry.executeSpecWithAudit()`: registry-mediated `list`, `get`, `create`, `update`, `delete`, and `execute` calls emit success/error events when an `AuditManager` is configured.
+- Verified the committed change set is docs-only with `git show --stat --oneline HEAD`.
+- Attempted `pnpm docs:check`, but this automation image has neither `pnpm` nor `node` on `PATH` (`pnpm: command not found`, `node: command not found`). Source-backed `rg` checks confirmed the new README audit claims match `src/config.ts`, `src/audit/*`, and `src/registry/index.ts`.
