@@ -53,12 +53,14 @@ export const agentsToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/gateway/agents/api/v1/agents",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           description: "List all agents (system and custom) scoped to the account/org/project context",
         },
         get: {
           method: "GET",
           path: "/gateway/agents/api/v1/agents/{agentIdentifier}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { agent_id: "agentIdentifier" },
           responseExtractor: passthrough,
           description: "Get agent details including YAML spec, role, status, timestamps, wiki, and logo",
@@ -66,6 +68,7 @@ export const agentsToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/gateway/agents/api/v1/agents",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | undefined;
             if (!body) throw new Error("body is required for agent creation");
@@ -88,6 +91,7 @@ export const agentsToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/gateway/agents/api/v1/agents/{agentIdentifier}",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { agent_id: "agentIdentifier" },
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | undefined;
@@ -101,6 +105,7 @@ export const agentsToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/gateway/agents/api/v1/agents/{agentIdentifier}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { agent_id: "agentIdentifier" },
           responseExtractor: passthrough,
           description: "Delete a custom agent (soft delete - sets status to 'deleted'). Only custom agents can be deleted.",

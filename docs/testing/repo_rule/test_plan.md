@@ -37,7 +37,7 @@
 
 ## Notes
 - `repo_rule` is scoped to a specific repository; `repo_id` is always required
-- Create, update, and delete operations require user confirmation (`blockWithoutConfirmation: true`)
+- Create, update, and delete operations require user confirmation (`operationPolicy.risk: "high_write"` or `"destructive"`)
 - Rule types: `branch`, `tag`, `push`
 - Rule states: `active`, `disabled`, `monitor`
 - Pattern supports `{default: true}` for default branch or `{include: [...], exclude: [...]}` with globstar patterns

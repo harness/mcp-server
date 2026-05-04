@@ -45,6 +45,7 @@ export const servicesToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/ng/api/servicesV2",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search_term: "searchTerm",
             sort: "sort",
@@ -58,6 +59,7 @@ export const servicesToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/ng/api/servicesV2/{serviceIdentifier}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { service_id: "serviceIdentifier" },
           responseExtractor: ngExtract,
           description: "Get service details",
@@ -65,6 +67,7 @@ export const servicesToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/ng/api/servicesV2",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: buildBodyNormalized({ unwrapKey: "service" }),
           responseExtractor: ngExtract,
           description: "Create a new service",
@@ -73,6 +76,7 @@ export const servicesToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/ng/api/servicesV2",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           bodyBuilder: buildBodyNormalized({
             unwrapKey: "service",
             injectIdentifier: { inputField: "service_id", bodyField: "identifier" },
@@ -84,6 +88,7 @@ export const servicesToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/ng/api/servicesV2/{serviceIdentifier}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { service_id: "serviceIdentifier" },
           responseExtractor: ngExtract,
           description: "Delete a service",

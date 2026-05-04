@@ -4,15 +4,103 @@
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
+// ---------------------------------------------------------------------------
+// OperationPolicy — risk + retry contract for every endpoint spec
+// ---------------------------------------------------------------------------
+
+export type RiskLevel =
+  | "read"
+  | "low_write"
+  | "medium_write"
+  | "high_write"
+  | "destructive";
+
+export type RetryPolicy =
+  | "safe"
+  | "idempotency_key_required"
+  | "do_not_retry";
+
+export interface OperationPolicy {
+  risk: RiskLevel;
+  retryPolicy: RetryPolicy;
+}
+
 /**
- * Context passed to EndpointSpec.preflight hooks. Typed structurally so this
- * module does not need to import HarnessClient/Registry (which would create a
- * cycle). Hook implementations can cast these to the concrete types.
+ * @deprecated Use `requiresConfirmation()` instead. After the P3 elicitation
+ * refactor, the blocking threshold is `medium_write` (not just `high_write`).
+ * This function remains for backward compatibility only.
+ */
+export function isBlockingRisk(risk: RiskLevel): boolean {
+  return risk === "high_write" || risk === "destructive";
+}
+
+// ---------------------------------------------------------------------------
+// Risk severity ordering + auto-approve / confirmation helpers
+// ---------------------------------------------------------------------------
+
+/** Explicit numeric ordering of risk levels. */
+export const RISK_SEVERITY: ReadonlyMap<RiskLevel, number> = new Map([
+  ["read", 0],
+  ["low_write", 1],
+  ["medium_write", 2],
+  ["high_write", 3],
+  ["destructive", 4],
+]);
+
+export type AutoApproveRisk = "none" | RiskLevel | "all";
+
+/**
+ * Returns true when the operation risk is at or below the auto-approve
+ * threshold, meaning it should proceed without user confirmation.
+ */
+export function shouldAutoApprove(opRisk: RiskLevel, threshold: AutoApproveRisk): boolean {
+  if (threshold === "none") return false;
+  if (threshold === "all") return true;
+  const opSeverity = RISK_SEVERITY.get(opRisk) ?? 999;
+  const thresholdSeverity = RISK_SEVERITY.get(threshold as RiskLevel) ?? -1;
+  return opSeverity <= thresholdSeverity;
+}
+
+/**
+ * Returns true when the risk level requires blocking the operation on clients
+ * that lack elicitation support (medium_write and above).
+ */
+export function requiresConfirmation(risk: RiskLevel): boolean {
+  return risk === "medium_write" || risk === "high_write" || risk === "destructive";
+}
+
+// ---------------------------------------------------------------------------
+// Minimal interfaces for PreflightContext (avoids circular imports).
+// The concrete HarnessClient and Registry satisfy these structurally.
+// Preflight hooks that need concrete-only methods (e.g. getCurrentUserId)
+// can narrow via `(client as unknown as HarnessClient)`.
+// ---------------------------------------------------------------------------
+
+export interface HarnessClientInterface {
+  readonly account: string;
+}
+
+export interface RegistryDispatchInterface {
+  dispatch(
+    client: HarnessClientInterface,
+    resourceType: string,
+    operation: string,
+    input: Record<string, unknown>,
+    signal?: AbortSignal,
+  ): Promise<unknown>;
+  getResource(resourceType: string): ResourceDefinition;
+}
+
+/**
+ * Context passed to EndpointSpec.preflight hooks. Uses structural interfaces
+ * so this module does not import HarnessClient/Registry (which would create a
+ * cycle). Hooks that need concrete-only methods can narrow:
+ *   `const hc = client as unknown as HarnessClient;`
  */
 export interface PreflightContext {
-  client: unknown;
+  client: HarnessClientInterface;
   input: Record<string, unknown>;
-  registry: unknown;
+  registry: RegistryDispatchInterface;
   signal?: AbortSignal;
 }
 
@@ -163,12 +251,8 @@ export interface EndpointSpec {
    * so required-field validation checks the inner object, not the wrapper.
    */
   bodyWrapperKey?: string;
-  /**
-   * When true, block the operation if user confirmation cannot be obtained
-   * (e.g. elicitation unavailable). Used for high-risk operations like
-   * protection rules. Default: false (create/update proceed without confirmation).
-   */
-  blockWithoutConfirmation?: boolean;
+  /** Declares the risk level and retry behavior for this operation. */
+  operationPolicy: OperationPolicy;
   /**
    * Declarative input expansion rules. When present, matching shorthand keys
    * in user input are expanded into full nested structures before resolution.

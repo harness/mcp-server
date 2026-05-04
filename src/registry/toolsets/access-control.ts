@@ -21,6 +21,7 @@ export const accessControlToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: "/ng/api/user/aggregate",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: { page: "pageIndex", size: "pageSize" },
           bodyBuilder: (input) => ({
             searchTerm: input.search_term ?? "",
@@ -31,6 +32,7 @@ export const accessControlToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/ng/api/user/{userId}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { user_id: "userId" },
           responseExtractor: ngExtract,
           description: "Get user details by ID",
@@ -40,6 +42,7 @@ export const accessControlToolset: ToolsetDefinition = {
         invite: {
           method: "POST",
           path: "/ng/api/user/users",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => {
             const b = input.body as Record<string, unknown> | undefined;
             const emails = b?.emails ?? b?.email_ids;
@@ -86,6 +89,7 @@ export const accessControlToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/ng/api/user-groups",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search_term: "searchTerm",
             page: "pageIndex",
@@ -97,6 +101,7 @@ export const accessControlToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/ng/api/user-groups/{groupIdentifier}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { user_group_id: "groupIdentifier" },
           responseExtractor: ngExtract,
           description: "Get user group details",
@@ -104,6 +109,7 @@ export const accessControlToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/ng/api/user-groups",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => input.body,
           responseExtractor: ngExtract,
           description: "Create a user group",
@@ -120,6 +126,7 @@ export const accessControlToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/ng/api/user-groups/{groupIdentifier}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { user_group_id: "groupIdentifier" },
           responseExtractor: ngExtract,
           description: "Delete a user group",
@@ -141,6 +148,7 @@ export const accessControlToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/ng/api/serviceaccount",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search_term: "searchTerm",
             page: "pageIndex",
@@ -152,6 +160,7 @@ export const accessControlToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/ng/api/serviceaccount/{serviceAccountIdentifier}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { service_account_id: "serviceAccountIdentifier" },
           responseExtractor: ngExtract,
           description: "Get service account details",
@@ -159,6 +168,7 @@ export const accessControlToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/ng/api/serviceaccount",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => input.body,
           responseExtractor: ngExtract,
           description: "Create a service account",
@@ -176,6 +186,7 @@ export const accessControlToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/ng/api/serviceaccount/{serviceAccountIdentifier}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { service_account_id: "serviceAccountIdentifier" },
           responseExtractor: ngExtract,
           description: "Delete a service account",
@@ -197,6 +208,7 @@ export const accessControlToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/authz/api/roles",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search_term: "searchTerm",
             page: "pageIndex",
@@ -208,6 +220,7 @@ export const accessControlToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/authz/api/roles/{roleIdentifier}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { role_id: "roleIdentifier" },
           responseExtractor: ngExtract,
           description: "Get role details",
@@ -215,6 +228,7 @@ export const accessControlToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/authz/api/roles",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => input.body,
           responseExtractor: ngExtract,
           description: "Create a role",
@@ -232,6 +246,7 @@ export const accessControlToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/authz/api/roles/{roleIdentifier}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { role_id: "roleIdentifier" },
           responseExtractor: ngExtract,
           description: "Delete a role",
@@ -254,6 +269,7 @@ export const accessControlToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: "/authz/api/roleassignments/filter",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: { page: "pageIndex", size: "pageSize" },
           bodyBuilder: (input) => ({
             principalTypeFilter: input.principal_type ? [input.principal_type] : undefined,
@@ -266,6 +282,7 @@ export const accessControlToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/authz/api/roleassignments",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => input.body,
           responseExtractor: ngExtract,
           description: "Create a role assignment",
@@ -285,6 +302,7 @@ export const accessControlToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/authz/api/roleassignments/{roleAssignmentIdentifier}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { role_assignment_id: "roleAssignmentIdentifier" },
           responseExtractor: ngExtract,
           description: "Delete a role assignment",
@@ -306,6 +324,7 @@ export const accessControlToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/resourcegroup/api/v2/resourcegroup",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search_term: "searchTerm",
             page: "pageIndex",
@@ -317,6 +336,7 @@ export const accessControlToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/resourcegroup/api/v2/resourcegroup/{resourceGroupIdentifier}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { resource_group_id: "resourceGroupIdentifier" },
           responseExtractor: ngExtract,
           description: "Get resource group details",
@@ -324,6 +344,7 @@ export const accessControlToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/resourcegroup/api/v2/resourcegroup",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => input.body,
           responseExtractor: ngExtract,
           description: "Create a resource group",
@@ -341,6 +362,7 @@ export const accessControlToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/resourcegroup/api/v2/resourcegroup/{resourceGroupIdentifier}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { resource_group_id: "resourceGroupIdentifier" },
           responseExtractor: ngExtract,
           description: "Delete a resource group",
@@ -358,6 +380,7 @@ export const accessControlToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/authz/api/permissions",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: ngExtract,
           description: "List all available permissions",
         },

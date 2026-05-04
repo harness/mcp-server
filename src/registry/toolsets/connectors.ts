@@ -56,6 +56,7 @@ export const connectorsToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: "/ng/api/connectors/listV2",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search_term: "searchTerm",
             page: "pageIndex",
@@ -85,6 +86,7 @@ export const connectorsToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/ng/api/connectors/{connectorIdentifier}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { connector_id: "connectorIdentifier" },
           responseExtractor: ngExtract,
           description: "Get connector details",
@@ -92,6 +94,7 @@ export const connectorsToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/ng/api/connectors",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: buildBodyNormalized({ wrapKey: "connector" }),
           bodyWrapperKey: "connector",
           responseExtractor: ngExtract,
@@ -101,6 +104,7 @@ export const connectorsToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/ng/api/connectors",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           bodyBuilder: buildBodyNormalized({
             wrapKey: "connector",
             injectFields: [{ from: "type", to: "connectionType", onlyIfMissing: true }],
@@ -113,6 +117,7 @@ export const connectorsToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/ng/api/connectors/{connectorIdentifier}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { connector_id: "connectorIdentifier" },
           responseExtractor: ngExtract,
           description: "Delete a connector",
@@ -122,6 +127,7 @@ export const connectorsToolset: ToolsetDefinition = {
         test_connection: {
           method: "POST",
           path: "/ng/api/connectors/testConnection/{connectorIdentifier}",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { connector_id: "connectorIdentifier" },
           bodyBuilder: () => ({}),
           responseExtractor: ngExtract,
@@ -141,6 +147,7 @@ export const connectorsToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/ng/api/connectors/catalogue",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: ngExtract,
           description: "List all available connector types in the catalogue",
         },

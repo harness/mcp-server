@@ -94,6 +94,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/internal/api/v2/workspaces",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             offset: "offset",
             size: "limit",
@@ -119,6 +120,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/internal/api/v2/environments/ws/{wsId}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { workspace_id: "wsId" },
           responseExtractor: passthrough,
           description: "List FME environments for a workspace",
@@ -146,6 +148,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/internal/api/v2/splits/ws/{wsId}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { workspace_id: "wsId" },
           queryParams: {
             offset: "offset",
@@ -161,6 +164,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { workspace_id: "wsId", feature_flag_name: "featureFlagName" },
           responseExtractor: fmeGetExtract,
           description: "Get a specific feature flag's metadata without requiring an environment",
@@ -168,6 +172,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/internal/api/v2/splits/ws/{wsId}/trafficTypes/{trafficTypeId}",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: { workspace_id: "wsId", traffic_type_id: "trafficTypeId" },
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | undefined;
@@ -184,6 +189,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { workspace_id: "wsId", feature_flag_name: "featureFlagName" },
           responseExtractor: passthrough,
           description: "Delete a feature flag from a workspace",
@@ -191,6 +197,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         update: {
           method: "PATCH",
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { workspace_id: "wsId", feature_flag_name: "featureFlagName" },
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | undefined;
@@ -223,38 +230,62 @@ export const featureFlagsToolset: ToolsetDefinition = {
         kill: {
           method: "PUT",
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/environments/{environmentId}/kill",
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: {
             workspace_id: "wsId",
             feature_flag_name: "featureFlagName",
             environment_id: "environmentId",
           },
+          bodyBuilder: () => ({}),
           responseExtractor: passthrough,
           actionDescription: "Kill (turn off) a feature flag in a specific environment. Requires workspace_id, feature_flag_name, and environment_id.",
+          bodySchema: {
+            description: "No body required — identifiers are in path/query params.",
+            fields: [],
+          },
         },
         restore: {
           method: "PUT",
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/environments/{environmentId}/restore",
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: {
             workspace_id: "wsId",
             feature_flag_name: "featureFlagName",
             environment_id: "environmentId",
           },
+          bodyBuilder: () => ({}),
           responseExtractor: passthrough,
           actionDescription: "Restore (re-enable) a killed feature flag in a specific environment. Requires workspace_id, feature_flag_name, and environment_id.",
+          bodySchema: {
+            description: "No body required — identifiers are in path/query params.",
+            fields: [],
+          },
         },
         archive: {
           method: "POST",
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/archive",
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: { workspace_id: "wsId", feature_flag_name: "featureFlagName" },
+          bodyBuilder: () => ({}),
           responseExtractor: passthrough,
           actionDescription: "Archive a feature flag. Requires workspace_id and feature_flag_name. Subject to OPA policy checks (409 on failure).",
+          bodySchema: {
+            description: "No body required for this action.",
+            fields: [],
+          },
         },
         unarchive: {
           method: "POST",
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/unarchive",
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: { workspace_id: "wsId", feature_flag_name: "featureFlagName" },
+          bodyBuilder: () => ({}),
           responseExtractor: passthrough,
           actionDescription: "Unarchive a previously archived feature flag. Requires workspace_id and feature_flag_name. Returns 409 if the flag has dependent objects.",
+          bodySchema: {
+            description: "No body required for this action.",
+            fields: [],
+          },
         },
       },
     },
@@ -271,6 +302,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/environments/{environmentId}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: {
             workspace_id: "wsId",
             feature_flag_name: "featureFlagName",
@@ -282,6 +314,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/environments/{environmentId}",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: {
             workspace_id: "wsId",
             feature_flag_name: "featureFlagName",
@@ -307,6 +340,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/internal/api/v2/rolloutStatuses/ws/{wsId}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { workspace_id: "wsId" },
           responseExtractor: passthrough,
           description: "List rollout status definitions for a workspace (Killed, Permanent, Ramping, etc.)",
@@ -327,6 +361,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/internal/api/v2/rule-based-segments/ws/{wsId}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { workspace_id: "wsId" },
           responseExtractor: passthrough,
           description: "List all rule-based segments in a workspace",
@@ -334,6 +369,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/internal/api/v2/rule-based-segments/ws/{wsId}/{rbSegmentName}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { workspace_id: "wsId", segment_name: "rbSegmentName" },
           responseExtractor: passthrough,
           description: "Get a rule-based segment by name (workspace-level metadata)",
@@ -341,6 +377,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/internal/api/v2/rule-based-segments/ws/{wsId}/trafficTypes/{trafficTypeId}",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: { workspace_id: "wsId", traffic_type_id: "trafficTypeId" },
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | undefined;
@@ -356,6 +393,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/internal/api/v2/rule-based-segments/ws/{wsId}/{rbSegmentName}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { workspace_id: "wsId", segment_name: "rbSegmentName" },
           responseExtractor: passthrough,
           description: "Delete a rule-based segment from a workspace. Environment-level configs must be removed separately.",
@@ -375,6 +413,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/internal/api/v2/rule-based-segments/ws/{wsId}/environments/{environmentId}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { workspace_id: "wsId", environment_id: "environmentId" },
           responseExtractor: passthrough,
           description: "List rule-based segment definitions in a specific environment",
@@ -382,6 +421,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/internal/api/v2/rule-based-segments/ws/{wsId}/{rbSegmentName}/environments/{environmentId}",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { workspace_id: "wsId", segment_name: "rbSegmentName", environment_id: "environmentId" },
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
@@ -393,6 +433,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         enable: {
           method: "POST",
           path: "/internal/api/v2/rule-based-segments/{environmentId}/{rbSegmentName}",
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           pathParams: { environment_id: "environmentId", segment_name: "rbSegmentName" },
           bodyBuilder: () => ({}),
           responseExtractor: passthrough,
@@ -402,13 +443,19 @@ export const featureFlagsToolset: ToolsetDefinition = {
         disable: {
           method: "DELETE",
           path: "/internal/api/v2/rule-based-segments/{environmentId}/{rbSegmentName}",
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           pathParams: { environment_id: "environmentId", segment_name: "rbSegmentName" },
           responseExtractor: passthrough,
           actionDescription: "Disable (remove) a rule-based segment from a specific environment. Workspace-level metadata is preserved.",
+          bodySchema: {
+            description: "No body required for this action.",
+            fields: [],
+          },
         },
         change_request: {
           method: "POST",
           path: "/internal/api/v2/changeRequests/ws/{wsId}/environments/{environmentId}",
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           pathParams: { workspace_id: "wsId", environment_id: "environmentId" },
           bodyBuilder: (input) => ({
             ruleBasedSegment: input.ruleBasedSegment ?? input.rule_based_segment,

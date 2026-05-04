@@ -44,6 +44,7 @@ export const dbopsToolset: ToolsetDefinition = {
           method: "GET",
           path: "/dbops/v1/orgs/{org}/projects/{project}/dbschema",
           pathParams: { org_id: "org", project_id: "project" },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search_term: "search_term",
             migration_type: "migrationType",
@@ -62,6 +63,7 @@ export const dbopsToolset: ToolsetDefinition = {
             project_id: "project",
             dbschema_id: "dbschema",
           },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           description: "Get a single database schema by identifier",
         },
@@ -115,6 +117,7 @@ export const dbopsToolset: ToolsetDefinition = {
             project_id: "project",
             dbschema_id: "dbschema",
           },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search_term: "search_term",
             page: "page",
@@ -135,6 +138,7 @@ export const dbopsToolset: ToolsetDefinition = {
             dbschema_id: "dbschema",
             dbinstance_id: "dbinstance",
           },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           description: "Get a single database instance by identifier",
         },
@@ -288,6 +292,7 @@ export const dbopsToolset: ToolsetDefinition = {
           method: "GET",
           path: "/dbops/v1/orgs/{org}/projects/{project}/default-llm-pipeline",
           pathParams: { org_id: "org", project_id: "project" },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             dbschema_id: "dbSchema",
             dbinstance_id: "dbInstance",
