@@ -251,7 +251,8 @@
 - [x] Add prompt regression coverage for valid policy resource types
 - [x] Fix stale DevSecOps prompt resource references
 - [x] Run focused tests and typecheck
-- [ ] Commit, push, open PR, and reply in the Slack thread
+- [x] Commit, push, and open PR
+- [ ] Reply in the Slack thread (blocked: trigger channel is not available to the configured Slack send tool)
 
 ### Plan
 - Confirm whether OPA policy access/create is supported by existing registry resources before changing code.
@@ -263,3 +264,4 @@
 - Found stale DevSecOps prompt guidance referencing nonexistent `resource_type="scs_opa_policy"`, which would route agents to an unsupported type despite policy CRUD support existing.
 - Updated `sbom-compliance-check` and `supply-chain-audit` prompts to list `policy` and `policy_set` explicitly, and added regression coverage for those prompt outputs.
 - Verified with `pnpm test tests/prompts/devsecops-policy-prompts.test.ts`, `pnpm test tests/registry/governance.test.ts`, and `pnpm typecheck`.
+- Opened PR #121. Slack reply was blocked because `C08SYT1FWJD` is not one of the channels available to `SendSlackMessage`, and the automation instructions forbid posting elsewhere.
