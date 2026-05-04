@@ -9,6 +9,7 @@ import {
   chaosK8sInfraListExtract,
   chaosHubListExtract,
   chaosDRTestListExtract,
+  sdPageExtract,
 } from "../extractors.js";
 import {
   descToolsetChaos,
@@ -87,6 +88,8 @@ import {
   descIsEnabledFlag, descIsBulkUpdate, descVerifyFlag,
   descExperimentRunIds, descNotifyIds,
   descFaultIdentityParam, descIsEnterpriseFilter,
+  descFaultSearch, descFaultListType, descFaultListInfraType, descFaultListInfrastructure,
+  descFaultListTags, descFaultListCategory, descFaultListSortField, descFaultListSortAscending,
   descIsEnterpriseYaml, descIsEnterpriseVars, descIsEnterpriseRuns,
   descActionIdentityParam, descSearchActionsParam, descHubIdentityActions,
   descExperimentVariablesParam, descTasksParam,
@@ -113,6 +116,10 @@ import {
   // Experiment create field descriptions
   descExperimentManifest, descExperimentInfraType, descExperimentInfraIdCreate, descExperimentCronSyntax,
   descExperimentIdUUID,
+  // Service Discovery
+  descSDAgentIdentity, descSDEnvironmentId, descSDFetchAll, descSDAgentDiagnostic,
+  descDiscoveredNamespace, descListDiscoveredNamespaces, descSDNamespaceNameFilter,
+  descDiscoveredService, descListDiscoveredServices, descSDNamespaceFilter, descSDSearchFilter,
 } from "./chaos-descriptions.js";
 
 /**
@@ -125,6 +132,14 @@ const CHAOS = "/chaos/manager/api";
 /** Load test API uses a separate service path per v1 Go server. */
 const CHAOS_LOADTEST = "/loadTest/manager/api";
 
+/**
+ * Service Discovery API base path. SD is a Chaos sub-feature backed by a
+ * separate `servicediscovery` service behind the Harness gateway.
+ * Endpoints expose Kubernetes inventory + eBPF-derived network edges
+ * collected by an SD agent running inside the user's cluster.
+ */
+const SD = "/gateway/servicediscovery/api/v1";
+
 /** Chaos scope override — Chaos REST API uses organizationIdentifier (not orgIdentifier). */
 const CHAOS_SCOPE = { org: "organizationIdentifier" } as const;
 
@@ -133,6 +148,15 @@ const chaosComponentVarExtract = (raw: unknown): unknown => {
   const r = raw as { items?: Array<{ name: string; variables: unknown[] }> };
   return r.items?.[0] ?? raw;
 };
+
+/** Parse input.body when LLMs double-serialize it as a JSON string instead of an object. */
+function coerceBody(input: Record<string, unknown>): Record<string, unknown> {
+  const raw = input.body ?? input;
+  if (typeof raw === "string") {
+    try { return JSON.parse(raw) as Record<string, unknown>; } catch { /* fall through */ }
+  }
+  return raw as Record<string, unknown>;
+}
 
 export const chaosToolset: ToolsetDefinition = {
   name: "chaos",
@@ -207,19 +231,26 @@ export const chaosToolset: ToolsetDefinition = {
           method: "POST",
           path: `${CHAOS}/rest/v2/experiment`,
           bodyBuilder: (input) => {
-            const b = (input.body ?? input) as Record<string, unknown>;
+            const b = coerceBody(input);
+            // Accept both snake_case (MCP convention) and camelCase (Harness API / manifest convention)
+            const infraId = b.infra_id ?? b.infraId;
+            const infraType = b.infra_type ?? b.infraType;
+            const cronSyntax = b.cron_syntax ?? b.cronSyntax;
+            const isSingleRunCron = b.is_single_run_cron ?? b.isSingleRunCronEnabled;
+            const experimentType = b.experiment_type ?? b.experimentType;
+            const tags = b.tags;
             return {
               id: (b.id as string) || randomUUID(),
               ...(b.identity ? { identity: b.identity } : {}),
               name: b.name,
               ...(b.manifest ? { manifest: b.manifest } : {}),
-              ...(b.infra_id ? { infraId: b.infra_id, infra_id: b.infra_id } : {}),
-              ...(b.infra_type ? { infraType: b.infra_type, infra_type: b.infra_type } : {}),
+              ...(infraId ? { infraId, infra_id: infraId } : {}),
+              ...(infraType ? { infraType, infra_type: infraType } : {}),
               ...(b.description ? { description: b.description } : {}),
-              ...(b.tags ? { tags: Array.isArray(b.tags) ? b.tags : (b.tags as string).split(",").map((t: string) => t.trim()).filter(Boolean) } : {}),
-              ...(b.cron_syntax !== undefined ? { cronSyntax: b.cron_syntax } : {}),
-              ...(b.is_single_run_cron !== undefined ? { isSingleRunCronEnabled: b.is_single_run_cron } : {}),
-              ...(b.experiment_type ? { experimentType: b.experiment_type } : {}),
+              ...(tags ? { tags: Array.isArray(tags) ? tags : (tags as string).split(",").map((t: string) => t.trim()).filter(Boolean) } : {}),
+              ...(cronSyntax !== undefined ? { cronSyntax } : {}),
+              ...(isSingleRunCron !== undefined ? { isSingleRunCronEnabled: isSingleRunCron } : {}),
+              ...(experimentType ? { experimentType } : {}),
             };
           },
           responseExtractor: passthrough,
@@ -351,8 +382,8 @@ export const chaosToolset: ToolsetDefinition = {
         { name: "start_date", description: descExperimentStartDate },
         { name: "end_date", description: descExperimentEndDate },
         { name: "probe_ids", description: descProbeIds },
-        { name: "infra_type", description: descInfraType },
-        { name: "sort_field", description: descProbeSortField },
+        { name: "infra_type", description: descInfraType, enum: ["Kubernetes", "KubernetesV2", "Linux", "Windows", "CloudFoundry", "Container"] },
+        { name: "sort_field", description: descProbeSortField, enum: ["NAME", "TIME", "ENABLED"] },
         { name: "sort_ascending", description: descSortAsc, type: "boolean" as const },
         { name: "entity_type", description: descEntityTypeProbe },
       ],
@@ -403,7 +434,7 @@ export const chaosToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: { probe_id: "probeId" },
           bodyBuilder: (input) => {
-            const b = (input.body ?? input) as Record<string, unknown>;
+            const b = coerceBody(input);
             return {
               isEnabled: b.is_enabled ?? true,
               ...(b.is_bulk_update !== undefined ? { isBulkUpdate: b.is_bulk_update } : {}),
@@ -425,7 +456,7 @@ export const chaosToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: { probe_id: "probeId" },
           bodyBuilder: (input) => {
-            const b = (input.body ?? input) as Record<string, unknown>;
+            const b = coerceBody(input);
             return { verify: b.verify ?? true };
           },
           responseExtractor: passthrough,
@@ -571,7 +602,7 @@ export const chaosToolset: ToolsetDefinition = {
           pathParams: { template_id: "templateId" },
           queryParams: { hub_identity: "hubIdentity", revision: "revision" },
           bodyBuilder: (input) => {
-            const b = (input.body ?? input) as Record<string, unknown>;
+            const b = coerceBody(input);
             let infraRef = b.infra_ref as string | undefined;
             if (!infraRef && b.infra_id) {
               const envId = b.environment_id as string | undefined;
@@ -625,13 +656,6 @@ export const chaosToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           actionDescription: descListRevisions,
-          bodySchema: {
-            description: "No body required. Template identified by path parameter.",
-            fields: [
-              { name: "template_id", type: "string", required: true, description: descTemplateIdentity },
-              { name: "hub_identity", type: "string", required: true, description: descHubIdentity },
-            ],
-          },
         },
         get_variables: {
           method: "GET",
@@ -644,14 +668,6 @@ export const chaosToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           actionDescription: descGetVariables,
-          bodySchema: {
-            description: "No body required. Template identified by path parameter.",
-            fields: [
-              { name: "template_id", type: "string", required: true, description: descTemplateIdentity },
-              { name: "hub_identity", type: "string", required: true, description: descHubIdentity },
-              { name: "revision", type: "string", required: false, description: descRevision },
-            ],
-          },
         },
         get_yaml: {
           method: "GET",
@@ -664,14 +680,6 @@ export const chaosToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           actionDescription: descGetYaml,
-          bodySchema: {
-            description: "No body required. Template identified by path parameter.",
-            fields: [
-              { name: "template_id", type: "string", required: true, description: descTemplateIdentity },
-              { name: "hub_identity", type: "string", required: true, description: descHubIdentity },
-              { name: "revision", type: "string", required: false, description: descRevision },
-            ],
-          },
         },
         compare_revisions: {
           method: "GET",
@@ -685,15 +693,6 @@ export const chaosToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           actionDescription: descCompareRevisions,
-          bodySchema: {
-            description: "No body required. Template identified by path parameter.",
-            fields: [
-              { name: "template_id", type: "string", required: true, description: descTemplateIdentity },
-              { name: "hub_identity", type: "string", required: true, description: descHubIdentity },
-              { name: "revision1", type: "string", required: true, description: descRevision1 },
-              { name: "revision2", type: "string", required: true, description: descRevision2 },
-            ],
-          },
         },
       },
     },
@@ -804,7 +803,7 @@ export const chaosToolset: ToolsetDefinition = {
           queryParams: { is_identity: "isIdentity" },
           defaultQueryParams: { isIdentity: "false" },
           bodyBuilder: (input) => {
-            const b = (input.body ?? input) as Record<string, unknown>;
+            const b = coerceBody(input);
             return {
               identity: b.identity,
               name: b.name,
@@ -832,7 +831,7 @@ export const chaosToolset: ToolsetDefinition = {
           queryParams: { is_identity: "isIdentity" },
           defaultQueryParams: { isIdentity: "false" },
           bodyBuilder: (input) => {
-            const b = (input.body ?? input) as Record<string, unknown>;
+            const b = coerceBody(input);
             return {
               name: b.name,
               description: b.description,
@@ -1095,7 +1094,7 @@ export const chaosToolset: ToolsetDefinition = {
           path: `${CHAOS}/rest/hubs`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => {
-            const b = (input.body ?? input) as Record<string, unknown>;
+            const b = coerceBody(input);
             return {
               identity: b.identity,
               name: b.name,
@@ -1127,7 +1126,7 @@ export const chaosToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { hub_id: "hubId" },
           bodyBuilder: (input) => {
-            const b = (input.body ?? input) as Record<string, unknown>;
+            const b = coerceBody(input);
             return {
               name: b.name,
               ...(b.description !== undefined ? { description: b.description } : {}),
@@ -1166,7 +1165,15 @@ export const chaosToolset: ToolsetDefinition = {
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["fault_id"],
       listFilterFields: [
+        { name: "search", description: descFaultSearch },
+        { name: "type", description: descFaultListType },
+        { name: "infrastructure_type", description: descFaultListInfraType },
+        { name: "infrastructure", description: descFaultListInfrastructure },
+        { name: "tags", description: descFaultListTags },
+        { name: "category", description: descFaultListCategory },
         { name: "is_enterprise", description: descIsEnterpriseFilter, type: "boolean" },
+        { name: "sort_field", description: descFaultListSortField, enum: ["name", "lastUpdated"] },
+        { name: "sort_ascending", description: descFaultListSortAscending, type: "boolean" },
       ],
       operations: {
         list: {
@@ -1180,6 +1187,13 @@ export const chaosToolset: ToolsetDefinition = {
             search: "search",
             search_term: "search",
             is_enterprise: "isEnterprise",
+            type: "type",
+            infrastructure_type: "infrastructureType",
+            infrastructure: "infrastructure",
+            tags: "tags",
+            category: "category",
+            sort_field: "sortField",
+            sort_ascending: "sortAscending",
           },
           responseExtractor: chaosPageExtract,
           description: descListFaults,
@@ -2094,13 +2108,13 @@ export const chaosToolset: ToolsetDefinition = {
           path: `${CHAOS}/v3/dr-tests`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => {
-            const b = (input.body ?? input) as Record<string, unknown>;
+            const b = coerceBody(input);
             return {
               name: b.name,
               identifier: b.identifier,
               ...(b.description ? { description: b.description } : {}),
               ...(b.objective ? { objective: b.objective } : {}),
-              ...(b.tags ? { tags: b.tags } : {}),
+              tags: (b.tags as Record<string, string>) ?? {},
             };
           },
           responseExtractor: passthrough,
@@ -2115,6 +2129,96 @@ export const chaosToolset: ToolsetDefinition = {
               { name: "tags", type: "object", required: false, description: descDRTestTags },
             ],
           },
+        },
+      },
+    },
+
+    // ── Service Discovery: Namespaces ──────────────────────────────────
+    {
+      resourceType: "discovered_namespace",
+      displayName: "Discovered Namespace",
+      description: descDiscoveredNamespace,
+      toolset: "chaos",
+      scope: "project",
+      scopeParams: CHAOS_SCOPE,
+      identifierFields: ["agent_identity"],
+      searchAliases: ["namespace", "k8s namespace", "kubernetes namespace", "service discovery namespace"],
+      listFilterFields: [
+        { name: "agent_identity", description: descSDAgentIdentity, required: true },
+        { name: "environment_id", description: descSDEnvironmentId, required: true },
+        { name: "name", description: descSDNamespaceNameFilter },
+        { name: "all", type: "boolean", description: descSDFetchAll },
+      ],
+      diagnosticHint: descSDAgentDiagnostic,
+      relatedResources: [
+        {
+          resourceType: "discovered_service",
+          relationship: "scopes",
+          description: "Discovered services can be filtered by namespace; use this list to find valid namespace values for that filter.",
+        },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${SD}/agents/{agentIdentity}/namespaces`,
+          pathParams: { agent_identity: "agentIdentity" },
+          queryParams: {
+            environment_id: "environmentIdentifier",
+            name: "name",
+            page: "page",
+            size: "limit",       // SD uses `limit`, not `size`
+            all: "all",
+          },
+          responseExtractor: sdPageExtract,
+          description: descListDiscoveredNamespaces,
+        },
+      },
+    },
+
+    // ── Service Discovery: Services ────────────────────────────────────
+    {
+      resourceType: "discovered_service",
+      displayName: "Discovered Service",
+      description: descDiscoveredService,
+      toolset: "chaos",
+      scope: "project",
+      scopeParams: CHAOS_SCOPE,
+      identifierFields: ["agent_identity"],
+      searchAliases: [
+        "service discovery", "discovered service", "k8s service", "kubernetes service",
+        "workload", "service map", "topology", "service relationship",
+        "lambda", "ec2", "rds", "load balancer",
+      ],
+      listFilterFields: [
+        { name: "agent_identity", description: descSDAgentIdentity, required: true },
+        { name: "environment_id", description: descSDEnvironmentId, required: true },
+        { name: "namespace", description: descSDNamespaceFilter },
+        { name: "search", description: descSDSearchFilter },
+        { name: "all", type: "boolean", description: descSDFetchAll },
+      ],
+      diagnosticHint: descSDAgentDiagnostic,
+      relatedResources: [
+        {
+          resourceType: "discovered_namespace",
+          relationship: "scoped_by",
+          description: "Use discovered_namespace to discover valid namespace values before filtering services.",
+        },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${SD}/agents/{agentIdentity}/discoveredservices`,
+          pathParams: { agent_identity: "agentIdentity" },
+          queryParams: {
+            environment_id: "environmentIdentifier",
+            namespace: "namespace",
+            search: "search",
+            page: "page",
+            size: "limit",
+            all: "all",
+          },
+          responseExtractor: sdPageExtract,
+          description: descListDiscoveredServices,
         },
       },
     },

@@ -22,6 +22,7 @@ export const secretsToolset: ToolsetDefinition = {
         { name: "secret_manager_identifiers", description: "Filter by secret manager identifiers (comma-separated)" },
         { name: "description", description: "Filter by description" },
         { name: "tags", description: "Filter by tags as key:value pairs (JSON object)" },
+        { name: "include_all_secrets_accessible_at_scope", type: "boolean", description: "When true, include secrets inherited from parent scopes (e.g. at project scope also return org- and account-scope secrets). Default: false." },
       ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/setup/resources/secrets/{secretIdentifier}",
       operations: {
@@ -39,6 +40,11 @@ export const secretsToolset: ToolsetDefinition = {
               if (!v) return undefined;
               return String(v).split(",").map((s) => s.trim()).filter(Boolean);
             };
+            const asBool = (v: unknown): boolean | undefined => {
+              if (v === true || v === "true") return true;
+              if (v === false || v === "false") return false;
+              return undefined;
+            };
             return {
               filterType: "Secret",
               secretTypes: input.type ? [input.type] : undefined,
@@ -48,6 +54,7 @@ export const secretsToolset: ToolsetDefinition = {
               description: input.description || undefined,
               searchTerm: input.search_term || undefined,
               tags: input.tags,
+              includeAllSecretsAccessibleAtScope: asBool(input.include_all_secrets_accessible_at_scope),
             };
           },
           responseExtractor: pageExtract,

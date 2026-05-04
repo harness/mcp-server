@@ -450,11 +450,50 @@ export const chaosHubListExtract = (raw: unknown): { items: unknown[]; total: nu
   };
 };
 
-/** Extract chaos DR test list response: { drtests: [...] } */
+/** Extract chaos DR test list response: { items: [...], pagination: { totalItems } } */
 export const chaosDRTestListExtract = (raw: unknown): { items: unknown[]; total: number } => {
-  const r = raw as { drtests?: unknown[] };
-  const items = r.drtests ?? [];
-  return { items, total: items.length };
+  const r = raw as { items?: unknown[]; pagination?: { totalItems?: number } };
+  const items = r.items ?? [];
+  return { items, total: r.pagination?.totalItems ?? items.length };
+};
+
+// ---------------------------------------------------------------------------
+// Service Discovery extractors
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract Service Discovery paginated list response — common envelope shape:
+ *   { correlationID, page: { totalItems, ... }, items: [...] }
+ * Used by namespaces, discoveredservices, workloads, connections, agents.
+ *
+ * Two server-side quirks are smoothed over here:
+ *   1. When the request uses `all=true` or `limit=0`, the SD server returns
+ *      `page: { all: true }` with no `totalItems` field — Go zero-values it
+ *      to 0. We compensate with `Math.max(reportedTotal, items.length)` so
+ *      `total` always reflects what was actually returned.
+ *   2. When `items` is empty, we attach a `_hint` covering the four most
+ *      common failure modes (wrong agent_identity, no sync yet, case-
+ *      sensitive exact `name` match, K8s-only `namespace` filter) so the
+ *      LLM can guide the user without an extra round trip.
+ */
+export const sdPageExtract = (raw: unknown): { items: unknown[]; total: number; _hint?: string } => {
+  const r = raw as { items?: unknown[]; page?: { totalItems?: number } };
+  const items = r.items ?? [];
+  const reported = r.page?.totalItems ?? 0;
+  const total = Math.max(reported, items.length);
+  if (items.length === 0) {
+    return {
+      items,
+      total,
+      _hint:
+        "Empty result. Common causes: " +
+        "(1) agent_identity is not a Service Discovery agent — a chaos infrastructure ID (chaos_k8s_infrastructure) is NOT an SD agent ID, they are separate; verify against the SD UI URL. " +
+        "(2) The agent has not completed a discovery sync yet (new agents take a few minutes to populate). " +
+        "(3) For discovered_namespace, the `name` filter is EXACT case-sensitive equality — for partial/case-insensitive matches, list with `all: true` and filter client-side. " +
+        "(4) For discovered_service, the `namespace` filter only matches Kubernetes-typed records (Lambda/EC2/VM/process records won't match).",
+    };
+  }
+  return { items, total };
 };
 
 // ---------------------------------------------------------------------------
