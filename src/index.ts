@@ -203,6 +203,17 @@ const REAP_INTERVAL_MS = 60_000;    // check every minute
  */
 async function startHttp(config: Config, port: number): Promise<void> {
   const host = process.env.HOST || "127.0.0.1";
+
+  const isLoopback = host === "127.0.0.1" || host === "::1" || host === "localhost";
+  if (!isLoopback) {
+    log.warn(
+      "HTTP server binding to non-loopback address without authentication. " +
+      "Any client that can reach this address will have full access to Harness resources via the configured API key. " +
+      "Deploy behind an authenticated reverse proxy or use HARNESS_ALLOWED_ORIGINS to restrict access.",
+      { host, port },
+    );
+  }
+
   const app = createMcpExpressApp(resolveHttpHostValidationOptions(host, config));
 
   const maxBodySize = config.HARNESS_MAX_BODY_SIZE_MB * 1024 * 1024;

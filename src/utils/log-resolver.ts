@@ -296,7 +296,7 @@ function decompressBlob(buf: Buffer): string {
 
   // Gzip
   if (buf[0] === GZIP_MAGIC_0 && buf[1] === GZIP_MAGIC_1) {
-    const decompressed = gunzipSync(buf);
+    const decompressed = gunzipSync(buf, { maxOutputLength: DEFAULT_MAX_LOG_BYTES * 10 });
     return decompressed.toString("utf-8");
   }
 
