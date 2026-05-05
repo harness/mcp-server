@@ -565,9 +565,9 @@ export const ccmToolset: ToolsetDefinition = {
         },
         delete: {
           method: "DELETE",
-          path: "/ccm/api/perspective/{perspectiveId}",
+          path: "/ccm/api/perspective",
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
-          pathParams: { perspective_id: "perspectiveId" },
+          queryParams: { perspective_id: "perspectiveId" },
           responseExtractor: ngExtract,
           description: "Delete a cost perspective",
         },
