@@ -92,6 +92,33 @@ function navigateToPath(
   return current;
 }
 
+const V1_STEP_GUIDANCE = "STEP PRIORITY for v1 pipelines: (1) 'template: uses: <stepName>' for Harness built-in steps — this is the preferred approach. (2) 'run:' for custom shell scripts. (3) 'approval:' for gates. (4) 'action:' ONLY for Drone/Harness plugins — do NOT use GitHub Actions references. Common template names: k8sRollingDeployStep, k8sRollingRollbackStep, helmDeployBasicStep, buildAndPushToECR, buildAndPushToDocker, TerraformPlan, TerraformApply, EcsRollingDeploy, EcsBlueGreenCreateService.";
+
+/**
+ * For v1 pipeline schemas, annotate step-type results with guidance
+ * that steers agents toward template: uses: over action:.
+ */
+function annotateV1StepTypes(resourceType: string, path: string | undefined, result: Record<string, unknown>): Record<string, unknown> {
+  if (!resourceType.includes("v1") && resourceType !== "agent-pipeline") return result;
+
+  // Always include guidance on the summary (no path) so agents see it early
+  if (!path) {
+    return { ...result, _guidance: V1_STEP_GUIDANCE };
+  }
+
+  const pathLower = path.toLowerCase();
+  const resultStr = JSON.stringify(result);
+  const isStepRelated = pathLower.includes("step") ||
+    pathLower.includes("action") ||
+    resultStr.includes("ActionStepInfoV1") ||
+    resultStr.includes("StepItems");
+
+  if (isStepRelated) {
+    return { ...result, _guidance: V1_STEP_GUIDANCE };
+  }
+  return result;
+}
+
 /**
  * Get a compact summary of the top-level structure: property names, types,
  * required fields, and available definition sections.
@@ -174,7 +201,7 @@ export function registerSchemaTool(server: McpServer, registry?: Registry): void
 
         // No path → return summary
         if (!args.path) {
-          return jsonResult(getSummary(schema, args.resource_type));
+          return jsonResult(annotateV1StepTypes(args.resource_type, undefined, getSummary(schema, args.resource_type)));
         }
 
         // Navigate to the requested path
@@ -191,11 +218,11 @@ export function registerSchemaTool(server: McpServer, registry?: Registry): void
         // Inline $ref references so the result is self-contained
         const resolved = inlineRefs(schema, node);
 
-        return jsonResult({
+        return jsonResult(annotateV1StepTypes(args.resource_type, args.path, {
           resource_type: args.resource_type,
           path: args.path,
           schema: resolved,
-        });
+        }));
       } catch (err) {
         return errorResult(err instanceof Error ? err.message : String(err));
       }

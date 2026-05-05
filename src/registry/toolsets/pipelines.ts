@@ -406,13 +406,13 @@ export const pipelinesToolset: ToolsetDefinition = {
     {
       resourceType: "pipeline_v1",
       displayName: "Pipeline (V1)",
-      description: "V1 pipeline definition using simplified YAML format. Use for agent pipelines and v1 YAML schema. Supports list, get, create, update, delete, and execute (run). V1 pipelines use a flatter YAML structure with direct step types (run, agent, action, approval) instead of v0's nested stage/step wrappers.",
+      description: "V1 pipeline definition using simplified YAML format. Use for agent pipelines and v1 YAML schema. Supports list, get, create, update, delete, and execute (run). V1 pipelines use a flatter YAML structure with direct step types (run, approval, template) instead of v0's nested stage/step wrappers. IMPORTANT: When generating v1 pipeline YAML, prefer 'template: uses: <stepName>' for Harness built-in steps (e.g., k8sRollingDeployStep, buildAndPushToECR, TerraformPlan). Use 'run:' for custom scripts. Do NOT use GitHub Actions references.",
       toolset: "pipelines",
       scope: "project",
       headerBasedScoping: true,
       identifierFields: ["pipeline_id"],
       searchAliases: ["v1 pipeline", "agent pipeline", "v1"],
-      diagnosticHint: "Use harness_diagnose with pipeline_id or execution_id to analyze failures. V1 pipelines use the same execution engine as v0.",
+      diagnosticHint: "Use harness_diagnose with pipeline_id or execution_id to analyze failures. V1 pipelines use the same execution engine as v0. If YAML validation fails, check: (1) Are you using v0 syntax like 'step.type' or 'spec:'? V1 uses 'template: uses:' and 'run:' directly. (2) Are you referencing GitHub Actions like 'actions/checkout@v3'? Use Harness templates instead.",
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipelineIdentifier}/pipeline-studio",
       operations: {
         list: {
@@ -447,7 +447,7 @@ export const pipelinesToolset: ToolsetDefinition = {
           pathParams: { org_id: "org", project_id: "project" },
           bodyBuilder: buildV1PipelineBody,
           responseExtractor: passthrough,
-          description: "Create a new v1 pipeline. Pass pipeline_yaml (YAML string), identifier, name. Version defaults to '1'. Alternatively pass a raw YAML string as body.",
+          description: "Create a new v1 pipeline. Pass pipeline_yaml (YAML string), identifier, name. Version defaults to '1'. Alternatively pass a raw YAML string as body. V1 YAML must use: 'template: uses: <stepName>' for built-in steps, 'run:' for scripts, 'approval: uses: harness' for gates. Never use v0 syntax (step.type, spec:, identifier:) or GitHub Actions.",
           bodySchema: pipelineV1CreateSchema,
         },
         update: {

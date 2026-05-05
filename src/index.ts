@@ -79,7 +79,7 @@ function createHarnessServer(config: Config, sharedAuditManager?: AuditManager):
         "",
         "PR RESOURCES: pull_request, pr_comment, pr_activity, pr_reviewer, pr_check — all accept URL or explicit repo_id + pr_number.",
         ...(config.HARNESS_PIPELINE_VERSION === "1"
-          ? ["", "PIPELINE VERSION: This account uses v1 pipelines. Use resource_type='pipeline_v1' for all pipeline operations."]
+          ? ["", "PIPELINE VERSION: This account uses v1 pipelines. Use resource_type='pipeline_v1' for all pipeline operations. When generating pipeline YAML, use 'template: uses: <stepName>' for Harness built-in steps (e.g., k8sRollingDeployStep, buildAndPushToECR, TerraformPlan). Do NOT use GitHub Actions syntax."]
           : ["", "PIPELINE VERSION: This account uses v0 pipelines. Use resource_type='pipeline' for all pipeline operations."]),
       ].join("\n"),
     },

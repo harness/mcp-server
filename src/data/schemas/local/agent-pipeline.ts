@@ -3758,7 +3758,7 @@ const schema: Record<string, any> = {
                 "$ref": "#/definitions/pipeline/Clone"
               },
               "action": {
-                "description": "Action step configuration.",
+                "description": "Drone/Harness plugin step. Prefer 'template: uses:' for Harness built-in steps instead.",
                 "$ref": "#/definitions/pipeline/steps/unified/ActionStepInfoV1"
               },
               "background": {
@@ -4210,15 +4210,15 @@ const schema: Record<string, any> = {
           },
           "ActionStepInfoV1": {
             "title": "ActionStepInfoV1",
-            "description": "Action step configuration for running GitHub-style actions.",
+            "description": "Action step using a Harness plugin or Drone plugin. IMPORTANT: Prefer 'template: uses:' for Harness built-in steps (e.g., k8sRollingDeployStep, buildAndPushToECR, TerraformPlan). Only use 'action:' for Drone/Harness plugins from the plugin registry. Do NOT use GitHub Actions marketplace references here.",
             "type": "object",
             "properties": {
               "uses": {
-                "description": "Action reference (e.g., actions/checkout@v3). Supports expressions.",
+                "description": "Plugin reference from the Harness/Drone plugin registry (e.g., plugins/docker, plugins/s3). Do NOT use GitHub Actions references like 'actions/checkout@v3'.",
                 "type": "string"
               },
               "with": {
-                "description": "Action inputs. Supports expressions.",
+                "description": "Plugin inputs as key-value pairs. Supports expressions.",
                 "$ref": "#/definitions/pipeline/common/ObjectOrExpression"
               },
               "env": {

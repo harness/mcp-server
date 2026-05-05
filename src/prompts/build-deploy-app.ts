@@ -73,9 +73,11 @@ Generate a Harness CI pipeline that:
 - Builds the Docker image from the Dockerfile found in Step 1
 - Tags the image with \`latest\` and \`<+pipeline.sequenceId>\`
 - Includes a build test step if the repo has tests (e.g. npm test, go test, pytest)
-- Uses a \`BuildAndPushDockerRegistry\` step. CRITICAL: The step spec differs based on the registry type. Use EXACTLY one of the two templates below — do not mix fields between them.
+- Uses the appropriate build-and-push step for the pipeline version (check server instructions for v0 vs v1)
 
-**TEMPLATE A — Harness Artifact Registry (default when user says "Harness Artifact Registry" or "HAR"):**
+**If v0 pipelines** — use a \`BuildAndPushDockerRegistry\` step:
+
+TEMPLATE A — Harness Artifact Registry (HAR):
 \`\`\`yaml
 - step:
     type: BuildAndPushDockerRegistry
@@ -89,9 +91,9 @@ Generate a Harness CI pipeline that:
       caching: true
       registryRef: <+input>
 \`\`\`
-Key: uses \`registryRef\`. Does NOT have \`connectorRef\`. No Docker connector needed.
+Key: uses \`registryRef\`. Does NOT have \`connectorRef\`.
 
-**TEMPLATE B — Third-party registry (DockerHub, ECR, GCR, ACR, etc.):**
+TEMPLATE B — Third-party registry (DockerHub, ECR, GCR, ACR):
 \`\`\`yaml
 - step:
     type: BuildAndPushDockerRegistry
@@ -106,6 +108,55 @@ Key: uses \`registryRef\`. Does NOT have \`connectorRef\`. No Docker connector n
       caching: true
 \`\`\`
 Key: uses \`connectorRef\`. Does NOT have \`registryRef\`.
+
+**If v1 pipelines** — use \`template: uses:\` syntax (NEVER use v0 \`step.type\`/\`spec:\` or GitHub Actions):
+
+TEMPLATE A — Build and push to ECR:
+\`\`\`yaml
+- id: build_push
+  name: Build and Push
+  template:
+    uses: buildAndPushToECR
+    with:
+      connector: account.aws_connector
+      region: us-east-1
+      registry: 123456789.dkr.ecr.us-east-1.amazonaws.com
+      repo: my-app
+      tags:
+        - <+pipeline.sequenceId>
+        - latest
+\`\`\`
+
+TEMPLATE B — Build and push to Docker registry:
+\`\`\`yaml
+- id: build_push
+  name: Build and Push
+  template:
+    uses: buildAndPushToDocker
+    with:
+      connector: account.dockerhub
+      repo: myorg/myapp
+      tags:
+        - <+pipeline.sequenceId>
+        - latest
+\`\`\`
+
+Other available templates: \`buildAndPushToGCR\`, \`buildAndPushToACR\`, \`buildAndPushToECR\`
+
+For v1 test steps use \`run:\`:
+\`\`\`yaml
+- id: run_tests
+  name: Run Tests
+  run:
+    container:
+      connector: account.dockerhub
+      image: node:20
+    script: |
+      npm ci
+      npm test
+    shell: bash
+  timeout: 10m
+\`\`\`
 
 Present the full pipeline YAML for review. Do NOT create it yet.
 
@@ -170,6 +221,37 @@ Generate a Harness CD pipeline that:
 - Uses a Rolling deployment strategy
 - Includes infrastructure definition targeting the ${namespace || "default"} namespace
 - Includes a Verify step or health check after deployment
+
+**If v1 pipelines** — use \`template: uses:\` for deploy steps:
+\`\`\`yaml
+- id: deploy_app
+  name: Deploy
+  environment:
+    id: dev
+    name: dev
+    deploy-to: ${namespace || "default"}
+  service: <service_id>
+  on-failure:
+    - action: stage-rollback
+      errors:
+        - all
+  rollback:
+    - id: rollback
+      name: Rollback
+      template:
+        uses: k8sRollingRollbackStep
+        with:
+          pruning: false
+      timeout: 10m
+  steps:
+    - id: deploy
+      name: Rolling Deploy
+      template:
+        uses: k8sRollingDeployStep
+        with:
+          skip_dry_run: false
+      timeout: 10m
+\`\`\`
 
 Present the full pipeline YAML for review. Do NOT create it yet.
 

@@ -11,10 +11,11 @@ import overlayInputSetV1 from "./v1/overlayInputSet.js";
 import serviceV1 from "./v1/service.js";
 import infraV1 from "./v1/infra.js";
 import agentPipeline from "./local/agent-pipeline.js";
+import pipelineV1Examples from "./local/pipeline-v1-examples.js";
 
 type V0SchemaKey = "pipeline" | "template" | "trigger";
 type V1SchemaKey = "pipeline_v1" | "template_v1" | "trigger_v1" | "inputSet_v1" | "overlayInputSet_v1" | "service_v1" | "infra_v1";
-type LocalSchemaKey = "agent-pipeline";
+type LocalSchemaKey = "agent-pipeline" | "pipeline_v1_examples";
 type AllSchemaKeys = V0SchemaKey | V1SchemaKey | LocalSchemaKey;
 
 export const SCHEMAS: Record<AllSchemaKeys, Record<string, any>> = {
@@ -29,10 +30,11 @@ export const SCHEMAS: Record<AllSchemaKeys, Record<string, any>> = {
   "service_v1": serviceV1,
   "infra_v1": infraV1,
   "agent-pipeline": agentPipeline,
+  "pipeline_v1_examples": pipelineV1Examples,
 };
 
 export const VALID_SCHEMAS = Object.keys(SCHEMAS) as AllSchemaKeys[];
 export type SchemaName = AllSchemaKeys;
 
 export const V0_SCHEMA_KEYS: V0SchemaKey[] = ["pipeline", "template", "trigger"];
-export const V1_SCHEMA_KEYS: V1SchemaKey[] = ["pipeline_v1", "template_v1", "trigger_v1", "inputSet_v1", "overlayInputSet_v1", "service_v1", "infra_v1"];
+export const V1_SCHEMA_KEYS: (V1SchemaKey | "pipeline_v1_examples")[] = ["pipeline_v1", "template_v1", "trigger_v1", "inputSet_v1", "overlayInputSet_v1", "service_v1", "infra_v1", "pipeline_v1_examples"];

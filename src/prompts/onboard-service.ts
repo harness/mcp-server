@@ -25,10 +25,21 @@ Steps:
 4. **Connectors**: Call harness_list with resource_type="connector"${projectId ? ` and project_id="${projectId}"` : ""} to see available infrastructure connectors
 5. **Check existing input sets**: Call harness_list with resource_type="input_set"${projectId ? ` and project_id="${projectId}"` : ""} to see if the project already uses input sets for parameterized deployments
 6. **Create service**: Generate the service YAML definition following existing patterns
-7. **Create pipeline**: Generate a deployment pipeline YAML for the service with:
+7. **Create pipeline**: Generate a deployment pipeline YAML for the service. Check the server instructions for which pipeline version this account uses (v0 or v1), then:
    - Build stage (if applicable)
    - Deploy to dev/staging/prod environments using \`<+input>\` for environment-specific values (infrastructure, namespace, replicas, image tag)
    - Approval gates between staging and prod
+
+   **If v1 pipelines**: Use v1 syntax — \`template: uses:\` for Harness built-in steps (e.g., \`k8sRollingDeployStep\`, \`helmDeployBasicStep\`, \`buildAndPushToECR\`), \`run:\` for scripts, \`approval: uses: harness\` for approvals. Do NOT use v0 patterns (\`step.type\`, \`spec:\`, \`identifier:\`) or GitHub Actions syntax. Example CD step:
+   \`\`\`yaml
+   - id: deploy
+     name: Deploy
+     template:
+       uses: k8sRollingDeployStep
+       with:
+         skip_dry_run: false
+     timeout: 10m
+   \`\`\`
 8. **Choose storage mode** — ask where to store the pipeline:
    - **Inline (default)**: Stored in Harness — simplest setup
    - **Remote (External Git)**: Stored in GitHub/GitLab/Bitbucket via a Git connector
