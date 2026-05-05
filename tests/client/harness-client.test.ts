@@ -102,6 +102,20 @@ describe("HarnessClient", () => {
       expect(url).not.toContain("/gateway/gateway/");
     });
 
+    it("deduplicates a matching version prefix from baseUrl overrides", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({
+        path: "/v1/entities",
+        baseUrl: "https://registry-api.qa.harness.io/v1",
+      });
+
+      const url = fetchSpy.mock.calls[0][0] as string;
+      expect(url).toContain("https://registry-api.qa.harness.io/v1/entities?");
+      expect(url).not.toContain("/v1/v1/");
+    });
+
     it("keeps /gateway path when base URL does not end with /gateway", async () => {
       fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
       const client = new HarnessClient(makeConfig({ HARNESS_BASE_URL: "https://app.harness.io" }));
