@@ -1,6 +1,5 @@
 import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { Registry } from "../registry/index.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { createLogger } from "../utils/logger.js";
 import { SCHEMAS, VALID_SCHEMAS } from "../data/schemas/index.js";
@@ -125,7 +124,7 @@ function getSummary(schema: Record<string, unknown>, resourceType: string): Reco
   };
 }
 
-export function registerSchemaTool(server: McpServer, registry?: Registry): void {
+export function registerSchemaTool(server: McpServer): void {
   const availableSchemas = VALID_SCHEMAS;
 
   server.registerTool(
