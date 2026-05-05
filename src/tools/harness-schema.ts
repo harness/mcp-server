@@ -3,12 +3,12 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { createLogger } from "../utils/logger.js";
-import { SCHEMAS, VALID_SCHEMAS, V0_SCHEMA_KEYS, V1_SCHEMA_KEYS } from "../data/schemas/index.js";
+import { SCHEMAS, VALID_SCHEMAS } from "../data/schemas/index.js";
+import { getExample, searchExamples, getExamplesForResource } from "../data/examples/index.js";
+import "../data/examples/load-all.js";
 
 const log = createLogger("tool:harness-schema");
 
-const V0_ONLY = new Set<string>(V0_SCHEMA_KEYS);
-const V1_ONLY = new Set<string>(V1_SCHEMA_KEYS);
 
 /**
  * Resolve a $ref pointer within the schema.
@@ -127,33 +127,23 @@ function getSummary(schema: Record<string, unknown>, resourceType: string): Reco
 }
 
 export function registerSchemaTool(server: McpServer, registry?: Registry): void {
-  const registeredTypes = registry ? new Set(registry.getAllResourceTypes()) : undefined;
-
-  // Determine which version set to exclude based on registry's pipeline version.
-  // If pipeline_v1 is registered → v1 account → hide v0-only schemas.
-  // If pipeline is registered → v0 account → hide v1-only schemas.
-  // Local schemas (agent-pipeline) are always available.
-  const excludeSet = registeredTypes?.has("pipeline_v1") ? V0_ONLY : V1_ONLY;
-
-  const availableSchemas = VALID_SCHEMAS.filter((s) => {
-    if (!registeredTypes) return true;
-    if (V0_ONLY.has(s) || V1_ONLY.has(s)) return !excludeSet.has(s);
-    return true; // local schemas always pass
-  });
+  const availableSchemas = VALID_SCHEMAS;
 
   server.registerTool(
     "harness_schema",
     {
       description:
-        "Fetch Harness YAML schema for a resource type. Returns the JSON Schema definition " +
-        "so you know the exact body structure for harness_create/harness_update. " +
+        "Fetch Harness YAML schema or examples for a resource type. " +
         "Use without path for a summary of fields and available sections. " +
         "Use with path to drill into a specific section. " +
+        "Use with example to fetch a named example YAML snippet. " +
+        "Use with example_search to find examples by keyword. " +
         `Available schemas: ${availableSchemas.join(", ")}.`,
       inputSchema: {
         resource_type: z
           .enum(availableSchemas as [string, ...string[]])
-          .describe(`Schema to fetch. Available: ${availableSchemas.join(", ")}`),
+          .describe(`Schema to fetch. Available: ${availableSchemas.join(", ")}. Required for schema/path lookups, optional for example_search.`)
+          .optional(),
         path: z
           .string()
           .optional()
@@ -161,6 +151,14 @@ export function registerSchemaTool(server: McpServer, registry?: Registry): void
             "Dot-separated path to drill into a specific definition section. " +
             "Omit for a top-level summary showing all available sections.",
           ),
+        example: z
+          .string()
+          .optional()
+          .describe("Fetch a specific example by name (e.g. 'minimal-ci'). Returns the full YAML snippet and description."),
+        example_search: z
+          .string()
+          .optional()
+          .describe("Search examples by keyword. Returns matching example names and descriptions. Optionally combine with resource_type to filter."),
       },
       annotations: {
         title: "Harness YAML Schema",
@@ -170,11 +168,62 @@ export function registerSchemaTool(server: McpServer, registry?: Registry): void
     },
     async (args) => {
       try {
+        // --- Example fetch mode ---
+        if (args.example) {
+          const ex = getExample(args.example);
+          if (!ex) {
+            const available = args.resource_type
+              ? getExamplesForResource(args.resource_type).map((e) => e.name)
+              : [];
+            return jsonResult({
+              error: `Example '${args.example}' not found.` +
+                (available.length ? ` Available for ${args.resource_type}: ${available.join(", ")}` : " Use example_search to find examples."),
+              available_examples: available,
+            });
+          }
+          return jsonResult({
+            name: ex.name,
+            resourceType: ex.resourceType,
+            description: ex.description,
+            tags: ex.tags,
+            yaml: ex.yaml,
+          });
+        }
+
+        // --- Example search mode ---
+        if (args.example_search) {
+          const results = searchExamples(args.example_search, args.resource_type);
+          return jsonResult({
+            search: args.example_search,
+            ...(args.resource_type ? { resource_type: args.resource_type } : {}),
+            total: results.length,
+            results: results.map((e) => ({
+              name: e.name,
+              resourceType: e.resourceType,
+              description: e.description,
+              tags: e.tags,
+            })),
+            hint: results.length > 0
+              ? "Use example='<name>' to fetch the full YAML for any result."
+              : "No matches. Try a broader keyword or omit resource_type to search globally.",
+          });
+        }
+
+        // --- Schema mode (existing behavior) ---
+        if (!args.resource_type) {
+          return errorResult("resource_type is required for schema lookups. Use example_search to search examples without specifying a resource type.");
+        }
+
         const schema = SCHEMAS[args.resource_type as keyof typeof SCHEMAS] as Record<string, unknown>;
 
-        // No path → return summary
+        // No path → return summary with available examples
         if (!args.path) {
-          return jsonResult(getSummary(schema, args.resource_type));
+          const summary = getSummary(schema, args.resource_type);
+          const examples = getExamplesForResource(args.resource_type);
+          if (examples.length > 0) {
+            (summary as Record<string, unknown>).examples_available = examples.map((e) => e.name);
+          }
+          return jsonResult(summary);
         }
 
         // Navigate to the requested path

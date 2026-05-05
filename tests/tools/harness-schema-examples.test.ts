@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { getExample, searchExamples, getExamplesForResource } from "../../src/data/examples/index.js";
-import "../../src/data/examples/pipeline.js";
-import "../../src/data/examples/pipeline-v1.js";
+import "../../src/data/examples/load-all.js";
 
 describe("example registry", () => {
   it("getExample returns undefined for non-existent example", () => {
