@@ -127,20 +127,14 @@ export class Registry {
       ? allToolsets.filter((t) => enabledNames.has(t.name))
       : allToolsets.filter((t) => !t.optIn);
 
-    const excludedPipelineType =
-      (this.config.HARNESS_PIPELINE_VERSION ?? "0") === "0"
-        ? "pipeline_v1"
-        : "pipeline";
-
     for (const toolset of this.toolsets) {
       for (const resource of toolset.resources) {
-        if (resource.resourceType === excludedPipelineType) continue;
         this.resourceMap.set(resource.resourceType, resource);
       }
     }
 
     log.info(`Registry loaded: ${this.resourceMap.size} resource types from ${this.toolsets.length} toolsets`, {
-      pipelineVersion: this.config.HARNESS_PIPELINE_VERSION ?? "0",
+      defaultPipelineVersion: this.config.HARNESS_PIPELINE_VERSION ?? "0",
     });
   }
 

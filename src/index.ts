@@ -79,8 +79,8 @@ function createHarnessServer(config: Config, sharedAuditManager?: AuditManager):
         "",
         "PR RESOURCES: pull_request, pr_comment, pr_activity, pr_reviewer, pr_check — all accept URL or explicit repo_id + pr_number.",
         ...(config.HARNESS_PIPELINE_VERSION === "1"
-          ? ["", "PIPELINE VERSION: This account uses v1 pipelines. Use resource_type='pipeline_v1' for all pipeline operations."]
-          : ["", "PIPELINE VERSION: This account uses v0 pipelines. Use resource_type='pipeline' for all pipeline operations."]),
+          ? ["", "PIPELINES: Both v0 ('pipeline') and v1 ('pipeline_v1') are available. Default to v1. Use harness_describe for version detection hints."]
+          : ["", "PIPELINES: Both v0 ('pipeline') and v1 ('pipeline_v1') are available. Default to v0 unless user explicitly requests v1 or 'agent pipeline'. Use harness_describe for version detection hints."]),
       ].join("\n"),
     },
   );
