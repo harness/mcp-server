@@ -1,5 +1,6 @@
-import type { ToolsetDefinition } from "../types.js";
+import type { ToolsetDefinition, PreflightContext } from "../types.js";
 import type { PathBuilderConfig } from "../types.js";
+import type { HarnessClient } from "../../client/harness-client.js";
 import { ngExtract, passthrough, gqlExtract, ccmViewsExtract, ccmBreakdownExtract, ccmTimeseriesExtract, ccmSummaryExtract, ccmRecommendationsExtract } from "../extractors.js";
 
 // ---------------------------------------------------------------------------
@@ -314,6 +315,140 @@ function extractBusinessMappingValues(raw: unknown, valueSubType?: string): unkn
 }
 
 // ---------------------------------------------------------------------------
+// Perspective preferences preflight — mirrors Go server's
+// GetPerspectivePreferenceDefaults + overlay pattern
+// ---------------------------------------------------------------------------
+
+interface SettingsValue {
+  identifier?: string;
+  value?: string;
+}
+
+function mapSettingsToViewPreferences(settings: SettingsValue[]): Record<string, unknown> {
+  const get = (id: string): string | undefined =>
+    settings.find(s => s.identifier === id)?.value;
+  const getBool = (id: string): boolean | undefined => {
+    const v = get(id);
+    return v !== undefined ? v === "true" : undefined;
+  };
+
+  const prefs: Record<string, unknown> = {};
+
+  const includeOthers = getBool("show_others");
+  if (includeOthers !== undefined) prefs.includeOthers = includeOthers;
+  const showAnomalies = getBool("show_anomalies");
+  if (showAnomalies !== undefined) prefs.showAnomalies = showAnomalies;
+  const includeUnallocated = getBool("show_unallocated_cluster_cost");
+  if (includeUnallocated !== undefined) prefs.includeUnallocatedCost = includeUnallocated;
+
+  // AWS preferences
+  const awsPrefs: Record<string, unknown> = {};
+  const awsDisc = getBool("include_aws_discounts");
+  if (awsDisc !== undefined) awsPrefs.includeDiscounts = awsDisc;
+  const awsCred = getBool("include_aws_credit");
+  if (awsCred !== undefined) awsPrefs.includeCredits = awsCred;
+  const awsRef = getBool("include_aws_refunds");
+  if (awsRef !== undefined) awsPrefs.includeRefunds = awsRef;
+  const awsTax = getBool("include_aws_taxes");
+  if (awsTax !== undefined) awsPrefs.includeTaxes = awsTax;
+  const awsCost = get("show_aws_cost_as");
+  if (awsCost) awsPrefs.awsCost = awsCost;
+  if (Object.keys(awsPrefs).length > 0) prefs.awsPreferences = awsPrefs;
+
+  // GCP preferences
+  const gcpPrefs: Record<string, unknown> = {};
+  const gcpDisc = getBool("include_gcp_discounts");
+  if (gcpDisc !== undefined) gcpPrefs.includeDiscounts = gcpDisc;
+  const gcpTax = getBool("include_gcp_taxes");
+  if (gcpTax !== undefined) gcpPrefs.includeTaxes = gcpTax;
+  const gcpPromo = getBool("include_gcp_promotions");
+  if (gcpPromo !== undefined) gcpPrefs.includePromotions = gcpPromo;
+  const gcpNeg = getBool("include_gcp_negotiated_savings");
+  if (gcpNeg !== undefined) gcpPrefs.includeNegotiatedSavings = gcpNeg;
+  const gcpSub = getBool("include_gcp_subscription_credits");
+  if (gcpSub !== undefined) gcpPrefs.includeSubscriptionCredits = gcpSub;
+  const gcpSus = getBool("include_gcp_sustained_use_discounts");
+  if (gcpSus !== undefined) gcpPrefs.includeSustainedUseDiscounts = gcpSus;
+  const gcpRes = getBool("include_gcp_resource_based_cud_credits");
+  if (gcpRes !== undefined) gcpPrefs.includeResourceBasedCudCredits = gcpRes;
+  const gcpLeg = getBool("include_gcp_legacy_based_cud_credits");
+  if (gcpLeg !== undefined) gcpPrefs.includeLegacyBasedCudCredits = gcpLeg;
+  const gcpSpend = getBool("include_gcp_spend_based_cud_discounts");
+  if (gcpSpend !== undefined) gcpPrefs.includeSpendBasedCudDiscounts = gcpSpend;
+  if (Object.keys(gcpPrefs).length > 0) prefs.gcpPreferences = gcpPrefs;
+
+  // Azure preferences
+  const azureCost = get("show_azure_cost_as");
+  if (azureCost) prefs.azureViewPreferences = { costType: azureCost };
+
+  return prefs;
+}
+
+function deepMerge(base: Record<string, unknown>, override: Record<string, unknown>): Record<string, unknown> {
+  const result = { ...base };
+  for (const key of Object.keys(override)) {
+    const ov = override[key];
+    if (ov !== undefined && ov !== null) {
+      if (typeof ov === "object" && !Array.isArray(ov) && typeof result[key] === "object" && result[key] !== null && !Array.isArray(result[key])) {
+        result[key] = deepMerge(result[key] as Record<string, unknown>, ov as Record<string, unknown>);
+      } else {
+        result[key] = ov;
+      }
+    }
+  }
+  return result;
+}
+
+/**
+ * Preflight hook for cost_perspective.create: fetches account-level preference
+ * defaults from the Settings API and uses them as a baseline. Agent-provided
+ * viewPreferences fields are overlaid on top (agent wins).
+ *
+ * Mirrors the Go MCP server pattern at:
+ * mcpServerInternal/mcp-server-pkg/common/pkg/tools/ccmperspectives.go
+ */
+async function perspectiveCreatePreflight(ctx: PreflightContext): Promise<void> {
+  const harnessClient = ctx.client as HarnessClient;
+  const input = ctx.input as { body?: Record<string, unknown> };
+  if (!input.body) input.body = {};
+
+  const accountId = harnessClient.account;
+  if (!accountId) return;
+
+  // Fetch account preference defaults
+  try {
+    const resp = await harnessClient.request<{ resource?: SettingsValue[]; data?: SettingsValue[] } | SettingsValue[]>({
+      method: "GET",
+      path: "/ng/api/settings",
+      params: {
+        accountIdentifier: accountId,
+        category: "CE",
+        group: "perspective_preferences",
+      },
+    });
+
+    const settings = Array.isArray(resp)
+      ? resp
+      : (resp as { resource?: SettingsValue[]; data?: SettingsValue[] }).resource
+        ?? (resp as { resource?: SettingsValue[]; data?: SettingsValue[] }).data
+        ?? [];
+
+    if (settings.length > 0) {
+      const defaults = mapSettingsToViewPreferences(settings);
+      const agentPrefs = (input.body.viewPreferences ?? {}) as Record<string, unknown>;
+      input.body.viewPreferences = deepMerge(defaults, agentPrefs);
+    }
+  } catch {
+    // Graceful degradation — proceed without defaults
+  }
+
+  // Set other defaults if absent
+  if (!input.body.viewState) input.body.viewState = "COMPLETED";
+  if (!input.body.viewType) input.body.viewType = "CUSTOMER";
+  if (!input.body.viewVersion) input.body.viewVersion = "v1";
+}
+
+// ---------------------------------------------------------------------------
 // Toolset definition: 6 resource types covering REST + GraphQL
 // ---------------------------------------------------------------------------
 
@@ -336,9 +471,12 @@ export const ccmToolset: ToolsetDefinition = {
       identifierFields: ["perspective_id"],
       listFilterFields: [
         { name: "search_term", description: "Filter perspectives by name" },
-        { name: "sort_type", description: "Sort field", enum: ["NAME", "LAST_EDIT", "COST", "CLUSTER_COST"] },
+        { name: "sort_type", description: "Sort field (default: TIME)", enum: ["TIME", "COST", "CLUSTER_COST", "NAME"] },
         { name: "sort_order", description: "Sort direction", enum: ["ASCENDING", "DESCENDING"] },
         { name: "cloud_filter", description: "Filter by cloud provider", enum: ["AWS", "GCP", "AZURE", "CLUSTER", "DEFAULT"] },
+        { name: "view_state", description: "Filter by state", enum: ["DRAFT", "COMPLETED"] },
+        { name: "view_type", description: "Filter by type", enum: ["SAMPLE", "CUSTOMER", "DEFAULT"] },
+        { name: "view_ids", description: "Filter by specific perspective IDs (comma-separated or array)" },
       ],
       operations: {
         list: {
@@ -349,6 +487,9 @@ export const ccmToolset: ToolsetDefinition = {
             sort_type: "sortType",
             sort_order: "sortOrder",
             cloud_filter: "cloudFilters",
+            view_state: "viewState",
+            view_type: "viewType",
+            view_ids: "viewIds",
             page: "pageNo",
             size: "pageSize",
           },
@@ -365,18 +506,26 @@ export const ccmToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/ccm/api/perspective",
+          preflight: perspectiveCreatePreflight,
           bodyBuilder: (input) => input.body,
           bodySchema: {
-            description: "Cost perspective definition",
+            description: "Cost perspective definition. viewPreferences defaults are auto-fetched from account settings and merged — agent-provided values override.",
             fields: [
-              { name: "name", type: "string", required: true, description: "Perspective name" },
-              { name: "viewVisualization", type: "object", required: false, description: "Chart type and group by configuration" },
+              { name: "name", type: "string", required: true, description: "Perspective name (1-80 chars)" },
+              { name: "viewVisualization", type: "object", required: false, description: "Chart config: { granularity: 'DAY'|'MONTH', groupBy: { fieldId, fieldName, identifier, identifierName }, chartType: 'STACKED_TIME_SERIES'|'STACKED_LINE_CHART' }" },
               {
                 name: "viewRules", type: "array", required: false,
                 description: "Filter rules. Multiple rules are OR-ed. Each rule has viewConditions (AND-ed). Each ViewIdCondition: { type: 'VIEW_ID_CONDITION', viewField: { fieldId, fieldName, identifier (COMMON|AWS|GCP|AZURE|CLUSTER|LABEL|LABEL_V2|BUSINESS_MAPPING|EXTERNAL_DATA), identifierName }, viewOperator: 'IN'|'NOT_IN'|'LIKE'|'NOT_NULL'|'NULL', values: string[] }",
                 itemType: "{ viewConditions: [{ type: 'VIEW_ID_CONDITION', viewField: { fieldId: string, fieldName: string, identifier: string, identifierName: string }, viewOperator: 'IN' | 'NOT_IN' | 'LIKE' | 'NOT_NULL' | 'NULL', values: string[] }] }",
               },
-              { name: "viewTimeRange", type: "object", required: false, description: "Time range settings" },
+              { name: "viewTimeRange", type: "object", required: false, description: "Time range: { viewTimeRangeType: 'LAST_7'|'LAST_30'|'LAST_MONTH'|'CURRENT_MONTH'|'LAST_QUARTER'|'CURRENT_QUARTER'|'LAST_3_MONTH'|'CUSTOM', startTime?: number (epoch ms), endTime?: number (epoch ms) }" },
+              { name: "folderId", type: "string", required: false, description: "Target folder ID to place perspective in" },
+              { name: "viewVersion", type: "string", required: false, description: "View version (default: 'v1')" },
+              { name: "dataSources", type: "array", required: false, description: "Data sources: CLUSTER|AWS|GCP|AZURE|EXTERNAL_DATA|OPENAI|ANTHROPIC|COMMON|CUSTOM|BUSINESS_MAPPING|LABEL|LABEL_V2" },
+              { name: "viewType", type: "string", required: false, description: "Perspective type (default: 'CUSTOMER'): SAMPLE|CUSTOMER|DEFAULT" },
+              { name: "viewState", type: "string", required: false, description: "State (default: 'COMPLETED'): DRAFT|COMPLETED" },
+              { name: "viewPreferences", type: "object", required: false, description: "Cost display preferences. Account defaults auto-applied as baseline; provide fields here to override. Shape: { showAnomalies?: bool, includeOthers?: bool, includeUnallocatedCost?: bool, awsPreferences?: { includeDiscounts, includeCredits, includeRefunds, includeTaxes: bool, awsCost: 'AMORTISED'|'NET_AMORTISED'|'BLENDED'|'UNBLENDED'|'EFFECTIVE' }, gcpPreferences?: { includeDiscounts, includeTaxes, includePromotions, includeNegotiatedSavings, includeSubscriptionCredits, includeSustainedUseDiscounts, includeResourceBasedCudCredits, includeLegacyBasedCudCredits, includeSpendBasedCudDiscounts: bool }, azureViewPreferences?: { costType: 'ACTUAL'|'AMORTIZED' } }" },
+              { name: "unitMetricInfo", type: "array", required: false, description: "Unit metrics: [{ name (max 80), kind: 'DIVISION'|'FORMULA', unitMetricNumerator: { operands: [{ type: 'VIEW'|'METRIC', operandName }], operators: ['ADD'|'SUBTRACT'|'MULTIPLY'|'DIVIDE'] }, unitMetricDenominator: { ... } }]" },
             ],
           },
           responseExtractor: ngExtract,
@@ -387,17 +536,24 @@ export const ccmToolset: ToolsetDefinition = {
           path: "/ccm/api/perspective",
           bodyBuilder: (input) => input.body,
           bodySchema: {
-            description: "Cost perspective update. Fetch the existing perspective via harness_get first, modify the fields, and send the full object back.",
+            description: "Cost perspective update. Fetch the existing perspective via harness_get first, modify the fields, and send the full object back. No preflight defaults — only explicitly provided fields are sent.",
             fields: [
               { name: "uuid", type: "string", required: true, description: "Perspective UUID (from get)" },
-              { name: "name", type: "string", required: true, description: "Perspective name" },
-              { name: "viewVisualization", type: "object", required: false, description: "Chart type and group by configuration" },
+              { name: "name", type: "string", required: true, description: "Perspective name (1-80 chars)" },
+              { name: "viewVisualization", type: "object", required: false, description: "Chart config: { granularity: 'DAY'|'MONTH', groupBy: { fieldId, fieldName, identifier, identifierName }, chartType: 'STACKED_TIME_SERIES'|'STACKED_LINE_CHART' }" },
               {
                 name: "viewRules", type: "array", required: false,
                 description: "Filter rules. Multiple rules are OR-ed. Each rule has viewConditions (AND-ed). Each ViewIdCondition: { type: 'VIEW_ID_CONDITION', viewField: { fieldId, fieldName, identifier (COMMON|AWS|GCP|AZURE|CLUSTER|LABEL|LABEL_V2|BUSINESS_MAPPING|EXTERNAL_DATA), identifierName }, viewOperator: 'IN'|'NOT_IN'|'LIKE'|'NOT_NULL'|'NULL', values: string[] }",
                 itemType: "{ viewConditions: [{ type: 'VIEW_ID_CONDITION', viewField: { fieldId: string, fieldName: string, identifier: string, identifierName: string }, viewOperator: 'IN' | 'NOT_IN' | 'LIKE' | 'NOT_NULL' | 'NULL', values: string[] }] }",
               },
-              { name: "viewTimeRange", type: "object", required: false, description: "Time range settings" },
+              { name: "viewTimeRange", type: "object", required: false, description: "Time range: { viewTimeRangeType: 'LAST_7'|'LAST_30'|'LAST_MONTH'|'CURRENT_MONTH'|'LAST_QUARTER'|'CURRENT_QUARTER'|'LAST_3_MONTH'|'CUSTOM', startTime?: number (epoch ms), endTime?: number (epoch ms) }" },
+              { name: "folderId", type: "string", required: false, description: "Target folder ID" },
+              { name: "viewVersion", type: "string", required: false, description: "View version" },
+              { name: "dataSources", type: "array", required: false, description: "Data sources: CLUSTER|AWS|GCP|AZURE|EXTERNAL_DATA|OPENAI|ANTHROPIC|COMMON|CUSTOM|BUSINESS_MAPPING|LABEL|LABEL_V2" },
+              { name: "viewType", type: "string", required: false, description: "Perspective type: SAMPLE|CUSTOMER|DEFAULT" },
+              { name: "viewState", type: "string", required: false, description: "State: DRAFT|COMPLETED" },
+              { name: "viewPreferences", type: "object", required: false, description: "Cost display preferences: { showAnomalies?: bool, includeOthers?: bool, includeUnallocatedCost?: bool, awsPreferences?: { includeDiscounts, includeCredits, includeRefunds, includeTaxes: bool, awsCost: 'AMORTISED'|'NET_AMORTISED'|'BLENDED'|'UNBLENDED'|'EFFECTIVE' }, gcpPreferences?: { includeDiscounts, includeTaxes, includePromotions, includeNegotiatedSavings, includeSubscriptionCredits, includeSustainedUseDiscounts, includeResourceBasedCudCredits, includeLegacyBasedCudCredits, includeSpendBasedCudDiscounts: bool }, azureViewPreferences?: { costType: 'ACTUAL'|'AMORTIZED' } }" },
+              { name: "unitMetricInfo", type: "array", required: false, description: "Unit metrics: [{ name (max 80), kind: 'DIVISION'|'FORMULA', unitMetricNumerator: { operands: [{ type: 'VIEW'|'METRIC', operandName }], operators: ['ADD'|'SUBTRACT'|'MULTIPLY'|'DIVIDE'] }, unitMetricDenominator: { ... } }]" },
             ],
           },
           responseExtractor: ngExtract,
@@ -405,10 +561,108 @@ export const ccmToolset: ToolsetDefinition = {
         },
         delete: {
           method: "DELETE",
-          path: "/ccm/api/perspective/{perspectiveId}",
-          pathParams: { perspective_id: "perspectiveId" },
+          path: "/ccm/api/perspective",
+          queryParams: { perspective_id: "perspectiveId" },
           responseExtractor: ngExtract,
           description: "Delete a cost perspective",
+        },
+      },
+      executeActions: {
+        clone: {
+          method: "POST",
+          path: "/ccm/api/perspective/clone/{perspectiveId}",
+          pathParams: { perspective_id: "perspectiveId" },
+          queryParams: { clone_name: "cloneName", destination_folder_id: "destinationFolderId" },
+          responseExtractor: ngExtract,
+          actionDescription: "Clone a perspective. Requires perspective_id and clone_name. Optionally specify destination_folder_id to place the clone in a specific folder.",
+        },
+      },
+    },
+
+    // ------------------------------------------------------------------
+    // 1b. cost_perspective_folder — REST CRUD for perspective folders
+    // ------------------------------------------------------------------
+    {
+      resourceType: "cost_perspective_folder",
+      displayName: "Cost Perspective Folder",
+      description:
+        "Folders for organizing cost perspectives. Use harness_list to see all folders, harness_get to list perspectives in a folder. Use the move_perspectives action to move perspectives between folders.",
+      toolset: "ccm",
+      scope: "account",
+      identifierFields: ["folder_id"],
+      listFilterFields: [
+        { name: "folder_name_pattern", description: "Filter folders by name pattern (substring match)" },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "/ccm/api/perspectiveFolders",
+          queryParams: { folder_name_pattern: "folderNamePattern" },
+          responseExtractor: ngExtract,
+          description: "List all perspective folders for the account",
+        },
+        get: {
+          method: "GET",
+          path: "/ccm/api/perspectiveFolders/{folderId}/perspectives",
+          pathParams: { folder_id: "folderId" },
+          responseExtractor: ngExtract,
+          description: "Get all perspectives in a specific folder",
+        },
+        create: {
+          method: "POST",
+          path: "/ccm/api/perspectiveFolders/create",
+          bodyBuilder: (input) => input.body,
+          bodySchema: {
+            description: "Folder creation payload",
+            fields: [
+              { name: "ceViewFolder", type: "object", required: true, description: "Folder definition: { name: string (1-80 chars), description?: string, pinned?: boolean, tags?: string[] }" },
+              { name: "perspectiveIds", type: "array", required: false, description: "Perspective IDs to move into this folder on creation" },
+              { name: "budgetIds", type: "array", required: false, description: "Budget IDs to associate with this folder" },
+            ],
+          },
+          responseExtractor: ngExtract,
+          description: "Create a new perspective folder",
+        },
+        update: {
+          method: "PUT",
+          path: "/ccm/api/perspectiveFolders",
+          bodyBuilder: (input) => input.body,
+          bodySchema: {
+            description: "Folder update payload (full CEViewFolder object)",
+            fields: [
+              { name: "uuid", type: "string", required: true, description: "Folder UUID (from list/get)" },
+              { name: "name", type: "string", required: true, description: "Folder name (1-80 chars)" },
+              { name: "description", type: "string", required: false, description: "Folder description" },
+              { name: "pinned", type: "boolean", required: false, description: "Whether folder is pinned" },
+              { name: "tags", type: "array", required: false, description: "Folder tags (string array)" },
+            ],
+          },
+          responseExtractor: ngExtract,
+          description: "Update a perspective folder",
+        },
+        delete: {
+          method: "DELETE",
+          path: "/ccm/api/perspectiveFolders/{folderId}",
+          pathParams: { folder_id: "folderId" },
+          responseExtractor: ngExtract,
+          description: "Delete a perspective folder",
+        },
+      },
+      executeActions: {
+        move_perspectives: {
+          method: "POST",
+          path: "/ccm/api/perspectiveFolders/movePerspectives",
+          bodyBuilder: (input) => input.body,
+          bodySchema: {
+            description: "Move perspectives between folders",
+            fields: [
+              { name: "newFolderId", type: "string", required: true, description: "Destination folder ID" },
+              { name: "perspectiveIds", type: "array", required: true, description: "Array of perspective IDs to move" },
+              { name: "moveAssociatedBudgets", type: "boolean", required: false, description: "Also move budgets associated with the perspectives (default: false)" },
+            ],
+          },
+          responseExtractor: ngExtract,
+          actionDescription: "Move perspectives to a different folder. Requires newFolderId and perspectiveIds array. Optionally set moveAssociatedBudgets=true to move associated budgets too.",
         },
       },
     },
