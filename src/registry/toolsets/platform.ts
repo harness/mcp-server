@@ -1,5 +1,5 @@
 import type { ToolsetDefinition, BodySchema } from "../types.js";
-import { pageExtract, unwrapOrgResponse, unwrapProjectResponse, v1Unwrap } from "../extractors.js";
+import { pageExtract, projectListExtract, unwrapOrgResponse, unwrapProjectResponse, v1Unwrap } from "../extractors.js";
 import { stripNulls } from "../../utils/body-normalizer.js";
 
 // ---------------------------------------------------------------------------
@@ -254,7 +254,7 @@ export const platformToolset: ToolsetDefinition = {
             sort_orders: "sortOrders",
             page_token: "pageToken",
           },
-          responseExtractor: pageExtract,
+          responseExtractor: projectListExtract,
           description: "List projects (NG /ng/api/projects)",
         },
         get: {
