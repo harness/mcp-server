@@ -1,5 +1,5 @@
 const SENSITIVE_KEYS =
-  "token|secret|password|authorization|bearer|credentials?|webhook|webhook[_-]?url|callback[_-]?url|endpoint[_-]?url|private[_-]?key|client[_-]?secret|api[_-]?key|secret[_-]?key|access[_-]?key|ssh[_-]?key|passphrase|encrypted|access[_-]?token|refresh[_-]?token|id[_-]?token|session[_-]?token|cookie";
+  "webhook[_-]?url|callback[_-]?url|endpoint[_-]?url|private[_-]?key|privateKey|client[_-]?secret|clientSecret|api[_-]?key|apiKey|secret[_-]?key|secretKey|access[_-]?key|accessKey|ssh[_-]?key|sshKey|access[_-]?token|accessToken|refresh[_-]?token|refreshToken|id[_-]?token|idToken|session[_-]?token|sessionToken|authorization|bearer|credentials?|passphrase|encrypted|password|webhook|secret|cookie|token";
 
 const SENSITIVE_KEY_PATTERN = new RegExp(`^(${SENSITIVE_KEYS})$`, "i");
 
@@ -39,8 +39,13 @@ export function redactSensitiveFields(obj: unknown, depth = 0): unknown {
  * Value capture handles quoted strings (double or single) and unquoted values up to the next delimiter.
  */
 const INLINE_SECRET_PATTERN = new RegExp(
-  `(["']?(?:${SENSITIVE_KEYS})["']?)\\s*[:=]\\s*("[^"]*"|'[^']*'|[^,\\n}{\\]]+)`,
+  `(["']?(?:${SENSITIVE_KEYS})(?![A-Za-z0-9_-])["']?)[ \\t]*[:=][ \\t]*(?![|>](?:\\s|$))("[^"]*"|'[^']*'|[^,\\n}{\\]]+)`,
   "gi",
+);
+
+const YAML_BLOCK_SECRET_PATTERN = new RegExp(
+  `(^[ \\t]*["']?(?:${SENSITIVE_KEYS})["']?[ \\t]*:[ \\t]*[|>][^\\n]*\\n)(?:[ \\t]+.*(?:\\n|$))+`,
+  "gim",
 );
 
 /**
@@ -54,7 +59,9 @@ export function redactJsonString(jsonStr: string, maxLen = 1000): string {
     const out = JSON.stringify(redacted);
     return out.length > maxLen ? out.slice(0, maxLen) + "..." : out;
   } catch {
-    const scrubbed = jsonStr.replace(INLINE_SECRET_PATTERN, `$1: ${REDACTED}`);
+    const scrubbed = jsonStr
+      .replace(YAML_BLOCK_SECRET_PATTERN, `$1  ${REDACTED}\n`)
+      .replace(INLINE_SECRET_PATTERN, `$1: ${REDACTED}`);
     return scrubbed.length > maxLen ? scrubbed.slice(0, maxLen) + "..." : scrubbed;
   }
 }
