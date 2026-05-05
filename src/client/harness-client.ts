@@ -455,10 +455,9 @@ export class HarnessClient {
     const baseUrl = (options.baseUrl ?? this.baseUrl).replace(/\/$/, "");
     let path = options.path;
 
-    // Prevent double /gateway when base URL already ends with /gateway
-    // (common with self-managed Harness installations)
-    if (baseUrl.endsWith("/gateway") && path.startsWith("/gateway/")) {
-      path = path.slice("/gateway".length);
+    const basePath = new URL(baseUrl).pathname.replace(/\/$/, "");
+    if (basePath && basePath !== "/" && path.startsWith(`${basePath}/`)) {
+      path = path.slice(basePath.length);
     }
 
     // Inject accountIdentifier into query params (used by most Harness APIs).
