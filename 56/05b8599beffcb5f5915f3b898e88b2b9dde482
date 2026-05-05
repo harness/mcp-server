@@ -1,0 +1,60 @@
+src/registry/toolsets/feature-flags.ts
+  96ece2b0-1722-46ed-b8e2-af137722228c 22-34,309,327-339
+  human 340
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 27,
+          "added_lines": 28,
+          "deleted_lines": 1,
+          "hash": "96ece2b0-1722-46ed-b8e2-af137722228c",
+          "lines": "22-34,309,327-339",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "340",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/feature-flags.ts"
+    }
+  ],
+  "base_commit_sha": "5605b8599beffcb5f5915f3b898e88b2b9dde482",
+  "branch": "main",
+  "commit_sha": "b7174219ad64342ca8d7785d6329739912622565",
+  "commit_time": "2026-05-04T16:50:07-07:00",
+  "git_ai_version": "1.2.6",
+  "prompts": {
+    "96ece2b0-1722-46ed-b8e2-af137722228c": {
+      "accepted_lines": 27,
+      "agent_id": {
+        "id": "96ece2b0-1722-46ed-b8e2-af137722228c",
+        "model": "claude-sonnet-4-5-20250929",
+        "tool": "claude"
+      },
+      "human_author": "Dave Karow <dtk@davekarow.com>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 28,
+      "total_deletions": 1
+    },
+    "human": {
+      "accepted_lines": 1,
+      "agent_id": null,
+      "human_author": "Dave Karow <dtk@davekarow.com>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 1,
+      "total_deletions": 0
+    }
+  },
+  "repo": "https://git0.harness.io/l7B_kbSEQD2wjrM7PShm5w/PROD/Harness_Commons/mcp-server.git",
+  "schema_version": "authorship/3.0.0"
+}
