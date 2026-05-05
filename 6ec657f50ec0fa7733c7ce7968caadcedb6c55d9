@@ -1,0 +1,57 @@
+src/registry/toolsets/feature-flags.ts
+  96ece2b0-1722-46ed-b8e2-af137722228c 22-34,309,327-339
+  human 340
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 27,
+          "added_lines": 27,
+          "deleted_lines": 1,
+          "hash": "96ece2b0-1722-46ed-b8e2-af137722228c",
+          "lines": "22-34,309,327-339",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "340",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/feature-flags.ts"
+    }
+  ],
+  "base_commit_sha": "6ec657f50ec0fa7733c7ce7968caadcedb6c55d9",
+  "commit_sha": "6ec657f50ec0fa7733c7ce7968caadcedb6c55d9",
+  "git_ai_version": "1.2.6",
+  "prompts": {
+    "96ece2b0-1722-46ed-b8e2-af137722228c": {
+      "accepted_lines": 27,
+      "agent_id": {
+        "id": "96ece2b0-1722-46ed-b8e2-af137722228c",
+        "model": "claude-sonnet-4-5-20250929",
+        "tool": "claude"
+      },
+      "human_author": "Dave Karow <dtk@davekarow.com>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 27,
+      "total_deletions": 1
+    },
+    "human": {
+      "accepted_lines": 1,
+      "agent_id": null,
+      "human_author": null,
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 1,
+      "total_deletions": 0
+    }
+  },
+  "schema_version": "authorship/3.0.0"
+}
