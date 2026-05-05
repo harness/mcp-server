@@ -5,7 +5,6 @@ import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { createLogger } from "../utils/logger.js";
 import { SCHEMAS, VALID_SCHEMAS } from "../data/schemas/index.js";
 import { getExample, searchExamples, getExamplesForResource } from "../data/examples/index.js";
-import "../data/examples/load-all.js";
 
 const log = createLogger("tool:harness-schema");
 
@@ -138,6 +137,7 @@ export function registerSchemaTool(server: McpServer, registry?: Registry): void
         "Use with path to drill into a specific section. " +
         "Use with example to fetch a named example YAML snippet. " +
         "Use with example_search to find examples by keyword. " +
+        "Precedence: example > example_search > path > summary. " +
         `Available schemas: ${availableSchemas.join(", ")}.`,
       inputSchema: {
         resource_type: z

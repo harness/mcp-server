@@ -2,8 +2,13 @@ import type { ResourceExample } from "./types.js";
 
 const ALL_EXAMPLES: ResourceExample[] = [];
 
-/** Register examples from a module. Called by each example file. */
+/** Register examples from a module. Called by each example file. Names must be globally unique. */
 export function registerExamples(examples: ResourceExample[]): void {
+  for (const ex of examples) {
+    if (ALL_EXAMPLES.some((e) => e.name === ex.name)) {
+      throw new Error(`Duplicate example name: '${ex.name}'. Example names must be globally unique.`);
+    }
+  }
   ALL_EXAMPLES.push(...examples);
 }
 
