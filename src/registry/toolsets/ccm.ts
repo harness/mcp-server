@@ -287,31 +287,36 @@ function gqlPath(input: Record<string, unknown>): string {
  * - With value_sub_type → get endpoint → extract costTarget bucket names
  */
 function extractBusinessMappingValues(raw: unknown, valueSubType?: string): unknown {
+  // Unwrap NG envelope: response may be { data: ... } or { resource: ... }
+  const envelope = raw as { data?: unknown; resource?: unknown } | undefined;
+  const unwrapped = envelope?.data ?? envelope?.resource ?? raw;
+
   if (valueSubType) {
-    // Single category GET: { resource: { costTargets: [{ name }] } } or NG-unwrapped
-    const r = raw as { resource?: Record<string, unknown>; costTargets?: unknown[] };
-    const entity = r.resource ?? raw as Record<string, unknown>;
-    const targets = (entity as Record<string, unknown>).costTargets as Array<{ name?: string }> | undefined;
+    // Single category GET: unwrapped is { costTargets: [{ name }], ... }
+    const entity = unwrapped as Record<string, unknown>;
+    const targets = entity.costTargets as Array<{ name?: string }> | undefined;
+    if (!Array.isArray(targets)) {
+      return { values: [], _error: "No costTargets found in response" };
+    }
     return {
-      values: targets?.map(t => t.name).filter(Boolean) ?? [],
+      values: targets.map(t => t.name).filter(Boolean),
     };
   }
-  // List all categories: { resource: { businessMappings: [{ uuid, name }] } } or NG-unwrapped
-  const r = raw as { resource?: Record<string, unknown> };
-  const data = r.resource ?? raw;
-  const mappings = (data as Record<string, unknown>).businessMappings as Array<{ uuid?: string; name?: string }> | undefined;
+  // List all categories: unwrapped is { businessMappings: [{ uuid, name }] }
+  const data = unwrapped as Record<string, unknown>;
+  const mappings = data.businessMappings as Array<{ uuid?: string; name?: string }> | undefined;
   if (Array.isArray(mappings)) {
     return {
       values: mappings.map(m => m.name).filter(Boolean),
     };
   }
-  // Fallback: if it's already an array (ngExtract may have unwrapped)
-  if (Array.isArray(data)) {
+  // Fallback: if unwrapped is already an array
+  if (Array.isArray(unwrapped)) {
     return {
-      values: (data as Array<{ name?: string }>).map(m => m.name).filter(Boolean),
+      values: (unwrapped as Array<{ name?: string }>).map(m => m.name).filter(Boolean),
     };
   }
-  return { values: [] };
+  return { values: [], _error: "Unexpected response shape — no businessMappings or array found" };
 }
 
 // ---------------------------------------------------------------------------

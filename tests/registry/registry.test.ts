@@ -967,4 +967,151 @@ describe("Registry", () => {
     });
   });
 
+  describe("methodBuilder and input-aware responseExtractor", () => {
+    let registry: Registry;
+    beforeEach(() => {
+      registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "ccm" }));
+    });
+
+    it("methodBuilder switches to GET for cost_filter_value with value_type=business_mapping", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        resource: {
+          businessMappings: [
+            { uuid: "abc", name: "Environments" },
+            { uuid: "def", name: "Teams" },
+          ],
+        },
+      });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_filter_value", "list", {
+        value_type: "business_mapping",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("GET");
+      expect(call.path).toBe("/ccm/api/business-mapping");
+    });
+
+    it("methodBuilder uses POST for cost_filter_value with non-business_mapping value_type", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: { perspectiveFilters: [{ values: ["us-east-1", "us-west-2"] }] },
+      });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_filter_value", "list", {
+        value_type: "region",
+        time_filter: "LAST_30_DAYS",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("POST");
+      expect(call.path).toBe("/ccm/api/graphql");
+    });
+
+    it("responseExtractor extracts category names from business_mapping list (resource envelope)", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        resource: {
+          businessMappings: [
+            { uuid: "abc", name: "Environments" },
+            { uuid: "def", name: "Teams" },
+          ],
+        },
+      });
+      const client = makeClient(mockRequest);
+
+      const result = await registry.dispatch(client, "cost_filter_value", "list", {
+        value_type: "business_mapping",
+      });
+
+      expect(result).toEqual({ values: ["Environments", "Teams"] });
+    });
+
+    it("responseExtractor extracts category names from business_mapping list (data envelope)", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: {
+          businessMappings: [
+            { uuid: "abc", name: "Environments" },
+            { uuid: "def", name: "Teams" },
+          ],
+        },
+      });
+      const client = makeClient(mockRequest);
+
+      const result = await registry.dispatch(client, "cost_filter_value", "list", {
+        value_type: "business_mapping",
+      });
+
+      expect(result).toEqual({ values: ["Environments", "Teams"] });
+    });
+
+    it("responseExtractor extracts bucket names from single category (resource envelope)", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        resource: {
+          uuid: "abc",
+          name: "Environments",
+          costTargets: [{ name: "Production" }, { name: "Staging" }, { name: "Dev" }],
+        },
+      });
+      const client = makeClient(mockRequest);
+
+      const result = await registry.dispatch(client, "cost_filter_value", "list", {
+        value_type: "business_mapping",
+        value_sub_type: "abc",
+      });
+
+      expect(result).toEqual({ values: ["Production", "Staging", "Dev"] });
+    });
+
+    it("responseExtractor extracts bucket names from single category (data envelope)", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: {
+          uuid: "abc",
+          name: "Environments",
+          costTargets: [{ name: "Production" }, { name: "Staging" }],
+        },
+      });
+      const client = makeClient(mockRequest);
+
+      const result = await registry.dispatch(client, "cost_filter_value", "list", {
+        value_type: "business_mapping",
+        value_sub_type: "abc",
+      });
+
+      expect(result).toEqual({ values: ["Production", "Staging"] });
+    });
+
+    it("responseExtractor returns error marker when business_mapping response has no costTargets", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        resource: { uuid: "abc", name: "Empty" },
+      });
+      const client = makeClient(mockRequest);
+
+      const result = await registry.dispatch(client, "cost_filter_value", "list", {
+        value_type: "business_mapping",
+        value_sub_type: "abc",
+      });
+
+      expect(result).toHaveProperty("_error");
+      expect((result as { values: string[] }).values).toEqual([]);
+    });
+
+    it("pathBuilder routes to /ccm/api/business-mapping/{id} for value_sub_type", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        resource: {
+          costTargets: [{ name: "Bucket1" }],
+        },
+      });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_filter_value", "list", {
+        value_type: "business_mapping",
+        value_sub_type: "cat-uuid-123",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/ccm/api/business-mapping/cat-uuid-123");
+    });
+  });
+
 });
