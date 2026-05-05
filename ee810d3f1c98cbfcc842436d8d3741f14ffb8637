@@ -1,0 +1,69 @@
+src/index.ts
+  human 82-83
+src/registry/index.ts
+  human 137
+src/registry/toolsets/pipelines.ts
+  human 409
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 2,
+          "added_lines": 2,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "82-83",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/index.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "137",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/index.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "409",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/pipelines.ts"
+    }
+  ],
+  "base_commit_sha": "3d0ff5b9a3eddc00c960401ec96b21177da53f80",
+  "branch": "feat/dual-pipeline-versions-and-examples",
+  "commit_sha": "ee810d3f1c98cbfcc842436d8d3741f14ffb8637",
+  "commit_time": "2026-05-05T12:36:56-07:00",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.2",
+  "prompts": {
+    "human": {
+      "accepted_lines": 4,
+      "agent_id": null,
+      "human_author": "Sunil Gattupalle <sunil.gattupalle@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 4,
+      "total_deletions": 0
+    }
+  },
+  "repo": "https://github.com/harness/mcp-server.git",
+  "schema_version": "authorship/3.0.0"
+}
