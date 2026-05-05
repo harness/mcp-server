@@ -1,0 +1,75 @@
+src/registry/toolsets/feature-flags.ts
+  96ece2b0-1722-46ed-b8e2-af137722228c 22-34,309,327-339
+  human 340
+README.md
+  human 3,11,955,1492
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 27,
+          "added_lines": 27,
+          "deleted_lines": 0,
+          "hash": "96ece2b0-1722-46ed-b8e2-af137722228c",
+          "lines": "22-34,309,327-339",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "340",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/feature-flags.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 4,
+          "added_lines": 4,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "3,11,955,1492",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "README.md"
+    }
+  ],
+  "base_commit_sha": "0197d0ce6ce69a1046c703141981e1ecaef896f7",
+  "branch": "FME-15522-add-create-flag-definition",
+  "commit_sha": "f9d72c8a3359a86adc1f7d21fb9c06ca98d4fecb",
+  "commit_time": "2026-05-04T17:46:26-07:00",
+  "git_ai_version": "1.2.6",
+  "prompts": {
+    "96ece2b0-1722-46ed-b8e2-af137722228c": {
+      "accepted_lines": 27,
+      "agent_id": {
+        "id": "96ece2b0-1722-46ed-b8e2-af137722228c",
+        "model": "claude-sonnet-4-5-20250929",
+        "tool": "claude"
+      },
+      "human_author": "Dave Karow <dtk@davekarow.com>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 27,
+      "total_deletions": 0
+    },
+    "human": {
+      "accepted_lines": 5,
+      "agent_id": null,
+      "human_author": "Dave Karow <dtk@davekarow.com>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 5,
+      "total_deletions": 0
+    }
+  },
+  "repo": "https://git0.harness.io/l7B_kbSEQD2wjrM7PShm5w/PROD/Harness_Commons/mcp-server.git",
+  "schema_version": "authorship/3.0.0"
+}
