@@ -91,15 +91,18 @@ export const stoToolset: ToolsetDefinition = {
     {
       resourceType: "security_exemption",
       displayName: "Security Exemption",
-      description: "Security issue exemption/waiver. Supports list (POST with status filter) with approve/reject/promote actions.",
+      description: "Security issue exemption/waiver. Supports list (POST with status filter) with approve/reject/promote actions. For secret-related exemptions, pass issue_type='SECRET' or search/search_term='Secret'.",
       toolset: "sto",
       scope: "project",
       scopeParams: STO_SCOPE,
       identifierFields: ["exemption_id"],
       listFilterFields: [
         { name: "status", description: "Exemption status filter", enum: ["Pending", "Approved", "Rejected", "Expired", "Canceled"], required: true },
-        { name: "search", description: "Free-text search for issue/exemption titles" },
+        { name: "issue_type", description: "Issue type shortcut for filtering exemptions. Use issue_type='SECRET' for secret-related exemptions; this maps to the STO exemption search filter.", enum: ["SECRET"] },
+        { name: "search", description: "Free-text search for issue/exemption titles. Use search='Secret' for secret-related exemptions." },
+        { name: "search_term", description: "Generic free-text search alias. Use search_term='Secret' for secret-related exemptions." },
       ],
+      searchAliases: ["secret-related exemptions", "secret exemptions", "pending secret exemptions"],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/sto/exemptions",
       operations: {
         list: {
@@ -109,12 +112,19 @@ export const stoToolset: ToolsetDefinition = {
           queryParams: {
             status: "status",
             search: "search",
+            search_term: "search",
+            issue_type: "search",
             page: "page",
             size: "pageSize",
           },
-          bodyBuilder: () => ({}),
+          bodyBuilder: (input) => {
+            if (input.issue_type === "SECRET" && input.search === undefined && input.search_term === undefined) {
+              input.issue_type = "Secret";
+            }
+            return {};
+          },
           responseExtractor: passthrough,
-          description: "List security exemptions filtered by status",
+          description: "List security exemptions filtered by status. For secret-related exemptions, pass issue_type='SECRET' or search/search_term='Secret'.",
         },
       },
       executeActions: {

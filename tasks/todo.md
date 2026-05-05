@@ -244,3 +244,21 @@
 - Confirmed npm `latest` still serves `0.9.5`, so users running `npx harness-mcp-v2@latest` can still receive the known-bad build even though PR #102 is merged.
 - Bumped `package.json`, root `manifest.json`, and `mcp-directory/manifest.json` to `0.9.6` and added `tests/release-metadata.test.ts` to keep patch release metadata synchronized.
 - Verified with focused release/env/HTTP tests, `pnpm typecheck`, `pnpm build`, and a stdio startup smoke test showing `stdout bytes=0`.
+
+## Slack Bug Triage: STO Secret Exemption Filtering (2026-05-05)
+- [x] Read the Slack thread and confirm no screenshots/additional repro context
+- [x] Inspect STO exemption resource metadata and list dispatch flow
+- [x] Add failing regression tests for secret-related exemption filtering guidance
+- [x] Implement focused STO metadata/query mapping fix
+- [x] Run focused tests, typecheck, and full tests
+- [ ] Commit, push, open PR, and reply in the Slack thread
+
+### Plan
+- Keep the fix in `src/registry/toolsets/sto.ts` because the backend list call already supports free-text `search`; the bug is that agents are not guided to apply `search=Secret` when users say "Secret" or "secret-related exemptions".
+- Add `tests/registry/sto.test.ts` coverage for `listFilterFields`, `harness_describe`-visible descriptions, and registry dispatch query params.
+- Avoid changing global server instructions; surface the behavior through resource metadata per the anti-bloat rules.
+
+### Review
+- Added `search_term` and `issue_type='SECRET'` support for `security_exemption` listing so prompts like "pending exemptions for Secret" and "secret-related exemptions" route to the STO exemption `search=Secret` query instead of returning all pending exemptions.
+- Added secret-related aliases/filter descriptions so `harness_describe` exposes the intended filtering behavior to chat agents.
+- Verified with `pnpm test tests/registry/sto.test.ts`, `pnpm typecheck`, and full `pnpm test`.
