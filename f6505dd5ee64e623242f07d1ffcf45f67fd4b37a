@@ -1,0 +1,73 @@
+tests/tools/harness-schema-examples.test.ts
+  d39d16d2-f6d7-4bf1-859b-e395bb3d5e49 1-16
+src/data/examples/index.ts
+  d39d16d2-f6d7-4bf1-859b-e395bb3d5e49 1-37
+src/data/examples/types.ts
+  d39d16d2-f6d7-4bf1-859b-e395bb3d5e49 1-12
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 16,
+          "added_lines": 16,
+          "deleted_lines": 0,
+          "hash": "d39d16d2-f6d7-4bf1-859b-e395bb3d5e49",
+          "lines": "1-16",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "tests/tools/harness-schema-examples.test.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 37,
+          "added_lines": 37,
+          "deleted_lines": 0,
+          "hash": "d39d16d2-f6d7-4bf1-859b-e395bb3d5e49",
+          "lines": "1-37",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/data/examples/index.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 12,
+          "added_lines": 12,
+          "deleted_lines": 0,
+          "hash": "d39d16d2-f6d7-4bf1-859b-e395bb3d5e49",
+          "lines": "1-12",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/data/examples/types.ts"
+    }
+  ],
+  "base_commit_sha": "222fd5a4bb3e4fb361a2275417da99883d5e13af",
+  "branch": "main",
+  "commit_sha": "f6505dd5ee64e623242f07d1ffcf45f67fd4b37a",
+  "commit_time": "2026-05-05T12:29:37-07:00",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.2",
+  "prompts": {
+    "d39d16d2-f6d7-4bf1-859b-e395bb3d5e49": {
+      "accepted_lines": 65,
+      "agent_id": {
+        "id": "d39d16d2-f6d7-4bf1-859b-e395bb3d5e49",
+        "model": "claude-opus-4-6",
+        "tool": "claude"
+      },
+      "human_author": "Sunil Gattupalle <sunil.gattupalle@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 65,
+      "total_deletions": 0
+    }
+  },
+  "repo": "https://github.com/harness/mcp-server.git",
+  "schema_version": "authorship/3.0.0"
+}
