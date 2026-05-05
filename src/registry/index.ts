@@ -702,6 +702,21 @@ export class Registry {
         }
       }
 
+      // Ensure common deep link placeholders {org} and {project} are resolved
+      // even when they aren't declared in pathParams (e.g. project list uses
+      // queryParams for org scoping but the deep link template has {org}).
+      // For list results, only use explicitly-provided values (not config defaults)
+      // since each item may belong to a different org/project. Per-item resolution
+      // will fill or override these from item fields.
+      if (!baseLinkParams.org) {
+        const orgValue = (params.orgIdentifier as string) || (input.org_id as string);
+        if (orgValue) baseLinkParams.org = orgValue;
+      }
+      if (!baseLinkParams.project) {
+        const projValue = (params.projectIdentifier as string) || (input.project_id as string);
+        if (projValue) baseLinkParams.project = projValue;
+      }
+
       const getPathParam = def.operations.get?.pathParams;
       for (const field of def.identifierFields) {
         const pathParamName = spec.pathParams?.[field] ?? getPathParam?.[field] ?? field;
@@ -749,6 +764,13 @@ export class Registry {
         (key) => Array.isArray(r[key])
       );
       if (!isList) {
+        // For single-item results, apply config defaults for {org}/{project} if still unset
+        if (!baseLinkParams.org && this.config.HARNESS_ORG) {
+          baseLinkParams.org = this.config.HARNESS_ORG;
+        }
+        if (!baseLinkParams.project && this.config.HARNESS_PROJECT) {
+          baseLinkParams.project = this.config.HARNESS_PROJECT;
+        }
         try {
           let link = buildDeepLink(
             this.config.HARNESS_BASE_URL,
@@ -784,13 +806,12 @@ export class Registry {
               const getPathParam = def.operations.get?.pathParams?.[field];
               const pathParamName = spec.pathParams?.[field] ?? getPathParam ?? field;
               // Look for the API param name directly in the item (e.g., pipelineIdentifier, identifier)
-              if (itemRecord[pathParamName] !== undefined) {
-                itemLinkParams[pathParamName] = String(itemRecord[pathParamName]);
-              } else if (itemRecord.identifier !== undefined) {
-                // Fall back to the generic "identifier" field for the primary identifier
+              const rawValue = itemRecord[pathParamName];
+              if (rawValue !== undefined && typeof rawValue !== "object") {
+                itemLinkParams[pathParamName] = String(rawValue);
+              } else if (itemRecord.identifier !== undefined && typeof itemRecord.identifier !== "object") {
                 itemLinkParams[pathParamName] = String(itemRecord.identifier);
-              } else if (itemRecord.name !== undefined) {
-                // Some APIs use "name" as the identifier (e.g., registry)
+              } else if (itemRecord.name !== undefined && typeof itemRecord.name !== "object") {
                 itemLinkParams[pathParamName] = String(itemRecord.name);
               } else {
                 // Check for nested wrapper objects (e.g., connector.identifier, service.identifier)
@@ -831,11 +852,19 @@ export class Registry {
               for (const token of remaining) {
                 const key = token.slice(1, -1); // strip { }
                 if (key === "accountId" || itemLinkParams[key]) continue;
-                if (itemRecord[key] !== undefined) {
+                if (itemRecord[key] !== undefined && typeof itemRecord[key] !== "object") {
                   itemLinkParams[key] = String(itemRecord[key]);
                 }
               }
             }
+
+            // Resolve {org} and {project} from item fields, overriding baseLinkParams.
+            // Each item may belong to a different org (e.g. account-scoped project list),
+            // so the item's own orgIdentifier takes precedence over any default.
+            const itemOrg = itemRecord.orgIdentifier ?? itemRecord.org;
+            if (itemOrg && typeof itemOrg === "string") itemLinkParams.org = itemOrg;
+            const itemProj = itemRecord.projectIdentifier ?? itemRecord.project ?? itemRecord.identifier;
+            if (itemProj && typeof itemProj === "string") itemLinkParams.project = itemProj;
 
             let itemLink = buildDeepLink(
               this.config.HARNESS_BASE_URL,
