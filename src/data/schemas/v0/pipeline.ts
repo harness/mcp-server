@@ -11812,6 +11812,220 @@ const schema: Record<string, any> = {
             ],
             "$schema": "https://json-schema.org/draft/2019-09/schema"
           },
+          "FmeMetricCheckStepNode": {
+            "title": "FmeMetricCheckStepNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "spec",
+              "type"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for FmeMetricCheckStepNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "FmeMetricCheck"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "FmeMetricCheck"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/custom/FmeMetricCheckStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "FmeMetricCheckStepInfo": {
+            "title": "FmeMetricCheckStepInfo",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/StepSpecType"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "flagName",
+                  "environment",
+                  "lookbackWindow",
+                  "failureCriteria"
+                ],
+                "properties": {
+                  "flagName": {
+                    "description": "Feature flag name. Maps to testId in Tinybird queries.",
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/fme-flag-common-flag-name"
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                      }
+                    ]
+                  },
+                  "environment": {
+                    "description": "FME Environment ID",
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/fme-flag-common-environment"
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                      }
+                    ]
+                  },
+                  "metrics": {
+                    "description": "One or more metrics to evaluate",
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "ref"
+                          ],
+                          "properties": {
+                            "ref": {
+                              "description": "Webadmin metric ID",
+                              "oneOf": [
+                                {
+                                  "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                                },
+                                {
+                                  "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        "minItems": 1
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                      }
+                    ]
+                  },
+                  "lookbackWindow": {
+                    "description": "Time window from now (e.g. 7d, 24h)",
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                      }
+                    ]
+                  },
+                  "failureCriteria": {
+                    "description": "Criteria to determine step failure. When condition evaluates to true, the step fails.",
+                    "type": "object",
+                    "required": [
+                      "type",
+                      "spec"
+                    ],
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "Jexl"
+                        ]
+                      },
+                      "spec": {
+                        "type": "object",
+                        "required": [
+                          "condition"
+                        ],
+                        "properties": {
+                          "condition": {
+                            "description": "JEXL condition expression. Evaluates to true = FAIL, false = PASS.",
+                            "oneOf": [
+                              {
+                                "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                              },
+                              {
+                                "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
           "VmInfraSpec": {
             "title": "VmInfraSpec",
             "type": "object",
@@ -101575,6 +101789,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/custom/FmeFlagDefinitionInstructionsStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeMetricCheckStepNode"
                   }
                 ]
               },
@@ -112646,6 +112863,9 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/custom/FmeFlagDefinitionInstructionsStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeMetricCheckStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/cd/GCEProvisionBackendServiceStepNode"
                   },
                   {
@@ -113484,6 +113704,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/custom/FmeFlagDefinitionInstructionsStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeMetricCheckStepNode"
                   }
                 ]
               },
