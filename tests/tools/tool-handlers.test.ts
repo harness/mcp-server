@@ -66,6 +66,26 @@ function makeMcpServer(elicitAction: "accept" | "decline" | "cancel" = "accept")
   } as any;
 }
 
+function makeMcpServerWithoutElicitation() {
+  const tools = new Map<string, { handler: (...args: unknown[]) => Promise<ToolResult> }>();
+  return {
+    server: {
+      getClientCapabilities: () => ({}),
+      elicitInput: vi.fn(),
+    },
+    registerTool: vi.fn((name: string, _schema: unknown, handler: (...args: unknown[]) => Promise<ToolResult>) => {
+      tools.set(name, { handler });
+    }),
+    _tools: tools,
+    async call(name: string, args: Record<string, unknown>, extra?: Record<string, unknown>): Promise<ToolResult> {
+      const tool = tools.get(name);
+      if (!tool) throw new Error(`Tool "${name}" not registered`);
+      const defaultExtra = { signal: new AbortController().signal, sendNotification: vi.fn(), _meta: {} };
+      return tool.handler(args, { ...defaultExtra, ...extra }) as Promise<ToolResult>;
+    },
+  } as any;
+}
+
 function parseResult(result: ToolResult): unknown {
   return JSON.parse(result.content[0]!.text);
 }
@@ -644,6 +664,24 @@ describe("harness_execute", () => {
     });
     expect(result.isError).toBeUndefined();
     expect(mockRequest).toHaveBeenCalled();
+  });
+
+  it("blocks execution interrupts when the client cannot confirm risky writes", async () => {
+    const noElicitationServer = makeMcpServerWithoutElicitation();
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(noElicitationServer, registry, client);
+
+    const result = await noElicitationServer.call("harness_execute", {
+      resource_type: "execution",
+      action: "interrupt",
+      resource_id: "exec-123",
+      params: { interrupt_type: "AbortAll" },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("declined") });
+    expect(noElicitationServer.server.elicitInput).not.toHaveBeenCalled();
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 
   it("materializes input_set_ids by GETting each input set then POSTing merged pipeline YAML", async () => {

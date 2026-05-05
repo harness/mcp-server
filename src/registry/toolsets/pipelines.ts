@@ -548,7 +548,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         interrupt: {
           method: "PUT",
           path: "/pipeline/api/pipeline/execute/interrupt/{planExecutionId}",
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: { execution_id: "planExecutionId" },
           queryParams: { interrupt_type: "interruptType" },
           bodyBuilder: () => ({}),
