@@ -250,10 +250,15 @@
 - [x] Trace registry API URL construction through registry dispatch and `HarnessClient`
 - [x] Add a failing regression test for duplicate base path joining
 - [x] Implement a minimal URL-join fix
-- [ ] Run focused and broader verification
+- [x] Run focused and broader verification
 - [ ] Commit, push, open PR, and reply in the Slack thread
 
 ### Plan
 - Reproduce the reported shape with a service-specific base URL that already includes `/v1` and a request path that starts with `/v1`.
 - Generalize the existing `/gateway` duplicate-prefix protection in `HarnessClient.buildUrl()` so versioned service base paths are handled without changing registry endpoint definitions.
 - Verify focused client tests, typecheck, then commit and push the branch before opening a PR.
+
+### Review
+- Root cause: `HarnessClient.buildUrl()` only stripped duplicate `/gateway`, so any service-specific `baseUrl` that already included a path prefix such as `/v1` was concatenated with endpoint paths like `/v1/entities`.
+- Added a focused client regression test proving `https://registry-api.qa.harness.io/v1` plus `/v1/entities` now produces a single `/v1`.
+- Verified with `pnpm test tests/client/harness-client.test.ts`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
