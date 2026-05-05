@@ -230,6 +230,7 @@ export const chaosToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: `${CHAOS}/rest/v2/experiment`,
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => {
             const b = coerceBody(input);
             // Accept both snake_case (MCP convention) and camelCase (Harness API / manifest convention)
@@ -746,6 +747,7 @@ export const chaosToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: `${CHAOS}/v3/integrations/get-chaos-component-variable`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             type: "type",
             identifier: "identifier",
@@ -2161,6 +2163,7 @@ export const chaosToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: `${SD}/agents/{agentIdentity}/namespaces`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { agent_identity: "agentIdentity" },
           queryParams: {
             environment_id: "environmentIdentifier",
@@ -2208,6 +2211,7 @@ export const chaosToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: `${SD}/agents/{agentIdentity}/discoveredservices`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { agent_identity: "agentIdentity" },
           queryParams: {
             environment_id: "environmentIdentifier",
