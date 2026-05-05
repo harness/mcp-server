@@ -406,7 +406,7 @@ export const pipelinesToolset: ToolsetDefinition = {
     {
       resourceType: "pipeline_v1",
       displayName: "Pipeline (V1)",
-      description: "V1 pipeline definition using simplified YAML format. Use for agent pipelines and v1 YAML schema. Supports list, get, create, update, delete, and execute (run). V1 pipelines use a flatter YAML structure with direct step types (run, agent, action, approval) instead of v0's nested stage/step wrappers.",
+      description: "V1 pipeline definition using simplified YAML format. Use ONLY when user explicitly requests v1, says 'agent pipeline', or provides YAML with v1 indicators: kebab-case keys (allow-stage-executions, fixed-inputs-on-rerun), top-level step types (run, agent, action, approval) without nested stage/step wrappers. Supports list, get, create, update, delete, and execute (run).",
       toolset: "pipelines",
       scope: "project",
       headerBasedScoping: true,
