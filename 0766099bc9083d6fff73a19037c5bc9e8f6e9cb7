@@ -1,0 +1,1443 @@
+src/registry/toolsets/feature-flags.ts
+  96ece2b0-1722-46ed-b8e2-af137722228c 22-34,309,327-339
+  human 110,136,164,180,188,205,213,246,252,255-258,263,269,272-275,280,282,285-288,293,295,298-301,318,340,344,370,391,399,407,423,443,451,463,473,477-480,485
+tests/registry/extractors-project.test.ts
+  human 2,41-80
+src/registry/index.ts
+  human 1,6-7,92-94,108-109,119,123,298,301-303,327,336,339-341,353-424,626,708-722,770-776,812-815,817,858,864-871
+src/audit/sinks/jsonl-file.ts
+  human 1-37
+src/registry/toolsets/repositories.ts
+  human 28,42,50,71,108,123,134,151,181,199,212,225,251,269,304,319,337,367,385,396,416,437,467,484,494,513,533
+src/registry/toolsets/audit.ts
+  human 43,65
+src/registry/toolsets/infrastructure.ts
+  human 28,44,53,72,90,101
+src/utils/logger.ts
+  human 28-31,51-55
+src/registry/toolsets/dbops.ts
+  human 18-20,33,47,66,81-82,95,102-106,120,141,148,150-151,153-156,159,163,168,171-190,194-293,297,304-305
+src/registry/toolsets/registries.ts
+  human 55,72,96,129,161
+src/registry/toolsets/dashboards.ts
+  human 26,59
+tests/registry/project-deep-links.test.ts
+  human 1-169
+src/registry/toolsets/logs.ts
+  human 23
+tests/release-metadata.test.ts
+  human 1-21
+mcp-directory/manifest.json
+  human 5
+src/tools/harness-search.ts
+  human 96
+src/registry/toolsets/scs.ts
+  human 357,417,436,488,545,596,632,664,700,756,772,809,826,867,912,925,1139,1146,1216,1280,1324,1369,1418,1471,1505
+src/registry/toolsets/access-control.ts
+  human 24,35,45,92,104,112,129,151,163,171,189,211,223,231,249,272,285,305,327,339,347,365,383
+src/tools/harness-update.ts
+  human 47,55,80
+src/registry/toolsets/agents.ts
+  human 56,63,71,94,108
+src/registry/toolsets/governance.ts
+  human 97,114,122,131,141,182,198,206,215,225,256,275
+src/utils/redact.ts
+  human 1-67
+pnpm-lock.yaml
+  human 14,48-59,253-354,992-994,1077-1078,1081-1084,1433-1532,2129-2130,2183,2189-2203,2403
+tests/config.test.ts
+  human 255-286
+src/utils/zip-csv.ts
+  human 75-76
+src/registry/toolsets/ai-evals.ts
+  human 559,568,576,586,596,607,618,631,645,669,679,688,699,710,739,748,756,766,776,787,797,809,838,847,855,865,877,887,897,921,933,957,980,989,997,1007,1017,1027,1056,1065,1073,1083,1093,1104,1115,1150,1159,1170,1181,1202,1211,1219,1229,1239,1250,1261,1271,1283,1306,1315,1326,1348,1358,1380,1389,1397,1407,1417,1428,1439,1450,1473,1482,1490,1500,1510,1536,1551,1559,1570,1581,1591,1617,1639,1647,1670,1680,1689,1700,1711
+scripts/smoke-test.js
+  human 1-344
+src/tools/harness-diagnose.ts
+  human 103
+src/registry/toolsets/environments.ts
+  human 51,66,74,83,95,105
+src/registry/toolsets/secrets.ts
+  human 30,59
+src/registry/toolsets/services.ts
+  human 48,62,70,79,91
+src/registry/toolsets/chaos.ts
+  human 161,181,189,199,244,280,313,335,343,353,375,393,419,476,497,509,520,569,589,609,629,668,698,708,718,746,772,798,841,852,860,875,885,895,926,952,962,988,1004,1012,1043,1067,1091,1106,1117,1127,1145,1183,1224,1254,1266,1277,1297,1317,1337,1379,1397,1409,1423,1463,1481,1493,1507,1532,1552,1594,1611,1619,1629,1665,1701,1738,1749,1777,1793,1801,1829,1845,1853,1863,1893,1904,1925,1936,1993,2011
+src/audit/sinks/otel.ts
+  human 1-220
+src/data/schemas/v0/template.ts
+  human 824-826,65410-65609,70172-70266,127790-127792,136710-136712,139447-139458,139791-139793,140407-140409,141160-141162,141750-141752,142305-142307
+specs/002-endpoint-spec-transport-overrides.md
+  human 1-361
+src/registry/toolsets/gitops.ts
+  human 204,217,253,262,273,340,393,413,439,481,501,581,590,626,635,675,685,702,791,875,885,916,949,986,1020,1049,1071,1113,1131,1163
+src/registry/types.ts
+  human 7-51,53-98,101,103,256-257
+src/registry/toolsets/delegates.ts
+  human 35,70,81,89,105,115,126
+scripts/verify-otel.js
+  human 1-177
+src/config.ts
+  human 75-78,82,84-88,106-119,130-139,143,151,153-154
+specs/004-audit-sinks.md
+  human 1-172
+src/utils/log-resolver.ts
+  human 299
+tests/registry/structural-validation.test.ts
+  human 8,35-60,348-525,550-633
+scripts/generate-docs.js
+  human 1-112
+src/audit/sinks/webhook.ts
+  human 1-112
+docs/testing/repo_rule/test_plan.md
+  human 40
+src/index.ts
+  human 16,20,39-43,46,48-49,51,56,88,93,127,153,163,172,206-216,259,261,265-266,331-332,441,462-465
+src/registry/toolsets/ccm.ts
+  human 485,503,512,540,568-570,579,606,614,622,638,656,666,707,757,810,845,888,903,928,941,954,975,1024,1059,1093,1128,1142,1150,1183,1217,1258,1297,1446,1474,1527,1573,1585,1597,1616,1635
+src/audit/types.ts
+  human 1-56
+src/registry/toolsets/connectors.ts
+  human 59,89,97,107,120,130,150
+src/tools/harness-delete.ts
+  human 47,64
+.github/workflows/ci.yml
+  human 27-64
+src/audit/manager.ts
+  human 1-62
+src/resources/pipeline-yaml.ts
+  human 21,69
+src/utils/cli.ts
+  human 37
+src/tools/harness-status.ts
+  human 112,116,120
+README.md
+  human 3,11-12,14,75,87,492-513,668-710,955,1100-1110,1401,1439-1472,1475,1491-1492,1682-1683,1685-1690,1693,1695-1697,1700-1704,1717,1724-1726,1732
+tests/audit/manager.test.ts
+  human 1-124
+src/audit/sinks/stderr.ts
+  human 1-24
+tests/utils/redact.test.ts
+  human 1-246
+tests/audit/sinks.test.ts
+  human 1-192
+src/audit/index.ts
+  human 1-58
+src/tools/harness-create.ts
+  human 52,60,66
+src/registry/toolsets/freeze.ts
+  human 57,78,86,102,119,129,163,172
+.gitignore
+  human 24
+src/resources/execution-summary.ts
+  human 27
+src/tools/harness-execute.ts
+  human 8,65-67,72,201,205,231
+src/registry/toolsets/overrides.ts
+  human 86,100,108,117,132
+src/registry/toolsets/templates.ts
+  human 26,45,54,86,135
+.env.example
+  human 28-36,55-68
+tests/audit/registry-audit.test.ts
+  human 1-148
+tests/integration/elicitation-flow.test.ts
+  human 241,252-254,258,287-303
+src/registry/toolsets/settings.ts
+  human 26
+src/registry/toolsets/idp.ts
+  human 26,56,74,85,103,114,134,153,176,192,213,226,253
+src/utils/elicitation.ts
+  human 4,13-14,17-18,23-24,32,38-44,50,55-56,58-60,64-66,68-69,85,88,90,92-93,95,98,100,102,105
+src/registry/extractors.ts
+  human 172-191
+src/registry/toolsets/platform.ts
+  human 2,169,184,192,202,213,244,257,264,275,287,300
+tasks/todo.md
+  human 227-246
+tests/utils/elicitation.test.ts
+  human 3-4,15-61,73,75,86,89,95,97,107,109,113-123,133,135,148,150,162,164,167,174,176,186-198,200,212,220-221,230,232,236-261,267,269
+package.json
+  human 3,23-24,60-79,81-84,98-99
+docs/architecture.md
+  human 1-225
+src/data/schemas/v0/pipeline.ts
+  human 11815-12028,13325-13567,100014-100016,101792-101794,110255-110257,112865-112867,113363-113374,113707-113709,114234-114236,114543-114545
+src/client/types.ts
+  human 62-64
+src/registry/toolsets/pipelines.ts
+  human 199,215,229,261,296,306,363,377,421,435,446,456,466,476,520,540,551,577,590,599,619,640,659,681,693,702,732,765,790,819,834,859
+manifest.json
+  human 5
+src/registry/toolsets/pull-requests.ts
+  human 29,43,54,73,96,130,141,162,196,220,240,263,294
+src/client/harness-client.ts
+  human 6,115,127,195,242-244,270-272,280-284,323-325,334,336,365,422-426,441,458-460,465,467
+docs/testing/space_rule/test_plan.md
+  human 43
+src/registry/toolsets/sei.ts
+  human 213,243,282,304,312,342,364,372,401,409,432,440,475,484,516,525,557,580
+specs/001-registry-contract.md
+  human 1-371
+specs/005-otel-audit-sink.md
+  human 1-151
+specs/003-safety-layer-p3-p4-p5.md
+  human 1-392
+tests/client/harness-client.test.ts
+  human 105-118,393-422
+src/registry/toolsets/sto.ts
+  human 46,79,108,124,127,154,157,184,187
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 27,
+          "added_lines": 27,
+          "deleted_lines": 0,
+          "hash": "96ece2b0-1722-46ed-b8e2-af137722228c",
+          "lines": "22-34,309,327-339",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 48,
+          "added_lines": 48,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "110,136,164,180,188,205,213,246,252,255-258,263,269,272-275,280,282,285-288,293,295,298-301,318,340,344,370,391,399,407,423,443,451,463,473,477-480,485",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/feature-flags.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 41,
+          "added_lines": 41,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "2,41-80",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "tests/registry/extractors-project.test.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 128,
+          "added_lines": 128,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "1,6-7,92-94,108-109,119,123,298,301-303,327,336,339-341,353-424,626,708-722,770-776,812-815,817,858,864-871",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/index.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 37,
+          "added_lines": 37,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "1-37",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/audit/sinks/jsonl-file.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 27,
+          "added_lines": 27,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "28,42,50,71,108,123,134,151,181,199,212,225,251,269,304,319,337,367,385,396,416,437,467,484,494,513,533",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/repositories.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 2,
+          "added_lines": 2,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "43,65",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/audit.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 6,
+          "added_lines": 6,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "28,44,53,72,90,101",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/infrastructure.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 9,
+          "added_lines": 9,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "28-31,51-55",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/utils/logger.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 149,
+          "added_lines": 149,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "18-20,33,47,66,81-82,95,102-106,120,141,148,150-151,153-156,159,163,168,171-190,194-293,297,304-305",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/dbops.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 5,
+          "added_lines": 5,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "55,72,96,129,161",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/registries.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 2,
+          "added_lines": 2,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "26,59",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/dashboards.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 169,
+          "added_lines": 169,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "1-169",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "tests/registry/project-deep-links.test.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "23",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/logs.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 21,
+          "added_lines": 21,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "1-21",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "tests/release-metadata.test.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "5",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "mcp-directory/manifest.json"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "96",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/tools/harness-search.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 25,
+          "added_lines": 25,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "357,417,436,488,545,596,632,664,700,756,772,809,826,867,912,925,1139,1146,1216,1280,1324,1369,1418,1471,1505",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/scs.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 23,
+          "added_lines": 23,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "24,35,45,92,104,112,129,151,163,171,189,211,223,231,249,272,285,305,327,339,347,365,383",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/access-control.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 3,
+          "added_lines": 3,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "47,55,80",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/tools/harness-update.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 5,
+          "added_lines": 5,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "56,63,71,94,108",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/agents.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 12,
+          "added_lines": 12,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "97,114,122,131,141,182,198,206,215,225,256,275",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/governance.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 67,
+          "added_lines": 67,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "1-67",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/utils/redact.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 243,
+          "added_lines": 243,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "14,48-59,253-354,992-994,1077-1078,1081-1084,1433-1532,2129-2130,2183,2189-2203,2403",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "pnpm-lock.yaml"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 32,
+          "added_lines": 32,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "255-286",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "tests/config.test.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 2,
+          "added_lines": 2,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "75-76",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/utils/zip-csv.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 90,
+          "added_lines": 90,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "559,568,576,586,596,607,618,631,645,669,679,688,699,710,739,748,756,766,776,787,797,809,838,847,855,865,877,887,897,921,933,957,980,989,997,1007,1017,1027,1056,1065,1073,1083,1093,1104,1115,1150,1159,1170,1181,1202,1211,1219,1229,1239,1250,1261,1271,1283,1306,1315,1326,1348,1358,1380,1389,1397,1407,1417,1428,1439,1450,1473,1482,1490,1500,1510,1536,1551,1559,1570,1581,1591,1617,1639,1647,1670,1680,1689,1700,1711",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/ai-evals.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 344,
+          "added_lines": 344,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "1-344",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "scripts/smoke-test.js"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "103",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/tools/harness-diagnose.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 6,
+          "added_lines": 6,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "51,66,74,83,95,105",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/environments.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 2,
+          "added_lines": 2,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "30,59",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/secrets.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 5,
+          "added_lines": 5,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "48,62,70,79,91",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/services.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 86,
+          "added_lines": 86,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "161,181,189,199,244,280,313,335,343,353,375,393,419,476,497,509,520,569,589,609,629,668,698,708,718,746,772,798,841,852,860,875,885,895,926,952,962,988,1004,1012,1043,1067,1091,1106,1117,1127,1145,1183,1224,1254,1266,1277,1297,1317,1337,1379,1397,1409,1423,1463,1481,1493,1507,1532,1552,1594,1611,1619,1629,1665,1701,1738,1749,1777,1793,1801,1829,1845,1853,1863,1893,1904,1925,1936,1993,2011",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/chaos.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 220,
+          "added_lines": 220,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "1-220",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/audit/sinks/otel.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 331,
+          "added_lines": 331,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "824-826,65410-65609,70172-70266,127790-127792,136710-136712,139447-139458,139791-139793,140407-140409,141160-141162,141750-141752,142305-142307",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/data/schemas/v0/template.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 361,
+          "added_lines": 361,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "1-361",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "specs/002-endpoint-spec-transport-overrides.md"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 30,
+          "added_lines": 30,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "204,217,253,262,273,340,393,413,439,481,501,581,590,626,635,675,685,702,791,875,885,916,949,986,1020,1049,1071,1113,1131,1163",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/gitops.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 95,
+          "added_lines": 95,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "7-51,53-98,101,103,256-257",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/types.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 7,
+          "added_lines": 7,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "35,70,81,89,105,115,126",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/delegates.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 177,
+          "added_lines": 177,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "1-177",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "scripts/verify-otel.js"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 38,
+          "added_lines": 38,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "75-78,82,84-88,106-119,130-139,143,151,153-154",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/config.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 172,
+          "added_lines": 172,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "1-172",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "specs/004-audit-sinks.md"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "299",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/utils/log-resolver.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 289,
+          "added_lines": 289,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "8,35-60,348-525,550-633",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "tests/registry/structural-validation.test.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 112,
+          "added_lines": 112,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "1-112",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "scripts/generate-docs.js"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 112,
+          "added_lines": 112,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "1-112",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/audit/sinks/webhook.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "40",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "docs/testing/repo_rule/test_plan.md"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 40,
+          "added_lines": 40,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "16,20,39-43,46,48-49,51,56,88,93,127,153,163,172,206-216,259,261,265-266,331-332,441,462-465",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/index.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 42,
+          "added_lines": 42,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "485,503,512,540,568-570,579,606,614,622,638,656,666,707,757,810,845,888,903,928,941,954,975,1024,1059,1093,1128,1142,1150,1183,1217,1258,1297,1446,1474,1527,1573,1585,1597,1616,1635",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/ccm.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 56,
+          "added_lines": 56,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "1-56",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/audit/types.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 7,
+          "added_lines": 7,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "59,89,97,107,120,130,150",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/connectors.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 2,
+          "added_lines": 2,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "47,64",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/tools/harness-delete.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 38,
+          "added_lines": 38,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "27-64",
+          "overridden_lines": 0
+        }
+      ],
+      "file": ".github/workflows/ci.yml"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 62,
+          "added_lines": 62,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "1-62",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/audit/manager.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 2,
+          "added_lines": 2,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "21,69",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/resources/pipeline-yaml.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "37",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/utils/cli.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 3,
+          "added_lines": 3,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "112,116,120",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/tools/harness-status.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 143,
+          "added_lines": 143,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "3,11-12,14,75,87,492-513,668-710,955,1100-1110,1401,1439-1472,1475,1491-1492,1682-1683,1685-1690,1693,1695-1697,1700-1704,1717,1724-1726,1732",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "README.md"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 124,
+          "added_lines": 124,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "1-124",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "tests/audit/manager.test.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 24,
+          "added_lines": 24,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "1-24",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/audit/sinks/stderr.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 246,
+          "added_lines": 246,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "1-246",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "tests/utils/redact.test.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 192,
+          "added_lines": 192,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "1-192",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "tests/audit/sinks.test.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 58,
+          "added_lines": 58,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "1-58",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/audit/index.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 3,
+          "added_lines": 3,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "52,60,66",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/tools/harness-create.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 8,
+          "added_lines": 8,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "57,78,86,102,119,129,163,172",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/freeze.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "24",
+          "overridden_lines": 0
+        }
+      ],
+      "file": ".gitignore"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "27",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/resources/execution-summary.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 8,
+          "added_lines": 8,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "8,65-67,72,201,205,231",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/tools/harness-execute.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 5,
+          "added_lines": 5,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "86,100,108,117,132",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/overrides.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 5,
+          "added_lines": 5,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "26,45,54,86,135",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/templates.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 23,
+          "added_lines": 23,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "28-36,55-68",
+          "overridden_lines": 0
+        }
+      ],
+      "file": ".env.example"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 148,
+          "added_lines": 148,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "1-148",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "tests/audit/registry-audit.test.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 22,
+          "added_lines": 22,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "241,252-254,258,287-303",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "tests/integration/elicitation-flow.test.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "26",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/settings.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 13,
+          "added_lines": 13,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "26,56,74,85,103,114,134,153,176,192,213,226,253",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/idp.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 36,
+          "added_lines": 36,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "4,13-14,17-18,23-24,32,38-44,50,55-56,58-60,64-66,68-69,85,88,90,92-93,95,98,100,102,105",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/utils/elicitation.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 20,
+          "added_lines": 20,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "172-191",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/extractors.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 12,
+          "added_lines": 12,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "2,169,184,192,202,213,244,257,264,275,287,300",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/platform.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 20,
+          "added_lines": 20,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "227-246",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "tasks/todo.md"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 124,
+          "added_lines": 124,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "3-4,15-61,73,75,86,89,95,97,107,109,113-123,133,135,148,150,162,164,167,174,176,186-198,200,212,220-221,230,232,236-261,267,269",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "tests/utils/elicitation.test.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 29,
+          "added_lines": 29,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "3,23-24,60-79,81-84,98-99",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "package.json"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 225,
+          "added_lines": 225,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "1-225",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "docs/architecture.md"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 490,
+          "added_lines": 490,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "11815-12028,13325-13567,100014-100016,101792-101794,110255-110257,112865-112867,113363-113374,113707-113709,114234-114236,114543-114545",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/data/schemas/v0/pipeline.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 3,
+          "added_lines": 3,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "62-64",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/client/types.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 32,
+          "added_lines": 32,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "199,215,229,261,296,306,363,377,421,435,446,456,466,476,520,540,551,577,590,599,619,640,659,681,693,702,732,765,790,819,834,859",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/pipelines.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "5",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "manifest.json"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 13,
+          "added_lines": 13,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "29,43,54,73,96,130,141,162,196,220,240,263,294",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/pull-requests.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 32,
+          "added_lines": 32,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "6,115,127,195,242-244,270-272,280-284,323-325,334,336,365,422-426,441,458-460,465,467",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/client/harness-client.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "43",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "docs/testing/space_rule/test_plan.md"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 18,
+          "added_lines": 18,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "213,243,282,304,312,342,364,372,401,409,432,440,475,484,516,525,557,580",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/sei.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 371,
+          "added_lines": 371,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "1-371",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "specs/001-registry-contract.md"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 151,
+          "added_lines": 151,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "1-151",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "specs/005-otel-audit-sink.md"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 392,
+          "added_lines": 392,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "1-392",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "specs/003-safety-layer-p3-p4-p5.md"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 44,
+          "added_lines": 44,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "105-118,393-422",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "tests/client/harness-client.test.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 9,
+          "added_lines": 9,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "46,79,108,124,127,154,157,184,187",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/sto.ts"
+    }
+  ],
+  "base_commit_sha": "b82cd9fbce28ef46ec2a765ff7e81a7bee7cc6ef",
+  "branch": "CCM-32038-filter-skill",
+  "commit_sha": "0766099bc9083d6fff73a19037c5bc9e8f6e9cb7",
+  "commit_time": "2026-05-05T16:20:13+05:30",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.2",
+  "prompts": {
+    "human": {
+      "accepted_lines": 6840,
+      "agent_id": null,
+      "human_author": "Shashwat Pandey <shashwat.pandey@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 6840,
+      "total_deletions": 0
+    }
+  },
+  "repo": "https://github.com/harness/mcp-server.git",
+  "schema_version": "authorship/3.0.0"
+}
