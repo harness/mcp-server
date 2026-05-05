@@ -244,3 +244,15 @@
 - Confirmed npm `latest` still serves `0.9.5`, so users running `npx harness-mcp-v2@latest` can still receive the known-bad build even though PR #102 is merged.
 - Bumped `package.json`, root `manifest.json`, and `mcp-directory/manifest.json` to `0.9.6` and added `tests/release-metadata.test.ts` to keep patch release metadata synchronized.
 - Verified with focused release/env/HTTP tests, `pnpm typecheck`, `pnpm build`, and a stdio startup smoke test showing `stdout bytes=0`.
+
+## Slack Bug Triage: Hosted MCP Harness0 Routing (2026-05-05)
+- [x] Read the triggered Slack thread and confirm there are no screenshots or follow-up messages
+- [x] Trace hosted and local Harness base URL configuration
+- [x] Clarify hosted MCP vs local MCP Harness0 routing in docs and manifests
+- [ ] Run docs verification and review the diff
+- [ ] Commit, push, open PR, and reply in the Slack thread
+
+### Plan
+- Treat this as a documentation/configuration gap unless code evidence shows the server ignores `HARNESS_BASE_URL`.
+- Preserve existing local behavior: stdio/self-hosted HTTP users set `HARNESS_BASE_URL=https://harness0.harness.io`.
+- Clarify hosted `https://mcp.harness.io/mcp` behavior: Claude/Cowork clients cannot point that managed endpoint at another Harness host from client config; Harness Support must enable/configure the hosted service for the target account/environment.

@@ -91,7 +91,7 @@
     "HARNESS_BASE_URL": {
       "type": "string",
       "title": "Harness Base URL",
-      "description": "Harness base URL. Use the default for Harness SaaS unless you run a self-managed Harness installation.",
+      "description": "Harness API/UI base URL for this local MCP server. Use the default for public Harness SaaS, or set an environment such as https://harness0.harness.io when running the server yourself.",
       "default": "https://app.harness.io",
       "required": false,
       "sensitive": false
