@@ -213,6 +213,8 @@ export type PathBuilderConfig = { HARNESS_ACCOUNT_ID?: string; HARNESS_ORG?: str
  */
 export interface EndpointSpec {
   method: HttpMethod;
+  /** Optional dynamic method override. When set, takes precedence over `method`. */
+  methodBuilder?: (input: Record<string, unknown>) => HttpMethod;
   /** Path template, e.g. "/pipeline/api/pipelines/{pipelineIdentifier}". Ignored when pathBuilder is set. */
   path: string;
   /** Optional dynamic path builder. When set, used instead of path + pathParams for account-scoped or multi-endpoint resources. */
@@ -238,7 +240,7 @@ export interface EndpointSpec {
   /** Static headers to merge into the request (e.g. Content-Type override) */
   headers?: Record<string, string>;
   /** For GET: extract the useful part from the raw response */
-  responseExtractor?: (raw: unknown) => unknown;
+  responseExtractor?: (raw: unknown, input?: Record<string, unknown>) => unknown;
   /** Request binary (ArrayBuffer) response instead of JSON. Used for ZIP download endpoints. */
   responseType?: "json" | "buffer";
   /** Description shown in harness_describe output */

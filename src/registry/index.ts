@@ -552,10 +552,13 @@ export class Registry {
       }
     }
 
+    // Resolve HTTP method — methodBuilder overrides static method when present.
+    const resolvedMethod = spec.methodBuilder ? spec.methodBuilder(input) : spec.method;
+
     // Inject orgIdentifier/projectIdentifier into the body for mutating operations (POST/PUT).
     // Harness NG APIs require these in the body (not just query params) to scope the resource correctly.
     // If bodyWrapperKey is set (e.g., "connector"), inject inside the wrapper object.
-    if (body && typeof body === "object" && (spec.method === "POST" || spec.method === "PUT")) {
+    if (body && typeof body === "object" && (resolvedMethod === "POST" || resolvedMethod === "PUT")) {
       const bodyRecord = body as Record<string, unknown>;
       // Determine where to inject: inside wrapper if present, otherwise at top level
       const targetRecord = spec.bodyWrapperKey && 
@@ -611,7 +614,7 @@ export class Registry {
     }
 
     const requestOpts = {
-      method: spec.method,
+      method: resolvedMethod,
       path,
       params,
       body,
@@ -653,7 +656,7 @@ export class Registry {
     }
 
     // Extract response
-    let result = spec.responseExtractor ? spec.responseExtractor(raw) : raw;
+    let result = spec.responseExtractor ? spec.responseExtractor(raw, input) : raw;
 
     // Tag ELK/Mongo data source on the response when fallback is active
     if (dataSource && result && typeof result === "object" && !Array.isArray(result)) {
