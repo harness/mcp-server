@@ -232,7 +232,7 @@
 - [x] Add a release/version regression check
 - [x] Bump package and bundle metadata for a patch release
 - [x] Run focused verification
-- [ ] Commit, push, open PR, and reply in the Slack thread
+- [x] Commit, push, open PR, and reply in the Slack thread
 
 ### Plan
 - Treat the sparse report as the same user/environment until contradicted by thread context, then verify against npm and current repo state.
