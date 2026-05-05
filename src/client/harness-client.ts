@@ -3,6 +3,7 @@ import type { RequestOptions } from "./types.js";
 import { HarnessApiError } from "../utils/errors.js";
 import { RateLimiter } from "../utils/rate-limiter.js";
 import { createLogger } from "../utils/logger.js";
+import { redactJsonString } from "../utils/redact.js";
 
 const log = createLogger("harness-client");
 
@@ -111,6 +112,7 @@ export class HarnessClient {
   private readonly timeout: number;
   private readonly maxRetries: number;
   private readonly rateLimiter: RateLimiter;
+  private readonly logUnsafeBodies: boolean;
   private accountIdResolver?: AccountIdResolver;
   private currentUserId?: string;
   private currentUserPromise?: Promise<string>;
@@ -122,6 +124,7 @@ export class HarnessClient {
     this.timeout = config.HARNESS_API_TIMEOUT_MS;
     this.maxRetries = config.HARNESS_MAX_RETRIES;
     this.rateLimiter = new RateLimiter(config.HARNESS_RATE_LIMIT_RPS);
+    this.logUnsafeBodies = config.HARNESS_LOG_UNSAFE_BODIES;
   }
 
   /**
@@ -189,7 +192,7 @@ export class HarnessClient {
     const isFme = options.product === "fme";
     const accountId = this.resolveAccountId();
     const headers: Record<string, string> = {
-      "Harness-Account": accountId,
+      ...(isFme ? {} : { "Harness-Account": accountId }),
       ...options.headers,
     };
 
@@ -236,7 +239,9 @@ export class HarnessClient {
 
         log.debug(`${method} ${url}`);
         if (bodyString !== undefined) {
-          log.debug("Request body", { body: bodyString.slice(0, 1000) });
+          log.debug("Request body", {
+            body: this.logUnsafeBodies ? bodyString.slice(0, 1000) : redactJsonString(bodyString),
+          });
         }
 
         const response = await fetch(url, {
@@ -262,7 +267,9 @@ export class HarnessClient {
               ? humanizeHttpError(response.status, body)
               : parsed.message!;
           const message = enrichErrorMessage(rawMessage, parsed, options.path);
-          log.debug(`HTTP ${response.status} error`, { body: body.slice(0, 1000) });
+          log.debug(`HTTP ${response.status} error`, {
+            body: this.logUnsafeBodies ? body.slice(0, 1000) : redactJsonString(body),
+          });
           const error = new HarnessApiError(
             message,
             response.status,
@@ -270,7 +277,11 @@ export class HarnessClient {
             parsed.correlationId,
           );
 
-          if (RETRYABLE_STATUS_CODES.has(response.status) && attempt < this.maxRetries) {
+          if (
+            RETRYABLE_STATUS_CODES.has(response.status) &&
+            attempt < this.maxRetries &&
+            options.retryPolicy !== "do_not_retry"
+          ) {
             lastError = error;
             continue;
           }
@@ -309,7 +320,9 @@ export class HarnessClient {
             parseErr,
           );
         }
-        log.debug("Response body", { body: text.slice(0, 1000) });
+        log.debug("Response body", {
+          body: this.logUnsafeBodies ? text.slice(0, 1000) : redactJsonString(text),
+        });
         return data as T;
       } catch (err) {
         if (err instanceof HarnessApiError) throw err;
@@ -318,9 +331,9 @@ export class HarnessClient {
           if (options.signal?.aborted) {
             throw new HarnessApiError("Request cancelled", 499, undefined, undefined, err);
           }
-          // Timeout — retry if allowed
+          // Timeout — retry if allowed (and policy permits)
           lastError = new HarnessApiError("Request timed out", 408, undefined, undefined, err);
-          if (attempt < this.maxRetries) continue;
+          if (attempt < this.maxRetries && options.retryPolicy !== "do_not_retry") continue;
           throw lastError;
         }
         throw new HarnessApiError(
@@ -349,7 +362,7 @@ export class HarnessClient {
     const isFme = options.product === "fme";
     const accountId = this.resolveAccountId();
     const headers: Record<string, string> = {
-      "Harness-Account": accountId,
+      ...(isFme ? {} : { "Harness-Account": accountId }),
       ...options.headers,
     };
 
@@ -406,7 +419,11 @@ export class HarnessClient {
           const message = enrichErrorMessage(rawMessage, parsed, options.path);
           const error = new HarnessApiError(message, response.status, parsed.code, parsed.correlationId);
 
-          if (RETRYABLE_STATUS_CODES.has(response.status) && attempt < this.maxRetries) {
+          if (
+            RETRYABLE_STATUS_CODES.has(response.status) &&
+            attempt < this.maxRetries &&
+            options.retryPolicy !== "do_not_retry"
+          ) {
             lastError = error;
             continue;
           }
@@ -421,7 +438,7 @@ export class HarnessClient {
             throw new HarnessApiError("Request cancelled", 499, undefined, undefined, err);
           }
           lastError = new HarnessApiError("Request timed out", 408, undefined, undefined, err);
-          if (attempt < this.maxRetries) continue;
+          if (attempt < this.maxRetries && options.retryPolicy !== "do_not_retry") continue;
           throw lastError;
         }
         throw new HarnessApiError(
@@ -438,16 +455,16 @@ export class HarnessClient {
     const baseUrl = (options.baseUrl ?? this.baseUrl).replace(/\/$/, "");
     let path = options.path;
 
-    // Prevent double /gateway when base URL already ends with /gateway
-    // (common with self-managed Harness installations)
-    if (baseUrl.endsWith("/gateway") && path.startsWith("/gateway/")) {
-      path = path.slice("/gateway".length);
+    const basePath = new URL(baseUrl).pathname.replace(/\/$/, "");
+    if (basePath && basePath !== "/" && path.startsWith(`${basePath}/`)) {
+      path = path.slice(basePath.length);
     }
 
     // Inject accountIdentifier into query params (used by most Harness APIs).
     // Some APIs (e.g. SEI) use only the Harness-Account header — skip when told.
+    // FME/Split API uses neither Harness account query params nor Harness-Account header.
     const params = new URLSearchParams();
-    if (!options.headerBasedScoping) {
+    if (!options.headerBasedScoping && options.product !== "fme") {
       const accountId = this.resolveAccountId();
       params.set("accountIdentifier", accountId);
 

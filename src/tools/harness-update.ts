@@ -4,7 +4,6 @@ import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
-import { logAudit } from "../utils/logger.js";
 import { confirmViaElicitation } from "../utils/elicitation.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, isRecord, coerceRecord } from "../utils/type-guards.js";
@@ -45,7 +44,7 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
           return errorResult(`Resource "${args.resource_type}" does not support "update". Supported: ${Object.keys(def.operations).join(", ")}`);
         }
 
-        const blockWithoutConfirmation = !!def.operations.update?.blockWithoutConfirmation;
+        const risk = def.operations.update!.operationPolicy.risk;
         const bodyPreview = typeof args.body === "string"
           ? (args.body.length > 500 ? args.body.slice(0, 500) + "\n...(truncated)" : args.body)
           : JSON.stringify(args.body, null, 2);
@@ -53,7 +52,7 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
           server,
           toolName: "harness_update",
           message: `Update ${args.resource_type} "${args.resource_id}"?\n\n${bodyPreview}`,
-          destructive: blockWithoutConfirmation,
+          risk,
         });
         if (!elicit.proceed) {
           return errorResult(`Operation ${elicit.reason} by user.`);
@@ -78,11 +77,9 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
           input.version_label = "v1";
         }
 
-        const result = await registry.dispatch(client, args.resource_type, "update", input);
-        logAudit({ operation: "update", resource_type: args.resource_type, resource_id: args.resource_id, org_id: input.org_id as string, project_id: input.project_id as string, outcome: "success" });
+        const result = await registry.dispatch(client, args.resource_type, "update", input, { tool: "harness_update", confirmation: elicit.method, resource_id: args.resource_id });
         return jsonResult(result);
       } catch (err) {
-        logAudit({ operation: "update", resource_type: args.resource_type, resource_id: args.resource_id, outcome: "error", error: String(err) });
         if (isUserError(err)) return errorResult(err.message);
         if (isUserFixableApiError(err)) return errorResult(err.message);
         throw toMcpError(err);

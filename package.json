@@ -1,6 +1,6 @@
 {
   "name": "harness-mcp-v2",
-  "version": "0.9.5",
+  "version": "0.9.6",
   "description": "Give AI agents full access to the Harness.io platform — manage pipelines, deployments, cloud costs, chaos engineering, feature flags, SEI, and 125+ resource types through 11 MCP tools",
   "type": "module",
   "main": "build/index.js",
@@ -20,6 +20,8 @@
     "typecheck": "tsc --noEmit",
     "sync-schemas": "node scripts/sync-schemas.js",
     "check-schema-coverage": "node scripts/check-schema-coverage.js",
+    "docs:generate": "node scripts/generate-docs.js",
+    "docs:check": "node scripts/generate-docs.js --check",
     "test": "vitest run",
     "test:watch": "vitest",
     "docker:build": "docker build -t harness-mcp-server .",
@@ -55,7 +57,31 @@
     "yaml": "^2.8.3",
     "zod": "^4.0.0"
   },
+  "peerDependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.200.0",
+    "@opentelemetry/resources": "^2.0.0",
+    "@opentelemetry/sdk-trace-node": "^2.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@opentelemetry/api": {
+      "optional": true
+    },
+    "@opentelemetry/sdk-trace-node": {
+      "optional": true
+    },
+    "@opentelemetry/exporter-trace-otlp-http": {
+      "optional": true
+    },
+    "@opentelemetry/resources": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.216.0",
+    "@opentelemetry/resources": "^2.7.1",
+    "@opentelemetry/sdk-trace-node": "^2.7.1",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.13.5",
@@ -69,7 +95,8 @@
       "path-to-regexp": ">=8.4.0",
       "@hono/node-server": ">=1.19.10",
       "express-rate-limit": ">=8.2.2",
-      "vite": "^7.3.2"
+      "vite": "^7.3.2",
+      "postcss": ">=8.5.10"
     }
   },
   "packageManager": "pnpm@10.18.2",

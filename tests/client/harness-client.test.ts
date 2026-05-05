@@ -102,6 +102,20 @@ describe("HarnessClient", () => {
       expect(url).not.toContain("/gateway/gateway/");
     });
 
+    it("deduplicates a matching version prefix from baseUrl overrides", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({
+        path: "/v1/entities",
+        baseUrl: "https://registry-api.qa.harness.io/v1",
+      });
+
+      const url = fetchSpy.mock.calls[0][0] as string;
+      expect(url).toContain("https://registry-api.qa.harness.io/v1/entities?");
+      expect(url).not.toContain("/v1/v1/");
+    });
+
     it("keeps /gateway path when base URL does not end with /gateway", async () => {
       fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
       const client = new HarnessClient(makeConfig({ HARNESS_BASE_URL: "https://app.harness.io" }));
@@ -374,6 +388,36 @@ describe("HarnessClient", () => {
 
       await expect(client.request({ path: "/test" })).rejects.toThrow(HarnessApiError);
       // initial + 1 retry = 2 calls
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it("does not retry on 500 when retryPolicy is 'do_not_retry'", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({ message: "fail" }), { status: 500 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 2 }));
+
+      await expect(client.request({ path: "/test", retryPolicy: "do_not_retry" })).rejects.toThrow(HarnessApiError);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("retries on 500 when retryPolicy is 'safe'", async () => {
+      fetchSpy
+        .mockResolvedValueOnce(new Response(JSON.stringify({ message: "fail" }), { status: 500 }))
+        .mockResolvedValueOnce(new Response(JSON.stringify({ data: "ok" }), { status: 200 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 2 }));
+
+      const result = await client.request<{ data: string }>({ path: "/test", retryPolicy: "safe" });
+      expect(result.data).toBe("ok");
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it("retries when retryPolicy is undefined (default behavior)", async () => {
+      fetchSpy
+        .mockResolvedValueOnce(new Response(JSON.stringify({ message: "fail" }), { status: 502 }))
+        .mockResolvedValueOnce(new Response(JSON.stringify({ data: "ok" }), { status: 200 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 2 }));
+
+      const result = await client.request<{ data: string }>({ path: "/test" });
+      expect(result.data).toBe("ok");
       expect(fetchSpy).toHaveBeenCalledTimes(2);
     });
   });

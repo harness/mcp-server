@@ -26,6 +26,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/code/api/v1/repos/{repoIdentifier}/pullreq",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { repo_id: "repoIdentifier" },
           queryParams: {
             state: "state",
@@ -39,6 +40,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: {
             repo_id: "repoIdentifier",
             pr_number: "prNumber",
@@ -49,6 +51,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/code/api/v1/repos/{repoIdentifier}/pullreq",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: { repo_id: "repoIdentifier" },
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
@@ -67,6 +70,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
         update: {
           method: "PATCH",
           path: "/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: {
             repo_id: "repoIdentifier",
             pr_number: "prNumber",
@@ -89,6 +93,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
         merge: {
           method: "POST",
           path: "/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}/merge",
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           pathParams: {
             repo_id: "repoIdentifier",
             pr_number: "prNumber",
@@ -122,6 +127,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}/reviewers",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: {
             repo_id: "repoIdentifier",
             pr_number: "prNumber",
@@ -132,6 +138,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}/reviewers",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: {
             repo_id: "repoIdentifier",
             pr_number: "prNumber",
@@ -152,6 +159,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
         submit_review: {
           method: "POST",
           path: "/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}/reviews",
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           pathParams: {
             repo_id: "repoIdentifier",
             pr_number: "prNumber",
@@ -185,6 +193,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}/comments",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: {
             repo_id: "repoIdentifier",
             pr_number: "prNumber",
@@ -208,6 +217,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
         update: {
           method: "PATCH",
           path: "/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}/comments/{pullreqCommentId}",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: {
             repo_id: "repoIdentifier",
             pr_number: "prNumber",
@@ -227,6 +237,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}/comments/{pullreqCommentId}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: {
             repo_id: "repoIdentifier",
             pr_number: "prNumber",
@@ -249,6 +260,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}/checks",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: {
             repo_id: "repoIdentifier",
             pr_number: "prNumber",
@@ -279,6 +291,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}/activities",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: {
             repo_id: "repoIdentifier",
             pr_number: "prNumber",

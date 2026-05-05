@@ -72,7 +72,8 @@ function extractFileData(buf: Buffer, entry: CentralDirEntry): Buffer {
   if (entry.compressionMethod === 0) {
     return Buffer.from(rawData);
   } else if (entry.compressionMethod === 8) {
-    return inflateRawSync(rawData);
+    const maxOutput = entry.uncompressedSize || 100 * 1024 * 1024; // 100 MB ceiling
+    return inflateRawSync(rawData, { maxOutputLength: maxOutput });
   }
   throw new Error(`Unsupported compression method: ${entry.compressionMethod}`);
 }

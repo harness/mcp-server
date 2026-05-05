@@ -94,6 +94,7 @@ export const governanceToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/pm/api/v1/policies",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search_term: "searchTerm",
             page: "page",
@@ -110,6 +111,7 @@ export const governanceToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/pm/api/v1/policies/{identifier}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { policy_id: "identifier" },
           responseExtractor: passthrough,
           description: "Get an OPA policy by identifier, including its Rego source",
@@ -117,6 +119,7 @@ export const governanceToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/pm/api/v1/policies",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
           description: "Create a new OPA policy",
@@ -125,6 +128,7 @@ export const governanceToolset: ToolsetDefinition = {
         update: {
           method: "PATCH",
           path: "/pm/api/v1/policies/{identifier}",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { policy_id: "identifier" },
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
@@ -134,6 +138,7 @@ export const governanceToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/pm/api/v1/policies/{identifier}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { policy_id: "identifier" },
           responseExtractor: passthrough,
           description: "Delete an OPA policy",
@@ -174,6 +179,7 @@ export const governanceToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/pm/api/v1/policysets",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search_term: "searchTerm",
             page: "page",
@@ -189,6 +195,7 @@ export const governanceToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/pm/api/v1/policysets/{identifier}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { policy_set_id: "identifier" },
           responseExtractor: passthrough,
           description: "Get an OPA policy set by identifier",
@@ -196,6 +203,7 @@ export const governanceToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/pm/api/v1/policysets",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
           description: "Create a new OPA policy set",
@@ -204,6 +212,7 @@ export const governanceToolset: ToolsetDefinition = {
         update: {
           method: "PATCH",
           path: "/pm/api/v1/policysets/{identifier}",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { policy_set_id: "identifier" },
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
@@ -213,6 +222,7 @@ export const governanceToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/pm/api/v1/policysets/{identifier}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { policy_set_id: "identifier" },
           responseExtractor: passthrough,
           description: "Delete an OPA policy set",
@@ -243,6 +253,7 @@ export const governanceToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/pm/api/v1/evaluations",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             page: "page",
             size: "per_page",
@@ -261,6 +272,7 @@ export const governanceToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/pm/api/v1/evaluations/{id}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { evaluation_id: "id" },
           responseExtractor: passthrough,
           description: "Get a specific policy evaluation result by ID",

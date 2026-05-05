@@ -1,5 +1,5 @@
 import type { ToolsetDefinition, BodySchema } from "../types.js";
-import { pageExtract, unwrapOrgResponse, unwrapProjectResponse, v1Unwrap } from "../extractors.js";
+import { pageExtract, projectListExtract, unwrapOrgResponse, unwrapProjectResponse, v1Unwrap } from "../extractors.js";
 import { stripNulls } from "../../utils/body-normalizer.js";
 
 // ---------------------------------------------------------------------------
@@ -166,6 +166,7 @@ export const platformToolset: ToolsetDefinition = {
           method: "GET",
           // NG: GET /ng/api/organizations?pageIndex=&pageSize=&searchTerm=&sortOrders=&pageToken=&identifiers=
           path: "/ng/api/organizations",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search_term: "searchTerm",
             page: "pageIndex",
@@ -180,6 +181,7 @@ export const platformToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/ng/api/organizations/{org}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { org_id: "org" },
           responseExtractor: unwrapOrgResponse,
           description: "Get organization details",
@@ -187,6 +189,7 @@ export const platformToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/ng/api/organizations",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: buildOrgBody,
           responseExtractor: unwrapOrgResponse,
           description: "Create a new organization",
@@ -196,6 +199,7 @@ export const platformToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/ng/api/organizations/{org}",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { org_id: "org" },
           bodyBuilder: buildOrgUpdateBody,
           responseExtractor: unwrapOrgResponse,
@@ -206,6 +210,7 @@ export const platformToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/ng/api/organizations/{org}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { org_id: "org" },
           responseExtractor: unwrapOrgResponse,
           description: "Delete an organization",
@@ -236,6 +241,7 @@ export const platformToolset: ToolsetDefinition = {
           method: "GET",
           // NG: GET /ng/api/projects?accountIdentifier=&orgIdentifier=&… (accountIdentifier injected by client)
           path: "/ng/api/projects",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             org_id: "orgIdentifier",
             has_module: "hasModule",
@@ -248,13 +254,14 @@ export const platformToolset: ToolsetDefinition = {
             sort_orders: "sortOrders",
             page_token: "pageToken",
           },
-          responseExtractor: pageExtract,
+          responseExtractor: projectListExtract,
           description: "List projects (NG /ng/api/projects)",
         },
         get: {
           method: "GET",
           // NG: GET /ng/api/projects/{projectIdentifier}?orgIdentifier=&accountIdentifier= (client injects account)
           path: "/ng/api/projects/{project}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { project_id: "project" },
           queryParams: { org_id: "orgIdentifier" },
           injectOrgQueryFallback: true,
@@ -265,6 +272,7 @@ export const platformToolset: ToolsetDefinition = {
           method: "POST",
           // NG: POST /ng/api/projects?orgIdentifier= — body { project: { orgIdentifier, identifier, name, ... } }
           path: "/ng/api/projects",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           queryParams: { org_id: "orgIdentifier" },
           injectOrgQueryFallback: true,
           bodyBuilder: buildProjectBody,
@@ -276,6 +284,7 @@ export const platformToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/ng/api/projects/{project}",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { project_id: "project" },
           queryParams: { org_id: "orgIdentifier" },
           injectOrgQueryFallback: true,
@@ -288,6 +297,7 @@ export const platformToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/ng/api/projects/{project}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { project_id: "project" },
           queryParams: { org_id: "orgIdentifier" },
           injectOrgQueryFallback: true,

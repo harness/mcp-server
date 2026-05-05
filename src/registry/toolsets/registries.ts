@@ -52,6 +52,7 @@ export const registriesToolset: ToolsetDefinition = {
           path: "/har/api/v1/spaces",
           pathBuilder: (input, config) =>
             `/har/api/v1/spaces/${harSpaceRef(input, config)}/+/registries`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search: "search_term",
             type: "type",
@@ -68,6 +69,7 @@ export const registriesToolset: ToolsetDefinition = {
           pathBuilder: (input, config) =>
             `/har/api/v1/registry/${harRegistryRef(input, config)}/+`,
           pathParams: { registry_id: "registryIdentifier" },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           description: "Get registry details",
         },
@@ -91,6 +93,7 @@ export const registriesToolset: ToolsetDefinition = {
           pathBuilder: (input, config) =>
             `/har/api/v1/registry/${harRegistryRef(input, config)}/+/artifacts`,
           pathParams: { registry_id: "registryIdentifier" },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search: "search_term",
             page: "page",
@@ -123,6 +126,7 @@ export const registriesToolset: ToolsetDefinition = {
             registry_id: "registryIdentifier",
             artifact_id: "artifactIdentifier",
           },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search: "search_term",
             page: "page",
@@ -154,6 +158,7 @@ export const registriesToolset: ToolsetDefinition = {
             artifact_id: "artifactIdentifier",
             version: "versionIdentifier",
           },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             sort_order: "sort_order",
             sort_field: "sort_field",

@@ -158,6 +158,7 @@ export const chaosToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: `${CHAOS}/rest/v2/experiment`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             page: "page",
             limit: "limit",
@@ -177,6 +178,7 @@ export const chaosToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: `${CHAOS}/rest/v2/experiments/{experimentId}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { experiment_id: "experimentId" },
           responseExtractor: passthrough,
           description: descGetExperiment,
@@ -184,6 +186,7 @@ export const chaosToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: `${CHAOS}/rest/v2/experiment/{experimentId}`,
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { experiment_id: "experimentId" },
           responseExtractor: passthrough,
           description: descDeleteExperiment,
@@ -193,6 +196,7 @@ export const chaosToolset: ToolsetDefinition = {
         run: {
           method: "POST",
           path: `${CHAOS}/rest/v2/experiments/{experimentId}/run`,
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: { experiment_id: "experimentId" },
           staticQueryParams: { isIdentity: "false" },
           bodyBuilder: (input) => {
@@ -237,6 +241,7 @@ export const chaosToolset: ToolsetDefinition = {
         stop: {
           method: "POST",
           path: `${CHAOS}/rest/v2/experiment/{experimentId}/stop`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: { experiment_id: "experimentId" },
           queryParams: {
             experiment_run_id: "experimentRunId",
@@ -272,6 +277,7 @@ export const chaosToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: `${CHAOS}/rest/v2/chaos-pipeline/{experimentId}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { experiment_id: "experimentId" },
           queryParams: { run_id: "experimentRunId", notify_id: "notifyId" },
           responseExtractor: passthrough,
@@ -304,6 +310,7 @@ export const chaosToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: `${CHAOS}/rest/v2/probes`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             page: "page",
             limit: "limit",
@@ -325,6 +332,7 @@ export const chaosToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: `${CHAOS}/rest/v2/probes/{probeId}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { probe_id: "probeId" },
           responseExtractor: passthrough,
           description: descGetProbe,
@@ -332,6 +340,7 @@ export const chaosToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: `${CHAOS}/rest/v2/probes/{probeId}`,
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { probe_id: "probeId" },
           responseExtractor: passthrough,
           description: descDeleteProbe,
@@ -341,6 +350,7 @@ export const chaosToolset: ToolsetDefinition = {
         enable: {
           method: "POST",
           path: `${CHAOS}/rest/v2/probes/{probeId}/enable`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: { probe_id: "probeId" },
           bodyBuilder: (input) => {
             const b = (input.body ?? input) as Record<string, unknown>;
@@ -362,6 +372,7 @@ export const chaosToolset: ToolsetDefinition = {
         verify: {
           method: "POST",
           path: `${CHAOS}/rest/v2/probes/{probeId}/verify`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: { probe_id: "probeId" },
           bodyBuilder: (input) => {
             const b = (input.body ?? input) as Record<string, unknown>;
@@ -379,6 +390,7 @@ export const chaosToolset: ToolsetDefinition = {
         get_manifest: {
           method: "GET",
           path: `${CHAOS}/rest/v2/probes/manifest/{probeId}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { probe_id: "probeId" },
           responseExtractor: passthrough,
           actionDescription: descGetProbeManifest,
@@ -404,6 +416,7 @@ export const chaosToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: `${CHAOS}/rest/v2/probes/experiment-run`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           bodyBuilder: (input) => {
             const body: Record<string, unknown> = {};
             if (input.experiment_run_ids) {
@@ -460,6 +473,7 @@ export const chaosToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: `${CHAOS}/rest/experimenttemplates`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             page: "page",
             limit: "limit",
@@ -480,6 +494,7 @@ export const chaosToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: `${CHAOS}/rest/experimenttemplates/{templateId}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { template_id: "templateId" },
           queryParams: {
             hub_identity: "hubIdentity",
@@ -491,6 +506,7 @@ export const chaosToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: `${CHAOS}/rest/experimenttemplates/{templateId}`,
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { template_id: "templateId" },
           queryParams: { hub_identity: "hubIdentity" },
           responseExtractor: passthrough,
@@ -501,6 +517,7 @@ export const chaosToolset: ToolsetDefinition = {
         create_from_template: {
           method: "POST",
           path: `${CHAOS}/rest/experimenttemplates/{templateId}/launch`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: { template_id: "templateId" },
           queryParams: { hub_identity: "hubIdentity", revision: "revision" },
           bodyBuilder: (input) => {
@@ -549,6 +566,7 @@ export const chaosToolset: ToolsetDefinition = {
         list_revisions: {
           method: "GET",
           path: `${CHAOS}/rest/experimenttemplates/{templateId}/revisions`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { template_id: "templateId" },
           queryParams: {
             hub_identity: "hubIdentity",
@@ -568,6 +586,7 @@ export const chaosToolset: ToolsetDefinition = {
         get_variables: {
           method: "GET",
           path: `${CHAOS}/rest/experimenttemplates/{templateId}/variables`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { template_id: "templateId" },
           queryParams: {
             hub_identity: "hubIdentity",
@@ -587,6 +606,7 @@ export const chaosToolset: ToolsetDefinition = {
         get_yaml: {
           method: "GET",
           path: `${CHAOS}/rest/experimenttemplates/{templateId}/yaml`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { template_id: "templateId" },
           queryParams: {
             hub_identity: "hubIdentity",
@@ -606,6 +626,7 @@ export const chaosToolset: ToolsetDefinition = {
         compare_revisions: {
           method: "GET",
           path: `${CHAOS}/rest/experimenttemplates/{templateId}/compare`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { template_id: "templateId" },
           queryParams: {
             hub_identity: "hubIdentity",
@@ -644,6 +665,7 @@ export const chaosToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: `${CHAOS}/rest/v2/experiments/{experimentId}/variables`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { experiment_id: "experimentId" },
           staticQueryParams: { isIdentity: "false" },
           responseExtractor: passthrough,
@@ -673,6 +695,7 @@ export const chaosToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: `${CHAOS}/rest/v2/experiments/{experimentId}/inputsets`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { experiment_id: "experimentId" },
           queryParams: { page: "page", limit: "limit", size: "limit", is_identity: "isIdentity" },
           defaultQueryParams: { isIdentity: "false" },
@@ -682,6 +705,7 @@ export const chaosToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: `${CHAOS}/rest/v2/experiments/{experimentId}/inputsets/{inputsetId}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { experiment_id: "experimentId", inputset_id: "inputsetId" },
           queryParams: { is_identity: "isIdentity" },
           defaultQueryParams: { isIdentity: "false" },
@@ -691,6 +715,7 @@ export const chaosToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: `${CHAOS}/rest/v2/experiments/{experimentId}/inputsets`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: { experiment_id: "experimentId" },
           queryParams: { is_identity: "isIdentity" },
           defaultQueryParams: { isIdentity: "false" },
@@ -718,6 +743,7 @@ export const chaosToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: `${CHAOS}/rest/v2/experiments/{experimentId}/inputsets/{inputsetId}`,
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { experiment_id: "experimentId", inputset_id: "inputsetId" },
           queryParams: { is_identity: "isIdentity" },
           defaultQueryParams: { isIdentity: "false" },
@@ -743,6 +769,7 @@ export const chaosToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: `${CHAOS}/rest/v2/experiments/{experimentId}/inputsets/{inputsetId}`,
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { experiment_id: "experimentId", inputset_id: "inputsetId" },
           queryParams: { is_identity: "isIdentity" },
           defaultQueryParams: { isIdentity: "false" },
@@ -768,6 +795,7 @@ export const chaosToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: `${CHAOS}/rest/machine/infras`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           staticQueryParams: { infraType: "Linux" },
           queryParams: {
             page: "page",
@@ -810,6 +838,7 @@ export const chaosToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: `${CHAOS_LOADTEST}/v1/load-tests`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             page: "page",
             limit: "limit",
@@ -820,6 +849,7 @@ export const chaosToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: `${CHAOS_LOADTEST}/v1/load-tests/{loadtestId}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { loadtest_id: "loadtestId" },
           responseExtractor: passthrough,
           description: descGetLoadtest,
@@ -827,6 +857,7 @@ export const chaosToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: `${CHAOS_LOADTEST}/v1/load-tests`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => input.body ?? {},
           responseExtractor: passthrough,
           description: descCreateLoadtest,
@@ -841,6 +872,7 @@ export const chaosToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: `${CHAOS_LOADTEST}/v1/load-tests/{loadtestId}`,
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { loadtest_id: "loadtestId" },
           responseExtractor: passthrough,
           description: descDeleteLoadtest,
@@ -850,6 +882,7 @@ export const chaosToolset: ToolsetDefinition = {
         run: {
           method: "POST",
           path: `${CHAOS_LOADTEST}/v1/load-tests/{loadtestId}/runs`,
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: { loadtest_id: "loadtestId" },
           bodyBuilder: () => ({}),
           responseExtractor: passthrough,
@@ -859,6 +892,7 @@ export const chaosToolset: ToolsetDefinition = {
         stop: {
           method: "POST",
           path: `${CHAOS_LOADTEST}/v1/runs/{runId}/stop`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: { run_id: "runId" },
           bodyBuilder: () => ({}),
           responseExtractor: passthrough,
@@ -889,6 +923,7 @@ export const chaosToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: `${CHAOS}/rest/v2/infrastructures`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             page: "page",
             limit: "limit",
@@ -914,6 +949,7 @@ export const chaosToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: `${CHAOS}/rest/kubernetes/infra/{infraId}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { infra_id: "infraId" },
           responseExtractor: passthrough,
           description: descGetK8sInfra,
@@ -923,6 +959,7 @@ export const chaosToolset: ToolsetDefinition = {
         check_health: {
           method: "GET",
           path: `${CHAOS}/rest/kubernetes/infra/{infraId}/health`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { infra_id: "infraId" },
           responseExtractor: passthrough,
           actionDescription: descCheckK8sHealth,
@@ -948,6 +985,7 @@ export const chaosToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: `${CHAOS}/rest/hubs`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             page: "page",
             limit: "limit",
@@ -963,6 +1001,7 @@ export const chaosToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: `${CHAOS}/rest/hubs/{hubId}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { hub_id: "hubId" },
           responseExtractor: passthrough,
           description: descGetHub,
@@ -970,6 +1009,7 @@ export const chaosToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: `${CHAOS}/rest/hubs`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => {
             const b = (input.body ?? input) as Record<string, unknown>;
             return {
@@ -1000,6 +1040,7 @@ export const chaosToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: `${CHAOS}/rest/hubs/{hubId}`,
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { hub_id: "hubId" },
           bodyBuilder: (input) => {
             const b = (input.body ?? input) as Record<string, unknown>;
@@ -1023,6 +1064,7 @@ export const chaosToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: `${CHAOS}/rest/hubs/{hubId}`,
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { hub_id: "hubId" },
           responseExtractor: passthrough,
           description: descDeleteHub,
@@ -1046,6 +1088,7 @@ export const chaosToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: `${CHAOS}/rest/faults`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             page: "page",
             limit: "limit",
@@ -1060,6 +1103,7 @@ export const chaosToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: `${CHAOS}/rest/faults/{faultId}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { fault_id: "faultId" },
           queryParams: {
             is_enterprise: "isEnterprise",
@@ -1070,6 +1114,7 @@ export const chaosToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: `${CHAOS}/rest/faults/{faultId}`,
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { fault_id: "faultId" },
           responseExtractor: passthrough,
           description: descDeleteFault,
@@ -1079,6 +1124,7 @@ export const chaosToolset: ToolsetDefinition = {
         get_variables: {
           method: "GET",
           path: `${CHAOS}/rest/faults/{faultId}/variables`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { fault_id: "faultId" },
           queryParams: {
             is_enterprise: "isEnterprise",
@@ -1096,6 +1142,7 @@ export const chaosToolset: ToolsetDefinition = {
         get_yaml: {
           method: "GET",
           path: `${CHAOS}/rest/faults/{faultId}/yaml`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { fault_id: "faultId" },
           queryParams: {
             is_enterprise: "isEnterprise",
@@ -1133,6 +1180,7 @@ export const chaosToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: `${CHAOS}/rest/faults/{faultId}/experimentruns`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { fault_id: "faultId" },
           queryParams: {
             page: "page",
@@ -1173,6 +1221,7 @@ export const chaosToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: `${CHAOS}/rest/faulttemplates`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           // Backend limitations:
           // - is_enterprise: accepted but never used in List() query filter
           // - sort_field/sort_ascending: accepted but $sort stage missing from aggregation pipeline
@@ -1202,6 +1251,7 @@ export const chaosToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: `${CHAOS}/rest/faulttemplates/{templateIdentity}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { template_identity: "templateIdentity" },
           queryParams: {
             hub_identity: "hubIdentity",
@@ -1213,6 +1263,7 @@ export const chaosToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: `${CHAOS}/rest/faulttemplates/{templateIdentity}`,
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { template_identity: "templateIdentity" },
           queryParams: { hub_identity: "hubIdentity" },
           responseExtractor: passthrough,
@@ -1223,6 +1274,7 @@ export const chaosToolset: ToolsetDefinition = {
         list_revisions: {
           method: "GET",
           path: `${CHAOS}/rest/faulttemplates/{templateIdentity}/revisions`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { template_identity: "templateIdentity" },
           queryParams: {
             hub_identity: "hubIdentity",
@@ -1242,6 +1294,7 @@ export const chaosToolset: ToolsetDefinition = {
         get_variables: {
           method: "GET",
           path: `${CHAOS}/rest/faulttemplates/{templateIdentity}/variables`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { template_identity: "templateIdentity" },
           queryParams: {
             hub_identity: "hubIdentity",
@@ -1261,6 +1314,7 @@ export const chaosToolset: ToolsetDefinition = {
         get_yaml: {
           method: "GET",
           path: `${CHAOS}/rest/faulttemplates/{templateIdentity}/yaml`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { template_identity: "templateIdentity" },
           queryParams: {
             hub_identity: "hubIdentity",
@@ -1280,6 +1334,7 @@ export const chaosToolset: ToolsetDefinition = {
         compare_revisions: {
           method: "GET",
           path: `${CHAOS}/rest/faulttemplates/{templateIdentity}/compare`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { template_identity: "templateIdentity" },
           queryParams: {
             hub_identity: "hubIdentity",
@@ -1321,6 +1376,7 @@ export const chaosToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: `${CHAOS}/rest/templates/probes`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             page: "page",
             limit: "limit",
@@ -1338,6 +1394,7 @@ export const chaosToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: `${CHAOS}/rest/templates/probes/{templateIdentity}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { template_identity: "templateIdentity" },
           queryParams: {
             hub_identity: "hubIdentity",
@@ -1349,6 +1406,7 @@ export const chaosToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: `${CHAOS}/rest/templates/probes/{templateIdentity}`,
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { template_identity: "templateIdentity" },
           queryParams: {
             hub_identity: "hubIdentity",
@@ -1362,6 +1420,7 @@ export const chaosToolset: ToolsetDefinition = {
         get_variables: {
           method: "GET",
           path: `${CHAOS}/rest/templates/probes/{templateIdentity}/variables`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { template_identity: "templateIdentity" },
           queryParams: {
             hub_identity: "hubIdentity",
@@ -1401,6 +1460,7 @@ export const chaosToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: `${CHAOS}/rest/templates/actions`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             page: "page",
             limit: "limit",
@@ -1418,6 +1478,7 @@ export const chaosToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: `${CHAOS}/rest/templates/actions/{templateIdentity}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { template_identity: "templateIdentity" },
           queryParams: {
             hub_identity: "hubIdentity",
@@ -1429,6 +1490,7 @@ export const chaosToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: `${CHAOS}/rest/templates/actions/{templateIdentity}`,
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { template_identity: "templateIdentity" },
           queryParams: {
             hub_identity: "hubIdentity",
@@ -1442,6 +1504,7 @@ export const chaosToolset: ToolsetDefinition = {
         list_revisions: {
           method: "GET",
           path: `${CHAOS}/rest/templates/actions/{templateIdentity}/revisions`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { template_identity: "templateIdentity" },
           queryParams: {
             hub_identity: "hubIdentity",
@@ -1466,6 +1529,7 @@ export const chaosToolset: ToolsetDefinition = {
         get_variables: {
           method: "GET",
           path: `${CHAOS}/rest/templates/actions/{templateIdentity}/variables`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { template_identity: "templateIdentity" },
           queryParams: {
             hub_identity: "hubIdentity",
@@ -1485,6 +1549,7 @@ export const chaosToolset: ToolsetDefinition = {
         compare_revisions: {
           method: "GET",
           path: `${CHAOS}/rest/templates/actions/{templateIdentity}/compare`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { template_identity: "templateIdentity" },
           queryParams: {
             hub_identity: "hubIdentity",
@@ -1526,6 +1591,7 @@ export const chaosToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: `${CHAOS}/rest/actions`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             page: "page",
             limit: "limit",
@@ -1542,6 +1608,7 @@ export const chaosToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: `${CHAOS}/rest/actions/{actionId}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { action_id: "actionId" },
           responseExtractor: passthrough,
           description: descGetAction,
@@ -1549,6 +1616,7 @@ export const chaosToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: `${CHAOS}/rest/actions/{actionId}`,
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { action_id: "actionId" },
           responseExtractor: passthrough,
           description: descDeleteAction,
@@ -1558,6 +1626,7 @@ export const chaosToolset: ToolsetDefinition = {
         get_manifest: {
           method: "GET",
           path: `${CHAOS}/rest/actions/manifest/{actionId}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { action_id: "actionId" },
           responseExtractor: passthrough,
           actionDescription: descGetActionManifest,
@@ -1593,6 +1662,7 @@ export const chaosToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: `${CHAOS}/rest/hubs/faults`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             page: "page",
             limit: "limit",
@@ -1628,6 +1698,7 @@ export const chaosToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: `/ng/api/environmentsV2/listV2`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             page: "page",
             size: "size",
@@ -1664,6 +1735,7 @@ export const chaosToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: `${CHAOS}/rest/v2/applicationmaps`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             page: "page",
             limit: "limit",
@@ -1674,6 +1746,7 @@ export const chaosToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: `${CHAOS}/rest/v2/applicationmaps/{mapId}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { map_id: "mapId" },
           responseExtractor: passthrough,
           description: descGetNetworkMap,
@@ -1701,6 +1774,7 @@ export const chaosToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: `${CHAOS}/v3/chaosguard-conditions`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             page: "page",
             limit: "limit",
@@ -1716,6 +1790,7 @@ export const chaosToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: `${CHAOS}/v3/chaosguard-conditions/{conditionId}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { condition_id: "conditionId" },
           responseExtractor: passthrough,
           description: descGetGuardCondition,
@@ -1723,6 +1798,7 @@ export const chaosToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: `${CHAOS}/v3/chaosguard-conditions/{conditionId}`,
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { condition_id: "conditionId" },
           responseExtractor: passthrough,
           description: descDeleteGuardCondition,
@@ -1750,6 +1826,7 @@ export const chaosToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: `${CHAOS}/v3/chaosguard-rules`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             page: "page",
             limit: "limit",
@@ -1765,6 +1842,7 @@ export const chaosToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: `${CHAOS}/v3/chaosguard-rules/{ruleId}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { rule_id: "ruleId" },
           responseExtractor: passthrough,
           description: descGetGuardRule,
@@ -1772,6 +1850,7 @@ export const chaosToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: `${CHAOS}/v3/chaosguard-rules/{ruleId}`,
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { rule_id: "ruleId" },
           responseExtractor: passthrough,
           description: descDeleteGuardRule,
@@ -1781,6 +1860,7 @@ export const chaosToolset: ToolsetDefinition = {
         enable: {
           method: "PUT",
           path: `${CHAOS}/v3/chaosguard-rules/{ruleId}/enable`,
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { rule_id: "ruleId" },
           queryParams: { enabled: "enabled" },
           bodyBuilder: () => ({}),
@@ -1810,6 +1890,7 @@ export const chaosToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: `${CHAOS}/rest/recommendations`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             page: "page",
             limit: "limit",
@@ -1820,6 +1901,7 @@ export const chaosToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: `${CHAOS}/rest/recommendations/{recommendationId}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { recommendation_id: "recommendationId" },
           responseExtractor: passthrough,
           description: descGetRecommendation,
@@ -1840,6 +1922,7 @@ export const chaosToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: `${CHAOS}/rest/v2/risks`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             page: "page",
             limit: "limit",
@@ -1850,6 +1933,7 @@ export const chaosToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: `${CHAOS}/rest/v2/risks/{riskId}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { risk_id: "riskId" },
           responseExtractor: passthrough,
           description: descGetRisk,
@@ -1906,6 +1990,7 @@ export const chaosToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: `${CHAOS}/v3/dr-tests`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             page: "page",
             limit: "limit",
@@ -1923,6 +2008,7 @@ export const chaosToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: `${CHAOS}/v3/dr-tests`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => {
             const b = (input.body ?? input) as Record<string, unknown>;
             return {

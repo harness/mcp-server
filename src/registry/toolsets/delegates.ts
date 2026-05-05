@@ -32,6 +32,7 @@ export const delegatesToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: "/ng/api/delegate-setup/listDelegates",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: { all: "all" },
           bodyBuilder: (input) => ({
             filterType: "Delegate",
@@ -66,6 +67,7 @@ export const delegatesToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/ng/api/delegate-token-ng",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             name: "name",
             status: "status",
@@ -76,6 +78,7 @@ export const delegatesToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/ng/api/delegate-token-ng/{tokenName}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { token_name: "tokenName" },
           responseExtractor: ngExtract,
           description: "Get delegate token details",
@@ -83,6 +86,7 @@ export const delegatesToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/ng/api/delegate-token-ng",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => ({
             name: input.token_name ?? input.name,
           }),
@@ -98,6 +102,7 @@ export const delegatesToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/ng/api/delegate-token-ng/{tokenName}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { token_name: "tokenName" },
           responseExtractor: ngExtract,
           description: "Delete a delegate token",
@@ -107,6 +112,7 @@ export const delegatesToolset: ToolsetDefinition = {
         revoke: {
           method: "PUT",
           path: "/ng/api/delegate-token-ng/{tokenName}",
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: { token_name: "tokenName" },
           queryParams: { status: "status" },
           bodyBuilder: () => undefined,
@@ -117,6 +123,7 @@ export const delegatesToolset: ToolsetDefinition = {
         get_delegates: {
           method: "GET",
           path: "/ng/api/delegate-token-ng/{tokenName}/delegates",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { token_name: "tokenName" },
           bodySchema: { description: "No body required. Returns delegates for the token.", fields: [] },
           responseExtractor: ngExtract,

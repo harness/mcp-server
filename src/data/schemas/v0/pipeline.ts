@@ -11812,6 +11812,220 @@ const schema: Record<string, any> = {
             ],
             "$schema": "https://json-schema.org/draft/2019-09/schema"
           },
+          "FmeMetricCheckStepNode": {
+            "title": "FmeMetricCheckStepNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "spec",
+              "type"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for FmeMetricCheckStepNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "FmeMetricCheck"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "FmeMetricCheck"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/custom/FmeMetricCheckStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "FmeMetricCheckStepInfo": {
+            "title": "FmeMetricCheckStepInfo",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/StepSpecType"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "flagName",
+                  "environment",
+                  "lookbackWindow",
+                  "failureCriteria"
+                ],
+                "properties": {
+                  "flagName": {
+                    "description": "Feature flag name. Maps to testId in Tinybird queries.",
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/fme-flag-common-flag-name"
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                      }
+                    ]
+                  },
+                  "environment": {
+                    "description": "FME Environment ID",
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/fme-flag-common-environment"
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                      }
+                    ]
+                  },
+                  "metrics": {
+                    "description": "One or more metrics to evaluate",
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "ref"
+                          ],
+                          "properties": {
+                            "ref": {
+                              "description": "Webadmin metric ID",
+                              "oneOf": [
+                                {
+                                  "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                                },
+                                {
+                                  "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        "minItems": 1
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                      }
+                    ]
+                  },
+                  "lookbackWindow": {
+                    "description": "Time window from now (e.g. 7d, 24h)",
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                      }
+                    ]
+                  },
+                  "failureCriteria": {
+                    "description": "Criteria to determine step failure. When condition evaluates to true, the step fails.",
+                    "type": "object",
+                    "required": [
+                      "type",
+                      "spec"
+                    ],
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "Jexl"
+                        ]
+                      },
+                      "spec": {
+                        "type": "object",
+                        "required": [
+                          "condition"
+                        ],
+                        "properties": {
+                          "condition": {
+                            "description": "JEXL condition expression. Evaluates to true = FAIL, false = PASS.",
+                            "oneOf": [
+                              {
+                                "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                              },
+                              {
+                                "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
           "VmInfraSpec": {
             "title": "VmInfraSpec",
             "type": "object",
@@ -13107,6 +13321,249 @@ const schema: Record<string, any> = {
               }
             },
             "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "AgentStepNode": {
+            "title": "AgentStepNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "spec",
+              "type"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for AgentStepNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Agent"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "Agent"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/common/AgentStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "AgentStepInfo": {
+            "title": "AgentStepInfo",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/StepSpecType"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "agentName"
+                ],
+                "properties": {
+                  "agentName": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                      }
+                    ]
+                  },
+                  "agentSettings": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "not": {
+                          "pattern": "^<\\+.*>.*$"
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": true
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^(<\\+.+>.*)$",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "llmConnector": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "mcpConnectors": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "properties": {
+              "agentName": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "agentSettings": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "not": {
+                      "pattern": "^<\\+.*>.*$"
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^(<\\+.+>.*)$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "llmConnector": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "mcpConnectors": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "description": {
+                "desc": "This is the description for AgentStepInfo"
+              }
+            }
+          },
+          "string-without-jexl": {
+            "title": "string-without-jexl",
+            "description": "A plain string type that explicitly excludes JEXL expressions (e.g., <+input>, <+variable>).\n\nThis is used in oneOf schemas alongside common-jexl to prevent validation conflicts.\nWithout the 'not' constraint, both schemas would match JEXL expressions since both are \ntype: string, causing oneOf validation to fail (oneOf requires exactly one match).\n\nThe 'not' pattern ensures mutual exclusivity:\n- This schema matches: plain strings that don't start with <+\n- common-jexl matches: JEXL expressions like <+input>, <+variable>, etc.\n\nUse this when you need a field that accepts either a literal string OR a JEXL expression.\n",
+            "type": "string",
+            "not": {
+              "pattern": "^<\\+.*>.*$"
+            }
+          },
+          "common-jexl": {
+            "title": "common-jexl",
+            "type": "string",
+            "pattern": "(<\\+.+>.*)"
           },
           "WizScanNode": {
             "title": "WizScanNode",
@@ -28124,19 +28581,6 @@ const schema: Record<string, any> = {
               }
             ]
           },
-          "string-without-jexl": {
-            "title": "string-without-jexl",
-            "description": "A plain string type that explicitly excludes JEXL expressions (e.g., <+input>, <+variable>).\n\nThis is used in oneOf schemas alongside common-jexl to prevent validation conflicts.\nWithout the 'not' constraint, both schemas would match JEXL expressions since both are \ntype: string, causing oneOf validation to fail (oneOf requires exactly one match).\n\nThe 'not' pattern ensures mutual exclusivity:\n- This schema matches: plain strings that don't start with <+\n- common-jexl matches: JEXL expressions like <+input>, <+variable>, etc.\n\nUse this when you need a field that accepts either a literal string OR a JEXL expression.\n",
-            "type": "string",
-            "not": {
-              "pattern": "^<\\+.*>.*$"
-            }
-          },
-          "common-jexl": {
-            "title": "common-jexl",
-            "type": "string",
-            "pattern": "(<\\+.+>.*)"
-          },
           "CIVolume": {
             "title": "CIVolume",
             "type": "object",
@@ -35735,236 +36179,6 @@ const schema: Record<string, any> = {
               }
             ],
             "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "AgentStepNode": {
-            "title": "AgentStepNode",
-            "type": "object",
-            "required": [
-              "identifier",
-              "name",
-              "spec",
-              "type"
-            ],
-            "properties": {
-              "description": {
-                "type": "string",
-                "desc": "This is the description for AgentStepNode"
-              },
-              "enforce": {
-                "$ref": "#/definitions/pipeline/common/PolicyConfig"
-              },
-              "failureStrategies": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "identifier": {
-                "type": "string",
-                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
-              },
-              "name": {
-                "type": "string",
-                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
-              },
-              "strategy": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "timeout": {
-                "type": "string",
-                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "Agent"
-                ]
-              },
-              "when": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "allOf": [
-              {
-                "if": {
-                  "properties": {
-                    "type": {
-                      "const": "Agent"
-                    }
-                  }
-                },
-                "then": {
-                  "properties": {
-                    "spec": {
-                      "$ref": "#/definitions/pipeline/steps/common/AgentStepInfo"
-                    }
-                  }
-                }
-              }
-            ]
-          },
-          "AgentStepInfo": {
-            "title": "AgentStepInfo",
-            "allOf": [
-              {
-                "$ref": "#/definitions/pipeline/common/StepSpecType"
-              },
-              {
-                "type": "object",
-                "required": [
-                  "agentName"
-                ],
-                "properties": {
-                  "agentName": {
-                    "oneOf": [
-                      {
-                        "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
-                      },
-                      {
-                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                      }
-                    ]
-                  },
-                  "agentSettings": {
-                    "oneOf": [
-                      {
-                        "type": "string",
-                        "not": {
-                          "pattern": "^<\\+.*>.*$"
-                        }
-                      },
-                      {
-                        "type": "object",
-                        "additionalProperties": true
-                      },
-                      {
-                        "type": "string",
-                        "pattern": "^(<\\+.+>.*)$",
-                        "minLength": 1
-                      }
-                    ]
-                  },
-                  "llmConnector": {
-                    "oneOf": [
-                      {
-                        "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
-                      },
-                      {
-                        "type": "string",
-                        "pattern": "(<\\+.+>.*)",
-                        "minLength": 1
-                      }
-                    ]
-                  },
-                  "mcpConnectors": {
-                    "oneOf": [
-                      {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      },
-                      {
-                        "type": "string",
-                        "pattern": "(<\\+.+>.*)",
-                        "minLength": 1
-                      }
-                    ]
-                  }
-                }
-              }
-            ],
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "type": "object",
-            "properties": {
-              "agentName": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                  }
-                ]
-              },
-              "agentSettings": {
-                "oneOf": [
-                  {
-                    "type": "string",
-                    "not": {
-                      "pattern": "^<\\+.*>.*$"
-                    }
-                  },
-                  {
-                    "type": "object",
-                    "additionalProperties": true
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^(<\\+.+>.*)$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "llmConnector": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "(<\\+.+>.*)",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "mcpConnectors": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "(<\\+.+>.*)",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "description": {
-                "desc": "This is the description for AgentStepInfo"
-              }
-            }
           },
           "fme-flag-common-flag-name": {
             "title": "fme-flag-common-flag-name",
@@ -99798,6 +100012,9 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/common/ActionStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/common/AgentStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/iacm/IACMTerraformPluginStepNode"
                   },
                   {
@@ -101572,6 +101789,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/custom/FmeFlagDefinitionInstructionsStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeMetricCheckStepNode"
                   }
                 ]
               },
@@ -110033,6 +110253,9 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/common/ActionStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/common/AgentStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/common/AnchoreScanNode"
                   },
                   {
@@ -112640,6 +112863,9 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/custom/FmeFlagDefinitionInstructionsStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeMetricCheckStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/cd/GCEProvisionBackendServiceStepNode"
                   },
                   {
@@ -113135,6 +113361,18 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/resiliencetesting/ChaosStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/resiliencetesting/LoadTestStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/resiliencetesting/ChaosProbeNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/resiliencetesting/ChaosActionNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/resiliencetesting/ChaosFaultNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/cd/TerragruntPlanStepNode"
                   },
                   {
@@ -113466,6 +113704,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/custom/FmeFlagDefinitionInstructionsStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeMetricCheckStepNode"
                   }
                 ]
               },
@@ -113991,6 +114232,9 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/common/PluginStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/common/AgentStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/idp/IDPCookieCutterStepNode"
                   },
                   {
@@ -114295,6 +114539,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/drtest/DRTestSlackNotifyStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/resiliencetesting/ChaosStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/resiliencetesting/ChaosProbeNode"

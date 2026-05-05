@@ -43,6 +43,7 @@ export const stoToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/sto/api/v2/frontend/all-issues/issues",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search: "search",
             severity_codes: "severityCodes",
@@ -75,6 +76,7 @@ export const stoToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/sto/api/v2/frontend/all-issues/filters",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             page: "page",
             size: "pageSize",
@@ -103,6 +105,7 @@ export const stoToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: "/sto/api/v2/frontend/exemptions",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             status: "status",
             search: "search",
@@ -118,9 +121,10 @@ export const stoToolset: ToolsetDefinition = {
         approve: {
           method: "PUT",
           path: "/sto/api/v2/exemptions/{exemptionId}/approve",
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: { exemption_id: "exemptionId" },
           preflight: async ({ client, input }) => {
-            const harnessClient = client as HarnessClient;
+            const harnessClient = client as unknown as HarnessClient;
             const body = ((input.body as Record<string, unknown> | undefined) ?? {});
             if (!body.approver_id) {
               body.approver_id = await harnessClient.getCurrentUserId();
@@ -147,9 +151,10 @@ export const stoToolset: ToolsetDefinition = {
         reject: {
           method: "PUT",
           path: "/sto/api/v2/exemptions/{exemptionId}/reject",
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: { exemption_id: "exemptionId" },
           preflight: async ({ client, input }) => {
-            const harnessClient = client as HarnessClient;
+            const harnessClient = client as unknown as HarnessClient;
             const body = ((input.body as Record<string, unknown> | undefined) ?? {});
             if (!body.approver_id) {
               body.approver_id = await harnessClient.getCurrentUserId();
@@ -176,9 +181,10 @@ export const stoToolset: ToolsetDefinition = {
         promote: {
           method: "PUT",
           path: "/sto/api/v2/exemptions/{exemptionId}/promote",
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: { exemption_id: "exemptionId" },
           preflight: async ({ client, input }) => {
-            const harnessClient = client as HarnessClient;
+            const harnessClient = client as unknown as HarnessClient;
             const body = ((input.body as Record<string, unknown> | undefined) ?? {});
             if (!body.approver_id) {
               body.approver_id = await harnessClient.getCurrentUserId();

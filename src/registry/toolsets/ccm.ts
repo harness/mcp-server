@@ -482,6 +482,7 @@ export const ccmToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/ccm/api/perspective/getAllPerspectives",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search_term: "searchKey",
             sort_type: "sortType",
@@ -499,6 +500,7 @@ export const ccmToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/ccm/api/perspective",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: { perspective_id: "perspectiveId" },
           responseExtractor: ngExtract,
           description: "Get cost perspective details by ID",
@@ -507,6 +509,7 @@ export const ccmToolset: ToolsetDefinition = {
           method: "POST",
           path: "/ccm/api/perspective",
           preflight: perspectiveCreatePreflight,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => input.body,
           bodySchema: {
             description: "Cost perspective definition. viewPreferences defaults are auto-fetched from account settings and merged — agent-provided values override.",
@@ -534,6 +537,7 @@ export const ccmToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/ccm/api/perspective",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           bodyBuilder: (input) => input.body,
           bodySchema: {
             description: "Cost perspective update. Fetch the existing perspective via harness_get first, modify the fields, and send the full object back. No preflight defaults — only explicitly provided fields are sent.",
@@ -561,8 +565,9 @@ export const ccmToolset: ToolsetDefinition = {
         },
         delete: {
           method: "DELETE",
-          path: "/ccm/api/perspective",
-          queryParams: { perspective_id: "perspectiveId" },
+          path: "/ccm/api/perspective/{perspectiveId}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          pathParams: { perspective_id: "perspectiveId" },
           responseExtractor: ngExtract,
           description: "Delete a cost perspective",
         },
@@ -571,6 +576,7 @@ export const ccmToolset: ToolsetDefinition = {
         clone: {
           method: "POST",
           path: "/ccm/api/perspective/clone/{perspectiveId}",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: { perspective_id: "perspectiveId" },
           queryParams: { clone_name: "cloneName", destination_folder_id: "destinationFolderId" },
           responseExtractor: ngExtract,
@@ -597,6 +603,7 @@ export const ccmToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/ccm/api/perspectiveFolders",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: { folder_name_pattern: "folderNamePattern" },
           responseExtractor: ngExtract,
           description: "List all perspective folders for the account",
@@ -604,6 +611,7 @@ export const ccmToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/ccm/api/perspectiveFolders/{folderId}/perspectives",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { folder_id: "folderId" },
           responseExtractor: ngExtract,
           description: "Get all perspectives in a specific folder",
@@ -611,6 +619,7 @@ export const ccmToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/ccm/api/perspectiveFolders/create",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => input.body,
           bodySchema: {
             description: "Folder creation payload",
@@ -626,6 +635,7 @@ export const ccmToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/ccm/api/perspectiveFolders",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => input.body,
           bodySchema: {
             description: "Folder update payload (full CEViewFolder object)",
@@ -643,6 +653,7 @@ export const ccmToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/ccm/api/perspectiveFolders/{folderId}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { folder_id: "folderId" },
           responseExtractor: ngExtract,
           description: "Delete a perspective folder",
@@ -652,6 +663,7 @@ export const ccmToolset: ToolsetDefinition = {
         move_perspectives: {
           method: "POST",
           path: "/ccm/api/perspectiveFolders/movePerspectives",
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => input.body,
           bodySchema: {
             description: "Move perspectives between folders",
@@ -692,6 +704,7 @@ Optional: group_by (predefined: ${VALID_GROUP_BY_FIELDS.join(", ")}, OR any labe
         list: {
           method: "POST",
           path: "/ccm/api/graphql",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           bodyBuilder: (input) => ({
             query: PERSPECTIVE_GRID_QUERY,
             operationName: "FetchperspectiveGrid",
@@ -741,6 +754,7 @@ Optional: time_filter (${VALID_TIME_FILTERS.join(", ")}), time_resolution (DAY, 
         list: {
           method: "POST",
           path: "/ccm/api/graphql",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           bodyBuilder: (input) => {
             const timeResolution = (input.time_resolution as string) ?? "DAY";
             const entityGroupBy = buildGroupBy(input.group_by as string | undefined);
@@ -793,6 +807,7 @@ Use with no perspective_id to get CCM metadata (available connectors, default pe
         list: {
           method: "POST",
           path: "/ccm/api/graphql",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           bodyBuilder: (input) => {
             const perspectiveId = input.perspective_id as string | undefined;
 
@@ -827,6 +842,7 @@ Use with no perspective_id to get CCM metadata (available connectors, default pe
         get: {
           method: "POST",
           path: "/ccm/api/graphql",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           bodyBuilder: (input) => ({
             query: PERSPECTIVE_BUDGET_QUERY,
             operationName: "FetchPerspectiveBudget",
@@ -869,6 +885,7 @@ Replaces the 5 separate resource-type tools from the official server (EC2, Azure
         list: {
           method: "POST",
           path: "/ccm/api/recommendation/overview/list",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           bodyBuilder: (input) => ({
             filterType: "CCMRecommendation",
             minSaving: (input.min_saving as number) ?? 0,
@@ -883,6 +900,7 @@ Replaces the 5 separate resource-type tools from the official server (EC2, Azure
         get: {
           method: "POST",
           path: "/ccm/api/graphql",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           bodyBuilder: (input) => ({
             query: PERSPECTIVE_RECOMMENDATIONS_QUERY,
             operationName: "PerspectiveRecommendations",
@@ -907,6 +925,7 @@ Replaces the 5 separate resource-type tools from the official server (EC2, Azure
         update_state: {
           method: "POST",
           path: "/ccm/api/recommendation/overview/change-state",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           queryParams: {
             recommendation_id: "recommendationId",
             state: "state",
@@ -919,6 +938,7 @@ Replaces the 5 separate resource-type tools from the official server (EC2, Azure
         override_savings: {
           method: "PUT",
           path: "/ccm/api/recommendation/overview/override-savings",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           queryParams: {
             recommendation_id: "recommendationId",
             overridden_savings: "overriddenSavings",
@@ -931,6 +951,7 @@ Replaces the 5 separate resource-type tools from the official server (EC2, Azure
         create_jira_ticket: {
           method: "POST",
           path: "/ccm/api/recommendation/jira/create",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => ({
             recommendationId: input.recommendation_id,
             ...(typeof input.body === "object" && input.body !== null ? input.body as Record<string, unknown> : {}),
@@ -951,6 +972,7 @@ Replaces the 5 separate resource-type tools from the official server (EC2, Azure
         create_snow_ticket: {
           method: "POST",
           path: "/ccm/api/recommendation/servicenow/create",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => ({
             recommendationId: input.recommendation_id,
             ...(typeof input.body === "object" && input.body !== null ? input.body as Record<string, unknown> : {}),
@@ -999,6 +1021,7 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
         list: {
           method: "POST",
           path: "/ccm/api/anomaly",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             perspective_id: "perspectiveId",
           },
@@ -1033,6 +1056,7 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
           description: "Report feedback on a cost anomaly",
           method: "PUT",
           path: "/ccm/api/anomaly/feedback",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           queryParams: {
             anomaly_id: "anomalyId",
             feedback: "feedback",
@@ -1066,6 +1090,7 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
         get: {
           method: "POST",
           path: "/ccm/api/anomaly/v2/summary",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           bodyBuilder: (input) => {
             const filters: Record<string, unknown> = {
               filterType: "Anomaly",
@@ -1100,6 +1125,7 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
         list: {
           method: "GET",
           path: "/ccm/api/business-mapping",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search: "searchKey",
             sort_type: "sortType",
@@ -1113,6 +1139,7 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
         get: {
           method: "GET",
           path: "/ccm/api/business-mapping/{costCategoryId}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { category_id: "costCategoryId" },
           responseExtractor: ngExtract,
           description: "Get cost category details by ID",
@@ -1120,6 +1147,7 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
         create: {
           method: "POST",
           path: "/ccm/api/business-mapping",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           injectAccountInBody: "accountId",
           bodyBuilder: (input) => input.body,
           bodySchema: {
@@ -1152,6 +1180,7 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
         update: {
           method: "PUT",
           path: "/ccm/api/business-mapping",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           injectAccountInBody: "accountId",
           bodyBuilder: (input) => input.body,
           bodySchema: {
@@ -1185,6 +1214,7 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
         delete: {
           method: "DELETE",
           path: "/ccm/api/business-mapping/{costCategoryId}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { category_id: "costCategoryId" },
           responseExtractor: ngExtract,
           description: "Delete a cost category",
@@ -1225,6 +1255,7 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
             if (!input.group_by) input.group_by = "DAY";
             return "/ccm/api/overview";
           },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             start_time: "startTime",
             end_time: "endTime",
@@ -1263,6 +1294,7 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
           methodBuilder: (input) =>
             (input.value_type as string) === "business_mapping" ? "GET" : "POST",
           path: "/ccm/api/graphql",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathBuilder: (input) => {
             if ((input.value_type as string) === "business_mapping") {
               const sub = input.value_sub_type as string | undefined;
@@ -1411,6 +1443,7 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
             input.group_by === "type"
               ? "/ccm/api/recommendation/overview/resource-type/stats"
               : "/ccm/api/recommendation/overview/stats",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           bodyBuilder: () => ({
             filterType: "CCMRecommendation",
             minSaving: 0,
@@ -1438,6 +1471,7 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
         get: {
           method: "GET",
           path: "/ccm/api/recommendation/details/{typePath}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { type_path: "typePath" },
           queryParams: { recommendation_id: "id" },
           responseExtractor: ngExtract,
@@ -1490,6 +1524,7 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
               default: return `${base}/v1/detail/compute_coverage`;
             }
           },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             start_date: "start_date",
             end_date: "end_date",
@@ -1535,6 +1570,7 @@ Requires CCM_UNIT_COST_METRICS feature flag.`,
         list: {
           method: "GET",
           path: "/ccm/api/unit-metric/list",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search_key: "searchKey",
             page: "pageNo",
@@ -1546,6 +1582,7 @@ Requires CCM_UNIT_COST_METRICS feature flag.`,
         get: {
           method: "GET",
           path: "/ccm/api/unit-metric",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             metric_identifier: "identifier",
             start_time: "startTime",
@@ -1557,6 +1594,7 @@ Requires CCM_UNIT_COST_METRICS feature flag.`,
         create: {
           method: "POST",
           path: "/ccm/api/unit-metric",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => input.body,
           bodySchema: {
             description: "Unit metric definition with time series data",
@@ -1575,6 +1613,7 @@ Requires CCM_UNIT_COST_METRICS feature flag.`,
         update: {
           method: "PUT",
           path: "/ccm/api/unit-metric",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           bodyBuilder: (input) => input.body,
           bodySchema: {
             description: "Unit metric update (same shape as create)",
@@ -1593,6 +1632,7 @@ Requires CCM_UNIT_COST_METRICS feature flag.`,
         delete: {
           method: "DELETE",
           path: "/ccm/api/unit-metric",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           queryParams: {
             metric_identifier: "identifier",
             start_time: "startTime",

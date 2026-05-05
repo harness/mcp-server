@@ -224,3 +224,23 @@
 - `HARNESS_MCP_ALLOWED_HOSTS` now throws with the malformed entries instead of silently dropping them.
 - Added an integration test that runs the real SDK Express Host-header middleware and verifies `Host: mcp.harness.io` is accepted while an unexpected host is rejected.
 - Replaced the source-text dotenv assertion with behavioral `loadEnvFile()` tests that verify custom and default dotenv loading do not write through `console.log`.
+
+## Slack Bug Triage: MCP Down Again (2026-05-01)
+- [x] Read the triggered Slack thread and related prior context
+- [x] Verify current npm release status and repository fixes
+- [x] Identify why users still see the outage after PR #102 merged
+- [x] Add a release/version regression check
+- [x] Bump package and bundle metadata for a patch release
+- [x] Run focused verification
+- [ ] Commit, push, open PR, and reply in the Slack thread
+
+### Plan
+- Treat the sparse report as the same user/environment until contradicted by thread context, then verify against npm and current repo state.
+- Add a small release metadata test that fails when `package.json`, root `manifest.json`, and `mcp-directory/manifest.json` drift.
+- Bump the patch version so the already-merged stdio/hosted MCP fixes can actually ship through `npx harness-mcp-v2@latest`.
+
+### Review
+- Slack thread had no new details, but the same reporter's previous thread identified `harness-mcp-v2@0.9.5` stdio stdout contamination as the concrete failure.
+- Confirmed npm `latest` still serves `0.9.5`, so users running `npx harness-mcp-v2@latest` can still receive the known-bad build even though PR #102 is merged.
+- Bumped `package.json`, root `manifest.json`, and `mcp-directory/manifest.json` to `0.9.6` and added `tests/release-metadata.test.ts` to keep patch release metadata synchronized.
+- Verified with focused release/env/HTTP tests, `pnpm typecheck`, `pnpm build`, and a stdio startup smoke test showing `stdout bytes=0`.

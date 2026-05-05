@@ -169,6 +169,26 @@ export const unwrapProjectResponse = (raw: unknown): unknown => {
   return inner;
 };
 
+/**
+ * Project LIST responses: unwrap NG `{ data: { content: [{ project: {...} }, ...] } }`.
+ * Each item in `content` is wrapped in a `{ project: {...} }` envelope — unwrap to
+ * expose `identifier`, `name`, `orgIdentifier` directly on each item.
+ */
+export const projectListExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { data?: { content?: unknown[]; totalElements?: number; totalItems?: number } };
+  const rawItems = r.data?.content ?? [];
+  const items = rawItems.map(item => {
+    if (isRecord(item) && "project" in item && item.project !== null && typeof item.project === "object") {
+      return item.project;
+    }
+    return item;
+  });
+  return {
+    items,
+    total: r.data?.totalElements ?? r.data?.totalItems ?? 0,
+  };
+};
+
 /** Factory for GraphQL field extraction (used by CCM). */
 export const gqlExtract = (field: string) => (raw: unknown): unknown => {
   const r = raw as { data?: Record<string, unknown> };
