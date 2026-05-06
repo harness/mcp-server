@@ -263,3 +263,23 @@
 - Clarified in README that hosted `https://mcp.harness.io/mcp` is managed and cannot be pointed at Harness0 from Claude/Cursor/Cowork client config; Support must configure hosted MCP for that target environment.
 - Updated MCPB manifest descriptions so `HARNESS_BASE_URL` covers private SaaS hosts such as `https://harness0.harness.io`, not just self-managed installs.
 - Verified with `pnpm build` and `pnpm docs:check`.
+
+## Critical Bug Inspection (2026-05-06)
+- [x] Gather recent commit context and prior inspection lessons
+- [x] Trace dual pipeline/schema example changes for concrete high-severity issues
+- [x] Identify ZIP log decompression output-cap bypass
+- [x] Identify CCM quarter/year time filters silently falling back to 30 days
+- [x] Add focused regression tests before implementation
+- [x] Implement minimal fixes
+- [x] Run focused verification and typecheck
+- [ ] Commit, push, open PR, and report results
+
+### Plan
+- Add a log resolver regression proving a ZIP entry with unknown uncompressed size cannot inflate beyond the configured decompressed log cap.
+- Add a CCM regression proving `THIS_YEAR` maps to a year-to-date filter instead of the default 30-day fallback.
+- Keep fixes scoped to decompression bounding and the advertised CCM time-filter enum values.
+
+### Review
+- Confirmed ZIP log blobs with unknown uncompressed sizes could inflate beyond the configured decompressed output budget and still return content.
+- Confirmed CCM filters such as `THIS_YEAR` were advertised but silently queried a last-30-days window.
+- Verified with focused tests, full test suite, and typecheck.

@@ -1009,6 +1009,43 @@ describe("Registry", () => {
       expect(call.path).toBe("/ccm/api/graphql");
     });
 
+    it("maps THIS_YEAR time_filter to year-to-date instead of the default 30-day window", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-05-06T12:00:00Z"));
+      try {
+        const mockRequest = vi.fn().mockResolvedValue({
+          data: { perspectiveGrid: { data: [] }, perspectiveTotalCount: 0 },
+        });
+        const client = makeClient(mockRequest);
+
+        await registry.dispatch(client, "cost_breakdown", "list", {
+          perspective_id: "view-1",
+          time_filter: "THIS_YEAR",
+        });
+
+        const call = mockRequest.mock.calls[0][0];
+        const filters = call.body.variables.filters as Array<Record<string, { field: { fieldId: string }; value: number }>>;
+        const timeFilters = filters
+          .map((filter) => filter.timeFilter)
+          .filter(Boolean);
+
+        expect(timeFilters).toEqual([
+          {
+            field: { fieldId: "startTime", fieldName: "startTime", identifier: "COMMON" },
+            operator: "AFTER",
+            value: Date.UTC(2026, 0, 1),
+          },
+          {
+            field: { fieldId: "startTime", fieldName: "startTime", identifier: "COMMON" },
+            operator: "BEFORE",
+            value: Date.UTC(2026, 4, 6, 23, 59, 59, 999),
+          },
+        ]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it("responseExtractor extracts category names from business_mapping list (resource envelope)", async () => {
       const mockRequest = vi.fn().mockResolvedValue({
         resource: {

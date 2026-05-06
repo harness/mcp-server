@@ -36,6 +36,50 @@ function buildZip(fileName: string, content: string): Buffer {
   return Buffer.concat([localHeader, fileNameBuf, compressed]);
 }
 
+/** Build a ZIP with central-directory sizes, optionally reporting unknown output size. */
+function buildZipWithCentralDirectory(fileName: string, content: string, reportedUncompressedSize?: number): Buffer {
+  const fileNameBuf = Buffer.from(fileName, "utf-8");
+  const uncompressed = Buffer.from(content, "utf-8");
+  const compressed = deflateRawSync(uncompressed);
+
+  const localHeader = Buffer.alloc(30);
+  localHeader.writeUInt32LE(0x04034b50, 0);
+  localHeader.writeUInt16LE(20, 4);
+  localHeader.writeUInt16LE(0, 6);
+  localHeader.writeUInt16LE(8, 8);
+  localHeader.writeUInt32LE(0, 14);
+  localHeader.writeUInt32LE(compressed.length, 18);
+  localHeader.writeUInt32LE(reportedUncompressedSize ?? uncompressed.length, 22);
+  localHeader.writeUInt16LE(fileNameBuf.length, 26);
+  localHeader.writeUInt16LE(0, 28);
+
+  const local = Buffer.concat([localHeader, fileNameBuf, compressed]);
+
+  const centralDirectory = Buffer.alloc(46);
+  centralDirectory.writeUInt32LE(0x02014b50, 0);
+  centralDirectory.writeUInt16LE(20, 4);
+  centralDirectory.writeUInt16LE(20, 6);
+  centralDirectory.writeUInt16LE(0, 8);
+  centralDirectory.writeUInt16LE(8, 10);
+  centralDirectory.writeUInt32LE(0, 16);
+  centralDirectory.writeUInt32LE(compressed.length, 20);
+  centralDirectory.writeUInt32LE(reportedUncompressedSize ?? uncompressed.length, 24);
+  centralDirectory.writeUInt16LE(fileNameBuf.length, 28);
+  centralDirectory.writeUInt16LE(0, 30);
+  centralDirectory.writeUInt16LE(0, 32);
+  centralDirectory.writeUInt32LE(0, 42);
+
+  const cd = Buffer.concat([centralDirectory, fileNameBuf]);
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(1, 8);
+  eocd.writeUInt16LE(1, 10);
+  eocd.writeUInt32LE(cd.length, 12);
+  eocd.writeUInt32LE(local.length, 16);
+
+  return Buffer.concat([local, cd, eocd]);
+}
+
 let fetchSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
@@ -98,6 +142,16 @@ describe("resolveLogContent", () => {
 
     const result = await resolveLogContent(client, "prefix");
     expect(result).toContain("zip entry log content");
+  });
+
+  it("rejects ZIP entries with unknown size that inflate beyond the decompressed log cap", async () => {
+    const zipBuf = buildZipWithCentralDirectory("logs.txt", "x".repeat(2048), 0);
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link: "https://logs.example.com/zip" }));
+    fetchSpy.mockResolvedValue(new Response(zipBuf, { status: 200 }));
+
+    await expect(
+      resolveLogContent(client, "prefix", { maxLogSizeBytes: 200 }),
+    ).rejects.toThrow(/decompressed log output too large/i);
   });
 
   it("parses JSON log entries and strips ANSI codes", async () => {
