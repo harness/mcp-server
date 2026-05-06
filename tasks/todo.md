@@ -272,7 +272,7 @@
 - [x] Add focused regression tests before implementation
 - [x] Implement minimal fixes
 - [x] Run focused verification and typecheck
-- [ ] Commit, push, open PR, and report results
+- [x] Commit, push, open PR, and report results
 
 ### Plan
 - Add a log resolver regression proving a ZIP entry with unknown uncompressed size cannot inflate beyond the configured decompressed log cap.
@@ -282,4 +282,4 @@
 ### Review
 - Confirmed ZIP log blobs with unknown uncompressed sizes could inflate beyond the configured decompressed output budget and still return content.
 - Confirmed CCM filters such as `THIS_YEAR` were advertised but silently queried a last-30-days window.
-- Verified with focused tests, full test suite, and typecheck.
+- Verified with focused tests, full test suite, typecheck, and build.
