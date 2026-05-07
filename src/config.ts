@@ -79,6 +79,7 @@ const RawConfigSchema = z.object({
   HARNESS_ALLOW_HTTP: booleanFromEnv.default(false),
   HARNESS_MCP_ALLOWED_HOSTS: optionalStringFromEnv.transform(validateAllowedHosts),
   HARNESS_FME_BASE_URL: urlFromEnv("https://api.split.io"),
+  HARNESS_IDP_BASE_URL: urlFromEnv("https://idp.harness.io"),
   HARNESS_LOG_UNSAFE_BODIES: booleanFromEnv.default(false),
   HARNESS_PIPELINE_VERSION: z.enum(["0", "1"]).optional(),
   HARNESS_AUDIT_FILE: optionalStringFromEnv,
@@ -106,6 +107,13 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
   if (data.HARNESS_FME_BASE_URL && !data.HARNESS_FME_BASE_URL.startsWith("https://") && !data.HARNESS_ALLOW_HTTP) {
     throw new Error(
       `HARNESS_FME_BASE_URL must use HTTPS (got "${data.HARNESS_FME_BASE_URL}"). ` +
+      "If you need HTTP for local development, set HARNESS_ALLOW_HTTP=true.",
+    );
+  }
+
+  if (data.HARNESS_IDP_BASE_URL && !data.HARNESS_IDP_BASE_URL.startsWith("https://") && !data.HARNESS_ALLOW_HTTP) {
+    throw new Error(
+      `HARNESS_IDP_BASE_URL must use HTTPS (got "${data.HARNESS_IDP_BASE_URL}"). ` +
       "If you need HTTP for local development, set HARNESS_ALLOW_HTTP=true.",
     );
   }
@@ -149,9 +157,11 @@ export type Config = z.infer<typeof ConfigSchema>;
  * Resolve the base URL for a given product backend.
  * - "harness" → undefined (uses the default client base URL)
  * - "fme"     → HARNESS_FME_BASE_URL from config (defaults to https://api.split.io)
+ * - "idp"     → HARNESS_IDP_BASE_URL from config (defaults to https://idp.harness.io)
  */
-export function resolveProductBaseUrl(config: Config, product: "harness" | "fme"): string | undefined {
+export function resolveProductBaseUrl(config: Config, product: "harness" | "fme" | "idp"): string | undefined {
   if (product === "fme") return config.HARNESS_FME_BASE_URL;
+  if (product === "idp") return config.HARNESS_IDP_BASE_URL;
   return undefined;
 }
 
