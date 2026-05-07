@@ -606,6 +606,40 @@ describe("Registry", () => {
       const call = mockRequest.mock.calls[0][0];
       expect(call.body.accountIdentifier).toBe("resolved-account");
     });
+
+    it("overrides accountIdentifier with __GLOBAL_TEMPLATES_ACCOUNT_ID__ sentinel", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { content: [], totalElements: 0 } });
+      const client = makeClient(mockRequest);
+      const registry = new Registry(
+        makeConfig({ HARNESS_TOOLSETS: "templates", HARNESS_ACCOUNT_ID: "static-account" }),
+      );
+
+      await registry.dispatch(client, "template", "list", {
+        org_id: "org1",
+        project_id: "proj1",
+        account_id: "__GLOBAL_TEMPLATES_ACCOUNT_ID__",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params.accountIdentifier).toBe("__GLOBAL_TEMPLATES_ACCOUNT_ID__");
+    });
+
+    it("does not override accountIdentifier for arbitrary account_id values", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { content: [], totalElements: 0 } });
+      const client = makeClient(mockRequest);
+      const registry = new Registry(
+        makeConfig({ HARNESS_TOOLSETS: "templates", HARNESS_ACCOUNT_ID: "static-account" }),
+      );
+
+      await registry.dispatch(client, "template", "list", {
+        org_id: "org1",
+        project_id: "proj1",
+        account_id: "some-other-account",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params.accountIdentifier).toBeUndefined();
+    });
   });
 
   describe("read-only mode", () => {
