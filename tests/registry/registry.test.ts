@@ -711,6 +711,16 @@ describe("Registry", () => {
       expect(call.params.orgIdentifier).toBeUndefined();
       expect(call.params.projectIdentifier).toBeUndefined();
     });
+
+    it("scope_level is ignored for resources without supportedScopeLevels", async () => {
+      const pipelineRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
+      const mockRequest = vi.fn().mockResolvedValue({ data: { content: [], totalElements: 0 } });
+      const client = makeClient(mockRequest);
+      await pipelineRegistry.dispatch(client, "pipeline", "list", { scope_level: "account" });
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params.orgIdentifier).toBe("default");
+      expect(call.params.projectIdentifier).toBe("test-project");
+    });
   });
 
   describe("trigger pipelineIdentifier extraction", () => {

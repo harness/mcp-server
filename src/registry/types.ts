@@ -322,6 +322,13 @@ export interface ResourceDefinition {
    */
   scopeOptional?: boolean;
   /**
+   * When set, the resource honors the per-call `scope_level` input parameter
+   * for the listed levels. E.g. ["account", "org"] means callers can pass
+   * scope_level="account" or "org" to widen beyond the resource's default scope.
+   * Resources without this field ignore `scope_level` entirely.
+   */
+  supportedScopeLevels?: Array<"account" | "org">;
+  /**
    * Override default scope query parameter names.
    * Standard NG API uses orgIdentifier / projectIdentifier.
    * Some APIs (e.g., Chaos) use organizationIdentifier instead.

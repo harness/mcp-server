@@ -136,9 +136,10 @@ export const accessControlToolset: ToolsetDefinition = {
     {
       resourceType: "service_account",
       displayName: "Service Account",
-      description: "Service account for API access. Supports list, get, create, and delete.",
+      description: "Service account for API access. Supports list, get, create, and delete. Pass scope_level='account' to list all account-level service accounts.",
       toolset: "access_control",
       scope: "project",
+      supportedScopeLevels: ["account", "org"],
       identifierFields: ["service_account_id"],
       listFilterFields: [
         { name: "search_term", description: "Filter service accounts by name or keyword" },

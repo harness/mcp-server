@@ -474,9 +474,13 @@ export class Registry {
     //   "account" → suppress both org and project injection (account-wide query)
     //   "org"     → inject org (from input or config fallback), suppress project
     //   undefined → use resource's default scoping behavior
+    // Only honored when the resource declares supportedScopeLevels.
     const orgParam = def.scopeParams?.org ?? "orgIdentifier";
     const projectParam = def.scopeParams?.project ?? "projectIdentifier";
-    const scopeLevel = input.scope_level as string | undefined;
+    const rawScopeLevel = input.scope_level as string | undefined;
+    const scopeLevel = rawScopeLevel && def.supportedScopeLevels?.includes(rawScopeLevel as "account" | "org")
+      ? rawScopeLevel
+      : undefined;
     if (scopeLevel === "account") {
       // Account-level: no org or project injected
     } else if (scopeLevel === "org") {
