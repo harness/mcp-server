@@ -23,6 +23,7 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
         url: z.string().describe("Harness UI URL — auto-extracts org, project, type, and ID").optional(),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
+        scope_level: z.enum(["account", "org", "project"]).describe("Override scope for this call. 'account' retrieves at account level (ignores default org/project).").optional(),
         params: z.record(z.string(), z.unknown()).describe("Additional identifiers for nested resources. Call harness_describe for fields per resource_type.").optional(),
       },
       annotations: {

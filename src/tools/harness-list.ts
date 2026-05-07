@@ -32,6 +32,7 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
         url: z.string().describe("Harness UI URL — auto-extracts org, project, and type").optional(),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
+        scope_level: z.enum(["account", "org", "project"]).describe("Override scope for this call. 'account' lists across the entire account (ignores default org/project). 'org' lists within the org only.").optional(),
         page: z.number().describe("Page number, 0-indexed").default(0).optional(),
         size: z.number().min(1).max(100).describe("Page size (1–100)").default(20).optional(),
         search_term: z.string().describe("Filter results by name or keyword").optional(),

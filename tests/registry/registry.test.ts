@@ -657,6 +657,62 @@ describe("Registry", () => {
     });
   });
 
+  describe("scope_level override", () => {
+    let registry: Registry;
+    beforeEach(() => {
+      registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+    });
+
+    it("default: injects org and project from config for project-scoped resources", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { content: [], totalElements: 0 } });
+      const client = makeClient(mockRequest);
+      await registry.dispatch(client, "connector", "list", {});
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params.orgIdentifier).toBe("default");
+      expect(call.params.projectIdentifier).toBe("test-project");
+    });
+
+    it("scope_level=account suppresses org and project injection", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { content: [], totalElements: 0 } });
+      const client = makeClient(mockRequest);
+      await registry.dispatch(client, "connector", "list", { scope_level: "account" });
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params.orgIdentifier).toBeUndefined();
+      expect(call.params.projectIdentifier).toBeUndefined();
+    });
+
+    it("scope_level=org injects org from config but suppresses project", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { content: [], totalElements: 0 } });
+      const client = makeClient(mockRequest);
+      await registry.dispatch(client, "connector", "list", { scope_level: "org" });
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params.orgIdentifier).toBe("default");
+      expect(call.params.projectIdentifier).toBeUndefined();
+    });
+
+    it("scope_level=org uses explicit org_id over config default", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { content: [], totalElements: 0 } });
+      const client = makeClient(mockRequest);
+      await registry.dispatch(client, "connector", "list", { scope_level: "org", org_id: "custom-org" });
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params.orgIdentifier).toBe("custom-org");
+      expect(call.params.projectIdentifier).toBeUndefined();
+    });
+
+    it("scope_level=account ignores explicit org_id and project_id", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { content: [], totalElements: 0 } });
+      const client = makeClient(mockRequest);
+      await registry.dispatch(client, "connector", "list", {
+        scope_level: "account",
+        org_id: "should-be-ignored",
+        project_id: "should-be-ignored",
+      });
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params.orgIdentifier).toBeUndefined();
+      expect(call.params.projectIdentifier).toBeUndefined();
+    });
+  });
+
   describe("trigger pipelineIdentifier extraction", () => {
     let registry: Registry;
 

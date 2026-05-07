@@ -469,9 +469,20 @@ export class Registry {
     // Add scope params (allow per-resource override of query param names)
     // When scopeOptional is true, only add org/project if explicitly provided in input.
     // Otherwise, fall back to config defaults based on the resource's scope level.
+    //
+    // Per-call scope override via input.scope_level:
+    //   "account" → suppress both org and project injection (account-wide query)
+    //   "org"     → inject org (from input or config fallback), suppress project
+    //   undefined → use resource's default scoping behavior
     const orgParam = def.scopeParams?.org ?? "orgIdentifier";
     const projectParam = def.scopeParams?.project ?? "projectIdentifier";
-    if (def.scopeOptional) {
+    const scopeLevel = input.scope_level as string | undefined;
+    if (scopeLevel === "account") {
+      // Account-level: no org or project injected
+    } else if (scopeLevel === "org") {
+      // Org-level: inject org (explicit or config default), no project
+      params[orgParam] = (input.org_id as string) ?? this.config.HARNESS_ORG;
+    } else if (def.scopeOptional) {
       // Dynamic scoping: only inject when caller explicitly provides them
       if (input.org_id) {
         params[orgParam] = input.org_id as string;
