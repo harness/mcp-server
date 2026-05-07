@@ -37,7 +37,6 @@ export const connectorsToolset: ToolsetDefinition = {
       description: "External integration connector. Supports full CRUD and test_connection.",
       toolset: "connectors",
       scope: "project",
-      scopeOptional: true,
       identifierFields: ["connector_id"],
       diagnosticHint: "Use harness_diagnose with resource_id set to the connector identifier to run a live connectivity test and get auth method, status history, and error details.",
       listFilterFields: [

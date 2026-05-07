@@ -139,7 +139,6 @@ export const accessControlToolset: ToolsetDefinition = {
       description: "Service account for API access. Supports list, get, create, and delete.",
       toolset: "access_control",
       scope: "project",
-      scopeOptional: true,
       identifierFields: ["service_account_id"],
       listFilterFields: [
         { name: "search_term", description: "Filter service accounts by name or keyword" },
