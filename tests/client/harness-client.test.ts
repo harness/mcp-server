@@ -546,6 +546,18 @@ describe("HarnessClient", () => {
       }
     });
 
+    it("returns success for 204 No Content responses", async () => {
+      fetchSpy.mockResolvedValue(new Response(null, { status: 204 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      const result = await client.request<{ status: string; message: string }>({
+        method: "DELETE",
+        path: "/v1/entities/account/component/my-service",
+      });
+
+      expect(result).toEqual({ status: "SUCCESS", message: "No content" });
+    });
+
     it("parses valid JSON response normally", async () => {
       fetchSpy.mockResolvedValue(new Response(JSON.stringify({ data: "ok" }), { status: 200 }));
       const client = new HarnessClient(makeConfig());

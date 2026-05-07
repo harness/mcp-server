@@ -210,6 +210,14 @@ describe("Registry", () => {
     it("returns false for unknown resource type", () => {
       expect(registry.supportsOperation("nonexistent", "list")).toBe(false);
     });
+
+    it("exposes idp_entity for write operations", () => {
+      const idpRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "idp" }));
+
+      expect(idpRegistry.getTypesForOperation("create")).toContain("idp_entity");
+      expect(idpRegistry.getTypesForOperation("update")).toContain("idp_entity");
+      expect(idpRegistry.getTypesForOperation("delete")).toContain("idp_entity");
+    });
   });
 
   describe("describe", () => {
@@ -482,6 +490,70 @@ describe("Registry", () => {
           body: {},
         }),
       ).rejects.toThrow(/body must be a YAML string/);
+    });
+
+    it("dispatches IDP entity get to the documented three-segment entity path", async () => {
+      const idpRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "idp" }));
+      const mockRequest = vi.fn().mockResolvedValue({ identifier: "my-service" });
+      const client = makeClient(mockRequest);
+
+      await idpRegistry.dispatch(client, "idp_entity", "get", {
+        entity_id: "my-service",
+        kind: "component",
+        org_id: "my_org",
+        project_id: "my_project",
+      });
+
+      expect(mockRequest).toHaveBeenCalledOnce();
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("GET");
+      expect(call.path).toBe("/v1/entities/account.my_org.my_project/component/my-service");
+      expect(call.params).toMatchObject({
+        orgIdentifier: "my_org",
+        projectIdentifier: "my_project",
+      });
+    });
+
+    it("dispatches IDP entity create/update/delete to the public v1 entity API", async () => {
+      const idpRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "idp" }));
+      const mockRequest = vi.fn()
+        .mockResolvedValueOnce({ identifier: "my-service" })
+        .mockResolvedValueOnce({ identifier: "my-service" })
+        .mockResolvedValueOnce({ status: "SUCCESS", message: "No content" });
+      const client = makeClient(mockRequest);
+      const yaml = "apiVersion: backstage.io/v1alpha1\nkind: Component\nmetadata:\n  name: my-service";
+
+      await idpRegistry.dispatch(client, "idp_entity", "create", {
+        body: yaml,
+        convert: true,
+        org_id: "my_org",
+      });
+      await idpRegistry.dispatch(client, "idp_entity", "update", {
+        entity_id: "my-service",
+        kind: "component",
+        body: { yaml },
+      });
+      await idpRegistry.dispatch(client, "idp_entity", "delete", {
+        entity_id: "my-service",
+        kind: "component",
+      });
+
+      expect(mockRequest).toHaveBeenCalledTimes(3);
+      expect(mockRequest.mock.calls[0][0]).toMatchObject({
+        method: "POST",
+        path: "/v1/entities",
+        body: { yaml },
+        params: { convert: true, orgIdentifier: "my_org" },
+      });
+      expect(mockRequest.mock.calls[1][0]).toMatchObject({
+        method: "PUT",
+        path: "/v1/entities/account/component/my-service",
+        body: { yaml },
+      });
+      expect(mockRequest.mock.calls[2][0]).toMatchObject({
+        method: "DELETE",
+        path: "/v1/entities/account/component/my-service",
+      });
     });
   });
 

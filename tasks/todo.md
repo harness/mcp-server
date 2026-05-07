@@ -263,3 +263,23 @@
 - Clarified in README that hosted `https://mcp.harness.io/mcp` is managed and cannot be pointed at Harness0 from Claude/Cursor/Cowork client config; Support must configure hosted MCP for that target environment.
 - Updated MCPB manifest descriptions so `HARNESS_BASE_URL` covers private SaaS hosts such as `https://harness0.harness.io`, not just self-managed installs.
 - Verified with `pnpm build` and `pnpm docs:check`.
+
+## Slack Bug Triage: IDP Entity MCP Operations (2026-05-07)
+- [x] Read the triggered Slack thread and confirm there are no screenshots or follow-up messages
+- [x] Trace `idp_entity` registry metadata and generic `harness_*` operation enum generation
+- [x] Confirm documented IDP entity API paths for get/create/update/delete
+- [x] Add focused failing registry tests for IDP entity get path and write operations
+- [x] Implement the minimal registry metadata fix
+- [x] Run focused tests and typecheck
+- [ ] Commit, push, open PR, and reply in the original Slack thread
+
+### Plan
+- Update `tests/registry/registry.test.ts` with regression coverage showing `idp_entity` is exposed for create/update/delete and dispatches get/update/delete to `/v1/entities/{scope}/{kind}/{identifier}`.
+- Update `src/registry/toolsets/idp.ts` so `resource_id` maps to `entity_id`, the get path drops the stale namespace segment, and create/update/delete map to the documented `/v1/entities` API.
+- Keep IDP write bodies generic: accept a YAML string as `{ yaml }` or pass through JSON bodies that already include `yaml` and optional `git_details`.
+
+### Review
+- Found `idp_entity` was read-only in registry metadata, so the generic create/update/delete resource type enums correctly excluded it.
+- Found the get path used a stale Backstage-style namespace segment (`/v1/entities/{scope}/{kind}/{namespace}/{entityId}`) while the documented public Harness endpoint is `/v1/entities/{scope}/{kind}/{identifier}`.
+- Added create/update/delete IDP entity operations backed by the documented `/v1/entities` API, fixed `resource_id` mapping to `entity_id`, and refreshed the README operation matrix.
+- Verified with focused IDP registry/tool/client tests, `pnpm typecheck`, `pnpm build && pnpm docs:check`, and full `pnpm test`.

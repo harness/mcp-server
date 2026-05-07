@@ -158,6 +158,25 @@ describe("harness_get", () => {
     const result = await server.call("harness_get", { resource_type: "pipeline", resource_id: "missing" });
     expect(result.isError).toBe(true);
   });
+
+  it("maps idp_entity resource_id to entity_id", async () => {
+    server = makeMcpServer();
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "idp" }));
+    mockRequest = vi.fn().mockResolvedValue({ identifier: "my-service" });
+    client = makeClient(mockRequest);
+    const { registerGetTool } = await import("../../src/tools/harness-get.js");
+    registerGetTool(server, registry, client);
+
+    const result = await server.call("harness_get", {
+      resource_type: "idp_entity",
+      resource_id: "my-service",
+      params: { kind: "component" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledOnce();
+    expect(mockRequest.mock.calls[0][0].path).toBe("/v1/entities/account/component/my-service");
+  });
 });
 
 describe("harness_get — execution_log", () => {

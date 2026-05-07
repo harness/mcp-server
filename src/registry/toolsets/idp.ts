@@ -1,6 +1,67 @@
 import type { ToolsetDefinition } from "../types.js";
 import { ngExtract, pageExtract, v1ListExtract } from "../extractors.js";
 
+function getString(input: Record<string, unknown>, key: string): string | undefined {
+  const value = input[key];
+  return typeof value === "string" && value !== "" ? value : undefined;
+}
+
+function requireString(input: Record<string, unknown>, key: string, resourceType: string): string {
+  const value = getString(input, key);
+  if (!value) {
+    throw new Error(`Missing required field "${key}" for ${resourceType}.`);
+  }
+  return value;
+}
+
+function buildIdpEntityScope(input: Record<string, unknown>): string {
+  const orgId = getString(input, "org_id");
+  const projectId = getString(input, "project_id");
+  if (!orgId) return "account";
+  return projectId ? `account.${orgId}.${projectId}` : `account.${orgId}`;
+}
+
+function buildIdpEntityPath(input: Record<string, unknown>): string {
+  const scope = buildIdpEntityScope(input);
+  const kind = getString(input, "kind") ?? "component";
+  const entityId = requireString(input, "entity_id", "idp_entity");
+  return `/v1/entities/${encodeURIComponent(scope)}/${encodeURIComponent(kind)}/${encodeURIComponent(entityId)}`;
+}
+
+function buildIdpEntityBody(input: Record<string, unknown>): unknown {
+  const body = input.body;
+  if (typeof body === "string") {
+    return { yaml: body };
+  }
+  if (body && typeof body === "object" && !Array.isArray(body)) {
+    return body;
+  }
+  throw new Error("IDP entity body must be a YAML string or a JSON object with a yaml field.");
+}
+
+const idpEntityBodySchema = {
+  description: "IDP entity definition. Pass a YAML string directly, or a JSON object with yaml and optional git_details.",
+  fields: [
+    { name: "yaml", type: "yaml" as const, required: true, description: "Entity YAML definition as a string" },
+    {
+      name: "git_details",
+      type: "object" as const,
+      required: false,
+      description: "Optional Git Experience storage parameters for REMOTE entities",
+      fields: [
+        { name: "store_type", type: "string" as const, required: false, description: "Entity storage type: INLINE or REMOTE" },
+        { name: "connector_ref", type: "string" as const, required: false, description: "Harness connector identifier for Git CRUD operations" },
+        { name: "repo_name", type: "string" as const, required: false, description: "Repository name for REMOTE entities" },
+        { name: "branch_name", type: "string" as const, required: false, description: "Branch name for REMOTE entities" },
+        { name: "file_path", type: "string" as const, required: false, description: "Entity file path in the repository" },
+        { name: "commit_message", type: "string" as const, required: false, description: "Commit message for the entity change" },
+        { name: "base_branch", type: "string" as const, required: false, description: "Base branch for Git-backed entity changes" },
+        { name: "is_harness_code_repo", type: "boolean" as const, required: false, description: "Whether the REMOTE repository is Harness Code" },
+      ],
+    },
+  ],
+};
+
 export const idpToolset: ToolsetDefinition = {
   name: "idp",
   displayName: "Internal Developer Portal",
@@ -9,14 +70,16 @@ export const idpToolset: ToolsetDefinition = {
     {
       resourceType: "idp_entity",
       displayName: "IDP Entity",
-      description: "Internal Developer Portal catalog entity. Supports list and get.",
+      description: "Internal Developer Portal catalog entity. Supports list, get, create, update, and delete.",
       toolset: "idp",
       scope: "account",
-      identifierFields: ["entity_id", "kind"],
+      scopeOptional: true,
+      headerBasedScoping: true,
+      identifierFields: ["kind", "entity_id"],
       listFilterFields: [
         { name: "kind", description: "Catalog entity kind filter", enum: ["api", "component", "environment", "environmentblueprint", "group", "resource", "user", "workflow"] },
         { name: "search", description: "Search catalog entities by name or keyword" },
-        { name: "namespace", description: "Entity namespace (defaults to 'account' for account scope)" },
+        { name: "scopes", description: "Filter entities by scope (e.g. account, account.orgId, account.orgId.projectId)" },
       ],
       deepLinkTemplate: "/ng/account/{accountId}/idp/catalog",
       operations: {
@@ -30,6 +93,14 @@ export const idpToolset: ToolsetDefinition = {
             page: "page",
             size: "limit",
             scope_level: "scope_level",
+            scopes: "scopes",
+            entity_refs: "entity_refs",
+            owned_by_me: "owned_by_me",
+            favorites: "favorites",
+            type: "type",
+            owner: "owner",
+            lifecycle: "lifecycle",
+            tags: "tags",
           },
           defaultQueryParams: { scope_level: "ACCOUNT" },
           responseExtractor: v1ListExtract(),
@@ -37,25 +108,48 @@ export const idpToolset: ToolsetDefinition = {
         },
         get: {
           method: "GET",
-          path: "/v1/entities/{scope}/{kind}/{namespace}/{entityId}",
-          pathBuilder: (input) => {
-            let scope = "account";
-            const orgId = input.org_id as string | undefined;
-            const projectId = input.project_id as string | undefined;
-            if (orgId) {
-              scope += `.${orgId}`;
-              if (projectId) {
-                scope += `.${projectId}`;
-              }
-            }
-            const kind = (input.kind as string) || "component";
-            const namespace = (input.namespace as string) || scope;
-            const entityId = input.entity_id as string;
-            return `/v1/entities/${encodeURIComponent(scope)}/${encodeURIComponent(kind)}/${encodeURIComponent(namespace)}/${encodeURIComponent(entityId)}`;
+          path: "/v1/entities/{scope}/{kind}/{identifier}",
+          pathBuilder: buildIdpEntityPath,
+          queryParams: {
+            branch_name: "branch_name",
+            connector_ref: "connector_ref",
+            repo_name: "repo_name",
+            load_from_fallback_branch: "load_from_fallback_branch",
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: ngExtract,
-          description: "Get IDP catalog entity details by scope, kind, namespace, and name (entity_ref format: kind:namespace/name)",
+          description: "Get IDP catalog entity details by scope, kind, and identifier",
+        },
+        create: {
+          method: "POST",
+          path: "/v1/entities",
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          queryParams: {
+            convert: "convert",
+            dry_run: "dry_run",
+          },
+          bodyBuilder: buildIdpEntityBody,
+          bodySchema: idpEntityBodySchema,
+          responseExtractor: ngExtract,
+          description: "Create an IDP catalog entity from entity YAML",
+        },
+        update: {
+          method: "PUT",
+          path: "/v1/entities/{scope}/{kind}/{identifier}",
+          pathBuilder: buildIdpEntityPath,
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: buildIdpEntityBody,
+          bodySchema: idpEntityBodySchema,
+          responseExtractor: ngExtract,
+          description: "Update or upsert an IDP catalog entity from entity YAML",
+        },
+        delete: {
+          method: "DELETE",
+          path: "/v1/entities/{scope}/{kind}/{identifier}",
+          pathBuilder: buildIdpEntityPath,
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          responseExtractor: ngExtract,
+          description: "Delete an IDP catalog entity by scope, kind, and identifier",
         },
       },
     },

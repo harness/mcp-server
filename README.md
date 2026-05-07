@@ -1115,7 +1115,7 @@ Only one pipeline YAML resource type is loaded at startup. By default `HARNESS_P
 
 | Resource Type           | List | Get | Create | Update | Delete | Execute Actions |
 | ----------------------- | ---- | --- | ------ | ------ | ------ | --------------- |
-| `idp_entity`            | x    | x   |        |        |        |                 |
+| `idp_entity`            | x    | x   | x      | x      | x      |                 |
 | `scorecard`             | x    | x   |        |        |        |                 |
 | `scorecard_check`       | x    | x   |        |        |        |                 |
 | `scorecard_stats`       |      | x   |        |        |        |                 |
