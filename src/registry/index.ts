@@ -494,6 +494,12 @@ export class Registry {
       params[def.scopeParams.account] = resolvedAccountId;
     }
 
+    // Allow the global templates sentinel to override accountIdentifier.
+    // Only this specific value is permitted — arbitrary account overrides are not supported.
+    if (input.account_id === "__GLOBAL_TEMPLATES_ACCOUNT_ID__") {
+      params["accountIdentifier"] = "__GLOBAL_TEMPLATES_ACCOUNT_ID__";
+    }
+
     // Account-scoped resources sometimes still need orgIdentifier in query params (NG /ng/api/projects).
     if (spec.injectOrgQueryFallback) {
       const orgKey = def.scopeParams?.org ?? "orgIdentifier";
