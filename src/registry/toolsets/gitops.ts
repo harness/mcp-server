@@ -229,13 +229,9 @@ export const gitopsToolset: ToolsetDefinition = {
         "IDENTIFIERS: agent_id is scope-prefixed:\n" +
         "- Account-scoped agent: 'account.myagent'\n" +
         "- Org-scoped agent: 'org.myagent'\n" +
-        "- Project-scoped agent: 'myagent' (no prefix)\n" +
-        "SCOPE BEHAVIOR for list/search:\n" +
-        "- Pass org_id and project_id explicitly for project-scoped results\n" +
-        "- Omitting them searches at account level only",
+        "- Project-scoped agent: 'myagent' (no prefix)",
       toolset: "gitops",
       scope: "project",
-      scopeOptional: true,
       diagnosticHint: "Use harness_diagnose with resource_type='gitops_application', agent_id, and resource_id (app name) to analyze sync failures, health issues, and unhealthy K8s resources. Combines app status, resource tree, and recent events.",
       executeHint:
         "SYNC: action='sync' for single app, action='bulk_sync' for multiple. " +
