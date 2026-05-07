@@ -19,6 +19,7 @@ import { resolveHttpHostValidationOptions } from "./utils/http-hosts.js";
 import { loadEnvFile } from "./utils/env.js";
 import { createAuditManager, type AuditManager } from "./audit/index.js";
 
+
 const log = createLogger("main");
 
 const PIPELINE_VERSION_HEADER = "x-harness-pipeline-version";
@@ -143,6 +144,7 @@ async function startStdio(config: Config): Promise<void> {
     lastActivityTs = Date.now();
     return originalSend(msg);
   };
+  process.stdin.on("data", () => { lastActivityTs = Date.now(); });
 
   process.stdin.on("end", () => {
     logToFile("stdin EOF — parent disconnected", {
@@ -164,7 +166,10 @@ async function startStdio(config: Config): Promise<void> {
     }
   });
 
+  let keepaliveTimer: ReturnType<typeof setInterval> | undefined;
+
   const shutdown = async (signal: string): Promise<void> => {
+    if (keepaliveTimer) clearInterval(keepaliveTimer);
     log.info(`Received ${signal}, closing stdio transport...`, {
       idle_ms: Date.now() - lastActivityTs,
       uptime_s: Math.round(process.uptime()),
@@ -176,8 +181,40 @@ async function startStdio(config: Config): Promise<void> {
     process.exit(0);
   };
 
-  process.on("SIGINT", () => { shutdown("SIGINT"); });
-  process.on("SIGTERM", () => { shutdown("SIGTERM"); });
+  process.on("SIGINT", () => {
+    shutdown("SIGINT").catch((err) => {
+      logToFile("shutdown failed", { signal: "SIGINT", error: String(err) });
+      process.exit(1);
+    });
+  });
+  process.on("SIGTERM", () => {
+    shutdown("SIGTERM").catch((err) => {
+      logToFile("shutdown failed", { signal: "SIGTERM", error: String(err) });
+      process.exit(1);
+    });
+  });
+
+  // Keepalive check — detect half-dead connections where stdin hasn't sent EOF
+  // but the parent process is gone. Exit immediately if reparented to init (ppid 1);
+  // otherwise wait for idle timeout + stdin not readable.
+  const KEEPALIVE_CHECK_MS = 30_000;
+  const KEEPALIVE_TIMEOUT_MS = 5 * 60_000;
+  keepaliveTimer = setInterval(() => {
+    const idleMs = Date.now() - lastActivityTs;
+    const reparented = process.ppid === 1;
+    const stdinDead = !process.stdin.readable;
+
+    if (reparented || (idleMs > KEEPALIVE_TIMEOUT_MS && stdinDead)) {
+      logToFile("parent gone — exiting", {
+        idle_ms: idleMs,
+        reparented,
+        stdin_readable: process.stdin.readable,
+        uptime_s: Math.round(process.uptime()),
+      });
+      auditManager.close().catch(() => {}).finally(() => process.exit(0));
+    }
+  }, KEEPALIVE_CHECK_MS);
+  keepaliveTimer.unref();
 }
 
 // ---------------------------------------------------------------------------
