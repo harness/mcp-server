@@ -18,6 +18,7 @@ import { configureElicitation } from "./utils/elicitation.js";
 import { resolveHttpHostValidationOptions } from "./utils/http-hosts.js";
 import { loadEnvFile } from "./utils/env.js";
 import { createAuditManager, type AuditManager } from "./audit/index.js";
+import { RejectionTracker } from "./utils/rejection-tracker.js";
 
 const log = createLogger("main");
 
@@ -143,6 +144,7 @@ async function startStdio(config: Config): Promise<void> {
     lastActivityTs = Date.now();
     return originalSend(msg);
   };
+  process.stdin.on("data", () => { lastActivityTs = Date.now(); });
 
   process.stdin.on("end", () => {
     logToFile("stdin EOF — parent disconnected", {
@@ -164,7 +166,10 @@ async function startStdio(config: Config): Promise<void> {
     }
   });
 
+  let keepaliveTimer: ReturnType<typeof setInterval> | undefined;
+
   const shutdown = async (signal: string): Promise<void> => {
+    if (keepaliveTimer) clearInterval(keepaliveTimer);
     log.info(`Received ${signal}, closing stdio transport...`, {
       idle_ms: Date.now() - lastActivityTs,
       uptime_s: Math.round(process.uptime()),
@@ -176,25 +181,38 @@ async function startStdio(config: Config): Promise<void> {
     process.exit(0);
   };
 
-  process.on("SIGINT", () => { shutdown("SIGINT").catch(() => process.exit(1)); });
-  process.on("SIGTERM", () => { shutdown("SIGTERM").catch(() => process.exit(1)); });
+  process.on("SIGINT", () => {
+    shutdown("SIGINT").catch((err) => {
+      logToFile("shutdown failed", { signal: "SIGINT", error: String(err) });
+      process.exit(1);
+    });
+  });
+  process.on("SIGTERM", () => {
+    shutdown("SIGTERM").catch((err) => {
+      logToFile("shutdown failed", { signal: "SIGTERM", error: String(err) });
+      process.exit(1);
+    });
+  });
 
   // Keepalive check — detect half-dead connections where stdin hasn't sent EOF
   // but the parent process is gone. Check every 30s; if no activity for 5 minutes
-  // and stdin is no longer readable, exit cleanly.
+  // and stdin is no longer readable (or parent died), exit cleanly.
   const KEEPALIVE_CHECK_MS = 30_000;
   const KEEPALIVE_TIMEOUT_MS = 5 * 60_000;
-  const keepalive = setInterval(() => {
+  keepaliveTimer = setInterval(() => {
     const idleMs = Date.now() - lastActivityTs;
-    if (idleMs > KEEPALIVE_TIMEOUT_MS && !process.stdin.readable) {
-      logToFile("stdin no longer readable after idle timeout — exiting", {
+    const parentGone = !process.stdin.readable || process.ppid === 1;
+    if (idleMs > KEEPALIVE_TIMEOUT_MS && parentGone) {
+      logToFile("parent gone after idle timeout — exiting", {
         idle_ms: idleMs,
+        stdin_readable: process.stdin.readable,
+        ppid: process.ppid,
         uptime_s: Math.round(process.uptime()),
       });
       auditManager.close().catch(() => {}).finally(() => process.exit(0));
     }
   }, KEEPALIVE_CHECK_MS);
-  keepalive.unref();
+  keepaliveTimer.unref();
 }
 
 // ---------------------------------------------------------------------------
@@ -521,13 +539,18 @@ async function main(): Promise<void> {
   // crash the process. We catch them to log context before exiting.
   // Note: CLI parsing and .env loading happen before these handlers are installed,
   // which is intentional — CLI errors should fail fast.
+  const rejectionTracker = new RejectionTracker({ threshold: 5, windowMs: 60_000 });
+
   process.on("unhandledRejection", (reason) => {
     const data = { error: String(reason), stack: (reason as Error)?.stack };
     log.error("Unhandled promise rejection", data);
     logToFile("unhandledRejection", data);
-    // In stdio mode, don't crash for transient errors — keep the connection alive.
-    // Only exit for truly fatal errors (uncaughtException below).
     if (transport !== "stdio") {
+      process.exit(1);
+    }
+    if (rejectionTracker.record()) {
+      log.error("Too many unhandled rejections — exiting to allow reconnect");
+      logToFile("rejection threshold breached — exiting", { count: 5, windowMs: 60_000 });
       process.exit(1);
     }
   });
