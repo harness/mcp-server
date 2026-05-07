@@ -18,7 +18,7 @@ import { configureElicitation } from "./utils/elicitation.js";
 import { resolveHttpHostValidationOptions } from "./utils/http-hosts.js";
 import { loadEnvFile } from "./utils/env.js";
 import { createAuditManager, type AuditManager } from "./audit/index.js";
-import { RejectionTracker } from "./utils/rejection-tracker.js";
+
 
 const log = createLogger("main");
 
@@ -195,18 +195,20 @@ async function startStdio(config: Config): Promise<void> {
   });
 
   // Keepalive check — detect half-dead connections where stdin hasn't sent EOF
-  // but the parent process is gone. Check every 30s; if no activity for 5 minutes
-  // and stdin is no longer readable (or parent died), exit cleanly.
+  // but the parent process is gone. Exit immediately if reparented to init (ppid 1);
+  // otherwise wait for idle timeout + stdin not readable.
   const KEEPALIVE_CHECK_MS = 30_000;
   const KEEPALIVE_TIMEOUT_MS = 5 * 60_000;
   keepaliveTimer = setInterval(() => {
     const idleMs = Date.now() - lastActivityTs;
-    const parentGone = !process.stdin.readable || process.ppid === 1;
-    if (idleMs > KEEPALIVE_TIMEOUT_MS && parentGone) {
-      logToFile("parent gone after idle timeout — exiting", {
+    const reparented = process.ppid === 1;
+    const stdinDead = !process.stdin.readable;
+
+    if (reparented || (idleMs > KEEPALIVE_TIMEOUT_MS && stdinDead)) {
+      logToFile("parent gone — exiting", {
         idle_ms: idleMs,
+        reparented,
         stdin_readable: process.stdin.readable,
-        ppid: process.ppid,
         uptime_s: Math.round(process.uptime()),
       });
       auditManager.close().catch(() => {}).finally(() => process.exit(0));
@@ -539,20 +541,11 @@ async function main(): Promise<void> {
   // crash the process. We catch them to log context before exiting.
   // Note: CLI parsing and .env loading happen before these handlers are installed,
   // which is intentional — CLI errors should fail fast.
-  const rejectionTracker = new RejectionTracker({ threshold: 5, windowMs: 60_000 });
-
   process.on("unhandledRejection", (reason) => {
     const data = { error: String(reason), stack: (reason as Error)?.stack };
-    log.error("Unhandled promise rejection", data);
-    logToFile("unhandledRejection", data);
-    if (transport !== "stdio") {
-      process.exit(1);
-    }
-    if (rejectionTracker.record()) {
-      log.error("Too many unhandled rejections — exiting to allow reconnect");
-      logToFile("rejection threshold breached — exiting", { count: 5, windowMs: 60_000 });
-      process.exit(1);
-    }
+    log.error("Unhandled promise rejection — exiting", data);
+    logToFile("unhandledRejection — exiting", data);
+    process.exit(1);
   });
   process.on("uncaughtException", (err) => {
     const data = { error: err.message, stack: err.stack, code: (err as NodeJS.ErrnoException).code };
