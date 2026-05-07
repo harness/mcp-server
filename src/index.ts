@@ -176,8 +176,25 @@ async function startStdio(config: Config): Promise<void> {
     process.exit(0);
   };
 
-  process.on("SIGINT", () => { shutdown("SIGINT"); });
-  process.on("SIGTERM", () => { shutdown("SIGTERM"); });
+  process.on("SIGINT", () => { shutdown("SIGINT").catch(() => process.exit(1)); });
+  process.on("SIGTERM", () => { shutdown("SIGTERM").catch(() => process.exit(1)); });
+
+  // Keepalive check — detect half-dead connections where stdin hasn't sent EOF
+  // but the parent process is gone. Check every 30s; if no activity for 5 minutes
+  // and stdin is no longer readable, exit cleanly.
+  const KEEPALIVE_CHECK_MS = 30_000;
+  const KEEPALIVE_TIMEOUT_MS = 5 * 60_000;
+  const keepalive = setInterval(() => {
+    const idleMs = Date.now() - lastActivityTs;
+    if (idleMs > KEEPALIVE_TIMEOUT_MS && !process.stdin.readable) {
+      logToFile("stdin no longer readable after idle timeout — exiting", {
+        idle_ms: idleMs,
+        uptime_s: Math.round(process.uptime()),
+      });
+      auditManager.close().catch(() => {}).finally(() => process.exit(0));
+    }
+  }, KEEPALIVE_CHECK_MS);
+  keepalive.unref();
 }
 
 // ---------------------------------------------------------------------------
@@ -506,9 +523,13 @@ async function main(): Promise<void> {
   // which is intentional — CLI errors should fail fast.
   process.on("unhandledRejection", (reason) => {
     const data = { error: String(reason), stack: (reason as Error)?.stack };
-    log.error("Unhandled promise rejection — exiting", data);
-    logToFile("unhandledRejection — exiting", data);
-    process.exit(1);
+    log.error("Unhandled promise rejection", data);
+    logToFile("unhandledRejection", data);
+    // In stdio mode, don't crash for transient errors — keep the connection alive.
+    // Only exit for truly fatal errors (uncaughtException below).
+    if (transport !== "stdio") {
+      process.exit(1);
+    }
   });
   process.on("uncaughtException", (err) => {
     const data = { error: err.message, stack: err.stack, code: (err as NodeJS.ErrnoException).code };
