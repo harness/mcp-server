@@ -139,7 +139,7 @@ export type ToolsetName =
   | "overrides"
   | "ai-evals";
 
-export type ProductName = "harness" | "fme" | "idp";
+export type ProductName = "harness" | "fme";
 
 export type OperationName = "list" | "get" | "create" | "update" | "delete";
 

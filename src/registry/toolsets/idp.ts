@@ -1,37 +1,5 @@
-import type { ToolsetDefinition, BodySchema } from "../types.js";
+import type { ToolsetDefinition } from "../types.js";
 import { ngExtract, pageExtract, v1ListExtract } from "../extractors.js";
-
-const idpEntityCreateSchema: BodySchema = {
-  description: "IDP catalog entity definition (Backstage catalog-info format)",
-  fields: [
-    { name: "kind", type: "string", required: true, description: "Entity kind (e.g. Component, API, System, Resource, Group, User)" },
-    { name: "metadata", type: "object", required: true, description: "Entity metadata (name, namespace, annotations, labels, tags)", fields: [
-      { name: "name", type: "string", required: true, description: "Entity name (unique within namespace+kind)" },
-      { name: "namespace", type: "string", required: false, description: "Namespace (defaults to 'default')" },
-      { name: "description", type: "string", required: false, description: "Entity description" },
-      { name: "annotations", type: "object", required: false, description: "Key-value annotations" },
-      { name: "labels", type: "object", required: false, description: "Key-value labels" },
-      { name: "tags", type: "array", required: false, description: "Tags", itemType: "string" },
-    ]},
-    { name: "spec", type: "object", required: true, description: "Kind-specific specification (varies by entity kind)" },
-  ],
-};
-
-const idpEntityUpdateSchema: BodySchema = {
-  description: "IDP catalog entity update definition (full entity replacement)",
-  fields: [
-    { name: "kind", type: "string", required: true, description: "Entity kind" },
-    { name: "metadata", type: "object", required: true, description: "Entity metadata (name, namespace, annotations, labels, tags)", fields: [
-      { name: "name", type: "string", required: true, description: "Entity name" },
-      { name: "namespace", type: "string", required: false, description: "Namespace (defaults to 'default')" },
-      { name: "description", type: "string", required: false, description: "Entity description" },
-      { name: "annotations", type: "object", required: false, description: "Key-value annotations" },
-      { name: "labels", type: "object", required: false, description: "Key-value labels" },
-      { name: "tags", type: "array", required: false, description: "Tags", itemType: "string" },
-    ]},
-    { name: "spec", type: "object", required: true, description: "Kind-specific specification" },
-  ],
-};
 
 export const idpToolset: ToolsetDefinition = {
   name: "idp",
@@ -41,10 +9,9 @@ export const idpToolset: ToolsetDefinition = {
     {
       resourceType: "idp_entity",
       displayName: "IDP Entity",
-      description: "Internal Developer Portal catalog entity. Supports list, get, create, update, and delete.",
+      description: "Internal Developer Portal catalog entity. Supports list and get.",
       toolset: "idp",
       scope: "account",
-      product: "idp",
       identifierFields: ["entity_id", "kind"],
       listFilterFields: [
         { name: "kind", description: "Catalog entity kind filter", enum: ["api", "component", "environment", "environmentblueprint", "group", "resource", "user", "workflow"] },
@@ -89,46 +56,6 @@ export const idpToolset: ToolsetDefinition = {
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: ngExtract,
           description: "Get IDP catalog entity details by scope, kind, namespace, and name (entity_ref format: kind:namespace/name)",
-        },
-        create: {
-          method: "POST",
-          path: "/v1/entities",
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
-          bodyBuilder: (input) => input.body ?? {},
-          responseExtractor: ngExtract,
-          description: "Create (register) an IDP catalog entity",
-          bodySchema: idpEntityCreateSchema,
-        },
-        update: {
-          method: "PUT",
-          path: "/v1/entities",
-          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
-          bodyBuilder: (input) => input.body ?? {},
-          responseExtractor: ngExtract,
-          description: "Update (replace) an IDP catalog entity",
-          bodySchema: idpEntityUpdateSchema,
-        },
-        delete: {
-          method: "DELETE",
-          path: "/v1/entities/{scope}/{kind}/{namespace}/{entityId}",
-          pathBuilder: (input) => {
-            let scope = "account";
-            const orgId = input.org_id as string | undefined;
-            const projectId = input.project_id as string | undefined;
-            if (orgId) {
-              scope += `.${orgId}`;
-              if (projectId) {
-                scope += `.${projectId}`;
-              }
-            }
-            const kind = (input.kind as string) || "component";
-            const namespace = (input.namespace as string) || scope;
-            const entityId = input.entity_id as string;
-            return `/v1/entities/${encodeURIComponent(scope)}/${encodeURIComponent(kind)}/${encodeURIComponent(namespace)}/${encodeURIComponent(entityId)}`;
-          },
-          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
-          responseExtractor: ngExtract,
-          description: "Delete (unregister) an IDP catalog entity by scope, kind, namespace, and name",
         },
       },
     },
