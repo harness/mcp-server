@@ -3589,7 +3589,15 @@ const schema: Record<string, any> = {
             "properties": {
               "enabled": {
                 "description": "Whether caching is enabled.",
-                "type": "boolean"
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                  }
+                ]
               },
               "path": {
                 "description": "Paths to cache.",
