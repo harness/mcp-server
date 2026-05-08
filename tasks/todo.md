@@ -269,7 +269,8 @@
 - [x] Reproduce the hardcoded `HARNESS_ORG` fallback with failing tests
 - [x] Remove the fallback without breaking explicit/deprecated org config
 - [x] Run focused tests and typecheck
-- [ ] Commit, push, open PR, and reply in the Slack thread
+- [x] Commit, push, and open PR
+- [ ] Reply in the Slack thread
 
 ### Plan
 - Keep `HARNESS_ORG` unset when neither `HARNESS_ORG` nor `HARNESS_DEFAULT_ORG_ID` is provided.
@@ -282,3 +283,4 @@
 - Added account-scoped project fallback coverage to ensure registry dispatch does not invent an org when config is unset.
 - Added explicit `org_id` guards for `harness_execute` input-set/runtime-input helpers and `harness_status`, where org scope is required.
 - Verification passed with `pnpm test tests/config.test.ts tests/registry/registry.test.ts -- --runInBand`, `pnpm test tests/tools/tool-handlers.test.ts -- --runInBand`, and `pnpm typecheck`.
+- Final verification passed with `pnpm test && pnpm typecheck`; Slack reply was blocked because the trigger channel was not configured for `SendSlackMessage`.
