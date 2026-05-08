@@ -1,0 +1,91 @@
+src/index.ts
+  33f7a536-81f1-4ae8-b2be-d9b4bc28b1b7 198-199,204-208,210,546-548
+  human 21
+src/utils/rejection-tracker.ts
+  human 1-44
+tests/utils/rejection-tracker.test.ts
+  human 1-46
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 11,
+          "added_lines": 12,
+          "deleted_lines": 19,
+          "hash": "33f7a536-81f1-4ae8-b2be-d9b4bc28b1b7",
+          "lines": "198-199,204-208,210,546-548",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 6,
+          "hash": "human",
+          "lines": "21",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/index.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 0,
+          "added_lines": 0,
+          "deleted_lines": 44,
+          "hash": "human",
+          "lines": "1-44",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/utils/rejection-tracker.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 0,
+          "added_lines": 0,
+          "deleted_lines": 46,
+          "hash": "human",
+          "lines": "1-46",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "tests/utils/rejection-tracker.test.ts"
+    }
+  ],
+  "base_commit_sha": "05e7511488bad36616a8fb3346c53de4c688a190",
+  "branch": "fix/stdio-disconnect-stability",
+  "commit_sha": "aa24daaa0bd8e1f3561cde690924998120c2bdff",
+  "commit_time": "2026-05-07T09:58:01-07:00",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.2",
+  "prompts": {
+    "33f7a536-81f1-4ae8-b2be-d9b4bc28b1b7": {
+      "accepted_lines": 11,
+      "agent_id": {
+        "id": "33f7a536-81f1-4ae8-b2be-d9b4bc28b1b7",
+        "model": "claude-opus-4-6",
+        "tool": "claude"
+      },
+      "human_author": "Sunil Gattupalle <sunil.gattupalle@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 12,
+      "total_deletions": 19
+    },
+    "human": {
+      "accepted_lines": 1,
+      "agent_id": null,
+      "human_author": "Sunil Gattupalle <sunil.gattupalle@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 1,
+      "total_deletions": 96
+    }
+  },
+  "repo": "https://github.com/harness/mcp-server.git",
+  "schema_version": "authorship/3.0.0"
+}

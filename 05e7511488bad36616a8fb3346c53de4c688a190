@@ -1,0 +1,91 @@
+src/index.ts
+  33f7a536-81f1-4ae8-b2be-d9b4bc28b1b7 21,147,169-170,172,184-195,199,202,204-206,208-209,215,542-543,551-553
+  human 554-555
+src/utils/rejection-tracker.ts
+  33f7a536-81f1-4ae8-b2be-d9b4bc28b1b7 1-44
+tests/utils/rejection-tracker.test.ts
+  33f7a536-81f1-4ae8-b2be-d9b4bc28b1b7 1-46
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 30,
+          "added_lines": 32,
+          "deleted_lines": 2,
+          "hash": "33f7a536-81f1-4ae8-b2be-d9b4bc28b1b7",
+          "lines": "21,147,169-170,172,184-195,199,202,204-206,208-209,215,542-543,551-553",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 2,
+          "added_lines": 2,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "554-555",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/index.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 44,
+          "added_lines": 44,
+          "deleted_lines": 3,
+          "hash": "33f7a536-81f1-4ae8-b2be-d9b4bc28b1b7",
+          "lines": "1-44",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/utils/rejection-tracker.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 46,
+          "added_lines": 46,
+          "deleted_lines": 4,
+          "hash": "33f7a536-81f1-4ae8-b2be-d9b4bc28b1b7",
+          "lines": "1-46",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "tests/utils/rejection-tracker.test.ts"
+    }
+  ],
+  "base_commit_sha": "cc8ccbf5894c7e1ff1ef9ad9832a0c6169a40c54",
+  "branch": "fix/stdio-disconnect-stability",
+  "commit_sha": "05e7511488bad36616a8fb3346c53de4c688a190",
+  "commit_time": "2026-05-07T09:38:26-07:00",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.2",
+  "prompts": {
+    "33f7a536-81f1-4ae8-b2be-d9b4bc28b1b7": {
+      "accepted_lines": 120,
+      "agent_id": {
+        "id": "33f7a536-81f1-4ae8-b2be-d9b4bc28b1b7",
+        "model": "claude-opus-4-6",
+        "tool": "claude"
+      },
+      "human_author": "Sunil Gattupalle <sunil.gattupalle@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 122,
+      "total_deletions": 9
+    },
+    "human": {
+      "accepted_lines": 2,
+      "agent_id": null,
+      "human_author": "Sunil Gattupalle <sunil.gattupalle@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 2,
+      "total_deletions": 0
+    }
+  },
+  "repo": "https://github.com/harness/mcp-server.git",
+  "schema_version": "authorship/3.0.0"
+}
