@@ -55,6 +55,7 @@ describe("HarnessClient", () => {
       expect(url.origin).toBe("https://app.harness.io");
       expect(url.pathname).toBe("/ng/api/projects");
       expect(url.searchParams.get("accountIdentifier")).toBe("test-account");
+      expect(url.searchParams.get("routingId")).toBe("test-account");
       expect(url.searchParams.get("orgIdentifier")).toBe("myorg");
     });
 

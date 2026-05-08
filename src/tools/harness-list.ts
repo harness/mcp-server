@@ -62,7 +62,7 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
           return errorResult("resource_type is required. Provide it explicitly or via a Harness URL.");
         }
         if (resourceType === "template" && input.template_list_type === undefined) {
-          input.template_list_type = "All";
+          input.template_list_type = "LastUpdated";
         }
         const result = await registry.dispatch(client, resourceType, "list", input);
 

@@ -218,7 +218,7 @@ export class Registry {
     return new Set(valid);
   }
 
-  get orgId(): string { return this.config.HARNESS_ORG; }
+  get orgId(): string | undefined { return this.config.HARNESS_ORG; }
   get projectId(): string | undefined { return this.config.HARNESS_PROJECT; }
 
   /** Get a resource definition by type, or throw. */
@@ -390,6 +390,11 @@ export class Registry {
   ): void {
     if (!this.auditManager) return;
 
+    // Resolve path using pathBuilder if present, otherwise use static path
+    const resolvedPath = spec.pathBuilder
+      ? spec.pathBuilder(input, { HARNESS_ACCOUNT_ID: this.getAccountId(), HARNESS_ORG: this.config.HARNESS_ORG, HARNESS_PROJECT: this.config.HARNESS_PROJECT })
+      : spec.path;
+
     const event: AuditEvent = {
       event_id: randomUUID(),
       timestamp: new Date().toISOString(),
@@ -410,7 +415,7 @@ export class Registry {
       outcome,
       duration_ms: durationMs,
       http_method: spec.method,
-      http_path: spec.path,
+      http_path: resolvedPath,
       ...(error ? { error } : {}),
       ...(httpStatus ? { http_status: httpStatus } : {}),
     };
@@ -494,11 +499,6 @@ export class Registry {
       params[def.scopeParams.account] = resolvedAccountId;
     }
 
-    // Allow the global templates sentinel to override accountIdentifier.
-    // Only this specific value is permitted — arbitrary account overrides are not supported.
-    if (input.account_id === "__GLOBAL_TEMPLATES_ACCOUNT_ID__") {
-      params["accountIdentifier"] = "__GLOBAL_TEMPLATES_ACCOUNT_ID__";
-    }
 
     // Account-scoped resources sometimes still need orgIdentifier in query params (NG /ng/api/projects).
     if (spec.injectOrgQueryFallback) {

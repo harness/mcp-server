@@ -485,6 +485,28 @@ describe("Registry", () => {
     });
   });
 
+  describe("template global get", () => {
+    it("overrides accountIdentifier for global template fetch", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "helmDeployAction" } });
+      const client = makeClient(mockRequest);
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+
+      await registry.dispatch(client, "template", "get", {
+        template_id: "helmDeployAction",
+        version_label: "1.0.8",
+        account_id: "__GLOBAL_TEMPLATES_ACCOUNT_ID__",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("GET");
+      expect(call.path).toBe("/template/api/templates/helmDeployAction");
+      expect(call.params).toMatchObject({
+        accountIdentifier: "__GLOBAL_TEMPLATES_ACCOUNT_ID__",
+        versionLabel: "1.0.8",
+      });
+    });
+  });
+
   describe("cost category create — account body injection", () => {
     let registry: Registry;
 
@@ -605,40 +627,6 @@ describe("Registry", () => {
 
       const call = mockRequest.mock.calls[0][0];
       expect(call.body.accountIdentifier).toBe("resolved-account");
-    });
-
-    it("overrides accountIdentifier with __GLOBAL_TEMPLATES_ACCOUNT_ID__ sentinel", async () => {
-      const mockRequest = vi.fn().mockResolvedValue({ data: { content: [], totalElements: 0 } });
-      const client = makeClient(mockRequest);
-      const registry = new Registry(
-        makeConfig({ HARNESS_TOOLSETS: "templates", HARNESS_ACCOUNT_ID: "static-account" }),
-      );
-
-      await registry.dispatch(client, "template", "list", {
-        org_id: "org1",
-        project_id: "proj1",
-        account_id: "__GLOBAL_TEMPLATES_ACCOUNT_ID__",
-      });
-
-      const call = mockRequest.mock.calls[0][0];
-      expect(call.params.accountIdentifier).toBe("__GLOBAL_TEMPLATES_ACCOUNT_ID__");
-    });
-
-    it("does not override accountIdentifier for arbitrary account_id values", async () => {
-      const mockRequest = vi.fn().mockResolvedValue({ data: { content: [], totalElements: 0 } });
-      const client = makeClient(mockRequest);
-      const registry = new Registry(
-        makeConfig({ HARNESS_TOOLSETS: "templates", HARNESS_ACCOUNT_ID: "static-account" }),
-      );
-
-      await registry.dispatch(client, "template", "list", {
-        org_id: "org1",
-        project_id: "proj1",
-        account_id: "some-other-account",
-      });
-
-      const call = mockRequest.mock.calls[0][0];
-      expect(call.params.accountIdentifier).toBeUndefined();
     });
   });
 

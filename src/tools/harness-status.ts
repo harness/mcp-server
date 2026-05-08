@@ -90,7 +90,7 @@ export function registerStatusTool(
       try {
         const signal = extra.signal;
         const merged = applyUrlDefaults(args as Record<string, unknown>, args.url);
-        const orgId = asString(merged.org_id) ?? config.HARNESS_ORG;
+        const orgId = asString(merged.org_id) ?? config.HARNESS_ORG ?? "";
         const projectId = asString(merged.project_id) ?? config.HARNESS_PROJECT ?? "";
         const limit = Math.min(args.limit ?? 5, 20);
 
