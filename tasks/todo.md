@@ -270,7 +270,7 @@
 - [x] Add a focused regression test for hosted HTTP session config using incoming auth/account/base host
 - [x] Implement the minimal hosted-session config fix
 - [x] Run focused tests, typecheck, and review the diff
-- [ ] Commit, push, open PR, and reply in the original Slack thread
+- [x] Commit, push, open PR, and reply in the original Slack thread
 
 ### Plan
 - Keep the fix at HTTP session initialization so all tools, including `harness_diagnose`, use the same effective Harness account, API key, and Harness SaaS host for the session.
