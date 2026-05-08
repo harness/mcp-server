@@ -55,6 +55,7 @@ describe("HarnessClient", () => {
       expect(url.origin).toBe("https://app.harness.io");
       expect(url.pathname).toBe("/ng/api/projects");
       expect(url.searchParams.get("accountIdentifier")).toBe("test-account");
+      expect(url.searchParams.get("routingId")).toBe("test-account");
       expect(url.searchParams.get("orgIdentifier")).toBe("myorg");
     });
 
@@ -67,6 +68,7 @@ describe("HarnessClient", () => {
       const url = new URL(fetchSpy.mock.calls[0][0] as string);
       expect(url.searchParams.get("accountID")).toBe("test-account");
       expect(url.searchParams.get("accountIdentifier")).toBe("test-account");
+      expect(url.searchParams.get("routingId")).toBe("test-account");
     });
 
     it("encodes query param for multi-word params", async () => {
@@ -164,6 +166,40 @@ describe("HarnessClient", () => {
       const url = new URL(fetchSpy.mock.calls[0][0] as string);
       expect(url.searchParams.getAll("inputSetIdentifiers")).toEqual(["set-a", "set-b"]);
       expect(url.searchParams.get("orgIdentifier")).toBe("o");
+    });
+
+    it("omits routingId when headerBasedScoping is true", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({ path: "/sei/api/v1/users", headerBasedScoping: true });
+
+      const url = new URL(fetchSpy.mock.calls[0][0] as string);
+      expect(url.searchParams.has("accountIdentifier")).toBe(false);
+      expect(url.searchParams.has("routingId")).toBe(false);
+    });
+
+    it("omits routingId for FME product requests", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({ path: "/internal/api/v2/splits", product: "fme" });
+
+      const url = new URL(fetchSpy.mock.calls[0][0] as string);
+      expect(url.searchParams.has("accountIdentifier")).toBe(false);
+      expect(url.searchParams.has("routingId")).toBe(false);
+    });
+
+    it("uses resolved account ID for routingId", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+      client.setAccountIdResolver(() => "resolved-account-123");
+
+      await client.request({ path: "/ng/api/projects" });
+
+      const url = new URL(fetchSpy.mock.calls[0][0] as string);
+      expect(url.searchParams.get("accountIdentifier")).toBe("resolved-account-123");
+      expect(url.searchParams.get("routingId")).toBe("resolved-account-123");
     });
   });
 
