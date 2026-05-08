@@ -333,6 +333,44 @@ describe("Registry", () => {
       expect(call.body.categories).toBeUndefined();
     });
 
+    it("audit_resource_type filter is serialized into the request body", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: { content: [], totalElements: 0 },
+      });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "audit_event", "list", {
+        audit_resource_type: "PIPELINE",
+        action: "CREATE",
+        page: 0,
+        size: 20,
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("POST");
+      expect(call.path).toBe("/audit/api/audits/list");
+      expect(call.body).toMatchObject({
+        filterType: "Audit",
+        actions: ["CREATE"],
+        resources: [{ type: "PIPELINE" }],
+      });
+    });
+
+    it("audit_event list omits resources field when audit_resource_type not provided", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: { content: [], totalElements: 0 },
+      });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "audit_event", "list", {
+        action: "DELETE",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.actions).toEqual(["DELETE"]);
+      expect(call.body.resources).toBeUndefined();
+    });
+
     it("identifierFields include parent IDs for nested resources", () => {
       // Trigger needs both pipeline_id and trigger_id
       const triggerDef = registry.getResource("trigger");
