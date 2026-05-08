@@ -77,7 +77,7 @@
     "HARNESS_ORG": {
       "type": "string",
       "title": "Default Harness Organization",
-      "description": "Default Harness organization identifier. If omitted, the server uses default.",
+      "description": "Default Harness organization identifier. If omitted, org_id must be provided per tool call.",
       "required": false,
       "sensitive": false
     },
