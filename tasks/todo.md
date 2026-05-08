@@ -269,10 +269,16 @@
 - [x] Trace `harness_diagnose` failed-step log resolution through the client and log-service request path
 - [x] Add a focused regression test for hosted HTTP session config using incoming auth/account/base host
 - [x] Implement the minimal hosted-session config fix
-- [ ] Run focused tests, typecheck, and review the diff
+- [x] Run focused tests, typecheck, and review the diff
 - [ ] Commit, push, open PR, and reply in the original Slack thread
 
 ### Plan
 - Keep the fix at HTTP session initialization so all tools, including `harness_diagnose`, use the same effective Harness account, API key, and Harness SaaS host for the session.
 - Preserve local/self-hosted behavior: explicit `HARNESS_BASE_URL` remains authoritative, and non-Harness MCP hostnames do not become Harness API base URLs.
 - Add coverage that a QA hosted MCP initialize request with `X-Api-Key`, `Harness-Account`, and `Host: qa.harness.io` produces a session config that targets `https://qa.harness.io` and injects the requested account into downstream log-service query params.
+
+### Review
+- Root cause: hosted HTTP sessions only carried the static server config plus optional pipeline version, so hosted QA sessions could keep using the default `https://app.harness.io` base URL and static account/API key instead of the request's `X-Api-Key`/`Harness-Account`/Harness host context.
+- Added `mergeConfigWithHttpRequest()` to derive per-session Harness API key, account ID, v1/v0 pipeline preference, and Harness SaaS base URL from the initialize request.
+- Updated HTTP session initialization and CORS allowed headers so hosted header-based configs are honored.
+- Verified with `pnpm test tests/utils/http-session-config.test.ts`, `pnpm test tests/client/harness-client.test.ts`, `pnpm test tests/tools/diagnose/pipeline.test.ts`, `pnpm typecheck`, and `pnpm test`.
