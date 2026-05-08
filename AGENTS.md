@@ -277,8 +277,8 @@ HARNESS_ACCOUNT_ID=abc123xyz                    # Account identifier
 HARNESS_BASE_URL=https://app.harness.io         # Override for self-managed
 
 # .env — optional defaults
-HARNESS_DEFAULT_ORG=default                     # Default org identifier
-HARNESS_DEFAULT_PROJECT=                        # Default project identifier
+HARNESS_ORG=                                    # Default org identifier (required if not provided per-call)
+HARNESS_PROJECT=                                # Default project identifier
 HARNESS_API_TIMEOUT_MS=30000                    # Request timeout
 HARNESS_MAX_RETRIES=3                           # Retry count for transient failures
 LOG_LEVEL=info                                  # debug | info | warn | error
@@ -288,16 +288,19 @@ LOG_LEVEL=info                                  # debug | info | warn | error
 ```typescript
 import * as z from "zod/v4";
 
+const emptyStringAsUndefined = (val: unknown): unknown => val === "" ? undefined : val;
+const optionalStringFromEnv = z.preprocess(emptyStringAsUndefined, z.string().optional());
+
 export const ConfigSchema = z.object({
   HARNESS_API_KEY: z.string().min(1, "HARNESS_API_KEY is required"),
-  HARNESS_ACCOUNT_ID: z.string().optional(),
+  HARNESS_ACCOUNT_ID: optionalStringFromEnv,
   HARNESS_BASE_URL: z.string().url().default("https://app.harness.io"),
-  HARNESS_DEFAULT_ORG_ID: z.string().default("default"),
-  HARNESS_DEFAULT_PROJECT_ID: z.string().optional(),
+  HARNESS_ORG: optionalStringFromEnv,
+  HARNESS_PROJECT: optionalStringFromEnv,
   HARNESS_API_TIMEOUT_MS: z.coerce.number().default(30000),
   HARNESS_MAX_RETRIES: z.coerce.number().default(3),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
-  HARNESS_TOOLSETS: z.string().optional(),
+  HARNESS_TOOLSETS: optionalStringFromEnv,
   HARNESS_MAX_BODY_SIZE_MB: z.coerce.number().default(10),
   HARNESS_RATE_LIMIT_RPS: z.coerce.number().default(10),
   HARNESS_READ_ONLY: z.coerce.boolean().default(false),
@@ -413,7 +416,7 @@ server.prompt(
 4. Similar past failures if identifiable
 
 Execution ID: ${executionId}
-Project: ${projectId || "default"}
+Project: ${projectId || "not specified"}
 
 Use get_execution and get_execution_logs tools to gather context.`
       }
@@ -620,8 +623,8 @@ Add to Claude Desktop config (`claude_desktop_config.json`):
       "env": {
         "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
         "HARNESS_ACCOUNT_ID": "your-account-id",
-        "HARNESS_DEFAULT_ORG": "default",
-        "HARNESS_DEFAULT_PROJECT": "your-project"
+        "HARNESS_ORG": "your-org-id",
+        "HARNESS_PROJECT": "your-project"
       }
     }
   }
