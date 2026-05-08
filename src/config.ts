@@ -124,7 +124,7 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
   if (!data.HARNESS_PROJECT && data.HARNESS_DEFAULT_PROJECT_ID) {
     console.error('[DEPRECATION] HARNESS_DEFAULT_PROJECT_ID is deprecated. Use HARNESS_PROJECT instead.');
   }
-  const HARNESS_ORG = data.HARNESS_ORG ?? data.HARNESS_DEFAULT_ORG_ID;
+  const HARNESS_ORG = data.HARNESS_ORG ?? data.HARNESS_DEFAULT_ORG_ID ?? "default";
   const HARNESS_PROJECT = data.HARNESS_PROJECT ?? data.HARNESS_DEFAULT_PROJECT_ID;
 
   // Resolve auto-approve risk: prefer new name, fall back to deprecated SKIP_ELICITATION

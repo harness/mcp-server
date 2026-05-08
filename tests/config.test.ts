@@ -81,7 +81,7 @@ describe("ConfigSchema", () => {
     const result = ConfigSchema.safeParse(validConfig);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.HARNESS_ORG).toBeUndefined();
+      expect(result.data.HARNESS_ORG).toBe("default");
     }
   });
 
@@ -112,7 +112,7 @@ describe("ConfigSchema", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.HARNESS_ACCOUNT_ID).toBe("acct123");
-      expect(result.data.HARNESS_ORG).toBeUndefined();
+      expect(result.data.HARNESS_ORG).toBe("default");
       expect(result.data.HARNESS_PROJECT).toBeUndefined();
       expect(result.data.HARNESS_BASE_URL).toBe("https://app.harness.io");
     }
