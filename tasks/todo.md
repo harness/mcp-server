@@ -270,7 +270,7 @@
 - [x] Add a focused failing regression test
 - [x] Normalize GitOps list response shapes for search/list consumers
 - [x] Run focused tests and typecheck
-- [ ] Commit, push, open PR, and reply in the Slack thread
+- [x] Commit, push, open PR, and reply in the Slack thread
 
 ### Plan
 - Reproduce the report with `harness_search(resource_types=["gitops_application"], org_id, project_id)` against the GitOps list response shape.
