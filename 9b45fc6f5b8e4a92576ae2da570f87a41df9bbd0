@@ -1,0 +1,100 @@
+tests/tools/harness-schema-examples.test.ts
+  d39d16d2-f6d7-4bf1-859b-e395bb3d5e49 3
+  human 4
+src/data/examples/load-all.ts
+  d39d16d2-f6d7-4bf1-859b-e395bb3d5e49 1-4
+src/tools/harness-schema.ts
+  d39d16d2-f6d7-4bf1-859b-e395bb3d5e49 7-8,136,139-140,145-146,154-161,171-216,219,221-226
+  human 6,130
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "d39d16d2-f6d7-4bf1-859b-e395bb3d5e49",
+          "lines": "3",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 0,
+          "added_lines": 0,
+          "deleted_lines": 1,
+          "hash": "human",
+          "lines": "4",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "tests/tools/harness-schema-examples.test.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 4,
+          "added_lines": 4,
+          "deleted_lines": 0,
+          "hash": "d39d16d2-f6d7-4bf1-859b-e395bb3d5e49",
+          "lines": "1-4",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/data/examples/load-all.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 68,
+          "added_lines": 68,
+          "deleted_lines": 8,
+          "hash": "d39d16d2-f6d7-4bf1-859b-e395bb3d5e49",
+          "lines": "7-8,136,139-140,145-146,154-161,171-216,219,221-226",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 2,
+          "added_lines": 2,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "6,130",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/tools/harness-schema.ts"
+    }
+  ],
+  "base_commit_sha": "9b45fc6f5b8e4a92576ae2da570f87a41df9bbd0",
+  "branch": "main",
+  "commit_sha": "be3b73cede55d43816c43e7e7564a62f1d12aad3",
+  "commit_time": "2026-05-05T12:34:18-07:00",
+  "commit_type": "cherry_pick",
+  "git_ai_version": "1.4.2",
+  "prompts": {
+    "d39d16d2-f6d7-4bf1-859b-e395bb3d5e49": {
+      "accepted_lines": 73,
+      "agent_id": {
+        "id": "d39d16d2-f6d7-4bf1-859b-e395bb3d5e49",
+        "model": "claude-opus-4-6",
+        "tool": "claude"
+      },
+      "human_author": "Sunil Gattupalle <sunil.gattupalle@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 73,
+      "total_deletions": 8
+    },
+    "human": {
+      "accepted_lines": 2,
+      "agent_id": null,
+      "human_author": "Sunil Gattupalle <sunil.gattupalle@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 2,
+      "total_deletions": 1
+    }
+  },
+  "repo": "https://github.com/harness/mcp-server.git",
+  "schema_version": "authorship/3.0.0"
+}

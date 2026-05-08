@@ -1,0 +1,43 @@
+tests/registry/registry.test.ts
+  42ad691c-7df6-45ae-9246-e0dc00d52337 609-642
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 34,
+          "added_lines": 34,
+          "deleted_lines": 0,
+          "hash": "42ad691c-7df6-45ae-9246-e0dc00d52337",
+          "lines": "609-642",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "tests/registry/registry.test.ts"
+    }
+  ],
+  "base_commit_sha": "9046c84ae489842f15c7536e70d824cbff92e0e4",
+  "branch": "fix/global-templates-account-id-override",
+  "commit_sha": "f121829d74a69ffa3ee030c380c6d30fe1df7dc1",
+  "commit_time": "2026-05-07T16:40:08+05:30",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.2",
+  "prompts": {
+    "42ad691c-7df6-45ae-9246-e0dc00d52337": {
+      "accepted_lines": 34,
+      "agent_id": {
+        "id": "42ad691c-7df6-45ae-9246-e0dc00d52337",
+        "model": "claude-sonnet-4-6",
+        "tool": "claude"
+      },
+      "human_author": "Yogesh Chauhan <yogesh.chauhan@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 34,
+      "total_deletions": 0
+    }
+  },
+  "repo": "git@github.com:yogesh-chauhan/mcp-server.git",
+  "schema_version": "authorship/3.0.0"
+}

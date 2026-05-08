@@ -1,0 +1,43 @@
+tests/client/harness-client.test.ts
+  a566d20e-dce5-436a-a54c-cc96638214fd 58,71,170-203
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 36,
+          "added_lines": 36,
+          "deleted_lines": 0,
+          "hash": "a566d20e-dce5-436a-a54c-cc96638214fd",
+          "lines": "58,71,170-203",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "tests/client/harness-client.test.ts"
+    }
+  ],
+  "base_commit_sha": "3e894a6d0f037e05e968d6784a99e39b5394cd3e",
+  "branch": "fix/add-routing-id-param",
+  "commit_sha": "d1cae1c25616c8254563a335b69e7a39c8ffe047",
+  "commit_time": "2026-05-08T15:44:52+05:30",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.2",
+  "prompts": {
+    "a566d20e-dce5-436a-a54c-cc96638214fd": {
+      "accepted_lines": 36,
+      "agent_id": {
+        "id": "a566d20e-dce5-436a-a54c-cc96638214fd",
+        "model": "claude-sonnet-4-5-20250929",
+        "tool": "claude"
+      },
+      "human_author": "Yogesh Chauhan <yogesh.chauhan@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 36,
+      "total_deletions": 0
+    }
+  },
+  "repo": "https://github.com/harness/mcp-server",
+  "schema_version": "authorship/3.0.0"
+}

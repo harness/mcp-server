@@ -1,0 +1,88 @@
+src/tools/index.ts
+  d39d16d2-f6d7-4bf1-859b-e395bb3d5e49 17
+src/data/examples/index.ts
+  d39d16d2-f6d7-4bf1-859b-e395bb3d5e49 5,7-11
+src/tools/harness-schema.ts
+  d39d16d2-f6d7-4bf1-859b-e395bb3d5e49 140
+src/index.ts
+  d39d16d2-f6d7-4bf1-859b-e395bb3d5e49 82-83
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "d39d16d2-f6d7-4bf1-859b-e395bb3d5e49",
+          "lines": "17",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/tools/index.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 6,
+          "added_lines": 6,
+          "deleted_lines": 2,
+          "hash": "d39d16d2-f6d7-4bf1-859b-e395bb3d5e49",
+          "lines": "5,7-11",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/data/examples/index.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "d39d16d2-f6d7-4bf1-859b-e395bb3d5e49",
+          "lines": "140",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/tools/harness-schema.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 2,
+          "added_lines": 2,
+          "deleted_lines": 2,
+          "hash": "d39d16d2-f6d7-4bf1-859b-e395bb3d5e49",
+          "lines": "82-83",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/index.ts"
+    }
+  ],
+  "base_commit_sha": "ee810d3f1c98cbfcc842436d8d3741f14ffb8637",
+  "branch": "feat/dual-pipeline-versions-and-examples",
+  "commit_sha": "b763451387efbd264f58b9520be81d7c4e3b2c82",
+  "commit_time": "2026-05-05T12:50:49-07:00",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.2",
+  "prompts": {
+    "d39d16d2-f6d7-4bf1-859b-e395bb3d5e49": {
+      "accepted_lines": 10,
+      "agent_id": {
+        "id": "d39d16d2-f6d7-4bf1-859b-e395bb3d5e49",
+        "model": "claude-opus-4-6",
+        "tool": "claude"
+      },
+      "human_author": "Sunil Gattupalle <sunil.gattupalle@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 10,
+      "total_deletions": 4
+    }
+  },
+  "repo": "https://github.com/harness/mcp-server.git",
+  "schema_version": "authorship/3.0.0"
+}

@@ -1,0 +1,43 @@
+src/registry/toolsets/ccm.ts
+  39da4904-fabb-4255-8126-1e7104e7d8fa 568,570
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 2,
+          "added_lines": 2,
+          "deleted_lines": 2,
+          "hash": "39da4904-fabb-4255-8126-1e7104e7d8fa",
+          "lines": "568,570",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/ccm.ts"
+    }
+  ],
+  "base_commit_sha": "0766099bc9083d6fff73a19037c5bc9e8f6e9cb7",
+  "branch": "CCM-32038-filter-skill",
+  "commit_sha": "6ff717319406043ae10fd8cc424bc2a509e5f826",
+  "commit_time": "2026-05-05T16:34:47+05:30",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.2",
+  "prompts": {
+    "39da4904-fabb-4255-8126-1e7104e7d8fa": {
+      "accepted_lines": 2,
+      "agent_id": {
+        "id": "39da4904-fabb-4255-8126-1e7104e7d8fa",
+        "model": "claude-sonnet-4-6",
+        "tool": "claude"
+      },
+      "human_author": "Shashwat Pandey <shashwat.pandey@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 2,
+      "total_deletions": 2
+    }
+  },
+  "repo": "https://github.com/harness/mcp-server.git",
+  "schema_version": "authorship/3.0.0"
+}

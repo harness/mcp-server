@@ -1,0 +1,73 @@
+src/tools/harness-get.ts
+  631096d2-3acd-4005-9bb0-d391939a44e0 73,75
+tests/tools/tool-handlers.test.ts
+  631096d2-3acd-4005-9bb0-d391939a44e0 162,173
+src/registry/toolsets/templates.ts
+  631096d2-3acd-4005-9bb0-d391939a44e0 20,29,38,47,59
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 2,
+          "added_lines": 2,
+          "deleted_lines": 2,
+          "hash": "631096d2-3acd-4005-9bb0-d391939a44e0",
+          "lines": "73,75",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/tools/harness-get.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 2,
+          "added_lines": 2,
+          "deleted_lines": 2,
+          "hash": "631096d2-3acd-4005-9bb0-d391939a44e0",
+          "lines": "162,173",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "tests/tools/tool-handlers.test.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 5,
+          "added_lines": 5,
+          "deleted_lines": 6,
+          "hash": "631096d2-3acd-4005-9bb0-d391939a44e0",
+          "lines": "20,29,38,47,59",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/templates.ts"
+    }
+  ],
+  "base_commit_sha": "87731bc032c36bba28c6e9c41714468ef6ac229a",
+  "branch": "fix/global-templates-account-id-override",
+  "commit_sha": "38272bca3706b7c2b41ff352bbd4df8c812bf046",
+  "commit_time": "2026-05-08T15:50:17+05:30",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.2",
+  "prompts": {
+    "631096d2-3acd-4005-9bb0-d391939a44e0": {
+      "accepted_lines": 9,
+      "agent_id": {
+        "id": "631096d2-3acd-4005-9bb0-d391939a44e0",
+        "model": "claude-sonnet-4-5-20250929",
+        "tool": "claude"
+      },
+      "human_author": "Yogesh Chauhan <yogesh.chauhan@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 9,
+      "total_deletions": 10
+    }
+  },
+  "repo": "https://github.com/harness/mcp-server",
+  "schema_version": "authorship/3.0.0"
+}

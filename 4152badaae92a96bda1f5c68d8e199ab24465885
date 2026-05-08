@@ -1,0 +1,91 @@
+src/tools/harness-execute.ts
+  c2067db4-09e1-457f-8c19-186b86e31935 108-112
+src/tools/harness-status.ts
+  c2067db4-09e1-457f-8c19-186b86e31935 94,97-102
+  human 103
+src/registry/index.ts
+  human 221
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 5,
+          "added_lines": 5,
+          "deleted_lines": 0,
+          "hash": "c2067db4-09e1-457f-8c19-186b86e31935",
+          "lines": "108-112",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/tools/harness-execute.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 7,
+          "added_lines": 8,
+          "deleted_lines": 1,
+          "hash": "c2067db4-09e1-457f-8c19-186b86e31935",
+          "lines": "94,97-102",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "103",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/tools/harness-status.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "221",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/index.ts"
+    }
+  ],
+  "base_commit_sha": "3d698181a36a5b1e74a1531f9a445acf81344d78",
+  "branch": "remove-default-org-id-value",
+  "commit_sha": "4152badaae92a96bda1f5c68d8e199ab24465885",
+  "commit_time": "2026-05-08T16:14:37+05:30",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.2",
+  "prompts": {
+    "c2067db4-09e1-457f-8c19-186b86e31935": {
+      "accepted_lines": 12,
+      "agent_id": {
+        "id": "c2067db4-09e1-457f-8c19-186b86e31935",
+        "model": "claude-sonnet-4-5-20250929",
+        "tool": "claude"
+      },
+      "human_author": "Yogesh Chauhan <yogesh.chauhan@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 13,
+      "total_deletions": 1
+    },
+    "human": {
+      "accepted_lines": 2,
+      "agent_id": null,
+      "human_author": "Yogesh Chauhan <yogesh.chauhan@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 2,
+      "total_deletions": 0
+    }
+  },
+  "repo": "https://github.com/harness/mcp-server",
+  "schema_version": "authorship/3.0.0"
+}
