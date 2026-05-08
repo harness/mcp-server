@@ -71,6 +71,40 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
+function numberField(record: Record<string, unknown>, key: string): number | undefined {
+  const value = record[key];
+  return typeof value === "number" ? value : undefined;
+}
+
+function gitopsListExtract(...arrayKeys: string[]) {
+  return (raw: unknown): unknown => {
+    if (!isRecord(raw)) return raw;
+
+    let items: unknown[] | undefined = Array.isArray(raw.items) ? raw.items : undefined;
+    for (const key of arrayKeys) {
+      if (items) break;
+      const value = raw[key];
+      if (Array.isArray(value)) {
+        items = value;
+      }
+    }
+
+    if (!items) return raw;
+
+    const pagination = isRecord(raw.pagination) ? raw.pagination : undefined;
+    const total =
+      numberField(raw, "total") ??
+      numberField(raw, "totalItems") ??
+      numberField(raw, "totalElements") ??
+      numberField(raw, "itemCount") ??
+      (pagination ? numberField(pagination, "totalItems") : undefined) ??
+      (pagination ? numberField(pagination, "total") : undefined) ??
+      items.length;
+
+    return { ...raw, items, total };
+  };
+}
+
 /**
  * Encode `apiextensionsv1.JSON` fields inside a generator's `list.elements`
  * and `plugin.input.parameters`.  Shared by top-level and nested encoders.
@@ -208,7 +242,7 @@ export const gitopsToolset: ToolsetDefinition = {
             page: "pageIndex",
             size: "pageSize",
           },
-          responseExtractor: passthrough,
+          responseExtractor: gitopsListExtract("agents"),
           description: "List GitOps agents",
         },
         get: {
@@ -253,7 +287,7 @@ export const gitopsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           injectAccountInBody: true,
           bodyBuilder: (input) => gitopsListBody(input, { metadataOnly: true }),
-          responseExtractor: passthrough,
+          responseExtractor: gitopsListExtract("applications"),
           description: "List GitOps applications in the project",
         },
         get: {
@@ -581,7 +615,7 @@ export const gitopsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           injectAccountInBody: true,
           bodyBuilder: (input) => gitopsListBody(input),
-          responseExtractor: passthrough,
+          responseExtractor: gitopsListExtract("clusters"),
           description: "List GitOps clusters (scope depends on org_id/project_id presence)",
         },
         get: {
@@ -626,7 +660,7 @@ export const gitopsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           injectAccountInBody: true,
           bodyBuilder: (input) => gitopsListBody(input, { repoCredsId: input.repo_creds_id ?? "" }),
-          responseExtractor: passthrough,
+          responseExtractor: gitopsListExtract("repositories"),
           description: "List GitOps repositories (scope depends on org_id/project_id presence)",
         },
         get: {
@@ -675,7 +709,7 @@ export const gitopsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           injectAccountInBody: true,
           bodyBuilder: (input) => gitopsListBody(input, input.agent_id ? { agentIdentifier: input.agent_id } : {}),
-          responseExtractor: passthrough,
+          responseExtractor: gitopsListExtract("applicationsets", "applicationSets"),
           emptyOnErrorPatterns: [/agent is not registered/, /never connected/, /Not Implemented/],
           description: "List GitOps ApplicationSets",
         },
@@ -875,7 +909,7 @@ export const gitopsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           injectAccountInBody: true,
           bodyBuilder: (input) => gitopsListBody(input, input.agent_id ? { agentIdentifier: input.agent_id } : {}),
-          responseExtractor: passthrough,
+          responseExtractor: gitopsListExtract("repoCreds", "repositoryCredentials", "credentials"),
           emptyOnErrorPatterns: [/agent is not registered/, /never connected/, /Not Implemented/],
           description: "List GitOps repository credentials",
         },
@@ -918,7 +952,7 @@ export const gitopsToolset: ToolsetDefinition = {
             agent_id: "agentIdentifier",
             app_name: "appName",
           },
-          responseExtractor: passthrough,
+          responseExtractor: gitopsListExtract("events"),
           description: "List events for a GitOps application",
         },
       },
@@ -988,7 +1022,7 @@ export const gitopsToolset: ToolsetDefinition = {
             agent_id: "agentIdentifier",
             app_name: "appName",
           },
-          responseExtractor: passthrough,
+          responseExtractor: gitopsListExtract("resources", "managedResources"),
           description: "List managed resources for a GitOps application",
         },
       },
@@ -1029,7 +1063,7 @@ export const gitopsToolset: ToolsetDefinition = {
             group: "request.group",
             version: "request.version",
           },
-          responseExtractor: passthrough,
+          responseExtractor: gitopsListExtract("actions", "resourceActions"),
           description: "List available actions for a resource in a GitOps application",
         },
       },

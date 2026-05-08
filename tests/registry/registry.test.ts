@@ -397,6 +397,25 @@ describe("Registry", () => {
       });
     });
 
+    it("normalizes GitOps application list arrays while preserving the raw response key", async () => {
+      const gitopsRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+      const mockRequest = vi.fn().mockResolvedValue({
+        applications: [{ name: "takeda-gitops-app" }],
+        total: 1,
+      });
+      const client = makeClient(mockRequest);
+
+      const result = (await gitopsRegistry.dispatch(client, "gitops_application", "list", {
+        org_id: "takeda-org",
+        project_id: "takeda-project",
+        search_term: "takeda",
+      })) as { applications: unknown[]; items: unknown[]; total: number };
+
+      expect(result.applications[0]).toMatchObject({ name: "takeda-gitops-app" });
+      expect(result.items[0]).toMatchObject({ name: "takeda-gitops-app" });
+      expect(result.total).toBe(1);
+    });
+
     it("builds correct path with path params for a get operation", async () => {
       const mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "my-pipeline" } });
       const client = makeClient(mockRequest);

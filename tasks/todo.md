@@ -263,3 +263,21 @@
 - Clarified in README that hosted `https://mcp.harness.io/mcp` is managed and cannot be pointed at Harness0 from Claude/Cursor/Cowork client config; Support must configure hosted MCP for that target environment.
 - Updated MCPB manifest descriptions so `HARNESS_BASE_URL` covers private SaaS hosts such as `https://harness0.harness.io`, not just self-managed installs.
 - Verified with `pnpm build` and `pnpm docs:check`.
+
+## Slack Bug Triage: GitOps Search Returns Zero (2026-05-08)
+- [x] Read the Slack thread and confirm available context
+- [x] Trace GitOps list/search request and response handling
+- [x] Add a focused failing regression test
+- [x] Normalize GitOps list response shapes for search/list consumers
+- [x] Run focused tests and typecheck
+- [ ] Commit, push, open PR, and reply in the Slack thread
+
+### Plan
+- Reproduce the report with `harness_search(resource_types=["gitops_application"], org_id, project_id)` against the GitOps list response shape.
+- Keep the fix in the GitOps toolset by normalizing list responses to expose `items` while preserving raw API fields.
+- Verify the search test plus registry/toolset behavior so scoped explicit list and search use the same data.
+
+### Review
+- Root cause: GitOps list APIs returned arrays under API-specific keys such as `applications`, but `harness_search` only counted normalized `items`.
+- Added a GitOps list extractor that preserves raw keys while adding `items` and `total` for list/search consumers.
+- Verified with focused GitOps search/list regressions, full `pnpm test`, `pnpm typecheck`, and `pnpm build`.

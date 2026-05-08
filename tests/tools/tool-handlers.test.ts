@@ -972,6 +972,48 @@ describe("harness_search", () => {
     expect(data.searched_types).toBe(1);
   });
 
+  it("finds scoped GitOps applications returned under the API-specific applications key", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+    mockRequest = vi.fn().mockResolvedValue({
+      applications: [
+        {
+          name: "takeda-gitops-app",
+          orgIdentifier: "takeda-org",
+          projectIdentifier: "takeda-project",
+        },
+      ],
+      total: 1,
+    });
+    client = makeClient(mockRequest);
+    const { registerSearchTool } = await import("../../src/tools/harness-search.js");
+    server = makeMcpServer();
+    registerSearchTool(server, registry, client);
+
+    const result = await server.call("harness_search", {
+      query: "takeda",
+      resource_types: ["gitops_application"],
+      org_id: "takeda-org",
+      project_id: "takeda-project",
+    });
+
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as { total_matches: number; results: Array<{ resource_type: string; items: Array<Record<string, unknown>> }> };
+    expect(data.total_matches).toBe(1);
+    expect(data.results[0]).toMatchObject({
+      resource_type: "gitops_application",
+    });
+    expect(String(data.results[0]?.items[0]?.name)).toContain("takeda-gitops-app");
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      path: "/gitops/api/v1/applications",
+      body: expect.objectContaining({
+        accountIdentifier: "test-account",
+        orgIdentifier: "takeda-org",
+        projectIdentifier: "takeda-project",
+        searchTerm: "takeda",
+      }),
+    }));
+  });
+
   it("gracefully handles search failures for individual types", async () => {
     // First call fails, second succeeds
     mockRequest
