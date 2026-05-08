@@ -267,8 +267,8 @@
 ## Slack Bug Triage: Hosted MCP v1 Step Logs (2026-05-08)
 - [x] Read the Slack report thread and capture the diagnose payload/error
 - [x] Trace `harness_diagnose` failed-step log resolution through the client and log-service request path
-- [ ] Add a focused regression test for hosted HTTP session config using incoming auth/account/base host
-- [ ] Implement the minimal hosted-session config fix
+- [x] Add a focused regression test for hosted HTTP session config using incoming auth/account/base host
+- [x] Implement the minimal hosted-session config fix
 - [ ] Run focused tests, typecheck, and review the diff
 - [ ] Commit, push, open PR, and reply in the original Slack thread
 
