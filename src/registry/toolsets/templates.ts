@@ -17,8 +17,7 @@ export const templatesToolset: ToolsetDefinition = {
         { name: "search_term", description: "Filter templates by name or keyword" },
         { name: "template_type", description: "Template entity type", enum: ["Pipeline", "Stage", "Step", "CustomDeployment", "MonitoredService", "SecretManager", "ArtifactSource"] },
         { name: "template_list_type", description: "Template list type", enum: ["Stable", "LastUpdated", "All"] },
-        { name: "global_templates", description: "When true, lists global templates by passing isGlobal=true in the request", type: "boolean" },
-        { name: "global_template", description: "When true on get, fetches from global templates account by forcing accountIdentifier=__GLOBAL_TEMPLATES_ACCOUNT_ID__", type: "boolean" },
+        { name: "global", description: "When true, accesses global templates (list: passes isGlobal=true; get: forces accountIdentifier to __GLOBAL_TEMPLATES_ACCOUNT_ID__)", type: "boolean" },
         { name: "metadata_only", description: "When true, fetches only template metadata (name, identifier, type, tags) via the list-metadata endpoint — faster and lighter than the full list", type: "boolean" },
       ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/setup/resources/templates/{templateIdentifier}",
@@ -27,7 +26,7 @@ export const templatesToolset: ToolsetDefinition = {
           method: "POST",
           path: "/template/api/templates/list",
           pathBuilder: (input) =>
-            input.metadata_only || input.global_templates
+            input.metadata_only || input.global
               ? "/template/api/templates/list-metadata"
               : "/template/api/templates/list",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
@@ -36,7 +35,7 @@ export const templatesToolset: ToolsetDefinition = {
             page: "page",
             size: "size",
             template_list_type: "templateListType",
-            global_templates: "isGlobal",
+            global: "isGlobal",
           },
           bodyBuilder: (input) => ({
             filterType: "Template",
@@ -45,7 +44,7 @@ export const templatesToolset: ToolsetDefinition = {
               : undefined,
           }),
           responseExtractor: pageExtract,
-          description: "List templates. Use global_templates=true to include global templates (passes isGlobal=true to the API). Use metadata_only=true to fetch only template metadata via the list-metadata endpoint (faster, lighter).",
+          description: "List templates. Use global=true to include global templates (passes isGlobal=true to the API). Use metadata_only=true to fetch only template metadata via the list-metadata endpoint (faster, lighter).",
         },
         get: {
           method: "GET",
@@ -57,7 +56,7 @@ export const templatesToolset: ToolsetDefinition = {
             account_id: "accountIdentifier",
           },
           responseExtractor: ngExtract,
-          description: "Get template details. Use global_template=true to fetch from global templates account.",
+          description: "Get template details. Use global=true to fetch from global templates account.",
         },
         update: {
           method: "PUT",
