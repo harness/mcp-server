@@ -467,7 +467,6 @@ export class HarnessClient {
     if (!options.headerBasedScoping && options.product !== "fme") {
       const accountId = this.resolveAccountId();
       params.set("accountIdentifier", accountId);
-      params.set("routingId", accountId);
 
       // Log-service gateway expects accountID (capital ID) in query params
       if (path.includes("/log-service/")) {
