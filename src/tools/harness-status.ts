@@ -93,6 +93,9 @@ export function registerStatusTool(
         const orgId = asString(merged.org_id) ?? config.HARNESS_ORG;
         const projectId = asString(merged.project_id) ?? config.HARNESS_PROJECT ?? "";
         const limit = Math.min(args.limit ?? 5, 20);
+        if (!orgId) {
+          return errorResult("org_id is required. Pass org_id, provide a Harness URL, or set HARNESS_ORG.");
+        }
 
         const baseInput: Record<string, unknown> = {
           org_id: orgId,

@@ -268,7 +268,7 @@
 - [x] Read Slack thread and referenced PR context
 - [x] Reproduce the hardcoded `HARNESS_ORG` fallback with failing tests
 - [x] Remove the fallback without breaking explicit/deprecated org config
-- [ ] Run focused tests and typecheck
+- [x] Run focused tests and typecheck
 - [ ] Commit, push, open PR, and reply in the Slack thread
 
 ### Plan
@@ -280,4 +280,5 @@
 - Reproduced the bug with config tests that expected unset/empty org values to remain undefined; current code returned `"default"`.
 - Removed the hardcoded config fallback while preserving explicit `HARNESS_ORG` and `HARNESS_DEFAULT_ORG_ID` resolution.
 - Added account-scoped project fallback coverage to ensure registry dispatch does not invent an org when config is unset.
-- Focused tests passed with `pnpm test tests/config.test.ts tests/registry/registry.test.ts -- --runInBand`.
+- Added explicit `org_id` guards for `harness_execute` input-set/runtime-input helpers and `harness_status`, where org scope is required.
+- Verification passed with `pnpm test tests/config.test.ts tests/registry/registry.test.ts -- --runInBand`, `pnpm test tests/tools/tool-handlers.test.ts -- --runInBand`, and `pnpm typecheck`.

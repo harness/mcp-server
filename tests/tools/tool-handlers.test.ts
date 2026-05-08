@@ -671,6 +671,28 @@ describe("harness_execute", () => {
     expect(runCall.body).toContain("x");
   });
 
+  it("requires org_id when materializing input_set_ids without configured HARNESS_ORG", async () => {
+    const noOrgServer = makeMcpServer("accept");
+    const noOrgRegistry = new Registry(
+      makeConfig({ HARNESS_TOOLSETS: "pipelines", HARNESS_ORG: undefined }),
+    );
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(noOrgServer, noOrgRegistry, client);
+
+    const result = await noOrgServer.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "mat_pipe",
+      input_set_ids: ["saved_set"],
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("org_id is required"),
+    });
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
   it("falls back to fresh run when retry returns 405", async () => {
     // First call (retry) throws 405, second call (run) succeeds
     mockRequest
@@ -1037,6 +1059,20 @@ describe("harness_status", () => {
     const data = parseResult(result) as { _errors?: Record<string, string> };
     // All 3 dispatches failed, should have _errors
     expect(data._errors).toBeDefined();
+  });
+
+  it("requires org_id when HARNESS_ORG is not configured", async () => {
+    const noOrgConfig = makeConfig({ HARNESS_ORG: undefined });
+    const noOrgServer = makeMcpServer();
+    const { registerStatusTool } = await import("../../src/tools/harness-status.js");
+    registerStatusTool(noOrgServer, registry, client, noOrgConfig);
+
+    const result = await noOrgServer.call("harness_status", {});
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("org_id is required"),
+    });
   });
 });
 

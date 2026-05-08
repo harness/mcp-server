@@ -105,6 +105,11 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
               "pipeline_id is required when using input_set_ids without inputs. Provide resource_id or params.pipeline_id.",
             );
           }
+          if (!orgId) {
+            return errorResult(
+              "org_id is required when using input_set_ids. Pass org_id or set HARNESS_ORG.",
+            );
+          }
           if (!projectId) {
             return errorResult(
               "project_id is required when using input_set_ids. Pass project_id or set HARNESS_PROJECT.",
@@ -149,6 +154,14 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           if (!pipelineId) {
             return errorResult("pipeline_id is required to auto-resolve runtime inputs. Provide it via resource_id, params.pipeline_id, or a Harness URL.");
           }
+          const orgId = asString(input.org_id) || registry.orgId;
+          const projectId = asString(input.project_id) || registry.projectId;
+          if (!orgId) {
+            return errorResult("org_id is required to auto-resolve runtime inputs. Pass org_id or set HARNESS_ORG.");
+          }
+          if (!projectId) {
+            return errorResult("project_id is required to auto-resolve runtime inputs. Pass project_id or set HARNESS_PROJECT.");
+          }
           try {
             // Flatten nested inputs (e.g. codebase build objects) into dot-path keys
             // for template matching. Flat inputs pass through unchanged.
@@ -157,8 +170,8 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
               : flattenInputs(args.inputs);
             resolved = await resolveRuntimeInputs(client, inputsToResolve, {
               pipelineId,
-              orgId: asString(input.org_id) || registry.orgId,
-              projectId: asString(input.project_id) || registry.projectId,
+              orgId,
+              projectId,
               branch: asString(input.branch),
             });
 
