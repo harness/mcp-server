@@ -955,6 +955,21 @@ describe("Registry", () => {
   });
 
   describe("injectOrgQueryFallback (account-scoped project CRUD)", () => {
+    it("does not invent an org when org_id and config HARNESS_ORG are omitted", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { project: {} } });
+      const client = makeClient(mockRequest);
+      const registry = new Registry(
+        makeConfig({ HARNESS_TOOLSETS: "platform", HARNESS_ORG: undefined }),
+      );
+
+      await registry.dispatch(client, "project", "get", {
+        project_id: "my-proj",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params?.orgIdentifier).toBeUndefined();
+    });
+
     it("falls back to config HARNESS_ORG when org_id is omitted", async () => {
       const mockRequest = vi.fn().mockResolvedValue({ data: { project: {} } });
       const client = makeClient(mockRequest);

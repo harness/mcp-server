@@ -218,7 +218,7 @@ export class Registry {
     return new Set(valid);
   }
 
-  get orgId(): string { return this.config.HARNESS_ORG; }
+  get orgId(): string | undefined { return this.config.HARNESS_ORG; }
   get projectId(): string | undefined { return this.config.HARNESS_PROJECT; }
 
   /** Get a resource definition by type, or throw. */

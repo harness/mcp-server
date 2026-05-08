@@ -263,3 +263,21 @@
 - Clarified in README that hosted `https://mcp.harness.io/mcp` is managed and cannot be pointed at Harness0 from Claude/Cursor/Cowork client config; Support must configure hosted MCP for that target environment.
 - Updated MCPB manifest descriptions so `HARNESS_BASE_URL` covers private SaaS hosts such as `https://harness0.harness.io`, not just self-managed installs.
 - Verified with `pnpm build` and `pnpm docs:check`.
+
+## Slack Bug Triage: HARNESS_ORG Default Fallback (2026-05-08)
+- [x] Read Slack thread and referenced PR context
+- [x] Reproduce the hardcoded `HARNESS_ORG` fallback with failing tests
+- [x] Remove the fallback without breaking explicit/deprecated org config
+- [ ] Run focused tests and typecheck
+- [ ] Commit, push, open PR, and reply in the Slack thread
+
+### Plan
+- Keep `HARNESS_ORG` unset when neither `HARNESS_ORG` nor `HARNESS_DEFAULT_ORG_ID` is provided.
+- Add focused config coverage for unset and empty org env values, plus registry coverage that account-scoped org fallback injection does not invent an org when config is unset.
+- Preserve explicit `HARNESS_ORG` and deprecated `HARNESS_DEFAULT_ORG_ID` behavior.
+
+### Review
+- Reproduced the bug with config tests that expected unset/empty org values to remain undefined; current code returned `"default"`.
+- Removed the hardcoded config fallback while preserving explicit `HARNESS_ORG` and `HARNESS_DEFAULT_ORG_ID` resolution.
+- Added account-scoped project fallback coverage to ensure registry dispatch does not invent an org when config is unset.
+- Focused tests passed with `pnpm test tests/config.test.ts tests/registry/registry.test.ts -- --runInBand`.
