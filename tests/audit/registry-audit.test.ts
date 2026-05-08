@@ -145,4 +145,67 @@ describe("Registry audit emission", () => {
     expect(sink.events).toHaveLength(1);
     expect(sink.events[0]!.tool).toBe("harness_list");
   });
+
+  it("audit event reflects scope_level=account override for supported resources", async () => {
+    const sink = collectingSink();
+    const auditManager = new AuditManager();
+    auditManager.addSink(sink);
+
+    const config = makeConfig({ HARNESS_TOOLSETS: "connectors" });
+    const registry = new Registry(config as any, { auditManager });
+
+    const mockClient = {
+      request: vi.fn().mockResolvedValue({ data: { content: [], totalElements: 0 } }),
+      account: "acct1",
+    };
+
+    await registry.dispatch(mockClient as any, "connector", "list", { scope_level: "account" }, { tool: "harness_list" });
+
+    expect(sink.events).toHaveLength(1);
+    const event = sink.events[0]!;
+    expect(event.org_id).toBeUndefined();
+    expect(event.project_id).toBeUndefined();
+  });
+
+  it("audit event reflects scope_level=org override (org present, no project)", async () => {
+    const sink = collectingSink();
+    const auditManager = new AuditManager();
+    auditManager.addSink(sink);
+
+    const config = makeConfig({ HARNESS_TOOLSETS: "connectors" });
+    const registry = new Registry(config as any, { auditManager });
+
+    const mockClient = {
+      request: vi.fn().mockResolvedValue({ data: { content: [], totalElements: 0 } }),
+      account: "acct1",
+    };
+
+    await registry.dispatch(mockClient as any, "connector", "list", { scope_level: "org", org_id: "my-org" }, { tool: "harness_list" });
+
+    expect(sink.events).toHaveLength(1);
+    const event = sink.events[0]!;
+    expect(event.org_id).toBe("my-org");
+    expect(event.project_id).toBeUndefined();
+  });
+
+  it("audit event uses default scope when scope_level is not supported by resource", async () => {
+    const sink = collectingSink();
+    const auditManager = new AuditManager();
+    auditManager.addSink(sink);
+
+    const config = makeConfig({ HARNESS_TOOLSETS: "pipelines" });
+    const registry = new Registry(config as any, { auditManager });
+
+    const mockClient = {
+      request: vi.fn().mockResolvedValue({ status: "SUCCESS", data: {} }),
+      account: "acct1",
+    };
+
+    await registry.dispatch(mockClient as any, "pipeline", "list", { scope_level: "account" }, { tool: "harness_list" });
+
+    expect(sink.events).toHaveLength(1);
+    const event = sink.events[0]!;
+    expect(event.org_id).toBe("default");
+    expect(event.project_id).toBe("proj1");
+  });
 });

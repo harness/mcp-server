@@ -390,6 +390,13 @@ export class Registry {
   ): void {
     if (!this.auditManager) return;
 
+    // Determine effective scope for audit based on scope_level override
+    const auditScopeLevel = (input.scope_level as string | undefined);
+    const effectiveAccountScope = def.scope === "account" ||
+      (auditScopeLevel === "account" && def.supportedScopeLevels?.includes("account"));
+    const effectiveOrgScope = def.scope === "org" ||
+      (auditScopeLevel === "org" && def.supportedScopeLevels?.includes("org"));
+
     const event: AuditEvent = {
       event_id: randomUUID(),
       timestamp: new Date().toISOString(),
@@ -398,10 +405,10 @@ export class Registry {
       resource_type: resourceType,
       resource_id: auditCtx?.resource_id ?? (input.resource_id as string | undefined),
       action: auditCtx?.action,
-      org_id: def.scope === "account"
+      org_id: effectiveAccountScope
         ? undefined
         : (input.org_id as string | undefined) ?? (def.scopeOptional ? undefined : this.config.HARNESS_ORG),
-      project_id: def.scope === "account" || def.scope === "org"
+      project_id: effectiveAccountScope || effectiveOrgScope
         ? undefined
         : (input.project_id as string | undefined) ?? (def.scopeOptional ? undefined : this.config.HARNESS_PROJECT),
       account_id: this.getAccountId(),

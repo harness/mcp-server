@@ -34,6 +34,7 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
             description: def.description,
             toolset: def.toolset,
             scope: def.scope,
+            supportedScopeLevels: def.supportedScopeLevels ?? undefined,
             identifierFields: def.identifierFields,
             listFilterFields: def.listFilterFields,
             operations: Object.entries(def.operations).map(([op, spec]) => ({
