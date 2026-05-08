@@ -1,0 +1,61 @@
+src/registry/toolsets/idp.ts
+  71563670-2dfa-4f98-b9d3-c0831eb119a6 1-5,7-14,24,27,29-38,46-75,79-97,100,104,115-132,135,153,160,167,171-176,182-191,195-196,199,207-208,215,226-227,234,247-248,255,258,260,275,277-286,289,291-303,333,335-366,368-378,380,382-401,410,414,416,423-434
+  human 6
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 233,
+          "added_lines": 237,
+          "deleted_lines": 56,
+          "hash": "71563670-2dfa-4f98-b9d3-c0831eb119a6",
+          "lines": "1-5,7-14,24,27,29-38,46-75,79-97,100,104,115-132,135,153,160,167,171-176,182-191,195-196,199,207-208,215,226-227,234,247-248,255,258,260,275,277-286,289,291-303,333,335-366,368-378,380,382-401,410,414,416,423-434",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "6",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/idp.ts"
+    }
+  ],
+  "base_commit_sha": "47752e5c602d21fc32e193be8f52a000698d2038",
+  "branch": "idp_tools",
+  "commit_sha": "6e3f9e58e8e46eea45357b6b90cfef071f390578",
+  "commit_time": "2026-05-08T16:49:59+05:30",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.2",
+  "prompts": {
+    "71563670-2dfa-4f98-b9d3-c0831eb119a6": {
+      "accepted_lines": 233,
+      "agent_id": {
+        "id": "71563670-2dfa-4f98-b9d3-c0831eb119a6",
+        "model": "claude-opus-4-7-thinking-xhigh",
+        "tool": "cursor"
+      },
+      "human_author": "Harjas <harjas.bathla@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 237,
+      "total_deletions": 56
+    },
+    "human": {
+      "accepted_lines": 1,
+      "agent_id": null,
+      "human_author": "Harjas <harjas.bathla@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 1,
+      "total_deletions": 0
+    }
+  },
+  "repo": "https://git0.harness.io/l7B_kbSEQD2wjrM7PShm5w/PROD/Harness_Commons/mcp-server.git",
+  "schema_version": "authorship/3.0.0"
+}
