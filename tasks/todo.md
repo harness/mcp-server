@@ -263,3 +263,16 @@
 - Clarified in README that hosted `https://mcp.harness.io/mcp` is managed and cannot be pointed at Harness0 from Claude/Cursor/Cowork client config; Support must configure hosted MCP for that target environment.
 - Updated MCPB manifest descriptions so `HARNESS_BASE_URL` covers private SaaS hosts such as `https://harness0.harness.io`, not just self-managed installs.
 - Verified with `pnpm build` and `pnpm docs:check`.
+
+## Slack Bug Triage: Hosted MCP v1 Step Logs (2026-05-08)
+- [x] Read the Slack report thread and capture the diagnose payload/error
+- [x] Trace `harness_diagnose` failed-step log resolution through the client and log-service request path
+- [ ] Add a focused regression test for hosted HTTP session config using incoming auth/account/base host
+- [ ] Implement the minimal hosted-session config fix
+- [ ] Run focused tests, typecheck, and review the diff
+- [ ] Commit, push, open PR, and reply in the original Slack thread
+
+### Plan
+- Keep the fix at HTTP session initialization so all tools, including `harness_diagnose`, use the same effective Harness account, API key, and Harness SaaS host for the session.
+- Preserve local/self-hosted behavior: explicit `HARNESS_BASE_URL` remains authoritative, and non-Harness MCP hostnames do not become Harness API base URLs.
+- Add coverage that a QA hosted MCP initialize request with `X-Api-Key`, `Harness-Account`, and `Host: qa.harness.io` produces a session config that targets `https://qa.harness.io` and injects the requested account into downstream log-service query params.
