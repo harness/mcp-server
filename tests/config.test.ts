@@ -77,7 +77,7 @@ describe("ConfigSchema", () => {
     }
   });
 
-  it("applies default HARNESS_ORG", () => {
+  it("defaults HARNESS_ORG to undefined when not provided", () => {
     const result = ConfigSchema.safeParse(validConfig);
     expect(result.success).toBe(true);
     if (result.success) {

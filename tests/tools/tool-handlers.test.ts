@@ -158,6 +158,27 @@ describe("harness_get", () => {
     const result = await server.call("harness_get", { resource_type: "pipeline", resource_id: "missing" });
     expect(result.isError).toBe(true);
   });
+
+  it("maps global=true to global templates account for template get", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "helmDeployAction" } });
+    client = makeClient(mockRequest);
+    const templateServer = makeMcpServer();
+    const { registerGetTool } = await import("../../src/tools/harness-get.js");
+    registerGetTool(templateServer, registry, client);
+
+    const result = await templateServer.call("harness_get", {
+      resource_type: "template",
+      resource_id: "helmDeployAction",
+      params: { version_label: "1.0.8", global: true },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown>; path: string };
+    expect(call.path).toBe("/template/api/templates/helmDeployAction");
+    expect(call.params.accountIdentifier).toBe("__GLOBAL_TEMPLATES_ACCOUNT_ID__");
+    expect(call.params.versionLabel).toBe("1.0.8");
+  });
 });
 
 describe("harness_get — execution_log", () => {

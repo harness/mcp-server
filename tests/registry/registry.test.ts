@@ -523,6 +523,28 @@ describe("Registry", () => {
     });
   });
 
+  describe("template global get", () => {
+    it("overrides accountIdentifier for global template fetch", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "helmDeployAction" } });
+      const client = makeClient(mockRequest);
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+
+      await registry.dispatch(client, "template", "get", {
+        template_id: "helmDeployAction",
+        version_label: "1.0.8",
+        account_id: "__GLOBAL_TEMPLATES_ACCOUNT_ID__",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("GET");
+      expect(call.path).toBe("/template/api/templates/helmDeployAction");
+      expect(call.params).toMatchObject({
+        accountIdentifier: "__GLOBAL_TEMPLATES_ACCOUNT_ID__",
+        versionLabel: "1.0.8",
+      });
+    });
+  });
+
   describe("cost category create — account body injection", () => {
     let registry: Registry;
 

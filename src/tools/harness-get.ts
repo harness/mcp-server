@@ -69,6 +69,12 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
           input[primaryField] = resourceId;
         }
 
+        // When fetching a global template, override accountIdentifier to the global account.
+        if (resourceType === "template" && (input.global === true || input.global === "true")) {
+          input.account_id = "__GLOBAL_TEMPLATES_ACCOUNT_ID__";
+          delete input.global;
+        }
+
         // execution_log: resolve full log content instead of returning a download URL
         if (resourceType === "execution_log") {
           try {

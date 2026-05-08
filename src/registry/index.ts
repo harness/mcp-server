@@ -390,6 +390,11 @@ export class Registry {
   ): void {
     if (!this.auditManager) return;
 
+    // Resolve path using pathBuilder if present, otherwise use static path
+    const resolvedPath = spec.pathBuilder
+      ? spec.pathBuilder(input, { HARNESS_ACCOUNT_ID: this.getAccountId(), HARNESS_ORG: this.config.HARNESS_ORG, HARNESS_PROJECT: this.config.HARNESS_PROJECT })
+      : spec.path;
+
     const event: AuditEvent = {
       event_id: randomUUID(),
       timestamp: new Date().toISOString(),
@@ -410,7 +415,7 @@ export class Registry {
       outcome,
       duration_ms: durationMs,
       http_method: spec.method,
-      http_path: spec.path,
+      http_path: resolvedPath,
       ...(error ? { error } : {}),
       ...(httpStatus ? { http_status: httpStatus } : {}),
     };
@@ -493,6 +498,7 @@ export class Registry {
     if (def.scopeParams?.account) {
       params[def.scopeParams.account] = resolvedAccountId;
     }
+
 
     // Account-scoped resources sometimes still need orgIdentifier in query params (NG /ng/api/projects).
     if (spec.injectOrgQueryFallback) {
