@@ -1,8 +1,42 @@
 import type { PathBuilderConfig, ToolsetDefinition } from "../types.js";
 import { ngExtract, passthrough, v1ListExtract } from "../extractors.js";
+import { parse as parseYaml } from "yaml";
 
-/** Stashed on `input` by pathBuilder for bodyBuilder to consume. Underscore prefix marks private. */
-const AUTH_HEADER_KEY = "__auth_header";
+const CONFIG_API_KEY = "__config_api_key";
+const PARAM_REF_RE = /^\s*\$\{\{\s*parameters\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}\s*$/;
+
+const extractAuthParamRefs = (yamlStr: string): { apikeyRefs: string[]; apiKeySecretRefs: string[] } => {
+  let parsed: unknown;
+  try {
+    parsed = parseYaml(yamlStr);
+  } catch (err) {
+    throw new Error(`Failed to parse workflow_details.yaml: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  const steps = (parsed as { spec?: { steps?: unknown[] } } | undefined)?.spec?.steps;
+  const apikeyRefs: string[] = [];
+  const apiKeySecretRefs: string[] = [];
+  if (!Array.isArray(steps)) return { apikeyRefs, apiKeySecretRefs };
+
+  for (const step of steps) {
+    const input = (step as { input?: Record<string, unknown> } | undefined)?.input;
+    if (!input || typeof input !== "object") continue;
+
+    const apiKey = input.apikey;
+    if (typeof apiKey === "string") {
+      const match = PARAM_REF_RE.exec(apiKey);
+      if (match?.[1]) apikeyRefs.push(match[1]);
+    }
+
+    const apiKeySecret = input.apiKeySecret;
+    if (typeof apiKeySecret === "string") {
+      const match = PARAM_REF_RE.exec(apiKeySecret);
+      if (match?.[1]) apiKeySecretRefs.push(match[1]);
+    }
+  }
+
+  return { apikeyRefs, apiKeySecretRefs };
+};
 
 const scorecardStatsExtract = (raw: unknown): unknown => {
   const r = raw as { name?: string; stats?: unknown[]; timestamp?: number | null };
@@ -132,6 +166,7 @@ export const idpToolset: ToolsetDefinition = {
             project_id: "projectIdentifier",
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: passthrough,
           description: "Get details of a specific IDP catalog entity by kind + entity_id. Returns the entity's identifier, scope, kind, ref type (INLINE/GIT), YAML, Git details, ownership, tags, lifecycle, scorecards, status, and group. Use list_entities first to discover the entity_id. Note: workflow entities may include a 'token' field — IGNORE it.",
         },
       },
@@ -157,6 +192,7 @@ export const idpToolset: ToolsetDefinition = {
           path: "/v1/scorecards/{scorecardIdentifier}",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { scorecard_id: "scorecardIdentifier" },
+          responseExtractor: passthrough,
           description: "Get details of a specific scorecard in the Harness IDP Catalog. Use this only when the scorecard_id is known (use list_scorecards first to discover it).",
         },
       },
@@ -205,6 +241,7 @@ export const idpToolset: ToolsetDefinition = {
           pathParams: { check_id: "checkIdentifier" },
           queryParams: { is_custom: "custom" },
           defaultQueryParams: { custom: "false" },
+          responseExtractor: passthrough,
           description: "Get details of a specific scorecard check. Pass is_custom=true for custom checks (the scorecard details indicate this).",
         },
       },
@@ -300,6 +337,7 @@ export const idpToolset: ToolsetDefinition = {
           queryParams: {
             entity_identifier: "entity_identifier",
           },
+          responseExtractor: passthrough,
           description: "Get aggregate score summary across all scorecards for an entity. Required: entity_identifier (format 'namespace/Kind/name', e.g. 'default/Component/my-service').",
         },
       },
@@ -307,24 +345,80 @@ export const idpToolset: ToolsetDefinition = {
     {
       resourceType: "idp_workflow",
       displayName: "IDP Workflow",
-      description: "IDP self-service workflow. Supports list and execute action.",
+      description:
+        "IDP self-service workflow. Supports list and execute. " +
+        "Workflows are IDP catalog entities with kind=workflow — list here is a thin wrapper over /v1/entities that pins kind=workflow and exposes the same filter surface as idp_entity (search_term, scope_level, owned_by_me, favorites, owner, lifecycle, tags, sort).",
       toolset: "idp",
       scope: "account",
       identifierFields: ["workflow_id"],
       listFilterFields: [
-        { name: "scope_level", description: "Scope level filter (ACCOUNT, ORG, PROJECT, ALL)", enum: ["ACCOUNT", "ORG", "PROJECT", "ALL"] },
+        { name: "search_term", description: "Filter workflows by name or keyword" },
+        { name: "scope_level", description: "Scope level for the workflow query. 'default' uses the configured org/project; 'account', 'org', and 'project' force that scope explicitly.", enum: ["default", "account", "org", "project"] },
+        { name: "sort", description: "Sort workflows (e.g. 'name,ASC')" },
+        { name: "owned_by_me", description: "Only return workflows owned by the current user", type: "boolean" },
+        { name: "favorites", description: "Only return workflows the current user has favorited", type: "boolean" },
+        { name: "owner", description: "Comma-separated list of owner references to filter on" },
+        { name: "lifecycle", description: "Comma-separated list of lifecycles to filter on (e.g. 'experimental,production')" },
+        { name: "tags", description: "Comma-separated list of tags to filter on" },
       ],
       operations: {
         list: {
           method: "GET",
           path: "/v1/entities",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          queryParams: {
-            scope_level: "scope_level",
+          pathBuilder: (input, config) => {
+            const scopeLevel = String(input.scope_level ?? "default").toLowerCase();
+            const orgId = (input.org_id as string) || config.HARNESS_ORG || "";
+            const projectId = (input.project_id as string) || config.HARNESS_PROJECT || "";
+
+            let scopes: string;
+            switch (scopeLevel) {
+              case "account":
+                scopes = "account";
+                break;
+              case "org":
+                scopes = orgId ? `account.${orgId}` : "account.org";
+                break;
+              case "project":
+                if (orgId && projectId) scopes = `account.${orgId}.${projectId}`;
+                else if (orgId) scopes = `account.${orgId}.project`;
+                else scopes = "account.org.project";
+                break;
+              default:
+                if (orgId && projectId) scopes = `account.${orgId}.${projectId}`;
+                else if (orgId) scopes = `account.${orgId}.*`;
+                else scopes = "account.*";
+            }
+            input.scopes = scopes;
+
+            if (orgId) input.org_id = orgId;
+            if (projectId) input.project_id = projectId;
+
+            return "/v1/entities";
           },
-          defaultQueryParams: { kind: "workflow", scope_level: "ACCOUNT" },
+          queryParams: {
+            page: "page",
+            size: "limit",
+            search_term: "search_term",
+            sort: "sort",
+            owned_by_me: "owned_by_me",
+            favorites: "favorites",
+            owner: "owner",
+            lifecycle: "lifecycle",
+            tags: "tags",
+            scopes: "scopes",
+            org_id: "orgIdentifier",
+            project_id: "projectIdentifier",
+          },
+          defaultQueryParams: {
+            page: "0",
+            limit: "20",
+            kind: "workflow",
+            owned_by_me: "false",
+            favorites: "false",
+          },
           responseExtractor: v1ListExtract(),
-          description: "List IDP workflows",
+          description: "List IDP self-service workflows. Pins kind=workflow on the underlying /v1/entities call. Defaults: page=0, limit=20 (max 100). If 'limit' is not supplied, paginate by calling repeatedly. Workflow entities may include a 'token' field — IGNORE it.",
         },
       },
       executeActions: {
@@ -333,19 +427,8 @@ export const idpToolset: ToolsetDefinition = {
           path: "/v2/workflows/execute",
           operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathBuilder: (input, config) => {
-            // Mirror addScope() — propagate org/project to query params so the
-            // request includes orgIdentifier/projectIdentifier when supplied.
-            const orgId = (input.org_id as string) || config.HARNESS_ORG || "";
-            const projectId = (input.project_id as string) || config.HARNESS_PROJECT || "";
-            if (orgId) input.org_id = orgId;
-            if (projectId) input.project_id = projectId;
-            // Stash auth header value for bodyBuilder to inject into values.token
-            // (mirrors Go's `inputSet["token"] = authHeaderVal`). bodyBuilder
-            // has no config access, so we route the value through input.
-            // For external (PAT) mode this is the raw API key — no `Bearer`
-            // prefix — matching APIKeyProvider.GetHeader().
             const cfg = config as PathBuilderConfig & { HARNESS_API_KEY?: string };
-            input[AUTH_HEADER_KEY] = cfg.HARNESS_API_KEY ?? "";
+            input[CONFIG_API_KEY] = cfg.HARNESS_API_KEY ?? "";
             return "/v2/workflows/execute";
           },
           queryParams: {
@@ -353,51 +436,99 @@ export const idpToolset: ToolsetDefinition = {
             project_id: "projectIdentifier",
           },
           bodyBuilder: (input) => {
-            const identifier = input.identifier as string | undefined;
-            if (!identifier) {
-              throw new Error("missing required parameter: identifier");
+            const b = (input.body as Record<string, unknown> | undefined) ?? {};
+            const wfDetails = b.workflow_details as Record<string, unknown> | undefined;
+            if (!wfDetails) {
+              throw new Error(
+                "workflow_details is required. Fetch it first with harness_get(resource_type=idp_entity, kind=workflow, entity_id=<id>) and pass the result.",
+              );
             }
-            const values = { ...((input.values as Record<string, unknown> | undefined) ?? {}) };
-            // Auto-inject auth token so workflow inputs of type HarnessAuthToken
-            // resolve without prompting the user (matches Go's NgManagerAuthProvider).
-            const authHeader = input[AUTH_HEADER_KEY] as string | undefined;
-            if (authHeader) values.token = authHeader;
-            return { identifier, values };
+
+            const yamlStr = wfDetails.yaml;
+            if (typeof yamlStr !== "string") {
+              throw new Error("workflow_details.yaml is missing or not a string.");
+            }
+
+            const identifier =
+              (b.identifier as string | undefined) ??
+              (wfDetails.identifier as string | undefined) ??
+              (input.workflow_id as string | undefined);
+            if (!identifier) {
+              throw new Error(
+                "missing required parameter: workflow identifier (pass via body.identifier or resource_id).",
+              );
+            }
+
+            const refs = extractAuthParamRefs(yamlStr);
+            const values = { ...((b.values as Record<string, unknown> | undefined) ?? {}) };
+
+            for (const ref of refs.apikeyRefs) {
+              if (values[ref] === undefined) values[ref] = "user.token";
+            }
+
+            if (refs.apiKeySecretRefs.length > 0) {
+              const userSupplied =
+                (b.api_key_secret as string | undefined) ??
+                (input.api_key_secret as string | undefined);
+              const fallback = input[CONFIG_API_KEY] as string | undefined;
+              const keyValue = userSupplied || fallback;
+              if (!keyValue) {
+                throw new Error(
+                  "Missing apiKeySecret. This workflow has a step with an apiKeySecret input but no api_key_secret was provided and HARNESS_API_KEY is not configured. Pass apiKeySecret in the body.",
+                );
+              }
+
+              for (const ref of refs.apiKeySecretRefs) {
+                if (values[ref] === undefined) values[ref] = keyValue;
+              }
+            }
+
+            const requestBody = { identifier, values };
+            const loggedValues = { ...values };
+            for (const ref of refs.apiKeySecretRefs) {
+              if (loggedValues[ref] !== undefined) loggedValues[ref] = "[REDACTED]";
+            }
+            console.error(
+              "[idp_workflow.execute] final request body",
+              JSON.stringify({ identifier, values: loggedValues }),
+            );
+            return requestBody;
           },
           responseExtractor: ngExtract,
           actionDescription:
-            "Execute a workflow in the Harness Internal Developer Portal Catalog. This tool takes in the entity metadata of the workflow and a set of values to be used for the execution.\n" +
-            "Usage Guidance:\n" +
-            "- Use the get_entity tool to fetch the workflow details\n" +
-            "- The set of values provided has to be validated against the input set required by the workflow.\n" +
-            "- Provide only non-authentication parameters in the values object\n" +
-            "- All HarnessAuthToken fields should be OMITTED regardless of workflow requirements\n" +
-            "- Validate other required parameters against the workflow's input set\n" +
-            "⚠️ IMPORTANT:\n" +
-            "- NEVER request or include token values when executing workflows. The system handles authentication automatically - DO NOT prompt users for tokens, even if they appear as required parameters in the workflow definition.\n" +
-            "- DO NOT execute the workflow if the valueset is not sufficient.",
+            "Execute a workflow in the Harness IDP Catalog.\n\n" +
+            "Required inputs:\n" +
+            "- workflow_details: full workflow entity. Fetch FIRST via harness_get(resource_type=idp_entity, kind=workflow, entity_id=<id>) and pass the result. Required so the tool can inspect spec.steps[] and inject the correct values for HarnessAuthToken-style parameters.\n" +
+            "- identifier: workflow identifier (or pass via resource_id; auto-extracted from workflow_details.identifier).\n" +
+            "- values: user-supplied values for the workflow's spec.parameters (validated against required fields). OMIT any parameter whose ui:field is HarnessAuthToken — the tool auto-fills those.\n\n" +
+            "Optional input:\n" +
+            "- api_key_secret: user-supplied API key. Required only when the workflow has a step input named \"apiKeySecret\" AND HARNESS_API_KEY is not configured (e.g. when the server runs in JWT-only mode). Otherwise the tool falls back to HARNESS_API_KEY.\n\n" +
+            "Auto-injection rules per step in spec.steps[]:\n" +
+            "- step.input.apikey: ${{ parameters.X }} -> values[X] = constant placeholder (\"user.token\")\n" +
+            "- step.input.apiKeySecret: ${{ parameters.Y }} -> values[Y] = api_key_secret (or HARNESS_API_KEY fallback)\n\n" +
+            "Do NOT execute if required parameters in spec.parameters[] are missing from values.",
           bodySchema: {
             description: "Workflow execution inputs.",
             fields: [
               {
-                name: "workflow_details",
-                type: "object",
-                required: false,
-                description:
-                  "A json representation of the workflow entity. This json contains the metadata of the workflow(like owner, name, description, ref etc) and a yaml field which should contain the spec.parameters against which the values should be validated. Only the parameters marked required are mandatory.",
-              },
-              {
                 name: "identifier",
                 type: "string",
                 required: true,
-                description: "The identifier of the workflow to be executed. This can be extracted from the field identifier of the workflow_details.",
+                description: "The identifier of the workflow to execute. This can be extracted from workflow_details.identifier or passed as resource_id.",
               },
               {
                 name: "values",
                 type: "object",
                 required: false,
                 description:
-                  "The values to be used for the workflow execution. The values should be in the format of a json object. These values are to be validated against the parameters of the workflow. Do NOT validate the field of type HarnessAuthToken, it is not to be provided in the prompt.",
+                  "User-supplied workflow parameter values. Validate required fields from workflow_details.yaml spec.parameters. Omit auth-token parameters; the tool auto-fills step.input.apikey and step.input.apiKeySecret references.",
+              },
+              {
+                name: "api_key_secret",
+                type: "string",
+                required: false,
+                description:
+                  "Optional API key used to fill parameters referenced by step.input.apiKeySecret. Falls back to HARNESS_API_KEY when omitted. Required when such a step exists and HARNESS_API_KEY is unavailable.",
               },
             ],
           },
