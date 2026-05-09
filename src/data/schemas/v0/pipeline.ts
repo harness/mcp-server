@@ -11225,6 +11225,77 @@ const schema: Record<string, any> = {
                       }
                     ]
                   },
+                  "defaultDefinition": {
+                    "description": "Optional. If the flag definition does not exist in the target environment, create one with these values. Ignored if definition already exists.",
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "required": [
+                          "treatments",
+                          "defaultTreatment",
+                          "baselineTreatment"
+                        ],
+                        "properties": {
+                          "treatments": {
+                            "type": "array",
+                            "minItems": 2,
+                            "items": {
+                              "type": "object",
+                              "required": [
+                                "treatment",
+                                "description"
+                              ],
+                              "properties": {
+                                "treatment": {
+                                  "oneOf": [
+                                    {
+                                      "$ref": "#/definitions/pipeline/steps/common/fme-flag-common-treatments"
+                                    },
+                                    {
+                                      "$ref": "#/definitions/pipeline/steps/common/common-jexl-expression-only"
+                                    }
+                                  ]
+                                },
+                                "description": {
+                                  "oneOf": [
+                                    {
+                                      "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                                    },
+                                    {
+                                      "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                                    }
+                                  ]
+                                }
+                              }
+                            }
+                          },
+                          "defaultTreatment": {
+                            "oneOf": [
+                              {
+                                "$ref": "#/definitions/pipeline/steps/common/fme-flag-common-treatments"
+                              },
+                              {
+                                "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                              }
+                            ]
+                          },
+                          "baselineTreatment": {
+                            "oneOf": [
+                              {
+                                "$ref": "#/definitions/pipeline/steps/common/fme-flag-common-treatments"
+                              },
+                              {
+                                "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                      }
+                    ]
+                  },
                   "instructions": {
                     "description": "Ordered list of flag definition instructions to apply atomically. Each instruction type may appear at most once (validated when using a literal array; expressions are not checked).",
                     "oneOf": [
@@ -11250,7 +11321,11 @@ const schema: Record<string, any> = {
                                     "SetLimitExposure",
                                     "UpdateIndividualTargets",
                                     "UpdateDynamicConfiguration",
-                                    "SetTargetingRules"
+                                    "SetTargetingRules",
+                                    "SetDefaultAllocations",
+                                    "SetTreatments",
+                                    "SetRolloutStatus",
+                                    "SetFlagKilled"
                                   ]
                                 },
                                 "value": {}
@@ -11684,120 +11759,169 @@ const schema: Record<string, any> = {
                                       }
                                     }
                                   }
+                                },
+                                {
+                                  "if": {
+                                    "properties": {
+                                      "type": {
+                                        "enum": [
+                                          "SetDefaultAllocations"
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  "then": {
+                                    "properties": {
+                                      "value": {
+                                        "oneOf": [
+                                          {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "object",
+                                              "required": [
+                                                "treatment",
+                                                "amount"
+                                              ],
+                                              "properties": {
+                                                "treatment": {
+                                                  "oneOf": [
+                                                    {
+                                                      "$ref": "#/definitions/pipeline/steps/common/fme-flag-common-treatments"
+                                                    },
+                                                    {
+                                                      "$ref": "#/definitions/pipeline/steps/common/common-jexl-expression-only"
+                                                    }
+                                                  ]
+                                                },
+                                                "amount": {
+                                                  "oneOf": [
+                                                    {
+                                                      "type": "integer",
+                                                      "maximum": 100,
+                                                      "minimum": 0
+                                                    },
+                                                    {
+                                                      "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                                                    }
+                                                  ]
+                                                }
+                                              }
+                                            }
+                                          },
+                                          {
+                                            "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "if": {
+                                    "properties": {
+                                      "type": {
+                                        "enum": [
+                                          "SetTreatments"
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  "then": {
+                                    "properties": {
+                                      "value": {
+                                        "oneOf": [
+                                          {
+                                            "type": "array",
+                                            "minItems": 2,
+                                            "items": {
+                                              "type": "object",
+                                              "required": [
+                                                "treatment",
+                                                "description"
+                                              ],
+                                              "properties": {
+                                                "treatment": {
+                                                  "oneOf": [
+                                                    {
+                                                      "$ref": "#/definitions/pipeline/steps/common/fme-flag-common-treatments"
+                                                    },
+                                                    {
+                                                      "$ref": "#/definitions/pipeline/steps/common/common-jexl-expression-only"
+                                                    }
+                                                  ]
+                                                },
+                                                "description": {
+                                                  "oneOf": [
+                                                    {
+                                                      "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                                                    },
+                                                    {
+                                                      "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                                                    }
+                                                  ]
+                                                }
+                                              }
+                                            }
+                                          },
+                                          {
+                                            "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "if": {
+                                    "properties": {
+                                      "type": {
+                                        "enum": [
+                                          "SetRolloutStatus"
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  "then": {
+                                    "properties": {
+                                      "value": {
+                                        "oneOf": [
+                                          {
+                                            "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                                          },
+                                          {
+                                            "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "if": {
+                                    "properties": {
+                                      "type": {
+                                        "enum": [
+                                          "SetFlagKilled"
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  "then": {
+                                    "properties": {
+                                      "value": {
+                                        "oneOf": [
+                                          {
+                                            "type": "boolean"
+                                          },
+                                          {
+                                            "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  }
                                 }
                               ]
-                            }
-                          },
-                          {
-                            "type": "array",
-                            "minContains": 0,
-                            "maxContains": 1,
-                            "contains": {
-                              "type": "object",
-                              "required": [
-                                "type"
-                              ],
-                              "properties": {
-                                "type": {
-                                  "const": "SetDefaultTreatment"
-                                }
-                              }
-                            }
-                          },
-                          {
-                            "type": "array",
-                            "minContains": 0,
-                            "maxContains": 1,
-                            "contains": {
-                              "type": "object",
-                              "required": [
-                                "type"
-                              ],
-                              "properties": {
-                                "type": {
-                                  "const": "SetBaselineTreatment"
-                                }
-                              }
-                            }
-                          },
-                          {
-                            "type": "array",
-                            "minContains": 0,
-                            "maxContains": 1,
-                            "contains": {
-                              "type": "object",
-                              "required": [
-                                "type"
-                              ],
-                              "properties": {
-                                "type": {
-                                  "const": "SetTrackImpression"
-                                }
-                              }
-                            }
-                          },
-                          {
-                            "type": "array",
-                            "minContains": 0,
-                            "maxContains": 1,
-                            "contains": {
-                              "type": "object",
-                              "required": [
-                                "type"
-                              ],
-                              "properties": {
-                                "type": {
-                                  "const": "SetLimitExposure"
-                                }
-                              }
-                            }
-                          },
-                          {
-                            "type": "array",
-                            "minContains": 0,
-                            "maxContains": 1,
-                            "contains": {
-                              "type": "object",
-                              "required": [
-                                "type"
-                              ],
-                              "properties": {
-                                "type": {
-                                  "const": "UpdateIndividualTargets"
-                                }
-                              }
-                            }
-                          },
-                          {
-                            "type": "array",
-                            "minContains": 0,
-                            "maxContains": 1,
-                            "contains": {
-                              "type": "object",
-                              "required": [
-                                "type"
-                              ],
-                              "properties": {
-                                "type": {
-                                  "const": "UpdateDynamicConfiguration"
-                                }
-                              }
-                            }
-                          },
-                          {
-                            "type": "array",
-                            "minContains": 0,
-                            "maxContains": 1,
-                            "contains": {
-                              "type": "object",
-                              "required": [
-                                "type"
-                              ],
-                              "properties": {
-                                "type": {
-                                  "const": "SetTargetingRules"
-                                }
-                              }
                             }
                           }
                         ]
@@ -23035,6 +23159,7 @@ const schema: Record<string, any> = {
                           "firewall-bypass",
                           "unusual-port",
                           "smb-security-mode",
+                          "vuln",
                           "exploit",
                           "no-default-cli-flags"
                         ]
@@ -23172,6 +23297,7 @@ const schema: Record<string, any> = {
                       "firewall-bypass",
                       "unusual-port",
                       "smb-security-mode",
+                      "vuln",
                       "exploit",
                       "no-default-cli-flags"
                     ]
@@ -40662,6 +40788,361 @@ const schema: Record<string, any> = {
                 }
               }
             ]
+          },
+          "CortexCloudScanNode": {
+            "title": "CortexCloudScanNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "spec",
+              "type"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for CortexCloudScanNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "CortexCloud"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "CortexCloud"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/common/CortexCloudStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "CortexCloudStepInfo": {
+            "title": "CortexCloudStepInfo",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/StepSpecType"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "config",
+                  "mode",
+                  "target"
+                ],
+                "properties": {
+                  "advanced": {
+                    "$ref": "#/definitions/pipeline/steps/common/STOYamlAdvancedSettings"
+                  },
+                  "auth": {
+                    "$ref": "#/definitions/pipeline/steps/common/STOYamlAuth"
+                  },
+                  "baseImageConnectorRefs": {
+                    "$ref": "#/definitions/pipeline/steps/ci/ParameterFieldListString"
+                  },
+                  "config": {
+                    "type": "string",
+                    "enum": [
+                      "default"
+                    ]
+                  },
+                  "image": {
+                    "$ref": "#/definitions/pipeline/steps/common/STOYamlImage"
+                  },
+                  "connectorRef": {
+                    "type": "string"
+                  },
+                  "imageTag": {
+                    "type": "string"
+                  },
+                  "imagePullPolicy": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "Always",
+                          "Never",
+                          "IfNotPresent"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "ingestion": {
+                    "$ref": "#/definitions/pipeline/steps/common/STOYamlIngestion"
+                  },
+                  "mode": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "ingestion",
+                          "orchestration",
+                          "extraction"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "outputVariables": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/definitions/pipeline/common/OutputNGVariable"
+                        }
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "privileged": {
+                    "oneOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "resources": {
+                    "$ref": "#/definitions/pipeline/common/ContainerResource"
+                  },
+                  "runAsUser": {
+                    "oneOf": [
+                      {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "settings": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/common/ParameterFieldMapStringJsonNode"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "target": {
+                    "$ref": "#/definitions/pipeline/steps/common/STOYamlTarget"
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "required": [
+              "config",
+              "mode",
+              "target"
+            ],
+            "properties": {
+              "advanced": {
+                "$ref": "#/definitions/pipeline/steps/common/STOYamlAdvancedSettings"
+              },
+              "auth": {
+                "$ref": "#/definitions/pipeline/steps/common/STOYamlAuth"
+              },
+              "baseImageConnectorRefs": {
+                "$ref": "#/definitions/pipeline/steps/ci/ParameterFieldListString"
+              },
+              "config": {
+                "type": "string",
+                "enum": [
+                  "default"
+                ]
+              },
+              "image": {
+                "$ref": "#/definitions/pipeline/steps/common/STOYamlImage"
+              },
+              "connectorRef": {
+                "type": "string"
+              },
+              "imageTag": {
+                "type": "string"
+              },
+              "imagePullPolicy": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "Always",
+                      "Never",
+                      "IfNotPresent"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "ingestion": {
+                "$ref": "#/definitions/pipeline/steps/common/STOYamlIngestion"
+              },
+              "mode": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "ingestion",
+                      "orchestration",
+                      "extraction"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "outputVariables": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/OutputNGVariable"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "privileged": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "resources": {
+                "$ref": "#/definitions/pipeline/common/ContainerResource"
+              },
+              "runAsUser": {
+                "oneOf": [
+                  {
+                    "type": "integer",
+                    "format": "int32"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "settings": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/ParameterFieldMapStringJsonNode"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "target": {
+                "$ref": "#/definitions/pipeline/steps/common/STOYamlTarget"
+              },
+              "description": {
+                "desc": "This is the description for CortexCloudStepInfo"
+              }
+            }
           },
           "ModelScanNode": {
             "title": "ModelScanNode",
@@ -110421,6 +110902,9 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/common/WizScanNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/common/CortexCloudScanNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/common/ModelScanNode"
                   },
                   {
@@ -111161,6 +111645,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/WizScanNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/CortexCloudScanNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/ModelScanNode"
