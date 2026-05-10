@@ -127,20 +127,14 @@ export class Registry {
       ? allToolsets.filter((t) => enabledNames.has(t.name))
       : allToolsets.filter((t) => !t.optIn);
 
-    const excludedPipelineType =
-      (this.config.HARNESS_PIPELINE_VERSION ?? "0") === "0"
-        ? "pipeline_v1"
-        : "pipeline";
-
     for (const toolset of this.toolsets) {
       for (const resource of toolset.resources) {
-        if (resource.resourceType === excludedPipelineType) continue;
         this.resourceMap.set(resource.resourceType, resource);
       }
     }
 
     log.info(`Registry loaded: ${this.resourceMap.size} resource types from ${this.toolsets.length} toolsets`, {
-      pipelineVersion: this.config.HARNESS_PIPELINE_VERSION ?? "0",
+      defaultPipelineVersion: this.config.HARNESS_PIPELINE_VERSION ?? "0",
     });
   }
 
@@ -224,7 +218,7 @@ export class Registry {
     return new Set(valid);
   }
 
-  get orgId(): string { return this.config.HARNESS_ORG; }
+  get orgId(): string | undefined { return this.config.HARNESS_ORG; }
   get projectId(): string | undefined { return this.config.HARNESS_PROJECT; }
 
   /** Get a resource definition by type, or throw. */
@@ -396,6 +390,11 @@ export class Registry {
   ): void {
     if (!this.auditManager) return;
 
+    // Resolve path using pathBuilder if present, otherwise use static path
+    const resolvedPath = spec.pathBuilder
+      ? spec.pathBuilder(input, { HARNESS_ACCOUNT_ID: this.getAccountId(), HARNESS_ORG: this.config.HARNESS_ORG, HARNESS_PROJECT: this.config.HARNESS_PROJECT })
+      : spec.path;
+
     const event: AuditEvent = {
       event_id: randomUUID(),
       timestamp: new Date().toISOString(),
@@ -416,7 +415,7 @@ export class Registry {
       outcome,
       duration_ms: durationMs,
       http_method: spec.method,
-      http_path: spec.path,
+      http_path: resolvedPath,
       ...(error ? { error } : {}),
       ...(httpStatus ? { http_status: httpStatus } : {}),
     };
@@ -500,6 +499,7 @@ export class Registry {
       params[def.scopeParams.account] = resolvedAccountId;
     }
 
+
     // Account-scoped resources sometimes still need orgIdentifier in query params (NG /ng/api/projects).
     if (spec.injectOrgQueryFallback) {
       const orgKey = def.scopeParams?.org ?? "orgIdentifier";
@@ -552,10 +552,13 @@ export class Registry {
       }
     }
 
+    // Resolve HTTP method — methodBuilder overrides static method when present.
+    const resolvedMethod = spec.methodBuilder ? spec.methodBuilder(input) : spec.method;
+
     // Inject orgIdentifier/projectIdentifier into the body for mutating operations (POST/PUT).
     // Harness NG APIs require these in the body (not just query params) to scope the resource correctly.
     // If bodyWrapperKey is set (e.g., "connector"), inject inside the wrapper object.
-    if (body && typeof body === "object" && (spec.method === "POST" || spec.method === "PUT")) {
+    if (body && typeof body === "object" && (resolvedMethod === "POST" || resolvedMethod === "PUT")) {
       const bodyRecord = body as Record<string, unknown>;
       // Determine where to inject: inside wrapper if present, otherwise at top level
       const targetRecord = spec.bodyWrapperKey && 
@@ -611,7 +614,7 @@ export class Registry {
     }
 
     const requestOpts = {
-      method: spec.method,
+      method: resolvedMethod,
       path,
       params,
       body,
@@ -653,7 +656,7 @@ export class Registry {
     }
 
     // Extract response
-    let result = spec.responseExtractor ? spec.responseExtractor(raw) : raw;
+    let result = spec.responseExtractor ? spec.responseExtractor(raw, input) : raw;
 
     // Tag ELK/Mongo data source on the response when fallback is active
     if (dataSource && result && typeof result === "object" && !Array.isArray(result)) {

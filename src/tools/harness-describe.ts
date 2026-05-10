@@ -3,6 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { InputExpansionRule } from "../registry/types.js";
 import { jsonResult } from "../utils/response-formatter.js";
+import { getExamplesForResource } from "../data/examples/index.js";
 
 export function registerDescribeTool(server: McpServer, registry: Registry): void {
   const allTypes = registry.getAllResourceTypes() as [string, ...string[]];
@@ -55,6 +56,15 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
             diagnosticHint: def.diagnosticHint ?? undefined,
             relatedResources: def.relatedResources ?? undefined,
             executeHint: def.executeHint ?? undefined,
+            ...(() => {
+              const examples = getExamplesForResource(def.resourceType);
+              return examples.length > 0
+                ? {
+                    examples_available: examples.map((e) => ({ name: e.name, description: e.description })),
+                    examples_hint: `Use harness_schema(resource_type='${def.resourceType}', example='<name>') to fetch full YAML.`,
+                  }
+                : {};
+            })(),
           });
         } catch (err) {
           // Resource type not found — return the compact summary with an error hint

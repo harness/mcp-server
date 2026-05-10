@@ -1,6 +1,6 @@
 ## Harness MCP Server 2.0
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 167 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 168 resource types.
 
 ## Why Use This MCP Server
 
@@ -8,7 +8,7 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **11 tools, 167 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **11 tools, 168 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
 - **Full platform coverage.** 31 toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Governance, Service Overrides, Visualizations, and more. Not just pipelines — the entire Harness platform.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **30 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
@@ -162,6 +162,8 @@ curl -X DELETE http://localhost:3000/mcp \
 Harness also supports a hosted MCP endpoint for accounts that have the managed service enabled. This is useful when you want a shared remote MCP endpoint instead of running `npx harness-mcp-v2` or self-hosting the HTTP transport yourself.
 
 > **Important:** Hosted MCP authentication uses **Harness Platform OAuth**. It does **not** use `HARNESS_API_KEY` in the client config. Hosted MCP availability is configured per Harness account, so you will need to work with **Harness Support** to enable/configure the setting before using it.
+>
+> The hosted endpoint `https://mcp.harness.io/mcp` is a managed service. Client-side MCP config in Claude, Cursor, or Cowork cannot override which Harness environment it routes to. For Harness0 or another private Harness SaaS environment, ask Harness Support to enable/configure hosted MCP for that environment, or run the local/self-hosted server and set `HARNESS_BASE_URL` to the target Harness host.
 
 **Hosted MCP example:**
 
@@ -494,8 +496,8 @@ The server automatically loads environment variables from a `.env` file in the p
 | --------------------------- | -------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `HARNESS_API_KEY`           | Yes      | --                          | Harness personal access token or service account token                                                                                                                                                                                                |
 | `HARNESS_ACCOUNT_ID`        | No       | *(from PAT)*                | Harness account identifier. Auto-extracted from PAT tokens; only needed for non-PAT API keys                                                                                                                                                          |
-| `HARNESS_BASE_URL`          | No       | `https://app.harness.io`    | Base URL (override for self-managed Harness)                                                                                                                                                                                                          |
-| `HARNESS_ORG`               | No       | `default`                   | Organization ID. Used when `org_id` is not specified per tool call. Agents can also discover orgs dynamically via `harness_list(resource_type="organization")`                                                                                        |
+| `HARNESS_BASE_URL`          | No       | `https://app.harness.io`    | Harness API/UI base URL for local stdio or self-hosted HTTP deployments. Set this to environments such as `https://harness0.harness.io` when running the server yourself. It does not affect the managed `https://mcp.harness.io/mcp` hosted endpoint |
+| `HARNESS_ORG`               | No       | --                          | Organization ID. Used when `org_id` is not specified per tool call. If omitted, `org_id` must be provided explicitly. Agents can also discover orgs dynamically via `harness_list(resource_type="organization")`                                      |
 | `HARNESS_PROJECT`           | No       | --                          | Project ID. Used when `project_id` is not specified per tool call. Agents can also discover projects dynamically via `harness_list(resource_type="project")`                                                                                          |
 | `HARNESS_API_TIMEOUT_MS`    | No       | `30000`                     | HTTP request timeout in milliseconds                                                                                                                                                                                                                  |
 | `HARNESS_MAX_RETRIES`       | No       | `3`                         | Retry count for transient failures (429, 5xx)                                                                                                                                                                                                         |
@@ -952,7 +954,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-167 resource types organized across 31 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+168 resource types organized across 31 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -1489,7 +1491,7 @@ Available toolset names:
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
                 |  32 Toolsets      |      (data files, not code)
-                |  167 Resource Types|
+                |  168 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+
