@@ -269,7 +269,7 @@
 - [x] Review changed behavioral paths for concrete high-severity trigger scenarios
 - [x] Implement a minimal fix and focused tests only if a critical bug is found
 - [x] Run verification appropriate to the outcome
-- [ ] Report results in Slack and avoid opening a PR unless a real critical bug was fixed
+- [x] Report results in Slack and avoid opening a PR unless a real critical bug was fixed
 
 ### Plan
 - Use `origin/main...HEAD` and recent commit metadata to identify changed files and behavior.
