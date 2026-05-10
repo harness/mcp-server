@@ -236,6 +236,24 @@ command: echo safe`;
     expect(result).not.toContain("line-two-secret");
   });
 
+  it("redacts YAML block scalars embedded in JSON string values", () => {
+    const json = JSON.stringify({
+      pipeline_yaml: `pipeline:
+  identifier: safe
+  privateKey: |
+    line-one-secret
+    line-two-secret
+  command: echo safe`,
+    });
+
+    const result = redactJsonString(json);
+
+    expect(result).toContain("[REDACTED]");
+    expect(result).toContain("echo safe");
+    expect(result).not.toContain("line-one-secret");
+    expect(result).not.toContain("line-two-secret");
+  });
+
   it("redacts kebab-case keys in JSON objects", () => {
     const json = JSON.stringify({ "private-key": "secret_value", name: "safe" });
     const result = redactJsonString(json);

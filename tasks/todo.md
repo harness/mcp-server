@@ -263,3 +263,15 @@
 - Clarified in README that hosted `https://mcp.harness.io/mcp` is managed and cannot be pointed at Harness0 from Claude/Cursor/Cowork client config; Support must configure hosted MCP for that target environment.
 - Updated MCPB manifest descriptions so `HARNESS_BASE_URL` covers private SaaS hosts such as `https://harness0.harness.io`, not just self-managed installs.
 - Verified with `pnpm build` and `pnpm docs:check`.
+
+## Critical Bug Inspection (2026-05-10)
+- [ ] Gather branch status, recent commits, and diff against `main`
+- [ ] Review changed behavioral paths for concrete high-severity trigger scenarios
+- [ ] Implement a minimal fix and focused tests only if a critical bug is found
+- [ ] Run verification appropriate to the outcome
+- [ ] Report results in Slack and avoid opening a PR unless a real critical bug was fixed
+
+### Plan
+- Use `origin/main...HEAD` and recent commit metadata to identify changed files and behavior.
+- Trace suspicious changes through callers and tests before deciding whether a bug is real.
+- Keep any fix narrow, commit/push it before verification, and open a PR only for a high-confidence critical issue.

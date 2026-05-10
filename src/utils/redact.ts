@@ -12,7 +12,7 @@ const REDACTED = "[REDACTED]";
 export function redactSensitiveFields(obj: unknown, depth = 0): unknown {
   if (depth > 10) return REDACTED;
 
-  if (typeof obj === "string") return obj;
+  if (typeof obj === "string") return scrubSensitiveText(obj);
   if (obj === null || obj === undefined) return obj;
   if (typeof obj !== "object") return obj;
 
@@ -48,6 +48,12 @@ const YAML_BLOCK_SECRET_PATTERN = new RegExp(
   "gim",
 );
 
+function scrubSensitiveText(text: string): string {
+  return text
+    .replace(YAML_BLOCK_SECRET_PATTERN, `$1  ${REDACTED}\n`)
+    .replace(INLINE_SECRET_PATTERN, `$1: ${REDACTED}`);
+}
+
 /**
  * Redact sensitive fields in a JSON string. Returns the redacted string.
  * If parsing fails, scrubs inline sensitive key/value pairs then truncates.
@@ -59,9 +65,7 @@ export function redactJsonString(jsonStr: string, maxLen = 1000): string {
     const out = JSON.stringify(redacted);
     return out.length > maxLen ? out.slice(0, maxLen) + "..." : out;
   } catch {
-    const scrubbed = jsonStr
-      .replace(YAML_BLOCK_SECRET_PATTERN, `$1  ${REDACTED}\n`)
-      .replace(INLINE_SECRET_PATTERN, `$1: ${REDACTED}`);
+    const scrubbed = scrubSensitiveText(jsonStr);
     return scrubbed.length > maxLen ? scrubbed.slice(0, maxLen) + "..." : scrubbed;
   }
 }
