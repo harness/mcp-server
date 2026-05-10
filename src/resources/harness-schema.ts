@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createLogger } from "../utils/logger.js";
-import { SCHEMAS, VALID_SCHEMAS, type SchemaName } from "../data/schemas/index.js";
+import { SCHEMAS, VALID_SCHEMAS, type SchemaName, type SchemaEntry } from "../data/schemas/index.js";
 
 const log = createLogger("resource:harness-schema");
 
@@ -11,7 +11,7 @@ export function isValidSchemaName(name: string, validNames: readonly string[] = 
 
 export function registerHarnessSchemaResource(
   server: McpServer,
-  additionalSchemas?: Record<string, Record<string, any>>,
+  additionalSchemas?: Record<string, SchemaEntry>,
 ): void {
   if (additionalSchemas) {
     for (const key of Object.keys(additionalSchemas)) {
@@ -21,7 +21,7 @@ export function registerHarnessSchemaResource(
     }
   }
   const allSchemas: Record<string, Record<string, any>> = additionalSchemas
-    ? { ...SCHEMAS, ...additionalSchemas }
+    ? { ...SCHEMAS, ...Object.fromEntries(Object.entries(additionalSchemas).map(([k, v]) => [k, v.schema])) }
     : { ...SCHEMAS };
   const allSchemaNames = Object.keys(allSchemas);
 

@@ -2,7 +2,7 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { createLogger } from "../utils/logger.js";
-import { SCHEMAS, VALID_SCHEMAS } from "../data/schemas/index.js";
+import { SCHEMAS, VALID_SCHEMAS, type SchemaEntry } from "../data/schemas/index.js";
 import { getExample, searchExamples, getExamplesForResource } from "../data/examples/index.js";
 
 const log = createLogger("tool:harness-schema");
@@ -129,7 +129,7 @@ function getSummary(schema: Record<string, unknown>, resourceType: string): Reco
 
 export function registerSchemaTool(
   server: McpServer,
-  additionalSchemas?: Record<string, Record<string, any>>,
+  additionalSchemas?: Record<string, SchemaEntry>,
 ): void {
   if (additionalSchemas) {
     for (const key of Object.keys(additionalSchemas)) {
@@ -139,7 +139,7 @@ export function registerSchemaTool(
     }
   }
   const allSchemas: Record<string, Record<string, any>> = additionalSchemas
-    ? { ...SCHEMAS, ...additionalSchemas }
+    ? { ...SCHEMAS, ...Object.fromEntries(Object.entries(additionalSchemas).map(([k, v]) => [k, v.schema])) }
     : { ...SCHEMAS };
   const availableSchemas = Object.keys(allSchemas);
 
