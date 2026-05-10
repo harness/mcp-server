@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { registerSchema, SCHEMAS, VALID_SCHEMAS } from "../../src/data/schemas/index.js";
 import { isValidSchemaName } from "../../src/resources/harness-schema.js";
 
 describe("harness-schema resource", () => {
@@ -28,6 +29,45 @@ describe("harness-schema resource", () => {
       expect(isValidSchemaName("")).toBe(false);
       expect(isValidSchemaName("Pipeline")).toBe(false);
       expect(isValidSchemaName("connector")).toBe(false);
+    });
+
+    it("returns true for schemas registered at runtime", () => {
+      registerSchema("dashboard-contract-test", {
+        definitions: {
+          "dashboard-contract-test": {
+            "dashboard-contract-test": {
+              type: "object",
+              properties: {
+                title: { type: "string" },
+              },
+            },
+          },
+        },
+      });
+
+      expect(isValidSchemaName("dashboard-contract-test")).toBe(true);
+      expect(VALID_SCHEMAS).toContain("dashboard-contract-test");
+      expect(SCHEMAS["dashboard-contract-test"]).toMatchObject({
+        definitions: {
+          "dashboard-contract-test": expect.any(Object),
+        },
+      });
+    });
+
+    it("throws when registering a duplicate schema name", () => {
+      registerSchema("duplicate-dashboard-contract-test", {
+        definitions: {
+          "duplicate-dashboard-contract-test": {},
+        },
+      });
+
+      expect(() =>
+        registerSchema("duplicate-dashboard-contract-test", {
+          definitions: {
+            "duplicate-dashboard-contract-test": {},
+          },
+        }),
+      ).toThrow("Schema 'duplicate-dashboard-contract-test' already registered.");
     });
   });
 });

@@ -263,3 +263,16 @@
 - Clarified in README that hosted `https://mcp.harness.io/mcp` is managed and cannot be pointed at Harness0 from Claude/Cursor/Cowork client config; Support must configure hosted MCP for that target environment.
 - Updated MCPB manifest descriptions so `HARNESS_BASE_URL` covers private SaaS hosts such as `https://harness0.harness.io`, not just self-managed installs.
 - Verified with `pnpm build` and `pnpm docs:check`.
+
+## PR #166 Schema Registration Follow-up (2026-05-10)
+- [x] Read the Slack request thread and inspect PR #166 metadata/diff
+- [x] Trace `harness_schema` registration through schema data, tool, and resource modules
+- [ ] Add focused regression coverage for runtime schema registration
+- [ ] Generate the runtime registration hook from `scripts/sync-schemas.js`
+- [ ] Verify focused tests, typecheck, and generated output stability
+- [ ] Commit, push, open PR, and reply in the Slack thread
+
+### Plan
+- Keep `registerSchema(name, schema)` in `src/data/schemas/index.ts`, but make `scripts/sync-schemas.js` emit it so schema syncs do not remove the hook.
+- Preserve startup ordering semantics: internal servers must register schemas before `registerSchemaTool()` / `registerHarnessSchemaResource()` so tool enum metadata and resource lists include the new names.
+- Add tests against the exported schema registry and resource validation helper to prove new schema names are accepted and duplicate names fail loudly.

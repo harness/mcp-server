@@ -118,12 +118,26 @@ type V1SchemaKey = ${v1Keys.join(" | ")};
 type LocalSchemaKey = ${localKeys.join(" | ")};
 type AllSchemaKeys = V0SchemaKey | V1SchemaKey | LocalSchemaKey;
 
-export const SCHEMAS: Record<AllSchemaKeys, Record<string, any>> = {
+export const SCHEMAS: Record<string, Record<string, unknown>> = {
 ${props}
 };
 
-export const VALID_SCHEMAS = Object.keys(SCHEMAS) as AllSchemaKeys[];
-export type SchemaName = AllSchemaKeys;
+export const VALID_SCHEMAS: string[] = Object.keys(SCHEMAS);
+export type SchemaName = AllSchemaKeys | string;
+
+/**
+ * Register an additional schema at runtime.
+ * Internal/extension servers should call this during startup, before
+ * registering schema tools/resources, so MCP clients see the new schema name.
+ */
+export function registerSchema(name: string, schema: Record<string, unknown>): void {
+  if (SCHEMAS[name]) {
+    throw new Error(\`Schema '\${name}' already registered.\`);
+  }
+
+  SCHEMAS[name] = schema;
+  VALID_SCHEMAS.push(name);
+}
 
 export const V0_SCHEMA_KEYS: V0SchemaKey[] = [${v0Keys.join(", ")}];
 export const V1_SCHEMA_KEYS: V1SchemaKey[] = [${v1Keys.join(", ")}];
