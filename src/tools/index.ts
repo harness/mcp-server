@@ -17,7 +17,7 @@ import { registerSchemaTool } from "./harness-schema.js";
 import "../data/examples/load-all.js";
 
 
-export function registerAllTools(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
+export function registerAllTools(server: McpServer, registry: Registry, client: HarnessClient, config: Config, additionalSchemas?: Record<string, Record<string, any>>): void {
   registerListTool(server, registry, client);
   registerGetTool(server, registry, client);
   registerCreateTool(server, registry, client);
@@ -28,5 +28,5 @@ export function registerAllTools(server: McpServer, registry: Registry, client: 
   registerSearchTool(server, registry, client);
   registerDescribeTool(server, registry);
   registerStatusTool(server, registry, client, config);
-  registerSchemaTool(server);
+  registerSchemaTool(server, additionalSchemas);
 }
