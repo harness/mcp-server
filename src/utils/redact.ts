@@ -24,10 +24,8 @@ export function redactSensitiveFields(obj: unknown, depth = 0): unknown {
   for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
     if (SENSITIVE_KEY_PATTERN.test(key)) {
       result[key] = REDACTED;
-    } else if (typeof value === "object" && value !== null) {
-      result[key] = redactSensitiveFields(value, depth + 1);
     } else {
-      result[key] = value;
+      result[key] = redactSensitiveFields(value, depth + 1);
     }
   }
   return result;
