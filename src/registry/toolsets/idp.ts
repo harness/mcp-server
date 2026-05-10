@@ -184,8 +184,12 @@ export const idpToolset: ToolsetDefinition = {
           method: "GET",
           path: "/v1/scorecards",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            page: "page",
+            size: "limit",
+          },
           responseExtractor: v1ListExtract("scorecard"),
-          description: "List scorecards in the Harness IDP Catalog. Returns all scorecards (no pagination).",
+          description: "List scorecards in the Harness IDP Catalog.",
         },
         get: {
           method: "GET",
@@ -510,6 +514,13 @@ export const idpToolset: ToolsetDefinition = {
           bodySchema: {
             description: "Workflow execution inputs.",
             fields: [
+              {
+                name: "workflow_details",
+                type: "object",
+                required: false,
+                description:
+                  "Required tool input, not sent to the Harness API. A json representation of the workflow entity. This json contains the metadata of the workflow(like owner, name, description, ref etc) and a yaml field which should contain the spec.parameters against which the values should be validated. Only the parameters marked required are mandatory.",
+              },
               {
                 name: "identifier",
                 type: "string",

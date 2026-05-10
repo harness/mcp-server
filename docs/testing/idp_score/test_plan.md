@@ -1,34 +1,33 @@
-# Test Plan: IDP Score (`idp_score`)
+# Test Plan: IDP Score (`idp_score`, `idp_score_summary`)
 
 | Field | Value |
 |-------|-------|
-| **Resource Type** | `idp_score` |
-| **Display Name** | IDP Score |
+| **Resource Type** | `idp_score`, `idp_score_summary` |
+| **Display Name** | IDP Score, IDP Score Summary |
 | **Toolset** | idp |
 | **Scope** | account |
-| **Operations** | list, get |
+| **Operations** | `idp_score`: list; `idp_score_summary`: get |
 | **Execute Actions** | None |
-| **Identifier Fields** | entity_id |
-| **Filter Fields** | None |
+| **Identifier Fields** | entity_identifier |
+| **Filter Fields** | entity_identifier |
 | **Deep Link** | No |
 
 ## Test Cases
 
 | Test ID | Category | Description | Prompt | Expected Result |
 |---------|----------|-------------|--------|-----------------|
-| TC-idp_score-001 | List | List all entity scores with defaults | `harness_list(resource_type="idp_score")` | Returns paginated list of entity scores |
-| TC-idp_score-002 | List | List with pagination page 0 | `harness_list(resource_type="idp_score", page=0, size=5)` | Returns first page with up to 5 scores |
-| TC-idp_score-003 | List | List with pagination page 1 | `harness_list(resource_type="idp_score", page=1, size=5)` | Returns second page of scores |
-| TC-idp_score-004 | List | List with large page size | `harness_list(resource_type="idp_score", size=100)` | Returns up to 100 scores |
-| TC-idp_score-005 | Get | Get score by entity_id | `harness_get(resource_type="idp_score", entity_id="my-service")` | Returns score summary for the entity |
-| TC-idp_score-006 | Get | Verify score response structure | `harness_get(resource_type="idp_score", entity_id="my-service")` | Response contains score summary fields |
-| TC-idp_score-007 | Error | Get with missing entity_id | `harness_get(resource_type="idp_score")` | Error: entity_id is required |
-| TC-idp_score-008 | Error | Get non-existent entity score | `harness_get(resource_type="idp_score", entity_id="nonexistent")` | Error: entity not found (404) |
-| TC-idp_score-009 | Edge | List with page beyond data | `harness_list(resource_type="idp_score", page=9999)` | Returns empty list |
-| TC-idp_score-010 | Edge | List with size=1 | `harness_list(resource_type="idp_score", size=1)` | Returns exactly 1 score |
+| TC-idp_score-001 | List | List scorecard scores for an entity | `harness_list(resource_type="idp_score", filters={"entity_identifier":"default/Component/my-service"})` | Returns overall_score plus scorecard score items for the entity |
+| TC-idp_score-002 | List | List scorecard scores using top-level entity_identifier | `harness_list(resource_type="idp_score", entity_identifier="default/Component/my-service")` | Returns overall_score plus scorecard score items for the entity |
+| TC-idp_score-003 | Error | List without entity_identifier | `harness_list(resource_type="idp_score")` | Error from IDP API or validation indicating entity_identifier is required |
+| TC-idp_score-004 | Error | List scorecard scores for non-existent entity | `harness_list(resource_type="idp_score", filters={"entity_identifier":"default/Component/nonexistent"})` | Error: entity not found or empty/no scores depending on API behavior |
+| TC-idp_score_summary-001 | Get | Get aggregate score summary for an entity | `harness_get(resource_type="idp_score_summary", resource_id="default/Component/my-service")` | Returns aggregate score summary for the entity |
+| TC-idp_score_summary-002 | Get | Get aggregate score summary via params | `harness_get(resource_type="idp_score_summary", params={"entity_identifier":"default/Component/my-service"})` | Returns aggregate score summary for the entity |
+| TC-idp_score_summary-003 | Error | Get summary without entity_identifier | `harness_get(resource_type="idp_score_summary")` | Error: entity_identifier is required |
+| TC-idp_score_summary-004 | Error | Get summary for non-existent entity | `harness_get(resource_type="idp_score_summary", resource_id="default/Component/nonexistent")` | Error: entity not found or empty/no summary depending on API behavior |
 
 ## Notes
 - Account-scoped resource
-- API paths: GET `/v1/scores` (list), GET `/v1/scores/{entityId}` (get)
-- No filter fields; only pagination params supported for list
+- API paths: GET `/v1/scores` (`idp_score` list), GET `/v1/scores/summary` (`idp_score_summary` get)
+- `idp_score` requires `entity_identifier` and does not expose pagination
+- `idp_score_summary` requires `entity_identifier`
 - No deep link template defined
