@@ -1,0 +1,113 @@
+src/tools/harness-schema.ts
+  517381e8-aa62-4c74-8608-b02c194696b0 100-105,137
+  human 134
+src/resources/harness-schema.ts
+  517381e8-aa62-4c74-8608-b02c194696b0 19
+tests/resources/harness-schema.test.ts
+  517381e8-aa62-4c74-8608-b02c194696b0 1-13
+tests/tools/harness-schema-tool.test.ts
+  517381e8-aa62-4c74-8608-b02c194696b0 38,40-45,64-86,97
+  human 39
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 7,
+          "added_lines": 7,
+          "deleted_lines": 1,
+          "hash": "517381e8-aa62-4c74-8608-b02c194696b0",
+          "lines": "100-105,137",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 0,
+          "added_lines": 0,
+          "deleted_lines": 1,
+          "hash": "human",
+          "lines": "134",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/tools/harness-schema.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "517381e8-aa62-4c74-8608-b02c194696b0",
+          "lines": "19",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/resources/harness-schema.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 13,
+          "added_lines": 13,
+          "deleted_lines": 2,
+          "hash": "517381e8-aa62-4c74-8608-b02c194696b0",
+          "lines": "1-13",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "tests/resources/harness-schema.test.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 31,
+          "added_lines": 32,
+          "deleted_lines": 6,
+          "hash": "517381e8-aa62-4c74-8608-b02c194696b0",
+          "lines": "38,40-45,64-86,97",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 1,
+          "hash": "human",
+          "lines": "39",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "tests/tools/harness-schema-tool.test.ts"
+    }
+  ],
+  "base_commit_sha": "e7aff85d2e3bbddd53d5e3d9d7dc448fd93e0e82",
+  "branch": "dashboard-schemas",
+  "commit_sha": "3cc9931100889c785289efa9b21d999b1f829a78",
+  "commit_time": "2026-05-10T13:36:52-07:00",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.3",
+  "prompts": {
+    "517381e8-aa62-4c74-8608-b02c194696b0": {
+      "accepted_lines": 52,
+      "agent_id": {
+        "id": "517381e8-aa62-4c74-8608-b02c194696b0",
+        "model": "claude-sonnet-4-6",
+        "tool": "claude"
+      },
+      "human_author": "Sunil Gattupalle <sunil.gattupalle@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 53,
+      "total_deletions": 9
+    },
+    "human": {
+      "accepted_lines": 1,
+      "agent_id": null,
+      "human_author": "Sunil Gattupalle <sunil.gattupalle@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 1,
+      "total_deletions": 2
+    }
+  },
+  "repo": "https://github.com/harness/mcp-server.git",
+  "schema_version": "authorship/3.0.0"
+}
