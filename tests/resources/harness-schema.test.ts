@@ -1,6 +1,17 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { registerSchema, SCHEMAS, VALID_SCHEMAS } from "../../src/data/schemas/index.js";
 import { isValidSchemaName } from "../../src/resources/harness-schema.js";
+import { registerSchemaTool } from "../../src/tools/harness-schema.js";
+import type { ToolResult } from "../../src/utils/response-formatter.js";
+
+function parseToolResult(result: ToolResult): unknown {
+  const content = result.content[0];
+  if (content?.type !== "text") {
+    throw new Error("Expected text tool result");
+  }
+
+  return JSON.parse(content.text);
+}
 
 describe("harness-schema resource", () => {
   describe("isValidSchemaName", () => {
@@ -68,6 +79,48 @@ describe("harness-schema resource", () => {
           },
         }),
       ).toThrow("Schema 'duplicate-dashboard-contract-test' already registered.");
+    });
+
+    it("advertises runtime schemas when the schema tool is registered after them", async () => {
+      registerSchema("tool-dashboard-contract-test", {
+        definitions: {
+          "tool-dashboard-contract-test": {
+            "tool-dashboard-contract-test": {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+              },
+            },
+          },
+        },
+      });
+
+      const registerTool = vi.fn();
+      registerSchemaTool({ registerTool } as unknown as Parameters<typeof registerSchemaTool>[0]);
+
+      const schemaConfig = registerTool.mock.calls[0]?.[1] as {
+        inputSchema: {
+          resource_type: {
+            parse(value: string): string;
+          };
+        };
+      };
+      expect(schemaConfig.inputSchema.resource_type.parse("tool-dashboard-contract-test")).toBe(
+        "tool-dashboard-contract-test",
+      );
+
+      const handler = registerTool.mock.calls[0]?.[2] as (args: Record<string, unknown>) => Promise<ToolResult>;
+      const result = await handler({ resource_type: "tool-dashboard-contract-test" });
+      expect(parseToolResult(result)).toMatchObject({
+        resource_type: "tool-dashboard-contract-test",
+        fields: [
+          {
+            name: "name",
+            type: "string",
+            required: false,
+          },
+        ],
+      });
     });
   });
 });

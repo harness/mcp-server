@@ -267,12 +267,18 @@
 ## PR #166 Schema Registration Follow-up (2026-05-10)
 - [x] Read the Slack request thread and inspect PR #166 metadata/diff
 - [x] Trace `harness_schema` registration through schema data, tool, and resource modules
-- [ ] Add focused regression coverage for runtime schema registration
-- [ ] Generate the runtime registration hook from `scripts/sync-schemas.js`
-- [ ] Verify focused tests, typecheck, and generated output stability
+- [x] Add focused regression coverage for runtime schema registration
+- [x] Generate the runtime registration hook from `scripts/sync-schemas.js`
+- [x] Verify focused tests, typecheck, build, and full test suite
 - [ ] Commit, push, open PR, and reply in the Slack thread
 
 ### Plan
 - Keep `registerSchema(name, schema)` in `src/data/schemas/index.ts`, but make `scripts/sync-schemas.js` emit it so schema syncs do not remove the hook.
 - Preserve startup ordering semantics: internal servers must register schemas before `registerSchemaTool()` / `registerHarnessSchemaResource()` so tool enum metadata and resource lists include the new names.
 - Add tests against the exported schema registry and resource validation helper to prove new schema names are accepted and duplicate names fail loudly.
+
+### Review
+- Found PR #166's hook was added directly to the generated schema index, so `pnpm sync-schemas` would remove it.
+- Added the same `registerSchema()` output to `scripts/sync-schemas.js` and the current generated `src/data/schemas/index.ts`.
+- Added tests proving runtime-registered schemas update shared validation state and appear in the `harness_schema` tool input schema when registered before tool setup.
+- Verified with `pnpm test tests/resources/harness-schema.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test`.
