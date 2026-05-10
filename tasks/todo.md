@@ -270,7 +270,7 @@
 - [x] Add focused regression coverage for runtime schema registration
 - [x] Generate the runtime registration hook from `scripts/sync-schemas.js`
 - [x] Verify focused tests, typecheck, build, and full test suite
-- [ ] Commit, push, open PR, and reply in the Slack thread
+- [x] Commit, push, open PR, and reply in the Slack thread
 
 ### Plan
 - Keep `registerSchema(name, schema)` in `src/data/schemas/index.ts`, but make `scripts/sync-schemas.js` emit it so schema syncs do not remove the hook.
