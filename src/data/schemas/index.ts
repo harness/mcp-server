@@ -17,7 +17,7 @@ type V1SchemaKey = "pipeline_v1" | "template_v1" | "trigger_v1" | "inputSet_v1" 
 type LocalSchemaKey = "agent-pipeline";
 type AllSchemaKeys = V0SchemaKey | V1SchemaKey | LocalSchemaKey;
 
-export const SCHEMAS: Record<AllSchemaKeys, Record<string, any>> = {
+export const SCHEMAS: Record<string, Record<string, any>> = {
   "pipeline": pipeline,
   "template": template,
   "trigger": trigger,
@@ -31,8 +31,21 @@ export const SCHEMAS: Record<AllSchemaKeys, Record<string, any>> = {
   "agent-pipeline": agentPipeline,
 };
 
-export const VALID_SCHEMAS = Object.keys(SCHEMAS) as AllSchemaKeys[];
-export type SchemaName = AllSchemaKeys;
+export const VALID_SCHEMAS: string[] = Object.keys(SCHEMAS);
+export type SchemaName = AllSchemaKeys | string;
+
+/**
+ * Register an additional schema at runtime.
+ * Used by internal/extension servers to add schemas without modifying the OSS package.
+ * Must be called before the schema tool is registered (i.e., at startup).
+ */
+export function registerSchema(name: string, schema: Record<string, any>): void {
+  if (SCHEMAS[name]) {
+    throw new Error(`Schema '${name}' already registered.`);
+  }
+  SCHEMAS[name] = schema;
+  VALID_SCHEMAS.push(name);
+}
 
 export const V0_SCHEMA_KEYS: V0SchemaKey[] = ["pipeline", "template", "trigger"];
 export const V1_SCHEMA_KEYS: V1SchemaKey[] = ["pipeline_v1", "template_v1", "trigger_v1", "inputSet_v1", "overlayInputSet_v1", "service_v1", "infra_v1"];
