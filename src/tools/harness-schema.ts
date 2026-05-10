@@ -128,6 +128,13 @@ export function registerSchemaTool(
   server: McpServer,
   additionalSchemas?: Record<string, Record<string, any>>,
 ): void {
+  if (additionalSchemas) {
+    for (const key of Object.keys(additionalSchemas)) {
+      if (key in SCHEMAS) {
+        log.warn(`additionalSchemas key '${key}' overrides a built-in schema`);
+      }
+    }
+  }
   const allSchemas: Record<string, Record<string, any>> = additionalSchemas
     ? { ...SCHEMAS, ...additionalSchemas }
     : { ...SCHEMAS };
