@@ -124,8 +124,14 @@ function getSummary(schema: Record<string, unknown>, resourceType: string): Reco
   };
 }
 
-export function registerSchemaTool(server: McpServer): void {
-  const availableSchemas = VALID_SCHEMAS;
+export function registerSchemaTool(
+  server: McpServer,
+  additionalSchemas?: Record<string, Record<string, any>>,
+): void {
+  const allSchemas: Record<string, Record<string, any>> = additionalSchemas
+    ? { ...SCHEMAS, ...additionalSchemas }
+    : { ...SCHEMAS };
+  const availableSchemas = Object.keys(allSchemas);
 
   server.registerTool(
     "harness_schema",
@@ -213,7 +219,7 @@ export function registerSchemaTool(server: McpServer): void {
           return errorResult("resource_type is required for schema lookups. Use example_search to search examples without specifying a resource type.");
         }
 
-        const schema = SCHEMAS[args.resource_type as keyof typeof SCHEMAS] as Record<string, unknown>;
+        const schema = allSchemas[args.resource_type] as Record<string, unknown>;
 
         // No path → return summary with available examples
         if (!args.path) {
