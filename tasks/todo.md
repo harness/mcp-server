@@ -265,13 +265,19 @@
 - Verified with `pnpm build` and `pnpm docs:check`.
 
 ## Critical Bug Inspection (2026-05-10)
-- [ ] Gather branch status, recent commits, and diff against `main`
-- [ ] Review changed behavioral paths for concrete high-severity trigger scenarios
-- [ ] Implement a minimal fix and focused tests only if a critical bug is found
-- [ ] Run verification appropriate to the outcome
+- [x] Gather branch status, recent commits, and diff against `main`
+- [x] Review changed behavioral paths for concrete high-severity trigger scenarios
+- [x] Implement a minimal fix and focused tests only if a critical bug is found
+- [x] Run verification appropriate to the outcome
 - [ ] Report results in Slack and avoid opening a PR unless a real critical bug was fixed
 
 ### Plan
 - Use `origin/main...HEAD` and recent commit metadata to identify changed files and behavior.
 - Trace suspicious changes through callers and tests before deciding whether a bug is real.
 - Keep any fix narrow, commit/push it before verification, and open a PR only for a high-confidence critical issue.
+
+### Review
+- Found a debug-log secret exposure regression: successfully parsed JSON log bodies only redacted sensitive object keys, so YAML stored inside ordinary string fields such as `pipeline_yaml` could leak `privateKey: |` block scalar contents to stderr/log aggregation when debug logging is enabled.
+- Added a regression test that failed before the fix for a JSON body containing embedded YAML block scalar secrets.
+- Fixed recursive redaction so primitive string values are scrubbed too, and replaced the broad YAML block regex with line-based block redaction that preserves later same-indent safe YAML fields.
+- Verified with `pnpm test tests/utils/redact.test.ts`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
