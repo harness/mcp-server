@@ -1,0 +1,59 @@
+src/data/schemas/index.ts
+  517381e8-aa62-4c74-8608-b02c194696b0 18,20,34-35
+  human 36-48
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 4,
+          "added_lines": 4,
+          "deleted_lines": 17,
+          "hash": "517381e8-aa62-4c74-8608-b02c194696b0",
+          "lines": "18,20,34-35",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 0,
+          "added_lines": 0,
+          "deleted_lines": 13,
+          "hash": "human",
+          "lines": "36-48",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/data/schemas/index.ts"
+    }
+  ],
+  "base_commit_sha": "21b04da7b52e8dc09848d0779709f21f896ddbc5",
+  "branch": "dashboard-schemas",
+  "commit_sha": "c0371bd137550fac97b867ae7e8e7a921c483e19",
+  "commit_time": "2026-05-10T13:03:03-07:00",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.3",
+  "prompts": {
+    "517381e8-aa62-4c74-8608-b02c194696b0": {
+      "accepted_lines": 4,
+      "agent_id": {
+        "id": "517381e8-aa62-4c74-8608-b02c194696b0",
+        "model": "claude-sonnet-4-6",
+        "tool": "claude"
+      },
+      "human_author": "Sunil Gattupalle <sunil.gattupalle@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 4,
+      "total_deletions": 17
+    },
+    "human": {
+      "accepted_lines": 0,
+      "agent_id": null,
+      "human_author": "Sunil Gattupalle <sunil.gattupalle@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 0,
+      "total_deletions": 13
+    }
+  },
+  "repo": "https://github.com/harness/mcp-server.git",
+  "schema_version": "authorship/3.0.0"
+}
