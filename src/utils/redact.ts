@@ -41,15 +41,44 @@ const INLINE_SECRET_PATTERN = new RegExp(
   "gi",
 );
 
-const YAML_BLOCK_SECRET_PATTERN = new RegExp(
-  `(^[ \\t]*["']?(?:${SENSITIVE_KEYS})["']?[ \\t]*:[ \\t]*[|>][^\\n]*\\n)(?:[ \\t]+.*(?:\\n|$))+`,
-  "gim",
+const YAML_BLOCK_SECRET_START_PATTERN = new RegExp(
+  `^([ \\t]*)(["']?(?:${SENSITIVE_KEYS})["']?[ \\t]*:[ \\t]*[|>][^\\n]*)$`,
+  "i",
 );
 
 function scrubSensitiveText(text: string): string {
-  return text
-    .replace(YAML_BLOCK_SECRET_PATTERN, `$1  ${REDACTED}\n`)
-    .replace(INLINE_SECRET_PATTERN, `$1: ${REDACTED}`);
+  return redactYamlBlockSecrets(text).replace(INLINE_SECRET_PATTERN, `$1: ${REDACTED}`);
+}
+
+function redactYamlBlockSecrets(text: string): string {
+  const lines = text.split("\n");
+  const redactedLines: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    const match = YAML_BLOCK_SECRET_START_PATTERN.exec(line);
+    if (!match) {
+      redactedLines.push(line);
+      continue;
+    }
+
+    const keyIndent = match[1]!;
+    redactedLines.push(line, `${keyIndent}  ${REDACTED}`);
+
+    for (i++; i < lines.length; i++) {
+      const blockLine = lines[i]!;
+      if (blockLine.trim() === "") {
+        continue;
+      }
+      const blockIndent = blockLine.match(/^[ \t]*/)?.[0] ?? "";
+      if (blockIndent.length <= keyIndent.length) {
+        i--;
+        break;
+      }
+    }
+  }
+
+  return redactedLines.join("\n");
 }
 
 /**
