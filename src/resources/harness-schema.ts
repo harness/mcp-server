@@ -16,7 +16,7 @@ export function registerHarnessSchemaResource(
   if (additionalSchemas) {
     for (const key of Object.keys(additionalSchemas)) {
       if (key in SCHEMAS) {
-        log.warn(`additionalSchemas key '${key}' overrides a built-in schema`);
+        throw new Error(`additionalSchemas key '${key}' conflicts with a built-in schema name`);
       }
     }
   }

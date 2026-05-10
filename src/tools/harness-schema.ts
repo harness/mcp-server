@@ -96,10 +96,13 @@ function navigateToPath(
  */
 function getSummary(schema: Record<string, unknown>, resourceType: string): Record<string, unknown> {
   const definitions = schema.definitions as Record<string, Record<string, unknown>> | undefined;
-  const sections = definitions ? Object.keys(definitions[resourceType] ?? {}) : [];
 
-  // Get the root resource definition
-  const rootDef = definitions?.[resourceType]?.[resourceType] as Record<string, unknown> | undefined;
+  // Harness-generated schemas nest the root definition under definitions[type][type].
+  // Plain JSON Schemas (extension schemas) place properties at the root level.
+  const harnessRootDef = definitions?.[resourceType]?.[resourceType] as Record<string, unknown> | undefined;
+  const rootDef = harnessRootDef ?? (schema.properties ? schema : undefined) as Record<string, unknown> | undefined;
+
+  const sections = definitions ? Object.keys(definitions[resourceType] ?? {}) : [];
   const properties = rootDef?.properties as Record<string, unknown> | undefined;
   const required = rootDef?.required as string[] | undefined;
 
@@ -131,7 +134,7 @@ export function registerSchemaTool(
   if (additionalSchemas) {
     for (const key of Object.keys(additionalSchemas)) {
       if (key in SCHEMAS) {
-        log.warn(`additionalSchemas key '${key}' overrides a built-in schema`);
+        throw new Error(`additionalSchemas key '${key}' conflicts with a built-in schema name`);
       }
     }
   }

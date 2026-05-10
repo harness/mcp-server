@@ -35,7 +35,14 @@ describe("registerSchemaTool additionalSchemas", () => {
     expect(() => registerSchemaTool(server)).not.toThrow();
   });
 
-  it("handler returns extension schema content when resource_type matches additionalSchemas key", async () => {
+  it("throws when additionalSchemas key collides with a built-in schema name", () => {
+    const server = makeMcpServer();
+    expect(() =>
+      registerSchemaTool(server, { pipeline: { type: "object" } }),
+    ).toThrow("conflicts with a built-in schema name");
+  });
+
+  it("handler returns fields from a Harness-layout extension schema (definitions[type][type])", async () => {
     const server = makeMcpServer();
     const dashboardSchema = {
       definitions: {
@@ -54,7 +61,29 @@ describe("registerSchemaTool additionalSchemas", () => {
     const parsed = parseResult(result) as Record<string, unknown>;
 
     expect(parsed.resource_type).toBe("DashboardContract");
-    expect(parsed.fields).toBeDefined();
+    expect(parsed.fields).toEqual([
+      { name: "title", type: "string", required: true },
+      { name: "widgets", type: "array", required: false },
+    ]);
+  });
+
+  it("handler returns fields from a plain JSON Schema extension schema (root-level properties)", async () => {
+    const server = makeMcpServer();
+    const plainSchema = {
+      type: "object",
+      properties: { name: { type: "string" }, count: { type: "number" } },
+      required: ["name"],
+    };
+    registerSchemaTool(server, { MyExtension: plainSchema });
+
+    const result = await server.call("harness_schema", { resource_type: "MyExtension" });
+    const parsed = parseResult(result) as Record<string, unknown>;
+
+    expect(parsed.resource_type).toBe("MyExtension");
+    expect(parsed.fields).toEqual([
+      { name: "name", type: "string", required: true },
+      { name: "count", type: "number", required: false },
+    ]);
   });
 
   it("handler still returns built-in schema content when no additionalSchemas", async () => {
@@ -65,5 +94,6 @@ describe("registerSchemaTool additionalSchemas", () => {
     const parsed = parseResult(result) as Record<string, unknown>;
 
     expect(parsed.resource_type).toBe("pipeline");
+    expect(Array.isArray(parsed.fields)).toBe(true);
   });
 });

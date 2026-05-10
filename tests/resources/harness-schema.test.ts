@@ -1,5 +1,16 @@
-import { describe, it, expect } from "vitest";
-import { isValidSchemaName } from "../../src/resources/harness-schema.js";
+import { describe, it, expect, vi } from "vitest";
+import { isValidSchemaName, registerHarnessSchemaResource } from "../../src/resources/harness-schema.js";
+
+describe("registerHarnessSchemaResource collision guard", () => {
+  it("throws when additionalSchemas key collides with a built-in schema name", () => {
+    const server = {
+      registerResource: vi.fn(),
+    } as any;
+    expect(() =>
+      registerHarnessSchemaResource(server, { pipeline: { type: "object" } }),
+    ).toThrow("conflicts with a built-in schema name");
+  });
+});
 
 describe("isValidSchemaName with extension schemas", () => {
   it("returns false for an extension schema name when no extensions passed", () => {
