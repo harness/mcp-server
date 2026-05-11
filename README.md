@@ -1260,6 +1260,14 @@ SEI resources are consolidated for token efficiency. Use `metric` or `aspect` pa
 | `security_issue_filter` | x    |     |        |        |        |                                |
 | `security_exemption`    | x    |     |        |        |        | `approve`, `reject`, `promote` |
 
+Security exemption execute workflow:
+
+- Use `harness_list` with `resource_type="security_exemption"` and an explicit `status` such as `Pending`, `Approved`, `Rejected`, `Expired`, or `Canceled`.
+- Use `harness_execute` with `action="approve"` only for project-level approval. The server auto-fills `body.approver_id` from the authenticated user when omitted; `body.comment` is optional.
+- Use `action="reject"` to reject an exemption. `body.approver_id` is also auto-filled when omitted.
+- Use `action="promote"` directly when the requested outcome is approval plus promotion to another scope. Do not call `approve` first for org, account, pipeline, or target promotion.
+- Promotion requires `body.scope`: `ACCOUNT`, `ORG`, `PROJECT`, `PIPELINE`, or `TARGET`. For `PIPELINE`, also pass `body.pipeline_id`; for `TARGET`, also pass `body.target_id`.
+
 
 ### Access Control
 
@@ -1576,6 +1584,16 @@ pnpm test:watch
 
 # Interactive MCP Inspector
 pnpm inspect
+
+# Refresh generated README counts from the built registry
+pnpm docs:generate
+
+# Verify README counts and clone instructions are current
+pnpm docs:check
+
+# Sync and verify JSON Schemas used by harness_schema
+pnpm sync-schemas
+pnpm check-schema-coverage
 ```
 
 ### Project Structure
@@ -1597,7 +1615,7 @@ src/
       ccm.ts
       access-control.ts
       ...
-  tools/                            # 10 generic MCP tools
+  tools/                            # 11 generic MCP tools
     harness-list.ts
     harness-get.ts
     harness-create.ts
@@ -1608,6 +1626,7 @@ src/
     harness-diagnose.ts
     harness-describe.ts
     harness-status.ts
+    harness-schema.ts
 
   resources/                        # MCP resource providers
     pipeline-yaml.ts

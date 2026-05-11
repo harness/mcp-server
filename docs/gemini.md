@@ -1,6 +1,6 @@
 # Harness MCP Server — Gemini CLI Context
 
-This extension connects Gemini CLI to the Harness Platform through 10 consolidated MCP tools that cover 137 resource types across 29 toolsets.
+This extension connects Gemini CLI to the Harness Platform through 11 consolidated MCP tools that cover 169 resource types across 31 toolsets.
 
 ## How This Server Works
 
@@ -23,6 +23,7 @@ Unlike traditional MCP servers with one tool per API endpoint, this server uses 
 - `harness_search` — Search across multiple resource types at once
 - `harness_diagnose` — Diagnose pipelines, connectors, delegates, and GitOps applications
 - `harness_status` — Project health overview: failed, running, and recent executions
+- `harness_schema` — Fetch exact JSON Schemas for creating or updating supported resources
 
 ## Available Capabilities
 
@@ -50,7 +51,7 @@ Unlike traditional MCP servers with one tool per API endpoint, this server uses 
 - Track commitment coverage, utilisation, and savings
 
 ### Security & Compliance
-- Security Test Orchestration (STO): manage issues, approve/reject exemptions
+- Security Test Orchestration (STO): manage issues; approve, reject, or promote exemptions with explicit scope
 - Supply Chain Security (SCS): track artifacts, compliance, SBOMs, chain of custody
 - Audit trail: comprehensive audit logs for governance
 
@@ -125,8 +126,8 @@ Secret values are never exposed — only metadata (name, type, scope).
    ```
    HARNESS_API_KEY=pat.xxxxx.xxxxx.xxxxx
    HARNESS_ACCOUNT_ID=your_account_id   # Optional for PATs, required for non-PAT API keys
-   HARNESS_ORG=default
-   HARNESS_PROJECT=your_project
+   HARNESS_ORG=your_org_id              # Optional default; omit to pass org_id per request
+   HARNESS_PROJECT=your_project_id      # Optional default; omit to pass project_id per request
    HARNESS_RATE_LIMIT_RPS=10            # Optional: client-side throttling
    HARNESS_MAX_BODY_SIZE_MB=10          # Optional: HTTP mode request size limit
    ```
@@ -146,4 +147,4 @@ Secret values are never exposed — only metadata (name, type, scope).
 
 **Toolset filtering:**
 - Set `HARNESS_TOOLSETS=pipelines,services,connectors` in `.env` to limit which resource types are available
-- Leave empty to enable all 29 toolsets
+- Leave empty to enable all default toolsets

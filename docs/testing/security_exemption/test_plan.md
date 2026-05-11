@@ -25,15 +25,15 @@
 | TC-se-007 | List | Combined status + search | `harness_list(resource_type="security_exemption", status="Pending", search="critical")` | Returns Pending exemptions matching search |
 | TC-se-008 | List | Pagination - page 0, size 5 | `harness_list(resource_type="security_exemption", page=0, size=5)` | Returns first 5 exemptions |
 | TC-se-009 | List | Pagination - page 1 | `harness_list(resource_type="security_exemption", page=1, size=5)` | Returns second page of exemptions |
-| TC-se-010 | Execute | Approve exemption | `harness_execute(resource_type="security_exemption", action="approve", exemption_id="<id>", body={approver_id: "<uuid>", comment: "Approved"})` | Exemption status changes to Approved |
-| TC-se-011 | Execute | Approve without comment | `harness_execute(resource_type="security_exemption", action="approve", exemption_id="<id>", body={approver_id: "<uuid>"})` | Exemption approved without comment |
-| TC-se-012 | Execute | Reject exemption | `harness_execute(resource_type="security_exemption", action="reject", exemption_id="<id>", body={approver_id: "<uuid>", comment: "Rejected - risk too high"})` | Exemption status changes to Rejected |
-| TC-se-013 | Execute | Promote exemption | `harness_execute(resource_type="security_exemption", action="promote", exemption_id="<id>", body={approver_id: "<uuid>", comment: "Promoting to org level"})` | Exemption promoted to org/account level |
-| TC-se-014 | Execute | Promote with pipeline_id scope | `harness_execute(resource_type="security_exemption", action="promote", exemption_id="<id>", body={approver_id: "<uuid>", pipeline_id: "<pid>"})` | Exemption promoted scoped to pipeline |
-| TC-se-015 | Execute | Promote with target_id scope | `harness_execute(resource_type="security_exemption", action="promote", exemption_id="<id>", body={approver_id: "<uuid>", target_id: "<tid>"})` | Exemption promoted scoped to target |
+| TC-se-010 | Execute | Approve exemption at project scope | `harness_execute(resource_type="security_exemption", action="approve", exemption_id="<id>", body={comment: "Approved"})` | Exemption is approved at project scope; server auto-fills approver_id from the authenticated user |
+| TC-se-011 | Execute | Approve without body | `harness_execute(resource_type="security_exemption", action="approve", exemption_id="<id>")` | Exemption is approved without a comment; server auto-fills approver_id |
+| TC-se-012 | Execute | Reject exemption | `harness_execute(resource_type="security_exemption", action="reject", exemption_id="<id>", body={comment: "Rejected - risk too high"})` | Exemption is rejected; server auto-fills approver_id |
+| TC-se-013 | Execute | Promote exemption to org scope | `harness_execute(resource_type="security_exemption", action="promote", exemption_id="<id>", body={scope: "ORG", comment: "Promoting to org level"})` | Exemption is approved and promoted to org scope in one call |
+| TC-se-014 | Execute | Promote with pipeline_id scope | `harness_execute(resource_type="security_exemption", action="promote", exemption_id="<id>", body={scope: "PIPELINE", pipeline_id: "<pid>"})` | Exemption is approved and promoted to the specified pipeline scope |
+| TC-se-015 | Execute | Promote with target_id scope | `harness_execute(resource_type="security_exemption", action="promote", exemption_id="<id>", body={scope: "TARGET", target_id: "<tid>"})` | Exemption is approved and promoted to the specified target scope |
 | TC-se-016 | Scope | Custom org and project | `harness_list(resource_type="security_exemption", org_id="custom_org", project_id="custom_project")` | Returns exemptions for specified org/project |
-| TC-se-017 | Error | Approve without approver_id | `harness_execute(resource_type="security_exemption", action="approve", exemption_id="<id>", body={})` | Returns validation error — approver_id required |
-| TC-se-018 | Error | Invalid exemption_id | `harness_execute(resource_type="security_exemption", action="approve", exemption_id="nonexistent", body={approver_id: "<uuid>"})` | Returns not found error |
+| TC-se-017 | Error | Promote without scope | `harness_execute(resource_type="security_exemption", action="promote", exemption_id="<id>", body={comment: "Missing scope"})` | Returns validation or API error because promote requires `body.scope` |
+| TC-se-018 | Error | Invalid exemption_id | `harness_execute(resource_type="security_exemption", action="approve", exemption_id="nonexistent", body={comment: "Approved"})` | Returns not found error |
 | TC-se-019 | Error | Invalid action name | `harness_execute(resource_type="security_exemption", action="invalid_action", exemption_id="<id>")` | Returns error — unknown action |
 | TC-se-020 | Edge | Approve already-approved exemption | `harness_execute(resource_type="security_exemption", action="approve", ...)` on approved exemption | Returns error or idempotent success |
 | TC-se-021 | Describe | Resource metadata | `harness_describe(resource_type="security_exemption")` | Returns metadata with execute actions (approve, reject, promote) and body schemas |
@@ -43,7 +43,9 @@
 - List endpoint is POST-based at `/sto/api/v2/frontend/exemptions`
 - status filter enum: Pending, Approved, Rejected, Expired, Canceled
 - Execute actions use PUT method with path params
-- approve body: `approver_id` (required), `comment` (optional)
-- reject body: `approver_id` (required), `comment` (optional)
-- promote body: `approver_id` (required), `comment` (optional), `pipeline_id` (optional), `target_id` (optional)
+- approve is for project-scope approval only. Do not use it before org/account/pipeline/target promotion.
+- approve body: `approver_id` (optional; auto-derived from authenticated user), `comment` (optional)
+- reject body: `approver_id` (optional; auto-derived from authenticated user), `comment` (optional)
+- promote approves and promotes in one call; call it directly for ACCOUNT, ORG, PROJECT, PIPELINE, or TARGET scope.
+- promote body: `scope` (required), `approver_id` (optional; auto-derived from authenticated user), `comment` (optional), `pipeline_id` (required when `scope` is `PIPELINE`), `target_id` (required when `scope` is `TARGET`)
 - STO gateway may have auth limitations with x-api-key PATs

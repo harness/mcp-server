@@ -263,3 +263,22 @@
 - Clarified in README that hosted `https://mcp.harness.io/mcp` is managed and cannot be pointed at Harness0 from Claude/Cursor/Cowork client config; Support must configure hosted MCP for that target environment.
 - Updated MCPB manifest descriptions so `HARNESS_BASE_URL` covers private SaaS hosts such as `https://harness0.harness.io`, not just self-managed installs.
 - Verified with `pnpm build` and `pnpm docs:check`.
+
+## Documentation Alignment Automation (2026-05-11)
+- [x] Audit recent registry, prompt, and config changes against existing docs
+- [x] Align STO security exemption docs and prompt guidance with execute action semantics
+- [x] Update stale setup/tooling references in existing user and contributor docs
+- [ ] Verify generated docs consistency and TypeScript prompt changes
+- [ ] Commit, push, and open/update docs-only PR
+
+### Plan
+- Update `README.md` in place for the `security_exemption` execute workflow and the project structure tool inventory.
+- Update `src/prompts/exemption-review.ts` so the prompt explains project-only `approve`, `promote` for wider scopes, confirmation, and `scope` body requirements.
+- Update `docs/gemini.md` to remove the stale `HARNESS_ORG=default` example and include exemption promotion in the STO capability summary.
+- Update `docs/testing/security_exemption/` so test prompts and expected results match the current body schemas: `approver_id` is optional, while `promote` requires `scope` and may require `pipeline_id` or `target_id`.
+- Update `CONTRIBUTING.md` for the current repository URL, 11-tool structure including `harness_schema`, and documentation/schema maintenance scripts.
+
+### Review
+- Documented that `security_exemption.approve` is project-scope only, while `promote` approves and promotes in a single call for ACCOUNT, ORG, PROJECT, PIPELINE, or TARGET.
+- Updated Gemini setup examples to avoid implying a default org named `default`; org/project defaults are optional and may be supplied per request.
+- Aligned contributor and README tooling sections with the current 11 generic tool files and docs/schema maintenance scripts.
