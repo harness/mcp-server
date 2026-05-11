@@ -269,7 +269,7 @@
 - [x] Align STO security exemption docs and prompt guidance with execute action semantics
 - [x] Update stale setup/tooling references in existing user and contributor docs
 - [x] Verify generated docs consistency and TypeScript prompt changes
-- [ ] Commit, push, and open/update docs-only PR
+- [x] Commit, push, and open/update docs-only PR
 
 ### Plan
 - Update `README.md` in place for the `security_exemption` execute workflow and the project structure tool inventory.
