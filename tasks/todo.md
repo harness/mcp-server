@@ -271,7 +271,7 @@
 - [x] Add focused regression coverage for invalid promotion scope inputs
 - [x] Implement the minimal scope validation/normalization fix
 - [x] Run focused verification, typecheck/build as appropriate
-- [ ] Commit, push, open PR, and report back only if the original Slack thread is available
+- [x] Commit, push, open PR, and report back only if the original Slack thread is available
 
 ### Plan
 - Keep the fix scoped to `security_exemption.promote` because the backend derives promotion scope from query params, not from body prose.
@@ -279,7 +279,7 @@
 - Normalize valid scope values before building the request so lower-case agent input cannot produce inconsistent body/query scope.
 
 ### Review
-- GitHub PR #171 is already merged and the GitHub API showed no inline or issue comments; the Slack root message could not be loaded by timestamp.
+- GitHub PR #171 is already merged and the GitHub API showed no inline or issue comments; the Slack root message could not be loaded by timestamp, so no Slack reply was posted.
 - Found a concrete STO promotion gap: `PIPELINE`/`TARGET` scope without the required ID could still issue a write shaped like a broader project request, and lower-case scope stayed inconsistent in the body.
 - Added preflight validation and normalization for `security_exemption.promote`, plus focused registry tests for missing `pipeline_id` and scope normalization.
 - Verified with `pnpm test tests/registry/registry.test.ts`, `pnpm typecheck`, `pnpm build`, `pnpm test`, and `git diff --check`.
