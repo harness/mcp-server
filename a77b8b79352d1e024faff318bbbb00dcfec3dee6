@@ -1,0 +1,39 @@
+README.md
+  human 3,11,955,1492
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 4,
+          "added_lines": 4,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "3,11,955,1492",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "README.md"
+    }
+  ],
+  "base_commit_sha": "6ff717319406043ae10fd8cc424bc2a509e5f826",
+  "branch": "CCM-32038-filter-skill",
+  "commit_sha": "a77b8b79352d1e024faff318bbbb00dcfec3dee6",
+  "commit_time": "2026-05-05T16:53:54+05:30",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.2",
+  "prompts": {
+    "human": {
+      "accepted_lines": 4,
+      "agent_id": null,
+      "human_author": "Shashwat Pandey <shashwat.pandey@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 4,
+      "total_deletions": 0
+    }
+  },
+  "repo": "https://github.com/harness/mcp-server.git",
+  "schema_version": "authorship/3.0.0"
+}

@@ -1,0 +1,67 @@
+src/tools/index.ts
+  d39d16d2-f6d7-4bf1-859b-e395bb3d5e49 31
+src/tools/harness-schema.ts
+  human 127
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 3,
+          "hash": "d39d16d2-f6d7-4bf1-859b-e395bb3d5e49",
+          "lines": "31",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/tools/index.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "127",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/tools/harness-schema.ts"
+    }
+  ],
+  "base_commit_sha": "b763451387efbd264f58b9520be81d7c4e3b2c82",
+  "branch": "feat/dual-pipeline-versions-and-examples",
+  "commit_sha": "9609545993eb90b04d468ad3b857d345a19657f2",
+  "commit_time": "2026-05-05T12:54:36-07:00",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.2",
+  "prompts": {
+    "d39d16d2-f6d7-4bf1-859b-e395bb3d5e49": {
+      "accepted_lines": 1,
+      "agent_id": {
+        "id": "d39d16d2-f6d7-4bf1-859b-e395bb3d5e49",
+        "model": "claude-opus-4-6",
+        "tool": "claude"
+      },
+      "human_author": "Sunil Gattupalle <sunil.gattupalle@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 2,
+      "total_deletions": 3
+    },
+    "human": {
+      "accepted_lines": 1,
+      "agent_id": null,
+      "human_author": "Sunil Gattupalle <sunil.gattupalle@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 1,
+      "total_deletions": 0
+    }
+  },
+  "repo": "https://github.com/harness/mcp-server.git",
+  "schema_version": "authorship/3.0.0"
+}

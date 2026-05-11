@@ -1,0 +1,54 @@
+src/registry/index.ts
+  human 221
+src/tools/harness-status.ts
+  human 93
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "221",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/index.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "93",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/tools/harness-status.ts"
+    }
+  ],
+  "base_commit_sha": "1aa112eda516def6dfd6e35148e1c57512586fba",
+  "branch": "fix/global-templates-account-id-override",
+  "commit_sha": "f6f76637d90c99744d9f308bfdfac4eb492ba11c",
+  "commit_time": "2026-05-08T16:11:14+05:30",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.2",
+  "prompts": {
+    "human": {
+      "accepted_lines": 2,
+      "agent_id": null,
+      "human_author": "Yogesh Chauhan <yogesh.chauhan@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 2,
+      "total_deletions": 0
+    }
+  },
+  "repo": "https://github.com/harness/mcp-server",
+  "schema_version": "authorship/3.0.0"
+}

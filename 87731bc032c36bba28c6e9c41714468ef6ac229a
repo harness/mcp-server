@@ -1,0 +1,13 @@
+---
+{
+  "attestations": [],
+  "base_commit_sha": "b7cffc7bcf333b6228a1fe7823061f8fe8a36d3a",
+  "branch": "fix/global-templates-account-id-override",
+  "commit_sha": "87731bc032c36bba28c6e9c41714468ef6ac229a",
+  "commit_time": "2026-05-08T14:30:24+05:30",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.2",
+  "prompts": {},
+  "repo": "https://github.com/harness/mcp-server",
+  "schema_version": "authorship/3.0.0"
+}

@@ -1,0 +1,43 @@
+tests/config.test.ts
+  c2db801e-4ff7-41fb-9ab1-014425d7d95e 84,115
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 2,
+          "added_lines": 2,
+          "deleted_lines": 2,
+          "hash": "c2db801e-4ff7-41fb-9ab1-014425d7d95e",
+          "lines": "84,115",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "tests/config.test.ts"
+    }
+  ],
+  "base_commit_sha": "411d210d204f76cecad28241b90ab084412c082f",
+  "branch": "remove-default-org-id-value",
+  "commit_sha": "3d698181a36a5b1e74a1531f9a445acf81344d78",
+  "commit_time": "2026-05-08T16:06:41+05:30",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.2",
+  "prompts": {
+    "c2db801e-4ff7-41fb-9ab1-014425d7d95e": {
+      "accepted_lines": 2,
+      "agent_id": {
+        "id": "c2db801e-4ff7-41fb-9ab1-014425d7d95e",
+        "model": "claude-sonnet-4-5-20250929",
+        "tool": "claude"
+      },
+      "human_author": "Yogesh Chauhan <yogesh.chauhan@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 2,
+      "total_deletions": 2
+    }
+  },
+  "repo": "https://github.com/harness/mcp-server",
+  "schema_version": "authorship/3.0.0"
+}

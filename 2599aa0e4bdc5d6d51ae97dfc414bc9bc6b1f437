@@ -1,0 +1,103 @@
+README.md
+  95a860fe-e032-49b7-998e-12f44f38a6d4 500
+manifest.json
+  95a860fe-e032-49b7-998e-12f44f38a6d4 80
+AGENTS.md
+  95a860fe-e032-49b7-998e-12f44f38a6d4 280-281,291-293,296,298-299,303,419,626-627
+.env.example
+  95a860fe-e032-49b7-998e-12f44f38a6d4 7
+mcp-directory/manifest.json
+  95a860fe-e032-49b7-998e-12f44f38a6d4 80
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "95a860fe-e032-49b7-998e-12f44f38a6d4",
+          "lines": "500",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "README.md"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "95a860fe-e032-49b7-998e-12f44f38a6d4",
+          "lines": "80",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "manifest.json"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 12,
+          "added_lines": 12,
+          "deleted_lines": 9,
+          "hash": "95a860fe-e032-49b7-998e-12f44f38a6d4",
+          "lines": "280-281,291-293,296,298-299,303,419,626-627",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "AGENTS.md"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "95a860fe-e032-49b7-998e-12f44f38a6d4",
+          "lines": "7",
+          "overridden_lines": 0
+        }
+      ],
+      "file": ".env.example"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 4,
+          "hash": "95a860fe-e032-49b7-998e-12f44f38a6d4",
+          "lines": "80",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "mcp-directory/manifest.json"
+    }
+  ],
+  "base_commit_sha": "4152badaae92a96bda1f5c68d8e199ab24465885",
+  "branch": "remove-default-org-id-value",
+  "commit_sha": "2599aa0e4bdc5d6d51ae97dfc414bc9bc6b1f437",
+  "commit_time": "2026-05-08T16:22:15+05:30",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.2",
+  "prompts": {
+    "95a860fe-e032-49b7-998e-12f44f38a6d4": {
+      "accepted_lines": 16,
+      "agent_id": {
+        "id": "95a860fe-e032-49b7-998e-12f44f38a6d4",
+        "model": "claude-sonnet-4-5-20250929",
+        "tool": "claude"
+      },
+      "human_author": "Yogesh Chauhan <yogesh.chauhan@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 16,
+      "total_deletions": 13
+    }
+  },
+  "repo": "https://github.com/harness/mcp-server",
+  "schema_version": "authorship/3.0.0"
+}

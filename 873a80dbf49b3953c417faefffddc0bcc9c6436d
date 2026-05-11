@@ -1,0 +1,38 @@
+README.md
+  human 3,11,955,1492
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 4,
+          "added_lines": 4,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "3,11,955,1492",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "README.md"
+    }
+  ],
+  "base_commit_sha": "6ec657f50ec0fa7733c7ce7968caadcedb6c55d9",
+  "branch": "FME-15522-add-create-flag-definition",
+  "commit_sha": "873a80dbf49b3953c417faefffddc0bcc9c6436d",
+  "commit_time": "2026-05-04T17:39:27-07:00",
+  "git_ai_version": "1.2.6",
+  "prompts": {
+    "human": {
+      "accepted_lines": 4,
+      "agent_id": null,
+      "human_author": "Dave Karow <dtk@davekarow.com>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 4,
+      "total_deletions": 0
+    }
+  },
+  "repo": "https://git0.harness.io/l7B_kbSEQD2wjrM7PShm5w/PROD/Harness_Commons/mcp-server.git",
+  "schema_version": "authorship/3.0.0"
+}

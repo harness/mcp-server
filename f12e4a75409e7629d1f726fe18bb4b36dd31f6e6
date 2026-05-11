@@ -1,0 +1,61 @@
+src/registry/toolsets/ccm.ts
+  0b76bf7e-a550-492d-8431-e75422bbef4a 1,3,318-450,474,477-479,490-492,509,512,514-515,521-528,539,542-543,549-556,564-565,570-577,583-667
+  human 317,578-582
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 260,
+          "added_lines": 266,
+          "deleted_lines": 12,
+          "hash": "0b76bf7e-a550-492d-8431-e75422bbef4a",
+          "lines": "1,3,318-450,474,477-479,490-492,509,512,514-515,521-528,539,542-543,549-556,564-565,570-577,583-667",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 6,
+          "added_lines": 6,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "317,578-582",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/ccm.ts"
+    }
+  ],
+  "base_commit_sha": "dbcb8554dc6dc2eac91218d3daa1db871880a52f",
+  "branch": "CCM-30392",
+  "commit_sha": "f12e4a75409e7629d1f726fe18bb4b36dd31f6e6",
+  "commit_time": "2026-05-05T15:29:35+05:30",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.2",
+  "prompts": {
+    "0b76bf7e-a550-492d-8431-e75422bbef4a": {
+      "accepted_lines": 260,
+      "agent_id": {
+        "id": "0b76bf7e-a550-492d-8431-e75422bbef4a",
+        "model": "claude-opus-4-6",
+        "tool": "claude"
+      },
+      "human_author": "Karthik Nayak <karthik.nayak@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 266,
+      "total_deletions": 12
+    },
+    "human": {
+      "accepted_lines": 6,
+      "agent_id": null,
+      "human_author": "Karthik Nayak <karthik.nayak@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 6,
+      "total_deletions": 0
+    }
+  },
+  "repo": "https://git0.harness.io/l7B_kbSEQD2wjrM7PShm5w/PROD/Harness_Commons/mcp-server.git",
+  "schema_version": "authorship/3.0.0"
+}

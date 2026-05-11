@@ -1,0 +1,328 @@
+tests/config.test.ts
+  f325590d-7af3-43df-8636-828c1c725e55 80,84,115
+src/client/harness-client.ts
+  ed1e0315-9a72-4ce8-918c-396399b79d61 470
+tests/client/harness-client.test.ts
+  ed1e0315-9a72-4ce8-918c-396399b79d61 58
+src/registry/index.ts
+  ed1e0315-9a72-4ce8-918c-396399b79d61 221
+  f83dad15-0d2d-44e8-b2b0-2b53c5dbc5e4 393-397,418
+src/tools/harness-execute.ts
+  ed1e0315-9a72-4ce8-918c-396399b79d61 108-112
+src/tools/harness-status.ts
+  ed1e0315-9a72-4ce8-918c-396399b79d61 93
+tests/registry/registry.test.ts
+  ed1e0315-9a72-4ce8-918c-396399b79d61 488-508
+  human 509
+src/tools/harness-get.ts
+  ed1e0315-9a72-4ce8-918c-396399b79d61 72-76
+  human 77
+tests/tools/tool-handlers.test.ts
+  ed1e0315-9a72-4ce8-918c-396399b79d61 162-181
+  human 161
+src/registry/toolsets/templates.ts
+  47f8c28a-1b4e-4aa7-94e6-97ce0818652d 20,39
+  f83dad15-0d2d-44e8-b2b0-2b53c5dbc5e4 22,29-32,48
+  ed1e0315-9a72-4ce8-918c-396399b79d61 21,55-58,60
+  42ad691c-7df6-45ae-9246-e0dc00d52337
+src/tools/harness-list.ts
+  human 65
+src/config.ts
+  human 127
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 3,
+          "added_lines": 3,
+          "deleted_lines": 3,
+          "hash": "f325590d-7af3-43df-8636-828c1c725e55",
+          "lines": "80,84,115",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "tests/config.test.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 2,
+          "deleted_lines": 1,
+          "hash": "ed1e0315-9a72-4ce8-918c-396399b79d61",
+          "lines": "470",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/client/harness-client.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 2,
+          "deleted_lines": 1,
+          "hash": "ed1e0315-9a72-4ce8-918c-396399b79d61",
+          "lines": "58",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "tests/client/harness-client.test.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "ed1e0315-9a72-4ce8-918c-396399b79d61",
+          "lines": "221",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 6,
+          "added_lines": 14,
+          "deleted_lines": 15,
+          "hash": "f83dad15-0d2d-44e8-b2b0-2b53c5dbc5e4",
+          "lines": "393-397,418",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/index.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 5,
+          "added_lines": 5,
+          "deleted_lines": 3,
+          "hash": "ed1e0315-9a72-4ce8-918c-396399b79d61",
+          "lines": "108-112",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/tools/harness-execute.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "ed1e0315-9a72-4ce8-918c-396399b79d61",
+          "lines": "93",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/tools/harness-status.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 21,
+          "added_lines": 21,
+          "deleted_lines": 13,
+          "hash": "ed1e0315-9a72-4ce8-918c-396399b79d61",
+          "lines": "488-508",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 34,
+          "hash": "human",
+          "lines": "509",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "tests/registry/registry.test.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 5,
+          "added_lines": 5,
+          "deleted_lines": 3,
+          "hash": "ed1e0315-9a72-4ce8-918c-396399b79d61",
+          "lines": "72-76",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "77",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/tools/harness-get.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 20,
+          "added_lines": 20,
+          "deleted_lines": 13,
+          "hash": "ed1e0315-9a72-4ce8-918c-396399b79d61",
+          "lines": "162-181",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "161",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "tests/tools/tool-handlers.test.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 2,
+          "added_lines": 8,
+          "deleted_lines": 33,
+          "hash": "47f8c28a-1b4e-4aa7-94e6-97ce0818652d",
+          "lines": "20,39",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 6,
+          "added_lines": 13,
+          "deleted_lines": 15,
+          "hash": "f83dad15-0d2d-44e8-b2b0-2b53c5dbc5e4",
+          "lines": "22,29-32,48",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 6,
+          "added_lines": 6,
+          "deleted_lines": 7,
+          "hash": "ed1e0315-9a72-4ce8-918c-396399b79d61",
+          "lines": "21,55-58,60",
+          "overridden_lines": 0
+        },
+        {
+          "hash": "42ad691c-7df6-45ae-9246-e0dc00d52337",
+          "lines": ""
+        }
+      ],
+      "file": "src/registry/toolsets/templates.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "65",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/tools/harness-list.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "127",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/config.ts"
+    }
+  ],
+  "base_commit_sha": "f121829d74a69ffa3ee030c380c6d30fe1df7dc1",
+  "branch": "fix/global-templates-account-id-override",
+  "commit_sha": "5999b0f73648d7cd708a13e316110d253d659d99",
+  "commit_time": "2026-05-08T14:14:52+05:30",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.2",
+  "prompts": {
+    "42ad691c-7df6-45ae-9246-e0dc00d52337": {
+      "accepted_lines": 0,
+      "agent_id": {
+        "id": "42ad691c-7df6-45ae-9246-e0dc00d52337",
+        "model": "claude-sonnet-4-6",
+        "tool": "claude"
+      },
+      "human_author": "Yogesh Chauhan <yogesh.chauhan@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 1,
+      "total_deletions": 15
+    },
+    "47f8c28a-1b4e-4aa7-94e6-97ce0818652d": {
+      "accepted_lines": 2,
+      "agent_id": {
+        "id": "47f8c28a-1b4e-4aa7-94e6-97ce0818652d",
+        "model": "claude-4.6-sonnet-medium-thinking",
+        "tool": "cursor"
+      },
+      "human_author": "Yogesh Chauhan <yogesh.chauhan@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 8,
+      "total_deletions": 33
+    },
+    "ed1e0315-9a72-4ce8-918c-396399b79d61": {
+      "accepted_lines": 61,
+      "agent_id": {
+        "id": "ed1e0315-9a72-4ce8-918c-396399b79d61",
+        "model": "claude-4.6-sonnet-medium-thinking",
+        "tool": "cursor"
+      },
+      "human_author": "Yogesh Chauhan <yogesh.chauhan@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 63,
+      "total_deletions": 41
+    },
+    "f325590d-7af3-43df-8636-828c1c725e55": {
+      "accepted_lines": 3,
+      "agent_id": {
+        "id": "f325590d-7af3-43df-8636-828c1c725e55",
+        "model": "claude-opus-4-6",
+        "tool": "claude"
+      },
+      "human_author": "Yogesh Chauhan <yogesh.chauhan@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 3,
+      "total_deletions": 3
+    },
+    "f83dad15-0d2d-44e8-b2b0-2b53c5dbc5e4": {
+      "accepted_lines": 12,
+      "agent_id": {
+        "id": "f83dad15-0d2d-44e8-b2b0-2b53c5dbc5e4",
+        "model": "claude-4.5-opus-high",
+        "tool": "cursor"
+      },
+      "human_author": "Yogesh Chauhan <yogesh.chauhan@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 27,
+      "total_deletions": 30
+    },
+    "human": {
+      "accepted_lines": 5,
+      "agent_id": null,
+      "human_author": "Yogesh Chauhan <yogesh.chauhan@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 5,
+      "total_deletions": 34
+    }
+  },
+  "repo": "https://github.com/harness/mcp-server",
+  "schema_version": "authorship/3.0.0"
+}
