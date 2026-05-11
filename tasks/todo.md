@@ -268,7 +268,7 @@
 - [x] Audit recent registry, prompt, and config changes against existing docs
 - [x] Align STO security exemption docs and prompt guidance with execute action semantics
 - [x] Update stale setup/tooling references in existing user and contributor docs
-- [ ] Verify generated docs consistency and TypeScript prompt changes
+- [x] Verify generated docs consistency and TypeScript prompt changes
 - [ ] Commit, push, and open/update docs-only PR
 
 ### Plan
@@ -282,3 +282,4 @@
 - Documented that `security_exemption.approve` is project-scope only, while `promote` approves and promotes in a single call for ACCOUNT, ORG, PROJECT, PIPELINE, or TARGET.
 - Updated Gemini setup examples to avoid implying a default org named `default`; org/project defaults are optional and may be supplied per request.
 - Aligned contributor and README tooling sections with the current 11 generic tool files and docs/schema maintenance scripts.
+- Verified with `pnpm build`, `pnpm docs:check`, and `pnpm typecheck`.
