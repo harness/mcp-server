@@ -1,0 +1,105 @@
+src/registry/toolsets/sto.ts
+  f9c535cc-3c68-4a29-8b8e-a528924f8ce7 142
+  89a45ad3-ac0e-4af4-b9ef-2a4ca648dde2 186,191-195,204-209,211,233,237
+  09263aeb-60b8-4a2f-b1c6-ab8a2b49f573 188-190,196-203,210,212,214-216
+  047b7b58-f59b-4ab7-95b1-f497b926334c 221-223,225,230
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 3,
+          "hash": "f9c535cc-3c68-4a29-8b8e-a528924f8ce7",
+          "lines": "142",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 15,
+          "added_lines": 15,
+          "deleted_lines": 7,
+          "hash": "89a45ad3-ac0e-4af4-b9ef-2a4ca648dde2",
+          "lines": "186,191-195,204-209,211,233,237",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 16,
+          "added_lines": 16,
+          "deleted_lines": 6,
+          "hash": "09263aeb-60b8-4a2f-b1c6-ab8a2b49f573",
+          "lines": "188-190,196-203,210,212,214-216",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 5,
+          "added_lines": 6,
+          "deleted_lines": 6,
+          "hash": "047b7b58-f59b-4ab7-95b1-f497b926334c",
+          "lines": "221-223,225,230",
+          "overridden_lines": 1
+        }
+      ],
+      "file": "src/registry/toolsets/sto.ts"
+    }
+  ],
+  "base_commit_sha": "47752e5c602d21fc32e193be8f52a000698d2038",
+  "branch": "feat/STO-11493/fix-exemption-flow",
+  "commit_sha": "893db47657ba479414168f65accd7207daaee08f",
+  "commit_time": "2026-05-11T13:45:11+05:30",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.3",
+  "prompts": {
+    "047b7b58-f59b-4ab7-95b1-f497b926334c": {
+      "accepted_lines": 5,
+      "agent_id": {
+        "id": "047b7b58-f59b-4ab7-95b1-f497b926334c",
+        "model": "unknown",
+        "tool": "windsurf"
+      },
+      "human_author": "Anurag Tiwari <anurag.tiwari@harness.io>",
+      "overriden_lines": 1,
+      "total_additions": 6,
+      "total_deletions": 6
+    },
+    "09263aeb-60b8-4a2f-b1c6-ab8a2b49f573": {
+      "accepted_lines": 16,
+      "agent_id": {
+        "id": "09263aeb-60b8-4a2f-b1c6-ab8a2b49f573",
+        "model": "unknown",
+        "tool": "windsurf"
+      },
+      "human_author": "Anurag Tiwari <anurag.tiwari@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 16,
+      "total_deletions": 6
+    },
+    "89a45ad3-ac0e-4af4-b9ef-2a4ca648dde2": {
+      "accepted_lines": 15,
+      "agent_id": {
+        "id": "89a45ad3-ac0e-4af4-b9ef-2a4ca648dde2",
+        "model": "unknown",
+        "tool": "windsurf"
+      },
+      "human_author": "Anurag Tiwari <anurag.tiwari@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 15,
+      "total_deletions": 7
+    },
+    "f9c535cc-3c68-4a29-8b8e-a528924f8ce7": {
+      "accepted_lines": 1,
+      "agent_id": {
+        "id": "f9c535cc-3c68-4a29-8b8e-a528924f8ce7",
+        "model": "unknown",
+        "tool": "windsurf"
+      },
+      "human_author": "Anurag Tiwari <anurag.tiwari@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 1,
+      "total_deletions": 3
+    }
+  },
+  "repo": "https://Anurag%20Tiwari:pat.l7B_kbSEQD2wjrM7PShm5w.68be5c04849927594bf7f741.GHibVgBwz83CjO2eDcOg@git0.harness.io/l7B_kbSEQD2wjrM7PShm5w/PROD/Harness_Commons/mcp-server.git",
+  "schema_version": "authorship/3.0.0"
+}
