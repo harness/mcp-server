@@ -2,7 +2,7 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { createLogger } from "../utils/logger.js";
-import { SCHEMAS, VALID_SCHEMAS } from "../data/schemas/index.js";
+import { SCHEMAS, VALID_SCHEMAS, type SchemaEntry } from "../data/schemas/index.js";
 import { getExample, searchExamples, getExamplesForResource } from "../data/examples/index.js";
 
 const log = createLogger("tool:harness-schema");
@@ -96,10 +96,13 @@ function navigateToPath(
  */
 function getSummary(schema: Record<string, unknown>, resourceType: string): Record<string, unknown> {
   const definitions = schema.definitions as Record<string, Record<string, unknown>> | undefined;
-  const sections = definitions ? Object.keys(definitions[resourceType] ?? {}) : [];
 
-  // Get the root resource definition
-  const rootDef = definitions?.[resourceType]?.[resourceType] as Record<string, unknown> | undefined;
+  // Harness-generated schemas nest the root definition under definitions[type][type].
+  // Plain JSON Schemas (extension schemas) place properties at the root level.
+  const harnessRootDef = definitions?.[resourceType]?.[resourceType] as Record<string, unknown> | undefined;
+  const rootDef = harnessRootDef ?? (schema.properties ? schema : undefined) as Record<string, unknown> | undefined;
+
+  const sections = definitions ? Object.keys(definitions[resourceType] ?? {}) : [];
   const properties = rootDef?.properties as Record<string, unknown> | undefined;
   const required = rootDef?.required as string[] | undefined;
 
@@ -124,8 +127,21 @@ function getSummary(schema: Record<string, unknown>, resourceType: string): Reco
   };
 }
 
-export function registerSchemaTool(server: McpServer): void {
-  const availableSchemas = VALID_SCHEMAS;
+export function registerSchemaTool(
+  server: McpServer,
+  additionalSchemas?: Record<string, SchemaEntry>,
+): void {
+  if (additionalSchemas) {
+    for (const key of Object.keys(additionalSchemas)) {
+      if (key in SCHEMAS) {
+        throw new Error(`additionalSchemas key '${key}' conflicts with a built-in schema name`);
+      }
+    }
+  }
+  const allSchemas: Record<string, Record<string, any>> = additionalSchemas
+    ? { ...SCHEMAS, ...Object.fromEntries(Object.entries(additionalSchemas).map(([k, v]) => [k, v.schema])) }
+    : { ...SCHEMAS };
+  const availableSchemas = Object.keys(allSchemas);
 
   server.registerTool(
     "harness_schema",
@@ -213,7 +229,7 @@ export function registerSchemaTool(server: McpServer): void {
           return errorResult("resource_type is required for schema lookups. Use example_search to search examples without specifying a resource type.");
         }
 
-        const schema = SCHEMAS[args.resource_type as keyof typeof SCHEMAS] as Record<string, unknown>;
+        const schema = allSchemas[args.resource_type] as Record<string, unknown>;
 
         // No path → return summary with available examples
         if (!args.path) {

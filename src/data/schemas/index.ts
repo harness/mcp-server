@@ -15,7 +15,7 @@ import agentPipeline from "./local/agent-pipeline.js";
 type V0SchemaKey = "pipeline" | "template" | "trigger";
 type V1SchemaKey = "pipeline_v1" | "template_v1" | "trigger_v1" | "inputSet_v1" | "overlayInputSet_v1" | "service_v1" | "infra_v1";
 type LocalSchemaKey = "agent-pipeline";
-type AllSchemaKeys = V0SchemaKey | V1SchemaKey | LocalSchemaKey;
+export type AllSchemaKeys = V0SchemaKey | V1SchemaKey | LocalSchemaKey;
 
 export const SCHEMAS: Record<AllSchemaKeys, Record<string, any>> = {
   "pipeline": pipeline,
@@ -31,8 +31,15 @@ export const SCHEMAS: Record<AllSchemaKeys, Record<string, any>> = {
   "agent-pipeline": agentPipeline,
 };
 
-export const VALID_SCHEMAS = Object.keys(SCHEMAS) as AllSchemaKeys[];
+export const VALID_SCHEMAS: AllSchemaKeys[] = Object.keys(SCHEMAS) as AllSchemaKeys[];
 export type SchemaName = AllSchemaKeys;
+
+/** Metadata-wrapped schema entry. All registered schemas must provide description and group. */
+export type SchemaEntry = {
+  schema: Record<string, any>;
+  description: string;
+  group: string;
+};
 
 export const V0_SCHEMA_KEYS: V0SchemaKey[] = ["pipeline", "template", "trigger"];
 export const V1_SCHEMA_KEYS: V1SchemaKey[] = ["pipeline_v1", "template_v1", "trigger_v1", "inputSet_v1", "overlayInputSet_v1", "service_v1", "infra_v1"];

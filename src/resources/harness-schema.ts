@@ -1,25 +1,40 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createLogger } from "../utils/logger.js";
-import { SCHEMAS, VALID_SCHEMAS, type SchemaName } from "../data/schemas/index.js";
+import { SCHEMAS, VALID_SCHEMAS, type SchemaName, type SchemaEntry } from "../data/schemas/index.js";
 
 const log = createLogger("resource:harness-schema");
 
-function isValidSchemaName(name: string): name is SchemaName {
-  return (VALID_SCHEMAS as readonly string[]).includes(name);
+export function isValidSchemaName(name: string, validNames: readonly string[] = VALID_SCHEMAS): name is SchemaName {
+  return validNames.includes(name);
 }
 
-export function registerHarnessSchemaResource(server: McpServer): void {
+export function registerHarnessSchemaResource(
+  server: McpServer,
+  additionalSchemas?: Record<string, SchemaEntry>,
+): void {
+  if (additionalSchemas) {
+    for (const key of Object.keys(additionalSchemas)) {
+      if (key in SCHEMAS) {
+        throw new Error(`additionalSchemas key '${key}' conflicts with a built-in schema name`);
+      }
+    }
+  }
+  const allSchemas: Record<string, Record<string, any>> = additionalSchemas
+    ? { ...SCHEMAS, ...Object.fromEntries(Object.entries(additionalSchemas).map(([k, v]) => [k, v.schema])) }
+    : { ...SCHEMAS };
+  const allSchemaNames = Object.keys(allSchemas);
+
   const template = new ResourceTemplate("schema:///{schemaName}", {
     list: async () => ({
-      resources: VALID_SCHEMAS.map((name) => ({
+      resources: allSchemaNames.map((name) => ({
         uri: `schema:///${name}`,
         name: `${name} schema`,
       })),
     }),
     complete: {
       schemaName: (value) =>
-        VALID_SCHEMAS.filter((s) => s.startsWith(value)),
+        allSchemaNames.filter((s) => s.startsWith(value)),
     },
   });
 
@@ -28,19 +43,19 @@ export function registerHarnessSchemaResource(server: McpServer): void {
     template,
     {
       title: "Harness Schema",
-      description: `Harness JSON Schema definitions. Valid schema names: ${VALID_SCHEMAS.join(", ")}. Use these to understand the required body format for harness_create.`,
+      description: `Harness JSON Schema definitions. Valid schema names: ${allSchemaNames.join(", ")}. Use these to understand the required body format for harness_create.`,
       mimeType: "application/schema+json",
     },
     async (uri) => {
       const schemaName = uri.pathname.replace(/^\/+/, "");
 
-      if (!isValidSchemaName(schemaName)) {
+      if (!isValidSchemaName(schemaName, allSchemaNames)) {
         throw new Error(
-          `Unknown schema '${schemaName}'. Valid schemas: ${VALID_SCHEMAS.join(", ")}`,
+          `Unknown schema '${schemaName}'. Valid schemas: ${allSchemaNames.join(", ")}`,
         );
       }
 
-      const schema = SCHEMAS[schemaName];
+      const schema = allSchemas[schemaName];
 
       return {
         contents: [
@@ -55,5 +70,3 @@ export function registerHarnessSchemaResource(server: McpServer): void {
   );
 }
 
-// Exported for testing
-export { isValidSchemaName };
