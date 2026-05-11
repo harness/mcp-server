@@ -11,6 +11,32 @@ import type { HarnessClient } from "../../client/harness-client.js";
  * not an MCP server issue.
  */
 const STO_SCOPE = { account: "accountId", org: "orgId", project: "projectId" } as const;
+type StoPromotionScope = "ACCOUNT" | "ORG" | "PROJECT" | "PIPELINE" | "TARGET";
+
+function normalizePromotionScope(value: unknown): StoPromotionScope {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error("scope is required for security_exemption.promote");
+  }
+
+  const scope = value.trim().toUpperCase();
+  switch (scope) {
+    case "ACCOUNT":
+    case "ORG":
+    case "PROJECT":
+    case "PIPELINE":
+    case "TARGET":
+      return scope;
+    default:
+      throw new Error("Invalid scope for security_exemption.promote. Expected ACCOUNT, ORG, PROJECT, PIPELINE, or TARGET.");
+  }
+}
+
+function requiredPromotionId(value: unknown, field: "pipeline_id" | "target_id", scope: StoPromotionScope): string {
+  if (typeof value === "string" && value.trim()) {
+    return value.trim();
+  }
+  throw new Error(`${field} is required for ${scope} security_exemption.promote scope`);
+}
 
 export const stoToolset: ToolsetDefinition = {
   name: "sto",
@@ -186,7 +212,9 @@ export const stoToolset: ToolsetDefinition = {
           queryParams: { promote_pipeline_id: "pipelineId", promote_target_id: "targetId" },
           preflight: async ({ client, input }) => {
             const b = ((input.body as Record<string, unknown> | undefined) ?? {});
-            const scope = ((b.scope ?? input.scope) as string | undefined)?.toUpperCase();
+            const scope = normalizePromotionScope(b.scope ?? input.scope);
+            b.scope = scope;
+            input.body = b;
             // The STO backend determines target scope by which query params are present:
             //   orgId + projectId + pipelineId → PIPELINE scope
             //   orgId + projectId + targetId   → TARGET scope
@@ -201,12 +229,16 @@ export const stoToolset: ToolsetDefinition = {
             } else if (scope === "ORG") {
               input.project_id = "";
               // org_id left undefined so registry injects it from config
-            } else if (scope === "PIPELINE" && b.pipeline_id) {
+            } else if (scope === "PIPELINE") {
+              const pipelineId = requiredPromotionId(b.pipeline_id ?? input.pipeline_id, "pipeline_id", scope);
+              b.pipeline_id = pipelineId;
               // Hoist to top-level so queryParams mapping sends it as URL param
-              input.promote_pipeline_id = b.pipeline_id;
-            } else if (scope === "TARGET" && b.target_id) {
+              input.promote_pipeline_id = pipelineId;
+            } else if (scope === "TARGET") {
+              const targetId = requiredPromotionId(b.target_id ?? input.target_id, "target_id", scope);
+              b.target_id = targetId;
               // Hoist to top-level so queryParams mapping sends it as URL param
-              input.promote_target_id = b.target_id;
+              input.promote_target_id = targetId;
             }
             // PROJECT: leave both org_id and project_id as-is, no extra params
 

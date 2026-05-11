@@ -668,6 +668,44 @@ describe("Registry", () => {
     });
   });
 
+  describe("STO exemption promotion", () => {
+    it("rejects PIPELINE promotion without a pipeline_id before sending a request", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({});
+      const client = makeClient(mockRequest);
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+
+      await expect(
+        registry.dispatchExecute(client, "security_exemption", "promote", {
+          exemption_id: "exemption-1",
+          body: {
+            scope: "PIPELINE",
+            approver_id: "user-1",
+          },
+        }),
+      ).rejects.toThrow(/pipeline_id is required/i);
+      expect(mockRequest).not.toHaveBeenCalled();
+    });
+
+    it("normalizes promotion scope before building body and query params", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({});
+      const client = makeClient(mockRequest);
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+
+      await registry.dispatchExecute(client, "security_exemption", "promote", {
+        exemption_id: "exemption-1",
+        body: {
+          scope: "target",
+          target_id: "target-1",
+          approver_id: "user-1",
+        },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params.targetId).toBe("target-1");
+      expect(call.body.scope).toBe("TARGET");
+    });
+  });
+
   describe("read-only mode", () => {
     let registry: Registry;
     beforeEach(() => {

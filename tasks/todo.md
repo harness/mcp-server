@@ -263,3 +263,23 @@
 - Clarified in README that hosted `https://mcp.harness.io/mcp` is managed and cannot be pointed at Harness0 from Claude/Cursor/Cowork client config; Support must configure hosted MCP for that target environment.
 - Updated MCPB manifest descriptions so `HARNESS_BASE_URL` covers private SaaS hosts such as `https://harness0.harness.io`, not just self-managed installs.
 - Verified with `pnpm build` and `pnpm docs:check`.
+
+## PR 171 STO Review Follow-up (2026-05-11)
+- [x] Read Slack trigger context and attempt to load the original thread
+- [x] Fetch PR #171 review metadata, comments, timeline, and diff
+- [x] Trace STO exemption promotion request construction through the registry
+- [x] Add focused regression coverage for invalid promotion scope inputs
+- [x] Implement the minimal scope validation/normalization fix
+- [x] Run focused verification, typecheck/build as appropriate
+- [ ] Commit, push, open PR, and report back only if the original Slack thread is available
+
+### Plan
+- Keep the fix scoped to `security_exemption.promote` because the backend derives promotion scope from query params, not from body prose.
+- Fail before any write when `scope` is missing/unknown, or when `PIPELINE`/`TARGET` scope lacks its corresponding identifier.
+- Normalize valid scope values before building the request so lower-case agent input cannot produce inconsistent body/query scope.
+
+### Review
+- GitHub PR #171 is already merged and the GitHub API showed no inline or issue comments; the Slack root message could not be loaded by timestamp.
+- Found a concrete STO promotion gap: `PIPELINE`/`TARGET` scope without the required ID could still issue a write shaped like a broader project request, and lower-case scope stayed inconsistent in the body.
+- Added preflight validation and normalization for `security_exemption.promote`, plus focused registry tests for missing `pipeline_id` and scope normalization.
+- Verified with `pnpm test tests/registry/registry.test.ts`, `pnpm typecheck`, `pnpm build`, `pnpm test`, and `git diff --check`.
