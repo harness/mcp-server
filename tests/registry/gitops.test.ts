@@ -801,3 +801,127 @@ describe("gitops sub-resources", () => {
     expect(call.path).toBe("/gitops/api/v1/dashboard/overview");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Scope behavior — scopeOptional resources omit org/project unless explicit
+// ---------------------------------------------------------------------------
+
+describe("gitops scope behavior", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+  });
+
+  it("gitops_agent get: omits orgIdentifier/projectIdentifier when not provided (account scope)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "myagent" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_agent", "get", {
+      agent_id: "account.myagent",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("gitops_agent list: includes org/project when explicitly provided", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ content: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_agent", "list", {
+      org_id: "my-org",
+      project_id: "my-project",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.orgIdentifier).toBe("my-org");
+    expect(call.params.projectIdentifier).toBe("my-project");
+  });
+
+  it("gitops_cluster list: scopeOptional means org/project omitted when not provided", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ content: [] });
+
+    const registryNoDefaults = new Registry(makeConfig({
+      HARNESS_TOOLSETS: "gitops",
+      HARNESS_ORG: "",
+      HARNESS_PROJECT: "",
+    }));
+
+    await registryNoDefaults.dispatch(makeClient(mockRequest), "gitops_cluster", "list", {});
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.body.accountIdentifier).toBeDefined();
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("gitops_repository get: includes org/project when provided (project scope)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_repository", "get", {
+      agent_id: "myagent",
+      repo_id: "my-repo",
+      org_id: "custom-org",
+      project_id: "custom-project",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.orgIdentifier).toBe("custom-org");
+    expect(call.params.projectIdentifier).toBe("custom-project");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// injectAccountInBody — GitOps list POST endpoints inject accountIdentifier
+// ---------------------------------------------------------------------------
+
+describe("gitops injectAccountInBody", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+  });
+
+  it("gitops_application list: accountIdentifier injected into POST body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ content: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_application", "list", {});
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.body.accountIdentifier).toBe("test-account");
+  });
+
+  it("gitops_cluster list: accountIdentifier injected into POST body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ content: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_cluster", "list", {});
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.body.accountIdentifier).toBe("test-account");
+  });
+
+  it("gitops_repository list: accountIdentifier injected into POST body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ content: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_repository", "list", {});
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.body.accountIdentifier).toBe("test-account");
+  });
+
+  it("gitops_applicationset list: accountIdentifier injected into POST body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ content: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_applicationset", "list", {});
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.body.accountIdentifier).toBe("test-account");
+  });
+});
