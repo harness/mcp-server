@@ -269,10 +269,15 @@
 - [x] Reproduce the TypeScript failure locally
 - [x] Trace the missing `SchemaEntry` export to the generated schema index
 - [x] Restore the missing exported type in the generated index and generator
-- [ ] Run focused typecheck/build verification
+- [x] Run focused typecheck/build verification
 - [ ] Commit, push, open PR, and reply in the Slack thread
 
 ### Plan
 - Keep the fix scoped to `src/data/schemas/index.ts` and `scripts/sync-schemas.js`.
 - Export a `SchemaEntry` type for runtime extension schemas without changing the shape of built-in `SCHEMAS`.
 - Update the generator template so `pnpm sync-schemas` preserves the export.
+
+### Review
+- Reproduced the exact CI error after installing dependencies: four imports failed because `SchemaEntry` was not exported from `src/data/schemas/index.ts`.
+- Restored `SchemaEntry` in the generated index and updated `scripts/sync-schemas.js` so regeneration preserves the type.
+- Verified with `pnpm typecheck`, focused schema tests, `pnpm build`, and the full `pnpm test` suite.
