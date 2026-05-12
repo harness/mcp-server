@@ -118,6 +118,12 @@ type V1SchemaKey = ${v1Keys.join(" | ")};
 type LocalSchemaKey = ${localKeys.join(" | ")};
 type AllSchemaKeys = V0SchemaKey | V1SchemaKey | LocalSchemaKey;
 
+export type SchemaEntry = {
+  schema: Record<string, unknown>;
+  description?: string;
+  group?: string;
+};
+
 export const SCHEMAS: Record<AllSchemaKeys, Record<string, any>> = {
 ${props}
 };
