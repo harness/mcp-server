@@ -1160,3 +1160,242 @@ describe("gitops buildBulkTargets validation", () => {
     ]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// gitops_cluster_link — negative path validation
+// ---------------------------------------------------------------------------
+
+describe("gitops_cluster_link negative paths", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+  });
+
+  it("create: throws when envRef is missing", async () => {
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatch(client, "gitops_cluster_link", "create", {
+        body: { identifier: "incluster", agentIdentifier: "myagent", scope: "ACCOUNT" },
+      }),
+    ).rejects.toThrow(/requires body\.identifier.*body\.envRef.*body\.agentIdentifier.*body\.scope/);
+  });
+
+  it("create: throws when scope is missing", async () => {
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatch(client, "gitops_cluster_link", "create", {
+        body: { identifier: "incluster", envRef: "my-env", agentIdentifier: "myagent" },
+      }),
+    ).rejects.toThrow(/requires body\.identifier.*body\.envRef.*body\.agentIdentifier.*body\.scope/);
+  });
+
+  it("create: throws when agentIdentifier is missing", async () => {
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatch(client, "gitops_cluster_link", "create", {
+        body: { identifier: "incluster", envRef: "my-env", scope: "ACCOUNT" },
+      }),
+    ).rejects.toThrow(/requires body\.identifier.*body\.envRef.*body\.agentIdentifier.*body\.scope/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// gitops_cluster_link delete — path building and required query params
+// ---------------------------------------------------------------------------
+
+describe("gitops_cluster_link delete", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+  });
+
+  it("delete: builds correct DELETE path with cluster_id", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_cluster_link", "delete", {
+      cluster_id: "incluster",
+      environment_id: "my-env",
+      agent_id: "myagent",
+      scope: "ACCOUNT",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("DELETE");
+    expect(call.path).toBe("/ng/api/gitops/clusters/incluster");
+  });
+
+  it("delete: forwards environment_id, agent_id, scope as query params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_cluster_link", "delete", {
+      cluster_id: "prod-cluster",
+      environment_id: "prod-env",
+      agent_id: "prodagent",
+      scope: "PROJECT",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.environmentIdentifier).toBe("prod-env");
+    expect(call.params.agentIdentifier).toBe("prodagent");
+    expect(call.params.scope).toBe("PROJECT");
+  });
+
+  it("delete: uses NG API path (not GitOps agent API path)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_cluster_link", "delete", {
+      cluster_id: "staging-cluster",
+      environment_id: "staging",
+      agent_id: "stagingagent",
+      scope: "ORGANIZATION",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.path).toContain("/ng/api/gitops/clusters/");
+    expect(call.path).not.toContain("/gitops/api/v1/");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// gitops_application sync — retry, prune, and strategy options
+// ---------------------------------------------------------------------------
+
+describe("gitops_application sync options", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+  });
+
+  it("sync: passes prune and dryRun in request body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "gitops_application", "sync", {
+      agent_id: "account.myagent",
+      app_name: "my-app",
+      body: { prune: true, dryRun: true },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.body.prune).toBe(true);
+    expect(call.body.dryRun).toBe(true);
+  });
+
+  it("sync: passes strategy (apply vs hook) in request body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "gitops_application", "sync", {
+      agent_id: "account.myagent",
+      app_name: "my-app",
+      body: { strategy: { apply: { force: true } } },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.body.strategy).toEqual({ apply: { force: true } });
+  });
+
+  it("sync: passes retryStrategy in request body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "gitops_application", "sync", {
+      agent_id: "account.myagent",
+      app_name: "my-app",
+      body: { retryStrategy: { limit: 3, backoff: { duration: "5s", factor: 2 } } },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.body.retryStrategy).toEqual({ limit: 3, backoff: { duration: "5s", factor: 2 } });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Toolset filtering — only gitops resources loaded
+// ---------------------------------------------------------------------------
+
+describe("gitops toolset filtering", () => {
+  it("HARNESS_TOOLSETS=gitops loads only gitops resources", () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+    const types = registry.getAllResourceTypes();
+
+    expect(types.length).toBeGreaterThan(0);
+    for (const t of types) {
+      expect(t).toMatch(/^gitops_/);
+    }
+  });
+
+  it("gitops toolset includes all expected resource types", () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+    const types = registry.getAllResourceTypes();
+
+    const expected = [
+      "gitops_agent",
+      "gitops_application",
+      "gitops_cluster",
+      "gitops_repository",
+      "gitops_applicationset",
+      "gitops_repo_credential",
+      "gitops_cluster_link",
+    ];
+
+    for (const e of expected) {
+      expect(types).toContain(e);
+    }
+  });
+
+  it("gitops resources not loaded when HARNESS_TOOLSETS excludes gitops", () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
+    const types = registry.getAllResourceTypes();
+
+    for (const t of types) {
+      expect(t).not.toMatch(/^gitops_/);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Identifier field ordering — validates resource definitions
+// ---------------------------------------------------------------------------
+
+describe("gitops identifier field ordering", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+  });
+
+  it("gitops_application: identifierFields are [agent_id, app_name]", () => {
+    const def = registry.getResource("gitops_application");
+    expect(def.identifierFields).toEqual(["agent_id", "app_name"]);
+  });
+
+  it("gitops_applicationset: identifierFields are [agent_id, appset_id]", () => {
+    const def = registry.getResource("gitops_applicationset");
+    expect(def.identifierFields).toEqual(["agent_id", "appset_id"]);
+  });
+
+  it("gitops_cluster: identifierFields are [agent_id, cluster_id]", () => {
+    const def = registry.getResource("gitops_cluster");
+    expect(def.identifierFields).toEqual(["agent_id", "cluster_id"]);
+  });
+
+  it("gitops_agent: identifierFields are [agent_id]", () => {
+    const def = registry.getResource("gitops_agent");
+    expect(def.identifierFields).toEqual(["agent_id"]);
+  });
+
+  it("gitops_cluster_link: identifierFields are [cluster_id]", () => {
+    const def = registry.getResource("gitops_cluster_link");
+    expect(def.identifierFields).toEqual(["cluster_id"]);
+  });
+});
