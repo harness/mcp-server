@@ -25,6 +25,76 @@ export const pageExtract = (raw: unknown): { items: unknown[]; total: number } =
 export const passthrough = (raw: unknown): unknown => raw;
 
 /**
+ * STO Global Exemptions extractor.
+ * API response: `{ exemptions: [...], pagination: { page, pageSize, totalPages, totalItems }, counts: {...} }`
+ * Projects each exemption to a clean, display-friendly shape (issue title, severity, requester name,
+ * target name, etc.) so the LLM picks the right columns and skips the opaque IDs. Normalized to the
+ * standard `{ items, total, page, pageSize, totalPages, counts }` shape used by all other paginated
+ * resources, with an explicit `_nextPageHint` so pagination can't be misinterpreted.
+ */
+export const stoExemptionsExtract = (raw: unknown): unknown => {
+  type Exemption = {
+    id?: string;
+    status?: string;
+    reason?: string;
+    type?: string;
+    scope?: string;
+    expiration?: number;
+    created?: number;
+    targetName?: string;
+    requesterName?: string;
+    requesterEmail?: string;
+    approverName?: string;
+    approverEmail?: string;
+    numOccurrences?: number;
+    totalOccurrences?: number;
+    issueSummary?: { title?: string; severity?: number; severityCode?: string; lastDetected?: number };
+  };
+  const r = raw as {
+    exemptions?: Exemption[];
+    pagination?: { page?: number; pageSize?: number; totalPages?: number; totalItems?: number };
+    counts?: unknown;
+  };
+  const page = r.pagination?.page ?? 0;
+  const pageSize = r.pagination?.pageSize ?? 5;
+  const totalPages = r.pagination?.totalPages ?? 0;
+  const total = r.pagination?.totalItems ?? (r.exemptions?.length ?? 0);
+  const hasMore = page + 1 < totalPages;
+  const exemptions = r.exemptions ?? [];
+  const items = exemptions.map((e) => ({
+    issue_title: e.issueSummary?.title,
+    severity: e.issueSummary?.severityCode,
+    type: e.type,
+    status: e.status,
+    requested_by: e.requesterName,
+    target: e.targetName || undefined,
+    scope: e.scope,
+    reason: e.reason || undefined,
+    approved_by: e.approverName || undefined,
+    created_at: e.created,
+    expires_at: e.expiration,
+    occurrences: e.numOccurrences,
+  }));
+  // Keep IDs OUT of the items so the LLM can't accidentally render them as a column.
+  // Provide them in a separate lookup keyed by row index (1-based) for approve/reject actions.
+  const _action_id_by_row: Record<number, string> = {};
+  exemptions.forEach((e, idx) => { if (e.id) _action_id_by_row[idx + 1] = e.id; });
+  return {
+    items,
+    total,
+    page,
+    pageSize,
+    totalPages,
+    counts: r.counts,
+    _action_id_by_row,
+    _display_hint: "Render a compact table with columns: # | Issue Title | Severity | Type | Requested by | Target | Status. NEVER add an 'ID' column — the items contain no ID field by design. If the user asks to approve/reject row N, look up the ID in _action_id_by_row[N].",
+    _nextPageHint: hasMore
+      ? `For the next page, call harness_list with filters={status:'<same>', page:${page + 1}, size:${pageSize}}. You MUST use size=${pageSize} (the same size as this call) — changing size will skip results because offset = page × size. Pages remaining: ${totalPages - page - 1}.`
+      : "No more pages — all exemptions have been returned.",
+  };
+};
+
+/**
  * AI Evals control plane — paginated list: `{ data, page, limit, total_elements }`.
  */
 export const aiEvalsListExtract = (raw: unknown): { items: unknown[]; total: number } => {

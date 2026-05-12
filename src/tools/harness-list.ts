@@ -66,8 +66,11 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
         }
         const result = await registry.dispatch(client, resourceType, "list", input);
 
-        // Apply compact mode — strip verbose metadata from list items
-        if (args.compact !== false && isRecord(result)) {
+        // Apply compact mode — strip verbose metadata from list items.
+        // Skip when the endpoint spec has opted out via `skipCompact` (marker
+        // propagated as non-enumerable `__skipCompact` by the registry).
+        const resultSkipCompact = isRecord(result) && (result as Record<string, unknown> & { __skipCompact?: boolean }).__skipCompact === true;
+        if (args.compact !== false && !resultSkipCompact && isRecord(result)) {
           const items = result.items;
           if (Array.isArray(items)) {
             result.items = compactItems(items);

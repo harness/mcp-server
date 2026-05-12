@@ -1,5 +1,5 @@
 import type { ToolsetDefinition } from "../types.js";
-import { passthrough } from "../extractors.js";
+import { passthrough, stoExemptionsExtract } from "../extractors.js";
 import type { HarnessClient } from "../../client/harness-client.js";
 
 /**
@@ -91,7 +91,7 @@ export const stoToolset: ToolsetDefinition = {
     {
       resourceType: "security_exemption",
       displayName: "Security Exemption",
-      description: "Security issue exemption/waiver. Supports list (POST with status filter) with approve/reject/promote actions.",
+      description: "Security issue exemption/waiver. Supports list (POST with status filter) with approve/reject/promote actions. PAGINATION RULES (follow strictly): (1) Default size is 5 — omit `size` (or pass size=5) unless the user explicitly asks for a different count. (2) Page is 0-indexed: page=0 → items 1–5, page=1 → items 6–10. (3) CRITICAL — size MUST stay the same across all pages in a session. The backend computes offset = page × size, so changing size mid-session skips or repeats results. (4) If the user asks 'next 10' after you showed 5 with size=5, make TWO sequential calls (page=1 size=5, page=2 size=5) and concatenate. Do NOT switch to size=10 mid-session. (5) NEVER repeat the same page value for a 'next' request — always increment.",
       toolset: "sto",
       scope: "project",
       scopeParams: STO_SCOPE,
@@ -99,6 +99,8 @@ export const stoToolset: ToolsetDefinition = {
       listFilterFields: [
         { name: "status", description: "Exemption status filter", enum: ["Pending", "Approved", "Rejected", "Expired", "Canceled"], required: true },
         { name: "search", description: "Free-text search for issue/exemption titles" },
+        { name: "size", type: "number", description: "Exemptions per page (default: 5, max: 50). Omit or pass 5 unless the user explicitly asks for a different count." },
+        { name: "page", type: "number", description: "0-indexed page number. Increment by 1 for each 'next' request — never repeat the same value." },
       ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/sto/exemptions",
       operations: {
@@ -106,6 +108,11 @@ export const stoToolset: ToolsetDefinition = {
           method: "POST",
           path: "/sto/api/v2/frontend/exemptions",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
+          // NOTE: we intentionally do NOT set `defaultQueryParams.pageSize` here.
+          // The shared `harness_list` input schema defaults `size` to 20 (see
+          // src/tools/harness-list.ts), which the registry maps onto `pageSize`
+          // and thus always overrides defaultQueryParams. The preflight below
+          // is the only reliable place to enforce the STO-specific default.
           queryParams: {
             status: "status",
             search: "search",
@@ -113,8 +120,34 @@ export const stoToolset: ToolsetDefinition = {
             size: "pageSize",
           },
           bodyBuilder: () => ({}),
-          responseExtractor: passthrough,
-          description: "List security exemptions filtered by status",
+          preflight: async ({ input }) => {
+            // Normalize page size for exemption listing:
+            //  - `harness_list` schema default is 20. Treat that exact value as
+            //    "LLM did not specify" and force the STO default of 5. This is
+            //    the only way to distinguish an implicit default from an explicit
+            //    request, because Zod collapses both to `20` before we see args.
+            //  - Clamp any explicit size to [1, 50] (documented maximum).
+            //  - Default page to 0 (matches backend 0-indexed offset math).
+            const HARNESS_LIST_SIZE_DEFAULT = 20;
+            const STO_EXEMPTION_SIZE_DEFAULT = 5;
+            const STO_EXEMPTION_SIZE_MAX = 50;
+
+            const rawSize = input.size;
+            if (typeof rawSize !== "number" || rawSize === HARNESS_LIST_SIZE_DEFAULT) {
+              input.size = STO_EXEMPTION_SIZE_DEFAULT;
+            } else if (rawSize < 1) {
+              input.size = STO_EXEMPTION_SIZE_DEFAULT;
+            } else if (rawSize > STO_EXEMPTION_SIZE_MAX) {
+              input.size = STO_EXEMPTION_SIZE_MAX;
+            }
+
+            if (typeof input.page !== "number" || input.page < 0) {
+              input.page = 0;
+            }
+          },
+          responseExtractor: stoExemptionsExtract,
+          skipCompact: true,
+          description: "List security exemptions filtered by status. DEFAULT: 5 per page at page=0. Response includes items[], total, page, pageSize, totalPages and _nextPageHint. ALWAYS read _nextPageHint — it tells you the exact next call to make. NEVER re-use the same page value for a 'next' request, and NEVER change size mid-session.",
         },
       },
       executeActions: {

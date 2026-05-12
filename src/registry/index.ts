@@ -663,6 +663,14 @@ export class Registry {
       result = Object.assign({}, result, { _data_source: dataSource });
     }
 
+    // Propagate spec.skipCompact as a non-enumerable marker so the tool layer
+    // can opt this result out of the global compactItems pass without leaking
+    // the flag into the user-visible JSON output. Must be set AFTER any
+    // Object.assign cloning so the marker survives.
+    if (spec.skipCompact && result && typeof result === "object" && !Array.isArray(result)) {
+      Object.defineProperty(result, "__skipCompact", { value: true, enumerable: false, configurable: true });
+    }
+
     // Propagate storeType from the request query params into the result when
     // the API response didn't include one.  Create/update endpoints like
     // `/pipeline/api/pipelines/v2` return a slim `PipelineSaveResponse` that
