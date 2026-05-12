@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { isValidSchemaName, registerHarnessSchemaResource } from "../../src/resources/harness-schema.js";
-import type { SchemaEntry } from "../../src/data/schemas/index.js";
+import type { SchemaEntry } from "../../src/data/schemas/types.js";
 
 describe("registerHarnessSchemaResource collision guard", () => {
   it("throws when additionalSchemas key collides with a built-in schema name", () => {

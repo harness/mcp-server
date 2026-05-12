@@ -2,7 +2,8 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { createLogger } from "../utils/logger.js";
-import { SCHEMAS, VALID_SCHEMAS, type SchemaEntry } from "../data/schemas/index.js";
+import { SCHEMAS, VALID_SCHEMAS } from "../data/schemas/index.js";
+import type { SchemaEntry } from "../data/schemas/types.js";
 import { getExample, searchExamples, getExamplesForResource } from "../data/examples/index.js";
 
 const log = createLogger("tool:harness-schema");

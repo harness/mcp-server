@@ -14,7 +14,7 @@ import { registerSearchTool } from "./harness-search.js";
 import { registerDescribeTool } from "./harness-describe.js";
 import { registerStatusTool } from "./harness-status.js";
 import { registerSchemaTool } from "./harness-schema.js";
-import type { SchemaEntry } from "../data/schemas/index.js";
+import type { SchemaEntry } from "../data/schemas/types.js";
 import "../data/examples/load-all.js";
 
 
