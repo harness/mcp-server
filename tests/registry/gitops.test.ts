@@ -1399,3 +1399,79 @@ describe("gitops identifier field ordering", () => {
     expect(def.identifierFields).toEqual(["cluster_id"]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Pagination param forwarding for list operations
+// ---------------------------------------------------------------------------
+
+describe("gitops pagination", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+  });
+
+  it("gitops_agent list: forwards page/size as pageIndex/pageSize query params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ content: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_agent", "list", { page: 2, size: 50 });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.pageIndex).toBe(2);
+    expect(call.params.pageSize).toBe(50);
+  });
+
+  it("gitops_application list: forwards page/size as pageIndex/pageSize in POST body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ content: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_application", "list", { page: 3, size: 10 });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.body.pageIndex).toBe(3);
+    expect(call.body.pageSize).toBe(10);
+  });
+
+  it("gitops_cluster list: defaults to page 0, size 20 when not provided", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ content: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_cluster", "list", {});
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.body.pageIndex).toBe(0);
+    expect(call.body.pageSize).toBe(20);
+  });
+
+  it("gitops_cluster_link list: forwards page/size as query params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ content: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_cluster_link", "list", {
+      environment_id: "my-env",
+      page: 1,
+      size: 30,
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.page).toBe(1);
+    expect(call.params.size).toBe(30);
+  });
+
+  it("gitops_repository list: search_term forwarded in POST body as searchTerm", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ content: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_repository", "list", {
+      search_term: "my-repo",
+      page: 0,
+      size: 5,
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.body.searchTerm).toBe("my-repo");
+    expect(call.body.pageIndex).toBe(0);
+    expect(call.body.pageSize).toBe(5);
+  });
+});
