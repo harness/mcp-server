@@ -17,6 +17,12 @@ type V1SchemaKey = "pipeline_v1" | "template_v1" | "trigger_v1" | "inputSet_v1" 
 type LocalSchemaKey = "agent-pipeline";
 type AllSchemaKeys = V0SchemaKey | V1SchemaKey | LocalSchemaKey;
 
+export interface SchemaEntry {
+  schema: Record<string, unknown>;
+  description?: string;
+  group?: string;
+}
+
 export const SCHEMAS: Record<AllSchemaKeys, Record<string, any>> = {
   "pipeline": pipeline,
   "template": template,

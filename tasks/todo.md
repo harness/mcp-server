@@ -263,3 +263,16 @@
 - Clarified in README that hosted `https://mcp.harness.io/mcp` is managed and cannot be pointed at Harness0 from Claude/Cursor/Cowork client config; Support must configure hosted MCP for that target environment.
 - Updated MCPB manifest descriptions so `HARNESS_BASE_URL` covers private SaaS hosts such as `https://harness0.harness.io`, not just self-managed installs.
 - Verified with `pnpm build` and `pnpm docs:check`.
+
+## Slack Bug Triage: SchemaEntry Build Failure (2026-05-12)
+- [x] Read the Slack thread and confirm the reported CI error
+- [x] Reproduce the TypeScript failure locally
+- [x] Trace the missing `SchemaEntry` export to the generated schema index
+- [x] Restore the missing exported type in the generated index and generator
+- [ ] Run focused typecheck/build verification
+- [ ] Commit, push, open PR, and reply in the Slack thread
+
+### Plan
+- Keep the fix scoped to `src/data/schemas/index.ts` and `scripts/sync-schemas.js`.
+- Export a `SchemaEntry` type for runtime extension schemas without changing the shape of built-in `SCHEMAS`.
+- Update the generator template so `pnpm sync-schemas` preserves the export.
