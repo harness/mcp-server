@@ -1,7 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createLogger } from "../utils/logger.js";
-import { SCHEMAS, VALID_SCHEMAS, type SchemaName, type SchemaEntry } from "../data/schemas/index.js";
+import { SCHEMAS, VALID_SCHEMAS, type SchemaName } from "../data/schemas/index.js";
+import type { SchemaEntry } from "../data/schemas/types.js";
 
 const log = createLogger("resource:harness-schema");
 

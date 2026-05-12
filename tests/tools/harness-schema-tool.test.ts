@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import type { ToolResult } from "../../src/utils/response-formatter.js";
-import type { SchemaEntry } from "../../src/data/schemas/index.js";
+import type { SchemaEntry } from "../../src/data/schemas/types.js";
 import { registerSchemaTool } from "../../src/tools/harness-schema.js";
 
 function entry(schema: Record<string, any>): SchemaEntry {
