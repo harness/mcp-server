@@ -269,7 +269,7 @@
 - [x] Reproduce the stale GitOps guidance with a failing registry regression test
 - [x] Update GitOps update descriptions and execute hints to match generic `resource_id` mapping
 - [x] Run focused GitOps tests, typecheck, and broader verification
-- [ ] Commit, push, open PR, and reply in the original Slack thread
+- [x] Commit, push, open PR, and reply in the original Slack thread
 
 ### Plan
 - Keep the fix scoped to `src/registry/toolsets/gitops.ts`; the generic tools intentionally map `resource_id` to the last `identifierFields` entry for nested resources.
