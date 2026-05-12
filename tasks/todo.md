@@ -263,3 +263,24 @@
 - Clarified in README that hosted `https://mcp.harness.io/mcp` is managed and cannot be pointed at Harness0 from Claude/Cursor/Cowork client config; Support must configure hosted MCP for that target environment.
 - Updated MCPB manifest descriptions so `HARNESS_BASE_URL` covers private SaaS hosts such as `https://harness0.harness.io`, not just self-managed installs.
 - Verified with `pnpm build` and `pnpm docs:check`.
+
+## Critical Bug Inspection (2026-05-12)
+- [x] Inspect recent commits for high-severity behavioral regressions
+- [x] Trace schema exposure changes for startup/runtime crashes or data leaks
+- [x] Trace IDP tool changes for auth/scope mistakes or destructive behavior
+- [x] Trace STO exemption changes for incorrect mutation payloads or silent failures
+- [x] Run targeted verification for any suspicious path
+- [x] Report outcome in Slack; open a PR only for a concrete critical fix
+
+### Plan
+- Compare the latest commits against recent main history and prioritize behavioral code over docs/version bumps.
+- For each high-risk area, follow the caller chain from MCP tool/resource input through registry dispatch to Harness API request/output shaping.
+- Only treat an issue as actionable if there is a plausible trigger that causes crash, data loss/corruption, security exposure, or major user-facing breakage.
+- If no critical bug meets the confidence bar, leave the code unchanged and post the no-critical-bugs summary.
+
+### Review
+- Found a release-blocking compile regression from recent schema auto-sync: `src/data/schemas/index.ts` no longer exported `SchemaEntry`, while schema tools/resources and tests still imported it.
+- Restored `SchemaEntry` in the generator template and current generated index so future `pnpm sync-schemas` runs preserve the contract.
+- Added `tests/schemas/generated-index.test.ts` to fail if either the generated index or sync template drops the export again.
+- Reviewed IDP and STO recent behavior; no additional issue met the high-confidence critical-bug bar.
+- Verified with `pnpm test tests/schemas/generated-index.test.ts tests/tools/harness-schema-tool.test.ts tests/resources/harness-schema.test.ts`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
