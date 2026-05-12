@@ -263,3 +263,21 @@
 - Clarified in README that hosted `https://mcp.harness.io/mcp` is managed and cannot be pointed at Harness0 from Claude/Cursor/Cowork client config; Support must configure hosted MCP for that target environment.
 - Updated MCPB manifest descriptions so `HARNESS_BASE_URL` covers private SaaS hosts such as `https://harness0.harness.io`, not just self-managed installs.
 - Verified with `pnpm build` and `pnpm docs:check`.
+
+## Slack Bug Triage: GitOps Update Identifier Guidance (2026-05-12)
+- [x] Read the Slack report thread and inspect linked PR #180 / CDS-123353 context
+- [x] Reproduce the stale GitOps guidance with a failing registry regression test
+- [x] Update GitOps update descriptions and execute hints to match generic `resource_id` mapping
+- [x] Run focused GitOps tests, typecheck, and broader verification
+- [ ] Commit, push, open PR, and reply in the original Slack thread
+
+### Plan
+- Keep the fix scoped to `src/registry/toolsets/gitops.ts`; the generic tools intentionally map `resource_id` to the last `identifierFields` entry for nested resources.
+- Add `tests/registry/gitops.test.ts` coverage for agent-facing `harness_update` guidance and dispatch path construction so future edits cannot reintroduce the stale `resource_id=agent_id` examples.
+- Verify with focused GitOps registry tests and TypeScript checks before broader test execution.
+
+### Review
+- Found that `harness_update` maps generic `resource_id` to the last identifier field (`app_name` / `appset_id`) for nested GitOps resources, but the GitOps update descriptions still instructed agents to put `agent_id` in `resource_id`.
+- Updated the GitOps application and ApplicationSet update guidance so `resource_id` is the app/appset identifier and `agent_id` is passed in `params`.
+- Added focused GitOps registry tests that first failed on the stale guidance, then passed with the corrected descriptions and verified request construction.
+- Verified with `pnpm test tests/registry/gitops.test.ts`, `pnpm typecheck`, and `pnpm test`.
