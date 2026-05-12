@@ -925,3 +925,150 @@ describe("gitops injectAccountInBody", () => {
     expect(call.body.accountIdentifier).toBe("test-account");
   });
 });
+
+// ---------------------------------------------------------------------------
+// encodeAppSetJsonFields — gRPC-gateway base64 encoding for ApplicationSets
+// ---------------------------------------------------------------------------
+
+describe("gitops_applicationset gRPC-gateway encoding", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+  });
+
+  it("create: list generator elements are base64-encoded as {raw: ...}", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_applicationset", "create", {
+      agent_id: "account.myagent",
+      body: {
+        applicationset: {
+          metadata: { name: "test-appset" },
+          spec: {
+            generators: [{
+              list: {
+                elements: [
+                  { cluster: "staging", url: "https://1.2.3.4" },
+                  { cluster: "prod", url: "https://2.3.4.5" },
+                ],
+              },
+            }],
+            template: {
+              metadata: { name: "app-{{.cluster}}" },
+              spec: { source: { repoURL: "https://github.com/org/repo" }, destination: { server: "{{.url}}" } },
+            },
+          },
+        },
+      },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    const elements = call.body.applicationset.spec.generators[0].list.elements;
+    expect(elements).toHaveLength(2);
+    expect(elements[0]).toHaveProperty("raw");
+    expect(typeof elements[0].raw).toBe("string");
+    const decoded = JSON.parse(Buffer.from(elements[0].raw, "base64").toString("utf-8"));
+    expect(decoded).toEqual({ cluster: "staging", url: "https://1.2.3.4" });
+  });
+
+  it("create: plugin input parameters are base64-encoded", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_applicationset", "create", {
+      agent_id: "account.myagent",
+      body: {
+        applicationset: {
+          metadata: { name: "plugin-appset" },
+          spec: {
+            generators: [{
+              plugin: {
+                configMapRef: { name: "my-plugin" },
+                input: {
+                  parameters: {
+                    key1: "simple-string",
+                    key2: { nested: true },
+                  },
+                },
+              },
+            }],
+            template: {
+              metadata: { name: "app" },
+              spec: { source: { repoURL: "https://github.com/org/repo" }, destination: { server: "https://k8s" } },
+            },
+          },
+        },
+      },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    const params = call.body.applicationset.spec.generators[0].plugin.input.parameters;
+    expect(params.key1).toHaveProperty("raw");
+    expect(params.key2).toHaveProperty("raw");
+    const decoded2 = JSON.parse(Buffer.from(params.key2.raw, "base64").toString("utf-8"));
+    expect(decoded2).toEqual({ nested: true });
+  });
+
+  it("create: pre-encoded values (already have raw) pass through unchanged", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    const preEncoded = { raw: Buffer.from(JSON.stringify({ pre: "encoded" })).toString("base64") };
+
+    await registry.dispatch(client, "gitops_applicationset", "create", {
+      agent_id: "account.myagent",
+      body: {
+        applicationset: {
+          metadata: { name: "pre-encoded-appset" },
+          spec: {
+            generators: [{
+              list: { elements: [preEncoded] },
+            }],
+            template: {
+              metadata: { name: "app" },
+              spec: { source: { repoURL: "https://github.com/org/repo" }, destination: { server: "https://k8s" } },
+            },
+          },
+        },
+      },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    const elements = call.body.applicationset.spec.generators[0].list.elements;
+    expect(elements[0]).toEqual(preEncoded);
+  });
+
+  it("create: nested matrix generators encode sub-generator matrix/merge as base64 blobs", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_applicationset", "create", {
+      agent_id: "account.myagent",
+      body: {
+        applicationset: {
+          metadata: { name: "matrix-appset" },
+          spec: {
+            generators: [{
+              matrix: {
+                generators: [
+                  { list: { elements: [{ env: "dev" }] } },
+                  { matrix: { generators: [{ list: { elements: [{ x: 1 }] } }] } },
+                ],
+              },
+            }],
+            template: {
+              metadata: { name: "app" },
+              spec: { source: { repoURL: "https://github.com/org/repo" }, destination: { server: "https://k8s" } },
+            },
+          },
+        },
+      },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    const nestedGenerators = call.body.applicationset.spec.generators[0].matrix.generators;
+    expect(nestedGenerators[0].list.elements[0]).toHaveProperty("raw");
+    expect(nestedGenerators[1].matrix).toHaveProperty("raw");
+  });
+});
