@@ -1,0 +1,179 @@
+src/registry/types.ts
+  edf48d0e-c626-4806-b21f-45b819d05440 301-307
+src/tools/harness-list.ts
+  edf48d0e-c626-4806-b21f-45b819d05440 69-73
+src/registry/extractors.ts
+  edf48d0e-c626-4806-b21f-45b819d05440 63-64,68,70-72,75,78-81,89-90
+  2618c728-bddd-4729-ba0c-99886c3f2a7c 28-62,65-67,69,73-74,76-77,82-88,91-96
+  human 27
+src/registry/index.ts
+  edf48d0e-c626-4806-b21f-45b819d05440 666-671
+  human 672-673
+src/registry/toolsets/sto.ts
+  edf48d0e-c626-4806-b21f-45b819d05440 149
+  2618c728-bddd-4729-ba0c-99886c3f2a7c 2,148
+  cd6b493b-1559-4f69-a980-2046f57a837e 94,102-103,111-115,123-147,150
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 7,
+          "added_lines": 7,
+          "deleted_lines": 1,
+          "hash": "edf48d0e-c626-4806-b21f-45b819d05440",
+          "lines": "301-307",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/types.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 5,
+          "added_lines": 5,
+          "deleted_lines": 0,
+          "hash": "edf48d0e-c626-4806-b21f-45b819d05440",
+          "lines": "69-73",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/tools/harness-list.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 13,
+          "added_lines": 13,
+          "deleted_lines": 2,
+          "hash": "edf48d0e-c626-4806-b21f-45b819d05440",
+          "lines": "63-64,68,70-72,75,78-81,89-90",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 56,
+          "added_lines": 57,
+          "deleted_lines": 5,
+          "hash": "2618c728-bddd-4729-ba0c-99886c3f2a7c",
+          "lines": "28-62,65-67,69,73-74,76-77,82-88,91-96",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "27",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/extractors.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 6,
+          "added_lines": 11,
+          "deleted_lines": 1,
+          "hash": "edf48d0e-c626-4806-b21f-45b819d05440",
+          "lines": "666-671",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 2,
+          "added_lines": 2,
+          "deleted_lines": 0,
+          "hash": "human",
+          "lines": "672-673",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/index.ts"
+    },
+    {
+      "entries": [
+        {
+          "accepted_lines": 1,
+          "added_lines": 1,
+          "deleted_lines": 2,
+          "hash": "edf48d0e-c626-4806-b21f-45b819d05440",
+          "lines": "149",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 2,
+          "added_lines": 2,
+          "deleted_lines": 1,
+          "hash": "2618c728-bddd-4729-ba0c-99886c3f2a7c",
+          "lines": "2,148",
+          "overridden_lines": 0
+        },
+        {
+          "accepted_lines": 34,
+          "added_lines": 34,
+          "deleted_lines": 6,
+          "hash": "cd6b493b-1559-4f69-a980-2046f57a837e",
+          "lines": "94,102-103,111-115,123-147,150",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "src/registry/toolsets/sto.ts"
+    }
+  ],
+  "base_commit_sha": "731e4b75ddc4ee4f202771e6745589a2d9c79310",
+  "branch": "feat/STO-11498/fix-pagination",
+  "commit_sha": "979533b42785ce5ba725d0ca5c3b8a4faccd8350",
+  "commit_time": "2026-05-12T13:02:06+05:30",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.4",
+  "prompts": {
+    "2618c728-bddd-4729-ba0c-99886c3f2a7c": {
+      "accepted_lines": 58,
+      "agent_id": {
+        "id": "2618c728-bddd-4729-ba0c-99886c3f2a7c",
+        "model": "unknown",
+        "tool": "windsurf"
+      },
+      "human_author": "Anurag Tiwari <anurag.tiwari@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 59,
+      "total_deletions": 6
+    },
+    "cd6b493b-1559-4f69-a980-2046f57a837e": {
+      "accepted_lines": 34,
+      "agent_id": {
+        "id": "cd6b493b-1559-4f69-a980-2046f57a837e",
+        "model": "unknown",
+        "tool": "windsurf"
+      },
+      "human_author": "Anurag Tiwari <anurag.tiwari@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 34,
+      "total_deletions": 6
+    },
+    "edf48d0e-c626-4806-b21f-45b819d05440": {
+      "accepted_lines": 32,
+      "agent_id": {
+        "id": "edf48d0e-c626-4806-b21f-45b819d05440",
+        "model": "unknown",
+        "tool": "windsurf"
+      },
+      "human_author": "Anurag Tiwari <anurag.tiwari@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 37,
+      "total_deletions": 6
+    },
+    "human": {
+      "accepted_lines": 3,
+      "agent_id": null,
+      "human_author": "Anurag Tiwari <anurag.tiwari@harness.io>",
+      "overriden_lines": 0,
+      "total_additions": 3,
+      "total_deletions": 0
+    }
+  },
+  "repo": "https://Anurag%20Tiwari:pat.l7B_kbSEQD2wjrM7PShm5w.68be5c04849927594bf7f741.GHibVgBwz83CjO2eDcOg@git0.harness.io/l7B_kbSEQD2wjrM7PShm5w/PROD/Harness_Commons/mcp-server.git",
+  "schema_version": "authorship/3.0.0"
+}
