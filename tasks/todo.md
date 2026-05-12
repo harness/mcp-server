@@ -269,7 +269,8 @@
 - [x] Reproduce the stale GitOps guidance with a failing registry regression test
 - [x] Update GitOps update descriptions and execute hints to match generic `resource_id` mapping
 - [x] Run focused GitOps tests, typecheck, and broader verification
-- [x] Commit, push, open PR, and reply in the original Slack thread
+- [x] Commit, push, and open PR
+- [ ] Reply in the original Slack thread (blocked: Slack tool is not configured for the trigger channel)
 
 ### Plan
 - Keep the fix scoped to `src/registry/toolsets/gitops.ts`; the generic tools intentionally map `resource_id` to the last `identifierFields` entry for nested resources.
@@ -281,3 +282,4 @@
 - Updated the GitOps application and ApplicationSet update guidance so `resource_id` is the app/appset identifier and `agent_id` is passed in `params`.
 - Added focused GitOps registry tests that first failed on the stale guidance, then passed with the corrected descriptions and verified request construction.
 - Verified with `pnpm test tests/registry/gitops.test.ts`, `pnpm typecheck`, and `pnpm test`.
+- Slack reply to the original thread could not be sent because `SendSlackMessage` is not configured for channel `C08SYT1FWJD`; no message was posted to any other channel.
