@@ -1072,3 +1072,91 @@ describe("gitops_applicationset gRPC-gateway encoding", () => {
     expect(nestedGenerators[1].matrix).toHaveProperty("raw");
   });
 });
+
+// ---------------------------------------------------------------------------
+// emptyOnErrorPatterns — validate declarations exist (not yet wired in executeSpec)
+// ---------------------------------------------------------------------------
+
+describe("gitops emptyOnErrorPatterns declarations", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+  });
+
+  it("gitops_applicationset list: has emptyOnErrorPatterns declared", () => {
+    const def = registry.getResource("gitops_applicationset");
+    const spec = def.operations.list;
+    expect(spec?.emptyOnErrorPatterns).toBeDefined();
+    expect(spec!.emptyOnErrorPatterns!.length).toBeGreaterThan(0);
+    expect(spec!.emptyOnErrorPatterns!.some(p => p.test("agent is not registered"))).toBe(true);
+    expect(spec!.emptyOnErrorPatterns!.some(p => p.test("Not Implemented"))).toBe(true);
+  });
+
+  it("gitops_repo_credential list: has emptyOnErrorPatterns declared", () => {
+    const def = registry.getResource("gitops_repo_credential");
+    const spec = def.operations.list;
+    expect(spec?.emptyOnErrorPatterns).toBeDefined();
+    expect(spec!.emptyOnErrorPatterns!.some(p => p.test("never connected"))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildBulkTargets — validation and single-app fallback
+// ---------------------------------------------------------------------------
+
+describe("gitops buildBulkTargets validation", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+  });
+
+  it("bulk_sync: throws when targets array has items missing agent_id", async () => {
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatchExecute(client, "gitops_application", "bulk_sync", {
+        body: {
+          targets: [{ app_name: "my-app" }],
+        },
+      }),
+    ).rejects.toThrow(/must have agent_id and app_name/);
+  });
+
+  it("bulk_sync: throws when targets array has items missing app_name", async () => {
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatchExecute(client, "gitops_application", "bulk_sync", {
+        body: {
+          targets: [{ agent_id: "account.myagent" }],
+        },
+      }),
+    ).rejects.toThrow(/must have agent_id and app_name/);
+  });
+
+  it("refresh: throws with descriptive error when neither resource_id nor body.targets given", async () => {
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatchExecute(client, "gitops_application", "refresh", {}),
+    ).rejects.toThrow(/requires at least one target/);
+  });
+
+  it("bulk_sync: single app via agent_id + app_name (no body.targets)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "gitops_application", "bulk_sync", {
+      agent_id: "org.myagent",
+      app_name: "single-app",
+      body: { prune: false },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.body.applicationTargets).toEqual([
+      { applicationName: "single-app", agentIdentifier: "org.myagent" },
+    ]);
+  });
+});
