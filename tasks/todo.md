@@ -284,4 +284,5 @@
 - Marked connectors, services, environments, infrastructure, secrets, and templates as supporting `account`, `org`, and `project` scopes and surfaced that guidance through `harness_describe`.
 - Kept resource-specific `scope` filters available for APIs such as GitOps cluster links by reserving `resource_scope` for dispatcher-level scoping.
 - Added coverage that each supported entity resource can list at account, org, and project scope, and that `harness_search` forwards explicit and URL-derived `resource_scope`.
-- Verified with focused red/green coverage, `pnpm typecheck`, full `pnpm test` (52 files / 1211 tests), and `pnpm build`.
+- Limited URL-derived `resource_scope` to known multi-scope entity URLs so account-scoped APIs with org/project UI paths, such as FME feature flags, are not rejected as unsupported project scope.
+- Verified with focused red/green coverage, `pnpm typecheck`, full `pnpm test` (52 files / 1213 tests), and `pnpm build`.
