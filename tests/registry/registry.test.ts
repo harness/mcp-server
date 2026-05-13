@@ -589,6 +589,37 @@ describe("Registry", () => {
       expect(call.params).not.toHaveProperty("projectIdentifier");
     });
 
+    it("rejects account-scoped template create when org or project selectors are also provided", async () => {
+      const client = makeClient();
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+
+      await expect(registry.dispatch(client, "template", "create", {
+        scope: "account",
+        org_id: "default",
+        project_id: "test-project",
+        body: {
+          template_yaml: "template:\n  name: Account Step\n  identifier: account_step\n",
+          identifier: "account_step",
+          name: "Account Step",
+        },
+      })).rejects.toThrow(/account.*org_id.*project_id/);
+    });
+
+    it("rejects explicit project-scoped template delete when project scope cannot be resolved", async () => {
+      const client = makeClient();
+      const registry = new Registry(makeConfig({
+        HARNESS_TOOLSETS: "templates",
+        HARNESS_ORG: "default",
+        HARNESS_PROJECT: undefined,
+      }));
+
+      await expect(registry.dispatch(client, "template", "delete", {
+        scope: "project",
+        template_id: "deploy_step",
+        version_label: "v2",
+      })).rejects.toThrow(/project_id or HARNESS_PROJECT/);
+    });
+
     it("uses configured project scope for template delete when scope params are omitted", async () => {
       const mockRequest = vi.fn().mockResolvedValue({ data: true });
       const client = makeClient(mockRequest);

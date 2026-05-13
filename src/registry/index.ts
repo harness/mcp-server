@@ -486,11 +486,15 @@ export class Registry {
       const accountProvided = Boolean(input.account_id);
       const global = input.global === true || input.global === "true";
 
+      if (!global && scope === "account" && (input.org_id || input.project_id)) {
+        throw new Error('scope "account" cannot be combined with org_id or project_id');
+      }
+
       if (
         def.scopeOptionalDefaultFromConfig &&
         !global &&
         !accountProvided &&
-        scope !== "account" &&
+        scope === undefined &&
         !orgProvided &&
         !projectProvided
       ) {
@@ -507,6 +511,12 @@ export class Registry {
       } else if (!global && scope === "project") {
         const org = (input.org_id as string | undefined) ?? this.config.HARNESS_ORG;
         const project = (input.project_id as string | undefined) ?? this.config.HARNESS_PROJECT;
+        if (!org) {
+          throw new Error("org_id or HARNESS_ORG is required for project-scoped operations");
+        }
+        if (!project) {
+          throw new Error("project_id or HARNESS_PROJECT is required for project-scoped operations");
+        }
         if (org) {
           params[orgParam] = org;
         }
@@ -515,6 +525,9 @@ export class Registry {
         }
       } else if (!global && scope === "org") {
         const org = (input.org_id as string | undefined) ?? this.config.HARNESS_ORG;
+        if (!org) {
+          throw new Error("org_id or HARNESS_ORG is required for org-scoped operations");
+        }
         if (org) {
           params[orgParam] = org;
         }
