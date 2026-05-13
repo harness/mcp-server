@@ -283,4 +283,5 @@
 - Account-level Harness URLs now propagate `resource_scope: "account"` through `applyUrlDefaults`, preventing account settings URLs from being narrowed by `HARNESS_ORG`/`HARNESS_PROJECT`.
 - Marked connectors, services, environments, infrastructure, secrets, and templates as supporting `account`, `org`, and `project` scopes and surfaced that guidance through `harness_describe`.
 - Kept resource-specific `scope` filters available for APIs such as GitOps cluster links by reserving `resource_scope` for dispatcher-level scoping.
-- Verified with focused red/green coverage, `pnpm typecheck`, full `pnpm test` (52 files / 1203 tests), and `pnpm build`.
+- Added coverage that each supported entity resource can list at account, org, and project scope, and that `harness_search` forwards explicit and URL-derived `resource_scope`.
+- Verified with focused red/green coverage, `pnpm typecheck`, full `pnpm test` (52 files / 1211 tests), and `pnpm build`.
