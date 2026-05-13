@@ -82,6 +82,15 @@ describe("parseHarnessUrl", () => {
     expect(result.resource_id).toBe("harnessSecretManager");
   });
 
+  it("does not derive a resource type for removed resource group routes", () => {
+    const result = parseHarnessUrl(
+      "https://app.harness.io/ng/account/abc123/settings/access-control/resource-groups/_all_resources",
+    );
+    expect(result.account_id).toBe("abc123");
+    expect(result.resource_type).toBeUndefined();
+    expect(result.resource_id).toBeUndefined();
+  });
+
   it("extracts execution ID and pipeline ID from execution URL", () => {
     const result = parseHarnessUrl(
       "https://ancestry.harness.io/ng/account/cetPGmqTQ22qdnkyMdP_9A/all/orgs/Genomics/projects/ga_ethnicity/pipelines/stack_ecs_docker_deploy/executions/GsHdrBCwR4ah3rwN9W_DMg/pipeline",

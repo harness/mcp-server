@@ -263,3 +263,16 @@
 - Clarified in README that hosted `https://mcp.harness.io/mcp` is managed and cannot be pointed at Harness0 from Claude/Cursor/Cowork client config; Support must configure hosted MCP for that target environment.
 - Updated MCPB manifest descriptions so `HARNESS_BASE_URL` covers private SaaS hosts such as `https://harness0.harness.io`, not just self-managed installs.
 - Verified with `pnpm build` and `pnpm docs:check`.
+
+## Slack Review Request: Remove ResourceGroup Routes (2026-05-13)
+- [x] Read the Slack thread and confirm there are no screenshots or follow-up details
+- [x] Locate current `resource_group` registry, URL parser, prompt, README, and testing-doc references
+- [ ] Add failing regression coverage for removing the dedicated `resource_group` route
+- [ ] Remove the dedicated ResourceGroup route and URL shortcut metadata
+- [ ] Refresh generated docs and remove stale ResourceGroup testing docs
+- [ ] Run focused tests, docs check, typecheck, build, commit, push, open PR, and reply in Slack
+
+### Plan
+- Treat the internal Harness Code PR link as inaccessible from this GitHub checkout; use the explicit Slack request as the source requirement.
+- Remove only the dedicated `resource_group` resource from the access-control toolset, not RBAC payload/filter fields like `resourceGroupIdentifier`.
+- Keep the change guarded by tests so `resource_group` cannot reappear in registry defaults or URL-derived tool inputs.

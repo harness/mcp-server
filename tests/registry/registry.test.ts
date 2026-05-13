@@ -88,6 +88,12 @@ describe("Registry", () => {
       expect(() => registry.getResource("eval_dataset")).toThrow(/Unknown resource_type/);
     });
 
+    it("does not expose the removed resource_group route", () => {
+      const registry = new Registry(makeConfig());
+      expect(registry.getAllResourceTypes()).not.toContain("resource_group");
+      expect(() => registry.getResource("resource_group")).toThrow(/Unknown resource_type/);
+    });
+
     it("enables opt-in toolset with + prefix", () => {
       const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "+ai-evals" }));
       const desc = registry.describe() as { total_toolsets: number };
