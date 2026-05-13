@@ -32,7 +32,7 @@ export const passthrough = (raw: unknown): unknown => raw;
  * standard `{ items, total, page, pageSize, totalPages, counts }` shape used by all other paginated
  * resources, with an explicit `_nextPageHint` so pagination can't be misinterpreted.
  */
-export const stoExemptionsExtract = (raw: unknown): unknown => {
+export const stoExemptionsExtract = (raw: unknown, input?: Record<string, unknown>): unknown => {
   type Exemption = {
     id?: string;
     status?: string;
@@ -79,6 +79,20 @@ export const stoExemptionsExtract = (raw: unknown): unknown => {
   // Provide them in a separate lookup keyed by row index (1-based) for approve/reject actions.
   const _action_id_by_row: Record<number, string> = {};
   exemptions.forEach((e, idx) => { if (e.id) _action_id_by_row[idx + 1] = e.id; });
+
+  // Reconstruct the active filter set from the actual request input so the
+  // next-page hint paginates the SAME query. Dropping any of these would
+  // switch the underlying dataset on the next call (Cursor review feedback).
+  const filterKeys = ["status", "search"] as const;
+  const activeFilters: Record<string, unknown> = {};
+  if (input) {
+    for (const key of filterKeys) {
+      const v = input[key];
+      if (v !== undefined && v !== "" && v !== null) activeFilters[key] = v;
+    }
+  }
+  const filterJson = JSON.stringify({ ...activeFilters, page: page + 1, size: pageSize });
+
   return {
     items,
     total,
@@ -89,7 +103,7 @@ export const stoExemptionsExtract = (raw: unknown): unknown => {
     _action_id_by_row,
     _display_hint: "Render a compact table with columns: # | Issue Title | Severity | Type | Requested by | Target | Status. NEVER add an 'ID' column — the items contain no ID field by design. If the user asks to approve/reject row N, look up the ID in _action_id_by_row[N].",
     _nextPageHint: hasMore
-      ? `For the next page, call harness_list with filters={status:'<same>', page:${page + 1}, size:${pageSize}}. You MUST use size=${pageSize} (the same size as this call) — changing size will skip results because offset = page × size. Pages remaining: ${totalPages - page - 1}.`
+      ? `For the next page, call harness_list with resource_type='security_exemption' and filters=${filterJson}. You MUST keep size=${pageSize} and ALL other filters identical — the backend computes offset = page × size, so changing size or dropping filters silently shifts the dataset. Pages remaining: ${totalPages - page - 1}.`
       : "No more pages — all exemptions have been returned.",
   };
 };
