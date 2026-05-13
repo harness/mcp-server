@@ -227,10 +227,10 @@ describe("Registry", () => {
 
     it("marks account-queryable settings resources as multi-scope", () => {
       const registry = new Registry(makeConfig({
-        HARNESS_TOOLSETS: "connectors,services,environments,infrastructure,secrets",
+        HARNESS_TOOLSETS: "connectors,services,environments,infrastructure,secrets,templates",
       }));
 
-      for (const resourceType of ["connector", "service", "environment", "infrastructure", "secret"]) {
+      for (const resourceType of ["connector", "service", "environment", "infrastructure", "secret", "template"]) {
         expect(registry.getResource(resourceType).supportedScopes).toEqual(["account", "org", "project"]);
       }
     });
@@ -575,6 +575,7 @@ describe("Registry", () => {
       ["environments", "environment"],
       ["infrastructure", "infrastructure"],
       ["secrets", "secret"],
+      ["templates", "template"],
     ])("supports account/org/project list scoping for %s", async (toolset, resourceType) => {
       const scopedRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: toolset }));
       const mockRequest = vi.fn().mockResolvedValue({
@@ -621,6 +622,46 @@ describe("Registry", () => {
       expect(call.path).toBe("/ng/api/v2/secrets/acctSecret");
       expect(call.params.orgIdentifier).toBeUndefined();
       expect(call.params.projectIdentifier).toBeUndefined();
+    });
+
+    it("template v1 update uses project-scoped path when resource_scope='project' with config defaults", async () => {
+      const templateRegistry = new Registry(makeConfig({
+        HARNESS_TOOLSETS: "templates",
+        HARNESS_ORG: "default-org",
+        HARNESS_PROJECT: "default-proj",
+      }));
+      const mockRequest = vi.fn().mockResolvedValue({ data: {} });
+      const client = makeClient(mockRequest);
+
+      await templateRegistry.dispatch(client, "template", "update", {
+        resource_scope: "project",
+        template_id: "my-template",
+        version_label: "v2",
+        body: { template_yaml: "template:\n  name: My Template\n  type: Step\n" },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/v1/orgs/default-org/projects/default-proj/templates/my-template/versions/v2");
+    });
+
+    it("template v1 update uses account-scoped path when resource_scope='account'", async () => {
+      const templateRegistry = new Registry(makeConfig({
+        HARNESS_TOOLSETS: "templates",
+        HARNESS_ORG: "default-org",
+        HARNESS_PROJECT: "default-proj",
+      }));
+      const mockRequest = vi.fn().mockResolvedValue({ data: {} });
+      const client = makeClient(mockRequest);
+
+      await templateRegistry.dispatch(client, "template", "update", {
+        resource_scope: "account",
+        template_id: "my-template",
+        version_label: "v2",
+        body: { template_yaml: "template:\n  name: My Template\n  type: Step\n" },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/v1/templates/my-template/versions/v2");
     });
 
     it("does not treat resource-specific scope filters as dispatcher scope", async () => {

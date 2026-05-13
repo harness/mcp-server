@@ -92,6 +92,7 @@ const URL_RESOURCE_SCOPE_TYPES = new Set([
   "environment",
   "infrastructure",
   "secret",
+  "template",
 ]);
 
 /** Structural segments that should never be treated as resource IDs */

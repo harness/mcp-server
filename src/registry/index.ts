@@ -518,6 +518,14 @@ export class Registry {
       await spec.preflight({ client, input, registry: this, signal });
     }
 
+    // When explicit resource_scope resolved org/project from config defaults,
+    // merge them into input so pathBuilder functions see the effective values.
+    // Only inject for scopes that actually use those params.
+    if (requestedScope && explicitScopeValues) {
+      if (shouldUseOrg(requestedScope) && explicitScopeValues.orgId && !input.org_id) input = { ...input, org_id: explicitScopeValues.orgId };
+      if (shouldUseProject(requestedScope) && explicitScopeValues.projectId && !input.project_id) input = { ...input, project_id: explicitScopeValues.projectId };
+    }
+
     // Build path with substitutions (or pathBuilder when present)
     let path: string;
     if (spec.pathBuilder) {
