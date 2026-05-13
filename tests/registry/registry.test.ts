@@ -564,15 +564,46 @@ describe("Registry", () => {
       });
     });
 
-    it("uses org-scoped v1 path for template update when no project scope is configured", async () => {
+    it("supports org-scoped template list when project defaults are configured", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { content: [] } });
+      const client = makeClient(mockRequest);
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+
+      await registry.dispatch(client, "template", "list", {
+        scope_level: "org",
+        org_id: "org-only",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params.orgIdentifier).toBe("org-only");
+      expect(call.params).not.toHaveProperty("projectIdentifier");
+    });
+
+    it("supports account-scoped template get when scope defaults are configured", async () => {
       const mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "testTemplate" } });
       const client = makeClient(mockRequest);
-      const registry = new Registry(makeConfig({
-        HARNESS_TOOLSETS: "templates",
-        HARNESS_PROJECT: undefined,
-      }));
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+
+      await registry.dispatch(client, "template", "get", {
+        scope_level: "account",
+        template_id: "testTemplate",
+        version_label: "v2",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/template/api/templates/testTemplate");
+      expect(call.params.versionLabel).toBe("v2");
+      expect(call.params).not.toHaveProperty("orgIdentifier");
+      expect(call.params).not.toHaveProperty("projectIdentifier");
+    });
+
+    it("uses org-scoped v1 path for template update when project defaults are configured", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "testTemplate" } });
+      const client = makeClient(mockRequest);
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
 
       await registry.dispatch(client, "template", "update", {
+        scope_level: "org",
         org_id: "org-only",
         template_id: "testTemplate",
         version_label: "v2",
@@ -584,16 +615,13 @@ describe("Registry", () => {
       expect(call.path).toBe("/v1/orgs/org-only/templates/testTemplate/versions/v2");
     });
 
-    it("uses account-scoped v1 path for template create when no org or project scope is configured", async () => {
+    it("uses account-scoped v1 path for template create when scope defaults are configured", async () => {
       const mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "testTemplate" } });
       const client = makeClient(mockRequest);
-      const registry = new Registry(makeConfig({
-        HARNESS_TOOLSETS: "templates",
-        HARNESS_ORG: undefined,
-        HARNESS_PROJECT: undefined,
-      }));
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
 
       await registry.dispatch(client, "template", "create", {
+        scope_level: "account",
         body: {
           template_yaml: templateYaml,
           identifier: "testTemplate",
@@ -604,6 +632,24 @@ describe("Registry", () => {
       const call = mockRequest.mock.calls[0][0];
       expect(call.method).toBe("POST");
       expect(call.path).toBe("/v1/templates");
+    });
+
+    it("supports org-scoped template delete when project defaults are configured", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { deleted: true } });
+      const client = makeClient(mockRequest);
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+
+      await registry.dispatch(client, "template", "delete", {
+        scope_level: "org",
+        org_id: "org-only",
+        template_id: "testTemplate",
+        version_label: "v2",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/template/api/templates/testTemplate/v2");
+      expect(call.params.orgIdentifier).toBe("org-only");
+      expect(call.params).not.toHaveProperty("projectIdentifier");
     });
 
     it("passes optional v1 template update body fields through", async () => {

@@ -13,19 +13,95 @@ function requiredString(input: Record<string, unknown>, key: string, context: st
   return value;
 }
 
+type TemplateScope = {
+  level: "account" | "org" | "project";
+  org?: string;
+  project?: string;
+};
+
+function normalizeTemplateScopeLevel(value: unknown): TemplateScope["level"] | undefined {
+  if (value !== "account" && value !== "org" && value !== "project") {
+    return undefined;
+  }
+  return value;
+}
+
+function resolveTemplateScope(input: Record<string, unknown>, config: PathBuilderConfig): TemplateScope {
+  const explicitScope = normalizeTemplateScopeLevel(input.scope_level);
+  const orgInput = nonEmptyString(input.org_id);
+  const projectInput = nonEmptyString(input.project_id);
+  const isGlobalTemplate = input.global === true || input.global === "true" || input.account_id === "__GLOBAL_TEMPLATES_ACCOUNT_ID__";
+
+  if (explicitScope === "account" || (!explicitScope && isGlobalTemplate)) {
+    return { level: "account" };
+  }
+
+  if (explicitScope === "org") {
+    const org = orgInput ?? config.HARNESS_ORG;
+    if (!org) {
+      throw new Error("org_id or HARNESS_ORG is required for org-scoped template operations");
+    }
+    return { level: "org", org };
+  }
+
+  if (explicitScope === "project") {
+    const org = orgInput ?? config.HARNESS_ORG;
+    const project = projectInput ?? config.HARNESS_PROJECT;
+    if (!org || !project) {
+      throw new Error("org_id/HARNESS_ORG and project_id/HARNESS_PROJECT are required for project-scoped template operations");
+    }
+    return { level: "project", org, project };
+  }
+
+  if (projectInput) {
+    const org = orgInput ?? config.HARNESS_ORG;
+    if (!org) {
+      throw new Error("org_id or HARNESS_ORG is required when project_id is provided for template operations");
+    }
+    return { level: "project", org, project: projectInput };
+  }
+
+  if (orgInput) {
+    return { level: "org", org: orgInput };
+  }
+
+  if (config.HARNESS_ORG && config.HARNESS_PROJECT) {
+    return { level: "project", org: config.HARNESS_ORG, project: config.HARNESS_PROJECT };
+  }
+
+  if (config.HARNESS_ORG) {
+    return { level: "org", org: config.HARNESS_ORG };
+  }
+
+  return { level: "account" };
+}
+
+function applyTemplateScope(input: Record<string, unknown>, config: PathBuilderConfig): TemplateScope {
+  const scope = resolveTemplateScope(input, config);
+
+  // Registry scope injection runs after pathBuilder. Keep only the resolved
+  // scope fields so account/org operations are not promoted by config defaults.
+  delete input.org_id;
+  delete input.project_id;
+
+  if (scope.org) {
+    input.org_id = scope.org;
+  }
+  if (scope.project) {
+    input.project_id = scope.project;
+  }
+
+  return scope;
+}
+
 function templateV1ScopePath(input: Record<string, unknown>, config: PathBuilderConfig): string {
-  const org = nonEmptyString(input.org_id) ?? config.HARNESS_ORG;
-  const project = nonEmptyString(input.project_id) ?? config.HARNESS_PROJECT;
+  const scope = applyTemplateScope(input, config);
 
-  if (project && !org) {
-    throw new Error("org_id is required when project_id is provided for template scope");
+  if (scope.level === "project") {
+    return `/v1/orgs/${encodeURIComponent(scope.org!)}/projects/${encodeURIComponent(scope.project!)}`;
   }
-
-  if (org && project) {
-    return `/v1/orgs/${encodeURIComponent(org)}/projects/${encodeURIComponent(project)}`;
-  }
-  if (org) {
-    return `/v1/orgs/${encodeURIComponent(org)}`;
+  if (scope.level === "org") {
+    return `/v1/orgs/${encodeURIComponent(scope.org!)}`;
   }
   return "/v1";
 }
@@ -41,11 +117,13 @@ export const templatesToolset: ToolsetDefinition = {
       description: "Reusable template definition. Supports list, get, create, update, and delete.",
       toolset: "templates",
       scope: "project",
+      scopeOptional: true,
       identifierFields: ["template_id"],
       listFilterFields: [
         { name: "search_term", description: "Filter templates by name or keyword" },
         { name: "template_type", description: "Template entity type", enum: ["Pipeline", "Stage", "Step", "CustomDeployment", "MonitoredService", "SecretManager", "ArtifactSource"] },
         { name: "template_list_type", description: "Template list type", enum: ["Stable", "LastUpdated", "All"] },
+        { name: "scope_level", description: "Template scope to target: account, org, or project. Defaults to explicit org/project params, then configured defaults.", enum: ["account", "org", "project"] },
         { name: "global", description: "When true, accesses global templates (list: passes isGlobal=true; get: forces accountIdentifier to __GLOBAL_TEMPLATES_ACCOUNT_ID__)", type: "boolean" },
         { name: "metadata_only", description: "When true, fetches only template metadata (name, identifier, type, tags) via the list-metadata endpoint — faster and lighter than the full list", type: "boolean" },
       ],
@@ -54,10 +132,12 @@ export const templatesToolset: ToolsetDefinition = {
         list: {
           method: "POST",
           path: "/template/api/templates/list",
-          pathBuilder: (input) =>
-            input.metadata_only || input.global
+          pathBuilder: (input, config) => {
+            applyTemplateScope(input, config);
+            return input.metadata_only || input.global
               ? "/template/api/templates/list-metadata"
-              : "/template/api/templates/list",
+              : "/template/api/templates/list";
+          },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search_term: "searchTerm",
@@ -78,6 +158,11 @@ export const templatesToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/template/api/templates/{templateIdentifier}",
+          pathBuilder: (input, config) => {
+            applyTemplateScope(input, config);
+            const template = requiredString(input, "template_id", "template get");
+            return `/template/api/templates/${encodeURIComponent(template)}`;
+          },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { template_id: "templateIdentifier" },
           queryParams: {
@@ -185,6 +270,12 @@ export const templatesToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/template/api/templates/{templateIdentifier}/{versionLabel}",
+          pathBuilder: (input, config) => {
+            applyTemplateScope(input, config);
+            const template = requiredString(input, "template_id", "template delete");
+            const version = requiredString(input, "version_label", "template delete");
+            return `/template/api/templates/${encodeURIComponent(template)}/${encodeURIComponent(version)}`;
+          },
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { template_id: "templateIdentifier", version_label: "versionLabel" },
           responseExtractor: ngExtract,
