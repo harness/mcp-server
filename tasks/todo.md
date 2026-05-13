@@ -263,3 +263,17 @@
 - Clarified in README that hosted `https://mcp.harness.io/mcp` is managed and cannot be pointed at Harness0 from Claude/Cursor/Cowork client config; Support must configure hosted MCP for that target environment.
 - Updated MCPB manifest descriptions so `HARNESS_BASE_URL` covers private SaaS hosts such as `https://harness0.harness.io`, not just self-managed installs.
 - Verified with `pnpm build` and `pnpm docs:check`.
+
+## Slack Bug Triage: Account-Scope Resource Queries (2026-05-13)
+- [x] Trace current scope injection and URL parsing for account-level resources
+- [ ] Add failing tests for explicit/account URL scope behavior
+- [ ] Implement explicit account/org/project scope handling and describe metadata
+- [ ] Mark connectors, services, environments, infrastructure, secrets, and templates as multi-scope queryable
+- [ ] Run focused tests, typecheck, and broader verification
+- [ ] Commit, push, and open/update PR
+
+### Plan
+- Preserve existing default behavior for project-scoped calls with no explicit scope so current users with `HARNESS_ORG`/`HARNESS_PROJECT` keep getting default project results.
+- Add a generic `scope` selector accepted by `harness_list` and `harness_get`: `account` omits org/project, `org` injects only org, and `project` injects org+project.
+- Teach account-level Harness URLs (for example `/all/settings/connectors`) to set `scope: "account"` so pasted account URLs do not get config defaults re-injected.
+- Surface multi-scope capability in `harness_describe` so agents know that account-level connectors, services, environments, infrastructure, secrets, and templates can be requested with `scope: "account"`.

@@ -108,6 +108,24 @@ describe("harness_list", () => {
     expect(data.items).toBeDefined();
   });
 
+  it("uses account scope from account-level connector URLs instead of config defaults", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { content: [], totalElements: 0 } });
+    client = makeClient(mockRequest);
+    const connectorServer = makeMcpServer();
+    const { registerListTool } = await import("../../src/tools/harness-list.js");
+    registerListTool(connectorServer, registry, client);
+
+    const result = await connectorServer.call("harness_list", {
+      url: "https://app.harness.io/ng/account/test-account/all/settings/connectors",
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
   it("propagates user-fixable API errors as errorResult", async () => {
     mockRequest.mockRejectedValueOnce(new HarnessApiError("Not found", 404));
     const result = await server.call("harness_list", { resource_type: "pipeline" });
@@ -929,6 +947,20 @@ describe("harness_describe", () => {
     const data = parseResult(result) as { resource_type: string; operations: unknown[] };
     expect(data.resource_type).toBe("pipeline");
     expect(data.operations.length).toBeGreaterThan(0);
+  });
+
+  it("describes account/org/project scope support for multi-scope resources", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+    const connectorServer = makeMcpServer();
+    const { registerDescribeTool } = await import("../../src/tools/harness-describe.js");
+    registerDescribeTool(connectorServer, registry);
+
+    const result = await connectorServer.call("harness_describe", { resource_type: "connector" });
+
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as { supportedScopes?: string[]; scopeHint?: string };
+    expect(data.supportedScopes).toEqual(["account", "org", "project"]);
+    expect(data.scopeHint).toContain("scope='account'");
   });
 
   it("returns error hint for unknown resource_type", async () => {

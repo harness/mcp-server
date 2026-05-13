@@ -142,6 +142,7 @@ export type ToolsetName =
 export type ProductName = "harness" | "fme";
 
 export type OperationName = "list" | "get" | "create" | "update" | "delete";
+export type ResourceScope = "project" | "org" | "account";
 
 /**
  * Lightweight field descriptor for body schemas.
@@ -312,8 +313,13 @@ export interface ResourceDefinition {
   description: string;
   /** Which toolset this resource belongs to (for HARNESS_TOOLSETS filtering) */
   toolset: string;
-  /** Scope level: "project" | "org" | "account" */
-  scope: "project" | "org" | "account";
+  /** Default scope level: "project" | "org" | "account" */
+  scope: ResourceScope;
+  /**
+   * Scopes this resource can query when the caller passes `scope`.
+   * If omitted, the resource supports only its default `scope`.
+   */
+  supportedScopes?: readonly ResourceScope[];
   /**
    * When true, org/project params are only added if explicitly provided in input.
    * Use for resources that support multiple scopes (e.g., Harness Code repos/PRs

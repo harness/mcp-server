@@ -9,9 +9,10 @@ export const templatesToolset: ToolsetDefinition = {
     {
       resourceType: "template",
       displayName: "Template",
-      description: "Reusable template definition. Supports list, get, create, update, and delete.",
+      description: "Reusable template definition. Supports list, get, create, update, and delete. Use scope='account' to list or get account-level templates.",
       toolset: "templates",
       scope: "project",
+      supportedScopes: ["account", "org", "project"],
       identifierFields: ["template_id"],
       listFilterFields: [
         { name: "search_term", description: "Filter templates by name or keyword" },

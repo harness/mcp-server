@@ -28,12 +28,19 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
       if (args.resource_type) {
         try {
           const def = registry.getResource(args.resource_type);
+          const supportedScopes = def.supportedScopes ?? (
+            def.scopeOptional ? ["account", "org", "project"] : undefined
+          );
           return jsonResult({
             resource_type: def.resourceType,
             displayName: def.displayName,
             description: def.description,
             toolset: def.toolset,
             scope: def.scope,
+            supportedScopes,
+            scopeHint: supportedScopes && supportedScopes.length > 1
+              ? "Set scope='account' for account-level data, scope='org' for org-level data, or scope='project' for project-level data. If scope is omitted, the resource uses its default scope and configured defaults."
+              : undefined,
             identifierFields: def.identifierFields,
             listFilterFields: def.listFilterFields,
             operations: Object.entries(def.operations).map(([op, spec]) => ({

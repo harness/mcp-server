@@ -5,6 +5,7 @@
 
 export interface ParsedHarnessUrl {
   account_id: string;
+  scope?: "account" | "org" | "project";
   org_id?: string;
   project_id?: string;
   module?: string;
@@ -176,6 +177,14 @@ export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
     if (primary.id) {
       result.resource_id = primary.id;
     }
+
+    if (result.project_id) {
+      result.scope = "project";
+    } else if (result.org_id) {
+      result.scope = "org";
+    } else {
+      result.scope = "account";
+    }
   }
 
   const stepId = url.searchParams.get("step") ?? url.searchParams.get("stepId");
@@ -195,6 +204,7 @@ export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
 
 /** Fields that applyUrlDefaults will merge */
 const MERGEABLE_FIELDS: (keyof ParsedHarnessUrl)[] = [
+  "scope",
   "org_id",
   "project_id",
   "module",
