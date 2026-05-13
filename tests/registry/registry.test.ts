@@ -227,10 +227,10 @@ describe("Registry", () => {
 
     it("marks account-queryable settings resources as multi-scope", () => {
       const registry = new Registry(makeConfig({
-        HARNESS_TOOLSETS: "connectors,services,environments,infrastructure,secrets,templates",
+        HARNESS_TOOLSETS: "connectors,services,environments,infrastructure,secrets",
       }));
 
-      for (const resourceType of ["connector", "service", "environment", "infrastructure", "secret", "template"]) {
+      for (const resourceType of ["connector", "service", "environment", "infrastructure", "secret"]) {
         expect(registry.getResource(resourceType).supportedScopes).toEqual(["account", "org", "project"]);
       }
     });
@@ -575,7 +575,6 @@ describe("Registry", () => {
       ["environments", "environment"],
       ["infrastructure", "infrastructure"],
       ["secrets", "secret"],
-      ["templates", "template"],
     ])("supports account/org/project list scoping for %s", async (toolset, resourceType) => {
       const scopedRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: toolset }));
       const mockRequest = vi.fn().mockResolvedValue({
