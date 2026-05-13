@@ -1089,6 +1089,29 @@ describe("harness_search", () => {
     expect(call.params.projectIdentifier).toBeUndefined();
   });
 
+  it("narrows broad harness_search to resource types compatible with resource_scope", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines,connectors" }));
+    mockRequest = vi.fn().mockResolvedValue({
+      data: { content: [], totalElements: 0 },
+    });
+    client = makeClient(mockRequest);
+    const searchServer = makeMcpServer();
+    const { registerSearchTool } = await import("../../src/tools/harness-search.js");
+    registerSearchTool(searchServer, registry, client);
+
+    const result = await searchServer.call("harness_search", {
+      query: "x",
+      resource_scope: "account",
+    });
+
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as { errors?: Record<string, string>; searched_types: number };
+    expect(data.errors).toBeUndefined();
+    expect(data.searched_types).toBeGreaterThan(0);
+    const paths = mockRequest.mock.calls.map((c) => (c[0] as { path: string }).path);
+    expect(paths.some((p) => p.includes("/pipelines/list"))).toBe(false);
+  });
+
   it("gracefully handles search failures for individual types", async () => {
     // First call fails, second succeeds
     mockRequest

@@ -93,6 +93,10 @@ function shouldUseProject(scope: ResourceScope): boolean {
   return scope === "project";
 }
 
+function hasResolvedScopeIdentifier(value: string | undefined): boolean {
+  return value !== undefined && value !== null && String(value).trim() !== "";
+}
+
 const ALL_TOOLSETS: ToolsetDefinition[] = [
   pipelinesToolset,
   agentsToolset,
@@ -315,6 +319,16 @@ export class Registry {
     return def?.operations[operation] !== undefined;
   }
 
+  /**
+   * True when the resource type accepts the given dispatcher `resource_scope`
+   * (account / org / project) for list/get/execute calls.
+   */
+  supportsResourceScope(resourceType: string, scope: ResourceScope): boolean {
+    const def = this.resourceMap.get(resourceType);
+    if (!def) return false;
+    return getSupportedScopes(def).includes(scope);
+  }
+
   /** Check if a resource type has execute actions. */
   getExecuteActions(resourceType: string): Record<string, EndpointSpec & { actionDescription: string }> | undefined {
     const def = this.resourceMap.get(resourceType);
@@ -483,6 +497,22 @@ export class Registry {
     const resolvedConfig: Config = { ...this.config, HARNESS_ACCOUNT_ID: resolvedAccountId };
     const requestedScope = getRequestedScope(def, input);
     const pathDefaultScope = requestedScope ?? def.scope;
+
+    // Explicit resource_scope must not widen when org/project identifiers are missing.
+    if (requestedScope) {
+      const orgResolved = (input.org_id as string | undefined) ?? this.config.HARNESS_ORG;
+      const projectResolved = (input.project_id as string | undefined) ?? this.config.HARNESS_PROJECT;
+      if (shouldUseOrg(requestedScope) && !hasResolvedScopeIdentifier(orgResolved)) {
+        throw new Error(
+          `resource_scope "${requestedScope}" requires an organization identifier. Pass org_id or configure HARNESS_ORG.`,
+        );
+      }
+      if (shouldUseProject(requestedScope) && !hasResolvedScopeIdentifier(projectResolved)) {
+        throw new Error(
+          `resource_scope "project" requires a project identifier. Pass project_id or configure HARNESS_PROJECT.`,
+        );
+      }
+    }
 
     // Run preflight hook (e.g. duplicate-check before create) before hitting the API.
     if (spec.preflight) {

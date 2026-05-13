@@ -1,6 +1,7 @@
 import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
+import type { ResourceScope } from "../registry/types.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
@@ -26,6 +27,12 @@ function getTier(resourceType: string): number {
   return RELEVANCE_TIERS[resourceType] ?? 3;
 }
 
+function parseResourceScope(value: unknown): ResourceScope | undefined {
+  if (value === undefined || value === "") return undefined;
+  if (value === "account" || value === "org" || value === "project") return value;
+  return undefined;
+}
+
 interface SearchResultEntry {
   resource_type: string;
   tier: number;
@@ -46,7 +53,7 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
         query: z.string().describe("Search term"),
         resource_types: z.array(z.enum(listableTypes)).describe("Types to search (defaults to all listable)").optional(),
         url: z.string().describe("Harness UI URL — auto-extracts org and project").optional(),
-        resource_scope: z.enum(["account", "org", "project"]).describe("Scope to search. Use account for account-level resources and to omit org/project defaults; org injects only org; project injects org+project. Auto-detected from url.").optional(),
+        resource_scope: z.enum(["account", "org", "project"]).optional().describe("Scope to search. Use account for account-level resources and to omit org/project defaults; org injects only org; project injects org+project. Auto-detected from url."),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
         max_per_type: z.number().describe("Max results per type").default(5).optional(),
@@ -67,6 +74,16 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
         if (targetTypes.length === 0) {
           // Search all types that support list
           targetTypes = registry.getAllResourceTypes().filter((rt) => registry.supportsOperation(rt, "list"));
+        }
+
+        const requestedSearchScope = parseResourceScope(mergedArgs.resource_scope);
+        if (requestedSearchScope) {
+          targetTypes = targetTypes.filter((rt) => registry.supportsResourceScope(rt, requestedSearchScope));
+          if (targetTypes.length === 0) {
+            return errorResult(
+              `No listable resource types support resource_scope "${requestedSearchScope}" with the enabled toolsets. Omit resource_scope, pass resource_types that support this scope, or use a Harness URL.`,
+            );
+          }
         }
 
         const entries: SearchResultEntry[] = [];

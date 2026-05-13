@@ -501,6 +501,37 @@ describe("Registry", () => {
       expect(call.params.projectIdentifier).toBeUndefined();
     });
 
+    it("throws when explicit org resource_scope lacks org_id and HARNESS_ORG", async () => {
+      const accountRegistry = new Registry(
+        makeConfig({ HARNESS_TOOLSETS: "connectors", HARNESS_ORG: undefined, HARNESS_PROJECT: undefined }),
+      );
+      const client = makeClient(vi.fn());
+
+      await expect(
+        accountRegistry.dispatch(client, "connector", "list", {
+          resource_scope: "org",
+        }),
+      ).rejects.toThrow(/resource_scope "org" requires an organization identifier/);
+    });
+
+    it("throws when explicit project resource_scope lacks project_id and HARNESS_PROJECT", async () => {
+      const accountRegistry = new Registry(
+        makeConfig({
+          HARNESS_TOOLSETS: "connectors",
+          HARNESS_ORG: "has-org",
+          HARNESS_PROJECT: undefined,
+        }),
+      );
+      const client = makeClient(vi.fn());
+
+      await expect(
+        accountRegistry.dispatch(client, "connector", "list", {
+          resource_scope: "project",
+          org_id: "has-org",
+        }),
+      ).rejects.toThrow(/resource_scope "project" requires a project identifier/);
+    });
+
     it("keeps default project scope when scope is omitted", async () => {
       const accountRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
       const mockRequest = vi.fn().mockResolvedValue({
