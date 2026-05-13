@@ -26,19 +26,18 @@ Steps:
 2. **List service accounts**: Call harness_list with resource_type="service_account"${orgFilter}${projectFilter} to get all service accounts
 3. **List roles**: Call harness_list with resource_type="role"${orgFilter}${projectFilter} to see all defined roles
 4. **List role assignments**: Call harness_list with resource_type="role_assignment"${orgFilter}${projectFilter} to see who has what role
-5. **List resource groups**: Call harness_list with resource_type="resource_group"${orgFilter}${projectFilter} to understand resource access scopes
-6. **List user groups**: Call harness_list with resource_type="user_group"${orgFilter}${projectFilter} to see group memberships
-7. **Analyze and flag**:
+5. **List user groups**: Call harness_list with resource_type="user_group"${orgFilter}${projectFilter} to see group memberships
+6. **Analyze and flag**:
    - **Over-privileged users**: Users with admin roles who don't need them
    - **Stale accounts**: Users who haven't been active (check audit trail if available)
    - **Service account sprawl**: Unused or redundant service accounts
    - **Role drift**: Role assignments that don't match team structure
-   - **Broad resource groups**: Resource groups with overly permissive scope
-8. **Present audit report**:
+   - **Broad access scopes**: Role assignments that use overly permissive resource group identifiers
+7. **Present audit report**:
    - User/SA inventory with role mappings
    - Flagged over-privileged accounts with recommended role changes
    - Recommendations for role consolidation
-   - Suggested resource group tightening`,
+   - Suggested access-scope tightening`,
           },
         }],
       };

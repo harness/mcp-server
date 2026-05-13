@@ -4,7 +4,7 @@ import { ngExtract, pageExtract } from "../extractors.js";
 export const accessControlToolset: ToolsetDefinition = {
   name: "access_control",
   displayName: "Access Control",
-  description: "RBAC — users, user groups, service accounts, roles, role assignments, resource groups, and permissions",
+  description: "RBAC — users, user groups, service accounts, roles, role assignments, and permissions",
   resources: [
     {
       resourceType: "user",
@@ -306,83 +306,6 @@ export const accessControlToolset: ToolsetDefinition = {
           pathParams: { role_assignment_id: "roleAssignmentIdentifier" },
           responseExtractor: ngExtract,
           description: "Delete a role assignment",
-        },
-      },
-    },
-    {
-      resourceType: "resource_group",
-      displayName: "Resource Group",
-      description: "Resource group defining a set of resources for RBAC. Supports list, get, create, and delete.",
-      toolset: "access_control",
-      scope: "project",
-      identifierFields: ["resource_group_id"],
-      listFilterFields: [
-        { name: "search_term", description: "Filter resource groups by name or keyword" },
-      ],
-      deepLinkTemplate: "/ng/account/{accountId}/settings/access-control/resource-groups/{resourceGroupIdentifier}",
-      operations: {
-        list: {
-          method: "GET",
-          path: "/authz/api/v2/resourcegroup",
-          operationPolicy: { risk: "read", retryPolicy: "safe" },
-          queryParams: {
-            search_term: "searchTerm",
-            page: "pageIndex",
-            size: "pageSize",
-          },
-          responseExtractor: pageExtract,
-          description: "List resource groups",
-        },
-        get: {
-          method: "GET",
-          path: "/authz/api/v2/resourcegroup/{resourceGroupIdentifier}",
-          operationPolicy: { risk: "read", retryPolicy: "safe" },
-          pathParams: { resource_group_id: "resourceGroupIdentifier" },
-          responseExtractor: ngExtract,
-          description: "Get resource group details",
-        },
-        create: {
-          method: "POST",
-          path: "/authz/api/v2/resourcegroup",
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
-          /** POST body must be `{ resourceGroup: { ... } }` per Harness authz API. */
-          bodyBuilder: (input) => {
-            const b = input.body;
-            if (b === undefined || b === null) return b;
-            if (typeof b !== "object" || Array.isArray(b)) return b;
-            const rec = b as Record<string, unknown>;
-            if (
-              "resourceGroup" in rec &&
-              typeof rec.resourceGroup === "object" &&
-              rec.resourceGroup !== null &&
-              !Array.isArray(rec.resourceGroup)
-            ) {
-              return { resourceGroup: rec.resourceGroup };
-            }
-            return { resourceGroup: rec };
-          },
-          bodyWrapperKey: "resourceGroup",
-          injectAccountInBody: true,
-          responseExtractor: ngExtract,
-          description: "Create a resource group",
-          bodySchema: {
-            description: "Resource group definition",
-            fields: [
-              { name: "identifier", type: "string", required: true, description: "Unique identifier" },
-              { name: "name", type: "string", required: true, description: "Display name" },
-              { name: "description", type: "string", required: false, description: "Description" },
-              { name: "includedScopes", type: "array", required: false, description: "Scopes to include", itemType: "scope object" },
-              { name: "resourceFilter", type: "array", required: false, description: "Resource filters", itemType: "filter object" },
-            ],
-          },
-        },
-        delete: {
-          method: "DELETE",
-          path: "/authz/api/v2/resourcegroup/{resourceGroupIdentifier}",
-          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
-          pathParams: { resource_group_id: "resourceGroupIdentifier" },
-          responseExtractor: ngExtract,
-          description: "Delete a resource group",
         },
       },
     },

@@ -74,7 +74,6 @@ const RESOURCE_SEGMENTS: Record<string, { type: string; contextField: ContextFie
   "user-groups":      { type: "user_group",          contextField: "resource_id" },
   "service-accounts": { type: "service_account",     contextField: "resource_id" },
   "roles":            { type: "role",                contextField: "resource_id" },
-  "resource-groups":  { type: "resource_group",      contextField: "resource_id" },
   "audit-trail":      { type: "audit_log",           contextField: "resource_id" },
   "dashboards":       { type: "dashboard",           contextField: "resource_id" },
   "pullrequests":     { type: "pull_request",        contextField: "pr_number" },
