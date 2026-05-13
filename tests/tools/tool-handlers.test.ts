@@ -46,14 +46,14 @@ function makeClient(requestFn?: (...args: unknown[]) => unknown): HarnessClient 
 
 /** Minimal McpServer stub that captures registered tools. */
 function makeMcpServer(elicitAction: "accept" | "decline" | "cancel" = "accept") {
-  const tools = new Map<string, { handler: (...args: unknown[]) => Promise<ToolResult> }>();
+  const tools = new Map<string, { schema: unknown; handler: (...args: unknown[]) => Promise<ToolResult> }>();
   return {
     server: {
       getClientCapabilities: () => ({ elicitation: { form: {} } }),
       elicitInput: vi.fn().mockResolvedValue({ action: elicitAction }),
     },
-    registerTool: vi.fn((name: string, _schema: unknown, handler: (...args: unknown[]) => Promise<ToolResult>) => {
-      tools.set(name, { handler });
+    registerTool: vi.fn((name: string, schema: unknown, handler: (...args: unknown[]) => Promise<ToolResult>) => {
+      tools.set(name, { schema, handler });
     }),
     _tools: tools,
     /** Invoke a registered tool handler by name. */
@@ -62,6 +62,12 @@ function makeMcpServer(elicitAction: "accept" | "decline" | "cancel" = "accept")
       if (!tool) throw new Error(`Tool "${name}" not registered`);
       const defaultExtra = { signal: new AbortController().signal, sendNotification: vi.fn(), _meta: {} };
       return tool.handler(args, { ...defaultExtra, ...extra }) as Promise<ToolResult>;
+    },
+    /** Return the registration schema for assertions about agent-facing metadata. */
+    schema(name: string): unknown {
+      const tool = tools.get(name);
+      if (!tool) throw new Error(`Tool "${name}" not registered`);
+      return tool.schema;
     },
   } as any;
 }
@@ -106,6 +112,31 @@ describe("harness_list", () => {
     expect(result.isError).toBeUndefined();
     const data = parseResult(result) as { items: unknown[]; total: number };
     expect(data.items).toBeDefined();
+  });
+
+  it("documents resource_scope in the registered input schema", () => {
+    const schema = server.schema("harness_list") as {
+      inputSchema: { resource_scope?: { description?: string | null } };
+    };
+    expect(schema.inputSchema.resource_scope?.description).toContain("Scope to query");
+  });
+
+  it("uses account scope from account-level connector URLs instead of config defaults", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { content: [], totalElements: 0 } });
+    client = makeClient(mockRequest);
+    const connectorServer = makeMcpServer();
+    const { registerListTool } = await import("../../src/tools/harness-list.js");
+    registerListTool(connectorServer, registry, client);
+
+    const result = await connectorServer.call("harness_list", {
+      url: "https://app.harness.io/ng/account/test-account/all/settings/connectors",
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
   });
 
   it("propagates user-fixable API errors as errorResult", async () => {
@@ -153,6 +184,13 @@ describe("harness_get", () => {
     expect(data.identifier).toBe("my-pipeline");
   });
 
+  it("documents resource_scope in the registered input schema", () => {
+    const schema = server.schema("harness_get") as {
+      inputSchema: { resource_scope?: { description?: string | null } };
+    };
+    expect(schema.inputSchema.resource_scope?.description).toContain("Scope to query");
+  });
+
   it("propagates 404 as errorResult", async () => {
     mockRequest.mockRejectedValueOnce(new HarnessApiError("Not found", 404));
     const result = await server.call("harness_get", { resource_type: "pipeline", resource_id: "missing" });
@@ -178,6 +216,26 @@ describe("harness_get", () => {
     expect(call.path).toBe("/template/api/templates/helmDeployAction");
     expect(call.params.accountIdentifier).toBe("__GLOBAL_TEMPLATES_ACCOUNT_ID__");
     expect(call.params.versionLabel).toBe("1.0.8");
+  });
+
+  it("does not infer resource_scope for account APIs with org/project UI URLs", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "feature-flags" }));
+    mockRequest = vi.fn().mockResolvedValue({ id: "my_flag" });
+    client = makeClient(mockRequest);
+    const fmeServer = makeMcpServer();
+    const { registerGetTool } = await import("../../src/tools/harness-get.js");
+    registerGetTool(fmeServer, registry, client);
+
+    const result = await fmeServer.call("harness_get", {
+      url: "https://app.harness.io/ng/account/abc123/cf/orgs/default/projects/myProject/feature-flags/my_flag",
+      params: { workspace_id: "workspace-1" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as { path: string; params: Record<string, unknown> };
+    expect(call.path).toBe("/internal/api/v2/splits/ws/workspace-1/my_flag");
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
   });
 });
 
@@ -480,6 +538,31 @@ describe("harness_create", () => {
       accountId: "test-account",
       name: "Engineering",
     });
+  });
+
+  it("does not let URL-derived resource_scope change create scoping", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "account_conn" } });
+    client = makeClient(mockRequest);
+    const connectorServer = makeMcpServer("accept");
+    const { registerCreateTool } = await import("../../src/tools/harness-create.js");
+    registerCreateTool(connectorServer, registry, client);
+
+    const result = await connectorServer.call("harness_create", {
+      resource_type: "connector",
+      url: "https://app.harness.io/ng/account/test-account/all/settings/connectors",
+      body: {
+        identifier: "account_conn",
+        name: "Account Connector",
+        type: "Bitbucket",
+        spec: {},
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(callArgs.params.orgIdentifier).toBe("default");
+    expect(callArgs.params.projectIdentifier).toBe("test-project");
   });
 });
 
@@ -931,6 +1014,20 @@ describe("harness_describe", () => {
     expect(data.operations.length).toBeGreaterThan(0);
   });
 
+  it("describes account/org/project scope support for multi-scope resources", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+    const connectorServer = makeMcpServer();
+    const { registerDescribeTool } = await import("../../src/tools/harness-describe.js");
+    registerDescribeTool(connectorServer, registry);
+
+    const result = await connectorServer.call("harness_describe", { resource_type: "connector" });
+
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as { supportedScopes?: string[]; scopeHint?: string };
+    expect(data.supportedScopes).toEqual(["account", "org", "project"]);
+    expect(data.scopeHint).toContain("resource_scope='account'");
+  });
+
   it("returns error hint for unknown resource_type", async () => {
     const result = await server.call("harness_describe", { resource_type: "nonexistent" });
     expect(result.isError).toBeUndefined(); // describe intentionally doesn't set isError
@@ -991,6 +1088,109 @@ describe("harness_search", () => {
     expect(result.isError).toBeUndefined();
     const data = parseResult(result) as { searched_types: number };
     expect(data.searched_types).toBe(1);
+  });
+
+  it("documents resource_scope in the registered input schema", () => {
+    const schema = server.schema("harness_search") as {
+      inputSchema: { resource_scope?: { description?: string | null } };
+    };
+    expect(schema.inputSchema.resource_scope?.description).toContain("Scope to search");
+  });
+
+  it("passes explicit account resource_scope through to searched resources", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+    mockRequest = vi.fn().mockResolvedValue({
+      data: { content: [{ identifier: "bitbucket" }], totalElements: 1 },
+    });
+    client = makeClient(mockRequest);
+    const searchServer = makeMcpServer();
+    const { registerSearchTool } = await import("../../src/tools/harness-search.js");
+    registerSearchTool(searchServer, registry, client);
+
+    const result = await searchServer.call("harness_search", {
+      query: "bitbucket",
+      resource_types: ["connector"],
+      resource_scope: "account",
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("filters broad scoped searches to resource types that support the requested scope", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines,connectors" }));
+    mockRequest = vi.fn().mockResolvedValue({
+      data: { content: [{ identifier: "github" }], totalElements: 1 },
+    });
+    client = makeClient(mockRequest);
+    const searchServer = makeMcpServer();
+    const { registerSearchTool } = await import("../../src/tools/harness-search.js");
+    registerSearchTool(searchServer, registry, client);
+
+    const result = await searchServer.call("harness_search", {
+      query: "github",
+      resource_scope: "account",
+    });
+
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as { searched_types: number; errors?: Record<string, string> };
+    expect(data.searched_types).toBeGreaterThan(0);
+    expect(data.searched_types).toBeLessThan(registry.getTypesForOperation("list").length);
+    expect(data.errors).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledTimes(data.searched_types);
+    const paths = mockRequest.mock.calls.map((call) => (call[0] as { path: string }).path);
+    expect(paths).toContain("/ng/api/connectors/listV2");
+    expect(paths.some((path) => path.startsWith("/pipeline/api"))).toBe(false);
+  });
+
+  it("uses account resource_scope from account-level URLs during search", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+    mockRequest = vi.fn().mockResolvedValue({
+      data: { content: [{ identifier: "github" }], totalElements: 1 },
+    });
+    client = makeClient(mockRequest);
+    const searchServer = makeMcpServer();
+    const { registerSearchTool } = await import("../../src/tools/harness-search.js");
+    registerSearchTool(searchServer, registry, client);
+
+    const result = await searchServer.call("harness_search", {
+      query: "github",
+      resource_types: ["connector"],
+      url: "https://app.harness.io/ng/account/test-account/all/settings/connectors",
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("filters broad account-level URL searches to compatible resource types", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines,connectors" }));
+    mockRequest = vi.fn().mockResolvedValue({
+      data: { content: [{ identifier: "github" }], totalElements: 1 },
+    });
+    client = makeClient(mockRequest);
+    const searchServer = makeMcpServer();
+    const { registerSearchTool } = await import("../../src/tools/harness-search.js");
+    registerSearchTool(searchServer, registry, client);
+
+    const result = await searchServer.call("harness_search", {
+      query: "github",
+      url: "https://app.harness.io/ng/account/test-account/all/settings/connectors",
+    });
+
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as { searched_types: number; errors?: Record<string, string> };
+    expect(data.searched_types).toBeGreaterThan(0);
+    expect(data.searched_types).toBeLessThan(registry.getTypesForOperation("list").length);
+    expect(data.errors).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledTimes(data.searched_types);
+    const paths = mockRequest.mock.calls.map((call) => (call[0] as { path: string }).path);
+    expect(paths).toContain("/ng/api/connectors/listV2");
+    expect(paths.some((path) => path.startsWith("/pipeline/api"))).toBe(false);
   });
 
   it("gracefully handles search failures for individual types", async () => {

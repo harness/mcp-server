@@ -263,3 +263,63 @@
 - Clarified in README that hosted `https://mcp.harness.io/mcp` is managed and cannot be pointed at Harness0 from Claude/Cursor/Cowork client config; Support must configure hosted MCP for that target environment.
 - Updated MCPB manifest descriptions so `HARNESS_BASE_URL` covers private SaaS hosts such as `https://harness0.harness.io`, not just self-managed installs.
 - Verified with `pnpm build` and `pnpm docs:check`.
+
+## Slack Bug Triage: Account-Scope Resource Queries (2026-05-13)
+- [x] Trace current scope injection and URL parsing for account-level resources
+- [x] Add failing tests for explicit/account URL scope behavior
+- [x] Implement explicit account/org/project scope handling and describe metadata
+- [x] Mark connectors, services, environments, infrastructure, secrets, and templates as multi-scope queryable
+- [x] Run focused tests, typecheck, and broader verification
+- [x] Commit, push, and open/update PR
+
+### Plan
+- Preserve existing default behavior for project-scoped calls with no explicit resource scope so current users with `HARNESS_ORG`/`HARNESS_PROJECT` keep getting default project results.
+- Add a generic `resource_scope` selector accepted by `harness_list` and `harness_get`: `account` omits org/project, `org` injects only org, and `project` injects org+project.
+- Teach account-level Harness URLs (for example `/all/settings/connectors`) to set `resource_scope: "account"` so pasted account URLs do not get config defaults re-injected.
+- Surface multi-scope capability in `harness_describe` so agents know that account-level connectors, services, environments, infrastructure, secrets, and templates can be requested with `resource_scope: "account"`.
+
+### Review
+- Added explicit `resource_scope` support for list/get requests: account scope omits org/project query params, org scope omits project, and project/default behavior continues to use configured defaults.
+- Account-level Harness URLs now propagate `resource_scope: "account"` through `applyUrlDefaults`, preventing account settings URLs from being narrowed by `HARNESS_ORG`/`HARNESS_PROJECT`.
+- Marked connectors, services, environments, infrastructure, secrets, and templates as supporting `account`, `org`, and `project` scopes and surfaced that guidance through `harness_describe`.
+- Kept resource-specific `scope` filters available for APIs such as GitOps cluster links by reserving `resource_scope` for dispatcher-level scoping.
+- Added coverage that each supported entity resource can list at account, org, and project scope, and that `harness_search` forwards explicit and URL-derived `resource_scope`.
+- Limited URL-derived `resource_scope` to known multi-scope entity URLs so account-scoped APIs with org/project UI paths, such as FME feature flags, are not rejected as unsupported project scope.
+- Verified with focused red/green coverage, `pnpm typecheck`, full `pnpm test` (52 files / 1213 tests), and `pnpm build`.
+
+## PR 182 Scope Feedback Follow-up (2026-05-13)
+- [x] Reproduce explicit org/project `resource_scope` fail-open behavior with missing defaults
+- [x] Add regression coverage for broad `harness_search` with scoped mixed registries
+- [x] Add regression coverage that `resource_scope` Zod descriptions survive optional wrapping
+- [x] Fail loudly before dispatch when explicit org/project scope lacks required IDs/defaults
+- [x] Filter broad scoped searches to resource types that support the requested scope
+- [x] Fix `.describe()` ordering on `resource_scope` tool inputs
+- [x] Run focused tests, typecheck, build, and full tests
+- [x] Commit, push, open PR, and reply in Slack
+
+### Plan
+- Keep the fix within the existing scope-selector implementation from PR #182.
+- Validate only explicit `resource_scope` requests; preserve default project-scoped behavior for existing calls.
+- Avoid broad-search noise by skipping predictable unsupported-scope targets before dispatch.
+- Verify with focused registry/tool tests plus typecheck/build.
+
+### Review
+- Confirmed current PR head failed the new regression tests: explicit org/project scopes with missing defaults still dispatched, Zod descriptions were absent, and broad scoped search reported avoidable unsupported-scope errors.
+- Added central explicit-scope validation in `src/registry/index.ts` so org/project scope requires `org_id`/`HARNESS_ORG` and `project_id`/`HARNESS_PROJECT` before request construction.
+- Added `Registry.getSupportedScopes()` and used it in `src/tools/harness-search.ts` to filter broad scoped searches before fan-out.
+- Moved `resource_scope` Zod descriptions after `.optional()` in `src/tools/harness-get.ts`, `src/tools/harness-list.ts`, and `src/tools/harness-search.ts`.
+- Verified with `pnpm test tests/registry/registry.test.ts tests/tools/tool-handlers.test.ts tests/utils/url-parser.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test`.
+
+## PR 185 Scope Review Follow-up (2026-05-13)
+- [x] Verify `scopeOptional` is not equivalent to explicit `resource_scope` support
+- [x] Add regression coverage for `scopeOptional` SCS resources rejecting unsupported explicit org scope
+- [x] Add regression coverage that URL-derived `resource_scope` is opt-in for tools
+- [x] Restrict URL-derived `resource_scope` merging to read tools that expose the field
+- [x] Run focused tests, typecheck, build, and full tests
+- [ ] Commit and push PR branch
+
+### Review
+- Changed explicit `resource_scope` support to come only from `supportedScopes`, not `scopeOptional`.
+- Updated `harness_describe` to surface `supportedScopes` only when the registry declares multi-scope support.
+- Made URL-derived `resource_scope` opt-in in `applyUrlDefaults()` and enabled it only for `harness_list`, `harness_get`, and `harness_search`.
+- Verified with focused scope/url/tool tests, `pnpm typecheck`, `pnpm build`, and full `pnpm test`.
