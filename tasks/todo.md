@@ -270,15 +270,15 @@
 - [x] Add focused registry regression tests
 - [x] Implement scoped template create/update/delete fixes without regressing list/get default scope
 - [x] Run focused tests and typecheck
-- [ ] Commit, push, open PR, and reply in the Slack thread
+- [x] Commit, push, open PR, and reply in the Slack thread
 
 ### Plan
 - Add tests in `tests/registry/registry.test.ts` that cover account/org/project v1 template create/update paths, version-specific delete path, update body pass-through fields, and existing default org/project scoping for template list.
-- Keep `template` as a normal project-scoped resource so list/get/delete still receive default config scope query params.
-- Use per-operation `pathBuilder` only for v1 create/update endpoints that genuinely vary by scope, and update delete to require `version_label` in the path.
+- Resolve template scope explicitly for every operation so callers can target account/org/project scope without configured project defaults overriding their intent.
+- Use path builders to apply the resolved query scope for list/get/delete, dynamic v1 paths for create/update, and `version_label` as the delete path segment.
 
 ### Review
-- Found that the PR's resource-wide `scopeOptional` approach would avoid project-scope errors for v1 template writes, but would also stop existing template list/get/delete calls from using configured default org/project scope.
-- Added per-operation v1 path builders for template create/update so account, org, and project scoped paths resolve correctly without changing default scoping for read operations.
+- Found that the template operations need account/org/project scope support, but explicit org/account intent must not be promoted to project scope when `HARNESS_PROJECT` is configured.
+- Added explicit template scope resolution (`scope_level`, explicit ids, then configured defaults) and path builders so list/get/delete/create/update all apply the resolved scope consistently.
 - Updated template delete to require `version_label` in the path and added pass-through support for optional v1 update metadata fields.
 - Verified with `pnpm test tests/registry/registry.test.ts`, `pnpm test tests/registry/structural-validation.test.ts`, `pnpm typecheck`, and full `pnpm test`.
