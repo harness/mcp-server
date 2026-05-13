@@ -263,3 +263,16 @@
 - Clarified in README that hosted `https://mcp.harness.io/mcp` is managed and cannot be pointed at Harness0 from Claude/Cursor/Cowork client config; Support must configure hosted MCP for that target environment.
 - Updated MCPB manifest descriptions so `HARNESS_BASE_URL` covers private SaaS hosts such as `https://harness0.harness.io`, not just self-managed installs.
 - Verified with `pnpm build` and `pnpm docs:check`.
+
+## Slack PR Review: Template Scoped Paths (2026-05-13)
+- [x] Read the Slack thread and PR #179 context
+- [x] Review template registry path/scope changes against dispatch behavior
+- [ ] Add focused registry regression tests
+- [ ] Implement scoped template create/update/delete fixes without regressing list/get default scope
+- [ ] Run focused tests and typecheck
+- [ ] Commit, push, open PR, and reply in the Slack thread
+
+### Plan
+- Add tests in `tests/registry/registry.test.ts` that cover account/org/project v1 template create/update paths, version-specific delete path, update body pass-through fields, and existing default org/project scoping for template list.
+- Keep `template` as a normal project-scoped resource so list/get/delete still receive default config scope query params.
+- Use per-operation `pathBuilder` only for v1 create/update endpoints that genuinely vary by scope, and update delete to require `version_label` in the path.

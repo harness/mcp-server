@@ -1,5 +1,34 @@
-import type { ToolsetDefinition } from "../types.js";
+import type { PathBuilderConfig, ToolsetDefinition } from "../types.js";
 import { ngExtract, pageExtract } from "../extractors.js";
+
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function requiredString(input: Record<string, unknown>, key: string, context: string): string {
+  const value = nonEmptyString(input[key]);
+  if (!value) {
+    throw new Error(`${key} is required for ${context}`);
+  }
+  return value;
+}
+
+function templateV1ScopePath(input: Record<string, unknown>, config: PathBuilderConfig): string {
+  const org = nonEmptyString(input.org_id) ?? config.HARNESS_ORG;
+  const project = nonEmptyString(input.project_id) ?? config.HARNESS_PROJECT;
+
+  if (project && !org) {
+    throw new Error("org_id is required when project_id is provided for template scope");
+  }
+
+  if (org && project) {
+    return `/v1/orgs/${encodeURIComponent(org)}/projects/${encodeURIComponent(project)}`;
+  }
+  if (org) {
+    return `/v1/orgs/${encodeURIComponent(org)}`;
+  }
+  return "/v1";
+}
 
 export const templatesToolset: ToolsetDefinition = {
   name: "templates",
@@ -62,7 +91,11 @@ export const templatesToolset: ToolsetDefinition = {
           method: "PUT",
           path: "/v1/orgs/{org}/projects/{project}/templates/{template}/versions/{version}",
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
-          pathParams: { org_id: "org", project_id: "project", template_id: "template", version_label: "version" },
+          pathBuilder: (input, config) => {
+            const template = requiredString(input, "template_id", "template update");
+            const version = requiredString(input, "version_label", "template update");
+            return `${templateV1ScopePath(input, config)}/templates/${encodeURIComponent(template)}/versions/${encodeURIComponent(version)}`;
+          },
           bodyBuilder: (input) => {
             const b = (input.body as Record<string, unknown>) ?? {};
             const templateYaml =
@@ -75,6 +108,11 @@ export const templatesToolset: ToolsetDefinition = {
               throw new Error("body.template_yaml (or body.yaml) is required: full template YAML string with your changes");
             }
             const out: Record<string, unknown> = { template_yaml: templateYaml };
+            if (b.identifier !== undefined) out.identifier = b.identifier;
+            if (b.name !== undefined) out.name = b.name;
+            if (b.label !== undefined) out.label = b.label;
+            if (b.yaml_version !== undefined) out.yaml_version = b.yaml_version;
+            if (b.git_details !== undefined) out.git_details = b.git_details;
             if (b.is_stable !== undefined) out.is_stable = b.is_stable;
             if (b.comments !== undefined) out.comments = b.comments;
             return out;
@@ -82,19 +120,24 @@ export const templatesToolset: ToolsetDefinition = {
           bodySchema: {
             description: "Template version update",
             fields: [
-              { name: "template_yaml", type: "yaml", required: true, description: "Full template YAML string with changes" },
+              { name: "template_yaml", type: "yaml", required: true, description: "Full template YAML string with changes (name, identifier, etc. are derived from the YAML)" },
+              { name: "identifier", type: "string", required: false, description: "Template identifier (derived from YAML if omitted)" },
+              { name: "name", type: "string", required: false, description: "Display name (derived from YAML if omitted)" },
+              { name: "label", type: "string", required: false, description: "Version label (derived from YAML if omitted)" },
+              { name: "yaml_version", type: "string", required: false, description: "YAML version (for example, '1')" },
+              { name: "git_details", type: "object", required: false, description: "Git storage details (for example, { store_type: 'INLINE' })" },
               { name: "is_stable", type: "boolean", required: false, description: "Mark as stable version" },
               { name: "comments", type: "string", required: false, description: "Version update comments" },
             ],
           },
           responseExtractor: ngExtract,
-          description: "Update a template version. Provide full template_yaml (required). Optional: is_stable, comments.",
+          description: "Update a template version. Provide full template_yaml (required). Name, identifier, and other metadata are derived from the YAML content. Optional: is_stable, comments.",
         },
         create: {
           method: "POST",
           path: "/v1/orgs/{org}/projects/{project}/templates",
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
-          pathParams: { org_id: "org", project_id: "project" },
+          pathBuilder: (input, config) => `${templateV1ScopePath(input, config)}/templates`,
           bodyBuilder: (input) => {
             const b = (input.body as Record<string, unknown>) ?? {};
             const templateYaml =
@@ -141,13 +184,12 @@ export const templatesToolset: ToolsetDefinition = {
         },
         delete: {
           method: "DELETE",
-          path: "/template/api/templates/{templateIdentifier}",
+          path: "/template/api/templates/{templateIdentifier}/{versionLabel}",
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
-          pathParams: { template_id: "templateIdentifier" },
-          queryParams: { version_label: "versionLabel" },
+          pathParams: { template_id: "templateIdentifier", version_label: "versionLabel" },
           responseExtractor: ngExtract,
           description:
-            "Delete a template. If version_label is provided, only that version is deleted. If omitted, all versions of the template are deleted.",
+            "Delete a specific version of a template. Both template_id and version_label are required.",
         },
       },
     },
