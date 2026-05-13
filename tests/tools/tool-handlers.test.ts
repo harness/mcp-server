@@ -1025,6 +1025,50 @@ describe("harness_search", () => {
     expect(data.searched_types).toBe(1);
   });
 
+  it("passes explicit account resource_scope through to searched resources", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+    mockRequest = vi.fn().mockResolvedValue({
+      data: { content: [{ identifier: "bitbucket" }], totalElements: 1 },
+    });
+    client = makeClient(mockRequest);
+    const searchServer = makeMcpServer();
+    const { registerSearchTool } = await import("../../src/tools/harness-search.js");
+    registerSearchTool(searchServer, registry, client);
+
+    const result = await searchServer.call("harness_search", {
+      query: "bitbucket",
+      resource_types: ["connector"],
+      resource_scope: "account",
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("uses account resource_scope from account-level URLs during search", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+    mockRequest = vi.fn().mockResolvedValue({
+      data: { content: [{ identifier: "github" }], totalElements: 1 },
+    });
+    client = makeClient(mockRequest);
+    const searchServer = makeMcpServer();
+    const { registerSearchTool } = await import("../../src/tools/harness-search.js");
+    registerSearchTool(searchServer, registry, client);
+
+    const result = await searchServer.call("harness_search", {
+      query: "github",
+      resource_types: ["connector"],
+      url: "https://app.harness.io/ng/account/test-account/all/settings/connectors",
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
   it("gracefully handles search failures for individual types", async () => {
     // First call fails, second succeeds
     mockRequest

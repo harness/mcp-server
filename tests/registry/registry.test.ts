@@ -500,6 +500,45 @@ describe("Registry", () => {
       expect(call.params.projectIdentifier).toBe("test-project");
     });
 
+    it.each([
+      ["connectors", "connector"],
+      ["services", "service"],
+      ["environments", "environment"],
+      ["infrastructure", "infrastructure"],
+      ["secrets", "secret"],
+      ["templates", "template"],
+    ])("supports account/org/project list scoping for %s", async (toolset, resourceType) => {
+      const scopedRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: toolset }));
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: { content: [], totalElements: 0 },
+      });
+      const client = makeClient(mockRequest);
+
+      await scopedRegistry.dispatch(client, resourceType, "list", {
+        resource_scope: "account",
+      });
+      await scopedRegistry.dispatch(client, resourceType, "list", {
+        resource_scope: "org",
+        org_id: "org-level",
+      });
+      await scopedRegistry.dispatch(client, resourceType, "list", {
+        resource_scope: "project",
+        org_id: "proj-org",
+        project_id: "proj-level",
+      });
+
+      const accountCall = mockRequest.mock.calls[0][0];
+      const orgCall = mockRequest.mock.calls[1][0];
+      const projectCall = mockRequest.mock.calls[2][0];
+
+      expect(accountCall.params.orgIdentifier).toBeUndefined();
+      expect(accountCall.params.projectIdentifier).toBeUndefined();
+      expect(orgCall.params.orgIdentifier).toBe("org-level");
+      expect(orgCall.params.projectIdentifier).toBeUndefined();
+      expect(projectCall.params.orgIdentifier).toBe("proj-org");
+      expect(projectCall.params.projectIdentifier).toBe("proj-level");
+    });
+
     it("omits default org/project query params for explicit account-scope secret get", async () => {
       const accountRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "secrets" }));
       const mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "acctSecret" } });
