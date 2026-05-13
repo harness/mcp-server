@@ -477,12 +477,58 @@ export class Registry {
     const orgParam = def.scopeParams?.org ?? "orgIdentifier";
     const projectParam = def.scopeParams?.project ?? "projectIdentifier";
     if (def.scopeOptional) {
-      // Dynamic scoping: only inject when caller explicitly provides them
-      if (input.org_id) {
-        params[orgParam] = input.org_id as string;
+      const scope = typeof input.scope === "string" ? input.scope : undefined;
+      if (scope !== undefined && scope !== "account" && scope !== "org" && scope !== "project") {
+        throw new Error('scope must be one of "account", "org", or "project"');
       }
-      if (input.project_id) {
-        params[projectParam] = input.project_id as string;
+      const orgProvided = Object.prototype.hasOwnProperty.call(input, "org_id");
+      const projectProvided = Object.prototype.hasOwnProperty.call(input, "project_id");
+      const accountProvided = Boolean(input.account_id);
+      const global = input.global === true || input.global === "true";
+
+      if (
+        def.scopeOptionalDefaultFromConfig &&
+        !global &&
+        !accountProvided &&
+        scope !== "account" &&
+        !orgProvided &&
+        !projectProvided
+      ) {
+        if (def.scope === "project" || def.scope === "org") {
+          if (this.config.HARNESS_ORG) {
+            params[orgParam] = this.config.HARNESS_ORG;
+          }
+        }
+        if (def.scope === "project") {
+          if (this.config.HARNESS_PROJECT) {
+            params[projectParam] = this.config.HARNESS_PROJECT;
+          }
+        }
+      } else if (!global && scope === "project") {
+        const org = (input.org_id as string | undefined) ?? this.config.HARNESS_ORG;
+        const project = (input.project_id as string | undefined) ?? this.config.HARNESS_PROJECT;
+        if (org) {
+          params[orgParam] = org;
+        }
+        if (project) {
+          params[projectParam] = project;
+        }
+      } else if (!global && scope === "org") {
+        const org = (input.org_id as string | undefined) ?? this.config.HARNESS_ORG;
+        if (org) {
+          params[orgParam] = org;
+        }
+      } else {
+        // Dynamic scoping: only inject when caller explicitly provides them
+        if (def.scopeOptionalDefaultFromConfig && input.project_id && !input.org_id && this.config.HARNESS_ORG) {
+          params[orgParam] = this.config.HARNESS_ORG;
+        }
+        if (input.org_id) {
+          params[orgParam] = input.org_id as string;
+        }
+        if (input.project_id) {
+          params[projectParam] = input.project_id as string;
+        }
       }
     } else {
       // Standard scoping: always inject based on scope level, falling back to config defaults

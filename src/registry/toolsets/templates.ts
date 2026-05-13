@@ -1,26 +1,112 @@
 import type { ToolsetDefinition, PathBuilderConfig } from "../types.js";
 import { ngExtract, pageExtract } from "../extractors.js";
 
+type TemplateScope = "account" | "org" | "project";
+
+function readString(input: Record<string, unknown>, key: string): string | undefined {
+  const value = input[key];
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function readTemplateScope(input: Record<string, unknown>): TemplateScope | undefined {
+  const value = input.scope;
+  if (value === undefined) return undefined;
+  if (value === "account" || value === "org" || value === "project") return value;
+  throw new Error('template scope must be one of "account", "org", or "project"');
+}
+
+function hasInputField(input: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(input, key);
+}
+
+function resolveTemplateScope(input: Record<string, unknown>, config: PathBuilderConfig): {
+  level: TemplateScope;
+  org?: string;
+  project?: string;
+} {
+  const explicitScope = readTemplateScope(input);
+  const explicitOrg = readString(input, "org_id");
+  const explicitProject = readString(input, "project_id");
+
+  if (explicitScope === "account" || input.global === true || input.global === "true") {
+    return { level: "account" };
+  }
+
+  if (explicitScope === "org") {
+    return { level: "org", org: explicitOrg ?? config.HARNESS_ORG };
+  }
+
+  if (explicitScope === "project") {
+    return {
+      level: "project",
+      org: explicitOrg ?? config.HARNESS_ORG,
+      project: explicitProject ?? config.HARNESS_PROJECT,
+    };
+  }
+
+  const orgProvided = hasInputField(input, "org_id");
+  const projectProvided = hasInputField(input, "project_id");
+  if (!orgProvided && !projectProvided) {
+    if (config.HARNESS_ORG && config.HARNESS_PROJECT) {
+      return { level: "project", org: config.HARNESS_ORG, project: config.HARNESS_PROJECT };
+    }
+    if (config.HARNESS_ORG) {
+      return { level: "org", org: config.HARNESS_ORG };
+    }
+    return { level: "account" };
+  }
+
+  if (explicitProject) {
+    return { level: "project", org: explicitOrg ?? config.HARNESS_ORG, project: explicitProject };
+  }
+
+  if (!explicitOrg) {
+    return { level: "account" };
+  }
+
+  return { level: "org", org: explicitOrg };
+}
+
+function requireTemplateScopePart(value: string | undefined, name: string, level: TemplateScope): string {
+  if (value) return value;
+  throw new Error(`${name} is required for ${level}-scoped template operations`);
+}
+
 /**
  * Builds a scope-aware v1 API base path for templates.
- * Uses ONLY explicit input fields (org_id, project_id) — never falls back to
- * config defaults. This lets callers target org/account scope even when
- * HARNESS_PROJECT is configured. The dispatcher still handles default scope
- * injection for NG endpoints (list/get/delete) via query params.
+ * Defaults to configured project/org scope when callers omit scope fields, while
+ * still allowing explicit account/org scope via params.scope or empty org_id.
  */
-function templateV1BasePath(input: Record<string, unknown>, _config: PathBuilderConfig): string {
-  const org = input.org_id as string | undefined;
-  const project = input.project_id as string | undefined;
+function templateV1BasePath(input: Record<string, unknown>, config: PathBuilderConfig): string {
+  const scope = resolveTemplateScope(input, config);
   const templateId = input.template_id as string;
   if (!templateId) throw new Error("template_id is required");
 
-  if (org && project) {
+  if (scope.level === "project") {
+    const org = requireTemplateScopePart(scope.org, "org_id or HARNESS_ORG", scope.level);
+    const project = requireTemplateScopePart(scope.project, "project_id or HARNESS_PROJECT", scope.level);
     return `/v1/orgs/${encodeURIComponent(org)}/projects/${encodeURIComponent(project)}/templates/${encodeURIComponent(templateId)}`;
   }
-  if (org) {
+  if (scope.level === "org") {
+    const org = requireTemplateScopePart(scope.org, "org_id or HARNESS_ORG", scope.level);
     return `/v1/orgs/${encodeURIComponent(org)}/templates/${encodeURIComponent(templateId)}`;
   }
   return `/v1/templates/${encodeURIComponent(templateId)}`;
+}
+
+function templateV1CreatePath(input: Record<string, unknown>, config: PathBuilderConfig): string {
+  const scope = resolveTemplateScope(input, config);
+
+  if (scope.level === "project") {
+    const org = requireTemplateScopePart(scope.org, "org_id or HARNESS_ORG", scope.level);
+    const project = requireTemplateScopePart(scope.project, "project_id or HARNESS_PROJECT", scope.level);
+    return `/v1/orgs/${encodeURIComponent(org)}/projects/${encodeURIComponent(project)}/templates`;
+  }
+  if (scope.level === "org") {
+    const org = requireTemplateScopePart(scope.org, "org_id or HARNESS_ORG", scope.level);
+    return `/v1/orgs/${encodeURIComponent(org)}/templates`;
+  }
+  return "/v1/templates";
 }
 
 /**
@@ -50,11 +136,13 @@ export const templatesToolset: ToolsetDefinition = {
       toolset: "templates",
       scope: "project",
       scopeOptional: true,
+      scopeOptionalDefaultFromConfig: true,
       identifierFields: ["template_id"],
       listFilterFields: [
         { name: "search_term", description: "Filter templates by name or keyword" },
         { name: "template_type", description: "Template entity type", enum: ["Pipeline", "Stage", "Step", "CustomDeployment", "MonitoredService", "SecretManager", "ArtifactSource"] },
         { name: "template_list_type", description: "Template list type", enum: ["Stable", "LastUpdated", "All"] },
+        { name: "scope", description: "Template scope. Omit to use configured org/project defaults; use account or org to target those scopes explicitly.", enum: ["account", "org", "project"] },
         { name: "global", description: "When true, accesses global templates (list: passes isGlobal=true; get: forces accountIdentifier to __GLOBAL_TEMPLATES_ACCOUNT_ID__)", type: "boolean" },
         { name: "metadata_only", description: "When true, fetches only template metadata (name, identifier, type, tags) via the list-metadata endpoint — faster and lighter than the full list", type: "boolean" },
       ],
@@ -146,17 +234,7 @@ export const templatesToolset: ToolsetDefinition = {
           method: "POST",
           path: "/v1/orgs/{org}/projects/{project}/templates",
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
-          pathBuilder: (input, _config) => {
-            const org = input.org_id as string | undefined;
-            const project = input.project_id as string | undefined;
-            if (org && project) {
-              return `/v1/orgs/${encodeURIComponent(org)}/projects/${encodeURIComponent(project)}/templates`;
-            }
-            if (org) {
-              return `/v1/orgs/${encodeURIComponent(org)}/templates`;
-            }
-            return "/v1/templates";
-          },
+          pathBuilder: (input, config) => templateV1CreatePath(input, config),
           bodyBuilder: (input) => {
             const b = (input.body as Record<string, unknown>) ?? {};
             const templateYaml =

@@ -322,6 +322,13 @@ export interface ResourceDefinition {
    */
   scopeOptional?: boolean;
   /**
+   * For scopeOptional resources, use configured org/project defaults only when
+   * the caller omits all scope selectors. Explicit scope/org/project input still
+   * wins, so account- and org-scoped calls remain possible with project defaults
+   * configured.
+   */
+  scopeOptionalDefaultFromConfig?: boolean;
+  /**
    * Override default scope query parameter names.
    * Standard NG API uses orgIdentifier / projectIdentifier.
    * Some APIs (e.g., Chaos) use organizationIdentifier instead.

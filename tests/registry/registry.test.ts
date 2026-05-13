@@ -542,6 +542,70 @@ describe("Registry", () => {
         accountIdentifier: "__GLOBAL_TEMPLATES_ACCOUNT_ID__",
         versionLabel: "1.0.8",
       });
+      expect(call.params).not.toHaveProperty("orgIdentifier");
+      expect(call.params).not.toHaveProperty("projectIdentifier");
+    });
+
+    it("uses configured project scope for template create when scope params are omitted", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "deploy_step" } });
+      const client = makeClient(mockRequest);
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+
+      await registry.dispatch(client, "template", "create", {
+        body: {
+          template_yaml: "template:\n  name: Deploy Step\n  identifier: deploy_step\n",
+          identifier: "deploy_step",
+          name: "Deploy Step",
+        },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("POST");
+      expect(call.path).toBe("/v1/orgs/default/projects/test-project/templates");
+      expect(call.params).toMatchObject({
+        orgIdentifier: "default",
+        projectIdentifier: "test-project",
+      });
+    });
+
+    it("keeps explicit account scope for template create even when config defaults exist", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "account_step" } });
+      const client = makeClient(mockRequest);
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+
+      await registry.dispatch(client, "template", "create", {
+        scope: "account",
+        body: {
+          template_yaml: "template:\n  name: Account Step\n  identifier: account_step\n",
+          identifier: "account_step",
+          name: "Account Step",
+        },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("POST");
+      expect(call.path).toBe("/v1/templates");
+      expect(call.params).not.toHaveProperty("orgIdentifier");
+      expect(call.params).not.toHaveProperty("projectIdentifier");
+    });
+
+    it("uses configured project scope for template delete when scope params are omitted", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: true });
+      const client = makeClient(mockRequest);
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+
+      await registry.dispatch(client, "template", "delete", {
+        template_id: "deploy_step",
+        version_label: "v2",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("DELETE");
+      expect(call.path).toBe("/template/api/templates/deploy_step/v2");
+      expect(call.params).toMatchObject({
+        orgIdentifier: "default",
+        projectIdentifier: "test-project",
+      });
     });
   });
 
