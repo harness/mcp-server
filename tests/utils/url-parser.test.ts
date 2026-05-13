@@ -250,6 +250,18 @@ describe("applyUrlDefaults", () => {
     expect(result.resource_scope).toBe("account");
   });
 
+  it("does not inject resource_scope for template URLs (scopeOptional, no supportedScopes)", () => {
+    const result = applyUrlDefaults(
+      {},
+      "https://app.harness.io/ng/account/abc/all/settings/templates/my-template",
+      { includeResourceScope: true },
+    );
+
+    expect(result.resource_type).toBe("template");
+    expect(result.resource_id).toBe("my-template");
+    expect(result.resource_scope).toBeUndefined();
+  });
+
   it("returns args unchanged when url is undefined", () => {
     const args = { resource_type: "pipeline" };
     const result = applyUrlDefaults(args as Record<string, unknown>, undefined);
