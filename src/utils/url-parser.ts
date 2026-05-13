@@ -217,7 +217,6 @@ export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
 
 /** Fields that applyUrlDefaults will merge */
 const MERGEABLE_FIELDS: (keyof ParsedHarnessUrl)[] = [
-  "resource_scope",
   "org_id",
   "project_id",
   "module",
@@ -237,6 +236,10 @@ const MERGEABLE_FIELDS: (keyof ParsedHarnessUrl)[] = [
   "stage_execution_id",
 ];
 
+export interface ApplyUrlDefaultsOptions {
+  includeResourceScope?: boolean;
+}
+
 /**
  * If `url` is provided, parse it and merge extracted values into args as defaults.
  * Explicit args always take precedence over URL-derived values.
@@ -245,6 +248,7 @@ const MERGEABLE_FIELDS: (keyof ParsedHarnessUrl)[] = [
 export function applyUrlDefaults(
   args: Record<string, unknown>,
   url?: unknown,
+  options: ApplyUrlDefaultsOptions = {},
 ): Record<string, unknown> {
   if (!url || typeof url !== "string") return args;
 
@@ -257,6 +261,13 @@ export function applyUrlDefaults(
   }
 
   const merged = { ...args };
+  if (
+    options.includeResourceScope &&
+    (merged.resource_scope === undefined || merged.resource_scope === "") &&
+    parsed.resource_scope !== undefined
+  ) {
+    merged.resource_scope = parsed.resource_scope;
+  }
   for (const field of MERGEABLE_FIELDS) {
     if ((merged[field] === undefined || merged[field] === "") && parsed[field] !== undefined) {
       merged[field] = parsed[field];

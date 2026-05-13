@@ -28,9 +28,8 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
       if (args.resource_type) {
         try {
           const def = registry.getResource(args.resource_type);
-          const supportedScopes = def.supportedScopes ?? (
-            def.scopeOptional ? ["account", "org", "project"] : undefined
-          );
+          const resourceScopes = registry.getSupportedScopes(args.resource_type);
+          const supportedScopes = resourceScopes.length > 1 ? resourceScopes : undefined;
           return jsonResult({
             resource_type: def.resourceType,
             displayName: def.displayName,

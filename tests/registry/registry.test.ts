@@ -249,6 +249,22 @@ describe("Registry", () => {
 
       expect(connector?.supportedScopes).toEqual(["account", "org", "project"]);
     });
+
+    it("does not infer explicit resource_scope support from scopeOptional", () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "scs" }));
+      const desc = registry.describe() as {
+        toolsets: {
+          scs: {
+            resources: Array<{ resource_type: string; supportedScopes?: string[] }>;
+          };
+        };
+      };
+
+      const vulnerability = desc.toolsets.scs.resources.find((r) => r.resource_type === "scs_component_vulnerability");
+
+      expect(vulnerability?.supportedScopes).toBeUndefined();
+      expect(registry.getSupportedScopes("scs_component_vulnerability")).toEqual(["project"]);
+    });
   });
 
   describe("getAllFilterFields", () => {
@@ -627,6 +643,19 @@ describe("Registry", () => {
         environmentIdentifier: "prod",
         scope: "ACCOUNT",
       });
+    });
+
+    it("rejects unsupported explicit org scope for scopeOptional resources", async () => {
+      const scsRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "scs" }));
+      const client = makeClient();
+
+      await expect(
+        scsRegistry.dispatch(client, "scs_component_vulnerability", "list", {
+          resource_scope: "org",
+          org_id: "default",
+          purl: "pkg:npm/express@4.18.0",
+        }),
+      ).rejects.toThrow(/scs_component_vulnerability does not support org scope/);
     });
 
     it("builds correct path with path params for a get operation", async () => {

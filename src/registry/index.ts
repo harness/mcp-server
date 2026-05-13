@@ -62,9 +62,6 @@ function getSupportedScopes(def: ResourceDefinition): readonly ResourceScope[] {
   if (def.supportedScopes?.length) {
     return def.supportedScopes;
   }
-  if (def.scopeOptional) {
-    return RESOURCE_SCOPES;
-  }
   return [def.scope];
 }
 

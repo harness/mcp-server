@@ -35,7 +35,7 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
     async (args) => {
       try {
         const { params, ...rest } = args;
-        const input = applyUrlDefaults(rest as Record<string, unknown>, args.url);
+        const input = applyUrlDefaults(rest as Record<string, unknown>, args.url, { includeResourceScope: true });
         const coercedParams = coerceRecord(params);
         if (coercedParams) Object.assign(input, coercedParams);
         const resourceType = asString(input.resource_type);

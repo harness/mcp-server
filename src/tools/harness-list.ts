@@ -51,7 +51,7 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
     async (args) => {
       try {
         const { params, filters, ...rest } = args;
-        const input = applyUrlDefaults(rest as Record<string, unknown>, args.url);
+        const input = applyUrlDefaults(rest as Record<string, unknown>, args.url, { includeResourceScope: true });
         // Spread caller-supplied params (path identifiers) and filters into the input
         // Use coerceRecord to handle LLMs that serialize objects as JSON strings
         const coercedParams = coerceRecord(params);

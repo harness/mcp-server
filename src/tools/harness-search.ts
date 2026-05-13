@@ -69,7 +69,7 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
     async (args, extra) => {
       try {
         const signal = extra.signal;
-        const mergedArgs = applyUrlDefaults(args as Record<string, unknown>, args.url);
+        const mergedArgs = applyUrlDefaults(args as Record<string, unknown>, args.url, { includeResourceScope: true });
         const requestedScope = asResourceScope(mergedArgs.resource_scope);
         const hasExplicitResourceTypes = (args.resource_types?.length ?? 0) > 0;
         // Determine which resource types to search

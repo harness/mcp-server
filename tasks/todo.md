@@ -295,7 +295,7 @@
 - [x] Filter broad scoped searches to resource types that support the requested scope
 - [x] Fix `.describe()` ordering on `resource_scope` tool inputs
 - [x] Run focused tests, typecheck, build, and full tests
-- [ ] Commit, push, open PR, and reply in Slack
+- [x] Commit, push, open PR, and reply in Slack
 
 ### Plan
 - Keep the fix within the existing scope-selector implementation from PR #182.
@@ -309,3 +309,17 @@
 - Added `Registry.getSupportedScopes()` and used it in `src/tools/harness-search.ts` to filter broad scoped searches before fan-out.
 - Moved `resource_scope` Zod descriptions after `.optional()` in `src/tools/harness-get.ts`, `src/tools/harness-list.ts`, and `src/tools/harness-search.ts`.
 - Verified with `pnpm test tests/registry/registry.test.ts tests/tools/tool-handlers.test.ts tests/utils/url-parser.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test`.
+
+## PR 185 Scope Review Follow-up (2026-05-13)
+- [x] Verify `scopeOptional` is not equivalent to explicit `resource_scope` support
+- [x] Add regression coverage for `scopeOptional` SCS resources rejecting unsupported explicit org scope
+- [x] Add regression coverage that URL-derived `resource_scope` is opt-in for tools
+- [x] Restrict URL-derived `resource_scope` merging to read tools that expose the field
+- [x] Run focused tests, typecheck, build, and full tests
+- [ ] Commit and push PR branch
+
+### Review
+- Changed explicit `resource_scope` support to come only from `supportedScopes`, not `scopeOptional`.
+- Updated `harness_describe` to surface `supportedScopes` only when the registry declares multi-scope support.
+- Made URL-derived `resource_scope` opt-in in `applyUrlDefaults()` and enabled it only for `harness_list`, `harness_get`, and `harness_search`.
+- Verified with focused scope/url/tool tests, `pnpm typecheck`, `pnpm build`, and full `pnpm test`.

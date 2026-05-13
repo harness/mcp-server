@@ -229,6 +229,27 @@ describe("applyUrlDefaults", () => {
     expect(result.project_id).toBe("urlProject"); // filled from URL
   });
 
+  it("does not merge URL-derived resource_scope unless requested by the caller", () => {
+    const result = applyUrlDefaults(
+      {},
+      "https://app.harness.io/ng/account/abc/all/settings/connectors/test",
+    );
+
+    expect(result.resource_type).toBe("connector");
+    expect(result.resource_id).toBe("test");
+    expect(result.resource_scope).toBeUndefined();
+  });
+
+  it("can opt into URL-derived resource_scope for read tools", () => {
+    const result = applyUrlDefaults(
+      {},
+      "https://app.harness.io/ng/account/abc/all/settings/connectors/test",
+      { includeResourceScope: true },
+    );
+
+    expect(result.resource_scope).toBe("account");
+  });
+
   it("returns args unchanged when url is undefined", () => {
     const args = { resource_type: "pipeline" };
     const result = applyUrlDefaults(args as Record<string, unknown>, undefined);

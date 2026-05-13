@@ -539,6 +539,31 @@ describe("harness_create", () => {
       name: "Engineering",
     });
   });
+
+  it("does not let URL-derived resource_scope change create scoping", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "account_conn" } });
+    client = makeClient(mockRequest);
+    const connectorServer = makeMcpServer("accept");
+    const { registerCreateTool } = await import("../../src/tools/harness-create.js");
+    registerCreateTool(connectorServer, registry, client);
+
+    const result = await connectorServer.call("harness_create", {
+      resource_type: "connector",
+      url: "https://app.harness.io/ng/account/test-account/all/settings/connectors",
+      body: {
+        identifier: "account_conn",
+        name: "Account Connector",
+        type: "Bitbucket",
+        spec: {},
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(callArgs.params.orgIdentifier).toBe("default");
+    expect(callArgs.params.projectIdentifier).toBe("test-project");
+  });
 });
 
 describe("harness_update", () => {
