@@ -39,6 +39,14 @@ const EXTERNAL_STORAGE_HOSTS = new Set([
 /** S3-style host pattern: bucket.s3.amazonaws.com or bucket.s3.region.amazonaws.com */
 const S3_BUCKET_HOST_RE = /^[a-z0-9][a-z0-9.-]*\.s3([.-][a-z0-9-]+)?\.amazonaws\.com$/i;
 
+function safeParseUrl(raw: string): URL | undefined {
+  try {
+    return new URL(raw);
+  } catch {
+    return undefined;
+  }
+}
+
 function isExternalStorageHost(host: string): boolean {
   const h = host.toLowerCase();
   if (EXTERNAL_STORAGE_HOSTS.has(h)) return true;
@@ -48,28 +56,16 @@ function isExternalStorageHost(host: string): boolean {
 }
 
 /**
- * Resolve the final download URL for a blob link.
- * - External storage (GCS, S3): use as-is — blob is served directly.
- * - Harness-hosted: rewrite host to configured base URL when self-managed.
+ * Detect pre-signed URLs that should be fetched directly without auth.
+ * GCS and S3 signed URLs carry their credentials in query params — adding
+ * extra auth headers or rewriting the host invalidates the signature.
  */
-function resolveDownloadUrl(blobLink: string, harnessBaseUrl: string): string {
-  let url: URL;
-  try {
-    url = new URL(blobLink);
-  } catch {
-    return blobLink;
-  }
-  if (isExternalStorageHost(url.host)) {
-    return blobLink;
-  }
-  const base = new URL(harnessBaseUrl.replace(/\/$/, "") + "/");
-  if (url.host === base.host) {
-    return blobLink;
-  }
-  url.host = base.host;
-  url.protocol = base.protocol;
-  return url.toString();
+function isPresignedUrl(url: URL): boolean {
+  if (url.searchParams.has("X-Goog-Signature")) return true;
+  if (url.searchParams.has("X-Amz-Signature")) return true;
+  return false;
 }
+
 
 // ─── ANSI / log parsing helpers ─────────────────────────────────────────────
 
@@ -312,6 +308,53 @@ function decompressBlob(buf: Buffer): string {
   return buf.toString("utf-8");
 }
 
+// ─── Blob download ──────────────────────────────────────────────────────────
+
+const LOG_SERVICE_GATEWAY_PREFIX = "/gateway/log-service";
+
+/**
+ * Download the blob content from the link returned by log-service.
+ *
+ * External storage URLs (GCS, S3) are pre-signed and fetched directly.
+ * Harness-hosted URLs are routed through the client so that auth headers
+ * (PAT, service JWT, or log-service token) are injected by the client or
+ * any proxy installed on it (e.g. mcpServerInternal's service routing).
+ */
+async function downloadBlobContent(
+  client: HarnessClient,
+  blobLink: string,
+  prefix: string,
+  signal: AbortSignal,
+): Promise<Response> {
+  const blobUrl = safeParseUrl(blobLink);
+
+  if (blobUrl && (isExternalStorageHost(blobUrl.host) || isPresignedUrl(blobUrl))) {
+    log.debug("Downloading log blob (direct)", { prefix, url: blobLink.slice(0, 80) });
+    try {
+      return await fetch(blobLink, { signal });
+    } catch (err) {
+      const cause = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+      throw new Error(`Log download fetch failed for ${blobUrl.host}: ${cause}`);
+    }
+  }
+
+  const rawPath = blobUrl ? blobUrl.pathname + blobUrl.search : blobLink;
+  const downloadPath = rawPath.startsWith(LOG_SERVICE_GATEWAY_PREFIX)
+    ? rawPath
+    : `${LOG_SERVICE_GATEWAY_PREFIX}${rawPath}`;
+  log.debug("Downloading log blob (client)", { prefix, path: downloadPath.slice(0, 80) });
+  try {
+    return await client.requestStream({
+      method: "GET",
+      path: downloadPath,
+      signal,
+    });
+  } catch (err) {
+    const cause = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    throw new Error(`Log download fetch failed for ${blobUrl?.host ?? "harness"}: ${cause}`);
+  }
+}
+
 // ─── Public API ─────────────────────────────────────────────────────────────
 
 /**
@@ -360,23 +403,11 @@ export async function resolveLogContent(
   }
 
   // Step 3: Download the zip/gzip from the signed URL
-  // External storage (GCS, S3): use as-is. Harness-hosted: rewrite host when self-managed.
-  const downloadUrl = resolveDownloadUrl(blob.link, client.baseURL);
-  log.debug("Downloading log blob", { prefix, url: downloadUrl.slice(0, 80) });
   const downloadSignal = signal
     ? AbortSignal.any([signal, AbortSignal.timeout(DEFAULT_DOWNLOAD_TIMEOUT_MS)])
     : AbortSignal.timeout(DEFAULT_DOWNLOAD_TIMEOUT_MS);
 
-  let response: Response;
-  try {
-    response = await fetch(downloadUrl, { signal: downloadSignal });
-  } catch (err) {
-    const cause =
-      err instanceof Error
-        ? `${err.name}: ${err.message}`
-        : String(err);
-    throw new Error(`Log download fetch failed for ${new URL(downloadUrl).host}: ${cause}`);
-  }
+  const response = await downloadBlobContent(client, blob.link, prefix, downloadSignal);
   if (!response.ok) {
     const errBody = await response.text().catch(() => "");
     throw new Error(`Log download failed: HTTP ${response.status} — ${errBody.slice(0, 200)}`);

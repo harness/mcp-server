@@ -5,10 +5,11 @@ import type { HarnessClient } from "../../src/client/harness-client.js";
 
 function makeClient(
   requestFn: (...args: unknown[]) => unknown,
-  overrides?: Partial<Pick<HarnessClient, "baseURL">>,
+  overrides?: Partial<Pick<HarnessClient, "baseURL" | "requestStream">>,
 ): HarnessClient {
   return {
     request: requestFn,
+    requestStream: vi.fn().mockResolvedValue(new Response("", { status: 200 })),
     account: "test-account",
     baseURL: "https://custom.harness.example/gateway",
     ...overrides,
@@ -49,8 +50,11 @@ afterEach(() => {
 describe("resolveLogContent", () => {
   it("downloads and returns plain text log content", async () => {
     const logText = "line 1\nline 2\nline 3";
-    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link: "https://logs.example.com/blob" }));
-    fetchSpy.mockResolvedValue(new Response(logText, { status: 200 }));
+    const streamFn = vi.fn().mockResolvedValue(new Response(logText, { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: "https://logs.example.com/blob" }),
+      { requestStream: streamFn },
+    );
 
     const result = await resolveLogContent(client, "acct/pipeline/p1/1/-exec1");
     expect(result).toContain("line 1");
@@ -64,8 +68,8 @@ describe("resolveLogContent", () => {
       .mockResolvedValueOnce({ status: "queued", link: null })
       .mockResolvedValueOnce({ status: "success", link: "https://logs.example.com/blob" });
 
-    const client = makeClient(requestFn);
-    fetchSpy.mockResolvedValue(new Response("log output", { status: 200 }));
+    const streamFn = vi.fn().mockResolvedValue(new Response("log output", { status: 200 }));
+    const client = makeClient(requestFn, { requestStream: streamFn });
 
     const result = await resolveLogContent(client, "prefix", { pollIntervalMs: 10 });
     expect(result).toContain("log output");
@@ -83,8 +87,11 @@ describe("resolveLogContent", () => {
   it("handles gzip-compressed log content", async () => {
     const logText = "gzipped log line 1\ngzipped log line 2";
     const gzipped = gzipSync(Buffer.from(logText));
-    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link: "https://logs.example.com/gz" }));
-    fetchSpy.mockResolvedValue(new Response(gzipped, { status: 200 }));
+    const streamFn = vi.fn().mockResolvedValue(new Response(gzipped, { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: "https://logs.example.com/gz" }),
+      { requestStream: streamFn },
+    );
 
     const result = await resolveLogContent(client, "prefix");
     expect(result).toContain("gzipped log line 1");
@@ -93,8 +100,11 @@ describe("resolveLogContent", () => {
 
   it("handles ZIP archive with log files", async () => {
     const zipBuf = buildZip("logs.txt", "zip entry log content");
-    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link: "https://logs.example.com/zip" }));
-    fetchSpy.mockResolvedValue(new Response(zipBuf, { status: 200 }));
+    const streamFn = vi.fn().mockResolvedValue(new Response(zipBuf, { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: "https://logs.example.com/zip" }),
+      { requestStream: streamFn },
+    );
 
     const result = await resolveLogContent(client, "prefix");
     expect(result).toContain("zip entry log content");
@@ -106,27 +116,35 @@ describe("resolveLogContent", () => {
       '{"level":"ERROR","time":"2026-03-09T17:01:45Z","out":"BUILD FAILURE"}',
     ].join("\n");
 
-    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link: "https://logs.example.com/json" }));
-    fetchSpy.mockResolvedValue(new Response(jsonLogs, { status: 200 }));
+    const streamFn = vi.fn().mockResolvedValue(new Response(jsonLogs, { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: "https://logs.example.com/json" }),
+      { requestStream: streamFn },
+    );
 
     const result = await resolveLogContent(client, "prefix");
     expect(result).toContain("mvn clean install");
     expect(result).toContain("BUILD FAILURE");
-    // ANSI codes should be stripped
     expect(result).not.toContain("\x1b[");
   });
 
   it("returns (empty log output) for empty content", async () => {
-    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link: "https://logs.example.com/empty" }));
-    fetchSpy.mockResolvedValue(new Response("", { status: 200 }));
+    const streamFn = vi.fn().mockResolvedValue(new Response("", { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: "https://logs.example.com/empty" }),
+      { requestStream: streamFn },
+    );
 
     const result = await resolveLogContent(client, "prefix");
     expect(result).toBe("(empty log output)");
   });
 
   it("throws on download failure", async () => {
-    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link: "https://logs.example.com/fail" }));
-    fetchSpy.mockResolvedValue(new Response("Not Found", { status: 404 }));
+    const streamFn = vi.fn().mockResolvedValue(new Response("Not Found", { status: 404 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: "https://logs.example.com/fail" }),
+      { requestStream: streamFn },
+    );
 
     await expect(resolveLogContent(client, "prefix")).rejects.toThrow(/HTTP 404/);
   });
@@ -142,30 +160,35 @@ describe("resolveLogContent", () => {
     expect(fetchSpy).toHaveBeenCalledWith(blobLink, expect.any(Object));
   });
 
-  it("rewrites Harness-hosted blob URL to configured base when self-managed", async () => {
+  it("routes non-external blob URL through client.requestStream with gateway prefix", async () => {
     const blobLink = "https://harness0.harness.io/some/blob/path?token=abc";
+    const streamFn = vi.fn().mockResolvedValue(new Response('{"out":"log line 1"}', { status: 200 }));
     const client = makeClient(
       vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
-      { baseURL: "https://myhost.harness.io/gateway" },
+      { baseURL: "https://myhost.harness.io/gateway", requestStream: streamFn },
     );
-    fetchSpy.mockResolvedValue(new Response('{"out":"log line 1"}', { status: 200 }));
 
     const result = await resolveLogContent(client, "prefix");
 
     expect(result).toContain("log line 1");
-    expect(fetchSpy).toHaveBeenCalledWith(
-      "https://myhost.harness.io/some/blob/path?token=abc",
-      expect.any(Object),
+    expect(streamFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "GET",
+        path: "/gateway/log-service/some/blob/path?token=abc",
+      }),
     );
   });
 
   it("throws when log file exceeds max size", async () => {
-    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link: "https://logs.example.com/big" }));
     const bigContent = "x".repeat(1024);
-    fetchSpy.mockResolvedValue(new Response(bigContent, {
+    const streamFn = vi.fn().mockResolvedValue(new Response(bigContent, {
       status: 200,
       headers: { "content-length": String(20 * 1024 * 1024) },
     }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: "https://logs.example.com/big" }),
+      { requestStream: streamFn },
+    );
 
     await expect(
       resolveLogContent(client, "prefix", { maxLogSizeBytes: 1024 }),
