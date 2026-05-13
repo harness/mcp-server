@@ -270,9 +270,15 @@
 - [x] Add failing regression coverage for removing the dedicated `resource_group` route
 - [x] Remove the dedicated ResourceGroup route and URL shortcut metadata
 - [x] Refresh generated docs and remove stale ResourceGroup testing docs
-- [ ] Run focused tests, docs check, typecheck, build, commit, push, open PR, and reply in Slack
+- [x] Run focused tests, docs check, typecheck, build, full tests, commit, push, open PR, and reply in Slack
 
 ### Plan
 - Treat the internal Harness Code PR link as inaccessible from this GitHub checkout; use the explicit Slack request as the source requirement.
 - Remove only the dedicated `resource_group` resource from the access-control toolset, not RBAC payload/filter fields like `resourceGroupIdentifier`.
 - Keep the change guarded by tests so `resource_group` cannot reappear in registry defaults or URL-derived tool inputs.
+
+### Review
+- Removed the dedicated `resource_group` access-control resource from the registry, reducing default registry discovery from 169 to 168 resource types.
+- Removed the `/resource-groups` URL shortcut mapping so pasted ResourceGroup UI URLs no longer populate a removed `resource_type`.
+- Updated access-control audit prompt guidance and public docs to avoid advertising the removed route while retaining RBAC resource group identifier fields.
+- Verified with focused registry/url-parser tests, `pnpm docs:check`, `pnpm typecheck`, `pnpm build`, and the full `pnpm test` suite.
