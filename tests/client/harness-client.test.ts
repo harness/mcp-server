@@ -71,6 +71,25 @@ describe("HarnessClient", () => {
       expect(url.searchParams.get("routingId")).toBe("test-account");
     });
 
+    it("merges query params already present in requestStream path", async () => {
+      fetchSpy.mockResolvedValue(new Response("ok", { status: 200 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_BASE_URL: "https://myhost.harness.io/gateway" }));
+
+      await client.requestStream({
+        method: "GET",
+        path: "/gateway/log-service/some/blob/path?token=abc",
+      });
+
+      const urlString = fetchSpy.mock.calls[0][0] as string;
+      const url = new URL(urlString);
+      expect(url.pathname).toBe("/gateway/log-service/some/blob/path");
+      expect(url.searchParams.get("token")).toBe("abc");
+      expect(url.searchParams.get("accountIdentifier")).toBe("test-account");
+      expect(url.searchParams.get("routingId")).toBe("test-account");
+      expect(url.searchParams.get("accountID")).toBe("test-account");
+      expect(urlString.split("?")).toHaveLength(2);
+    });
+
     it("encodes query param for multi-word params", async () => {
       fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
       const client = new HarnessClient(makeConfig());

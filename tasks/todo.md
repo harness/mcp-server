@@ -323,3 +323,20 @@
 - Updated `harness_describe` to surface `supportedScopes` only when the registry declares multi-scope support.
 - Made URL-derived `resource_scope` opt-in in `applyUrlDefaults()` and enabled it only for `harness_list`, `harness_get`, and `harness_search`.
 - Verified with focused scope/url/tool tests, `pnpm typecheck`, `pnpm build`, and full `pnpm test`.
+
+## PR 189 Blocking URL Builder Follow-up (2026-05-13)
+- [x] Add a failing regression test for `RequestOptions.path` values that already include query params
+- [x] Update `HarnessClient.buildUrl()` to merge existing path query params before appending scope params
+- [x] Run focused client tests, `pnpm typecheck`, `pnpm build`, and full `pnpm test`
+- [x] Commit, push, and open a PR
+
+### Plan
+- Keep the fix in `src/client/harness-client.ts` because both `request()` and `requestStream()` share `buildUrl()`.
+- Add coverage in `tests/client/harness-client.test.ts` using `requestStream()` with a log-service blob path containing `?token=abc`.
+- Preserve existing behavior where explicit `options.params` can override generated scoping params.
+
+### Review
+- Confirmed the regression test fails before the fix: `token` was parsed as `abc?accountIdentifier=test-account`.
+- Split query strings out of `RequestOptions.path` before base-path de-duplication and query assembly.
+- Merged path query params into the generated `URLSearchParams` before applying `options.params`, preserving explicit override behavior.
+- Verified with `pnpm test tests/client/harness-client.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test`.
