@@ -267,9 +267,9 @@
 ## Slack Review Request: Remove ResourceGroup Routes (2026-05-13)
 - [x] Read the Slack thread and confirm there are no screenshots or follow-up details
 - [x] Locate current `resource_group` registry, URL parser, prompt, README, and testing-doc references
-- [ ] Add failing regression coverage for removing the dedicated `resource_group` route
-- [ ] Remove the dedicated ResourceGroup route and URL shortcut metadata
-- [ ] Refresh generated docs and remove stale ResourceGroup testing docs
+- [x] Add failing regression coverage for removing the dedicated `resource_group` route
+- [x] Remove the dedicated ResourceGroup route and URL shortcut metadata
+- [x] Refresh generated docs and remove stale ResourceGroup testing docs
 - [ ] Run focused tests, docs check, typecheck, build, commit, push, open PR, and reply in Slack
 
 ### Plan

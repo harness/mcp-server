@@ -80,7 +80,7 @@ Unlike traditional MCP servers with one tool per API endpoint, this server uses 
 
 ### Access Control
 - Manage users, user groups, service accounts
-- Create and assign roles, resource groups, permissions
+- Create and assign roles, role assignments, and permissions
 
 ### Software Engineering Intelligence (SEI)
 - DORA metrics: deployment frequency, change failure rate, MTTR, lead time

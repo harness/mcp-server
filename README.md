@@ -1,6 +1,6 @@
 ## Harness MCP Server 2.0
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 169 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 168 resource types.
 
 ## Why Use This MCP Server
 
@@ -8,7 +8,7 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **11 tools, 169 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **11 tools, 168 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
 - **Full platform coverage.** 31 toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Governance, Service Overrides, Visualizations, and more. Not just pipelines — the entire Harness platform.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **30 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
@@ -954,7 +954,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-169 resource types organized across 31 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+168 resource types organized across 31 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -1271,7 +1271,6 @@ SEI resources are consolidated for token efficiency. Use `metric` or `aspect` pa
 | `service_account` | x    | x   | x      |        | x      |                 |
 | `role`            | x    | x   | x      |        | x      |                 |
 | `role_assignment` | x    |     | x      |        |        |                 |
-| `resource_group`  | x    | x   | x      |        | x      |                 |
 | `permission`      | x    |     |        |        |        |                 |
 
 
@@ -1466,7 +1465,7 @@ Available toolset names:
 | `scs`                   | scs_artifact_source, artifact_security, scs_artifact_component, scs_artifact_remediation, scs_chain_of_custody, scs_compliance_result, code_repo_security, scs_sbom                                                                                                                             |
 | `sto`                   | security_issue, security_issue_filter, security_exemption                                                                                                                                                                                                                                       |
 | `dbops`                 | database_schema, database_instance, database_snapshot_object, database_llm_authoring_pipeline                                                                                                                                                                                                   |
-| `access_control`        | user, user_group, service_account, role, role_assignment, resource_group, permission                                                                                                                                                                                                            |
+| `access_control`        | user, user_group, service_account, role, role_assignment, permission                                                                                                                                                                                                                            |
 | `governance`            | policy, policy_set, policy_evaluation                                                                                                                                                                                                                                                           |
 | `freeze`                | freeze_window, global_freeze                                                                                                                                                                                                                                                                    |
 | `overrides`             | service_override                                                                                                                                                                                                                                                                                |
@@ -1491,7 +1490,7 @@ Available toolset names:
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
                 |  32 Toolsets      |      (data files, not code)
-                |  169 Resource Types|
+                |  168 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+

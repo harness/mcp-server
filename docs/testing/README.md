@@ -21,10 +21,9 @@ Each resource has its own subdirectory containing:
 | 6 | Users | [test_plan](users/test_plan.md) | [test_report](users/test_report.md) | USR-001 → USR-006 |
 | 7 | Roles | [test_plan](roles/test_plan.md) | [test_report](roles/test_report.md) | ROL-001 → ROL-006 |
 | 8 | User Groups | [test_plan](user_groups/test_plan.md) | [test_report](user_groups/test_report.md) | UGR-001 → UGR-009 |
-| 9 | Resource Groups | [test_plan](resource_groups/test_plan.md) | [test_report](resource_groups/test_report.md) | RGR-001 → RGR-008 |
-| 10 | Role Assignments | [test_plan](role_assignments/test_plan.md) | [test_report](role_assignments/test_report.md) | RAS-001 → RAS-003 |
-| 11 | Service Accounts | [test_plan](service_accounts/test_plan.md) | [test_report](service_accounts/test_report.md) | SAC-001 → SAC-009 |
-| 12 | Audit | [test_plan](audit/test_plan.md) | [test_report](audit/test_report.md) | AUD-001 → AUD-005 |
+| 9 | Role Assignments | [test_plan](role_assignments/test_plan.md) | [test_report](role_assignments/test_report.md) | RAS-001 → RAS-003 |
+| 10 | Service Accounts | [test_plan](service_accounts/test_plan.md) | [test_report](service_accounts/test_report.md) | SAC-001 → SAC-009 |
+| 11 | Audit | [test_plan](audit/test_plan.md) | [test_report](audit/test_report.md) | AUD-001 → AUD-005 |
 
 ## CD/CI Module
 
