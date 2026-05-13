@@ -316,7 +316,7 @@ export interface ResourceDefinition {
   /** Default scope level: "project" | "org" | "account" */
   scope: ResourceScope;
   /**
-   * Scopes this resource can query when the caller passes `scope`.
+   * Scopes this resource can query when the caller passes `resource_scope`.
    * If omitted, the resource supports only its default `scope`.
    */
   supportedScopes?: readonly ResourceScope[];
