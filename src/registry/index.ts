@@ -959,6 +959,7 @@ export class Registry {
           displayName: r.displayName,
           description: r.description,
           scope: r.scope,
+          supportedScopes: getSupportedScopes(r).length > 1 ? getSupportedScopes(r) : undefined,
           operations: Object.keys(r.operations),
           executeActions: r.executeActions ? Object.keys(r.executeActions) : undefined,
           identifierFields: r.identifierFields,

@@ -234,6 +234,21 @@ describe("Registry", () => {
         expect(registry.getResource(resourceType).supportedScopes).toEqual(["account", "org", "project"]);
       }
     });
+
+    it("includes supportedScopes in toolset-level describe metadata", () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+      const desc = registry.describe() as {
+        toolsets: {
+          connectors: {
+            resources: Array<{ resource_type: string; supportedScopes?: string[] }>;
+          };
+        };
+      };
+
+      const connector = desc.toolsets.connectors.resources.find((r) => r.resource_type === "connector");
+
+      expect(connector?.supportedScopes).toEqual(["account", "org", "project"]);
+    });
   });
 
   describe("getAllFilterFields", () => {

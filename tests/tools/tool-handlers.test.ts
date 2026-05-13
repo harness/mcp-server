@@ -197,6 +197,26 @@ describe("harness_get", () => {
     expect(call.params.accountIdentifier).toBe("__GLOBAL_TEMPLATES_ACCOUNT_ID__");
     expect(call.params.versionLabel).toBe("1.0.8");
   });
+
+  it("does not infer resource_scope for account APIs with org/project UI URLs", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "feature-flags" }));
+    mockRequest = vi.fn().mockResolvedValue({ id: "my_flag" });
+    client = makeClient(mockRequest);
+    const fmeServer = makeMcpServer();
+    const { registerGetTool } = await import("../../src/tools/harness-get.js");
+    registerGetTool(fmeServer, registry, client);
+
+    const result = await fmeServer.call("harness_get", {
+      url: "https://app.harness.io/ng/account/abc123/cf/orgs/default/projects/myProject/feature-flags/my_flag",
+      params: { workspace_id: "workspace-1" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as { path: string; params: Record<string, unknown> };
+    expect(call.path).toBe("/internal/api/v2/splits/ws/workspace-1/my_flag");
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
 });
 
 describe("harness_get — execution_log", () => {

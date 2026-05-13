@@ -86,6 +86,15 @@ const RESOURCE_SEGMENTS: Record<string, { type: string; contextField: ContextFie
   "conversation":     { type: "pr_activity",          contextField: "comment_id" },
 };
 
+const URL_RESOURCE_SCOPE_TYPES = new Set([
+  "connector",
+  "service",
+  "environment",
+  "infrastructure",
+  "secret",
+  "template",
+]);
+
 /** Structural segments that should never be treated as resource IDs */
 const STRUCTURAL = new Set([
   "ng", "all", "account", "module", "orgs", "projects", "organizations",
@@ -180,12 +189,14 @@ export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
       result.resource_id = primary.id;
     }
 
-    if (result.project_id) {
-      result.resource_scope = "project";
-    } else if (result.org_id) {
-      result.resource_scope = "org";
-    } else {
-      result.resource_scope = "account";
+    if (URL_RESOURCE_SCOPE_TYPES.has(primary.type)) {
+      if (result.project_id) {
+        result.resource_scope = "project";
+      } else if (result.org_id) {
+        result.resource_scope = "org";
+      } else {
+        result.resource_scope = "account";
+      }
     }
   }
 

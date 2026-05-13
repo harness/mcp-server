@@ -148,6 +148,7 @@ describe("parseHarnessUrl", () => {
     expect(result.resource_type).toBe("environment");
     expect(result.resource_id).toBe("prod");
     expect(result.environment_id).toBe("prod");
+    expect(result.resource_scope).toBe("project");
   });
 
   it("handles gitops agents URL", () => {
@@ -165,6 +166,7 @@ describe("parseHarnessUrl", () => {
     );
     expect(result.resource_type).toBe("fme_feature_flag");
     expect(result.resource_id).toBe("my_flag");
+    expect(result.resource_scope).toBeUndefined();
   });
 
   it("extracts repo_id and pr_number from Harness Code PR URL", () => {
