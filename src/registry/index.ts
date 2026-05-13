@@ -93,6 +93,32 @@ function shouldUseProject(scope: ResourceScope): boolean {
   return scope === "project";
 }
 
+interface ExplicitScopeValues {
+  orgId?: string;
+  projectId?: string;
+}
+
+function resolveScopeString(value: unknown, fallback: string | undefined): string | undefined {
+  if (typeof value === "string" && value !== "") {
+    return value;
+  }
+  return fallback && fallback !== "" ? fallback : undefined;
+}
+
+function getExplicitScopeValues(scope: ResourceScope, input: Record<string, unknown>, config: Config): ExplicitScopeValues {
+  const orgId = resolveScopeString(input.org_id, config.HARNESS_ORG);
+  const projectId = resolveScopeString(input.project_id, config.HARNESS_PROJECT);
+
+  if (shouldUseOrg(scope) && !orgId) {
+    throw new Error(`resource_scope "${scope}" requires org_id or HARNESS_ORG.`);
+  }
+  if (shouldUseProject(scope) && !projectId) {
+    throw new Error(`resource_scope "${scope}" requires project_id or HARNESS_PROJECT.`);
+  }
+
+  return { orgId, projectId };
+}
+
 const ALL_TOOLSETS: ToolsetDefinition[] = [
   pipelinesToolset,
   agentsToolset,
@@ -279,6 +305,11 @@ export class Registry {
   /** Get resource types that support a specific CRUD operation. */
   getTypesForOperation(operation: OperationName): string[] {
     return this.getAllResourceTypes().filter(rt => this.supportsOperation(rt, operation));
+  }
+
+  /** Get scopes supported by a resource for explicit resource_scope selection. */
+  getSupportedScopes(resourceType: string): readonly ResourceScope[] {
+    return getSupportedScopes(this.getResource(resourceType));
   }
 
   /** Get resource types that have at least one execute action. */
@@ -482,6 +513,7 @@ export class Registry {
     const resolvedAccountId = this.getAccountId();
     const resolvedConfig: Config = { ...this.config, HARNESS_ACCOUNT_ID: resolvedAccountId };
     const requestedScope = getRequestedScope(def, input);
+    const explicitScopeValues = requestedScope ? getExplicitScopeValues(requestedScope, input, this.config) : undefined;
     const pathDefaultScope = requestedScope ?? def.scope;
 
     // Run preflight hook (e.g. duplicate-check before create) before hitting the API.
@@ -501,9 +533,9 @@ export class Registry {
           if (value === undefined || value === "") {
             // Default scope placeholders from config for project/org-scoped resources
             if (pathPlaceholder === "org" && shouldUseOrg(pathDefaultScope)) {
-              value = this.config.HARNESS_ORG;
+              value = explicitScopeValues?.orgId ?? this.config.HARNESS_ORG;
             } else if (pathPlaceholder === "project" && shouldUseProject(pathDefaultScope)) {
-              value = this.config.HARNESS_PROJECT;
+              value = explicitScopeValues?.projectId ?? this.config.HARNESS_PROJECT;
             }
           }
           if (value === undefined || value === "") {
@@ -531,10 +563,10 @@ export class Registry {
     if (requestedScope) {
       // Explicit resource scoping: account omits org/project, org injects org only, project injects both.
       if (shouldUseOrg(requestedScope)) {
-        params[orgParam] = (input.org_id as string) ?? this.config.HARNESS_ORG;
+        params[orgParam] = explicitScopeValues?.orgId;
       }
       if (shouldUseProject(requestedScope)) {
-        params[projectParam] = (input.project_id as string) ?? this.config.HARNESS_PROJECT;
+        params[projectParam] = explicitScopeValues?.projectId;
       }
     } else if (def.scopeOptional) {
       // Dynamic scoping: only inject when caller explicitly provides them.

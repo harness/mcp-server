@@ -286,3 +286,26 @@
 - Added coverage that each supported entity resource can list at account, org, and project scope, and that `harness_search` forwards explicit and URL-derived `resource_scope`.
 - Limited URL-derived `resource_scope` to known multi-scope entity URLs so account-scoped APIs with org/project UI paths, such as FME feature flags, are not rejected as unsupported project scope.
 - Verified with focused red/green coverage, `pnpm typecheck`, full `pnpm test` (52 files / 1213 tests), and `pnpm build`.
+
+## PR 182 Scope Feedback Follow-up (2026-05-13)
+- [x] Reproduce explicit org/project `resource_scope` fail-open behavior with missing defaults
+- [x] Add regression coverage for broad `harness_search` with scoped mixed registries
+- [x] Add regression coverage that `resource_scope` Zod descriptions survive optional wrapping
+- [x] Fail loudly before dispatch when explicit org/project scope lacks required IDs/defaults
+- [x] Filter broad scoped searches to resource types that support the requested scope
+- [x] Fix `.describe()` ordering on `resource_scope` tool inputs
+- [x] Run focused tests, typecheck, build, and full tests
+- [ ] Commit, push, open PR, and reply in Slack
+
+### Plan
+- Keep the fix within the existing scope-selector implementation from PR #182.
+- Validate only explicit `resource_scope` requests; preserve default project-scoped behavior for existing calls.
+- Avoid broad-search noise by skipping predictable unsupported-scope targets before dispatch.
+- Verify with focused registry/tool tests plus typecheck/build.
+
+### Review
+- Confirmed current PR head failed the new regression tests: explicit org/project scopes with missing defaults still dispatched, Zod descriptions were absent, and broad scoped search reported avoidable unsupported-scope errors.
+- Added central explicit-scope validation in `src/registry/index.ts` so org/project scope requires `org_id`/`HARNESS_ORG` and `project_id`/`HARNESS_PROJECT` before request construction.
+- Added `Registry.getSupportedScopes()` and used it in `src/tools/harness-search.ts` to filter broad scoped searches before fan-out.
+- Moved `resource_scope` Zod descriptions after `.optional()` in `src/tools/harness-get.ts`, `src/tools/harness-list.ts`, and `src/tools/harness-search.ts`.
+- Verified with `pnpm test tests/registry/registry.test.ts tests/tools/tool-handlers.test.ts tests/utils/url-parser.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test`.

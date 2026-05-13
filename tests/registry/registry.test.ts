@@ -501,6 +501,44 @@ describe("Registry", () => {
       expect(call.params.projectIdentifier).toBeUndefined();
     });
 
+    it("throws before dispatch when explicit org scope lacks org_id and HARNESS_ORG", async () => {
+      const accountRegistry = new Registry(makeConfig({
+        HARNESS_TOOLSETS: "connectors",
+        HARNESS_ORG: undefined,
+        HARNESS_PROJECT: undefined,
+      }));
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: { content: [], totalElements: 0 },
+      });
+      const client = makeClient(mockRequest);
+
+      await expect(
+        accountRegistry.dispatch(client, "connector", "list", {
+          resource_scope: "org",
+        }),
+      ).rejects.toThrow(/resource_scope "org" requires org_id or HARNESS_ORG/);
+      expect(mockRequest).not.toHaveBeenCalled();
+    });
+
+    it("throws before dispatch when explicit project scope lacks project_id and HARNESS_PROJECT", async () => {
+      const accountRegistry = new Registry(makeConfig({
+        HARNESS_TOOLSETS: "connectors",
+        HARNESS_ORG: "platform",
+        HARNESS_PROJECT: undefined,
+      }));
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: { content: [], totalElements: 0 },
+      });
+      const client = makeClient(mockRequest);
+
+      await expect(
+        accountRegistry.dispatch(client, "connector", "list", {
+          resource_scope: "project",
+        }),
+      ).rejects.toThrow(/resource_scope "project" requires project_id or HARNESS_PROJECT/);
+      expect(mockRequest).not.toHaveBeenCalled();
+    });
+
     it("keeps default project scope when scope is omitted", async () => {
       const accountRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
       const mockRequest = vi.fn().mockResolvedValue({

@@ -8,8 +8,10 @@ import { compactItems } from "../utils/compact.js";
 import { createLogger } from "../utils/logger.js";
 import { sendProgress, sendLog } from "../utils/progress.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
+import type { ResourceScope } from "../registry/types.js";
 
 const log = createLogger("search");
+const RESOURCE_SCOPES: readonly ResourceScope[] = ["account", "org", "project"];
 
 /** Relevance tiers — lower number = more relevant. */
 const RELEVANCE_TIERS: Record<string, number> = {
@@ -24,6 +26,12 @@ const RELEVANCE_TIERS: Record<string, number> = {
 
 function getTier(resourceType: string): number {
   return RELEVANCE_TIERS[resourceType] ?? 3;
+}
+
+function asResourceScope(value: unknown): ResourceScope | undefined {
+  return typeof value === "string" && RESOURCE_SCOPES.includes(value as ResourceScope)
+    ? value as ResourceScope
+    : undefined;
 }
 
 interface SearchResultEntry {
@@ -46,7 +54,7 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
         query: z.string().describe("Search term"),
         resource_types: z.array(z.enum(listableTypes)).describe("Types to search (defaults to all listable)").optional(),
         url: z.string().describe("Harness UI URL — auto-extracts org and project").optional(),
-        resource_scope: z.enum(["account", "org", "project"]).describe("Scope to search. Use account for account-level resources and to omit org/project defaults; org injects only org; project injects org+project. Auto-detected from url.").optional(),
+        resource_scope: z.enum(["account", "org", "project"]).optional().describe("Scope to search. Use account for account-level resources and to omit org/project defaults; org injects only org; project injects org+project. Auto-detected from url."),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
         max_per_type: z.number().describe("Max results per type").default(5).optional(),
@@ -62,11 +70,16 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
       try {
         const signal = extra.signal;
         const mergedArgs = applyUrlDefaults(args as Record<string, unknown>, args.url);
+        const requestedScope = asResourceScope(mergedArgs.resource_scope);
+        const hasExplicitResourceTypes = (args.resource_types?.length ?? 0) > 0;
         // Determine which resource types to search
         let targetTypes = args.resource_types ?? [];
         if (targetTypes.length === 0) {
           // Search all types that support list
           targetTypes = registry.getAllResourceTypes().filter((rt) => registry.supportsOperation(rt, "list"));
+        }
+        if (requestedScope && !hasExplicitResourceTypes) {
+          targetTypes = targetTypes.filter((rt) => registry.getSupportedScopes(rt).includes(requestedScope));
         }
 
         const entries: SearchResultEntry[] = [];

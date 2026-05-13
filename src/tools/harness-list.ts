@@ -30,7 +30,7 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
       inputSchema: {
         resource_type: resourceTypeSchema(listableTypes).optional().describe("Resource type to list. Auto-detected from url."),
         url: z.string().describe("Harness UI URL — auto-extracts org, project, and type").optional(),
-        resource_scope: z.enum(["account", "org", "project"]).describe("Scope to query. Use account for account-level resources and to omit org/project defaults; org injects only org; project injects org+project. Auto-detected from url.").optional(),
+        resource_scope: z.enum(["account", "org", "project"]).optional().describe("Scope to query. Use account for account-level resources and to omit org/project defaults; org injects only org; project injects org+project. Auto-detected from url."),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
         page: z.number().describe("Page number, 0-indexed").default(0).optional(),
