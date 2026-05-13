@@ -266,6 +266,42 @@ export const dbopsToolset: ToolsetDefinition = {
       },
     },
 
+    // ── Default Authoring Instance ──────────────────────────────────────
+    {
+      resourceType: "database_default_authoring_instance",
+      displayName: "Default Authoring Instance",
+      description:
+        "Returns the best database instance for LLM change authoring given a schema. " +
+        "Selection priority: (1) oldest instance with a metadata snapshot, " +
+        "(2) oldest instance overall. Returns a minimal response with the instance " +
+        "identifier, name, and whether it has a snapshot. " +
+        "Use this when a schema has no primaryDbInstanceId configured and you need " +
+        "to auto-select an instance for changeset generation. " +
+        "IMPORTANT: This is an x-internal endpoint.",
+      toolset: "dbops",
+      scope: "project",
+      identifierFields: ["dbschema_id"],
+      operations: {
+        get: {
+          method: "GET",
+          path: "/dbops/v1/orgs/{org}/projects/{project}/dbschema/{dbschema}/default-authoring-instance",
+          pathParams: {
+            org_id: "org",
+            project_id: "project",
+            dbschema_id: "dbschema",
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: passthrough,
+          description:
+            "Get the best instance for LLM change authoring for a schema. " +
+            "Returns { identifier: string, name: string, hasSnapshot: boolean }. " +
+            "Prefers the oldest instance that has a metadata snapshot; falls back to " +
+            "the oldest instance overall if none have snapshots. " +
+            "Returns 404 if no instances exist for the schema.",
+        },
+      },
+    },
+
     // ── LLM Authoring Pipeline ───────────────────────────────────────────
     // NOTE: This endpoint is marked x-internal in the DBOPS OpenAPI spec.
     // The response 'metadata' map is expected to contain the pipeline identifier
