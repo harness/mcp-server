@@ -453,7 +453,7 @@ describe("Registry", () => {
       const client = makeClient(mockRequest);
 
       await accountRegistry.dispatch(client, "connector", "list", {
-        scope: "account",
+        resource_scope: "account",
         type: "Bitbucket",
         page: 0,
         size: 100,
@@ -477,7 +477,7 @@ describe("Registry", () => {
       const client = makeClient(mockRequest);
 
       await accountRegistry.dispatch(client, "connector", "list", {
-        scope: "org",
+        resource_scope: "org",
         org_id: "platform",
       });
 
@@ -506,7 +506,7 @@ describe("Registry", () => {
       const client = makeClient(mockRequest);
 
       await accountRegistry.dispatch(client, "secret", "get", {
-        scope: "account",
+        resource_scope: "account",
         secret_id: "acctSecret",
       });
 
@@ -514,6 +514,27 @@ describe("Registry", () => {
       expect(call.path).toBe("/ng/api/v2/secrets/acctSecret");
       expect(call.params.orgIdentifier).toBeUndefined();
       expect(call.params.projectIdentifier).toBeUndefined();
+    });
+
+    it("does not treat resource-specific scope filters as dispatcher scope", async () => {
+      const gitopsRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: { content: [], totalElements: 0 },
+      });
+      const client = makeClient(mockRequest);
+
+      await gitopsRegistry.dispatch(client, "gitops_cluster_link", "list", {
+        environment_id: "prod",
+        scope: "ACCOUNT",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params).toMatchObject({
+        orgIdentifier: "default",
+        projectIdentifier: "test-project",
+        environmentIdentifier: "prod",
+        scope: "ACCOUNT",
+      });
     });
 
     it("builds correct path with path params for a get operation", async () => {

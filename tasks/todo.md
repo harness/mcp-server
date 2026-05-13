@@ -273,13 +273,13 @@
 - [x] Commit, push, and open/update PR
 
 ### Plan
-- Preserve existing default behavior for project-scoped calls with no explicit scope so current users with `HARNESS_ORG`/`HARNESS_PROJECT` keep getting default project results.
-- Add a generic `scope` selector accepted by `harness_list` and `harness_get`: `account` omits org/project, `org` injects only org, and `project` injects org+project.
-- Teach account-level Harness URLs (for example `/all/settings/connectors`) to set `scope: "account"` so pasted account URLs do not get config defaults re-injected.
-- Surface multi-scope capability in `harness_describe` so agents know that account-level connectors, services, environments, infrastructure, secrets, and templates can be requested with `scope: "account"`.
+- Preserve existing default behavior for project-scoped calls with no explicit resource scope so current users with `HARNESS_ORG`/`HARNESS_PROJECT` keep getting default project results.
+- Add a generic `resource_scope` selector accepted by `harness_list` and `harness_get`: `account` omits org/project, `org` injects only org, and `project` injects org+project.
+- Teach account-level Harness URLs (for example `/all/settings/connectors`) to set `resource_scope: "account"` so pasted account URLs do not get config defaults re-injected.
+- Surface multi-scope capability in `harness_describe` so agents know that account-level connectors, services, environments, infrastructure, secrets, and templates can be requested with `resource_scope: "account"`.
 
 ### Review
-- Added explicit `scope` support for list/get requests: account scope omits org/project query params, org scope omits project, and project/default behavior continues to use configured defaults.
-- Account-level Harness URLs now propagate `scope: "account"` through `applyUrlDefaults`, preventing account settings URLs from being narrowed by `HARNESS_ORG`/`HARNESS_PROJECT`.
+- Added explicit `resource_scope` support for list/get requests: account scope omits org/project query params, org scope omits project, and project/default behavior continues to use configured defaults.
+- Account-level Harness URLs now propagate `resource_scope: "account"` through `applyUrlDefaults`, preventing account settings URLs from being narrowed by `HARNESS_ORG`/`HARNESS_PROJECT`.
 - Marked connectors, services, environments, infrastructure, secrets, and templates as supporting `account`, `org`, and `project` scopes and surfaced that guidance through `harness_describe`.
 - Verified with focused red/green coverage, `pnpm typecheck`, full `pnpm test` (52 files / 1201 tests), and `pnpm build`.

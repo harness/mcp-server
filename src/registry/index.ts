@@ -69,12 +69,12 @@ function getSupportedScopes(def: ResourceDefinition): readonly ResourceScope[] {
 }
 
 function getRequestedScope(def: ResourceDefinition, input: Record<string, unknown>): ResourceScope | undefined {
-  const value = input.scope;
+  const value = input.resource_scope;
   if (value === undefined || value === "") {
     return undefined;
   }
   if (!isResourceScope(value)) {
-    throw new Error(`Invalid scope "${String(value)}". Expected one of: ${RESOURCE_SCOPES.join(", ")}`);
+    throw new Error(`Invalid resource_scope "${String(value)}". Expected one of: ${RESOURCE_SCOPES.join(", ")}`);
   }
   const supported = getSupportedScopes(def);
   if (!supported.includes(value)) {
@@ -429,7 +429,7 @@ export class Registry {
     httpStatus?: number,
   ): void {
     if (!this.auditManager) return;
-    const auditScope = isResourceScope(input.scope) ? input.scope : undefined;
+    const auditScope = isResourceScope(input.resource_scope) ? input.resource_scope : undefined;
 
     // Resolve path using pathBuilder if present, otherwise use static path
     const resolvedPath = spec.pathBuilder
@@ -509,7 +509,7 @@ export class Registry {
           if (value === undefined || value === "") {
             const supportedScopes = getSupportedScopes(def);
             const scopeHint = supportedScopes.length > 1
-              ? ` This resource supports ${supportedScopes.join("/")} scope — pass "${inputKey}" via params, set scope appropriately, or use a Harness URL.`
+              ? ` This resource supports ${supportedScopes.join("/")} scope — pass "${inputKey}" via params, set resource_scope appropriately, or use a Harness URL.`
               : "";
             throw new Error(
               `Missing required field "${inputKey}" for ${def.resourceType}.${scopeHint}`,
@@ -529,7 +529,7 @@ export class Registry {
     const orgParam = def.scopeParams?.org ?? "orgIdentifier";
     const projectParam = def.scopeParams?.project ?? "projectIdentifier";
     if (requestedScope) {
-      // Explicit scoping: account omits org/project, org injects org only, project injects both.
+      // Explicit resource scoping: account omits org/project, org injects org only, project injects both.
       if (shouldUseOrg(requestedScope)) {
         params[orgParam] = (input.org_id as string) ?? this.config.HARNESS_ORG;
       }

@@ -33,7 +33,7 @@ export const environmentsToolset: ToolsetDefinition = {
     {
       resourceType: "environment",
       displayName: "Environment",
-      description: "Deployment target environment. Supports full CRUD. Use scope='account' to list or get account-level environments.",
+      description: "Deployment target environment. Supports full CRUD. Use resource_scope='account' to list or get account-level environments.",
       toolset: "environments",
       scope: "project",
       supportedScopes: ["account", "org", "project"],

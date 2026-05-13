@@ -9,7 +9,7 @@ export const infrastructureToolset: ToolsetDefinition = {
     {
       resourceType: "infrastructure",
       displayName: "Infrastructure Definition",
-      description: "Infrastructure definition within an environment. Supports full CRUD. Use scope='account' to list or get account-level infrastructure definitions.",
+      description: "Infrastructure definition within an environment. Supports full CRUD. Use resource_scope='account' to list or get account-level infrastructure definitions.",
       toolset: "infrastructure",
       scope: "project",
       supportedScopes: ["account", "org", "project"],

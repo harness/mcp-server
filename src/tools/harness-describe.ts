@@ -39,7 +39,7 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
             scope: def.scope,
             supportedScopes,
             scopeHint: supportedScopes && supportedScopes.length > 1
-              ? "Set scope='account' for account-level data, scope='org' for org-level data, or scope='project' for project-level data. If scope is omitted, the resource uses its default scope and configured defaults."
+              ? "Set resource_scope='account' for account-level data, resource_scope='org' for org-level data, or resource_scope='project' for project-level data. If resource_scope is omitted, the resource uses its default scope and configured defaults."
               : undefined,
             identifierFields: def.identifierFields,
             listFilterFields: def.listFilterFields,

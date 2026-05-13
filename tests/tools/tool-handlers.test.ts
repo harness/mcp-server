@@ -960,7 +960,7 @@ describe("harness_describe", () => {
     expect(result.isError).toBeUndefined();
     const data = parseResult(result) as { supportedScopes?: string[]; scopeHint?: string };
     expect(data.supportedScopes).toEqual(["account", "org", "project"]);
-    expect(data.scopeHint).toContain("scope='account'");
+    expect(data.scopeHint).toContain("resource_scope='account'");
   });
 
   it("returns error hint for unknown resource_type", async () => {

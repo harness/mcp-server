@@ -5,7 +5,7 @@
 
 export interface ParsedHarnessUrl {
   account_id: string;
-  scope?: "account" | "org" | "project";
+  resource_scope?: "account" | "org" | "project";
   org_id?: string;
   project_id?: string;
   module?: string;
@@ -53,6 +53,8 @@ const RESOURCE_SEGMENTS: Record<string, { type: string; contextField: ContextFie
   "input-sets":       { type: "input_set",           contextField: "resource_id" },
   "services":         { type: "service",             contextField: "resource_id" },
   "environments":     { type: "environment",         contextField: "environment_id" },
+  "infrastructures":  { type: "infrastructure",      contextField: "resource_id" },
+  "infrastructure-definitions": { type: "infrastructure", contextField: "resource_id" },
   "connectors":       { type: "connector",           contextField: "resource_id" },
   "templates":        { type: "template",            contextField: "resource_id" },
   "secrets":          { type: "secret",              contextField: "resource_id" },
@@ -179,11 +181,11 @@ export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
     }
 
     if (result.project_id) {
-      result.scope = "project";
+      result.resource_scope = "project";
     } else if (result.org_id) {
-      result.scope = "org";
+      result.resource_scope = "org";
     } else {
-      result.scope = "account";
+      result.resource_scope = "account";
     }
   }
 
@@ -204,7 +206,7 @@ export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
 
 /** Fields that applyUrlDefaults will merge */
 const MERGEABLE_FIELDS: (keyof ParsedHarnessUrl)[] = [
-  "scope",
+  "resource_scope",
   "org_id",
   "project_id",
   "module",

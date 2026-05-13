@@ -59,7 +59,7 @@ describe("parseHarnessUrl", () => {
     expect(result.account_id).toBe("lnFZRF6jQO6tQnB9znMALw");
     expect(result.resource_type).toBe("connector");
     expect(result.resource_id).toBeUndefined();
-    expect(result.scope).toBe("account");
+    expect(result.resource_scope).toBe("account");
     expect(result.org_id).toBeUndefined();
     expect(result.project_id).toBeUndefined();
   });
@@ -70,7 +70,7 @@ describe("parseHarnessUrl", () => {
     );
     expect(result.resource_type).toBe("connector");
     expect(result.resource_id).toBe("test");
-    expect(result.scope).toBe("account");
+    expect(result.resource_scope).toBe("account");
     expect(result.org_id).toBeUndefined();
   });
 
@@ -80,9 +80,20 @@ describe("parseHarnessUrl", () => {
     );
     expect(result.org_id).toBe("default");
     expect(result.project_id).toBe("GitX_Test");
-    expect(result.scope).toBe("project");
+    expect(result.resource_scope).toBe("project");
     expect(result.resource_type).toBe("connector");
     expect(result.resource_id).toBe("harnessSecretManager");
+  });
+
+  it("handles account-level settings infrastructure list", () => {
+    const result = parseHarnessUrl(
+      "https://app.harness.io/ng/account/lnFZRF6jQO6tQnB9znMALw/all/settings/infrastructures",
+    );
+    expect(result.account_id).toBe("lnFZRF6jQO6tQnB9znMALw");
+    expect(result.resource_type).toBe("infrastructure");
+    expect(result.resource_scope).toBe("account");
+    expect(result.org_id).toBeUndefined();
+    expect(result.project_id).toBeUndefined();
   });
 
   it("extracts execution ID and pipeline ID from execution URL", () => {
