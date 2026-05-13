@@ -250,7 +250,7 @@
 - [x] Trace hosted and local Harness base URL configuration
 - [x] Clarify hosted MCP vs local MCP Harness0 routing in docs and manifests
 - [x] Run docs verification and review the diff
-- [ ] Commit, push, open PR, and reply in the Slack thread
+- [x] Commit, push, open PR, and reply in the Slack thread
 
 ### Plan
 - Treat this as a documentation/configuration gap unless code evidence shows the server ignores `HARNESS_BASE_URL`.
