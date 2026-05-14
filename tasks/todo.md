@@ -346,7 +346,7 @@
 - [x] Add failing regression coverage for Harness-hosted pre-signed blob links
 - [x] Patch `src/utils/log-resolver.ts` so only true external storage hosts are direct-fetched
 - [x] Run focused log resolver tests, typecheck, build, and broader tests as appropriate
-- [ ] Commit, push, open PR, and reply in the original Slack thread
+- [x] Commit, push, open PR, and reply in the original Slack thread
 
 ### Plan
 - Treat PR #195 as the concrete report because the Slack thread has no follow-up screenshots or repro text.
