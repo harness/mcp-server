@@ -362,13 +362,19 @@
 - Verified with `pnpm test tests/registry/registry.test.ts tests/tools/tool-handlers.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test` (53 files / 1309 tests).
 
 ## Slack Follow-up: Harness Code PR Close Endpoint (2026-05-14)
-- [ ] Add regression coverage for closing a PR through `harness_update`
-- [ ] Add regression coverage for `harness_execute` action `close`
-- [ ] Route PR state changes through the dedicated Harness Code state endpoint
-- [ ] Run focused tests, typecheck, build, and full tests
-- [ ] Commit and push the fix
+- [x] Add regression coverage for closing a PR through `harness_update`
+- [x] Add regression coverage for `harness_execute` action `close`
+- [x] Route PR state changes through the dedicated Harness Code state endpoint
+- [x] Run focused tests, typecheck, build, and full tests
+- [x] Commit and push the fix
 
 ### Plan
 - Keep metadata edits (`title`, `description`) on the existing PR PATCH endpoint.
 - Route state transitions (`state: "closed"` or `state: "open"`) to `POST /code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}/state`.
 - Add an explicit `close` execute action so agents do not guess a missing action after update attempts fail.
+
+### Review
+- Confirmed the regression before implementation: `state: "closed"` used the generic PATCH endpoint, and `harness_execute` only exposed `merge`.
+- Added conditional PR update routing so state changes use the Harness Code state endpoint while title/description updates continue using PATCH.
+- Added `skipScopeBodyInjection` for endpoints that must not receive org/project fields in POST/PUT bodies, and applied it to PR state changes so the request body remains `{ state }`.
+- Verified with `pnpm test tests/registry/pull-requests.test.ts`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
