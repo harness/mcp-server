@@ -129,6 +129,8 @@ export const fileStoreToolset: ToolsetDefinition = {
       scope: "project",
       supportedScopes: ["account", "org", "project"],
       identifierFields: ["file_id"],
+      deepLinkTemplate:
+        "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/setup/resources/file-store",
       diagnosticHint:
         "If create fails, verify the parent folder exists (harness_get with file_id set to the parent_identifier). " +
         "Identifiers must be unique within their scope and follow Harness naming rules (alphanumeric, dash, underscore). " +

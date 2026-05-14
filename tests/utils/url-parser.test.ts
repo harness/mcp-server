@@ -151,6 +151,25 @@ describe("parseHarnessUrl", () => {
     expect(result.resource_scope).toBe("project");
   });
 
+  it("extracts file_store_item from project-level File Store URL", () => {
+    const result = parseHarnessUrl(
+      "https://app.harness.io/ng/account/abc123/all/orgs/default/projects/myProject/setup/resources/file-store/my_config",
+    );
+    expect(result.resource_type).toBe("file_store_item");
+    expect(result.file_id).toBe("my_config");
+    expect(result.org_id).toBe("default");
+    expect(result.project_id).toBe("myProject");
+  });
+
+  it("detects account-level scope for File Store settings URL", () => {
+    const result = parseHarnessUrl(
+      "https://app.harness.io/ng/account/abc123/all/settings/file-store/global_cfg",
+    );
+    expect(result.resource_type).toBe("file_store_item");
+    expect(result.file_id).toBe("global_cfg");
+    expect(result.resource_scope).toBe("account");
+  });
+
   it("handles gitops agents URL", () => {
     const result = parseHarnessUrl(
       "https://app.harness.io/ng/account/abc123/all/orgs/default/projects/myProject/gitops/agents/myAgent/applications/myApp",
@@ -259,6 +278,41 @@ describe("applyUrlDefaults", () => {
 
     expect(result.resource_type).toBe("template");
     expect(result.resource_id).toBe("my-template");
+    expect(result.resource_scope).toBe("account");
+  });
+
+  it("extracts file_store_item from project-level File Store URL", () => {
+    const result = applyUrlDefaults(
+      {},
+      "https://app.harness.io/ng/account/abc/all/orgs/myOrg/projects/myProject/setup/resources/file-store",
+    );
+
+    expect(result.resource_type).toBe("file_store_item");
+    expect(result.org_id).toBe("myOrg");
+    expect(result.project_id).toBe("myProject");
+  });
+
+  it("extracts file_id from File Store URL with identifier", () => {
+    const result = applyUrlDefaults(
+      {},
+      "https://app.harness.io/ng/account/abc/all/orgs/default/projects/proj1/setup/resources/file-store/my_config",
+    );
+
+    expect(result.resource_type).toBe("file_store_item");
+    expect(result.file_id).toBe("my_config");
+    expect(result.org_id).toBe("default");
+    expect(result.project_id).toBe("proj1");
+  });
+
+  it("injects resource_scope='account' for account-level File Store URLs", () => {
+    const result = applyUrlDefaults(
+      {},
+      "https://app.harness.io/ng/account/abc/all/settings/file-store/global_config",
+      { includeResourceScope: true },
+    );
+
+    expect(result.resource_type).toBe("file_store_item");
+    expect(result.file_id).toBe("global_config");
     expect(result.resource_scope).toBe("account");
   });
 
