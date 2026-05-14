@@ -346,7 +346,7 @@
 - [x] Add failing regression coverage for Harness-hosted signed log blob URLs
 - [x] Route only true external storage blob URLs through direct fetch
 - [x] Preserve client-routed log download errors and path normalization
-- [ ] Run focused resolver tests, typecheck, build, and broader tests
+- [x] Run focused resolver tests, typecheck, build, and broader tests
 - [ ] Commit, push, open PR, and reply in the Slack thread
 
 ### Plan
@@ -354,3 +354,8 @@
 - Add regression coverage in `tests/utils/log-resolver.test.ts` for `*.harness.io` URLs with `X-Amz-Signature`/`X-Goog-Signature`, explicit ports, and relative blob paths.
 - Preserve direct `fetch()` only for known S3/GCS storage hosts so signed credentials are not invalidated for external blob storage.
 - Route Harness-hosted signed URLs through `client.requestStream()` so self-managed/proxied deployments can apply the configured Harness client routing.
+
+### Review
+- Confirmed the regression tests failed before the fix: Harness-hosted signed URLs attempted direct `fetch()`, relative blob paths produced `/gateway/log-serviceblob/...`, and `HarnessApiError` was wrapped as a plain `Error`.
+- Updated `src/utils/log-resolver.ts` to direct-fetch only known external S3/GCS hosts, use `URL.hostname` for host classification, normalize relative paths, and preserve `HarnessApiError` from client-routed downloads.
+- Verified with `pnpm test tests/utils/log-resolver.test.ts` (15 passed), `pnpm typecheck`, `pnpm build`, and full `pnpm test` (53 files / 1310 tests passed).
