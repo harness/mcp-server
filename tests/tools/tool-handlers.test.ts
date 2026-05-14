@@ -771,6 +771,26 @@ describe("harness_execute", () => {
     expect(call.body).toEqual({ state: "closed" });
   });
 
+  it("uses resource_id for the missing child identifier when parent params are provided", async () => {
+    const prServer = makeMcpServer("accept");
+    const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const prRequest = vi.fn().mockResolvedValue({ number: 42, state: "closed" });
+    const prClient = makeClient(prRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(prServer, prRegistry, prClient);
+
+    const result = await prServer.call("harness_execute", {
+      resource_type: "pull_request",
+      action: "close",
+      resource_id: "42",
+      params: { repo_id: "my-repo" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = prRequest.mock.calls[0]![0] as { path?: string };
+    expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42");
+  });
+
   it("materializes input_set_ids by GETting each input set then POSTing merged pipeline YAML", async () => {
     const inputSetYaml = `inputSet:\n  pipeline:\n    identifier: mat_pipe\n    variables:\n      - name: x\n        type: String\n        value: "1"\n`;
     mockRequest
