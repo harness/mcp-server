@@ -745,8 +745,8 @@ describe("Registry", () => {
 
       expect(mockRequest).toHaveBeenCalledOnce();
       const call = mockRequest.mock.calls[0][0];
-      expect(call.method).toBe("PATCH");
-      expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42");
+      expect(call.method).toBe("POST");
+      expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/state");
       expect(call.body).toEqual({ state: "closed" });
     });
 

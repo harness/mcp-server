@@ -766,8 +766,8 @@ describe("harness_execute", () => {
     expect(result.isError).toBeUndefined();
     expect(prRequest).toHaveBeenCalledOnce();
     const call = prRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
-    expect(call.method).toBe("PATCH");
-    expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42");
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/state");
     expect(call.body).toEqual({ state: "closed" });
   });
 
@@ -788,7 +788,7 @@ describe("harness_execute", () => {
 
     expect(result.isError).toBeUndefined();
     const call = prRequest.mock.calls[0]![0] as { path?: string };
-    expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42");
+    expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/state");
   });
 
   it("explicit resource_id overrides URL-derived pr_number", async () => {
@@ -807,7 +807,7 @@ describe("harness_execute", () => {
 
     expect(result.isError).toBeUndefined();
     const call = prRequest.mock.calls[0]![0] as { path?: string };
-    expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/43");
+    expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/43/state");
   });
 
   it("does not remap resource_id to child field when primary matches (GitOps contract)", async () => {
