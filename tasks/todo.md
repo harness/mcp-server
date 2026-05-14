@@ -340,3 +340,15 @@
 - Split query strings out of `RequestOptions.path` before base-path de-duplication and query assembly.
 - Merged path query params into the generated `URLSearchParams` before applying `options.params`, preserving explicit override behavior.
 - Verified with `pnpm test tests/client/harness-client.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test`.
+
+## Slack Bug Triage: Harness Log Blob Routing (2026-05-14)
+- [ ] Read Slack thread, PR #195 context, memories, and current resolver/client code
+- [ ] Add failing regression coverage for Harness-hosted pre-signed blob links
+- [ ] Patch `src/utils/log-resolver.ts` so only true external storage hosts are direct-fetched
+- [ ] Run focused log resolver tests, typecheck, build, and broader tests as appropriate
+- [ ] Commit, push, open PR, and reply in the original Slack thread
+
+### Plan
+- Treat PR #195 as the concrete report because the Slack thread has no follow-up screenshots or repro text.
+- Keep the fix in `src/utils/log-resolver.ts`: route S3/GCS storage URLs directly, route Harness-hosted signed links through `HarnessClient.requestStream()`, and normalize the path passed to the client.
+- Preserve `HarnessApiError` details from client-routed downloads so callers can still distinguish auth/permission failures.

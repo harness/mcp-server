@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { resolveLogContent } from "../../src/utils/log-resolver.js";
 import { gzipSync, deflateRawSync } from "node:zlib";
 import type { HarnessClient } from "../../src/client/harness-client.js";
+import { HarnessApiError } from "../../src/utils/errors.js";
 
 function makeClient(
   requestFn: (...args: unknown[]) => unknown,
@@ -177,6 +178,88 @@ describe("resolveLogContent", () => {
         path: "/gateway/log-service/some/blob/path?token=abc",
       }),
     );
+  });
+
+  it("REGRESSION routes Harness-hosted pre-signed blob URLs through client.requestStream", async () => {
+    const blobLink = "https://app.harness.io/some/blob/path?X-Amz-Signature=sig&token=abc";
+    const streamFn = vi.fn().mockResolvedValue(new Response('{"out":"log line 1"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { requestStream: streamFn },
+    );
+    fetchSpy.mockRejectedValue(new TypeError("fetch failed"));
+
+    const result = await resolveLogContent(client, "prefix");
+
+    expect(result).toContain("log line 1");
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(streamFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "GET",
+        path: "/some/blob/path?X-Amz-Signature=sig&token=abc",
+      }),
+    );
+  });
+
+  it("REGRESSION routes Harness-hosted pre-signed blob URLs with explicit ports through client.requestStream", async () => {
+    const blobLink = "https://app.harness.io:443/some/blob/path?X-Goog-Signature=sig&token=abc";
+    const streamFn = vi.fn().mockResolvedValue(new Response('{"out":"log line 1"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { requestStream: streamFn },
+    );
+    fetchSpy.mockRejectedValue(new TypeError("fetch failed"));
+
+    const result = await resolveLogContent(client, "prefix");
+
+    expect(result).toContain("log line 1");
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(streamFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "GET",
+        path: "/some/blob/path?X-Goog-Signature=sig&token=abc",
+      }),
+    );
+  });
+
+  it("direct-fetches true external storage pre-signed URLs", async () => {
+    const blobLink = "https://bucket.s3.us-west-2.amazonaws.com/logs.zip?X-Amz-Signature=sig";
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link: blobLink }));
+    fetchSpy.mockResolvedValue(new Response('{"out":"log line 1"}', { status: 200 }));
+
+    const result = await resolveLogContent(client, "prefix");
+
+    expect(result).toContain("log line 1");
+    expect(fetchSpy).toHaveBeenCalledWith(blobLink, expect.any(Object));
+    expect(client.requestStream).not.toHaveBeenCalled();
+  });
+
+  it("normalizes relative blob paths before adding the gateway prefix", async () => {
+    const streamFn = vi.fn().mockResolvedValue(new Response('{"out":"log line 1"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: "some/blob/path?token=abc" }),
+      { requestStream: streamFn },
+    );
+
+    const result = await resolveLogContent(client, "prefix");
+
+    expect(result).toContain("log line 1");
+    expect(streamFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "GET",
+        path: "/gateway/log-service/some/blob/path?token=abc",
+      }),
+    );
+  });
+
+  it("preserves HarnessApiError details from client-routed blob downloads", async () => {
+    const apiError = new HarnessApiError("Forbidden", 403, "FORBIDDEN", "corr-123");
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: "https://logs.example.com/blob" }),
+      { requestStream: vi.fn().mockRejectedValue(apiError) },
+    );
+
+    await expect(resolveLogContent(client, "prefix")).rejects.toBe(apiError);
   });
 
   it("throws when log file exceeds max size", async () => {
