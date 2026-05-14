@@ -355,6 +355,6 @@
 
 ### Review
 - Confirmed the red tests failed on current code: Harness-hosted signed URLs direct-fetched and failed, relative blob paths became `/gateway/log-servicesome/...`, and `HarnessApiError` details were wrapped in a generic `Error`.
-- Updated `src/utils/log-resolver.ts` so only recognized external storage hosts are direct-fetched; non-storage signed URLs keep their raw path/query while routing through `HarnessClient.requestStream()`.
-- Added coverage for Harness-hosted `X-Amz-Signature` and `X-Goog-Signature` links, true S3 direct fetch, relative path normalization, and preservation of `HarnessApiError`.
-- Verified with `pnpm test tests/utils/log-resolver.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test` (`53` files / `1311` tests).
+- Updated `src/utils/log-resolver.ts` so only recognized external storage hosts are direct-fetched; non-storage signed URLs keep their raw path/query while routing through `HarnessClient.requestStream()` with header-based scoping to avoid appending query params.
+- Added coverage for Harness-hosted `X-Amz-Signature` and `X-Goog-Signature` links, true S3 direct fetch including path-style regional hosts, relative path normalization, and preservation of `HarnessApiError`.
+- Verified with `pnpm test tests/utils/log-resolver.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test` (`53` files / `1312` tests).
