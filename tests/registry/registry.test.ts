@@ -733,6 +733,23 @@ describe("Registry", () => {
       ).rejects.toThrow(/Missing required field/);
     });
 
+    it("closes a Harness Code pull request via execute action", async () => {
+      const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+      const mockRequest = vi.fn().mockResolvedValue({ number: 42, state: "closed" });
+      const client = makeClient(mockRequest);
+
+      await prRegistry.dispatchExecute(client, "pull_request", "close", {
+        repo_id: "my-repo",
+        pr_number: "42",
+      });
+
+      expect(mockRequest).toHaveBeenCalledOnce();
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("PATCH");
+      expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42");
+      expect(call.body).toEqual({ state: "closed" });
+    });
+
     it("pipeline update with yamlPipeline sends raw YAML string as body with Content-Type header and returns openInHarness", async () => {
       const yaml = "pipeline:\n  name: Test\n  identifier: test_pipeline\n  stages: []";
       const mockRequest = vi.fn().mockResolvedValue({

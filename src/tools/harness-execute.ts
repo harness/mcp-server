@@ -75,10 +75,24 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           return errorResult(`Operation ${elicit.reason} by user.`);
         }
 
-        // Map resource_id to the primary identifier field
+        // Map resource_id → identifierFields[0] (the documented primary field).
+        // For multi-identifier resources where the primary field is already
+        // populated with a DIFFERENT value (e.g. URL filled repo_id while
+        // resource_id is the pr_number), fall through to the child (last)
+        // identifier field instead — preserving the parent context.
+        // When the primary field holds the SAME value as resource_id (e.g.
+        // GitOps agent_id supplied via both resource_id and params), just
+        // overwrite — no fallthrough.
         const primaryField = def.identifierFields[0];
         if (primaryField && resourceId) {
-          input[primaryField] = resourceId;
+          const existing = input[primaryField];
+          const primaryAlreadySet = existing !== undefined && existing !== "" && existing !== resourceId;
+          if (primaryAlreadySet && def.identifierFields.length > 1) {
+            const childField = def.identifierFields[def.identifierFields.length - 1]!;
+            input[childField] = resourceId;
+          } else {
+            input[primaryField] = resourceId;
+          }
         }
 
         // Pass input_set_ids as string[] so HarnessClient emits repeated `inputSetIdentifiers=` query keys

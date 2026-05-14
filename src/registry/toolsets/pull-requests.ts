@@ -11,7 +11,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
       resourceType: "pull_request",
       displayName: "Pull Request",
       description:
-        "Code pull request. Supports list, get, create, and update. Use execute actions for merge.",
+        "Code pull request. Supports list, get, create, and update. Use execute actions for close and merge.",
       toolset: "pull-requests",
       scope: "account",
       scopeOptional: true,
@@ -90,6 +90,23 @@ export const pullRequestsToolset: ToolsetDefinition = {
         },
       },
       executeActions: {
+        close: {
+          method: "PATCH",
+          path: "/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}",
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          pathParams: {
+            repo_id: "repoIdentifier",
+            pr_number: "prNumber",
+          },
+          bodyBuilder: () => ({ state: "closed" }),
+          responseExtractor: passthrough,
+          actionDescription:
+            "Close a pull request without merging it. Sends state='closed' to the pull request update endpoint.",
+          bodySchema: {
+            description: "No body required. The action sends { state: 'closed' } automatically.",
+            fields: [],
+          },
+        },
         merge: {
           method: "POST",
           path: "/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}/merge",

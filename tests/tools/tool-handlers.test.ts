@@ -750,6 +750,86 @@ describe("harness_execute", () => {
     expect(mockRequest).toHaveBeenCalled();
   });
 
+  it("closes a pull request from a Harness PR URL", async () => {
+    const prServer = makeMcpServer("accept");
+    const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const prRequest = vi.fn().mockResolvedValue({ number: 42, state: "closed" });
+    const prClient = makeClient(prRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(prServer, prRegistry, prClient);
+
+    const result = await prServer.call("harness_execute", {
+      url: "https://app.harness.io/ng/account/test-account/module/code/orgs/default/projects/test-project/repos/my-repo/pull-requests/42",
+      action: "close",
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(prRequest).toHaveBeenCalledOnce();
+    const call = prRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
+    expect(call.method).toBe("PATCH");
+    expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42");
+    expect(call.body).toEqual({ state: "closed" });
+  });
+
+  it("uses resource_id for the missing child identifier when parent params are provided", async () => {
+    const prServer = makeMcpServer("accept");
+    const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const prRequest = vi.fn().mockResolvedValue({ number: 42, state: "closed" });
+    const prClient = makeClient(prRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(prServer, prRegistry, prClient);
+
+    const result = await prServer.call("harness_execute", {
+      resource_type: "pull_request",
+      action: "close",
+      resource_id: "42",
+      params: { repo_id: "my-repo" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = prRequest.mock.calls[0]![0] as { path?: string };
+    expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42");
+  });
+
+  it("explicit resource_id overrides URL-derived pr_number", async () => {
+    const prServer = makeMcpServer("accept");
+    const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const prRequest = vi.fn().mockResolvedValue({ number: 43, state: "closed" });
+    const prClient = makeClient(prRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(prServer, prRegistry, prClient);
+
+    const result = await prServer.call("harness_execute", {
+      url: "https://app.harness.io/ng/account/test-account/module/code/orgs/default/projects/test-project/repos/my-repo/pull-requests/42",
+      resource_id: "43",
+      action: "close",
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = prRequest.mock.calls[0]![0] as { path?: string };
+    expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/43");
+  });
+
+  it("does not remap resource_id to child field when primary matches (GitOps contract)", async () => {
+    const gitopsServer = makeMcpServer("accept");
+    const gitopsRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+    const gitopsRequest = vi.fn().mockResolvedValue({});
+    const gitopsClient = makeClient(gitopsRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(gitopsServer, gitopsRegistry, gitopsClient);
+
+    const result = await gitopsServer.call("harness_execute", {
+      resource_type: "gitops_application",
+      action: "cancel_operation",
+      resource_id: "account.myagent",
+      params: { agent_id: "account.myagent", app_name: "my-app" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = gitopsRequest.mock.calls[0]![0] as { path?: string };
+    expect(call.path).toContain("/agents/account.myagent/applications/my-app/operation");
+  });
+
   it("materializes input_set_ids by GETting each input set then POSTing merged pipeline YAML", async () => {
     const inputSetYaml = `inputSet:\n  pipeline:\n    identifier: mat_pipe\n    variables:\n      - name: x\n        type: String\n        value: "1"\n`;
     mockRequest

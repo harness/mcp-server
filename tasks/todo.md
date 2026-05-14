@@ -340,3 +340,23 @@
 - Split query strings out of `RequestOptions.path` before base-path de-duplication and query assembly.
 - Merged path query params into the generated `URLSearchParams` before applying `options.params`, preserving explicit override behavior.
 - Verified with `pnpm test tests/client/harness-client.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test`.
+
+## Slack Bug Triage: Pull Request Close Support (2026-05-14)
+- [x] Confirm whether PR close is available by design or missing from MCP v2 metadata
+- [x] Add a failing registry test for a first-class pull request close action
+- [x] Implement the minimal pull request close action against the existing Harness Code PR update endpoint
+- [x] Run focused tests, typecheck, build, and relevant broader verification
+- [x] Commit, push, and open/update PR
+
+### Plan
+- Keep the change scoped to the existing `pull_request` resource in `src/registry/toolsets/pull-requests.ts`.
+- Preserve the already-supported generic update path (`harness_update` with `body.state = "closed"`) and add a more discoverable `harness_execute` action named `close`.
+- Map `close` to the existing Harness Code PATCH endpoint `/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}` with a fixed `{ state: "closed" }` body.
+- Mark the action as `medium_write` and `do_not_retry`, matching a non-idempotent PR state transition that requires confirmation in clients with elicitation.
+
+### Review
+- Confirmed PR close was not blocked by MCP design: generic `harness_update` already documented `state: open/closed`, but no first-class `harness_execute` close action existed, so agents asking to "close a PR" saw only `merge`.
+- Added `pull_request.close` as a medium-risk execute action that PATCHes the PR update endpoint with `{ state: "closed" }`.
+- Added registry coverage for the close action and MCP-handler coverage for closing directly from a Harness PR URL.
+- Fixed `harness_execute` resource-id mapping so URL-derived parent identifiers like `repo_id` are preserved instead of being overwritten by the URL's `resource_id`.
+- Verified with `pnpm test tests/registry/registry.test.ts tests/tools/tool-handlers.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test` (53 files / 1309 tests).
