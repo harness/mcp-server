@@ -359,4 +359,4 @@
 - Added `pull_request.close` as a medium-risk execute action that PATCHes the PR update endpoint with `{ state: "closed" }`.
 - Added registry coverage for the close action and MCP-handler coverage for closing directly from a Harness PR URL.
 - Fixed `harness_execute` resource-id mapping so URL-derived parent identifiers like `repo_id` are preserved instead of being overwritten by the URL's `resource_id`.
-- Verified with `pnpm test tests/registry/registry.test.ts tests/tools/tool-handlers.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test` (53 files / 1308 tests).
+- Verified with `pnpm test tests/registry/registry.test.ts tests/tools/tool-handlers.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test` (53 files / 1309 tests).
