@@ -197,6 +197,7 @@ describe("resolveLogContent", () => {
       expect.objectContaining({
         method: "GET",
         path: "/some/blob/path?X-Amz-Signature=sig&token=abc",
+        headerBasedScoping: true,
       }),
     );
   });
@@ -218,12 +219,25 @@ describe("resolveLogContent", () => {
       expect.objectContaining({
         method: "GET",
         path: "/some/blob/path?X-Goog-Signature=sig&token=abc",
+        headerBasedScoping: true,
       }),
     );
   });
 
   it("direct-fetches true external storage pre-signed URLs", async () => {
     const blobLink = "https://bucket.s3.us-west-2.amazonaws.com/logs.zip?X-Amz-Signature=sig";
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link: blobLink }));
+    fetchSpy.mockResolvedValue(new Response('{"out":"log line 1"}', { status: 200 }));
+
+    const result = await resolveLogContent(client, "prefix");
+
+    expect(result).toContain("log line 1");
+    expect(fetchSpy).toHaveBeenCalledWith(blobLink, expect.any(Object));
+    expect(client.requestStream).not.toHaveBeenCalled();
+  });
+
+  it("direct-fetches path-style S3 pre-signed URLs from any region", async () => {
+    const blobLink = "https://s3.eu-north-1.amazonaws.com/harness-logs/logs.zip?X-Amz-Signature=sig";
     const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link: blobLink }));
     fetchSpy.mockResolvedValue(new Response('{"out":"log line 1"}', { status: 200 }));
 
