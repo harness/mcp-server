@@ -4,6 +4,7 @@ import {
   passthrough,
   ngExtract,
   chaosPageExtract,
+  chaosAppMapPageExtract,
   chaosProbeListExtract,
   chaosInfraListExtract,
   chaosK8sInfraListExtract,
@@ -20,7 +21,8 @@ import {
   descChaosHub, descChaosFault, descChaosFaultExperimentRun, descChaosFaultTemplate,
   descChaosProbeTemplate, descChaosActionTemplate,
   descChaosHubFault, descChaosEnvironment,
-  descChaosNetworkMap,
+  descChaosApplicationMap,
+  descDiscoveredNetworkMap,
   descChaosGuardCondition, descChaosGuardRule,
   descChaosRecommendation, descChaosRisk,
   descChaosAction, descChaosProbeInRun,
@@ -40,7 +42,10 @@ import {
   descListProbeTemplates, descGetProbeTemplate, descDeleteProbeTemplate,
   descListActionTemplates, descGetActionTemplate, descDeleteActionTemplate,
   descListHubFaults, descListChaosEnvironments,
-  descListNetworkMaps, descGetNetworkMap,
+  descListApplicationMaps, descGetApplicationMap,
+  descAppMapSearch, descAppMapEnvironmentId, descAppMapInfraId,
+  descAppMapAll, descAppMapMinimal,
+  descListDiscoveredNetworkMaps, descSDNetworkMapSearch,
   descListGuardConditions, descGetGuardCondition, descDeleteGuardCondition,
   descListGuardRules, descGetGuardRule, descDeleteGuardRule,
   descListRecommendations, descGetRecommendation,
@@ -97,6 +102,7 @@ import {
   descAccountIdBody, descOrgIdBody, descProjectIdBody,
   descSearchExperiments, descExperimentInfraId, descExperimentEnvironmentId, descExperimentIds,
   descExperimentStartDate, descExperimentEndDate,
+  descExperimentTargetNetworkMapIds, descExperimentMyExperiments, descExperimentExcludeAutomation,
   descSearchProbes, descProbeIds, descProbeSortField,
   descDRTestSort,
   descCreateDRTest,
@@ -173,10 +179,20 @@ export const chaosToolset: ToolsetDefinition = {
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["experiment_id"],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/chaos/experiments/{experimentId}",
-      // NOTE: hce-saas backend limitations for ListChaosV2Experiments:
-      // 1. infraName, status, infraActive are parsed but never applied in the MongoDB aggregation.
-      // 2. infra_id and environment_id ONLY work when BOTH are provided (composite match: "envId/infraId").
-      //    Sending just one is silently ignored by the repository layer.
+      searchAliases: [
+        "chaos test", "fault injection", "fault injection experiment",
+        "blast radius experiment", "resilience test", "chaos engineering test",
+      ],
+      // NOTE: hce-saas backend limitations for ListChaosV2Experiments
+      // (verified by reading repository.go ListChaosV2Experiments aggregation):
+      // 1. infraName, status, infraActive: parsed into ExperimentFilterInput
+      //    but NEVER applied in the Mongo aggregation (repository.go:684-770).
+      //    Do NOT expose them — agents would think they work and silently get
+      //    unfiltered results.
+      // 2. infra_id + environment_id ONLY work when BOTH are provided
+      //    (repository.go:712-714); either alone is silently dropped.
+      // 3. tags filter is AND substring match across the experiment's tag array
+      //    (substring per tag — tags=fault=gcp matches fault=gcp-vm-kill etc.).
       listFilterFields: [
         { name: "experiment_name", description: descSearchExperiments },
         { name: "infra_id", description: descExperimentInfraId },
@@ -185,10 +201,18 @@ export const chaosToolset: ToolsetDefinition = {
         { name: "environment_id", description: descExperimentEnvironmentId },
         { name: "start_date", description: descExperimentStartDate },
         { name: "end_date", description: descExperimentEndDate },
+        { name: "target_network_map_ids", description: descExperimentTargetNetworkMapIds },
+        { name: "my_experiments", description: descExperimentMyExperiments, type: "boolean" },
+        { name: "exclude_automation", description: descExperimentExcludeAutomation, type: "boolean" },
       ],
       relatedResources: [
         { resourceType: "chaos_experiment_variable", relationship: "child", description: "Runtime variables for the experiment. List these to discover required inputs before running." },
         { resourceType: "chaos_input_set", relationship: "child", description: "Saved collections of variable overrides. Create input sets to reuse runtime configurations across runs." },
+        { resourceType: "chaos_application_map", relationship: "scoped_by", description: "When an experiment is bound to a chaos_application_map, the backend auto-emits workload=<name> AND service=<name> system tags. To find every experiment that targets a workload/service inside a given app map, either filter chaos_experiment with target_network_map_ids=<map> (returns ALL experiments on that map) or list services via chaos_application_map.get and use tags=workload=<name> / tags=service=<name>." },
+        { resourceType: "chaos_fault", relationship: "uses", description: "Each fault step in the experiment manifest emits a fault=<faultName> system tag. Use chaos_fault to discover available fault identities, then filter chaos_experiment with tags=fault=<name>." },
+        { resourceType: "chaos_probe", relationship: "uses", description: "Each probe reference in the experiment manifest emits a probe=<probeID> system tag. Use chaos_probe to discover probe identities, then filter chaos_experiment with tags=probe=<probeID>." },
+        { resourceType: "chaos_k8s_infrastructure", relationship: "scoped_by", description: "Experiments execute on a chaos infrastructure (the chaos agent installed in a Kubernetes cluster). Filter list with infra_id + environment_id (BOTH required together — backend ignores either alone)." },
+        { resourceType: "discovered_network_map", relationship: "discovery_source", description: "When the user gives a high-level target (e.g. 'experiments for the payments app') without an app-map ID, the discovery path is: discovered_network_map → enumerate services/workloads → tags=workload=<name> on chaos_experiment. See descToolsetChaos REASONING PLAYBOOK for the full step-by-step." },
       ],
       operations: {
         list: {
@@ -207,6 +231,9 @@ export const chaosToolset: ToolsetDefinition = {
             environment_id: "environmentIdentifier",
             start_date: "startDate",
             end_date: "endDate",
+            target_network_map_ids: "targetNetworkMapIds",
+            my_experiments: "myExperiments",
+            exclude_automation: "excludeAutomation",
           },
           responseExtractor: chaosPageExtract,
           description: descListExperiments,
@@ -1822,34 +1849,66 @@ export const chaosToolset: ToolsetDefinition = {
       },
     },
 
-    // ── Chaos Network Maps ──────────────────────────────────────────
+    // ── Chaos Application Maps ──────────────────────────────────────
     {
-      resourceType: "chaos_network_map",
-      displayName: "Chaos Network Map",
-      description: descChaosNetworkMap,
+      resourceType: "chaos_application_map",
+      displayName: "Chaos Application Map",
+      description: descChaosApplicationMap,
       toolset: "chaos",
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["map_id"],
+      searchAliases: [
+        "chaos_network_map",
+        "application map", "app map",
+        "network map", "chaos network map",
+        "blast radius",
+      ],
+      listFilterFields: [
+        { name: "search",         description: descAppMapSearch },
+        { name: "environment_id", description: descAppMapEnvironmentId },
+        { name: "infra_id",       description: descAppMapInfraId },
+        { name: "all",            description: descAppMapAll,     type: "boolean" },
+        { name: "minimal",        description: descAppMapMinimal, type: "boolean" },
+      ],
+      relatedResources: [
+        { resourceType: "chaos_k8s_infrastructure", relationship: "scoped_by", description: "Application maps are scoped by (environment, infrastructure). Use chaos_k8s_infrastructure to discover valid infra_id values." },
+        { resourceType: "chaos_environment",        relationship: "scoped_by", description: "Application maps are scoped by environment. Use chaos_environment to discover valid environment_id values." },
+        { resourceType: "discovered_network_map",   relationship: "backed-by", description: "The chaos application map wraps an underlying service-discovery network map. Use discovered_network_map to inspect the raw per-agent inventory." },
+        { resourceType: "chaos_experiment",         relationship: "scopes",    description: "Experiments bound to this application map auto-emit workload=<name> AND service=<name> system tags (one per workload/service in the manifest). Find them via chaos_experiment list with target_network_map_ids=<this map's identity> (broadest) or tags=workload=<name> / tags=service=<name> (narrower)." },
+      ],
       operations: {
         list: {
-          method: "GET",
+          method: "POST",
           path: `${CHAOS}/rest/v2/applicationmaps`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             page: "page",
             limit: "limit",
+            size: "limit",
+            search: "search",
+            search_term: "search",
+            environment_id: "environmentIdentifier",
+            infra_id: "infraId",
+            all: "all",
+            minimal: "minimal",
           },
-          responseExtractor: chaosPageExtract,
-          description: descListNetworkMaps,
+          bodyBuilder: () => ({}),
+          responseExtractor: chaosAppMapPageExtract,
+          description: descListApplicationMaps,
+          bodySchema: { description: descBodyNoBody, fields: [] },
         },
         get: {
           method: "GET",
           path: `${CHAOS}/rest/v2/applicationmaps/{mapId}`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { map_id: "mapId" },
+          queryParams: {
+            environment_id: "environmentIdentifier",
+            infra_id: "infraId",
+          },
           responseExtractor: passthrough,
-          description: descGetNetworkMap,
+          description: descGetApplicationMap,
         },
       },
     },
@@ -2158,6 +2217,11 @@ export const chaosToolset: ToolsetDefinition = {
           relationship: "scopes",
           description: "Discovered services can be filtered by namespace; use this list to find valid namespace values for that filter.",
         },
+        {
+          resourceType: "discovered_network_map",
+          relationship: "selected_by",
+          description: "Network maps select a subset of discovered services from one or more namespaces. Use this resource as the next step after picking which namespaces to chaos-test.",
+        },
       ],
       operations: {
         list: {
@@ -2206,6 +2270,16 @@ export const chaosToolset: ToolsetDefinition = {
           relationship: "scoped_by",
           description: "Use discovered_namespace to discover valid namespace values before filtering services.",
         },
+        {
+          resourceType: "discovered_network_map",
+          relationship: "selected_by",
+          description: "Network maps reference discovered services as their resources. Inspect a network map to see which of these services are in scope for chaos.",
+        },
+        {
+          resourceType: "chaos_application_map",
+          relationship: "promoted_to",
+          description: "Once selected into a network map and promoted to a chaos application map, the workloads behind these services become chaos targets and emit workload=<name> tags on experiments.",
+        },
       ],
       operations: {
         list: {
@@ -2223,6 +2297,50 @@ export const chaosToolset: ToolsetDefinition = {
           },
           responseExtractor: sdPageExtract,
           description: descListDiscoveredServices,
+        },
+      },
+    },
+
+    // ── Service Discovery: Network Maps ────────────────────────────────
+    {
+      resourceType: "discovered_network_map",
+      displayName: "Discovered Network Map",
+      description: descDiscoveredNetworkMap,
+      toolset: "chaos",
+      scope: "project",
+      scopeParams: CHAOS_SCOPE,
+      identifierFields: ["agent_identity"],
+      searchAliases: [
+        "service discovery network map", "sd network map", "raw network map",
+        "agent network map",
+      ],
+      listFilterFields: [
+        { name: "agent_identity", description: descSDAgentIdentity, required: true },
+        { name: "environment_id", description: descSDEnvironmentId, required: true },
+        { name: "search",         description: descSDNetworkMapSearch },
+        { name: "all", type: "boolean", description: descSDFetchAll },
+      ],
+      diagnosticHint: descSDAgentDiagnostic,
+      relatedResources: [
+        { resourceType: "chaos_application_map",  relationship: "promoted_to", description: "The chaos application map (chaos_application_map) is the project-scoped, chaos-augmented view of a discovered network map. Use chaos_application_map for blast-radius / experiment context." },
+        { resourceType: "discovered_service",     relationship: "contains",    description: "Network maps reference discovered services as their resources. Use discovered_service to inspect each entry." },
+        { resourceType: "discovered_namespace",   relationship: "scoped_by",   description: "Use discovered_namespace to discover valid namespace context for the agent." },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${SD}/agents/{agentIdentity}/networkmaps`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { agent_identity: "agentIdentity" },
+          queryParams: {
+            environment_id: "environmentIdentifier",
+            search: "search",
+            page: "page",
+            size: "limit",       // SD uses `limit`, not `size`
+            all: "all",
+          },
+          responseExtractor: sdPageExtract,
+          description: descListDiscoveredNetworkMaps,
         },
       },
     },

@@ -1,10 +1,82 @@
 // ── Toolset ──────────────────────────────────────────────────────────
 
-export const descToolsetChaos = `Harness Chaos Engineering — run/stop/govern chaos experiments; manage probes, faults (Kubernetes, AWS, Azure, GCP, Linux), actions, hubs, and templates (experiment, fault, probe, action); inspect experiment runs and resiliency scores; configure Kubernetes and Linux infrastructure and environments; visualize blast radius via network maps; enforce governance via ChaosGuard rules/conditions; analyze recommendations and risks; run load tests; list disaster recovery (DR) tests`;
+export const descToolsetChaos = `Harness Chaos Engineering — controlled failure injection against Kubernetes/Linux workloads to measure and improve resilience.
+
+PRIMITIVES (the building blocks of every experiment):
+- Fault — a single failure injection step (e.g. pod-delete, gcp-vm-kill, disk-fill, network-loss). Built-in or custom; lives in a chaos hub. Resource: chaos_fault.
+- Action — a non-failure step used for setup/teardown (delay, customScript, container exec). Resource: chaos_action.
+- Probe — a continuous health check that runs alongside the experiment (httpProbe, cmdProbe, promProbe, k8sProbe, sloProbe, datadogProbe, etc.). Probe verdicts produce the resiliency score. Resource: chaos_probe.
+- Experiment — a manifest combining one or more faults + actions + probes, plus runtime variables. Resource: chaos_experiment. Supports run/stop. The same primitives have template forms (chaos_fault_template, chaos_action_template, chaos_probe_template, chaos_experiment_template) that live in chaos hubs (chaos_hub) and are instantiated via the create_from_template execute action.
+
+INFRASTRUCTURE LAYER (where experiments execute):
+- chaos_k8s_infrastructure — a chaos agent installed inside a Kubernetes cluster, scoped to one Harness environment. An experiment can only run when status=ACTIVE and isChaosEnabled=true.
+- chaos_infrastructure — Linux/machine equivalent.
+- chaos_environment — the Harness env scoping the infra.
+
+SERVICE DISCOVERY (SD) — END-TO-END JOURNEY:
+1. Customer installs an SD agent in a Kubernetes cluster (one agent per chaos_k8s_infrastructure).
+2. SD agent uses eBPF to discover namespaces, services, workloads, and inter-service connections. Inspect via discovered_namespace, discovered_service.
+3. Customer (or rules) selects a subset of services into an SD network map. Inspect via discovered_network_map (raw, per-agent inventory).
+4. The SD network map is promoted into a chaos_application_map, scoped to one (environment, infrastructure) pair.
+5. Experiments bound to that application map automatically tag themselves with workload=<name> AND service=<name> for each workload/service in the manifest — enabling blast-radius reporting and the workload=/service= filters (see system tags below).
+
+SYSTEM TAGS auto-emitted by the backend on chaos_experiment create/update — use these as the primary filter for "find experiments that target X":
+- fault=<faultName>       (ALWAYS attached, one per fault step) — tags=fault=pod-delete; tags=fault=gcp matches all gcp-* faults (substring).
+- probe=<probeID>         (ALWAYS attached, one per probe reference) — tags=probe=<probeID>.
+- workload=<workloadName> (ONLY when bound to chaos_application_map) — from manifest Targets.Selectors.Workloads. tags=workload=payments-api.
+- service=<serviceName>   (ONLY when bound to chaos_application_map) — from the manifest's resolved service mapping. tags=service=payments-api.
+Filter is AND substring match across the experiment's tag array. Combine: tags=fault=pod-delete,workload=payments-api.
+Note: "workload" = Kubernetes Deployment/StatefulSet/DaemonSet (NOT a Pod). Chaos faults always target workloads; pods are ephemeral.
+
+COMMON GOTCHAS:
+- chaos_experiment list filters infra_id and environment_id are silently ignored when passed alone — backend requires BOTH together.
+- chaos_experiment list filters infra_name, infra_active, status are PARSED but NEVER applied by the backend aggregation. Don't pass them — agents would think they work and silently get unfiltered results. Use infra_id (paired with environment_id) for infra filtering.
+- chaos_application_map get treats environment_id + infra_id as de facto required: the backend's Mongo lookup is keyed on {identity, infra_id, environment_ref}, so missing either returns HTTP 500 with "mongo: no documents in result" (no validation error).
+- SD endpoints (discovered_*) require an agent_identity that is also a registered chaos_k8s_infrastructure.identity.
+- Chaos REST API uses organizationIdentifier (not orgIdentifier) — the registry handles this via scopeParams override; agents shouldn't notice.
+
+REASONING PLAYBOOK — answering "list experiments for <high-level X>" (e.g. "Harness Payment Bank", "the payments service"):
+X is rarely a chaos_experiment field directly. It's almost always a Harness project, a K8s service name, a workload name, or an application-map name. Resolve it before listing:
+
+  Step 1. Identify scope. If the user names a project/org → set project_id/org_id. If they name an environment ("prod") → list chaos_environment with search_term=<env keyword>. If they name a cluster → list chaos_k8s_infrastructure. Remember: env_id + infra_id must be passed TOGETHER on chaos_experiment list — either alone is silently dropped.
+
+  Step 2. Resolve X to concrete tag values. Two sub-paths:
+    (2a) Fast path — try tag-substring directly: chaos_experiment list with tags=workload=<keyword> (e.g. tags=workload=payment). The backend's substring match is forgiving. If the result count looks right, you're done.
+    (2b) Discovery path — when X is fuzzy or you need to enumerate workloads first:
+      (i)   chaos_application_map list filtered by env+infra → pick the map(s) matching X by name.
+      (ii)  chaos_application_map get on each candidate → response.services[].name gives service names; response.<resources>[].name gives workload names; response.identity is the app-map ID.
+      (iii) chaos_experiment list with target_network_map_ids=<map identity> (returns ALL experiments on that map; no tag filter needed) OR tags=service=<name>,workload=<name> for narrower hits.
+
+  Step 3. If the customer wants raw inventory (not chaos-augmented), use discovered_network_map list with agent_identity=<infra identity> + environment_id; then discovered_service for finer detail. Use this when the user asks "what services even exist in my cluster" before they pick targets.
+
+  Step 4. NEVER pass infra_name, infra_active, or status to chaos_experiment list — backend silently drops them. Use infra_id (paired with environment_id) instead.
+
+Common compound queries:
+  - "experiments touching payments in prod"     → env+infra together → tags=workload=payment
+  - "experiments running today on app map M"    → target_network_map_ids=M, start_date=today
+  - "my experiments, no automation noise"       → my_experiments=true, exclude_automation=true
+  - "every pod-delete experiment account-wide"  → tags=fault=pod-delete (no env/infra needed)
+  - "experiments using HTTP probe X"            → tags=probe=X`;
 
 // ── Resource Descriptions ────────────────────────────────────────────
 
-export const descChaosExperiment = `Chaos experiment definition. Supports list, get, delete, create, and execute actions: run, stop. Use chaos_experiment_variable list to discover required runtime inputs before running.`;
+export const descChaosExperiment = `Chaos experiment definition — a saved, manifest-backed test that injects one or more faults against selected workloads.
+Supports list, get, delete, create, and execute actions: run, stop. Use chaos_experiment_variable list to discover required runtime inputs before running.
+
+System tags (auto-emitted by the backend on create/update — use these as the primary filter for "experiments that target X"):
+- fault=<faultName> — ALWAYS attached, one per fault step in the manifest (e.g. fault=pod-delete, fault=gcp-vm-kill). Use tags=fault=<name> to find every experiment that runs a given fault. Substring matches, so tags=fault=gcp matches all gcp-* faults.
+- probe=<probeID> — ALWAYS attached, one per probe reference in the manifest. Use tags=probe=<probeID> to find every experiment using a specific health-check probe.
+- workload=<workloadName> — attached ONLY when the experiment is bound to a chaos_application_map (targetNetworkMapID is set on the experiment). Sourced from manifest Targets.Selectors.Workloads[].Names (V1) or TARGET_WORKLOAD_NAMES env (V2 enterprise faults). Use tags=workload=<name> to find every experiment that targets a specific Kubernetes workload (Deployment/StatefulSet/DaemonSet — NOT a Pod).
+- service=<serviceName> — attached ALONGSIDE workload= ONLY when bound to a chaos_application_map. Sourced from the manifest's resolved service mapping. Use tags=service=<name> to find experiments targeting a specific Kubernetes Service (label-selector → pods).
+
+Filter semantics: the tags filter is an AND substring match across the experiment's tag array. Pass multiple tags via comma-separated value (e.g. tags=fault=pod-delete,workload=payments-api).
+
+TWO WAYS to find experiments targeting a workload/service X:
+  (a) Tag filter — list with tags=workload=X (or tags=service=X). Works without knowing which app map X belongs to. Substring, so tags=workload=payment matches all payment-* workloads.
+  (b) App-map filter — list with target_network_map_ids=<map identity>. Use when you already know the app map; returns ALL experiments bound to it regardless of which workload they target.
+Approach (a) is broader (any tagged workload, no app-map needed); (b) is narrower (only experiments bound to a specific map).
+
+See descToolsetChaos REASONING PLAYBOOK for the full multi-step flow when the user query is high-level (e.g. "experiments for the Harness Payment Bank app").`;
 
 export const descChaosExperimentRun = `Experiment run timeline — full snapshot of an ongoing or completed chaos experiment run.
 Returns the execution pipeline with individual nodes (faults, probes, actions), each with status, timing, and chaos data.
@@ -52,7 +124,16 @@ Typical workflow: harness_list resource_type=chaos_hub → pick a hub → harnes
 
 export const descChaosFault = `Chaos fault definition (e.g. pod-delete, network-loss, CPU stress). Supports list, get, delete, plus get_variables, get_yaml, and list_experiment_runs execute actions.`;
 
-export const descChaosNetworkMap = `Network map (application map) for chaos blast radius visualization. Supports list and get.`;
+export const descChaosApplicationMap = `Chaos application map — a project-scoped, chaos-augmented view of a service-discovery network map, scoped to one (environment, infrastructure) pair.
+
+End-to-end lifecycle (an LLM should reason about this when answering "how do I run a chaos experiment against my services?"):
+  1. Customer installs a Service Discovery (SD) agent into a Kubernetes cluster (one agent per chaos_k8s_infrastructure).
+  2. SD agent uses eBPF to discover namespaces, services, workloads (Deployment/StatefulSet/DaemonSet — NOT pods), and inter-service connections. List these via discovered_namespace and discovered_service.
+  3. Customer (or an automated rule) selects a subset of discovered services + connections into an SD network map. Inspect via discovered_network_map.
+  4. The SD network map is "promoted" into a chaos application map (this resource), tied to one (environment, infrastructure). One application map per (env, infra, identity).
+  5. Chaos experiments can then be created against this application map. The presence of an application map on an experiment unlocks workload=<name> AND service=<name> system tags — see chaos_experiment.
+
+Returns name, identity, environmentRef, infrastructureId, status, agentIdentity, averageResiliencyScore, resiliencyCoverage, recentExperimentRunsDetails, totalExperimentCount; get adds eBPF-derived connections and per-service resiliency. Supports list and get.`;
 
 export const descChaosGuardCondition = `ChaosGuard condition — defines the infrastructure, fault, and application constraints that ChaosGuard rules evaluate against chaos experiments.
 Returns name, description, infraType, faultSpec, associated rules, tags, and audit info.
@@ -188,8 +269,19 @@ export const descDeleteFaultTemplate = `Delete a chaos fault template by identit
 Requires hub_identity to identify which chaos hub owns the template.
 Returns a success confirmation on completion.`;
 
-export const descListNetworkMaps = `List chaos network maps`;
-export const descGetNetworkMap = `Get chaos network map details`;
+export const descListApplicationMaps = `List chaos application maps in the project.
+Returns a paginated list with name, identity, environmentRef, infrastructureId, status, resiliency scores, recent experiment runs, and audit info.
+Supports filtering by environment_id, infra_id, search (name substring), and the boolean toggles all (include archived) and minimal (lightweight projection).`;
+
+export const descGetApplicationMap = `Get a single chaos application map by identity.
+environment_id and infra_id MUST be passed via params — the backend composes its Mongo lookup as {identity, infra_id, environment_ref} (composite key); missing either yields HTTP 500 with a "mongo: no documents in result" message (de facto required, not validation-enforced).
+Returns the application map plus its eBPF-derived connections and per-service resiliency metadata (averageResiliencyScore, resiliencyCoverage).`;
+
+export const descAppMapSearch        = `Substring match on application-map name (case-insensitive). Optional.`;
+export const descAppMapEnvironmentId = `Harness environment identifier scoping the map. Optional for list (filters results); required for get.`;
+export const descAppMapInfraId       = `Chaos infrastructure identifier (chaos_k8s_infrastructure.identity) scoping the map. Optional for list (filters results); required for get.`;
+export const descAppMapAll           = `When true, include archived/soft-deleted application maps. Default: false.`;
+export const descAppMapMinimal       = `When true, return a lightweight projection (omit heavy fields like recent runs / resiliency arrays). Default: false.`;
 
 export const descListGuardConditions = `List ChaosGuard conditions.
 Conditions define the infrastructure, fault, and application constraints that ChaosGuard rules evaluate against chaos experiments.
@@ -462,7 +554,13 @@ export const descRevision2 = `Second revision identifier for comparison.`;
 export const descRevisionToCompare = `Second revision identifier for comparison (action templates use this param name).`;
 export const descSortField = `Field to sort results by.`;
 export const descSortAsc = `When true, sort in ascending order. Defaults to false (descending).`;
-export const descTags = `Comma-separated list of tags to filter by. Must have ALL specified tags (AND filter).`;
+export const descTags = `Comma-separated list of tag substrings to filter by (AND match — each tag must appear as a substring in at least one of the resource's tags).
+For chaos_experiment specifically, the backend auto-emits these system tags you can filter on:
+  - fault=<faultName>     (always present): tags=fault=pod-delete, tags=fault=gcp (matches all gcp-* faults)
+  - probe=<probeID>       (always present): tags=probe=<probeID>
+  - workload=<workloadName> (only on app-map-bound experiments): tags=workload=payments-api
+  - service=<serviceName>   (only on app-map-bound experiments): tags=service=payments-api
+Combine: tags=fault=pod-delete,workload=payments-api → experiments that pod-delete the payments-api workload.`;
 export const descIncludeAllScope = `Controls scope filtering for list queries. false (default): Returns only templates matching the exact organizationIdentifier and projectIdentifier provided. If both are empty, returns only account-level and Enterprise ChaosHub (global) templates. true: Returns templates across all organizations and projects in the account, plus Enterprise ChaosHub (global) templates. Use this when you need a combined view of built-in enterprise templates and custom templates across scopes, or when the user's org/project context is unknown.`;
 export const descInfrastructure = `Infrastructure filter (e.g. KubernetesV2).`;
 
@@ -499,6 +597,12 @@ export const descExperimentInfraId = `Filter experiments by infrastructure ID. I
 export const descExperimentIds = `Comma-separated experiment IDs for bulk lookup (e.g. "id1,id2,id3").`;
 export const descExperimentStartDate = `Filter by start date (Unix milliseconds, e.g. "1711324800000"). Must be used together with end_date.`;
 export const descExperimentEndDate = `Filter by end date (Unix milliseconds, e.g. "1711324800000"). Must be used together with start_date.`;
+
+export const descExperimentTargetNetworkMapIds = `Comma-separated chaos_application_map identities; returns experiments bound to any of these app maps. Useful when you already have an app map and want every experiment that targets workloads inside it. Bypasses the tag-substring approach (no tags=workload= needed).`;
+
+export const descExperimentMyExperiments = `When true, return only experiments created or updated by the calling user. Default: false.`;
+
+export const descExperimentExcludeAutomation = `When true, exclude experiments that were triggered by pipeline automation (e.g. via DR-test pipelines). Default: false.`;
 
 // K8s infrastructure fields
 
@@ -955,5 +1059,21 @@ IMPORTANT — pass compact: false on this call. The actionable payload lives ins
 export const descSDNamespaceFilter = `Filter discovered services by Kubernetes namespace (exact match on spec.kubernetes.namespace). Only meaningful for records with a Kubernetes-typed spec; non-K8s records (Lambda, EC2, VMs) won't match.`;
 
 export const descSDSearchFilter = `Case-insensitive substring search on the discovered service's name field.`;
+
+// discovered_network_map
+export const descDiscoveredNetworkMap = `Service-discovery network map — the raw, per-agent inventory of services + connections discovered by an SD agent inside a single Kubernetes cluster.
+
+This is step 3 of the chaos onboarding journey (see chaos_application_map for the full lifecycle):
+  SD agent installed → discovers namespaces/services/workloads → user selects subset into an SD network map (this resource) → promoted into a chaos_application_map → experiments can target workloads inside it.
+
+Use this resource to inspect what an SD agent has discovered BEFORE it is grouped/promoted into a chaos_application_map (e.g. to debug "why is my service missing from the application map?").
+
+Returns name, identity, description, tags, environmentIdentifier, agentID, rules, resources (NetworkMapEntity[] — services in the map, each with kubernetes namespace + kind + hasWorkload metadata), and connections (eBPF-derived).`;
+
+export const descListDiscoveredNetworkMaps = `List service-discovery network maps for a specific SD agent and environment.
+Requires agent_identity (the SD agent ID, same as chaos_k8s_infrastructure.identity for SD-enabled infras) and environment_id.
+Supports search (name substring) and the all toggle (default false → server returns paginated chunk; true → server returns full list and skips the user-name enrichment loop).`;
+
+export const descSDNetworkMapSearch = `Case-insensitive substring match on network-map name. Optional.`;
 
 export const descExperimentIdUUID = `Experiment UUID (v4). Required — generate a new random UUID for create. For update, pass the exact id from harness_get to avoid creating a duplicate.`;

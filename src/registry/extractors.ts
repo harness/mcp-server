@@ -406,6 +406,24 @@ export const chaosPageExtract = (raw: unknown): { items: unknown[]; total: numbe
 };
 
 /**
+ * Extract chaos application-map (a.k.a. network map) list response:
+ * { data: [...], page: { index, limit, totalPages, totalItems } }
+ *
+ * Note: the JSON key is "page" (not "pagination" like other chaos
+ * resources), per ListTargetNetworkMapResponse in hce-saas
+ * pkg/networkmap/types.go. We don't widen chaosPageExtract because
+ * "page" also means a query param, and silently accepting both shapes
+ * could mask bugs in unrelated endpoints.
+ */
+export const chaosAppMapPageExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { data?: unknown[]; page?: { totalItems?: number } };
+  return {
+    items: r.data ?? [],
+    total: r.page?.totalItems ?? (Array.isArray(r.data) ? r.data.length : 0),
+  };
+};
+
+/**
  * Extract chaos probe list response: { totalNoOfProbes, data: [...] }
  */
 export const chaosProbeListExtract = (raw: unknown): { items: unknown[]; total: number } => {

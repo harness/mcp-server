@@ -1280,7 +1280,10 @@ Use `harness_execute(resource_type="pull_request", action="close", ...)` for an 
 | `chaos_k8s_infrastructure`  | x    | x   |        |        |        | `check_health`         |
 | `chaos_hub`                 | x    | x   |        |        |        |                        |
 | `chaos_fault`               | x    | x   |        |        |        |                        |
-| `chaos_network_map`         | x    | x   |        |        |        |                        |
+| `chaos_application_map`     | x    | x   |        |        |        |                        |
+| `discovered_namespace`      | x    |     |        |        |        |                        |
+| `discovered_service`        | x    |     |        |        |        |                        |
+| `discovered_network_map`    | x    |     |        |        |        |                        |
 | `chaos_guard_condition`     | x    | x   |        |        |        |                        |
 | `chaos_guard_rule`          | x    | x   |        |        |        |                        |
 | `chaos_recommendation`      | x    | x   |        |        |        |                        |
@@ -1555,7 +1558,7 @@ Available toolset names:
 | `pull-requests`         | pull_request, pr_reviewer, pr_comment, pr_check, pr_activity                                                                                                                                                                                                                                    |
 | `feature-flags`         | fme_workspace, fme_environment, fme_feature_flag, fme_feature_flag_definition, fme_rollout_status, fme_rule_based_segment, fme_rule_based_segment_definition, feature_flag                                                                                                                      |
 | `gitops`                | gitops_agent, gitops_application, gitops_cluster, gitops_repository, gitops_applicationset, gitops_repo_credential, gitops_app_event, gitops_pod_log, gitops_managed_resource, gitops_resource_action, gitops_dashboard, gitops_app_resource_tree                                               |
-| `chaos`                 | chaos_experiment, chaos_probe, chaos_experiment_template, chaos_infrastructure, chaos_experiment_variable, chaos_experiment_run, chaos_loadtest, chaos_k8s_infrastructure, chaos_hub, chaos_fault, chaos_network_map, chaos_guard_condition, chaos_guard_rule, chaos_recommendation, chaos_risk |
+| `chaos`                 | chaos_experiment, chaos_probe, chaos_experiment_template, chaos_infrastructure, chaos_experiment_variable, chaos_experiment_run, chaos_loadtest, chaos_k8s_infrastructure, chaos_hub, chaos_fault, chaos_application_map, chaos_guard_condition, chaos_guard_rule, chaos_recommendation, chaos_risk, discovered_namespace, discovered_service, discovered_network_map |
 | `ccm`                   | cost_perspective, cost_breakdown, cost_timeseries, cost_summary, cost_recommendation, cost_anomaly, cost_anomaly_summary, cost_category, cost_account_overview, cost_filter_value, cost_recommendation_stats, cost_recommendation_detail, cost_commitment                                       |
 | `sei`                   | sei_metric, sei_productivity_metric, sei_dora_metric, sei_team, sei_team_detail, sei_org_tree, sei_org_tree_detail, sei_business_alignment, sei_ai_usage, sei_ai_adoption, sei_ai_impact, sei_ai_raw_metric                                                                                     |
 | `scs`                   | scs_artifact_source, artifact_security, scs_artifact_component, scs_artifact_remediation, scs_chain_of_custody, scs_compliance_result, code_repo_security, scs_sbom                                                                                                                             |
