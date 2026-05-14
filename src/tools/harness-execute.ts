@@ -65,15 +65,12 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         const actionSpec = def.executeActions?.[args.action];
         const risk = actionSpec?.operationPolicy.risk ?? "low_write";
 
-        const skipConfirmation = resourceType === "pipeline" && args.action === "retry_stages";
-        const elicit = skipConfirmation
-          ? { proceed: true, method: "not_required" as const }
-          : await confirmViaElicitation({
-            server,
-            toolName: "harness_execute",
-            message: `Execute "${args.action}" on ${resourceType}${resourceId ? ` "${resourceId}"` : ""}?`,
-            risk,
-          });
+        const elicit = await confirmViaElicitation({
+          server,
+          toolName: "harness_execute",
+          message: `Execute "${args.action}" on ${resourceType}${resourceId ? ` "${resourceId}"` : ""}?`,
+          risk,
+        });
         if (!elicit.proceed) {
           return errorResult(`Operation ${elicit.reason} by user.`);
         }
