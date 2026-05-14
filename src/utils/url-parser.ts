@@ -19,6 +19,7 @@ export interface ParsedHarnessUrl {
   comment_id?: string;
   registry_id?: string;
   artifact_id?: string;
+  file_id?: string;
   environment_id?: string;
   step_id?: string;
   stage_id?: string;
@@ -36,6 +37,7 @@ type ContextField =
   | "comment_id"
   | "registry_id"
   | "artifact_id"
+  | "file_id"
   | "environment_id";
 
 /** Known Harness module identifiers that appear in URL paths */
@@ -67,6 +69,7 @@ const RESOURCE_SEGMENTS: Record<string, { type: string; contextField: ContextFie
   "experiments":      { type: "chaos_experiment",    contextField: "resource_id" },
   "registries":       { type: "registry",            contextField: "registry_id" },
   "artifacts":        { type: "artifact",            contextField: "artifact_id" },
+  "file-store":       { type: "file_store_item",     contextField: "file_id" },
   "repositories":     { type: "repository",          contextField: "repo_id" },
   "repos":            { type: "repository",          contextField: "repo_id" },
   "issues":           { type: "sto_issue",           contextField: "resource_id" },
@@ -93,6 +96,7 @@ const URL_RESOURCE_SCOPE_TYPES = new Set([
   "infrastructure",
   "secret",
   "template",
+  "file_store_item",
 ]);
 
 /** Structural segments that should never be treated as resource IDs */
@@ -230,6 +234,7 @@ const MERGEABLE_FIELDS: (keyof ParsedHarnessUrl)[] = [
   "comment_id",
   "registry_id",
   "artifact_id",
+  "file_id",
   "environment_id",
   "step_id",
   "stage_id",

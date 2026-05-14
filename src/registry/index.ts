@@ -36,6 +36,7 @@ import { dbopsToolset } from "./toolsets/dbops.js";
 import { accessControlToolset } from "./toolsets/access-control.js";
 import { settingsToolset } from "./toolsets/settings.js";
 import { platformToolset } from "./toolsets/platform.js";
+import { fileStoreToolset } from "./toolsets/file-store.js";
 
 import { visualizationsToolset } from "./toolsets/visualizations.js";
 import { governanceToolset } from "./toolsets/governance.js";
@@ -116,6 +117,10 @@ function getExplicitScopeValues(scope: ResourceScope, input: Record<string, unkn
   return { orgId, projectId };
 }
 
+function isFormDataBody(body: unknown): body is FormData {
+  return typeof FormData !== "undefined" && body instanceof FormData;
+}
+
 const ALL_TOOLSETS: ToolsetDefinition[] = [
   pipelinesToolset,
   agentsToolset,
@@ -144,6 +149,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   accessControlToolset,
   settingsToolset,
   platformToolset,
+  fileStoreToolset,
 
   visualizationsToolset,
   governanceToolset,
@@ -655,7 +661,7 @@ export class Registry {
     // Inject orgIdentifier/projectIdentifier into the body for mutating operations (POST/PUT).
     // Harness NG APIs require these in the body (not just query params) to scope the resource correctly.
     // If bodyWrapperKey is set (e.g., "connector"), inject inside the wrapper object.
-    if (body && typeof body === "object" && (resolvedMethod === "POST" || resolvedMethod === "PUT")) {
+    if (body && typeof body === "object" && !isFormDataBody(body) && (resolvedMethod === "POST" || resolvedMethod === "PUT")) {
       const bodyRecord = body as Record<string, unknown>;
       // Determine where to inject: inside wrapper if present, otherwise at top level
       const targetRecord = spec.bodyWrapperKey && 
@@ -686,6 +692,9 @@ export class Registry {
     if (spec.bodySchema && body && typeof body === "object") {
       const bodyRecord = body as Record<string, unknown>;
       const payload =
+        isFormDataBody(body) && input.body != null && typeof input.body === "object"
+          ? (input.body as Record<string, unknown>)
+          :
         spec.bodyWrapperKey &&
         bodyRecord[spec.bodyWrapperKey] != null &&
         typeof bodyRecord[spec.bodyWrapperKey] === "object"

@@ -265,6 +265,22 @@ describe("HarnessClient", () => {
       expect(headers["Content-Type"]).toBe("application/yaml");
     });
 
+    it("passes FormData bodies without setting Content-Type manually", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({ data: "ok" }), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+      const form = new FormData();
+      form.append("name", "config.yaml");
+
+      await client.request({ method: "POST", path: "/ng/api/file-store", body: form });
+
+      const init = fetchSpy.mock.calls[0][1] as RequestInit;
+      const headers = init.headers as Record<string, string>;
+      expect(init.body).toBe(form);
+      expect(headers["Harness-Account"]).toBe("test-account");
+      expect(headers["x-api-key"]).toBe("pat.test-account.token.secret");
+      expect(headers["Content-Type"]).toBeUndefined();
+    });
+
     it("allows Content-Type override via options.headers", async () => {
       fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
       const client = new HarnessClient(makeConfig());

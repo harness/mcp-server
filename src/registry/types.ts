@@ -132,6 +132,7 @@ export type ToolsetName =
   | "access_control"
   | "settings"
   | "platform"
+  | "file-store"
 
   | "visualizations"
   | "governance"
