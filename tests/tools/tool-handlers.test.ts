@@ -641,6 +641,52 @@ describe("harness_update", () => {
       identifier: "proj1",
     });
   });
+
+  it("rejects template updates without an explicit version label", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "stepTemplate" } });
+    client = makeClient(mockRequest);
+    const templateServer = makeMcpServer("accept");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(templateServer, registry, client);
+
+    const result = await templateServer.call("harness_update", {
+      resource_type: "template",
+      resource_id: "stepTemplate",
+      body: {
+        template_yaml: "template:\n  name: Step Template\n  identifier: stepTemplate\n",
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("version_label is required for template update"),
+    });
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("uses body.label as the template update version when params.version_label is omitted", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "stepTemplate" } });
+    client = makeClient(mockRequest);
+    const templateServer = makeMcpServer("accept");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(templateServer, registry, client);
+
+    const result = await templateServer.call("harness_update", {
+      resource_type: "template",
+      resource_id: "stepTemplate",
+      body: {
+        label: "stable",
+        template_yaml: "template:\n  name: Step Template\n  identifier: stepTemplate\n",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { path: string; body: Record<string, unknown> };
+    expect(callArgs.path).toBe("/v1/templates/stepTemplate/versions/stable");
+    expect(callArgs.body.label).toBe("stable");
+  });
 });
 
 describe("harness_delete", () => {

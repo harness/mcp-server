@@ -340,3 +340,16 @@
 - Split query strings out of `RequestOptions.path` before base-path de-duplication and query assembly.
 - Merged path query params into the generated `URLSearchParams` before applying `options.params`, preserving explicit override behavior.
 - Verified with `pnpm test tests/client/harness-client.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test`.
+
+## Critical Bug Inspection (2026-05-14)
+- [ ] Inspect recent commits for high-severity behavioral regressions
+- [ ] Reproduce template update wrong-version fallback
+- [ ] Add regression coverage that template updates require an explicit version label
+- [ ] Implement minimal fix in the template update handler
+- [ ] Run focused tests, typecheck, build, and relevant full tests
+- [ ] Commit, push, open PR, and post Slack summary
+
+### Plan
+- Focus the fix on `src/tools/harness-update.ts`, where the MCP handler currently defaults template updates to `version_label="v1"` before dispatch.
+- Add tool-level regression tests in `tests/tools/tool-handlers.test.ts` because the registry already rejects missing `version_label`; the bug is the handler masking that validation with a silent default.
+- Preserve successful template updates when `params.version_label`, `body.version_label`, or body version aliases identify the intended template version.

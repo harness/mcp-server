@@ -70,11 +70,15 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
           input[primaryField] = args.resource_id;
         }
         const versionLabel = asString(input.version_label);
+        const bodyRecord = isRecord(args.body) ? args.body : undefined;
+        const bodyVersionLabel = bodyRecord
+          ? asString(bodyRecord.version_label) ?? asString(bodyRecord.versionLabel) ?? asString(bodyRecord.label)
+          : undefined;
         if (versionLabel) { /* already set via params */ }
-        else if (isRecord(args.body) && "version_label" in args.body) {
-          input.version_label = args.body.version_label;
+        else if (bodyVersionLabel) {
+          input.version_label = bodyVersionLabel;
         } else if (args.resource_type === "template") {
-          input.version_label = "v1";
+          return errorResult("version_label is required for template update. Pass params.version_label or body.label to identify the template version to update.");
         }
 
         const result = await registry.dispatch(client, args.resource_type, "update", input, { tool: "harness_update", confirmation: elicit.method, resource_id: args.resource_id });
