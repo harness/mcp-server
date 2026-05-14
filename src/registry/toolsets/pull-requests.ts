@@ -1,6 +1,38 @@
 import type { ToolsetDefinition } from "../types.js";
 import { passthrough } from "../extractors.js";
 
+function bodyRecord(input: Record<string, unknown>): Record<string, unknown> | undefined {
+  const body = input.body;
+  return body && typeof body === "object" && !Array.isArray(body)
+    ? body as Record<string, unknown>
+    : undefined;
+}
+
+function pullRequestState(input: Record<string, unknown>): "open" | "closed" | undefined {
+  const state = bodyRecord(input)?.state;
+  return state === "open" || state === "closed" ? state : undefined;
+}
+
+function requiredPathPart(input: Record<string, unknown>, field: string): string {
+  const value = input[field];
+  if (value === undefined || value === "") {
+    throw new Error(`Missing required field "${field}" for pull_request.`);
+  }
+  return encodeURIComponent(String(value));
+}
+
+function pullRequestUpdatePath(input: Record<string, unknown>): string {
+  const repoIdentifier = requiredPathPart(input, "repo_id");
+  const prNumber = requiredPathPart(input, "pr_number");
+  const stateSuffix = pullRequestState(input) ? "/state" : "";
+  return `/code/api/v1/repos/${repoIdentifier}/pullreq/${prNumber}${stateSuffix}`;
+}
+
+function pullRequestUpdateBody(input: Record<string, unknown>): unknown {
+  const state = pullRequestState(input);
+  return state ? { state } : input.body;
+}
+
 export const pullRequestsToolset: ToolsetDefinition = {
   name: "pull-requests",
   displayName: "Pull Requests",
@@ -69,16 +101,18 @@ export const pullRequestsToolset: ToolsetDefinition = {
         },
         update: {
           method: "PATCH",
+          methodBuilder: (input) => pullRequestState(input) ? "POST" : "PATCH",
           path: "/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}",
+          pathBuilder: pullRequestUpdatePath,
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: {
             repo_id: "repoIdentifier",
             pr_number: "prNumber",
           },
-          bodyBuilder: (input) => input.body,
+          bodyBuilder: pullRequestUpdateBody,
           responseExtractor: passthrough,
           description:
-            "Update a pull request. Body fields: title, description, state (open/closed).",
+            "Update a pull request. Body fields: title, description, state (open/closed). State changes use the dedicated Harness Code PR state endpoint.",
           bodySchema: {
             description: "Pull request update fields",
             fields: [
@@ -91,9 +125,10 @@ export const pullRequestsToolset: ToolsetDefinition = {
       },
       executeActions: {
         close: {
-          method: "PATCH",
-          path: "/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}",
-          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          method: "POST",
+          path: "/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}/state",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
           pathParams: {
             repo_id: "repoIdentifier",
             pr_number: "prNumber",
@@ -101,9 +136,9 @@ export const pullRequestsToolset: ToolsetDefinition = {
           bodyBuilder: () => ({ state: "closed" }),
           responseExtractor: passthrough,
           actionDescription:
-            "Close a pull request without merging it. Sends state='closed' to the pull request update endpoint.",
+            "Close a pull request by setting its state to closed.",
           bodySchema: {
-            description: "No body required. The action sends { state: 'closed' } automatically.",
+            description: "Close pull request state transition",
             fields: [],
           },
         },
