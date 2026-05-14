@@ -750,6 +750,35 @@ describe("Registry", () => {
       expect(call.body).toEqual({ state: "closed" });
     });
 
+    it("pipeline execute sends pipeline_branch as ?pipelineBranchName= query param", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ planExecution: { uuid: "exec-123" } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatchExecute(client, "pipeline", "run", {
+        pipeline_id: "my-pipeline",
+        pipeline_branch: "feature/my-fix",
+      });
+
+      expect(mockRequest).toHaveBeenCalledOnce();
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("POST");
+      expect(call.path).toContain("/pipeline/api/pipeline/execute/my-pipeline");
+      expect(call.params).toMatchObject({ pipelineBranchName: "feature/my-fix" });
+    });
+
+    it("pipeline execute omits pipelineBranchName when pipeline_branch not provided", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ planExecution: { uuid: "exec-456" } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatchExecute(client, "pipeline", "run", {
+        pipeline_id: "my-pipeline",
+      });
+
+      expect(mockRequest).toHaveBeenCalledOnce();
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params?.pipelineBranchName).toBeUndefined();
+    });
+
     it("pipeline update with yamlPipeline sends raw YAML string as body with Content-Type header and returns openInHarness", async () => {
       const yaml = "pipeline:\n  name: Test\n  identifier: test_pipeline\n  stages: []";
       const mockRequest = vi.fn().mockResolvedValue({
