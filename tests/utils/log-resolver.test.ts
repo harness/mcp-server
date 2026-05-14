@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { resolveLogContent } from "../../src/utils/log-resolver.js";
 import { gzipSync, deflateRawSync } from "node:zlib";
 import type { HarnessClient } from "../../src/client/harness-client.js";
+import { HarnessApiError } from "../../src/utils/errors.js";
 
 function makeClient(
   requestFn: (...args: unknown[]) => unknown,
@@ -177,6 +178,74 @@ describe("resolveLogContent", () => {
         path: "/gateway/log-service/some/blob/path?token=abc",
       }),
     );
+  });
+
+  it("routes Harness-hosted AWS-signed blob URLs through client.requestStream", async () => {
+    const blobLink = "https://app.harness.io/storage/logs/blob.zip?X-Amz-Signature=abc123&X-Amz-Expires=900";
+    const streamFn = vi.fn().mockResolvedValue(new Response('{"out":"internal harness log"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { requestStream: streamFn },
+    );
+    fetchSpy.mockRejectedValue(new TypeError("fetch failed"));
+
+    const result = await resolveLogContent(client, "prefix");
+
+    expect(result).toContain("internal harness log");
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(streamFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "GET",
+        path: "/storage/logs/blob.zip?X-Amz-Signature=abc123&X-Amz-Expires=900",
+      }),
+    );
+  });
+
+  it("routes Harness-hosted GCS-signed blob URLs with explicit ports through client.requestStream", async () => {
+    const blobLink = "https://app.harness.io:443/gateway/log-service/blob/download?X-Goog-Signature=sig";
+    const streamFn = vi.fn().mockResolvedValue(new Response('{"out":"port-safe harness log"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { requestStream: streamFn },
+    );
+    fetchSpy.mockRejectedValue(new TypeError("fetch failed"));
+
+    const result = await resolveLogContent(client, "prefix");
+
+    expect(result).toContain("port-safe harness log");
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(streamFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: "/gateway/log-service/blob/download?X-Goog-Signature=sig",
+      }),
+    );
+  });
+
+  it("normalizes relative blob paths before adding the log-service gateway prefix", async () => {
+    const streamFn = vi.fn().mockResolvedValue(new Response('{"out":"relative path log"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: "blob/download?token=abc" }),
+      { requestStream: streamFn },
+    );
+
+    const result = await resolveLogContent(client, "prefix");
+
+    expect(result).toContain("relative path log");
+    expect(streamFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: "/gateway/log-service/blob/download?token=abc",
+      }),
+    );
+  });
+
+  it("preserves HarnessApiError thrown while downloading through the client", async () => {
+    const apiError = new HarnessApiError("unauthorized", 401, "INVALID_TOKEN", "corr-123");
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: "https://app.harness.io/logs/blob" }),
+      { requestStream: vi.fn().mockRejectedValue(apiError) },
+    );
+
+    await expect(resolveLogContent(client, "prefix")).rejects.toBe(apiError);
   });
 
   it("throws when log file exceeds max size", async () => {

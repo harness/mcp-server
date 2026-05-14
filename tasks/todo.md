@@ -340,3 +340,17 @@
 - Split query strings out of `RequestOptions.path` before base-path de-duplication and query assembly.
 - Merged path query params into the generated `URLSearchParams` before applying `options.params`, preserving explicit override behavior.
 - Verified with `pnpm test tests/client/harness-client.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test`.
+
+## Slack Bug Triage: Harness-Hosted Signed Log URLs (2026-05-14)
+- [x] Read the triggered Slack thread and nearby channel context
+- [ ] Add failing regression coverage for Harness-hosted signed log blob URLs
+- [ ] Route only true external storage blob URLs through direct fetch
+- [ ] Preserve client-routed log download errors and path normalization
+- [ ] Run focused resolver tests, typecheck, build, and broader tests
+- [ ] Commit, push, open PR, and reply in the Slack thread
+
+### Plan
+- Keep the change in `src/utils/log-resolver.ts`, where log blob download routing is decided.
+- Add regression coverage in `tests/utils/log-resolver.test.ts` for `*.harness.io` URLs with `X-Amz-Signature`/`X-Goog-Signature`, explicit ports, and relative blob paths.
+- Preserve direct `fetch()` only for known S3/GCS storage hosts so signed credentials are not invalidated for external blob storage.
+- Route Harness-hosted signed URLs through `client.requestStream()` so self-managed/proxied deployments can apply the configured Harness client routing.
