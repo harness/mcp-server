@@ -340,3 +340,16 @@
 - Split query strings out of `RequestOptions.path` before base-path de-duplication and query assembly.
 - Merged path query params into the generated `URLSearchParams` before applying `options.params`, preserving explicit override behavior.
 - Verified with `pnpm test tests/client/harness-client.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test`.
+
+## Slack Bug Triage: Pull Request Close Support (2026-05-14)
+- [ ] Confirm whether PR close is available by design or missing from MCP v2 metadata
+- [ ] Add a failing registry test for a first-class pull request close action
+- [ ] Implement the minimal pull request close action against the existing Harness Code PR update endpoint
+- [ ] Run focused tests, typecheck, build, and relevant broader verification
+- [ ] Commit, push, and open/update PR
+
+### Plan
+- Keep the change scoped to the existing `pull_request` resource in `src/registry/toolsets/pull-requests.ts`.
+- Preserve the already-supported generic update path (`harness_update` with `body.state = "closed"`) and add a more discoverable `harness_execute` action named `close`.
+- Map `close` to the existing Harness Code PATCH endpoint `/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}` with a fixed `{ state: "closed" }` body.
+- Mark the action as `medium_write` and `do_not_retry`, matching a non-idempotent PR state transition that requires confirmation in clients with elicitation.
