@@ -21,11 +21,29 @@ function requiredPathPart(input: Record<string, unknown>, field: string): string
   return encodeURIComponent(String(value));
 }
 
+const PR_METADATA_FIELDS = ["title", "description"];
+
 function pullRequestUpdatePath(input: Record<string, unknown>): string {
   const repoIdentifier = requiredPathPart(input, "repo_id");
   const prNumber = requiredPathPart(input, "pr_number");
-  const stateSuffix = pullRequestState(input) ? "/state" : "";
-  return `/code/api/v1/repos/${repoIdentifier}/pullreq/${prNumber}${stateSuffix}`;
+  const state = pullRequestState(input);
+  if (state) {
+    rejectMixedStateUpdate(input);
+    return `/code/api/v1/repos/${repoIdentifier}/pullreq/${prNumber}/state`;
+  }
+  return `/code/api/v1/repos/${repoIdentifier}/pullreq/${prNumber}`;
+}
+
+function rejectMixedStateUpdate(input: Record<string, unknown>): void {
+  const body = bodyRecord(input);
+  if (!body) return;
+  const extras = PR_METADATA_FIELDS.filter((f) => body[f] !== undefined);
+  if (extras.length > 0) {
+    throw new Error(
+      `Cannot combine state change with metadata fields (${extras.join(", ")}). ` +
+      `Send state changes and metadata updates as separate harness_update calls.`,
+    );
+  }
 }
 
 function pullRequestUpdateBody(input: Record<string, unknown>): unknown {

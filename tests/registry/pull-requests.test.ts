@@ -69,6 +69,21 @@ describe("pull_request registry mappings", () => {
     }));
   });
 
+  it("rejects mixed state + metadata updates", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "pull_request", "update", {
+        repo_id: "rc_tools",
+        pr_number: "42",
+        body: { state: "closed", title: "Updated title", description: "keep me" },
+      }),
+    ).rejects.toThrow(/Cannot combine state change with metadata fields/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
   it("supports an explicit close execute action", async () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
     const mockRequest = vi.fn().mockResolvedValue({ data: { number: 42, state: "closed" } });
