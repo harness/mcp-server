@@ -347,7 +347,7 @@
 - [x] Route only true external storage blob URLs through direct fetch
 - [x] Preserve client-routed log download errors and path normalization
 - [x] Run focused resolver tests, typecheck, build, and broader tests
-- [ ] Commit, push, open PR, and reply in the Slack thread
+- [x] Commit, push, open PR, and reply in the Slack thread
 
 ### Plan
 - Keep the change in `src/utils/log-resolver.ts`, where log blob download routing is decided.
