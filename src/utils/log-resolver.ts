@@ -39,6 +39,7 @@ const EXTERNAL_STORAGE_HOSTS = new Set([
 
 /** S3-style host pattern: bucket.s3.amazonaws.com or bucket.s3.region.amazonaws.com */
 const S3_BUCKET_HOST_RE = /^[a-z0-9][a-z0-9.-]*\.s3([.-][a-z0-9-]+)?\.amazonaws\.com$/i;
+const S3_PATH_STYLE_HOST_RE = /^s3([.-][a-z0-9-]+)?\.amazonaws\.com$/i;
 
 function safeParseUrl(raw: string): URL | undefined {
   try {
@@ -52,6 +53,7 @@ function isExternalStorageHost(host: string): boolean {
   const h = host.toLowerCase();
   if (EXTERNAL_STORAGE_HOSTS.has(h)) return true;
   if (S3_BUCKET_HOST_RE.test(h)) return true;
+  if (S3_PATH_STYLE_HOST_RE.test(h)) return true;
   if (h.endsWith(".storage.googleapis.com")) return true;
   return false;
 }
@@ -331,6 +333,7 @@ async function downloadBlobContent(
   signal: AbortSignal,
 ): Promise<Response> {
   const blobUrl = safeParseUrl(blobLink);
+  const isSignedBlobUrl = blobUrl ? isPresignedUrl(blobUrl) : false;
 
   if (blobUrl && isExternalStorageHost(blobUrl.hostname)) {
     log.debug("Downloading log blob (direct)", { prefix, url: blobLink.slice(0, 80) });
@@ -343,7 +346,7 @@ async function downloadBlobContent(
   }
 
   const rawPath = normalizePath(blobUrl ? blobUrl.pathname + blobUrl.search : blobLink);
-  const downloadPath = blobUrl && isPresignedUrl(blobUrl)
+  const downloadPath = isSignedBlobUrl
     ? rawPath
     : rawPath.startsWith(LOG_SERVICE_GATEWAY_PREFIX)
       ? rawPath
@@ -354,6 +357,7 @@ async function downloadBlobContent(
       method: "GET",
       path: downloadPath,
       signal,
+      ...(isSignedBlobUrl ? { headerBasedScoping: true } : {}),
     });
   } catch (err) {
     if (err instanceof HarnessApiError) throw err;
