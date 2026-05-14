@@ -347,7 +347,7 @@
 - [x] Add regression coverage that template updates require an explicit version label
 - [x] Implement minimal fix in the template update handler
 - [x] Run focused tests, typecheck, build, and relevant full tests
-- [ ] Commit, push, open PR, and post Slack summary
+- [x] Commit, push, open PR, and post Slack summary
 
 ### Plan
 - Focus the fix on `src/tools/harness-update.ts`, where the MCP handler currently defaults template updates to `version_label="v1"` before dispatch.
