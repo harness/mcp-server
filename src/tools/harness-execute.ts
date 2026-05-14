@@ -75,10 +75,11 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           return errorResult(`Operation ${elicit.reason} by user.`);
         }
 
-        // Map resource_id to the primary identifier field
-        const primaryField = def.identifierFields[0];
-        if (primaryField && resourceId) {
-          input[primaryField] = resourceId;
+        // Map resource_id to the first unresolved identifier field. URL and params
+        // may already provide parent IDs for nested resources such as PRs.
+        const resourceIdField = getResourceIdField(def.identifierFields, input);
+        if (resourceIdField && resourceId && (input[resourceIdField] === undefined || input[resourceIdField] === "")) {
+          input[resourceIdField] = resourceId;
         }
 
         // Pass input_set_ids as string[] so HarnessClient emits repeated `inputSetIdentifiers=` query keys
@@ -264,6 +265,11 @@ const STRUCTURAL_FIELDS = new Set([
   "infrastructure", "execution", "spec", "template",
   "templateinputs", "servicedefinition", "artifacts", "manifests",
 ]);
+
+function getResourceIdField(identifierFields: string[], input: Record<string, unknown>): string | undefined {
+  if (identifierFields.length === 0) return undefined;
+  return identifierFields.find((field) => input[field] === undefined || input[field] === "") ?? identifierFields[0];
+}
 
 function isStructuralField(fieldName: string): boolean {
   return STRUCTURAL_FIELDS.has(fieldName.toLowerCase());
