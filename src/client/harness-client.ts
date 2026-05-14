@@ -4,6 +4,7 @@ import { HarnessApiError } from "../utils/errors.js";
 import { RateLimiter } from "../utils/rate-limiter.js";
 import { createLogger } from "../utils/logger.js";
 import { redactJsonString } from "../utils/redact.js";
+import { isFormDataBody } from "../utils/type-guards.js";
 
 const log = createLogger("harness-client");
 
@@ -17,10 +18,6 @@ const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
  */
 function hasExplicitBody(body: unknown): boolean {
   return body !== undefined && body !== null;
-}
-
-function isFormDataBody(body: unknown): body is FormData {
-  return typeof FormData !== "undefined" && body instanceof FormData;
 }
 
 function serializeRequestBody(body: unknown): BodyInit | undefined {

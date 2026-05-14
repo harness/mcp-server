@@ -118,6 +118,45 @@ describe("File Store registry toolset", () => {
     expect(form.get("content")).toBeInstanceOf(Blob);
   });
 
+  it("deletes a File Store item", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file-store" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: true });
+
+    await registry.dispatch(makeClient(mockRequest), "file_store_item", "delete", {
+      file_id: "config_file",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("DELETE");
+    expect(call.path).toBe("/ng/api/file-store/config_file");
+  });
+
+  it("hydrate preflight does not leak body fields into the GET request", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file-store" }));
+    const mockRequest = vi.fn()
+      .mockResolvedValueOnce({
+        data: {
+          identifier: "config_file",
+          name: "config.yaml",
+          type: "FILE",
+          parentIdentifier: "Root",
+        },
+      })
+      .mockResolvedValueOnce({ data: { identifier: "config_file" } });
+
+    await registry.dispatch(makeClient(mockRequest), "file_store_item", "update", {
+      file_id: "config_file",
+      body: {
+        content: "key: new-value\n",
+        mime_type: "application/x-yaml",
+      },
+    });
+
+    const getCall = mockRequest.mock.calls[0][0];
+    expect(getCall.params).not.toHaveProperty("content");
+    expect(getCall.params).not.toHaveProperty("mime_type");
+  });
+
   it("reads UTF-8 file content from the download endpoint", async () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file-store" }));
     const mockRequest = vi.fn().mockResolvedValue(new TextEncoder().encode("hello").buffer);
