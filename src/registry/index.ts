@@ -36,6 +36,7 @@ import { dbopsToolset } from "./toolsets/dbops.js";
 import { accessControlToolset } from "./toolsets/access-control.js";
 import { settingsToolset } from "./toolsets/settings.js";
 import { platformToolset } from "./toolsets/platform.js";
+import { testIntelligenceToolset } from "./toolsets/test-intelligence.js";
 
 import { visualizationsToolset } from "./toolsets/visualizations.js";
 import { governanceToolset } from "./toolsets/governance.js";
@@ -81,6 +82,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   accessControlToolset,
   settingsToolset,
   platformToolset,
+  testIntelligenceToolset,
 
   visualizationsToolset,
   governanceToolset,
@@ -437,6 +439,10 @@ export class Registry {
     // Run preflight hook (e.g. duplicate-check before create) before hitting the API.
     if (spec.preflight) {
       await spec.preflight({ client, input, registry: this, signal });
+    }
+
+    if (spec.handler) {
+      return spec.handler({ client, input, config: resolvedConfig, signal });
     }
 
     // Build path with substitutions (or pathBuilder when present)

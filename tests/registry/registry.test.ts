@@ -192,6 +192,167 @@ describe("Registry", () => {
     });
   });
 
+  describe("test_failure", () => {
+    it("is available as a default read-only resource with only required filters", () => {
+      const registry = new Registry(makeConfig());
+      const def = registry.getResource("test_failure");
+
+      expect(def.toolset).toBe("test-intelligence");
+      expect(def.operations.list).toBeDefined();
+      expect(def.listFilterFields).toEqual([
+        expect.objectContaining({ name: "pipeline_id", required: true }),
+        expect.objectContaining({ name: "build_id", required: true }),
+      ]);
+    });
+
+    it("orchestrates stages, failed suites, and failed test cases", async () => {
+      const mockRequest = vi.fn()
+        .mockResolvedValueOnce({ data: { stages: [{ stageId: "stage-1" }] } })
+        .mockResolvedValueOnce({ data: { testSuites: [{ suite_name: "Suite A" }] } })
+        .mockResolvedValueOnce({
+          data: {
+            testCases: [
+              {
+                test_name: "fails when value is missing",
+                status: "failed",
+                duration_ms: 42,
+                error_message: "expected value",
+                stack_trace: "AssertionError: expected value",
+              },
+            ],
+          },
+        });
+
+      const registry = new Registry(makeConfig());
+      const result = await registry.dispatch(makeClient(mockRequest), "test_failure", "list", {
+        org_id: "PROD",
+        project_id: "Quality_Engineering",
+        pipeline_id: "pipe-1",
+        build_id: "build-1",
+      }) as {
+        items: Array<Record<string, unknown>>;
+        failed_tests: number;
+        format: string;
+        text: string;
+        pipeline_id: string;
+        build_id: string;
+      };
+
+      expect(mockRequest).toHaveBeenCalledTimes(3);
+      expect(mockRequest).toHaveBeenNthCalledWith(1, expect.objectContaining({
+        method: "GET",
+        path: "/gateway/ti-service/reports/info",
+        headerBasedScoping: true,
+        params: expect.objectContaining({
+          routingId: "test-account",
+          accountId: "test-account",
+          orgId: "PROD",
+          projectId: "Quality_Engineering",
+          pipelineId: "pipe-1",
+          buildId: "build-1",
+        }),
+      }));
+      expect(mockRequest).toHaveBeenNthCalledWith(2, expect.objectContaining({
+        path: "/gateway/ti-service/reports/test_suites",
+        params: expect.objectContaining({
+          report: "junit",
+          status: "failed",
+          order: "DESC",
+          stageId: "stage-1",
+          stepId: "captureFailures",
+          pageIndex: 0,
+          pageSize: 20,
+        }),
+      }));
+      expect(mockRequest).toHaveBeenNthCalledWith(3, expect.objectContaining({
+        path: "/gateway/ti-service/reports/test_cases",
+        params: expect.objectContaining({
+          suite_name: "Suite A",
+          sort: "status",
+          order: "ASC",
+          pageIndex: 0,
+          pageSize: 100,
+          stageId: "stage-1",
+          stepId: "captureFailures",
+        }),
+      }));
+      expect(result).toEqual({
+        items: [{
+          stage_id: "stage-1",
+          suite_name: "Suite A",
+          test_method: "fails when value is missing",
+        }],
+        failed_tests: 1,
+        format: "stage_id<TAB>suite_name<TAB>test_method",
+        text: "Number of failed tests: 1\n\nstage-1\tSuite A\tfails when value is missing",
+        pipeline_id: "pipe-1",
+        build_id: "build-1",
+      });
+    });
+
+    it("handles Harness TI response shapes and resolves execution IDs to runSequence", async () => {
+      const mockRequest = vi.fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce({ data: { pipelineExecutionSummary: { runSequence: 2016 } } })
+        .mockResolvedValueOnce([{ stage: "stage-1", step: "captureFailures" }])
+        .mockResolvedValueOnce({
+          data: { totalItems: 1, pageSize: 20 },
+          content: [{ name: "Suite A", failed_tests: 1 }],
+        })
+        .mockResolvedValueOnce({
+          data: { totalItems: 1, pageSize: 100 },
+          content: [{ name: "test A", errorMessage: "boom" }],
+        });
+
+      const registry = new Registry(makeConfig());
+      const result = await registry.dispatch(makeClient(mockRequest), "test_failure", "list", {
+        org_id: "PROD",
+        project_id: "Quality_Engineering",
+        pipeline_id: "pipe-1",
+        build_id: "execution-uuid",
+      }) as {
+        items: Array<Record<string, unknown>>;
+        failed_tests: number;
+        format: string;
+        text: string;
+        build_id: string;
+      };
+
+      expect(mockRequest).toHaveBeenCalledTimes(5);
+      expect(mockRequest).toHaveBeenNthCalledWith(2, expect.objectContaining({
+        path: "/pipeline/api/pipelines/execution/execution-uuid",
+        params: expect.objectContaining({
+          orgIdentifier: "PROD",
+          projectIdentifier: "Quality_Engineering",
+        }),
+      }));
+      expect(mockRequest).toHaveBeenNthCalledWith(3, expect.objectContaining({
+        path: "/gateway/ti-service/reports/info",
+        params: expect.objectContaining({ buildId: "2016" }),
+      }));
+      expect(result).toEqual({
+        items: [{
+          stage_id: "stage-1",
+          suite_name: "Suite A",
+          test_method: "test A",
+        }],
+        failed_tests: 1,
+        format: "stage_id<TAB>suite_name<TAB>test_method",
+        text: "Number of failed tests: 1\n\nstage-1\tSuite A\ttest A",
+        pipeline_id: "pipe-1",
+        build_id: "2016",
+      });
+    });
+
+    it("requires pipeline_id and build_id filters", async () => {
+      const registry = new Registry(makeConfig());
+
+      await expect(registry.dispatch(makeClient(), "test_failure", "list", {
+        pipeline_id: "pipe-1",
+      })).rejects.toThrow(/Missing required filter\(s\).*build_id/);
+    });
+  });
+
   describe("supportsOperation", () => {
     let registry: Registry;
     beforeEach(() => {
