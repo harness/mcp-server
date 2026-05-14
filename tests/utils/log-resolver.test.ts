@@ -179,6 +179,127 @@ describe("resolveLogContent", () => {
     );
   });
 
+  // ── Regression tests: Harness-internal hosts with pre-signed params ──────────
+  // Pre-signed params on app.harness.io or any *.harness.io host do NOT mean
+  // the URL is publicly routable. Internal/on-prem deployments proxy these through
+  // their own host. The fix: only bypass client routing for TRUE external storage.
+
+  it("REGRESSION: app.harness.io pre-signed URL routes through client.requestStream, not direct fetch", async () => {
+    const blobLink =
+      "https://app.harness.io/storage/logs/blob.zip?X-Amz-Signature=abc123&X-Amz-Expires=900";
+    const streamFn = vi.fn().mockResolvedValue(new Response('{"out":"log from internal harness"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { requestStream: streamFn },
+    );
+
+    const result = await resolveLogContent(client, "prefix");
+
+    expect(result).toContain("log from internal harness");
+    // Must route through client — NOT bypass via direct fetch
+    expect(streamFn).toHaveBeenCalledWith(
+      expect.objectContaining({ path: expect.stringContaining("/storage/logs/blob.zip") }),
+    );
+    expect(fetchSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("harness.io"),
+      expect.any(Object),
+    );
+  });
+
+  it("REGRESSION: custom.harness.io pre-signed URL routes through client.requestStream, not direct fetch", async () => {
+    const blobLink =
+      "https://custom.harness.io/storage/blob?X-Goog-Signature=sig&X-Goog-Expires=3600";
+    const streamFn = vi.fn().mockResolvedValue(new Response('{"out":"internal gcs proxy log"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { requestStream: streamFn },
+    );
+
+    const result = await resolveLogContent(client, "prefix");
+
+    expect(result).toContain("internal gcs proxy log");
+    expect(streamFn).toHaveBeenCalledWith(
+      expect.objectContaining({ path: expect.stringContaining("/storage/blob") }),
+    );
+    expect(fetchSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("harness.io"),
+      expect.any(Object),
+    );
+  });
+
+  // ── On-prem / custom-gateway invariant ───────────────────────────────────────
+  // INVARIANT: any *.harness.io blob URL — with or without pre-signed params —
+  // MUST route through client.requestStream(), never global fetch().
+  // This has broken TWICE (PR #189, fixed in PR #195). If you change routing
+  // logic and this test fails, you are re-introducing the same bug.
+
+  it("REGRESSION: app.harness.io blob with custom gateway baseURL routes through client", async () => {
+    // On-prem/self-managed scenario: HARNESS_BASE_URL points to a custom gateway host,
+    // but the blob link returned by log-service still points to app.harness.io.
+    // app.harness.io is not directly reachable — must go through client.requestStream().
+    const blobLink =
+      "https://app.harness.io/gateway/log-service/blob/download?accountId=jLO&X-Amz-Signature=tok";
+    const streamFn = vi.fn().mockResolvedValue(new Response('{"out":"on-prem log line"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://custom-gateway.example.com/gateway", requestStream: streamFn },
+    );
+
+    const result = await resolveLogContent(client, "prefix");
+
+    expect(result).toContain("on-prem log line");
+    expect(streamFn).toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("app.harness.io"),
+      expect.any(Object),
+    );
+  });
+
+  it("REGRESSION: app.harness.io URL with explicit port still classified as Harness host", async () => {
+    // URL.host includes port (app.harness.io:443) — isHarnessHost must use .hostname not .host
+    const blobLink =
+      "https://app.harness.io:443/gateway/log-service/blob/download?X-Amz-Signature=tok";
+    const streamFn = vi.fn().mockResolvedValue(new Response('{"out":"port log"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://custom-gateway.example.com/gateway", requestStream: streamFn },
+    );
+
+    const result = await resolveLogContent(client, "prefix");
+
+    expect(result).toContain("port log");
+    expect(streamFn).toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("harness.io"),
+      expect.any(Object),
+    );
+  });
+
+  it("true S3 pre-signed URL still uses direct fetch (external storage host)", async () => {
+    const blobLink =
+      "https://harness-prod-logs.s3.us-east-1.amazonaws.com/logs.zip?X-Amz-Signature=abc&X-Amz-Expires=900";
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link: blobLink }));
+    fetchSpy.mockResolvedValue(new Response('{"out":"s3 log line"}', { status: 200 }));
+
+    const result = await resolveLogContent(client, "prefix");
+
+    expect(result).toContain("s3 log line");
+    // True external S3 → direct fetch is correct
+    expect(fetchSpy).toHaveBeenCalledWith(blobLink, expect.any(Object));
+  });
+
+  it("true GCS pre-signed URL still uses direct fetch (external storage host)", async () => {
+    const blobLink =
+      "https://storage.googleapis.com/harness-logs/run.zip?X-Goog-Signature=sig&X-Goog-Expires=3600";
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link: blobLink }));
+    fetchSpy.mockResolvedValue(new Response('{"out":"gcs log line"}', { status: 200 }));
+
+    const result = await resolveLogContent(client, "prefix");
+
+    expect(result).toContain("gcs log line");
+    expect(fetchSpy).toHaveBeenCalledWith(blobLink, expect.any(Object));
+  });
+
   it("throws when log file exceeds max size", async () => {
     const bigContent = "x".repeat(1024);
     const streamFn = vi.fn().mockResolvedValue(new Response(bigContent, {

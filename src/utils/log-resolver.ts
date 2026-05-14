@@ -1,5 +1,6 @@
 import { gunzipSync, inflateRawSync } from "node:zlib";
 import type { HarnessClient } from "../client/harness-client.js";
+import { HarnessApiError } from "./errors.js";
 import { createLogger } from "./logger.js";
 
 const log = createLogger("log-resolver");
@@ -53,6 +54,16 @@ function isExternalStorageHost(host: string): boolean {
   if (S3_BUCKET_HOST_RE.test(h)) return true;
   if (h.endsWith(".storage.googleapis.com")) return true;
   return false;
+}
+
+/**
+ * Detect Harness-internal hosts that are never publicly routable.
+ * Even when these URLs carry pre-signed query params, they must route
+ * through the client so internal deployments can rewrite the host.
+ */
+function isHarnessHost(host: string): boolean {
+  const h = host.toLowerCase();
+  return h === "harness.io" || h.endsWith(".harness.io");
 }
 
 /**
@@ -328,20 +339,39 @@ async function downloadBlobContent(
 ): Promise<Response> {
   const blobUrl = safeParseUrl(blobLink);
 
-  if (blobUrl && (isExternalStorageHost(blobUrl.host) || isPresignedUrl(blobUrl))) {
-    log.debug("Downloading log blob (direct)", { prefix, url: blobLink.slice(0, 80) });
+  // Two routing strategies based on the blob URL:
+  //
+  // 1. True external storage (S3, GCS domains) → direct fetch, no auth headers.
+  //    The URL is publicly routable with embedded signature params; routing through
+  //    the client or adding extra headers would invalidate the AWS/GCS signature.
+  //
+  // 2. All other URLs (including *.harness.io pre-signed) → client.requestStream()
+  //    so PAT/JWT auth and proxy are applied. Harness pre-signed params are internal
+  //    tokens that are not AWS host-bound, so they survive client proxying.
+  //    For Harness pre-signed paths, use rawPath directly (already absolute on host);
+  //    for standard log-service paths, prepend the gateway prefix if absent.
+
+  if (blobUrl && isExternalStorageHost(blobUrl.hostname)) {
+    // Strategy 1: true external storage — always direct fetch
+    log.debug("Downloading log blob (direct, external storage)", { prefix, url: blobLink.slice(0, 80) });
     try {
       return await fetch(blobLink, { signal });
     } catch (err) {
       const cause = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-      throw new Error(`Log download fetch failed for ${blobUrl.host}: ${cause}`);
+      throw new Error(`Log download fetch failed for ${blobUrl.hostname}: ${cause}`);
     }
   }
 
-  const rawPath = blobUrl ? blobUrl.pathname + blobUrl.search : blobLink;
-  const downloadPath = rawPath.startsWith(LOG_SERVICE_GATEWAY_PREFIX)
-    ? rawPath
-    : `${LOG_SERVICE_GATEWAY_PREFIX}${rawPath}`;
+  // Strategy 2: route through client for auth injection and proxy support.
+  const rawPath = blobUrl
+    ? blobUrl.pathname + blobUrl.search
+    : blobLink.startsWith("/") ? blobLink : `/${blobLink}`;
+  const downloadPath =
+    blobUrl && isPresignedUrl(blobUrl) && isHarnessHost(blobUrl.hostname)
+      ? rawPath
+      : rawPath.startsWith(LOG_SERVICE_GATEWAY_PREFIX)
+      ? rawPath
+      : `${LOG_SERVICE_GATEWAY_PREFIX}${rawPath}`;
   log.debug("Downloading log blob (client)", { prefix, path: downloadPath.slice(0, 80) });
   try {
     return await client.requestStream({
@@ -350,8 +380,9 @@ async function downloadBlobContent(
       signal,
     });
   } catch (err) {
+    if (err instanceof HarnessApiError) throw err;
     const cause = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-    throw new Error(`Log download fetch failed for ${blobUrl?.host ?? "harness"}: ${cause}`);
+    throw new Error(`Log download fetch failed for ${blobUrl?.hostname ?? "harness"}: ${cause}`);
   }
 }
 
