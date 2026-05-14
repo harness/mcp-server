@@ -706,7 +706,7 @@ describe("harness_execute", () => {
     });
 
     expect(result.isError).toBeUndefined();
-    expect(server.server.elicitInput).not.toHaveBeenCalled();
+    expect(server.server.elicitInput).toHaveBeenCalled();
     expect(mockRequest).toHaveBeenCalledTimes(3);
     expect(mockRequest.mock.calls[0]![0]).toMatchObject({
       method: "GET",

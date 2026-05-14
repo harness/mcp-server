@@ -648,7 +648,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         retry_stages: {
           method: "POST",
           path: "/pipeline/api/pipeline/execute/retry/{pipelineIdentifier}",
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: { pipeline_id: "pipelineIdentifier" },
           headers: { "Content-Type": "application/yaml" },
           handler: retryPipelineStagesHandler,
