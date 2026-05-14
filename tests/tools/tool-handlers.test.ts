@@ -792,6 +792,196 @@ describe("harness_execute", () => {
     expect(data._note).toContain("fresh pipeline run");
   });
 
+  it("retries explicit pipeline stages with original execution input YAML", async () => {
+    const inputSetYaml = "pipeline:\n  identifier: my-pipe\n";
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: true }) // canRetry
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetYaml } }) // inputsetV2
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { planExecutionId: "retry-exec" } }); // retry
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "retry_stages",
+      resource_id: "my-pipe",
+      params: {
+        execution_id: "exec-123",
+        retry_stages: ["Build", "Test", "Build"],
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(server.server.elicitInput).not.toHaveBeenCalled();
+    expect(mockRequest).toHaveBeenCalledTimes(3);
+    expect(mockRequest.mock.calls[0]![0]).toMatchObject({
+      method: "GET",
+      path: "/pipeline/api/pipelines/execution/canRetry/exec-123",
+    });
+    expect(mockRequest.mock.calls[1]![0]).toMatchObject({
+      method: "GET",
+      path: "/pipeline/api/pipelines/execution/exec-123/inputsetV2",
+    });
+
+    const retryCall = mockRequest.mock.calls[2]![0] as {
+      method?: string;
+      path?: string;
+      params?: Record<string, unknown>;
+      body?: string;
+      headers?: Record<string, string>;
+    };
+    expect(retryCall.method).toBe("POST");
+    expect(retryCall.path).toBe("/pipeline/api/pipeline/execute/retry/my-pipe");
+    expect(retryCall.body).toBe(inputSetYaml);
+    expect(retryCall.headers?.["Content-Type"]).toBe("application/yaml");
+    expect(retryCall.params).toMatchObject({
+      planExecutionId: "exec-123",
+      runAllStages: false,
+      retryStages: ["Build", "Test"],
+    });
+  });
+
+  it("derives failed stages before retrying when retry_failed_stages is true", async () => {
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: true }) // canRetry
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetYaml: "pipeline:\n  identifier: my-pipe\n" } })
+      .mockResolvedValueOnce({
+        status: "SUCCESS",
+        data: {
+          executionGraph: {
+            nodeMap: {
+              failedStep: {
+                status: "Failed",
+                baseFqn: "pipeline.stages.Build.spec.execution.steps.UnitTests",
+                identifier: "UnitTests",
+              },
+              failedStage: {
+                status: "Errored",
+                baseFqn: "pipeline.stages.Deploy",
+                identifier: "Deploy",
+                nodeGroup: "STAGE",
+              },
+              okStage: {
+                status: "Success",
+                baseFqn: "pipeline.stages.Verify",
+                identifier: "Verify",
+              },
+            },
+          },
+        },
+      })
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { planExecutionId: "retry-exec" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "retry_stages",
+      resource_id: "my-pipe",
+      params: {
+        execution_id: "exec-123",
+        retry_failed_stages: true,
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledTimes(4);
+    expect(mockRequest.mock.calls[2]![0]).toMatchObject({
+      method: "GET",
+      path: "/pipeline/api/pipelines/execution/v2/exec-123",
+    });
+    const retryCall = mockRequest.mock.calls[3]![0] as { params?: Record<string, unknown> };
+    expect(retryCall.params).toMatchObject({
+      runAllStages: false,
+      retryStages: ["Build", "Deploy"],
+    });
+  });
+
+  it("returns a user-facing error when retry_stages is missing execution_id", async () => {
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "retry_stages",
+      resource_id: "my-pipe",
+      params: { retry_stages: ["Build"] },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(parseResult(result))).toContain("execution_id");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("returns a user-facing error when failed-stage derivation finds no stages", async () => {
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: true })
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetYaml: "pipeline:\n  identifier: my-pipe\n" } })
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { executionGraph: { nodeMap: {} } } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "retry_stages",
+      resource_id: "my-pipe",
+      params: {
+        execution_id: "exec-123",
+        retry_failed_stages: true,
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(parseResult(result))).toContain("No failed stages found");
+    expect(mockRequest).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not use the legacy retry fresh-run fallback for retry_stages", async () => {
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: true })
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetYaml: "pipeline:\n  identifier: my-pipe\n" } })
+      .mockRejectedValueOnce(new HarnessApiError("Method not allowed", 405));
+
+    await expect(server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "retry_stages",
+      resource_id: "my-pipe",
+      params: {
+        execution_id: "exec-123",
+        retry_stages: ["Build"],
+      },
+    })).rejects.toThrow();
+
+    expect(mockRequest).toHaveBeenCalledTimes(3);
+  });
+
+  it("falls back to parent stage targets when Harness rejects child retry stages", async () => {
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: true })
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetYaml: "pipeline:\n  identifier: my-pipe\n" } })
+      .mockRejectedValueOnce(new HarnessApiError(
+        "Invalid request: The execution can not be retried because the retryStagesIdentifier could not be found in any stage Groups.",
+        400,
+      ))
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { planExecutionId: "retry-exec" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "retry_stages",
+      resource_id: "my-pipe",
+      params: {
+        execution_id: "exec-123",
+        retry_stages: [
+          "PMS_Regression_pipelineRollback",
+          "PMS_Regression_specialCharacterUser",
+          "Azure_RUN___name___AzureWebApp5__",
+        ],
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledTimes(4);
+    const fallbackCall = mockRequest.mock.calls[3]![0] as { params?: Record<string, unknown> };
+    expect(fallbackCall.params).toMatchObject({
+      runAllStages: true,
+      retryStages: ["PMS_Regression", "Azure_RUN"],
+    });
+    const data = parseResult(result) as { _retryStages?: { fallback_applied?: boolean; stages?: string[] } };
+    expect(data._retryStages?.fallback_applied).toBe(true);
+    expect(data._retryStages?.stages).toEqual(["PMS_Regression", "Azure_RUN"]);
+  });
+
   it("blocks when flat inputs have unmatchedRequired and no input_set_ids", async () => {
     // Template fetch returns a template with required + optional fields
     const mixedTemplate = `pipeline:

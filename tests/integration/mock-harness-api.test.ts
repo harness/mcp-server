@@ -135,6 +135,84 @@ describe("Integration: Registry → HarnessClient → fetch", () => {
     });
   });
 
+  describe("test failure list", () => {
+    it("fetches TI stages, failed suites, and failed cases with required API params", async () => {
+      fetchSpy
+        .mockResolvedValueOnce(mockFetchResponse({ data: { stages: [{ stageId: "stage-1" }] } }))
+        .mockResolvedValueOnce(mockFetchResponse({ data: { testSuites: [{ suite_name: "My Suite" }] } }))
+        .mockResolvedValueOnce(mockFetchResponse({
+          data: {
+            testCases: [
+              {
+                testName: "should fail clearly",
+                status: "failed",
+                errorMessage: "boom",
+              },
+            ],
+          },
+        }));
+
+      const config = makeConfig({
+        HARNESS_ORG: "PROD",
+        HARNESS_PROJECT: "Quality_Engineering",
+      });
+      const client = new HarnessClient(config);
+      const registry = new Registry(config);
+
+      const result = await registry.dispatch(client, "test_failure", "list", {
+        pipeline_id: "pipe-1",
+        build_id: "build-1",
+      }) as { items: Array<Record<string, unknown>>; total: number };
+
+      expect(fetchSpy).toHaveBeenCalledTimes(3);
+
+      const [infoUrl, infoOptions] = fetchSpy.mock.calls[0]!;
+      const infoUrlStr = String(infoUrl);
+      expect(infoUrlStr).toContain("/gateway/ti-service/reports/info");
+      expect(infoUrlStr).toContain("routingId=testaccount");
+      expect(infoUrlStr).toContain("accountId=testaccount");
+      expect(infoUrlStr).toContain("orgId=PROD");
+      expect(infoUrlStr).toContain("projectId=Quality_Engineering");
+      expect(infoUrlStr).toContain("pipelineId=pipe-1");
+      expect(infoUrlStr).toContain("buildId=build-1");
+      expect(infoUrlStr).not.toContain("accountIdentifier=");
+      expect(((infoOptions as RequestInit).headers as Record<string, string>)["x-api-key"]).toBe("pat.testaccount.tokenid.secret");
+
+      const [suitesUrl] = fetchSpy.mock.calls[1]!;
+      const suitesUrlStr = String(suitesUrl);
+      expect(suitesUrlStr).toContain("/gateway/ti-service/reports/test_suites");
+      expect(suitesUrlStr).toContain("report=junit");
+      expect(suitesUrlStr).toContain("status=failed");
+      expect(suitesUrlStr).toContain("order=DESC");
+      expect(suitesUrlStr).toContain("stageId=stage-1");
+      expect(suitesUrlStr).toContain("stepId=captureFailures");
+      expect(suitesUrlStr).toContain("pageIndex=0");
+      expect(suitesUrlStr).toContain("pageSize=20");
+
+      const [casesUrl] = fetchSpy.mock.calls[2]!;
+      const casesUrlStr = String(casesUrl);
+      expect(casesUrlStr).toContain("/gateway/ti-service/reports/test_cases");
+      expect(casesUrlStr).toContain("suite_name=My%20Suite");
+      expect(casesUrlStr).toContain("sort=status");
+      expect(casesUrlStr).toContain("order=ASC");
+      expect(casesUrlStr).toContain("pageIndex=0");
+      expect(casesUrlStr).toContain("pageSize=100");
+
+      expect(result).toEqual({
+        items: [{
+          stage_id: "stage-1",
+          suite_name: "My Suite",
+          test_method: "should fail clearly",
+        }],
+        failed_tests: 1,
+        format: "stage_id<TAB>suite_name<TAB>test_method",
+        text: "Number of failed tests: 1\n\nstage-1\tMy Suite\tshould fail clearly",
+        pipeline_id: "pipe-1",
+        build_id: "build-1",
+      });
+    });
+  });
+
   describe("error handling", () => {
     it("throws HarnessApiError for 401 unauthorized", async () => {
       const mock401Body = {

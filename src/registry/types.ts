@@ -78,6 +78,17 @@ export function requiresConfirmation(risk: RiskLevel): boolean {
 
 export interface HarnessClientInterface {
   readonly account: string;
+  request<T = unknown>(options: {
+    method?: HttpMethod;
+    path: string;
+    params?: Record<string, string | number | boolean | string[] | undefined>;
+    body?: unknown;
+    headers?: Record<string, string>;
+    responseType?: "json" | "buffer";
+    headerBasedScoping?: boolean;
+    retryPolicy?: RetryPolicy;
+    signal?: AbortSignal;
+  }): Promise<T>;
 }
 
 export interface RegistryDispatchInterface {
@@ -101,6 +112,17 @@ export interface PreflightContext {
   client: HarnessClientInterface;
   input: Record<string, unknown>;
   registry: RegistryDispatchInterface;
+  signal?: AbortSignal;
+}
+
+/**
+ * Context passed to custom endpoint handlers. Use this for read-only endpoints
+ * that must orchestrate multiple Harness requests behind one MCP operation.
+ */
+export interface EndpointHandlerContext {
+  client: HarnessClientInterface;
+  input: Record<string, unknown>;
+  config: PathBuilderConfig;
   signal?: AbortSignal;
 }
 
@@ -132,6 +154,7 @@ export type ToolsetName =
   | "access_control"
   | "settings"
   | "platform"
+  | "test-intelligence"
 
   | "visualizations"
   | "governance"
@@ -240,6 +263,8 @@ export interface EndpointSpec {
   bodyBuilder?: (input: Record<string, unknown>) => unknown;
   /** Static headers to merge into the request (e.g. Content-Type override) */
   headers?: Record<string, string>;
+  /** Optional custom handler for multi-request read operations. */
+  handler?: (ctx: EndpointHandlerContext) => Promise<unknown>;
   /** For GET: extract the useful part from the raw response */
   responseExtractor?: (raw: unknown, input?: Record<string, unknown>) => unknown;
   /** Request binary (ArrayBuffer) response instead of JSON. Used for ZIP download endpoints. */
