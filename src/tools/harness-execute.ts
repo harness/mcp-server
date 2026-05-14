@@ -75,11 +75,24 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           return errorResult(`Operation ${elicit.reason} by user.`);
         }
 
-        // Map resource_id to the first unresolved identifier field. URL and params
-        // may already provide parent IDs for nested resources such as PRs.
-        const resourceIdField = getResourceIdField(def.identifierFields, input);
-        if (resourceIdField && resourceId && (input[resourceIdField] === undefined || input[resourceIdField] === "")) {
-          input[resourceIdField] = resourceId;
+        // Map resource_id → identifierFields[0] (the documented primary field).
+        // For multi-identifier resources where the primary field is already
+        // populated with a DIFFERENT value (e.g. URL filled repo_id while
+        // resource_id is the pr_number), fall through to the child (last)
+        // identifier field instead — preserving the parent context.
+        // When the primary field holds the SAME value as resource_id (e.g.
+        // GitOps agent_id supplied via both resource_id and params), just
+        // overwrite — no fallthrough.
+        const primaryField = def.identifierFields[0];
+        if (primaryField && resourceId) {
+          const existing = input[primaryField];
+          const primaryAlreadySet = existing !== undefined && existing !== "" && existing !== resourceId;
+          if (primaryAlreadySet && def.identifierFields.length > 1) {
+            const childField = def.identifierFields[def.identifierFields.length - 1]!;
+            input[childField] = resourceId;
+          } else {
+            input[primaryField] = resourceId;
+          }
         }
 
         // Pass input_set_ids as string[] so HarnessClient emits repeated `inputSetIdentifiers=` query keys
@@ -265,11 +278,6 @@ const STRUCTURAL_FIELDS = new Set([
   "infrastructure", "execution", "spec", "template",
   "templateinputs", "servicedefinition", "artifacts", "manifests",
 ]);
-
-function getResourceIdField(identifierFields: string[], input: Record<string, unknown>): string | undefined {
-  if (identifierFields.length === 0) return undefined;
-  return identifierFields.find((field) => input[field] === undefined || input[field] === "") ?? identifierFields[0];
-}
 
 function isStructuralField(fieldName: string): boolean {
   return STRUCTURAL_FIELDS.has(fieldName.toLowerCase());
