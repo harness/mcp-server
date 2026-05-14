@@ -37,6 +37,7 @@ import { accessControlToolset } from "./toolsets/access-control.js";
 import { settingsToolset } from "./toolsets/settings.js";
 import { platformToolset } from "./toolsets/platform.js";
 import { testIntelligenceToolset } from "./toolsets/test-intelligence.js";
+import { fileStoreToolset } from "./toolsets/file-store.js";
 
 import { visualizationsToolset } from "./toolsets/visualizations.js";
 import { governanceToolset } from "./toolsets/governance.js";
@@ -117,6 +118,10 @@ function getExplicitScopeValues(scope: ResourceScope, input: Record<string, unkn
   return { orgId, projectId };
 }
 
+function isFormDataBody(body: unknown): body is FormData {
+  return typeof FormData !== "undefined" && body instanceof FormData;
+}
+
 const ALL_TOOLSETS: ToolsetDefinition[] = [
   pipelinesToolset,
   agentsToolset,
@@ -146,6 +151,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   settingsToolset,
   platformToolset,
   testIntelligenceToolset,
+  fileStoreToolset,
 
   visualizationsToolset,
   governanceToolset,
@@ -688,6 +694,9 @@ export class Registry {
     if (spec.bodySchema && body && typeof body === "object") {
       const bodyRecord = body as Record<string, unknown>;
       const payload =
+        isFormDataBody(body) && input.body != null && typeof input.body === "object"
+          ? (input.body as Record<string, unknown>)
+          :
         spec.bodyWrapperKey &&
         bodyRecord[spec.bodyWrapperKey] != null &&
         typeof bodyRecord[spec.bodyWrapperKey] === "object"

@@ -2,6 +2,7 @@
  * Shared response extractors for Harness API responses.
  * Used across all toolset definitions — eliminates per-file duplication.
  */
+import { Buffer } from "node:buffer";
 import { isRecord } from "../utils/type-guards.js";
 import { parseZipCsv } from "../utils/zip-csv.js";
 
@@ -19,6 +20,51 @@ export const pageExtract = (raw: unknown): { items: unknown[]; total: number } =
     items: r.data?.content ?? [],
     total: r.data?.totalElements ?? r.data?.totalItems ?? 0,
   };
+};
+
+const MAX_INLINE_FILE_STORE_TEXT_BYTES = 1_000_000;
+const MAX_INLINE_FILE_STORE_BASE64_BYTES = 100_000;
+
+/** Extract File Store download content from an ArrayBuffer without blindly embedding large/binary files. */
+export const fileStoreContentExtract = (raw: unknown): unknown => {
+  if (!(raw instanceof ArrayBuffer)) return raw;
+
+  const bytes = new Uint8Array(raw);
+  if (bytes.byteLength > MAX_INLINE_FILE_STORE_TEXT_BYTES) {
+    return {
+      size: bytes.byteLength,
+      content: null,
+      encoding: null,
+      truncated: true,
+      message: `File content is ${bytes.byteLength} bytes; refusing to inline content larger than ${MAX_INLINE_FILE_STORE_TEXT_BYTES} bytes.`,
+    };
+  }
+
+  try {
+    const content = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    return {
+      content,
+      encoding: "utf-8",
+      size: bytes.byteLength,
+      truncated: false,
+    };
+  } catch {
+    if (bytes.byteLength <= MAX_INLINE_FILE_STORE_BASE64_BYTES) {
+      return {
+        content: Buffer.from(bytes).toString("base64"),
+        encoding: "base64",
+        size: bytes.byteLength,
+        truncated: false,
+      };
+    }
+    return {
+      size: bytes.byteLength,
+      content: null,
+      encoding: null,
+      truncated: true,
+      message: "File appears to be binary; refusing to inline large binary content.",
+    };
+  }
 };
 
 /** Pass-through extractor — returns raw response unchanged. Used for APIs that don't wrap in `data`. */

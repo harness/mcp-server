@@ -155,6 +155,7 @@ export type ToolsetName =
   | "settings"
   | "platform"
   | "test-intelligence"
+  | "file-store"
 
   | "visualizations"
   | "governance"

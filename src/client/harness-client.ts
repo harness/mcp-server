@@ -19,8 +19,13 @@ function hasExplicitBody(body: unknown): boolean {
   return body !== undefined && body !== null;
 }
 
-function serializeRequestBody(body: unknown): string | undefined {
+function isFormDataBody(body: unknown): body is FormData {
+  return typeof FormData !== "undefined" && body instanceof FormData;
+}
+
+function serializeRequestBody(body: unknown): BodyInit | undefined {
   if (!hasExplicitBody(body)) return undefined;
+  if (isFormDataBody(body)) return body;
   return typeof body === "string" ? body : JSON.stringify(body);
 }
 
@@ -207,6 +212,8 @@ export class HarnessClient {
     if (hasExplicitBody(options.body)) {
       if (typeof options.body === "string") {
         headers["Content-Type"] = headers["Content-Type"] ?? "application/yaml";
+      } else if (isFormDataBody(options.body)) {
+        // Let fetch set multipart/form-data with the correct boundary.
       } else {
         headers["Content-Type"] = headers["Content-Type"] ?? "application/json";
       }
@@ -238,9 +245,12 @@ export class HarnessClient {
         const bodyString = serializeRequestBody(options.body);
 
         log.debug(`${method} ${url}`);
-        if (bodyString !== undefined) {
+        if (isFormDataBody(options.body)) {
+          log.debug("Request body", { body: "multipart/form-data body (redacted)" });
+        } else if (bodyString !== undefined) {
+          const serializedBody = bodyString as string;
           log.debug("Request body", {
-            body: this.logUnsafeBodies ? bodyString.slice(0, 1000) : redactJsonString(bodyString),
+            body: this.logUnsafeBodies ? serializedBody.slice(0, 1000) : redactJsonString(serializedBody),
           });
         }
 
@@ -374,6 +384,8 @@ export class HarnessClient {
     if (hasExplicitBody(options.body)) {
       if (typeof options.body === "string") {
         headers["Content-Type"] = headers["Content-Type"] ?? "application/yaml";
+      } else if (isFormDataBody(options.body)) {
+        // Let fetch set multipart/form-data with the correct boundary.
       } else {
         headers["Content-Type"] = headers["Content-Type"] ?? "application/json";
       }
