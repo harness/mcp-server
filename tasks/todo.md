@@ -343,9 +343,9 @@
 
 ## Slack Bug Triage: Harness-Hosted Signed Log URLs (2026-05-14)
 - [x] Read the triggered Slack thread and nearby channel context
-- [ ] Add failing regression coverage for Harness-hosted signed log blob URLs
-- [ ] Route only true external storage blob URLs through direct fetch
-- [ ] Preserve client-routed log download errors and path normalization
+- [x] Add failing regression coverage for Harness-hosted signed log blob URLs
+- [x] Route only true external storage blob URLs through direct fetch
+- [x] Preserve client-routed log download errors and path normalization
 - [ ] Run focused resolver tests, typecheck, build, and broader tests
 - [ ] Commit, push, open PR, and reply in the Slack thread
 

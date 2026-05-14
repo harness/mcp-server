@@ -1,5 +1,6 @@
 import { gunzipSync, inflateRawSync } from "node:zlib";
 import type { HarnessClient } from "../client/harness-client.js";
+import { HarnessApiError } from "./errors.js";
 import { createLogger } from "./logger.js";
 
 const log = createLogger("log-resolver");
@@ -53,6 +54,11 @@ function isExternalStorageHost(host: string): boolean {
   if (S3_BUCKET_HOST_RE.test(h)) return true;
   if (h.endsWith(".storage.googleapis.com")) return true;
   return false;
+}
+
+function isHarnessHost(host: string): boolean {
+  const h = host.toLowerCase();
+  return h === "harness.io" || h.endsWith(".harness.io");
 }
 
 /**
@@ -328,20 +334,25 @@ async function downloadBlobContent(
 ): Promise<Response> {
   const blobUrl = safeParseUrl(blobLink);
 
-  if (blobUrl && (isExternalStorageHost(blobUrl.host) || isPresignedUrl(blobUrl))) {
+  if (blobUrl && isExternalStorageHost(blobUrl.hostname)) {
     log.debug("Downloading log blob (direct)", { prefix, url: blobLink.slice(0, 80) });
     try {
       return await fetch(blobLink, { signal });
     } catch (err) {
       const cause = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-      throw new Error(`Log download fetch failed for ${blobUrl.host}: ${cause}`);
+      throw new Error(`Log download fetch failed for ${blobUrl.hostname}: ${cause}`);
     }
   }
 
-  const rawPath = blobUrl ? blobUrl.pathname + blobUrl.search : blobLink;
-  const downloadPath = rawPath.startsWith(LOG_SERVICE_GATEWAY_PREFIX)
-    ? rawPath
-    : `${LOG_SERVICE_GATEWAY_PREFIX}${rawPath}`;
+  const rawPath = blobUrl
+    ? blobUrl.pathname + blobUrl.search
+    : blobLink.startsWith("/") ? blobLink : `/${blobLink}`;
+  const downloadPath =
+    blobUrl && isPresignedUrl(blobUrl) && isHarnessHost(blobUrl.hostname)
+      ? rawPath
+      : rawPath.startsWith(LOG_SERVICE_GATEWAY_PREFIX)
+        ? rawPath
+        : `${LOG_SERVICE_GATEWAY_PREFIX}${rawPath}`;
   log.debug("Downloading log blob (client)", { prefix, path: downloadPath.slice(0, 80) });
   try {
     return await client.requestStream({
@@ -350,8 +361,9 @@ async function downloadBlobContent(
       signal,
     });
   } catch (err) {
+    if (err instanceof HarnessApiError) throw err;
     const cause = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-    throw new Error(`Log download fetch failed for ${blobUrl?.host ?? "harness"}: ${cause}`);
+    throw new Error(`Log download fetch failed for ${blobUrl?.hostname ?? "harness"}: ${cause}`);
   }
 }
 
