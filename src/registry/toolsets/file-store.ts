@@ -94,11 +94,16 @@ async function hydrateFileStoreUpdate(ctx: PreflightContext): Promise<void> {
     || !stringField(body, "parent_identifier", "parentIdentifier");
   if (!needsMetadata) return;
 
+  const getInput: Record<string, unknown> = { file_id: ctx.input.file_id };
+  if (ctx.input.org_id) getInput.org_id = ctx.input.org_id;
+  if (ctx.input.project_id) getInput.project_id = ctx.input.project_id;
+  if (ctx.input.resource_scope) getInput.resource_scope = ctx.input.resource_scope;
+
   const metadata = await ctx.registry.dispatch(
     ctx.client,
     "file_store_item",
     "get",
-    { ...ctx.input },
+    getInput,
     ctx.signal,
   );
   const item = asRecord(metadata);
@@ -124,6 +129,13 @@ export const fileStoreToolset: ToolsetDefinition = {
       scope: "project",
       supportedScopes: ["account", "org", "project"],
       identifierFields: ["file_id"],
+      diagnosticHint:
+        "If create fails, verify the parent folder exists (harness_get with file_id set to the parent_identifier). " +
+        "Identifiers must be unique within their scope and follow Harness naming rules (alphanumeric, dash, underscore). " +
+        "Use file_store_content to read file content after metadata lookup.",
+      relatedResources: [
+        { resourceType: "file_store_content", relationship: "child", description: "Download and read file content" },
+      ],
       listFilterFields: [
         { name: "search_term", description: "Filter files or folders by name or identifier" },
         { name: "identifiers", description: "Specific File Store identifiers to fetch (array or repeated query values)" },
@@ -157,7 +169,7 @@ export const fileStoreToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/ng/api/file-store",
-          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: buildFileStoreFormData,
           responseExtractor: ngExtract,
           description: "Create a File Store folder or file. For files, pass body.content or body.content_base64.",
@@ -166,13 +178,21 @@ export const fileStoreToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/ng/api/file-store/{identifier}",
-          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { file_id: "identifier" },
           preflight: hydrateFileStoreUpdate,
           bodyBuilder: buildFileStoreFormData,
           responseExtractor: ngExtract,
           description: "Update an existing File Store folder or file, including file content.",
           bodySchema: fileStoreUpdateSchema,
+        },
+        delete: {
+          method: "DELETE",
+          path: "/ng/api/file-store/{identifier}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          pathParams: { file_id: "identifier" },
+          responseExtractor: ngExtract,
+          description: "Delete a File Store file or folder",
         },
       },
     },

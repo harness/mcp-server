@@ -39,3 +39,8 @@ export function coerceRecord(value: unknown): Record<string, unknown> | undefine
   }
   return undefined;
 }
+
+/** Narrow `unknown` to `FormData` with a runtime check. */
+export function isFormDataBody(body: unknown): body is FormData {
+  return typeof FormData !== "undefined" && body instanceof FormData;
+}
