@@ -254,6 +254,11 @@ export interface EndpointSpec {
    * so required-field validation checks the inner object, not the wrapper.
    */
   bodyWrapperKey?: string;
+  /**
+   * When true, do not inject orgIdentifier/projectIdentifier into POST/PUT
+   * bodies. Some APIs take scope only in query/path and reject extra body fields.
+   */
+  skipScopeBodyInjection?: boolean;
   /** Declares the risk level and retry behavior for this operation. */
   operationPolicy: OperationPolicy;
   /**

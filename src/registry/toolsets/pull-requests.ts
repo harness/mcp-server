@@ -105,6 +105,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           path: "/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}",
           pathBuilder: pullRequestUpdatePath,
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
           pathParams: {
             repo_id: "repoIdentifier",
             pr_number: "prNumber",
