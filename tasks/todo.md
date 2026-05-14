@@ -342,14 +342,20 @@
 - Verified with `pnpm test tests/client/harness-client.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test`.
 
 ## Critical Bug Inspection (2026-05-14)
-- [ ] Inspect recent commits for high-severity behavioral regressions
-- [ ] Reproduce template update wrong-version fallback
-- [ ] Add regression coverage that template updates require an explicit version label
-- [ ] Implement minimal fix in the template update handler
-- [ ] Run focused tests, typecheck, build, and relevant full tests
+- [x] Inspect recent commits for high-severity behavioral regressions
+- [x] Reproduce template update wrong-version fallback
+- [x] Add regression coverage that template updates require an explicit version label
+- [x] Implement minimal fix in the template update handler
+- [x] Run focused tests, typecheck, build, and relevant full tests
 - [ ] Commit, push, open PR, and post Slack summary
 
 ### Plan
 - Focus the fix on `src/tools/harness-update.ts`, where the MCP handler currently defaults template updates to `version_label="v1"` before dispatch.
 - Add tool-level regression tests in `tests/tools/tool-handlers.test.ts` because the registry already rejects missing `version_label`; the bug is the handler masking that validation with a silent default.
 - Preserve successful template updates when `params.version_label`, `body.version_label`, or body version aliases identify the intended template version.
+
+### Review
+- Found that `harness_update(resource_type="template")` silently filled missing `version_label` with `v1`, so a caller editing another version such as `stable` could mutate `v1` instead of failing loudly.
+- Removed the silent `v1` fallback and resolve the update version only from `params.version_label`, `body.version_label`, `body.versionLabel`, or `body.label`.
+- Added regression coverage for the missing-version error path and for using `body.label` as the intended version.
+- Verified with `pnpm test tests/tools/tool-handlers.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test`.
