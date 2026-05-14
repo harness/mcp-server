@@ -1,5 +1,6 @@
 import { gunzipSync, inflateRawSync } from "node:zlib";
 import type { HarnessClient } from "../client/harness-client.js";
+import { HarnessApiError } from "./errors.js";
 import { createLogger } from "./logger.js";
 
 const log = createLogger("log-resolver");
@@ -55,10 +56,13 @@ function isExternalStorageHost(host: string): boolean {
   return false;
 }
 
+function normalizePath(path: string): string {
+  return path.startsWith("/") ? path : `/${path}`;
+}
+
 /**
- * Detect pre-signed URLs that should be fetched directly without auth.
- * GCS and S3 signed URLs carry their credentials in query params — adding
- * extra auth headers or rewriting the host invalidates the signature.
+ * Detect signed URLs whose path/query must not be rewritten.
+ * Direct fetching is still limited to recognized external storage hosts.
  */
 function isPresignedUrl(url: URL): boolean {
   if (url.searchParams.has("X-Goog-Signature")) return true;
@@ -328,20 +332,22 @@ async function downloadBlobContent(
 ): Promise<Response> {
   const blobUrl = safeParseUrl(blobLink);
 
-  if (blobUrl && (isExternalStorageHost(blobUrl.host) || isPresignedUrl(blobUrl))) {
+  if (blobUrl && isExternalStorageHost(blobUrl.hostname)) {
     log.debug("Downloading log blob (direct)", { prefix, url: blobLink.slice(0, 80) });
     try {
       return await fetch(blobLink, { signal });
     } catch (err) {
       const cause = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-      throw new Error(`Log download fetch failed for ${blobUrl.host}: ${cause}`);
+      throw new Error(`Log download fetch failed for ${blobUrl.hostname}: ${cause}`);
     }
   }
 
-  const rawPath = blobUrl ? blobUrl.pathname + blobUrl.search : blobLink;
-  const downloadPath = rawPath.startsWith(LOG_SERVICE_GATEWAY_PREFIX)
+  const rawPath = normalizePath(blobUrl ? blobUrl.pathname + blobUrl.search : blobLink);
+  const downloadPath = blobUrl && isPresignedUrl(blobUrl)
     ? rawPath
-    : `${LOG_SERVICE_GATEWAY_PREFIX}${rawPath}`;
+    : rawPath.startsWith(LOG_SERVICE_GATEWAY_PREFIX)
+      ? rawPath
+      : `${LOG_SERVICE_GATEWAY_PREFIX}${rawPath}`;
   log.debug("Downloading log blob (client)", { prefix, path: downloadPath.slice(0, 80) });
   try {
     return await client.requestStream({
@@ -350,8 +356,9 @@ async function downloadBlobContent(
       signal,
     });
   } catch (err) {
+    if (err instanceof HarnessApiError) throw err;
     const cause = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-    throw new Error(`Log download fetch failed for ${blobUrl?.host ?? "harness"}: ${cause}`);
+    throw new Error(`Log download fetch failed for ${blobUrl?.hostname ?? "harness"}: ${cause}`);
   }
 }
 
