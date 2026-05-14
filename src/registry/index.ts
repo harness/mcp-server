@@ -655,7 +655,7 @@ export class Registry {
     // Inject orgIdentifier/projectIdentifier into the body for mutating operations (POST/PUT).
     // Harness NG APIs require these in the body (not just query params) to scope the resource correctly.
     // If bodyWrapperKey is set (e.g., "connector"), inject inside the wrapper object.
-    if (body && typeof body === "object" && (resolvedMethod === "POST" || resolvedMethod === "PUT")) {
+    if (body && typeof body === "object" && !spec.skipScopeBodyInjection && (resolvedMethod === "POST" || resolvedMethod === "PUT")) {
       const bodyRecord = body as Record<string, unknown>;
       // Determine where to inject: inside wrapper if present, otherwise at top level
       const targetRecord = spec.bodyWrapperKey && 

@@ -643,6 +643,75 @@ describe("harness_update", () => {
   });
 });
 
+describe("harness_update — pull request", () => {
+  it("updates a PR title from a Harness URL via harness_update", async () => {
+    const prServer = makeMcpServer("accept");
+    const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const prRequest = vi.fn().mockResolvedValue({ number: 42, title: "New Title" });
+    const prClient = makeClient(prRequest);
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(prServer, prRegistry, prClient);
+
+    const result = await prServer.call("harness_update", {
+      resource_type: "pull_request",
+      resource_id: "42",
+      url: "https://app.harness.io/ng/account/test-account/module/code/orgs/default/projects/test-project/repos/my-repo/pull-requests/42",
+      body: { title: "New Title" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(prRequest).toHaveBeenCalledOnce();
+    const call = prRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
+    expect(call.method).toBe("PATCH");
+    expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42");
+    expect(call.body).toEqual({ title: "New Title" });
+  });
+
+  it("closes a PR from a Harness URL via harness_update", async () => {
+    const prServer = makeMcpServer("accept");
+    const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const prRequest = vi.fn().mockResolvedValue({ number: 42, state: "closed" });
+    const prClient = makeClient(prRequest);
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(prServer, prRegistry, prClient);
+
+    const result = await prServer.call("harness_update", {
+      resource_type: "pull_request",
+      resource_id: "42",
+      url: "https://app.harness.io/ng/account/test-account/module/code/orgs/default/projects/test-project/repos/my-repo/pull-requests/42",
+      body: { state: "closed" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = prRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/state");
+    expect(call.body).toEqual({ state: "closed" });
+  });
+
+  it("rejects mixed state + metadata via harness_update", async () => {
+    const prServer = makeMcpServer("accept");
+    const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const prRequest = vi.fn().mockResolvedValue({});
+    const prClient = makeClient(prRequest);
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(prServer, prRegistry, prClient);
+
+    const result = await prServer.call("harness_update", {
+      resource_type: "pull_request",
+      resource_id: "42",
+      params: { repo_id: "my-repo" },
+      body: { state: "closed", title: "Nope" },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("Cannot combine state change"),
+    });
+    expect(prRequest).not.toHaveBeenCalled();
+  });
+});
+
 describe("harness_delete", () => {
   let server: ReturnType<typeof makeMcpServer>;
   let registry: Registry;
@@ -766,8 +835,8 @@ describe("harness_execute", () => {
     expect(result.isError).toBeUndefined();
     expect(prRequest).toHaveBeenCalledOnce();
     const call = prRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
-    expect(call.method).toBe("PATCH");
-    expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42");
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/state");
     expect(call.body).toEqual({ state: "closed" });
   });
 
@@ -788,7 +857,7 @@ describe("harness_execute", () => {
 
     expect(result.isError).toBeUndefined();
     const call = prRequest.mock.calls[0]![0] as { path?: string };
-    expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42");
+    expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/state");
   });
 
   it("explicit resource_id overrides URL-derived pr_number", async () => {
@@ -807,7 +876,7 @@ describe("harness_execute", () => {
 
     expect(result.isError).toBeUndefined();
     const call = prRequest.mock.calls[0]![0] as { path?: string };
-    expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/43");
+    expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/43/state");
   });
 
   it("does not remap resource_id to child field when primary matches (GitOps contract)", async () => {
