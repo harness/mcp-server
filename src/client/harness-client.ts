@@ -454,6 +454,12 @@ export class HarnessClient {
   private buildUrl(options: RequestOptions): string {
     const baseUrl = (options.baseUrl ?? this.baseUrl).replace(/\/$/, "");
     let path = options.path;
+    const queryIndex = path.indexOf("?");
+    const pathQuery = queryIndex === -1 ? "" : path.slice(queryIndex + 1);
+    if (queryIndex !== -1) {
+      path = path.slice(0, queryIndex);
+    }
+    const pathParams = new URLSearchParams(pathQuery);
 
     const basePath = new URL(baseUrl).pathname.replace(/\/$/, "");
     if (basePath && basePath !== "/" && path.startsWith(`${basePath}/`)) {
@@ -467,11 +473,19 @@ export class HarnessClient {
     if (!options.headerBasedScoping && options.product !== "fme") {
       const accountId = this.resolveAccountId();
       params.set("accountIdentifier", accountId);
+      params.set("routingId", accountId);
 
       // Log-service gateway expects accountID (capital ID) in query params
       if (path.includes("/log-service/")) {
         params.set("accountID", accountId);
       }
+    }
+
+    for (const key of pathParams.keys()) {
+      params.delete(key);
+    }
+    for (const [key, value] of pathParams) {
+      params.append(key, value);
     }
 
     if (options.params) {

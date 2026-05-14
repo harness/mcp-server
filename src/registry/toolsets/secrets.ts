@@ -9,9 +9,10 @@ export const secretsToolset: ToolsetDefinition = {
     {
       resourceType: "secret",
       displayName: "Secret",
-      description: "Secret metadata (name, type, scope). Values are NEVER returned. Read-only.",
+      description: "Secret metadata (name, type, scope). Values are NEVER returned. Read-only. Use resource_scope='account' to list or get account-level secret metadata.",
       toolset: "secrets",
       scope: "project",
+      supportedScopes: ["account", "org", "project"],
       identifierFields: ["secret_id"],
       listFilterFields: [
         { name: "search_term", description: "Filter secrets by name or keyword" },

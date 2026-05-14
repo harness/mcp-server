@@ -108,6 +108,11 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
               "pipeline_id is required when using input_set_ids without inputs. Provide resource_id or params.pipeline_id.",
             );
           }
+          if (!orgId) {
+            return errorResult(
+              "org_id is required when using input_set_ids. Pass org_id or set HARNESS_ORG.",
+            );
+          }
           if (!projectId) {
             return errorResult(
               "project_id is required when using input_set_ids. Pass project_id or set HARNESS_PROJECT.",

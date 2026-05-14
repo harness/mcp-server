@@ -165,6 +165,7 @@ export type ToolsetName =
 export type ProductName = "harness" | "fme";
 
 export type OperationName = "list" | "get" | "create" | "update" | "delete";
+export type ResourceScope = "project" | "org" | "account";
 
 /**
  * Lightweight field descriptor for body schemas.
@@ -236,6 +237,8 @@ export type PathBuilderConfig = { HARNESS_ACCOUNT_ID?: string; HARNESS_ORG?: str
  */
 export interface EndpointSpec {
   method: HttpMethod;
+  /** Optional dynamic method override. When set, takes precedence over `method`. */
+  methodBuilder?: (input: Record<string, unknown>) => HttpMethod;
   /** Path template, e.g. "/pipeline/api/pipelines/{pipelineIdentifier}". Ignored when pathBuilder is set. */
   path: string;
   /** Optional dynamic path builder. When set, used instead of path + pathParams for account-scoped or multi-endpoint resources. */
@@ -263,7 +266,7 @@ export interface EndpointSpec {
   /** Optional custom handler for multi-request read operations. */
   handler?: (ctx: EndpointHandlerContext) => Promise<unknown>;
   /** For GET: extract the useful part from the raw response */
-  responseExtractor?: (raw: unknown) => unknown;
+  responseExtractor?: (raw: unknown, input?: Record<string, unknown>) => unknown;
   /** Request binary (ArrayBuffer) response instead of JSON. Used for ZIP download endpoints. */
   responseType?: "json" | "buffer";
   /** Description shown in harness_describe output */
@@ -335,8 +338,13 @@ export interface ResourceDefinition {
   description: string;
   /** Which toolset this resource belongs to (for HARNESS_TOOLSETS filtering) */
   toolset: string;
-  /** Scope level: "project" | "org" | "account" */
-  scope: "project" | "org" | "account";
+  /** Default scope level: "project" | "org" | "account" */
+  scope: ResourceScope;
+  /**
+   * Scopes this resource can query when the caller passes `resource_scope`.
+   * If omitted, the resource supports only its default `scope`.
+   */
+  supportedScopes?: readonly ResourceScope[];
   /**
    * When true, org/project params are only added if explicitly provided in input.
    * Use for resources that support multiple scopes (e.g., Harness Code repos/PRs

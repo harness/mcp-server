@@ -240,7 +240,7 @@ export const gitopsToolset: ToolsetDefinition = {
         "RESOURCE ACTIONS (restart, pause, etc.): 1) harness_get resource_type='gitops_app_resource_tree' to discover K8s resources, " +
         "2) harness_list resource_type='gitops_resource_action' to discover available actions, " +
         "3) harness_execute action='run_resource_action'. " +
-        "NOTE: resource_id maps to agent_id in harness_execute but to app_name in harness_get.",
+        "NOTE: resource_id maps to agent_id in harness_execute, but to app_name in harness_get and harness_update.",
       identifierFields: ["agent_id", "app_name"],
       listFilterFields: [
         { name: "search_term", description: "Filter GitOps applications by name or keyword" },
@@ -365,9 +365,9 @@ export const gitopsToolset: ToolsetDefinition = {
           description:
             "Update a GitOps application. This is a full PUT replace — provide the complete desired state.\n" +
             "RECOMMENDED FLOW: First harness_get the current app, modify the fields you need, then pass the full application object.\n" +
-            "IMPORTANT: resource_id must be the agent_id (scope-prefixed), and app_name goes in params.\n" +
-            "Example: harness_update(resource_type='gitops_application', resource_id='account.myagent', params={app_name:'my-app', cluster_identifier:'account.incluster', skip_repo_validation:'true'}, body={application:{...}})\n" +
-            "SCOPE PREFIXES: 'account.' for account-level, 'org.' for org-level, no prefix for project-level.\n" +
+            "IMPORTANT: resource_id must be the app_name (plain name, not scope-prefixed), and agent_id goes in params.\n" +
+            "Example: harness_update(resource_type='gitops_application', resource_id='my-app', params={agent_id:'account.myagent', cluster_identifier:'account.incluster', skip_repo_validation:'true'}, body={application:{...}})\n" +
+            "SCOPE PREFIXES for agent_id: 'account.' for account-level, 'org.' for org-level, no prefix for project-level.\n" +
             "REPO VALIDATION: Set repo_identifier or skip_repo_validation=true in params.\n" +
             "LINKING SERVICE/ENVIRONMENT: Set labels 'harness.io/serviceRef' and 'harness.io/envRef' in metadata.labels. Values are scope-prefixed.",
           bodySchema: {
@@ -823,8 +823,8 @@ export const gitopsToolset: ToolsetDefinition = {
             "  1. harness_list(resource_type='gitops_applicationset', params={agent_id:'account.myagent'}, search_term='my-appset')\n" +
             "     → note 'identifier' (= metadata.uid) and spec.template.spec.project\n" +
             "  2. Modify the fields you need\n" +
-            "  3. harness_update(resource_type='gitops_applicationset', resource_id='account.myagent',\n" +
-            "     body={applicationset:{metadata:{name:'my-appset', uid:'<identifier>'}, spec:{...project:'<project>'...}}})\n\n" +
+            "  3. harness_update(resource_type='gitops_applicationset', resource_id='<appset_id>',\n" +
+            "     params={agent_id:'account.myagent'}, body={applicationset:{metadata:{name:'my-appset', uid:'<identifier>'}, spec:{...project:'<project>'...}}})\n\n" +
             "MUST PRESERVE from list response:\n" +
             "  - metadata.uid — server uses it to identify the appset\n" +
             "  - metadata.name — server validates it matches\n" +

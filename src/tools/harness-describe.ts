@@ -3,6 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { InputExpansionRule } from "../registry/types.js";
 import { jsonResult } from "../utils/response-formatter.js";
+import { getExamplesForResource } from "../data/examples/index.js";
 
 export function registerDescribeTool(server: McpServer, registry: Registry): void {
   const allTypes = registry.getAllResourceTypes() as [string, ...string[]];
@@ -27,12 +28,20 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
       if (args.resource_type) {
         try {
           const def = registry.getResource(args.resource_type);
+          const resourceScopes = registry.getSupportedScopes(args.resource_type);
+          const supportedScopes = resourceScopes.length > 1 ? resourceScopes : undefined;
           return jsonResult({
             resource_type: def.resourceType,
             displayName: def.displayName,
             description: def.description,
             toolset: def.toolset,
             scope: def.scope,
+            supportedScopes,
+            scopeHint: supportedScopes && supportedScopes.length > 1
+              ? def.scopeOptional
+                ? "Set resource_scope='account' for account-level data, resource_scope='org' for org-level data, or resource_scope='project' for project-level data. If resource_scope is omitted, org/project are only included when explicitly passed (no fallback to configured defaults)."
+                : "Set resource_scope='account' for account-level data, resource_scope='org' for org-level data, or resource_scope='project' for project-level data. If resource_scope is omitted, the resource uses its default scope and configured defaults."
+              : undefined,
             identifierFields: def.identifierFields,
             listFilterFields: def.listFilterFields,
             operations: Object.entries(def.operations).map(([op, spec]) => ({
@@ -55,6 +64,15 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
             diagnosticHint: def.diagnosticHint ?? undefined,
             relatedResources: def.relatedResources ?? undefined,
             executeHint: def.executeHint ?? undefined,
+            ...(() => {
+              const examples = getExamplesForResource(def.resourceType);
+              return examples.length > 0
+                ? {
+                    examples_available: examples.map((e) => ({ name: e.name, description: e.description })),
+                    examples_hint: `Use harness_schema(resource_type='${def.resourceType}', example='<name>') to fetch full YAML.`,
+                  }
+                : {};
+            })(),
           });
         } catch (err) {
           // Resource type not found — return the compact summary with an error hint

@@ -139,7 +139,7 @@ export const stoToolset: ToolsetDefinition = {
             };
           },
           responseExtractor: passthrough,
-          actionDescription: "Approve a security exemption. approver_id is auto-derived from the authenticated user when not supplied.",
+          actionDescription: "Approve a security exemption at PROJECT scope only. Use this ONLY when the user explicitly wants project-level approval. For ORG or ACCOUNT level, use the 'promote' action instead — do NOT call approve first.",
           bodySchema: {
             description: "Exemption approval details",
             fields: [
@@ -183,28 +183,58 @@ export const stoToolset: ToolsetDefinition = {
           path: "/sto/api/v2/exemptions/{exemptionId}/promote",
           operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: { exemption_id: "exemptionId" },
+          queryParams: { promote_pipeline_id: "pipelineId", promote_target_id: "targetId" },
           preflight: async ({ client, input }) => {
+            const b = ((input.body as Record<string, unknown> | undefined) ?? {});
+            const scope = ((b.scope ?? input.scope) as string | undefined)?.toUpperCase();
+            // The STO backend determines target scope by which query params are present:
+            //   orgId + projectId + pipelineId → PIPELINE scope
+            //   orgId + projectId + targetId   → TARGET scope
+            //   orgId + projectId              → PROJECT scope
+            //   orgId only                     → ORG scope
+            //   neither                        → ACCOUNT scope
+            // Setting to "" wins over config fallback (nullish coalescing) and is
+            // skipped by the harness client URL builder, so the param is omitted.
+            if (scope === "ACCOUNT") {
+              input.org_id = "";
+              input.project_id = "";
+            } else if (scope === "ORG") {
+              input.project_id = "";
+              // org_id left undefined so registry injects it from config
+            } else if (scope === "PIPELINE" && b.pipeline_id) {
+              // Hoist to top-level so queryParams mapping sends it as URL param
+              input.promote_pipeline_id = b.pipeline_id;
+            } else if (scope === "TARGET" && b.target_id) {
+              // Hoist to top-level so queryParams mapping sends it as URL param
+              input.promote_target_id = b.target_id;
+            }
+            // PROJECT: leave both org_id and project_id as-is, no extra params
+
             const harnessClient = client as unknown as HarnessClient;
-            const body = ((input.body as Record<string, unknown> | undefined) ?? {});
-            if (!body.approver_id) {
-              body.approver_id = await harnessClient.getCurrentUserId();
-              input.body = body;
+            if (!b.approver_id) {
+              b.approver_id = await harnessClient.getCurrentUserId();
+              input.body = b;
             }
           },
           bodyBuilder: (input) => {
             const b = (input.body as Record<string, unknown> | undefined) ?? {};
-            return {
+            // scope may arrive in body OR as a top-level input param depending on the calling agent
+            const scope = (b.scope ?? input.scope) as string | undefined;
+            const requestBody = {
               approverId: b.approver_id,
+              scope,
               ...(b.comment     ? { comment:    b.comment }     : {}),
               ...(b.pipeline_id ? { pipelineId: b.pipeline_id } : {}),
               ...(b.target_id   ? { targetId:   b.target_id }   : {}),
             };
+            return requestBody;
           },
           responseExtractor: passthrough,
-          actionDescription: "Promote a security exemption to organization or account level. approver_id is auto-derived when not supplied.",
+          actionDescription: "Approve AND promote a security exemption to any scope in a single step. Call this directly — do NOT call 'approve' first. MUST pass scope in body: 'ACCOUNT' | 'ORG' | 'PROJECT' | 'PIPELINE' (requires pipeline_id) | 'TARGET' (requires target_id). approver_id is auto-derived when not supplied.",
           bodySchema: {
             description: "Exemption promotion details",
             fields: [
+              { name: "scope",       type: "string", required: true,  description: "Target scope: 'ACCOUNT' | 'ORG' | 'PROJECT' | 'PIPELINE' (also pass pipeline_id) | 'TARGET' (also pass target_id)." },
               { name: "approver_id", type: "string", required: false, description: "User UUID of the approver. Auto-derived from the authenticated PAT via /ng/api/user/currentUser if omitted." },
               { name: "comment",     type: "string", required: false, description: "Optional comment" },
               { name: "pipeline_id", type: "string", required: false, description: "Pipeline ID to scope promotion" },

@@ -385,6 +385,47 @@ describe("Registry", () => {
       expect(desc.total_resource_types).toBeGreaterThan(0);
       expect(desc.toolsets).toHaveProperty("pipelines");
     });
+
+    it("marks account-queryable settings resources as multi-scope", () => {
+      const registry = new Registry(makeConfig({
+        HARNESS_TOOLSETS: "connectors,services,environments,infrastructure,secrets,templates",
+      }));
+
+      for (const resourceType of ["connector", "service", "environment", "infrastructure", "secret", "template"]) {
+        expect(registry.getResource(resourceType).supportedScopes).toEqual(["account", "org", "project"]);
+      }
+    });
+
+    it("includes supportedScopes in toolset-level describe metadata", () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+      const desc = registry.describe() as {
+        toolsets: {
+          connectors: {
+            resources: Array<{ resource_type: string; supportedScopes?: string[] }>;
+          };
+        };
+      };
+
+      const connector = desc.toolsets.connectors.resources.find((r) => r.resource_type === "connector");
+
+      expect(connector?.supportedScopes).toEqual(["account", "org", "project"]);
+    });
+
+    it("does not infer explicit resource_scope support from scopeOptional", () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "scs" }));
+      const desc = registry.describe() as {
+        toolsets: {
+          scs: {
+            resources: Array<{ resource_type: string; supportedScopes?: string[] }>;
+          };
+        };
+      };
+
+      const vulnerability = desc.toolsets.scs.resources.find((r) => r.resource_type === "scs_component_vulnerability");
+
+      expect(vulnerability?.supportedScopes).toBeUndefined();
+      expect(registry.getSupportedScopes("scs_component_vulnerability")).toEqual(["project"]);
+    });
   });
 
   describe("getAllFilterFields", () => {
@@ -494,6 +535,44 @@ describe("Registry", () => {
       expect(call.body.categories).toBeUndefined();
     });
 
+    it("audit_resource_type filter is serialized into the request body", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: { content: [], totalElements: 0 },
+      });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "audit_event", "list", {
+        audit_resource_type: "PIPELINE",
+        action: "CREATE",
+        page: 0,
+        size: 20,
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("POST");
+      expect(call.path).toBe("/audit/api/audits/list");
+      expect(call.body).toMatchObject({
+        filterType: "Audit",
+        actions: ["CREATE"],
+        resources: [{ type: "PIPELINE" }],
+      });
+    });
+
+    it("audit_event list omits resources field when audit_resource_type not provided", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: { content: [], totalElements: 0 },
+      });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "audit_event", "list", {
+        action: "DELETE",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.actions).toEqual(["DELETE"]);
+      expect(call.body.resources).toBeUndefined();
+    });
+
     it("identifierFields include parent IDs for nested resources", () => {
       // Trigger needs both pipeline_id and trigger_id
       const triggerDef = registry.getResource("trigger");
@@ -556,6 +635,228 @@ describe("Registry", () => {
         page: 0,
         size: 10,
       });
+    });
+
+    it("omits default org/project query params for explicit account-scope connector list", async () => {
+      const accountRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: { content: [], totalElements: 0 },
+      });
+      const client = makeClient(mockRequest);
+
+      await accountRegistry.dispatch(client, "connector", "list", {
+        resource_scope: "account",
+        type: "Bitbucket",
+        page: 0,
+        size: 100,
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/ng/api/connectors/listV2");
+      expect(call.params.orgIdentifier).toBeUndefined();
+      expect(call.params.projectIdentifier).toBeUndefined();
+      expect(call.body).toMatchObject({
+        filterType: "Connector",
+        types: ["Bitbucket"],
+      });
+    });
+
+    it("injects only org query params for explicit org-scope connector list", async () => {
+      const accountRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: { content: [], totalElements: 0 },
+      });
+      const client = makeClient(mockRequest);
+
+      await accountRegistry.dispatch(client, "connector", "list", {
+        resource_scope: "org",
+        org_id: "platform",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params.orgIdentifier).toBe("platform");
+      expect(call.params.projectIdentifier).toBeUndefined();
+    });
+
+    it("throws before dispatch when explicit org scope lacks org_id and HARNESS_ORG", async () => {
+      const accountRegistry = new Registry(makeConfig({
+        HARNESS_TOOLSETS: "connectors",
+        HARNESS_ORG: undefined,
+        HARNESS_PROJECT: undefined,
+      }));
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: { content: [], totalElements: 0 },
+      });
+      const client = makeClient(mockRequest);
+
+      await expect(
+        accountRegistry.dispatch(client, "connector", "list", {
+          resource_scope: "org",
+        }),
+      ).rejects.toThrow(/resource_scope "org" requires org_id or HARNESS_ORG/);
+      expect(mockRequest).not.toHaveBeenCalled();
+    });
+
+    it("throws before dispatch when explicit project scope lacks project_id and HARNESS_PROJECT", async () => {
+      const accountRegistry = new Registry(makeConfig({
+        HARNESS_TOOLSETS: "connectors",
+        HARNESS_ORG: "platform",
+        HARNESS_PROJECT: undefined,
+      }));
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: { content: [], totalElements: 0 },
+      });
+      const client = makeClient(mockRequest);
+
+      await expect(
+        accountRegistry.dispatch(client, "connector", "list", {
+          resource_scope: "project",
+        }),
+      ).rejects.toThrow(/resource_scope "project" requires project_id or HARNESS_PROJECT/);
+      expect(mockRequest).not.toHaveBeenCalled();
+    });
+
+    it("keeps default project scope when scope is omitted", async () => {
+      const accountRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: { content: [], totalElements: 0 },
+      });
+      const client = makeClient(mockRequest);
+
+      await accountRegistry.dispatch(client, "connector", "list", {});
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params.orgIdentifier).toBe("default");
+      expect(call.params.projectIdentifier).toBe("test-project");
+    });
+
+    it.each([
+      ["connectors", "connector"],
+      ["services", "service"],
+      ["environments", "environment"],
+      ["infrastructure", "infrastructure"],
+      ["secrets", "secret"],
+      ["templates", "template"],
+    ])("supports account/org/project list scoping for %s", async (toolset, resourceType) => {
+      const scopedRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: toolset }));
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: { content: [], totalElements: 0 },
+      });
+      const client = makeClient(mockRequest);
+
+      await scopedRegistry.dispatch(client, resourceType, "list", {
+        resource_scope: "account",
+      });
+      await scopedRegistry.dispatch(client, resourceType, "list", {
+        resource_scope: "org",
+        org_id: "org-level",
+      });
+      await scopedRegistry.dispatch(client, resourceType, "list", {
+        resource_scope: "project",
+        org_id: "proj-org",
+        project_id: "proj-level",
+      });
+
+      const accountCall = mockRequest.mock.calls[0][0];
+      const orgCall = mockRequest.mock.calls[1][0];
+      const projectCall = mockRequest.mock.calls[2][0];
+
+      expect(accountCall.params.orgIdentifier).toBeUndefined();
+      expect(accountCall.params.projectIdentifier).toBeUndefined();
+      expect(orgCall.params.orgIdentifier).toBe("org-level");
+      expect(orgCall.params.projectIdentifier).toBeUndefined();
+      expect(projectCall.params.orgIdentifier).toBe("proj-org");
+      expect(projectCall.params.projectIdentifier).toBe("proj-level");
+    });
+
+    it("omits default org/project query params for explicit account-scope secret get", async () => {
+      const accountRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "secrets" }));
+      const mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "acctSecret" } });
+      const client = makeClient(mockRequest);
+
+      await accountRegistry.dispatch(client, "secret", "get", {
+        resource_scope: "account",
+        secret_id: "acctSecret",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/ng/api/v2/secrets/acctSecret");
+      expect(call.params.orgIdentifier).toBeUndefined();
+      expect(call.params.projectIdentifier).toBeUndefined();
+    });
+
+    it("template v1 update uses project-scoped path when resource_scope='project' with config defaults", async () => {
+      const templateRegistry = new Registry(makeConfig({
+        HARNESS_TOOLSETS: "templates",
+        HARNESS_ORG: "default-org",
+        HARNESS_PROJECT: "default-proj",
+      }));
+      const mockRequest = vi.fn().mockResolvedValue({ data: {} });
+      const client = makeClient(mockRequest);
+
+      await templateRegistry.dispatch(client, "template", "update", {
+        resource_scope: "project",
+        template_id: "my-template",
+        version_label: "v2",
+        body: { template_yaml: "template:\n  name: My Template\n  type: Step\n" },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/v1/orgs/default-org/projects/default-proj/templates/my-template/versions/v2");
+    });
+
+    it("template v1 update uses account-scoped path when resource_scope='account'", async () => {
+      const templateRegistry = new Registry(makeConfig({
+        HARNESS_TOOLSETS: "templates",
+        HARNESS_ORG: "default-org",
+        HARNESS_PROJECT: "default-proj",
+      }));
+      const mockRequest = vi.fn().mockResolvedValue({ data: {} });
+      const client = makeClient(mockRequest);
+
+      await templateRegistry.dispatch(client, "template", "update", {
+        resource_scope: "account",
+        template_id: "my-template",
+        version_label: "v2",
+        body: { template_yaml: "template:\n  name: My Template\n  type: Step\n" },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/v1/templates/my-template/versions/v2");
+    });
+
+    it("does not treat resource-specific scope filters as dispatcher scope", async () => {
+      const gitopsRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: { content: [], totalElements: 0 },
+      });
+      const client = makeClient(mockRequest);
+
+      await gitopsRegistry.dispatch(client, "gitops_cluster_link", "list", {
+        environment_id: "prod",
+        scope: "ACCOUNT",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params).toMatchObject({
+        orgIdentifier: "default",
+        projectIdentifier: "test-project",
+        environmentIdentifier: "prod",
+        scope: "ACCOUNT",
+      });
+    });
+
+    it("rejects unsupported explicit org scope for scopeOptional resources", async () => {
+      const scsRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "scs" }));
+      const client = makeClient();
+
+      await expect(
+        scsRegistry.dispatch(client, "scs_component_vulnerability", "list", {
+          resource_scope: "org",
+          org_id: "default",
+          purl: "pkg:npm/express@4.18.0",
+        }),
+      ).rejects.toThrow(/scs_component_vulnerability does not support org scope/);
     });
 
     it("builds correct path with path params for a get operation", async () => {
@@ -643,6 +944,28 @@ describe("Registry", () => {
           body: {},
         }),
       ).rejects.toThrow(/body must be a YAML string/);
+    });
+  });
+
+  describe("template global get", () => {
+    it("overrides accountIdentifier for global template fetch", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "helmDeployAction" } });
+      const client = makeClient(mockRequest);
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+
+      await registry.dispatch(client, "template", "get", {
+        template_id: "helmDeployAction",
+        version_label: "1.0.8",
+        account_id: "__GLOBAL_TEMPLATES_ACCOUNT_ID__",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("GET");
+      expect(call.path).toBe("/template/api/templates/helmDeployAction");
+      expect(call.params).toMatchObject({
+        accountIdentifier: "__GLOBAL_TEMPLATES_ACCOUNT_ID__",
+        versionLabel: "1.0.8",
+      });
     });
   });
 
@@ -1125,6 +1448,153 @@ describe("Registry", () => {
 
       const call = mockRequest.mock.calls[0][0];
       expect(call.params?.orgIdentifier).toBeUndefined();
+    });
+  });
+
+  describe("methodBuilder and input-aware responseExtractor", () => {
+    let registry: Registry;
+    beforeEach(() => {
+      registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "ccm" }));
+    });
+
+    it("methodBuilder switches to GET for cost_filter_value with value_type=business_mapping", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        resource: {
+          businessMappings: [
+            { uuid: "abc", name: "Environments" },
+            { uuid: "def", name: "Teams" },
+          ],
+        },
+      });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_filter_value", "list", {
+        value_type: "business_mapping",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("GET");
+      expect(call.path).toBe("/ccm/api/business-mapping");
+    });
+
+    it("methodBuilder uses POST for cost_filter_value with non-business_mapping value_type", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: { perspectiveFilters: [{ values: ["us-east-1", "us-west-2"] }] },
+      });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_filter_value", "list", {
+        value_type: "region",
+        time_filter: "LAST_30_DAYS",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("POST");
+      expect(call.path).toBe("/ccm/api/graphql");
+    });
+
+    it("responseExtractor extracts category names from business_mapping list (resource envelope)", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        resource: {
+          businessMappings: [
+            { uuid: "abc", name: "Environments" },
+            { uuid: "def", name: "Teams" },
+          ],
+        },
+      });
+      const client = makeClient(mockRequest);
+
+      const result = await registry.dispatch(client, "cost_filter_value", "list", {
+        value_type: "business_mapping",
+      });
+
+      expect(result).toEqual({ values: ["Environments", "Teams"] });
+    });
+
+    it("responseExtractor extracts category names from business_mapping list (data envelope)", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: {
+          businessMappings: [
+            { uuid: "abc", name: "Environments" },
+            { uuid: "def", name: "Teams" },
+          ],
+        },
+      });
+      const client = makeClient(mockRequest);
+
+      const result = await registry.dispatch(client, "cost_filter_value", "list", {
+        value_type: "business_mapping",
+      });
+
+      expect(result).toEqual({ values: ["Environments", "Teams"] });
+    });
+
+    it("responseExtractor extracts bucket names from single category (resource envelope)", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        resource: {
+          uuid: "abc",
+          name: "Environments",
+          costTargets: [{ name: "Production" }, { name: "Staging" }, { name: "Dev" }],
+        },
+      });
+      const client = makeClient(mockRequest);
+
+      const result = await registry.dispatch(client, "cost_filter_value", "list", {
+        value_type: "business_mapping",
+        value_sub_type: "abc",
+      });
+
+      expect(result).toEqual({ values: ["Production", "Staging", "Dev"] });
+    });
+
+    it("responseExtractor extracts bucket names from single category (data envelope)", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: {
+          uuid: "abc",
+          name: "Environments",
+          costTargets: [{ name: "Production" }, { name: "Staging" }],
+        },
+      });
+      const client = makeClient(mockRequest);
+
+      const result = await registry.dispatch(client, "cost_filter_value", "list", {
+        value_type: "business_mapping",
+        value_sub_type: "abc",
+      });
+
+      expect(result).toEqual({ values: ["Production", "Staging"] });
+    });
+
+    it("responseExtractor returns error marker when business_mapping response has no costTargets", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        resource: { uuid: "abc", name: "Empty" },
+      });
+      const client = makeClient(mockRequest);
+
+      const result = await registry.dispatch(client, "cost_filter_value", "list", {
+        value_type: "business_mapping",
+        value_sub_type: "abc",
+      });
+
+      expect(result).toHaveProperty("_error");
+      expect((result as { values: string[] }).values).toEqual([]);
+    });
+
+    it("pathBuilder routes to /ccm/api/business-mapping/{id} for value_sub_type", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        resource: {
+          costTargets: [{ name: "Bucket1" }],
+        },
+      });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_filter_value", "list", {
+        value_type: "business_mapping",
+        value_sub_type: "cat-uuid-123",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/ccm/api/business-mapping/cat-uuid-123");
     });
   });
 
