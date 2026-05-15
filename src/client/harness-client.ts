@@ -9,6 +9,10 @@ const log = createLogger("harness-client");
 
 const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
 
+function isFormDataBody(body: unknown): body is FormData {
+  return typeof FormData !== "undefined" && body instanceof FormData;
+}
+
 /**
  * Whether the caller explicitly set a body (including empty string).
  * `""` must be preserved: `if (options.body)` treats it as absent, which drops the
@@ -21,6 +25,7 @@ function hasExplicitBody(body: unknown): boolean {
 
 function serializeRequestBody(body: unknown): string | undefined {
   if (!hasExplicitBody(body)) return undefined;
+  if (isFormDataBody(body)) return undefined;
   return typeof body === "string" ? body : JSON.stringify(body);
 }
 
@@ -205,7 +210,9 @@ export class HarnessClient {
     }
 
     if (hasExplicitBody(options.body)) {
-      if (typeof options.body === "string") {
+      if (isFormDataBody(options.body)) {
+        // Let fetch set multipart boundary — never force application/json
+      } else if (typeof options.body === "string") {
         headers["Content-Type"] = headers["Content-Type"] ?? "application/yaml";
       } else {
         headers["Content-Type"] = headers["Content-Type"] ?? "application/json";
@@ -235,10 +242,14 @@ export class HarnessClient {
           ? AbortSignal.any([options.signal, timeoutController.signal])
           : timeoutController.signal;
 
+        const formBody = isFormDataBody(options.body) ? options.body : undefined;
         const bodyString = serializeRequestBody(options.body);
+        const fetchBody: BodyInit | undefined = formBody ?? bodyString;
 
         log.debug(`${method} ${url}`);
-        if (bodyString !== undefined) {
+        if (formBody) {
+          log.debug("Request body", { body: "[multipart/form-data FormData]" });
+        } else if (bodyString !== undefined) {
           log.debug("Request body", {
             body: this.logUnsafeBodies ? bodyString.slice(0, 1000) : redactJsonString(bodyString),
           });
@@ -247,7 +258,7 @@ export class HarnessClient {
         const response = await fetch(url, {
           method,
           headers,
-          body: bodyString,
+          body: fetchBody,
           signal,
         });
 
@@ -372,7 +383,9 @@ export class HarnessClient {
     }
 
     if (hasExplicitBody(options.body)) {
-      if (typeof options.body === "string") {
+      if (isFormDataBody(options.body)) {
+        // boundary set by fetch
+      } else if (typeof options.body === "string") {
         headers["Content-Type"] = headers["Content-Type"] ?? "application/yaml";
       } else {
         headers["Content-Type"] = headers["Content-Type"] ?? "application/json";
@@ -400,11 +413,13 @@ export class HarnessClient {
           ? AbortSignal.any([options.signal, timeoutController.signal])
           : timeoutController.signal;
 
+        const formBody = isFormDataBody(options.body) ? options.body : undefined;
         const bodyString = serializeRequestBody(options.body);
+        const fetchBody: BodyInit | undefined = formBody ?? bodyString;
 
         log.debug(`STREAM ${method} ${url}`);
 
-        const response = await fetch(url, { method, headers, body: bodyString, signal });
+        const response = await fetch(url, { method, headers, body: fetchBody, signal });
 
         clearTimeout(timer);
 

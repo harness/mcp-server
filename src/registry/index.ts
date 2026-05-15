@@ -36,6 +36,7 @@ import { dbopsToolset } from "./toolsets/dbops.js";
 import { accessControlToolset } from "./toolsets/access-control.js";
 import { settingsToolset } from "./toolsets/settings.js";
 import { platformToolset } from "./toolsets/platform.js";
+import { fileStoreToolset } from "./toolsets/file-store.js";
 
 import { visualizationsToolset } from "./toolsets/visualizations.js";
 import { governanceToolset } from "./toolsets/governance.js";
@@ -144,6 +145,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   accessControlToolset,
   settingsToolset,
   platformToolset,
+  fileStoreToolset,
 
   visualizationsToolset,
   governanceToolset,
@@ -655,7 +657,13 @@ export class Registry {
     // Inject orgIdentifier/projectIdentifier into the body for mutating operations (POST/PUT).
     // Harness NG APIs require these in the body (not just query params) to scope the resource correctly.
     // If bodyWrapperKey is set (e.g., "connector"), inject inside the wrapper object.
-    if (body && typeof body === "object" && !spec.skipScopeBodyInjection && (resolvedMethod === "POST" || resolvedMethod === "PUT")) {
+    if (
+      body &&
+      typeof body === "object" &&
+      !(typeof FormData !== "undefined" && body instanceof FormData) &&
+      !spec.skipScopeBodyInjection &&
+      (resolvedMethod === "POST" || resolvedMethod === "PUT")
+    ) {
       const bodyRecord = body as Record<string, unknown>;
       // Determine where to inject: inside wrapper if present, otherwise at top level
       const targetRecord = spec.bodyWrapperKey && 
@@ -680,25 +688,27 @@ export class Registry {
       }
     }
 
-    // Validate required fields if bodySchema is defined.
-    // When bodyWrapperKey is set, the bodyBuilder wraps user fields inside that
-    // key (e.g. { project: { identifier, name } }), so we validate the inner object.
-    if (spec.bodySchema && body && typeof body === "object") {
-      const bodyRecord = body as Record<string, unknown>;
-      const payload =
-        spec.bodyWrapperKey &&
-        bodyRecord[spec.bodyWrapperKey] != null &&
-        typeof bodyRecord[spec.bodyWrapperKey] === "object"
-          ? (bodyRecord[spec.bodyWrapperKey] as Record<string, unknown>)
-          : bodyRecord;
-      const missing = spec.bodySchema.fields
-        .filter(f => f.required && payload[f.name] === undefined)
-        .map(f => f.name);
-      if (missing.length > 0) {
-        throw new Error(
-          `Missing required fields for ${def.resourceType}: ${missing.join(", ")}. ` +
-          `Use harness_describe(resource_type="${def.resourceType}") to see the schema.`
-        );
+    // Validate required fields if bodySchema is defined (plain JSON bodies only).
+    if (spec.bodySchema && body && typeof body === "object" && !Array.isArray(body)) {
+      if (typeof FormData !== "undefined" && body instanceof FormData) {
+        // Multipart — validation is enforced inside the resource bodyBuilder
+      } else {
+        const bodyRecord = body as Record<string, unknown>;
+        const payload =
+          spec.bodyWrapperKey &&
+          bodyRecord[spec.bodyWrapperKey] != null &&
+          typeof bodyRecord[spec.bodyWrapperKey] === "object"
+            ? (bodyRecord[spec.bodyWrapperKey] as Record<string, unknown>)
+            : bodyRecord;
+        const missing = spec.bodySchema.fields
+          .filter(f => f.required && payload[f.name] === undefined)
+          .map(f => f.name);
+        if (missing.length > 0) {
+          throw new Error(
+            `Missing required fields for ${def.resourceType}: ${missing.join(", ")}. ` +
+            `Use harness_describe(resource_type="${def.resourceType}") to see the schema.`
+          );
+        }
       }
     }
 
