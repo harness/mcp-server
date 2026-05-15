@@ -384,10 +384,16 @@
 - [x] Verify npm, GitHub release, and release workflow state for the current tag
 - [x] Add regression coverage for idempotent release workflow guards
 - [x] Make npm publish and GitHub release creation idempotent for rerun/race cases
-- [ ] Run focused verification
+- [x] Run focused verification
 - [ ] Commit, push, open PR, and reply in the original Slack thread
 
 ### Plan
 - Treat the thread as a release-status question unless code evidence shows an MCP runtime bug.
 - Keep the fix scoped to `.github/workflows/release.yml` and a release workflow regression test.
 - Preserve the tag/version check, but skip or tolerate npm/GitHub publish steps when the external artifact already exists.
+
+### Review
+- Confirmed npm `harness-mcp-v2@latest` is `3.0.2`, matching `package.json` and both MCPB manifests.
+- Confirmed GitHub release `v3.0.2` exists and was published at `2026-05-15T16:57:26Z`.
+- Found the release workflow was red because `npm publish` tried to publish already-published `3.0.2`; made npm publish and GitHub release creation idempotent for reruns/races.
+- Verified with `pnpm test tests/release-workflow.test.ts tests/release-metadata.test.ts`, `pnpm typecheck`, and full `pnpm test` (57 files / 1352 tests).
