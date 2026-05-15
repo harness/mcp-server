@@ -23,9 +23,11 @@ const MAX_WAIT_INTERVAL_MS = 30_000;
 
 /**
  * Extract the execution ID from a `harness_execute` run/retry response.
- * v0 pipelines (ngExtract) return `{ planExecutionId, ... }`.
- * v1 pipelines (passthrough) wrap it as `{ execution_details: { execution_id } }`
- * (also seen as `execution_id` or `executionId` depending on endpoint version).
+ * Verified shapes:
+ *  - v0 pipeline run (ngExtract): `{ planExecution: { uuid, metadata: { executionUuid, ... } }, ... }`
+ *  - v0 pipeline retry: usually returns `{ planExecutionId, ... }` directly
+ *  - v1 pipeline run (passthrough): `{ execution_details: { execution_id } }` or
+ *    `{ execution_id }` / `{ executionId }` depending on endpoint version
  */
 function extractExecutionId(result: unknown, resourceType: string): string | undefined {
   const rec = asRecord(result);
@@ -36,7 +38,11 @@ function extractExecutionId(result: unknown, resourceType: string): string | und
       ?? asString(rec.execution_id)
       ?? asString(rec.executionId);
   }
-  return asString(rec.planExecutionId) ?? asString(rec.executionId);
+  const planExec = asRecord(rec.planExecution);
+  return asString(rec.planExecutionId)
+    ?? asString(planExec?.uuid)
+    ?? asString(asRecord(planExec?.metadata)?.executionUuid)
+    ?? asString(rec.executionId);
 }
 
 export function registerExecuteTool(server: McpServer, registry: Registry, client: HarnessClient): void {
@@ -311,9 +317,10 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           if (!executionId) {
             envelope._wait = {
               skipped: true,
-              reason: "Could not locate execution_id in the trigger response — wait skipped.",
+              reason: "Could not locate execution_id in the trigger response — wait skipped. Inspect the response shape and report so we can extend extractExecutionId.",
             };
           } else {
+            envelope.execution_id = executionId;
             const timeoutMs = (wait_timeout_seconds ?? DEFAULT_WAIT_TIMEOUT_SECONDS) * 1000;
             const initialIntervalMs = (wait_poll_interval_seconds ?? DEFAULT_WAIT_POLL_INTERVAL_SECONDS) * 1000;
             const orgId = asString(input.org_id) || registry.orgId;
@@ -356,21 +363,21 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
 
               if (pollResult.timed_out) {
                 envelope._wait = {
-                  hint: `Execution still running after ${pollResult.elapsed_ms}ms (last status: ${pollResult.status}). Call harness_get(resource_type='execution', resource_id='${executionId}') to recheck, or harness_diagnose(resource_type='execution', resource_id='${executionId}') for diagnostics so far.`,
+                  hint: `Execution still running after ${pollResult.elapsed_ms}ms (last status: ${pollResult.status}). Recheck with harness_get(resource_type='execution', execution_id='${executionId}'), or get diagnostics so far with harness_diagnose(resource_type='execution', options={execution_id: '${executionId}'}).`,
                 };
               } else if (FAILURE_STATUSES.has(pollResult.status)) {
-                envelope._diagnose_hint = `Execution ${pollResult.status}. Call harness_diagnose(resource_type='execution', resource_id='${executionId}') to get the failed step, error message, and log snippet.`;
+                envelope._diagnose_hint = `Execution ${pollResult.status}. Call harness_diagnose(resource_type='execution', options={execution_id: '${executionId}'}) for the failed step, error message, and log snippet.`;
               }
             } catch (err) {
               if (err instanceof AbortError) {
                 envelope._wait = {
-                  hint: `Wait cancelled by client. Execution may still be running. Call harness_get(resource_type='execution', resource_id='${executionId}') to recheck.`,
+                  hint: `Wait cancelled by client. Execution may still be running. Recheck with harness_get(resource_type='execution', execution_id='${executionId}').`,
                   cancelled: true,
                 };
               } else {
                 log.warn("Wait failed", { executionId, error: String(err) });
                 envelope._wait = {
-                  hint: `Wait failed: ${String(err)}. The trigger succeeded — the execution may still be running. Call harness_get(resource_type='execution', resource_id='${executionId}') to recheck.`,
+                  hint: `Wait failed: ${String(err)}. The trigger succeeded — the execution may still be running. Recheck with harness_get(resource_type='execution', execution_id='${executionId}').`,
                   error: String(err),
                 };
               }
