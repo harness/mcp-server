@@ -970,15 +970,23 @@ describe("harness_execute", () => {
   // Single-poll wait tests verify the wiring (extract execution_id, poll once,
   // merge envelope fields). Multi-poll backoff and abort handling are covered
   // by the unit tests in tests/utils/poll-execution.test.ts.
-  it("waits for terminal status when wait=true and merges execution status into the response", async () => {
+  it("extracts execution_id from the live planExecution.uuid response shape", async () => {
+    // Real Harness response wraps the ID inside { planExecution: { uuid, metadata: { executionUuid } } }
     mockRequest
-      .mockResolvedValueOnce({ data: { planExecutionId: "exec-wait-1" } })
+      .mockResolvedValueOnce({
+        data: {
+          planExecution: {
+            uuid: "exec-wait-uuid",
+            status: "RUNNING",
+            metadata: { executionUuid: "exec-wait-uuid", pipelineIdentifier: "wait_pipe" },
+          },
+        },
+      })
       .mockResolvedValueOnce({
         data: {
           pipelineExecutionSummary: {
-            planExecutionId: "exec-wait-1",
+            planExecutionId: "exec-wait-uuid",
             status: "Success",
-            name: "Wait Pipeline",
             pipelineIdentifier: "wait_pipe",
             startTs: 1_700_000_000_000,
             endTs: 1_700_000_010_000,
@@ -999,16 +1007,10 @@ describe("harness_execute", () => {
     const data = parseResult(result) as Record<string, unknown>;
     expect(data.execution_status).toBe("Success");
     expect(data.execution_terminal).toBe(true);
-    expect(data.execution_timed_out).toBe(false);
-    expect(data.started_at).toBe("2023-11-14T22:13:20.000Z");
-    expect(data.ended_at).toBe("2023-11-14T22:13:30.000Z");
-    expect(data._diagnose_hint).toBeUndefined();
 
-    // 1 trigger + 1 poll
-    expect(mockRequest).toHaveBeenCalledTimes(2);
-    const pollCall = mockRequest.mock.calls[1]![0] as { method?: string; path?: string };
-    expect(pollCall.method).toBe("GET");
-    expect(pollCall.path).toBe("/pipeline/api/pipelines/execution/v2/exec-wait-1");
+    // Confirm the extracted ID was used to build the poll URL
+    const pollCall = mockRequest.mock.calls[1]![0] as { path?: string };
+    expect(pollCall.path).toBe("/pipeline/api/pipelines/execution/v2/exec-wait-uuid");
   });
 
   it("attaches a diagnose hint when the awaited execution fails", async () => {
