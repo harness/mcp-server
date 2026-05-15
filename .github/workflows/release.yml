@@ -11,8 +11,6 @@ permissions:
 
 jobs:
   release:
-    # Disabled by default. Set repository variable ENABLE_AUTOMATED_RELEASE=true to enable tag releases.
-    if: ${{ vars.ENABLE_AUTOMATED_RELEASE == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
