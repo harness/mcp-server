@@ -378,3 +378,22 @@
 - Added conditional PR update routing so state changes use the Harness Code state endpoint while title/description updates continue using PATCH.
 - Added `skipScopeBodyInjection` for endpoints that must not receive org/project fields in POST/PUT bodies, and applied it to PR state changes so the request body remains `{ state }`.
 - Verified with `pnpm test tests/registry/pull-requests.test.ts`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
+
+## Slack Bug Triage: v3.0.2 Release Idempotency (2026-05-15)
+- [x] Read the trigger thread and nearby channel context for the git tag report
+- [x] Confirm the v3.0.2 tag, GitHub Release, npm latest version, and failed release workflow run
+- [x] Add failing regression coverage for release workflow idempotency
+- [x] Make `release.yml` skip or tolerate already-published npm/GitHub release artifacts
+- [x] Run focused tests, typecheck/build, commit, push, open PR, and reply in Slack thread
+
+### Plan
+- Keep the fix in `.github/workflows/release.yml`; the package metadata and tag are already correct at `3.0.2`.
+- Add a workflow-structure regression test so future edits do not reintroduce unconditional `npm publish` or `gh release create`.
+- Make npm publishing idempotent by checking the package/version first and rechecking after publish failures before failing the job.
+- Make GitHub Release creation idempotent by skipping `gh release create` when the tag release already exists.
+
+### Review
+- Confirmed the release workflow failed at `npm publish` for `v3.0.2` because npm already had `harness-mcp-v2@3.0.2`; package metadata, the Git tag, GitHub Release, and npm `latest` were otherwise correct.
+- Added `tests/release-workflow.test.ts` to require idempotency guards for npm publish and GitHub Release creation.
+- Updated `.github/workflows/release.yml` to skip npm publish when the package version already exists, tolerate a publish race by rechecking npm after failure, and skip `gh release create` when the release already exists.
+- Verified with `pnpm test tests/release-workflow.test.ts tests/release-metadata.test.ts`, `pnpm typecheck`, `pnpm build`, `pnpm docs:check`, and full `pnpm test`.
