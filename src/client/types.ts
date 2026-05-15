@@ -42,7 +42,6 @@ export interface RequestOptions {
   path: string;
   /** Scalar or string[] (repeated query keys, e.g. `inputSetIdentifiers=a&inputSetIdentifiers=b`). */
   params?: Record<string, string | number | boolean | string[] | undefined>;
-  /** JSON/YAML payload, or FormData for multipart endpoints such as File Store uploads. */
   body?: unknown;
   headers?: Record<string, string>;
   /** Override base URL for this request (e.g. FME/Split.io uses https://api.split.io) */
