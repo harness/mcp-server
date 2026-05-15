@@ -385,7 +385,7 @@
 - [x] Add regression coverage for idempotent release workflow guards
 - [x] Make npm publish and GitHub release creation idempotent for rerun/race cases
 - [x] Run focused verification
-- [ ] Commit, push, open PR, and reply in the original Slack thread
+- [x] Commit, push, open PR, and attempt to reply in the original Slack thread
 
 ### Plan
 - Treat the thread as a release-status question unless code evidence shows an MCP runtime bug.
@@ -397,3 +397,4 @@
 - Confirmed GitHub release `v3.0.2` exists and was published at `2026-05-15T16:57:26Z`.
 - Found the release workflow was red because `npm publish` tried to publish already-published `3.0.2`; made npm publish and GitHub release creation idempotent for reruns/races.
 - Verified with `pnpm test tests/release-workflow.test.ts tests/release-metadata.test.ts`, `pnpm typecheck`, and full `pnpm test` (57 files / 1352 tests).
+- Opened PR #210. Slack reply to the original thread was blocked because `SendSlackMessage` is not configured for channel `C08SYT1FWJD`; no alternate-channel post was made.
