@@ -384,7 +384,7 @@
 - [x] Trace log blob download routing after the pre-signed URL fixes
 - [x] Add regression coverage for regional S3 path-style pre-signed URLs
 - [x] Fix external storage host detection for S3 service endpoints
-- [ ] Run focused tests, typecheck, build, and full tests
+- [x] Run focused tests, typecheck, build, and full tests
 - [ ] Commit, push, open PR, and report in Slack
 
 ### Plan
@@ -395,4 +395,4 @@
 ### Review
 - Confirmed the new red test failed before the fix by returning the empty client-stream response instead of the S3 log body.
 - Generalized S3 external host matching to include regional service endpoints such as `s3.eu-west-2.amazonaws.com`, plus multi-segment bucket endpoints.
-- Verified the focused log resolver test after the change.
+- Verified with `pnpm test tests/utils/log-resolver.test.ts`, `pnpm typecheck`, full `pnpm test` (54 files / 1325 tests), and `pnpm build`.
