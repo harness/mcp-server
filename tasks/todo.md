@@ -378,3 +378,16 @@
 - Added conditional PR update routing so state changes use the Harness Code state endpoint while title/description updates continue using PATCH.
 - Added `skipScopeBodyInjection` for endpoints that must not receive org/project fields in POST/PUT bodies, and applied it to PR state changes so the request body remains `{ state }`.
 - Verified with `pnpm test tests/registry/pull-requests.test.ts`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
+
+## Slack Triage: SMP Release Status (2026-05-15)
+- [x] Read the Slack thread and confirm it has no screenshots or follow-ups
+- [x] Verify npm, GitHub release, and release workflow state for the current tag
+- [x] Add regression coverage for idempotent release workflow guards
+- [x] Make npm publish and GitHub release creation idempotent for rerun/race cases
+- [ ] Run focused verification
+- [ ] Commit, push, open PR, and reply in the original Slack thread
+
+### Plan
+- Treat the thread as a release-status question unless code evidence shows an MCP runtime bug.
+- Keep the fix scoped to `.github/workflows/release.yml` and a release workflow regression test.
+- Preserve the tag/version check, but skip or tolerate npm/GitHub publish steps when the external artifact already exists.

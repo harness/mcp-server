@@ -39,9 +39,34 @@ jobs:
           }
 
       - name: Publish to npm
-        run: npm publish
+        run: |
+          PKG_NAME=$(node -p "require('./package.json').name")
+          PKG_VERSION=$(node -p "require('./package.json').version")
+
+          if npm view "$PKG_NAME@$PKG_VERSION" version >/dev/null 2>&1; then
+            echo "Package $PKG_NAME@$PKG_VERSION already exists on npm; skipping publish."
+            exit 0
+          fi
+
+          if npm publish; then
+            exit 0
+          fi
+
+          echo "npm publish failed; rechecking npm in case another run published first."
+          npm view "$PKG_NAME@$PKG_VERSION" version >/dev/null
 
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "GitHub release $GITHUB_REF_NAME already exists; skipping create."
+            exit 0
+          fi
+
+          if gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes; then
+            exit 0
+          fi
+
+          echo "GitHub release create failed; rechecking GitHub in case another run created it first."
+          gh release view "$GITHUB_REF_NAME" >/dev/null
