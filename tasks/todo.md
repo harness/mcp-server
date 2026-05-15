@@ -385,7 +385,7 @@
 - [x] Add regression coverage for regional S3 path-style pre-signed URLs
 - [x] Fix external storage host detection for S3 service endpoints
 - [x] Run focused tests, typecheck, build, and full tests
-- [ ] Commit, push, open PR, and report in Slack
+- [x] Commit, push, open PR, and report in Slack
 
 ### Plan
 - Keep the fix scoped to `src/utils/log-resolver.ts` because the regression is in host classification before choosing direct fetch vs `client.requestStream()`.
