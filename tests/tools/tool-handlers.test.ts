@@ -764,6 +764,18 @@ describe("harness_execute", () => {
     expect(postCall![0].params).toMatchObject({ pipelineBranchName: "feature/my-fix" });
   });
 
+  it("pipeline_branch coexists with other params without clobbering", async () => {
+    await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "my-pipe",
+      params: { pipeline_branch: "feature/my-fix", module: "ci" },
+    });
+    const postCall = mockRequest.mock.calls.find((c) => c[0].method === "POST");
+    expect(postCall).toBeDefined();
+    expect(postCall![0].params).toMatchObject({ pipelineBranchName: "feature/my-fix", module: "ci" });
+  });
+
   it("closes a pull request from a Harness PR URL", async () => {
     const prServer = makeMcpServer("accept");
     const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
