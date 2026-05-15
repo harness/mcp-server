@@ -20,10 +20,10 @@ import "../data/examples/load-all.js";
 export function registerAllTools(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
   registerListTool(server, registry, client);
   registerGetTool(server, registry, client);
-  registerCreateTool(server, registry, client);
-  registerUpdateTool(server, registry, client);
-  registerDeleteTool(server, registry, client);
-  registerExecuteTool(server, registry, client);
+  registerCreateTool(server, registry, client, config);
+  registerUpdateTool(server, registry, client, config);
+  registerDeleteTool(server, registry, client, config);
+  registerExecuteTool(server, registry, client, config);
   registerDiagnoseTool(server, registry, client, config);
   registerSearchTool(server, registry, client);
   registerDescribeTool(server, registry);
