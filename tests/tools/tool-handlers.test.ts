@@ -893,6 +893,62 @@ describe("harness_execute", () => {
     });
   });
 
+  it("maps failed matrix child stages to the retryable parent strategy group", async () => {
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: true })
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetYaml: "pipeline:\n  identifier: my-pipe\n" } })
+      .mockResolvedValueOnce({
+        status: "SUCCESS",
+        data: {
+          pipelineExecutionSummary: {
+            layoutNodeMap: {
+              parent: {
+                nodeIdentifier: "PMS_Regression",
+                name: "PMS_Regression",
+                status: "Failed",
+                nodeGroup: "STRATEGY",
+                nodeType: "MATRIX",
+                edgeLayoutList: {
+                  currentNodeChildren: ["rollback", "notification"],
+                },
+              },
+              rollback: {
+                nodeIdentifier: "PMS_Regression_pipelineRollback",
+                status: "Failed",
+                nodeGroup: "STAGE",
+                nodeType: "CI",
+              },
+              notification: {
+                nodeIdentifier: "PMS_Regression_pipelineNotification",
+                status: "Failed",
+                nodeGroup: "STAGE",
+                nodeType: "CI",
+              },
+            },
+          },
+        },
+      })
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { planExecutionId: "retry-exec" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "retry_stages",
+      resource_id: "my-pipe",
+      params: {
+        execution_id: "exec-123",
+        retry_failed_stages: true,
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledTimes(4);
+    const retryCall = mockRequest.mock.calls[3]![0] as { params?: Record<string, unknown> };
+    expect(retryCall.params).toMatchObject({
+      runAllStages: true,
+      retryStages: ["PMS_Regression"],
+    });
+  });
+
   it("returns a user-facing error when retry_stages is missing execution_id", async () => {
     const result = await server.call("harness_execute", {
       resource_type: "pipeline",
@@ -946,15 +1002,28 @@ describe("harness_execute", () => {
     expect(mockRequest).toHaveBeenCalledTimes(3);
   });
 
-  it("falls back to parent stage targets when Harness rejects child retry stages", async () => {
+  it("returns a clear error when derived failed-stage identifiers are rejected", async () => {
     mockRequest
       .mockResolvedValueOnce({ status: "SUCCESS", data: true })
       .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetYaml: "pipeline:\n  identifier: my-pipe\n" } })
+      .mockResolvedValueOnce({
+        status: "SUCCESS",
+        data: {
+          executionGraph: {
+            nodeMap: {
+              failedStep: {
+                status: "Failed",
+                baseFqn: "pipeline.stages.PMS_Regression_pipelineRollback.spec.execution.steps.rerun_failures",
+                identifier: "rerun_failures",
+              },
+            },
+          },
+        },
+      })
       .mockRejectedValueOnce(new HarnessApiError(
         "Invalid request: The execution can not be retried because the retryStagesIdentifier could not be found in any stage Groups.",
         400,
-      ))
-      .mockResolvedValueOnce({ status: "SUCCESS", data: { planExecutionId: "retry-exec" } });
+      ));
 
     const result = await server.call("harness_execute", {
       resource_type: "pipeline",
@@ -962,24 +1031,13 @@ describe("harness_execute", () => {
       resource_id: "my-pipe",
       params: {
         execution_id: "exec-123",
-        retry_stages: [
-          "PMS_Regression_pipelineRollback",
-          "PMS_Regression_specialCharacterUser",
-          "Azure_RUN___name___AzureWebApp5__",
-        ],
+        retry_failed_stages: true,
       },
     });
 
-    expect(result.isError).toBeUndefined();
+    expect(result.isError).toBe(true);
     expect(mockRequest).toHaveBeenCalledTimes(4);
-    const fallbackCall = mockRequest.mock.calls[3]![0] as { params?: Record<string, unknown> };
-    expect(fallbackCall.params).toMatchObject({
-      runAllStages: true,
-      retryStages: ["PMS_Regression", "Azure_RUN"],
-    });
-    const data = parseResult(result) as { _retryStages?: { fallback_applied?: boolean; stages?: string[] } };
-    expect(data._retryStages?.fallback_applied).toBe(true);
-    expect(data._retryStages?.stages).toEqual(["PMS_Regression", "Azure_RUN"]);
+    expect(JSON.stringify(parseResult(result))).toContain("Refusing to broaden");
   });
 
   it("blocks when flat inputs have unmatchedRequired and no input_set_ids", async () => {
