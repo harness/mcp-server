@@ -378,3 +378,21 @@
 - Added conditional PR update routing so state changes use the Harness Code state endpoint while title/description updates continue using PATCH.
 - Added `skipScopeBodyInjection` for endpoints that must not receive org/project fields in POST/PUT bodies, and applied it to PR state changes so the request body remains `{ state }`.
 - Verified with `pnpm test tests/registry/pull-requests.test.ts`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
+
+## Critical Bug Inspection (2026-05-15)
+- [x] Inspect recent commits for high-severity behavioral regressions
+- [x] Trace log blob download routing after the pre-signed URL fixes
+- [x] Add regression coverage for regional S3 path-style pre-signed URLs
+- [x] Fix external storage host detection for S3 service endpoints
+- [ ] Run focused tests, typecheck, build, and full tests
+- [ ] Commit, push, open PR, and report in Slack
+
+### Plan
+- Keep the fix scoped to `src/utils/log-resolver.ts` because the regression is in host classification before choosing direct fetch vs `client.requestStream()`.
+- Preserve the existing Harness-host behavior: `*.harness.io` pre-signed links must still route through the client for internal/self-managed deployments.
+- Add a red test using a valid regional S3 path-style pre-signed URL to prove the resolver does not accidentally proxy external storage links through Harness.
+
+### Review
+- Confirmed the new red test failed before the fix by returning the empty client-stream response instead of the S3 log body.
+- Generalized S3 external host matching to include regional service endpoints such as `s3.eu-west-2.amazonaws.com`, plus multi-segment bucket endpoints.
+- Verified the focused log resolver test after the change.

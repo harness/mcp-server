@@ -160,6 +160,22 @@ describe("resolveLogContent", () => {
     expect(fetchSpy).toHaveBeenCalledWith(blobLink, expect.any(Object));
   });
 
+  it("uses regional S3 path-style pre-signed URLs as-is", async () => {
+    const blobLink = "https://s3.eu-west-2.amazonaws.com/harness-logs/path/logs.zip?X-Amz-Signature=abc";
+    const streamFn = vi.fn().mockResolvedValue(new Response("", { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { requestStream: streamFn },
+    );
+    fetchSpy.mockResolvedValue(new Response('{"out":"regional s3 log"}', { status: 200 }));
+
+    const result = await resolveLogContent(client, "prefix");
+
+    expect(result).toContain("regional s3 log");
+    expect(fetchSpy).toHaveBeenCalledWith(blobLink, expect.any(Object));
+    expect(streamFn).not.toHaveBeenCalled();
+  });
+
   it("routes non-external blob URL through client.requestStream with gateway prefix", async () => {
     const blobLink = "https://harness0.harness.io/some/blob/path?token=abc";
     const streamFn = vi.fn().mockResolvedValue(new Response('{"out":"log line 1"}', { status: 200 }));

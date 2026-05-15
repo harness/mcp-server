@@ -37,8 +37,9 @@ const EXTERNAL_STORAGE_HOSTS = new Set([
   "s3.ap-northeast-1.amazonaws.com",
 ]);
 
-/** S3-style host pattern: bucket.s3.amazonaws.com or bucket.s3.region.amazonaws.com */
-const S3_BUCKET_HOST_RE = /^[a-z0-9][a-z0-9.-]*\.s3([.-][a-z0-9-]+)?\.amazonaws\.com$/i;
+/** S3-style host patterns: bucket.s3.region.amazonaws.com or s3.region.amazonaws.com. */
+const S3_BUCKET_HOST_RE = /^[a-z0-9][a-z0-9.-]*\.s3([.-][a-z0-9-]+)*\.amazonaws\.com$/i;
+const S3_SERVICE_HOST_RE = /^s3([.-][a-z0-9-]+)*\.amazonaws\.com$/i;
 
 function safeParseUrl(raw: string): URL | undefined {
   try {
@@ -52,6 +53,7 @@ function isExternalStorageHost(host: string): boolean {
   const h = host.toLowerCase();
   if (EXTERNAL_STORAGE_HOSTS.has(h)) return true;
   if (S3_BUCKET_HOST_RE.test(h)) return true;
+  if (S3_SERVICE_HOST_RE.test(h)) return true;
   if (h.endsWith(".storage.googleapis.com")) return true;
   return false;
 }
