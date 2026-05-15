@@ -168,10 +168,18 @@ const schema: Record<string, any> = {
             ]
           },
           "submodules": {
-            "description": "Submodules enables cloning all submodules.",
+            "description": "Submodules enables cloning all submodules. Accepts boolean, string (true/false/recursive), or expression.",
             "oneOf": [
               {
                 "type": "boolean"
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "true",
+                  "false",
+                  "recursive"
+                ]
               },
               {
                 "$ref": "#/definitions/pipeline_v1/common/Expression"
@@ -864,9 +872,6 @@ const schema: Record<string, any> = {
             },
             {
               "type": "string"
-            },
-            {
-              "$ref": "#/definitions/pipeline_v1/common/Expression"
             }
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
@@ -934,6 +939,10 @@ const schema: Record<string, any> = {
                   "$ref": "#/definitions/pipeline_v1/common/Expression"
                 }
               ]
+            },
+            "if": {
+              "description": "Conditional expression to determine whether the strategy should execute. Supports expressions.",
+              "type": "string"
             }
           },
           "oneOf": [
@@ -1723,41 +1732,120 @@ const schema: Record<string, any> = {
             }
           },
           "uses": {
-            "type": "string",
             "description": "Notification channel type.",
+            "type": "string",
             "enum": [
               "email",
               "webhook",
-              "pagerduty",
-              "msteams",
+              "pager-duty",
+              "ms-teams",
               "slack",
               "datadog"
             ]
           },
           "with": {
             "description": "Channel-specific configuration based on 'uses' type.",
-            "oneOf": [
-              {
-                "$ref": "#/definitions/pipeline_v1/PmsEmailChannel"
-              },
-              {
-                "$ref": "#/definitions/pipeline_v1/PmsSlackChannel"
-              },
-              {
-                "$ref": "#/definitions/pipeline_v1/PmsMSTeamChannel"
-              },
-              {
-                "$ref": "#/definitions/pipeline_v1/PmsWebhookChannel"
-              },
-              {
-                "$ref": "#/definitions/pipeline_v1/PmsPagerDutyChannel"
-              },
-              {
-                "$ref": "#/definitions/pipeline_v1/PmsDatadogChannel"
-              }
-            ]
+            "type": "object"
           }
         },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "uses": {
+                  "const": "email"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "with": {
+                  "$ref": "#/definitions/pipeline_v1/PmsEmailChannel"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "uses": {
+                  "const": "slack"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "with": {
+                  "$ref": "#/definitions/pipeline_v1/PmsSlackChannel"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "uses": {
+                  "const": "ms-teams"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "with": {
+                  "$ref": "#/definitions/pipeline_v1/PmsMSTeamChannel"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "uses": {
+                  "const": "webhook"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "with": {
+                  "$ref": "#/definitions/pipeline_v1/PmsWebhookChannel"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "uses": {
+                  "const": "pager-duty"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "with": {
+                  "$ref": "#/definitions/pipeline_v1/PmsPagerDutyChannel"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "uses": {
+                  "const": "datadog"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "with": {
+                  "$ref": "#/definitions/pipeline_v1/PmsDatadogChannel"
+                }
+              }
+            }
+          }
+        ],
         "$schema": "http://json-schema.org/draft-07/schema#"
       },
       "NotificationEvent": {
@@ -1926,9 +2014,6 @@ const schema: Record<string, any> = {
         "title": "PmsEmailChannel",
         "description": "Email notification channel configuration.",
         "type": "object",
-        "required": [
-          "recipients"
-        ],
         "properties": {
           "user-groups": {
             "description": "List of user group references.",
@@ -2416,26 +2501,12 @@ const schema: Record<string, any> = {
                 "$ref": "#/definitions/pipeline_v1/steps/common/PlatformV1"
               },
               "service": {
-                "description": "Service configuration for CD stages. Supports expressions.",
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline_v1/stages/unified/ServiceV1"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline_v1/common/Expression"
-                  }
-                ]
+                "description": "Service configuration for CD stages.",
+                "$ref": "#/definitions/pipeline_v1/stages/unified/ServiceV1"
               },
               "environment": {
-                "description": "Environment configuration for CD stages. Supports expressions.",
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline_v1/stages/unified/EnvironmentV1"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline_v1/common/Expression"
-                  }
-                ]
+                "description": "Environment configuration for CD stages.",
+                "$ref": "#/definitions/pipeline_v1/stages/unified/EnvironmentV1"
               },
               "workspace": {
                 "type": "string",
@@ -3270,7 +3341,7 @@ const schema: Record<string, any> = {
               "anyOf": [
                 {
                   "required": [
-                    "deploy-to"
+                    "id"
                   ]
                 },
                 {
@@ -3295,14 +3366,13 @@ const schema: Record<string, any> = {
                 {
                   "if": {
                     "required": [
-                      "deploy-to"
+                      "id"
                     ]
                   },
                   "then": {
                     "type": "object",
                     "required": [
-                      "id",
-                      "deploy-to"
+                      "id"
                     ],
                     "properties": {
                       "id": {
@@ -3403,7 +3473,7 @@ const schema: Record<string, any> = {
             },
             "else": {
               "required": [
-                "deploy-to"
+                "id"
               ]
             },
             "$schema": "http://json-schema.org/draft-07/schema#"
