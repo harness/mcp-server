@@ -7,6 +7,11 @@ type RetryQueryValue = string | number | boolean | string[] | undefined;
 
 const FAILED_RETRY_STATUSES = new Set(["Failed", "Errored", "Aborted"]);
 
+interface FailedStageExtraction {
+  stages: string[];
+  requiresRunAllStages: boolean;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -88,13 +93,40 @@ function extractStageIdFromFqn(baseFqn: unknown): string | undefined {
   return baseFqn.match(/\.stages\.([^.]+)(?:\.|$)/)?.[1];
 }
 
-function extractFailedStageIds(raw: unknown): string[] {
+function getNodeIdentifier(node: Record<string, unknown>): string | undefined {
+  return getString(node, "nodeIdentifier") ??
+    getString(node, "identifier") ??
+    getString(node, "stageIdentifier") ??
+    getString(node, "stageId");
+}
+
+function isRetryableStrategyNode(node: Record<string, unknown>): boolean {
+  return node.nodeGroup === "STRATEGY" || node.nodeType === "MATRIX";
+}
+
+function findRetryableParentStageId(
+  layoutNodeMap: Record<string, unknown>,
+  childNodeId: string,
+): string | undefined {
+  for (const parent of Object.values(layoutNodeMap)) {
+    if (!isRecord(parent) || !isRetryableStrategyNode(parent)) continue;
+    const edgeLayoutList = isRecord(parent.edgeLayoutList) ? parent.edgeLayoutList : undefined;
+    const children = edgeLayoutList?.currentNodeChildren;
+    if (!Array.isArray(children) || !children.includes(childNodeId)) continue;
+    return getNodeIdentifier(parent);
+  }
+  return undefined;
+}
+
+function extractFailedStageIds(raw: unknown): FailedStageExtraction {
   const root = isRecord(raw) ? raw : {};
   const data = isRecord(root.data) ? root.data : root;
+  const summary = isRecord(data.pipelineExecutionSummary) ? data.pipelineExecutionSummary : data;
   const stages: string[] = [];
   const seen = new Set<string>();
+  let requiresRunAllStages = false;
 
-  const executionGraph = isRecord(data.executionGraph) ? data.executionGraph : undefined;
+  const executionGraph = isRecord(summary.executionGraph) ? summary.executionGraph : undefined;
   const nodeMap = isRecord(executionGraph?.nodeMap) ? executionGraph.nodeMap : undefined;
   if (nodeMap) {
     for (const node of Object.values(nodeMap)) {
@@ -108,37 +140,31 @@ function extractFailedStageIds(raw: unknown): string[] {
     }
   }
 
-  const layoutNodeMap = isRecord(data.layoutNodeMap) ? data.layoutNodeMap : undefined;
+  const layoutNodeMap = isRecord(summary.layoutNodeMap) ? summary.layoutNodeMap : undefined;
   if (layoutNodeMap) {
-    for (const node of Object.values(layoutNodeMap)) {
+    for (const [nodeId, node] of Object.entries(layoutNodeMap)) {
       if (!isRecord(node) || !FAILED_RETRY_STATUSES.has(String(node.status))) continue;
-      if (node.nodeGroup !== "STAGE") continue;
-      addStageId(stages, seen, getString(node, "nodeIdentifier") ?? getString(node, "identifier"));
+      if (isRetryableStrategyNode(node)) {
+        addStageId(stages, seen, getNodeIdentifier(node));
+        requiresRunAllStages = true;
+        continue;
+      }
+      if (node.nodeGroup === "STAGE") {
+        const parentStageId = findRetryableParentStageId(layoutNodeMap, nodeId);
+        if (parentStageId) {
+          requiresRunAllStages = true;
+          addStageId(stages, seen, parentStageId);
+        } else {
+          addStageId(stages, seen, getNodeIdentifier(node));
+        }
+      }
     }
   }
 
-  return stages;
+  return { stages, requiresRunAllStages };
 }
 
-function inferRetryStageParents(stages: string[]): string[] {
-  const seen = new Set<string>();
-  const parents: string[] = [];
-
-  for (const stage of stages) {
-    const candidate =
-      (stage.includes("___name___") ? stage.split("___name___")[0] : undefined) ??
-      (stage.split("_").length > 2 ? stage.split("_").slice(0, 2).join("_") : undefined) ??
-      stage;
-
-    if (seen.has(candidate)) continue;
-    seen.add(candidate);
-    parents.push(candidate);
-  }
-
-  return parents;
-}
-
-function shouldRetryWithParentStages(error: unknown): boolean {
+function isRetryStageIdentifierError(error: unknown): boolean {
   if (!(error instanceof HarnessApiError) || error.statusCode !== 400) return false;
   return /retryStagesIdentifier could not be found|Run only failed stages is applicable/i.test(error.message);
 }
@@ -155,6 +181,7 @@ async function retryPipelineStagesHandler({ client, input, config, signal }: End
   const explicitStages = normalizeRetryStages(input.retry_stages);
   const retryFailedStages = getBoolean(input, "retry_failed_stages") ?? false;
   const requestedRunAllStages = getBoolean(input, "run_all_stages");
+  let derivedRequiresRunAllStages = false;
 
   if (explicitStages.length > 0 && retryFailedStages) {
     throw new Error("Provide either retry_stages or retry_failed_stages=true, not both.");
@@ -207,7 +234,9 @@ async function retryPipelineStagesHandler({ client, input, config, signal }: End
       retryPolicy: "do_not_retry",
       signal,
     });
-    retryStages = extractFailedStageIds(executionRaw);
+    const extracted = extractFailedStageIds(executionRaw);
+    retryStages = extracted.stages;
+    derivedRequiresRunAllStages = extracted.requiresRunAllStages;
     if (retryStages.length === 0) {
       throw new Error(`No failed stages found for execution "${executionId}". Pass retry_stages explicitly if you know the stage identifiers.`);
     }
@@ -220,7 +249,7 @@ async function retryPipelineStagesHandler({ client, input, config, signal }: End
   const params: Record<string, RetryQueryValue> = {
     ...scopeParams,
     planExecutionId: executionId,
-    runAllStages,
+    runAllStages: runAllStages || derivedRequiresRunAllStages,
     moduleType: getString(input, "module_type") ?? getString(input, "module") ?? "string",
     notesForPipelineExecution: getString(input, "notes") ?? "",
   };
@@ -241,27 +270,18 @@ async function retryPipelineStagesHandler({ client, input, config, signal }: End
 
   let result: unknown;
   let effectiveStages = retryStages;
-  let effectiveRunAllStages = runAllStages;
-  let fallbackApplied = false;
+  let effectiveRunAllStages = runAllStages || derivedRequiresRunAllStages;
   try {
     result = await sendRetry(params);
   } catch (error) {
-    const parentStages = inferRetryStageParents(retryStages);
-    const canFallback = retryStages.length > 0 &&
-      parentStages.length > 0 &&
-      shouldRetryWithParentStages(error) &&
-      (parentStages.join("\0") !== retryStages.join("\0") || !runAllStages);
-
-    if (!canFallback) throw error;
-
-    effectiveStages = parentStages;
-    effectiveRunAllStages = true;
-    fallbackApplied = true;
-    result = await sendRetry({
-      ...params,
-      retryStages: parentStages,
-      runAllStages: true,
-    });
+    if (retryFailedStages && isRetryStageIdentifierError(error)) {
+      throw new Error(
+        "Harness rejected the failed-stage identifiers exposed by execution details. " +
+        "Refusing to broaden the retry to parent stages automatically. " +
+        "Pass explicit retry_stages with run_all_stages=true only if you want to rerun a broader parent target.",
+      );
+    }
+    throw error;
   }
 
   return {
@@ -271,7 +291,6 @@ async function retryPipelineStagesHandler({ client, input, config, signal }: End
       stages: effectiveStages,
       run_all_stages: effectiveRunAllStages,
       source_execution_id: executionId,
-      fallback_applied: fallbackApplied,
     },
   };
 }
@@ -459,7 +478,7 @@ export const pipelinesToolset: ToolsetDefinition = {
       scope: "project",
       identifierFields: ["pipeline_id"],
       diagnosticHint: "Use harness_diagnose with pipeline_id or execution_id to analyze failures — includes step-level error details, log snippets, delegate info, and chained pipeline traversal.",
-      executeHint: "Before executing, check required inputs: harness_get(resource_type='runtime_input_template', resource_id='PIPELINE_ID'). For simple variables, pass key-value pairs in inputs. For CI pipelines with codebase: pass {branch: 'main'}, {tag: 'v1.0'}, {pr_number: '42'}, or {commit_sha: 'abc123'} — auto-expanded to the full build structure. For complex template inputs, use input_set_ids — list available sets with harness_list(resource_type='input_set', filters={pipeline_id: '...'}). To retry only failed/specific stages, use action='retry_stages' with params.execution_id and params.retry_stages or params.retry_failed_stages=true; action='retry' is the legacy whole-execution retry.",
+      executeHint: "Before executing, check required inputs: harness_get(resource_type='runtime_input_template', resource_id='PIPELINE_ID'). For simple variables, pass key-value pairs in inputs. For CI pipelines with codebase: pass {branch: 'main'}, {tag: 'v1.0'}, {pr_number: '42'}, or {commit_sha: 'abc123'} — auto-expanded to the full build structure. For complex template inputs, use input_set_ids — list available sets with harness_list(resource_type='input_set', filters={pipeline_id: '...'}). To retry only failed/specific pipeline stages, use action='retry_stages' with params.execution_id and params.retry_stages or params.retry_failed_stages=true. action='retry' is the legacy whole-execution retry.",
       listFilterFields: [
         { name: "search_term", description: "Filter pipelines by name or keyword" },
         { name: "module", description: "Harness module filter", enum: ["CD", "CI", "CV", "CF", "CE", "STO"] },
