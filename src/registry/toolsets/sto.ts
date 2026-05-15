@@ -1,5 +1,5 @@
 import type { ToolsetDefinition } from "../types.js";
-import { passthrough } from "../extractors.js";
+import { passthrough, stoExemptionsExtract } from "../extractors.js";
 import type { HarnessClient } from "../../client/harness-client.js";
 
 /**
@@ -91,7 +91,7 @@ export const stoToolset: ToolsetDefinition = {
     {
       resourceType: "security_exemption",
       displayName: "Security Exemption",
-      description: "Security issue exemption/waiver. Supports list (POST with status filter) with approve/reject/promote actions.",
+      description: "Security issue exemption/waiver. Supports list (POST with status filter) with approve/reject/promote actions. PAGINATION CONTRACT: (1) Pass `size: 5` explicitly inside `filters` for the first call — the recommended default for this resource is 5, not the global 20. (2) Page is 0-indexed: page=0 → items 1–5, page=1 → items 6–10. (3) CRITICAL — `size` AND all other filters (status, search, …) MUST stay identical across every page in a session. The backend computes offset = page × size, so altering either silently shifts the dataset. (4) For 'next N' requests, increment `page` by 1 and keep `size` constant. If the user asks for 'next 10' after showing 5, make TWO sequential calls with the same size=5 — do NOT bump size mid-session. (5) After each response, read `_nextPageHint` — it spells out the exact follow-up call to make.",
       toolset: "sto",
       scope: "project",
       scopeParams: STO_SCOPE,
@@ -99,6 +99,8 @@ export const stoToolset: ToolsetDefinition = {
       listFilterFields: [
         { name: "status", description: "Exemption status filter", enum: ["Pending", "Approved", "Rejected", "Expired", "Canceled"], required: true },
         { name: "search", description: "Free-text search for issue/exemption titles" },
+        { name: "size", type: "number", description: "Exemptions per page (recommended: 5, max: 50). Always pass explicitly inside `filters` — `harness_list`'s global default of 20 is too large for this resource. Must remain constant across pages in a session." },
+        { name: "page", type: "number", description: "0-indexed page number. Increment by 1 for each 'next' request — never repeat the same value." },
       ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/sto/exemptions",
       operations: {
@@ -113,8 +115,38 @@ export const stoToolset: ToolsetDefinition = {
             size: "pageSize",
           },
           bodyBuilder: () => ({}),
-          responseExtractor: passthrough,
-          description: "List security exemptions filtered by status",
+          preflight: async ({ input }) => {
+            // Fail-loud validation only — no silent rewriting of caller-supplied
+            // values. The shared `harness_list` tool already applies Zod
+            // defaults; this preflight enforces STO-specific BOUNDS and rejects
+            // invalid inputs so misuse surfaces immediately instead of being
+            // papered over (Cursor review feedback).
+            const STO_EXEMPTION_SIZE_MAX = 50;
+            const rawSize = input.size;
+            if (rawSize !== undefined) {
+              if (typeof rawSize !== "number" || !Number.isInteger(rawSize)) {
+                throw new Error(`security_exemption: 'size' must be an integer, got ${typeof rawSize}.`);
+              }
+              if (rawSize < 1) {
+                throw new Error(`security_exemption: 'size' must be >= 1, got ${rawSize}.`);
+              }
+              if (rawSize > STO_EXEMPTION_SIZE_MAX) {
+                throw new Error(`security_exemption: 'size' must be <= ${STO_EXEMPTION_SIZE_MAX}, got ${rawSize}.`);
+              }
+            }
+            const rawPage = input.page;
+            if (rawPage !== undefined) {
+              if (typeof rawPage !== "number" || !Number.isInteger(rawPage)) {
+                throw new Error(`security_exemption: 'page' must be an integer, got ${typeof rawPage}.`);
+              }
+              if (rawPage < 0) {
+                throw new Error(`security_exemption: 'page' must be >= 0 (0-indexed), got ${rawPage}.`);
+              }
+            }
+          },
+          responseExtractor: stoExemptionsExtract,
+          skipCompact: true,
+          description: "List security exemptions filtered by status. Recommended `size`: 5 (pass explicitly via `filters` — the shared default of 20 is too large for this resource). Response includes items[], total, page, pageSize, totalPages and `_nextPageHint`. ALWAYS read `_nextPageHint` — it spells out the exact follow-up call, including all active filters. NEVER re-use the same page for a 'next' request, NEVER drop filters between pages, and NEVER change size mid-session.",
         },
       },
       executeActions: {

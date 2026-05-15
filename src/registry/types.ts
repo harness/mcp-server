@@ -304,6 +304,13 @@ export interface EndpointSpec {
    * Only applicable to ssca-manager endpoints that accept the `enforce_elasticsearch` query param.
    */
   elkFallback?: boolean;
+  /**
+   * When true, harness_list will NOT run the global compactItems whitelist pass
+   * on this response's `items`. Use this when `responseExtractor` already
+   * produces a minimal, hand-picked projection and further compaction would
+   * strip intentional display fields (e.g. `severity`, `requested_by`).
+   */
+  skipCompact?: boolean;
 }
 
 /**
