@@ -10,7 +10,7 @@ import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, isRecord, coerceRecord } from "../utils/type-guards.js";
 import { resourceTypeSchema } from "./input-schemas.js";
 
-export function registerUpdateTool(server: McpServer, registry: Registry, client: HarnessClient, config?: Config): void {
+export function registerUpdateTool(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
   const updatableTypes = registry.getTypesForOperation("update");
 
   server.registerTool(
@@ -54,7 +54,7 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
           toolName: "harness_update",
           message: `Update ${args.resource_type} "${args.resource_id}"?\n\n${bodyPreview}`,
           risk,
-          autoApproveRisk: config?.HARNESS_AUTO_APPROVE_RISK,
+          autoApproveRisk: config.HARNESS_AUTO_APPROVE_RISK,
         });
         if (!elicit.proceed) {
           return errorResult(`Operation ${elicit.reason} by user.`);

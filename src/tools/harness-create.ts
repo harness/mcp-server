@@ -10,7 +10,7 @@ import { applyUrlDefaults } from "../utils/url-parser.js";
 import { coerceRecord } from "../utils/type-guards.js";
 import { resourceTypeSchema } from "./input-schemas.js";
 
-export function registerCreateTool(server: McpServer, registry: Registry, client: HarnessClient, config?: Config): void {
+export function registerCreateTool(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
   const creatableTypes = registry.getTypesForOperation("create");
 
   server.registerTool(
@@ -59,7 +59,7 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
           toolName: "harness_create",
           message: `Create ${args.resource_type}?\n\n${bodyPreview}`,
           risk,
-          autoApproveRisk: config?.HARNESS_AUTO_APPROVE_RISK,
+          autoApproveRisk: config.HARNESS_AUTO_APPROVE_RISK,
         });
         if (!elicit.proceed) {
           return errorResult(`Operation ${elicit.reason} by user.`);
