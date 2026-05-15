@@ -2,6 +2,7 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
+import type { Config } from "../config.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError, HarnessApiError } from "../utils/errors.js";
 import { confirmViaElicitation } from "../utils/elicitation.js";
@@ -15,7 +16,7 @@ import { resourceTypeSchema } from "./input-schemas.js";
 
 const log = createLogger("execute");
 
-export function registerExecuteTool(server: McpServer, registry: Registry, client: HarnessClient): void {
+export function registerExecuteTool(server: McpServer, registry: Registry, client: HarnessClient, config?: Config): void {
   const executableTypes = registry.getTypesWithExecuteActions();
 
   server.registerTool(
@@ -70,6 +71,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           toolName: "harness_execute",
           message: `Execute "${args.action}" on ${resourceType}${resourceId ? ` "${resourceId}"` : ""}?`,
           risk,
+          autoApproveRisk: config?.HARNESS_AUTO_APPROVE_RISK,
         });
         if (!elicit.proceed) {
           return errorResult(`Operation ${elicit.reason} by user.`);

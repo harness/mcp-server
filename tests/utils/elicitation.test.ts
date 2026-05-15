@@ -233,6 +233,20 @@ describe("confirmViaElicitation", () => {
     expect(mcpServer.server.elicitInput).not.toHaveBeenCalled();
   });
 
+  it("uses explicit autoApproveRisk before the module default", async () => {
+    configureElicitation({ autoApproveRisk: "none" });
+    const mcpServer = makeServerStub(undefined);
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_delete",
+      message: "Delete pipeline?",
+      risk: "destructive",
+      autoApproveRisk: "all",
+    });
+    expect(result).toEqual({ proceed: true, method: "auto_approved" });
+    expect(mcpServer.server.elicitInput).not.toHaveBeenCalled();
+  });
+
   it("auto-approves low_write when threshold is low_write", async () => {
     configureElicitation({ autoApproveRisk: "low_write" });
     const mcpServer = makeServerStub(undefined);
