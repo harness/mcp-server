@@ -368,8 +368,10 @@ async function downloadBlobContent(
     }
   }
 
-  if (blobUrl && isPresignedUrl(blobUrl) && isHarnessHost(blobUrl.hostname)) {
+  if (blobUrl && isPresignedUrl(blobUrl) && isHarnessHost(blobUrl.hostname) && blobUrl.pathname.startsWith("/storage/")) {
     // Strategy 2: *.harness.io CDN blob — rewrite hostname and direct fetch.
+    // Guarded by /storage/ prefix to avoid misrouting signed API paths (e.g. /gateway/log-service/...)
+    // that happen to carry pre-signed params — those must go through client.requestStream() for auth.
     // The blob link always points to app.harness.io/storage/... regardless of HARNESS_BASE_URL.
     // Rewrite to the configured host so self-managed deployments can reach it.
     const baseUrl = safeParseUrl(client.baseURL);

@@ -379,6 +379,30 @@ describe("resolveLogContent", () => {
     );
   });
 
+  it("STRICT: presigned *.harness.io URL on non-/storage/ path routes through requestStream, not direct fetch", async () => {
+    // A *.harness.io URL carrying X-Amz-Signature on a log-service API path (not /storage/...)
+    // must go through client.requestStream() for auth injection — Strategy 2 only applies to
+    // CDN /storage/ paths. Without the /storage/ guard, this would be misrouted as a CDN blob.
+    const blobLink =
+      "https://app.harness.io/gateway/log-service/blob/download?accountId=jLO&X-Amz-Signature=tok&X-Amz-Expires=900";
+    const streamFn = vi.fn().mockResolvedValue(new Response('{"out":"api path log"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.example.com/gateway", requestStream: streamFn },
+    );
+
+    const result = await resolveLogContent(client, "prefix");
+
+    expect(result).toContain("api path log");
+    // Must route through client (auth headers needed for API paths)
+    expect(streamFn).toHaveBeenCalled();
+    // Must NOT be direct-fetched — API paths require auth, CDN guard prevents misclassification
+    expect(fetchSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("harness.io"),
+      expect.any(Object),
+    );
+  });
+
   it("true S3 pre-signed URL still uses direct fetch (external storage host)", async () => {
     const blobLink =
       "https://harness-prod-logs.s3.us-east-1.amazonaws.com/logs.zip?X-Amz-Signature=abc&X-Amz-Expires=900";
