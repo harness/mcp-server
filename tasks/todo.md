@@ -397,3 +397,21 @@
 - Added `tests/release-workflow.test.ts` to require idempotency guards for npm publish and GitHub Release creation.
 - Updated `.github/workflows/release.yml` to skip npm publish when the package version already exists, tolerate a publish race by rechecking npm after failure, and skip `gh release create` when the release already exists.
 - Verified with `pnpm test tests/release-workflow.test.ts tests/release-metadata.test.ts`, `pnpm typecheck`, `pnpm build`, `pnpm docs:check`, and full `pnpm test`.
+
+## Critical Bug Inspection (2026-05-16)
+- [x] Inspect recent commits for high-severity behavioral regressions
+- [x] Trace suspicious changes through caller chains and downstream behavior
+- [x] Implement a minimal fix only if a concrete critical bug is confirmed
+- [x] Run focused verification and report the outcome
+
+### Plan
+- Review recent merged commits since the last critical bug inspection, prioritizing code-path changes over docs/schema churn.
+- Focus tracing on repository write actions, release workflow behavior, schema sync side effects, and any client/request construction changes.
+- If no data-loss, crash, security, or major user-facing breakage has a concrete trigger, do not open a PR; post a concise no-critical-findings summary instead.
+
+### Review
+- Found a safety regression from the per-session auto-approve header: any HTTP client starting a session could set `x-harness-auto-approve-risk: all` and widen the session beyond the deployment's configured `HARNESS_AUTO_APPROVE_RISK`, bypassing the server operator's confirmation threshold for writes and destructive operations.
+- Capped session header auto-approve values at the server-configured threshold while preserving the ability for a session to lower its own threshold.
+- Added focused regression coverage for capping and lowering behavior, and updated the architecture note to describe the cap.
+- Reviewed other recent changes (schema sync, commit create, STO pagination, pipeline branch loading, release workflow idempotency) and did not find another high-confidence critical issue to patch in this run.
+- Verified with `pnpm test tests/utils/session-headers.test.ts tests/utils/elicitation.test.ts`, `pnpm typecheck`, `pnpm build`, full `pnpm test`, `pnpm docs:check`, and `git diff --check`.

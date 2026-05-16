@@ -50,14 +50,38 @@ describe("session header parsing", () => {
 
   it("merges valid session headers without mutating the base config", () => {
     const base = makeConfig();
+    base.HARNESS_AUTO_APPROVE_RISK = "high_write";
     const merged = mergeConfigWithSessionHeaders(base, {
       "x-harness-pipeline-version": "1",
-      "x-harness-auto-approve-risk": "high_write",
+      "x-harness-auto-approve-risk": "medium_write",
     });
     expect(merged).not.toBe(base);
     expect(merged.HARNESS_PIPELINE_VERSION).toBe("1");
-    expect(merged.HARNESS_AUTO_APPROVE_RISK).toBe("high_write");
+    expect(merged.HARNESS_AUTO_APPROVE_RISK).toBe("medium_write");
     expect(base.HARNESS_PIPELINE_VERSION).toBeUndefined();
-    expect(base.HARNESS_AUTO_APPROVE_RISK).toBe("none");
+    expect(base.HARNESS_AUTO_APPROVE_RISK).toBe("high_write");
+  });
+
+  it("caps session auto-approve risk at the deployment threshold", () => {
+    const base = makeConfig();
+    base.HARNESS_AUTO_APPROVE_RISK = "low_write";
+
+    const merged = mergeConfigWithSessionHeaders(base, {
+      "x-harness-auto-approve-risk": "all",
+    });
+
+    expect(merged.HARNESS_AUTO_APPROVE_RISK).toBe("low_write");
+    expect(base.HARNESS_AUTO_APPROVE_RISK).toBe("low_write");
+  });
+
+  it("allows session auto-approve headers to reduce the deployment threshold", () => {
+    const base = makeConfig();
+    base.HARNESS_AUTO_APPROVE_RISK = "all";
+
+    const merged = mergeConfigWithSessionHeaders(base, {
+      "x-harness-auto-approve-risk": "none",
+    });
+
+    expect(merged.HARNESS_AUTO_APPROVE_RISK).toBe("none");
   });
 });
