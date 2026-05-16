@@ -7,6 +7,7 @@ import type { AuditManager } from "../audit/manager.js";
 import type { AuditContext, AuditEvent } from "../audit/types.js";
 import { createLogger } from "../utils/logger.js";
 import { buildDeepLink, appendStoreType } from "../utils/deep-links.js";
+import { isFormDataBody } from "../utils/type-guards.js";
 
 // Import all toolsets
 import { pipelinesToolset } from "./toolsets/pipelines.js";
@@ -660,7 +661,7 @@ export class Registry {
     if (
       body &&
       typeof body === "object" &&
-      !(typeof FormData !== "undefined" && body instanceof FormData) &&
+      !isFormDataBody(body) &&
       !spec.skipScopeBodyInjection &&
       (resolvedMethod === "POST" || resolvedMethod === "PUT")
     ) {
@@ -690,7 +691,7 @@ export class Registry {
 
     // Validate required fields if bodySchema is defined (plain JSON bodies only).
     if (spec.bodySchema && body && typeof body === "object" && !Array.isArray(body)) {
-      if (typeof FormData !== "undefined" && body instanceof FormData) {
+      if (isFormDataBody(body)) {
         // Multipart — validation is enforced inside the resource bodyBuilder
       } else {
         const bodyRecord = body as Record<string, unknown>;

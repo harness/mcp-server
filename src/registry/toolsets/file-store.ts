@@ -2,6 +2,9 @@ import { Buffer } from "node:buffer";
 import type { ToolsetDefinition, BodySchema } from "../types.js";
 import { ngExtract, pageExtract } from "../extractors.js";
 
+// Matches server-side FileUploadLimit.fileStoreFileLimit (100 MB)
+const MAX_FILE_BYTES = 100_000_000;
+
 function appendPart(fd: FormData, key: string, value: unknown): void {
   if (value === undefined || value === null || value === "") return;
   if (typeof value === "boolean") {
@@ -91,10 +94,17 @@ export function buildFileStoreMultipartBody(
       (typeof b.file_name === "string" && b.file_name) ||
       name;
     if (typeof b.content_base64 === "string" && b.content_base64 !== "") {
+      const estimatedBytes = Math.ceil(b.content_base64.length * 3 / 4);
+      if (estimatedBytes > MAX_FILE_BYTES) {
+        throw new Error(`File content exceeds maximum size of ${MAX_FILE_BYTES} bytes (estimated ${estimatedBytes} bytes from base64).`);
+      }
       const buf = Buffer.from(b.content_base64, "base64");
       fd.append("content", new Blob([buf], { type: mime }), filename);
     } else if (b.content !== undefined && b.content !== null) {
       const text = typeof b.content === "string" ? b.content : JSON.stringify(b.content);
+      if (Buffer.byteLength(text) > MAX_FILE_BYTES) {
+        throw new Error(`File content exceeds maximum size of ${MAX_FILE_BYTES} bytes.`);
+      }
       fd.append("content", new Blob([text], { type: mime }), filename);
     } else if (mode === "create") {
       throw new Error(
@@ -118,7 +128,7 @@ function buildFileStoreUpdateBody(input: Record<string, unknown>): unknown {
  * POST /ng/api/file-store/folder expects a FileStoreNode-shaped JSON body.
  * Accept full `body` from the user, or shorthand folder_identifier + folder_name.
  */
-function buildFolderNodesBody(input: Record<string, unknown>): unknown {
+export function buildFolderNodesBody(input: Record<string, unknown>): unknown {
   const rawBody = input.body;
   if (rawBody !== undefined && typeof rawBody === "object" && rawBody !== null && !Array.isArray(rawBody)) {
     return rawBody;
@@ -257,7 +267,7 @@ export const fileStoreToolset: ToolsetDefinition = {
           skipScopeBodyInjection: true,
           responseExtractor: ngExtract,
           description:
-            "Delete a file or folder by identifier. Optional filters.force_delete / params.force_delete as boolean to force delete without usage checks.",
+            "Delete a file or folder by identifier. Optional params.force_delete (boolean) to force delete without usage checks.",
         },
       },
       executeActions: {

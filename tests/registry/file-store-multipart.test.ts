@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildFileStoreMultipartBody } from "../../src/registry/toolsets/file-store.js";
+import { buildFileStoreMultipartBody, buildFolderNodesBody } from "../../src/registry/toolsets/file-store.js";
 
 describe("buildFileStoreMultipartBody", () => {
   it("builds FOLDER multipart without content", () => {
@@ -65,5 +65,67 @@ describe("buildFileStoreMultipartBody", () => {
       "update",
     );
     expect(fd.get("identifier")).toBe("node123");
+  });
+
+  it("rejects oversized base64 content", () => {
+    const hugeBase64 = "A".repeat(140_000_000);
+    expect(() =>
+      buildFileStoreMultipartBody(
+        {
+          body: {
+            name: "big.bin",
+            type: "FILE",
+            parent_identifier: "Root",
+            content_base64: hugeBase64,
+          },
+        },
+        "create",
+      ),
+    ).toThrow(/exceeds maximum size/);
+  });
+
+  it("rejects oversized text content", () => {
+    const hugeText = "x".repeat(101_000_000);
+    expect(() =>
+      buildFileStoreMultipartBody(
+        {
+          body: {
+            name: "big.txt",
+            type: "FILE",
+            parent_identifier: "Root",
+            content: hugeText,
+          },
+        },
+        "create",
+      ),
+    ).toThrow(/exceeds maximum size/);
+  });
+});
+
+describe("buildFolderNodesBody", () => {
+  it("passes through a full body object", () => {
+    const body = { identifier: "f1", name: "scripts", type: "FOLDER" };
+    const result = buildFolderNodesBody({ body });
+    expect(result).toBe(body);
+  });
+
+  it("builds node from shorthand folder_identifier + folder_name", () => {
+    const result = buildFolderNodesBody({ folder_identifier: "f1", folder_name: "scripts" }) as Record<string, unknown>;
+    expect(result.identifier).toBe("f1");
+    expect(result.name).toBe("scripts");
+    expect(result.type).toBe("FOLDER");
+  });
+
+  it("includes parent_identifier when provided", () => {
+    const result = buildFolderNodesBody({
+      folder_identifier: "f1",
+      folder_name: "scripts",
+      parent_identifier: "Root",
+    }) as Record<string, unknown>;
+    expect(result.parentIdentifier).toBe("Root");
+  });
+
+  it("throws when required shorthand fields are missing", () => {
+    expect(() => buildFolderNodesBody({ folder_identifier: "f1" })).toThrow(/folder_identifier/);
   });
 });

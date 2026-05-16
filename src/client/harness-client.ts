@@ -4,14 +4,11 @@ import { HarnessApiError } from "../utils/errors.js";
 import { RateLimiter } from "../utils/rate-limiter.js";
 import { createLogger } from "../utils/logger.js";
 import { redactJsonString } from "../utils/redact.js";
+import { isFormDataBody } from "../utils/type-guards.js";
 
 const log = createLogger("harness-client");
 
 const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
-
-function isFormDataBody(body: unknown): body is FormData {
-  return typeof FormData !== "undefined" && body instanceof FormData;
-}
 
 /**
  * Whether the caller explicitly set a body (including empty string).
