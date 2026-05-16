@@ -179,67 +179,26 @@ describe("resolveLogContent", () => {
     );
   });
 
-  // ── Regression tests: Harness-internal hosts with pre-signed params ──────────
-  // Pre-signed params on app.harness.io or any *.harness.io host do NOT mean
-  // the URL is publicly routable. Internal/on-prem deployments proxy these through
-  // their own host. The fix: only bypass client routing for TRUE external storage.
+  // ── Regression tests: Harness CDN blob URLs ──────────────────────────────────
+  // The Harness log-service always returns blob links pointing to
+  // app.harness.io/storage/... regardless of HARNESS_BASE_URL. On self-managed
+  // deployments app.harness.io is not directly reachable, but the CDN is accessible
+  // via the configured base URL host (e.g. self-managed.example.com/storage/...).
+  //
+  // INVARIANT: *.harness.io pre-signed blob links must have their hostname rewritten
+  // to match the configured baseURL host and then be fetched directly. Routing through
+  // client.requestStream() was tried (PR #195) but produces 403 because the API gateway
+  // doesn't serve /storage/... CDN paths.
+  //
+  // This has broken THREE times. If this test fails you are re-introducing the bug.
 
-  it("REGRESSION: app.harness.io pre-signed URL routes through client.requestStream, not direct fetch", async () => {
+  it("REGRESSION: app.harness.io pre-signed blob URL is host-rewritten to baseURL host and direct-fetched", async () => {
+    // The log-service returns app.harness.io/storage/... but the client is configured
+    // with a custom base URL. Rewrite hostname to baseURL.hostname + direct fetch.
     const blobLink =
-      "https://app.harness.io/storage/logs/blob.zip?X-Amz-Signature=abc123&X-Amz-Expires=900";
-    const streamFn = vi.fn().mockResolvedValue(new Response('{"out":"log from internal harness"}', { status: 200 }));
-    const client = makeClient(
-      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
-      { requestStream: streamFn },
-    );
-
-    const result = await resolveLogContent(client, "prefix");
-
-    expect(result).toContain("log from internal harness");
-    // Must route through client — NOT bypass via direct fetch
-    expect(streamFn).toHaveBeenCalledWith(
-      expect.objectContaining({ path: expect.stringContaining("/storage/logs/blob.zip") }),
-    );
-    expect(fetchSpy).not.toHaveBeenCalledWith(
-      expect.stringContaining("harness.io"),
-      expect.any(Object),
-    );
-  });
-
-  it("REGRESSION: custom.harness.io pre-signed URL routes through client.requestStream, not direct fetch", async () => {
-    const blobLink =
-      "https://custom.harness.io/storage/blob?X-Goog-Signature=sig&X-Goog-Expires=3600";
-    const streamFn = vi.fn().mockResolvedValue(new Response('{"out":"internal gcs proxy log"}', { status: 200 }));
-    const client = makeClient(
-      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
-      { requestStream: streamFn },
-    );
-
-    const result = await resolveLogContent(client, "prefix");
-
-    expect(result).toContain("internal gcs proxy log");
-    expect(streamFn).toHaveBeenCalledWith(
-      expect.objectContaining({ path: expect.stringContaining("/storage/blob") }),
-    );
-    expect(fetchSpy).not.toHaveBeenCalledWith(
-      expect.stringContaining("harness.io"),
-      expect.any(Object),
-    );
-  });
-
-  // ── On-prem / custom-gateway invariant ───────────────────────────────────────
-  // INVARIANT: any *.harness.io blob URL — with or without pre-signed params —
-  // MUST route through client.requestStream(), never global fetch().
-  // This has broken TWICE (PR #189, fixed in PR #195). If you change routing
-  // logic and this test fails, you are re-introducing the same bug.
-
-  it("REGRESSION: app.harness.io blob with custom gateway baseURL routes through client", async () => {
-    // On-prem/self-managed scenario: HARNESS_BASE_URL points to a custom gateway host,
-    // but the blob link returned by log-service still points to app.harness.io.
-    // app.harness.io is not directly reachable — must go through client.requestStream().
-    const blobLink =
-      "https://app.harness.io/gateway/log-service/blob/download?accountId=jLO&X-Amz-Signature=tok";
-    const streamFn = vi.fn().mockResolvedValue(new Response('{"out":"on-prem log line"}', { status: 200 }));
+      "https://app.harness.io/storage/harness-download/logs.zip?X-Amz-Signature=abc123&X-Amz-Expires=900";
+    fetchSpy.mockResolvedValue(new Response('{"out":"log from internal harness"}', { status: 200 }));
+    const streamFn = vi.fn();
     const client = makeClient(
       vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
       { baseURL: "https://custom-gateway.example.com/gateway", requestStream: streamFn },
@@ -247,19 +206,26 @@ describe("resolveLogContent", () => {
 
     const result = await resolveLogContent(client, "prefix");
 
-    expect(result).toContain("on-prem log line");
-    expect(streamFn).toHaveBeenCalled();
-    expect(fetchSpy).not.toHaveBeenCalledWith(
-      expect.stringContaining("app.harness.io"),
+    expect(result).toContain("log from internal harness");
+    // STRICT: must use direct fetch with the rewritten URL — NOT client.requestStream()
+    // Routing through requestStream sends self-managed.example.com/gateway/storage/... which 403s
+    // because the API gateway does not serve /storage CDN paths.
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining("custom-gateway.example.com/storage/harness-download/logs.zip"),
       expect.any(Object),
     );
+    expect(streamFn).not.toHaveBeenCalled();
+    // STRICT: the fetch URL must NOT contain /gateway/storage — that path produces 403
+    const fetchUrl = fetchSpy.mock.calls[fetchSpy.mock.calls.length - 1]![0] as string;
+    expect(fetchUrl).not.toContain("/gateway/storage");
   });
 
-  it("REGRESSION: app.harness.io URL with explicit port still classified as Harness host", async () => {
-    // URL.host includes port (app.harness.io:443) — isHarnessHost must use .hostname not .host
+  it("REGRESSION: app.harness.io blob URL with explicit port is host-rewritten correctly", async () => {
+    // URL.host includes port (app.harness.io:443) — must use .hostname not .host
     const blobLink =
-      "https://app.harness.io:443/gateway/log-service/blob/download?X-Amz-Signature=tok";
-    const streamFn = vi.fn().mockResolvedValue(new Response('{"out":"port log"}', { status: 200 }));
+      "https://app.harness.io:443/storage/harness-download/logs.zip?X-Amz-Signature=tok";
+    fetchSpy.mockResolvedValue(new Response('{"out":"port log"}', { status: 200 }));
+    const streamFn = vi.fn();
     const client = makeClient(
       vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
       { baseURL: "https://custom-gateway.example.com/gateway", requestStream: streamFn },
@@ -268,9 +234,147 @@ describe("resolveLogContent", () => {
     const result = await resolveLogContent(client, "prefix");
 
     expect(result).toContain("port log");
-    expect(streamFn).toHaveBeenCalled();
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining("custom-gateway.example.com/storage/harness-download/logs.zip"),
+      expect.any(Object),
+    );
+    // STRICT: requestStream must NOT be called — it would produce gateway/storage/... → 403
+    expect(streamFn).not.toHaveBeenCalled();
+  });
+
+  it("STRICT: non-presigned Harness URLs route through requestStream with gateway prefix, not direct fetch", async () => {
+    // Standard log-service API paths (no pre-signed params) must go through the client
+    // so auth headers (PAT/JWT) are injected. These are API paths, not CDN paths.
+    const blobLink = "https://app.harness.io/gateway/log-service/blob/some-path";
+    const streamFn = vi.fn().mockResolvedValue(new Response('{"out":"api log"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://custom-gateway.example.com/gateway", requestStream: streamFn },
+    );
+
+    const result = await resolveLogContent(client, "prefix");
+
+    expect(result).toContain("api log");
+    // Must go through client — API paths require auth injection
+    expect(streamFn).toHaveBeenCalledWith(
+      expect.objectContaining({ path: expect.stringContaining("/gateway/log-service/blob/some-path") }),
+    );
+    // STRICT: must NOT be a direct fetch to app.harness.io (blocked) or gateway/storage (wrong)
     expect(fetchSpy).not.toHaveBeenCalledWith(
-      expect.stringContaining("harness.io"),
+      expect.stringContaining("app.harness.io"),
+      expect.any(Object),
+    );
+  });
+
+  it("STRICT: pre-signed query params are preserved exactly after host rewrite", async () => {
+    // Critical: if X-Amz-Signature or X-Amz-Expires are dropped, the CDN rejects the request.
+    // Verify the full URL including all query params reaches fetchSpy unchanged (except hostname).
+    const blobLink =
+      "https://app.harness.io/storage/harness-download/logs.zip" +
+      "?X-Amz-Algorithm=AWS4-HMAC-SHA256" +
+      "&X-Amz-Credential=GOOG1EXAMPLEKEY%2F20260516%2Fus-east-1%2Fs3%2Faws4_request" +
+      "&X-Amz-Date=20260516T040000Z" +
+      "&X-Amz-Expires=86400" +
+      "&X-Amz-SignedHeaders=host" +
+      "&X-Amz-Signature=abc123def456";
+    fetchSpy.mockResolvedValue(new Response('{"out":"sig preserved"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.example.com/gateway" },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    const fetchUrl = fetchSpy.mock.calls[0]![0] as string;
+    // Host rewritten
+    expect(fetchUrl).toContain("self-managed.example.com");
+    expect(fetchUrl).not.toContain("app.harness.io");
+    // All pre-signed params intact
+    expect(fetchUrl).toContain("X-Amz-Signature=abc123def456");
+    expect(fetchUrl).toContain("X-Amz-Expires=86400");
+    expect(fetchUrl).toContain("X-Amz-SignedHeaders=host");
+    // Path intact
+    expect(fetchUrl).toContain("/storage/harness-download/logs.zip");
+    // No gateway prefix injected — CDN path must stay as /storage/..., not /gateway/storage/...
+    expect(fetchUrl).not.toContain("/gateway/storage");
+  });
+
+  it("STRICT: GCS pre-signed URL on Harness CDN is also host-rewritten (not gateway-routed)", async () => {
+    // The Harness CDN sometimes uses GCS-backend pre-signed URLs with X-Goog-Signature.
+    // Same routing rules apply — host rewrite + direct fetch, NOT requestStream.
+    const blobLink =
+      "https://app.harness.io/storage/harness-download/logs.zip?X-Goog-Signature=gcs-sig&X-Goog-Expires=3600";
+    fetchSpy.mockResolvedValue(new Response('{"out":"gcs cdn log"}', { status: 200 }));
+    const streamFn = vi.fn();
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.example.com/gateway", requestStream: streamFn },
+    );
+
+    const result = await resolveLogContent(client, "prefix");
+
+    expect(result).toContain("gcs cdn log");
+    const fetchUrl = fetchSpy.mock.calls[0]![0] as string;
+    expect(fetchUrl).toContain("self-managed.example.com/storage/harness-download/logs.zip");
+    expect(fetchUrl).toContain("X-Goog-Signature=gcs-sig");
+    expect(fetchUrl).not.toContain("/gateway/storage");
+    expect(streamFn).not.toHaveBeenCalled();
+  });
+
+  it("STRICT: S3/GCS external hosts are NOT host-rewritten — original URL fetched as-is", async () => {
+    // External storage (amazonaws.com, googleapis.com) must NOT have hostname rewritten.
+    // The pre-signed signature is host-bound; changing the host invalidates it.
+    const blobLink =
+      "https://harness-logs.s3.amazonaws.com/logs.zip?X-Amz-Signature=real-sig&X-Amz-Expires=900";
+    fetchSpy.mockResolvedValue(new Response('{"out":"s3 log"}', { status: 200 }));
+    const streamFn = vi.fn();
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.example.com/gateway", requestStream: streamFn },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    // Original URL unchanged — rewriting would break the AWS signature
+    expect(fetchSpy).toHaveBeenCalledWith(blobLink, expect.any(Object));
+    expect(fetchSpy.mock.calls[0]![0]).not.toContain("self-managed.example.com");
+    expect(streamFn).not.toHaveBeenCalled();
+  });
+
+  it("STRICT: non-default port in baseURL is preserved in rewritten blob URL", async () => {
+    // If baseURL is https://gateway.example.com:8443/gateway, the rewritten URL must be
+    // https://gateway.example.com:8443/storage/... — not https://gateway.example.com/storage/...
+    // Dropping the port would send traffic to the wrong server.
+    const blobLink =
+      "https://app.harness.io/storage/harness-download/logs.zip?X-Amz-Signature=sig&X-Amz-Expires=900";
+    fetchSpy.mockResolvedValue(new Response('{"out":"port preserved"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://gateway.example.com:8443/gateway" },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    const fetchUrl = fetchSpy.mock.calls[0]![0] as string;
+    expect(fetchUrl).toContain("gateway.example.com:8443/storage/harness-download/logs.zip");
+    expect(fetchUrl).not.toContain("app.harness.io");
+  });
+
+  it("STRICT: unparseable baseURL throws instead of fetching original blocked URL", async () => {
+    // If HARNESS_BASE_URL is misconfigured and unparseable, we must NOT fall back to
+    // direct-fetching app.harness.io (which is blocked on self-managed nets → TypeError).
+    // A clear error is better than a cryptic network failure.
+    const blobLink =
+      "https://app.harness.io/storage/harness-download/logs.zip?X-Amz-Signature=sig&X-Amz-Expires=900";
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "not-a-valid-url" },
+    );
+
+    await expect(resolveLogContent(client, "prefix")).rejects.toThrow(/HARNESS_BASE_URL.*not a valid URL/);
+    // Must NOT have attempted to fetch app.harness.io
+    expect(fetchSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("app.harness.io"),
       expect.any(Object),
     );
   });

@@ -339,17 +339,23 @@ async function downloadBlobContent(
 ): Promise<Response> {
   const blobUrl = safeParseUrl(blobLink);
 
-  // Two routing strategies based on the blob URL:
+  // Three routing strategies based on the blob URL:
   //
   // 1. True external storage (S3, GCS domains) → direct fetch, no auth headers.
   //    The URL is publicly routable with embedded signature params; routing through
   //    the client or adding extra headers would invalidate the AWS/GCS signature.
   //
-  // 2. All other URLs (including *.harness.io pre-signed) → client.requestStream()
-  //    so PAT/JWT auth and proxy are applied. Harness pre-signed params are internal
-  //    tokens that are not AWS host-bound, so they survive client proxying.
-  //    For Harness pre-signed paths, use rawPath directly (already absolute on host);
-  //    for standard log-service paths, prepend the gateway prefix if absent.
+  // 2. *.harness.io pre-signed CDN blob URLs → rewrite hostname to match
+  //    HARNESS_BASE_URL host, then direct fetch.
+  //    The Harness log-service always returns blob links pointing to app.harness.io/storage/...
+  //    regardless of the configured base URL. On self-managed deployments app.harness.io is
+  //    not directly reachable, but the CDN is accessible via the configured host
+  //    (e.g. self-managed.example.com/storage/...). The pre-signed params authenticate the request
+  //    so no API key header is needed — and adding one would not help anyway since this is
+  //    a CDN path, not an API gateway path (/gateway/... would 403 for /storage/... paths).
+  //
+  // 3. Standard log-service paths → client.requestStream() with gateway prefix so
+  //    PAT/JWT auth headers are injected by the client proxy.
 
   if (blobUrl && isExternalStorageHost(blobUrl.hostname)) {
     // Strategy 1: true external storage — always direct fetch
@@ -362,16 +368,37 @@ async function downloadBlobContent(
     }
   }
 
-  // Strategy 2: route through client for auth injection and proxy support.
+  if (blobUrl && isPresignedUrl(blobUrl) && isHarnessHost(blobUrl.hostname)) {
+    // Strategy 2: *.harness.io CDN blob — rewrite hostname and direct fetch.
+    // The blob link always points to app.harness.io/storage/... regardless of HARNESS_BASE_URL.
+    // Rewrite to the configured host so self-managed deployments can reach it.
+    const baseUrl = safeParseUrl(client.baseURL);
+    if (!baseUrl) {
+      // If baseURL is unparseable we cannot safely rewrite — throw rather than
+      // direct-fetching the original app.harness.io URL (which is blocked on self-managed nets).
+      throw new Error(`Cannot rewrite Harness CDN blob URL: HARNESS_BASE_URL "${client.baseURL}" is not a valid URL`);
+    }
+    blobUrl.hostname = baseUrl.hostname;
+    blobUrl.protocol = baseUrl.protocol;
+    // Preserve non-default port from baseURL (e.g. https://gateway.example.com:8443/...)
+    blobUrl.port = baseUrl.port;
+    const rewrittenUrl = blobUrl.toString();
+    log.debug("Downloading log blob (direct, host-rewritten)", { prefix, url: rewrittenUrl.slice(0, 80) });
+    try {
+      return await fetch(rewrittenUrl, { signal });
+    } catch (err) {
+      const cause = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+      throw new Error(`Log download fetch failed for ${blobUrl.hostname}: ${cause}`);
+    }
+  }
+
+  // Strategy 3: standard log-service path — route through client for auth injection.
   const rawPath = blobUrl
     ? blobUrl.pathname + blobUrl.search
     : blobLink.startsWith("/") ? blobLink : `/${blobLink}`;
-  const downloadPath =
-    blobUrl && isPresignedUrl(blobUrl) && isHarnessHost(blobUrl.hostname)
-      ? rawPath
-      : rawPath.startsWith(LOG_SERVICE_GATEWAY_PREFIX)
-      ? rawPath
-      : `${LOG_SERVICE_GATEWAY_PREFIX}${rawPath}`;
+  const downloadPath = rawPath.startsWith(LOG_SERVICE_GATEWAY_PREFIX)
+    ? rawPath
+    : `${LOG_SERVICE_GATEWAY_PREFIX}${rawPath}`;
   log.debug("Downloading log blob (client)", { prefix, path: downloadPath.slice(0, 80) });
   try {
     return await client.requestStream({
