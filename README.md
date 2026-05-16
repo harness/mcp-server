@@ -1694,17 +1694,15 @@ Elicitation behavior varies by operation risk when client support is missing:
 
 If elicitation fails at runtime, operations at `medium_write` or above are blocked.
 
-### Auto-Approve for Autonomous Workflows
+### Autonomous Mode
 
-For CI/CD bots, headless agents, or batch automation, use `HARNESS_AUTO_APPROVE_RISK` to auto-approve operations up to a given risk level:
+**Autonomous mode** means the server proceeds with all operations — including writes and destructive actions — without prompting for confirmation. Enable it by setting:
 
 ```bash
-# Auto-approve everything (equivalent to old HARNESS_SKIP_ELICITATION=true)
 HARNESS_AUTO_APPROVE_RISK=all
-
-# Auto-approve only low-risk writes, still prompt for medium+
-HARNESS_AUTO_APPROVE_RISK=low_write
 ```
+
+This is the deployment-level ceiling: once set, individual sessions cannot escalate beyond it (though they can choose a stricter threshold per-session via the `x-harness-auto-approve-risk` header).
 
 Or in your MCP client config:
 
@@ -1723,9 +1721,27 @@ Or in your MCP client config:
 }
 ```
 
-> **Migration note:** `HARNESS_SKIP_ELICITATION=true` is still supported and maps to `HARNESS_AUTO_APPROVE_RISK=all`. A deprecation warning is logged to stderr. If both are set, `HARNESS_AUTO_APPROVE_RISK` takes precedence.
+**Partial autonomy:** You can also auto-approve only up to a specific risk level while still prompting for higher-risk operations:
 
-When set to `all`, **all** write and delete operations proceed without user confirmation — including destructive operations like `harness_delete`. Use with caution and consider pairing with `HARNESS_TOOLSETS` to restrict which resource types are available.
+```bash
+# Auto-approve reads and low-risk writes; prompt for medium_write, high_write, destructive
+HARNESS_AUTO_APPROVE_RISK=low_write
+
+# Auto-approve up to high-risk writes; only prompt for destructive operations
+HARNESS_AUTO_APPROVE_RISK=high_write
+```
+
+| Value | What's auto-approved |
+|---|---|
+| `none` (default) | Nothing — no auto-approval threshold |
+| `low_write` | Reads + low-risk writes |
+| `medium_write` | Reads + low + medium-risk writes |
+| `high_write` | Reads + low + medium + high-risk writes |
+| `all` | Everything, including destructive operations |
+
+> **Autonomous mode warning:** `HARNESS_AUTO_APPROVE_RISK=all` skips confirmation for **all** operations including `harness_delete`. Use with caution and consider pairing with `HARNESS_TOOLSETS` to restrict which resource types are available.
+
+> **Migration note:** `HARNESS_SKIP_ELICITATION=true` is still supported and maps to `HARNESS_AUTO_APPROVE_RISK=all`. A deprecation warning is logged to stderr. If both are set, `HARNESS_AUTO_APPROVE_RISK` takes precedence.
 
 ## Safety
 

@@ -1,8 +1,11 @@
 import type { IncomingHttpHeaders } from "node:http";
 import type { Config } from "../config.js";
+import { RISK_SEVERITY, type RiskLevel } from "../registry/types.js";
 
 export const PIPELINE_VERSION_HEADER = "x-harness-pipeline-version";
 export const AUTO_APPROVE_RISK_HEADER = "x-harness-auto-approve-risk";
+
+type ConfigAutoApproveRisk = Config["HARNESS_AUTO_APPROVE_RISK"];
 
 function getHeader(headers: IncomingHttpHeaders, name: string): string | undefined {
   const raw = headers[name];
@@ -34,6 +37,19 @@ export function parseAutoApproveRiskHeader(
   return undefined;
 }
 
+function autoApproveSeverity(risk: ConfigAutoApproveRisk): number {
+  if (risk === "none") return -1;
+  if (risk === "all") return Number.POSITIVE_INFINITY;
+  return RISK_SEVERITY.get(risk as RiskLevel) ?? -1;
+}
+
+function capAutoApproveRisk(
+  requested: ConfigAutoApproveRisk,
+  maximum: ConfigAutoApproveRisk,
+): ConfigAutoApproveRisk {
+  return autoApproveSeverity(requested) <= autoApproveSeverity(maximum) ? requested : maximum;
+}
+
 export function mergeConfigWithSessionHeaders(
   baseConfig: Config,
   headers: IncomingHttpHeaders,
@@ -41,9 +57,12 @@ export function mergeConfigWithSessionHeaders(
   const pipelineVersion = parsePipelineVersionHeader(headers);
   const autoApproveRisk = parseAutoApproveRiskHeader(headers);
   if (pipelineVersion === undefined && autoApproveRisk === undefined) return baseConfig;
+  const cappedAutoApproveRisk = autoApproveRisk === undefined
+    ? undefined
+    : capAutoApproveRisk(autoApproveRisk, baseConfig.HARNESS_AUTO_APPROVE_RISK ?? "none");
   return {
     ...baseConfig,
     ...(pipelineVersion !== undefined ? { HARNESS_PIPELINE_VERSION: pipelineVersion } : {}),
-    ...(autoApproveRisk !== undefined ? { HARNESS_AUTO_APPROVE_RISK: autoApproveRisk } : {}),
+    ...(cappedAutoApproveRisk !== undefined ? { HARNESS_AUTO_APPROVE_RISK: cappedAutoApproveRisk } : {}),
   };
 }

@@ -174,7 +174,7 @@ These tests run on every `pnpm test` invocation and validate all ~500+ endpoint 
 
 ### Elicitation Module (`src/utils/elicitation.ts`)
 
-Confirmation is driven by `risk: RiskLevel` plus optional auto-approve level from the session config (`HARNESS_AUTO_APPROVE_RISK`; deprecated `HARNESS_SKIP_ELICITATION` maps to approving all risks at startup). HTTP sessions may override the deployment default during initialize with `X-Harness-Auto-Approve-Risk`; tool handlers pass the resolved session value explicitly, so different sessions do not mutate shared process state.
+Confirmation is driven by `risk: RiskLevel` plus optional auto-approve level from the session config (`HARNESS_AUTO_APPROVE_RISK`; deprecated `HARNESS_SKIP_ELICITATION` maps to approving all risks at startup). HTTP sessions may lower the deployment default during initialize with `X-Harness-Auto-Approve-Risk`, but cannot raise it above the server-configured threshold; tool handlers pass the resolved session value explicitly, so different sessions do not mutate shared process state.
 
 | Risk level | Client supports elicitation | Behavior |
 |---|---|---|
