@@ -1733,7 +1733,7 @@ HARNESS_AUTO_APPROVE_RISK=high_write
 
 | Value | What's auto-approved |
 |---|---|
-| `none` (default) | Nothing — all writes prompt for confirmation |
+| `none` (default) | Nothing — no auto-approval threshold |
 | `low_write` | Reads + low-risk writes |
 | `medium_write` | Reads + low + medium-risk writes |
 | `high_write` | Reads + low + medium + high-risk writes |
