@@ -43863,6 +43863,9 @@ const schema: Record<string, any> = {
               },
               {
                 "type": "object",
+                "required": [
+                  "apiKey"
+                ],
                 "properties": {
                   "evalId": {
                     "description": "Eval identifier to run (creates a new run automatically)",
@@ -43955,39 +43958,6 @@ const schema: Record<string, any> = {
                   },
                   "repoFlags": {
                     "description": "Repository mappings as comma-separated NAME=PATH pairs",
-                    "oneOf": [
-                      {
-                        "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
-                      },
-                      {
-                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                      }
-                    ]
-                  },
-                  "otlpEnabled": {
-                    "description": "Enable exporting eval scores to an OTLP endpoint",
-                    "oneOf": [
-                      {
-                        "type": "boolean"
-                      },
-                      {
-                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                      }
-                    ]
-                  },
-                  "otlpEndpoint": {
-                    "description": "OTLP collector base URL",
-                    "oneOf": [
-                      {
-                        "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
-                      },
-                      {
-                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                      }
-                    ]
-                  },
-                  "otlpApiKey": {
-                    "description": "OTLP API key secret reference",
                     "oneOf": [
                       {
                         "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
@@ -44094,39 +44064,6 @@ const schema: Record<string, any> = {
               },
               "repoFlags": {
                 "description": "Repository mappings as comma-separated NAME=PATH pairs",
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                  }
-                ]
-              },
-              "otlpEnabled": {
-                "description": "Enable exporting eval scores to an OTLP endpoint",
-                "oneOf": [
-                  {
-                    "type": "boolean"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                  }
-                ]
-              },
-              "otlpEndpoint": {
-                "description": "OTLP collector base URL",
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                  }
-                ]
-              },
-              "otlpApiKey": {
-                "description": "OTLP API key secret reference",
                 "oneOf": [
                   {
                     "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
@@ -44486,6 +44423,39 @@ const schema: Record<string, any> = {
                   "configOverride": {
                     "type": "string",
                     "description": "Configuration override as JSON string"
+                  },
+                  "variables": {
+                    "type": "array",
+                    "description": "Per-execution variable overrides (variable_scope='build_run', highest precedence)",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "key",
+                        "valueType"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "description": "Variable identifier (carried back from the alias defaults)"
+                        },
+                        "key": {
+                          "type": "string",
+                          "description": "Variable key"
+                        },
+                        "value": {
+                          "type": "string",
+                          "description": "Variable value (literal string for string, secret reference for secret)"
+                        },
+                        "valueType": {
+                          "type": "string",
+                          "enum": [
+                            "string",
+                            "secret"
+                          ],
+                          "description": "Variable value type"
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -44531,6 +44501,39 @@ const schema: Record<string, any> = {
               "configOverride": {
                 "type": "string",
                 "description": "Configuration override as JSON string"
+              },
+              "variables": {
+                "type": "array",
+                "description": "Per-execution variable overrides (variable_scope='build_run', highest precedence)",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "key",
+                    "valueType"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "description": "Variable identifier (carried back from the alias defaults)"
+                    },
+                    "key": {
+                      "type": "string",
+                      "description": "Variable key"
+                    },
+                    "value": {
+                      "type": "string",
+                      "description": "Variable value (literal string for string, secret reference for secret)"
+                    },
+                    "valueType": {
+                      "type": "string",
+                      "enum": [
+                        "string",
+                        "secret"
+                      ],
+                      "description": "Variable value type"
+                    }
+                  }
+                }
               },
               "description": {
                 "desc": "This is the description for AiTestAutomationStepInfo"
@@ -78197,6 +78200,18 @@ const schema: Record<string, any> = {
                         "minLength": 1
                       }
                     ]
+                  },
+                  "skipApplicationScaling": {
+                    "oneOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
                   }
                 }
               }
@@ -78232,6 +78247,18 @@ const schema: Record<string, any> = {
                 ]
               },
               "sameAsAlreadyRunningInstances": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "skipApplicationScaling": {
                 "oneOf": [
                   {
                     "type": "boolean"
@@ -80406,6 +80433,39 @@ const schema: Record<string, any> = {
                   "configOverride": {
                     "type": "string",
                     "description": "Configuration override as JSON string"
+                  },
+                  "variables": {
+                    "type": "array",
+                    "description": "Per-execution variable overrides (variable_scope='build_run', highest precedence)",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "key",
+                        "valueType"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "description": "Variable identifier (carried back from the alias defaults)"
+                        },
+                        "key": {
+                          "type": "string",
+                          "description": "Variable key"
+                        },
+                        "value": {
+                          "type": "string",
+                          "description": "Variable value (literal string for string, secret reference for secret)"
+                        },
+                        "valueType": {
+                          "type": "string",
+                          "enum": [
+                            "string",
+                            "secret"
+                          ],
+                          "description": "Variable value type"
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -80451,6 +80511,39 @@ const schema: Record<string, any> = {
               "configOverride": {
                 "type": "string",
                 "description": "Configuration override as JSON string"
+              },
+              "variables": {
+                "type": "array",
+                "description": "Per-execution variable overrides (variable_scope='build_run', highest precedence)",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "key",
+                    "valueType"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "description": "Variable identifier (carried back from the alias defaults)"
+                    },
+                    "key": {
+                      "type": "string",
+                      "description": "Variable key"
+                    },
+                    "value": {
+                      "type": "string",
+                      "description": "Variable value (literal string for string, secret reference for secret)"
+                    },
+                    "valueType": {
+                      "type": "string",
+                      "enum": [
+                        "string",
+                        "secret"
+                      ],
+                      "description": "Variable value type"
+                    }
+                  }
+                }
               }
             }
           },
