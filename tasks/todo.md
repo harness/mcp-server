@@ -415,3 +415,21 @@
 - Added focused regression coverage for capping and lowering behavior, and updated the architecture note to describe the cap.
 - Reviewed other recent changes (schema sync, commit create, STO pagination, pipeline branch loading, release workflow idempotency) and did not find another high-confidence critical issue to patch in this run.
 - Verified with `pnpm test tests/utils/session-headers.test.ts tests/utils/elicitation.test.ts`, `pnpm typecheck`, `pnpm build`, full `pnpm test`, `pnpm docs:check`, and `git diff --check`.
+
+## Critical Bug Inspection (2026-05-17)
+- [x] Inspect recent commits for high-severity behavioral regressions
+- [x] Trace pipeline branch execution through `harness_execute`, runtime-input resolution, and registry dispatch
+- [x] Add failing regression coverage for feature-branch pipeline execution metadata
+- [x] Implement a minimal fix for confirmed `pipeline_branch` dropping/mismatch
+- [x] Run focused verification, typecheck, and full tests
+
+### Plan
+- Prioritize recently changed behavior with high blast radius: per-session approval, Harness Code write actions, STO pagination, and feature-branch pipeline execution.
+- Keep any fix scoped to the confirmed caller chain and avoid changing generic request construction.
+- Add regression tests at the MCP tool-handler layer because the bug is in how agent-facing inputs are normalized before registry dispatch.
+
+### Review
+- Confirmed a high-impact execution bug: `pipeline_branch` was documented in the pipeline run action schema, but `harness_execute` only honored it from `params`; callers using the action body schema silently dropped it and ran the default pipeline branch.
+- Confirmed a second branch mismatch in the same path: runtime-input auto-resolution fetched the template without the requested pipeline branch, so feature-branch pipeline YAML could be executed with default-branch input metadata.
+- Hoisted documented pipeline run body fields (`inputs`, `input_set_ids`, and `pipeline_branch`) into the execute input before resolution/dispatch, and used `pipeline_branch` for runtime-input template lookup.
+- Verified with failing-then-passing regression tests, `pnpm test tests/tools/tool-handlers.test.ts`, `pnpm typecheck`, full `pnpm test`, `pnpm build`, and `git diff --check`.

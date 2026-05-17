@@ -64,6 +64,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         }
 
         const actionSpec = def.executeActions?.[args.action];
+        applyPipelineRunBodyFields(args, input, resourceType);
         const risk = actionSpec?.operationPolicy.risk ?? "low_write";
 
         const elicit = await confirmViaElicitation({
@@ -180,7 +181,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
               pipelineId,
               orgId: asString(input.org_id) || registry.orgId,
               projectId: asString(input.project_id) || registry.projectId,
-              branch: asString(input.branch),
+              branch: asString(input.pipeline_branch) || asString(input.branch),
             });
 
             // Smart pre-flight: only block on required unmatched fields when no input sets cover them
@@ -280,6 +281,45 @@ const STRUCTURAL_FIELDS = new Set([
   "infrastructure", "execution", "spec", "template",
   "templateinputs", "servicedefinition", "artifacts", "manifests",
 ]);
+
+function applyPipelineRunBodyFields(
+  args: {
+    action: string;
+    body?: Record<string, unknown>;
+    inputs?: string | Record<string, unknown>;
+    input_set_ids?: string[];
+  },
+  input: Record<string, unknown>,
+  resourceType: string,
+): void {
+  if (resourceType !== "pipeline" || args.action !== "run") return;
+
+  const body = asRecord(args.body);
+  if (!body) return;
+
+  if (args.inputs === undefined && body.inputs !== undefined) {
+    const bodyInputs = body.inputs;
+    if (typeof bodyInputs === "string" || asRecord(bodyInputs)) {
+      args.inputs = bodyInputs as string | Record<string, unknown>;
+      input.inputs = bodyInputs;
+    }
+  }
+
+  const bodyInputSetIds = body.input_set_ids;
+  if (
+    args.input_set_ids === undefined &&
+    Array.isArray(bodyInputSetIds) &&
+    bodyInputSetIds.every((id): id is string => typeof id === "string")
+  ) {
+    args.input_set_ids = [...bodyInputSetIds];
+    input.input_set_ids = [...bodyInputSetIds];
+  }
+
+  const pipelineBranch = asString(body.pipeline_branch);
+  if (input.pipeline_branch === undefined && pipelineBranch) {
+    input.pipeline_branch = pipelineBranch;
+  }
+}
 
 function isStructuralField(fieldName: string): boolean {
   return STRUCTURAL_FIELDS.has(fieldName.toLowerCase());

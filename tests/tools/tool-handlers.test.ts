@@ -845,6 +845,47 @@ describe("harness_execute", () => {
     expect(postCall![0].params).toMatchObject({ pipelineBranchName: "feature/my-fix", module: "ci" });
   });
 
+  it("accepts pipeline_branch from the action body schema without dropping it", async () => {
+    await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "my-pipe",
+      body: { pipeline_branch: "feature/my-fix" },
+    });
+    const postCall = mockRequest.mock.calls.find((c) => c[0].method === "POST");
+    expect(postCall).toBeDefined();
+    expect(postCall![0].params).toMatchObject({ pipelineBranchName: "feature/my-fix" });
+  });
+
+  it("uses pipeline_branch when resolving runtime inputs for feature-branch pipeline YAML", async () => {
+    const branchTemplate = `pipeline:
+  identifier: "branch_pipe"
+  variables:
+    - name: "environment"
+      type: "String"
+      value: "<+input>"
+`;
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetTemplateYaml: branchTemplate } })
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-branch" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "branch_pipe",
+      inputs: { environment: "prod" },
+      params: { pipeline_branch: "feature/my-fix" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const templateCall = mockRequest.mock.calls[0]![0] as { path?: string; params?: Record<string, unknown> };
+    expect(templateCall.path).toBe("/pipeline/api/inputSets/template");
+    expect(templateCall.params).toMatchObject({ branch: "feature/my-fix" });
+    const runCall = mockRequest.mock.calls[1]![0] as { method?: string; params?: Record<string, unknown> };
+    expect(runCall.method).toBe("POST");
+    expect(runCall.params).toMatchObject({ pipelineBranchName: "feature/my-fix" });
+  });
+
   it("closes a pull request from a Harness PR URL", async () => {
     const prServer = makeMcpServer("accept");
     const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
