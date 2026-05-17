@@ -447,3 +447,10 @@
 - Add `HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP` as an explicit escape hatch. If HTTP binds to a non-loopback host without `HARNESS_MCP_AUTH_TOKEN`, startup fails unless this escape hatch is true.
 - Preserve `/health` as unauthenticated for probes, because it returns only status and session count.
 - Keep Host-header validation and CORS as defense-in-depth controls, not auth controls.
+
+### Review
+- Added `HARNESS_MCP_AUTH_TOKEN` and `HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP` config fields.
+- Added `src/utils/http-auth.ts` to validate non-loopback binds, check exact Bearer tokens with timing-safe comparison, and reject unauthenticated `/mcp` requests before handlers run.
+- Wired the auth middleware after CORS/rate-limit middleware and before MCP session creation/reuse in `src/index.ts`; `/health` and CORS preflight remain unauthenticated.
+- Updated README and `.env.example` to document HTTP auth and clarify that CORS/Host validation are not authentication.
+- Verified with `pnpm test tests/utils/http-auth.test.ts tests/config.test.ts tests/integration/http-transport.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test` (58 files / 1360 tests).
