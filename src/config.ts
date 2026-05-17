@@ -78,6 +78,8 @@ const RawConfigSchema = z.object({
   ),
   HARNESS_ALLOW_HTTP: booleanFromEnv.default(false),
   HARNESS_MCP_ALLOWED_HOSTS: optionalStringFromEnv.transform(validateAllowedHosts),
+  HARNESS_MCP_AUTH_TOKEN: optionalStringFromEnv,
+  HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP: booleanFromEnv.default(false),
   HARNESS_FME_BASE_URL: urlFromEnv("https://api.split.io"),
   HARNESS_LOG_UNSAFE_BODIES: booleanFromEnv.default(false),
   HARNESS_PIPELINE_VERSION: z.enum(["0", "1"]).optional(),

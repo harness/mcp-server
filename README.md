@@ -125,6 +125,8 @@ The HTTP transport runs in **session-based mode**. A new MCP session is created 
 
 Operational constraints in HTTP mode:
 
+- Set `HARNESS_MCP_AUTH_TOKEN` for any shared or remotely reachable deployment. When set, every `POST`, `GET`, and `DELETE` request to `/mcp` must include `Authorization: Bearer <token>`.
+- Non-loopback binds require `HARNESS_MCP_AUTH_TOKEN` by default. To run unauthenticated on a non-loopback interface anyway, set `HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP=true` explicitly.
 - `POST /mcp` without `mcp-session-id` must be an `initialize` request.
 - `POST /mcp`, `GET /mcp`, and `DELETE /mcp` for existing sessions require the `mcp-session-id` header.
 - `GET /mcp` is used for SSE notifications (progress updates and elicitation prompts).
@@ -141,18 +143,23 @@ curl http://localhost:3000/health
 # MCP initialize request (capture mcp-session-id response header)
 curl -i -X POST http://localhost:3000/mcp \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $HARNESS_MCP_AUTH_TOKEN" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
 
 # Subsequent MCP request (use returned session ID)
 curl -X POST http://localhost:3000/mcp \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $HARNESS_MCP_AUTH_TOKEN" \
   -H "mcp-session-id: <session-id>" \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
 
 # Terminate session
 curl -X DELETE http://localhost:3000/mcp \
+  -H "Authorization: Bearer $HARNESS_MCP_AUTH_TOKEN" \
   -H "mcp-session-id: <session-id>"
 ```
+
+`HARNESS_MCP_ALLOWED_HOSTS` controls Host-header validation for DNS-rebinding protection, and CORS limits browser origins. Neither is authentication; use `HARNESS_MCP_AUTH_TOKEN` or an authenticated gateway/reverse proxy for access control.
 
 ### Client Configuration
 
@@ -512,6 +519,8 @@ The server automatically loads environment variables from a `.env` file in the p
 | `HARNESS_ALLOW_HTTP`        | No       | `false`                     | Allow non-HTTPS `HARNESS_BASE_URL`. By default, the server enforces HTTPS for security. Set to `true` only for local development against a non-TLS Harness instance                                                                                   |
 | `HARNESS_PIPELINE_VERSION`  | No       | `0`                         | **(Alpha)** Pipeline YAML version. `0` loads the `pipeline` resource type and excludes `pipeline_v1`; `1` loads `pipeline_v1` and excludes `pipeline`. HTTP sessions can override this at initialize time with `x-harness-pipeline-version: 0` or `1` |
 | `HARNESS_MCP_ALLOWED_HOSTS` | No       | --                          | Comma-separated hostnames allowed by HTTP transport Host-header validation. `mcp.harness.io` is allowed by default for localhost binds; add proxy/custom domains here                                                                                 |
+| `HARNESS_MCP_AUTH_TOKEN`    | No       | --                          | Bearer token required on `/mcp` HTTP routes when set. Required by default when HTTP transport binds to a non-loopback host                                                                                                                             |
+| `HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP` | No | `false`         | Explicitly allow unauthenticated HTTP transport on non-loopback binds. Use only behind another authenticated control                                                                                                                                    |
 | `HARNESS_MCP_LOG_FILE`      | No       | `~/.claude/harness-mcp.log` | File used for stdio disconnect/crash diagnostics when stderr may no longer be available                                                                                                                                                               |
 
 

@@ -16,6 +16,7 @@ import { registerAllPrompts } from "./prompts/index.js";
 import { parseArgs, resolvePort, getVersion } from "./utils/cli.js";
 import { configureElicitation } from "./utils/elicitation.js";
 import { resolveHttpHostValidationOptions } from "./utils/http-hosts.js";
+import { createHttpAuthMiddleware, validateHttpAuthForBindHost, isLoopbackBindHost } from "./utils/http-auth.js";
 import { loadEnvFile } from "./utils/env.js";
 import { createAuditManager, type AuditManager } from "./audit/index.js";
 import { mergeConfigWithSessionHeaders } from "./utils/session-headers.js";
@@ -227,12 +228,12 @@ const REAP_INTERVAL_MS = 60_000;    // check every minute
 async function startHttp(config: Config, port: number): Promise<void> {
   const host = process.env.HOST || "127.0.0.1";
 
-  const isLoopback = host === "127.0.0.1" || host === "::1" || host === "localhost";
-  if (!isLoopback) {
+  validateHttpAuthForBindHost(host, config);
+  if (!isLoopbackBindHost(host) && config.HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP) {
     log.warn(
       "HTTP server binding to non-loopback address without authentication. " +
       "Any client that can reach this address will have full access to Harness resources via the configured API key. " +
-      "Deploy behind an authenticated reverse proxy or use HARNESS_ALLOWED_ORIGINS to restrict access.",
+      "Set HARNESS_MCP_AUTH_TOKEN or deploy behind an authenticated reverse proxy.",
       { host, port },
     );
   }
@@ -247,7 +248,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
   app.use((_req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", `http://${host}:${port}`);
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, mcp-session-id, x-harness-pipeline-version, x-harness-auto-approve-risk");
+    res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, mcp-session-id, x-harness-pipeline-version, x-harness-auto-approve-risk");
     res.setHeader("Access-Control-Expose-Headers", "mcp-session-id");
     next();
   });
@@ -276,6 +277,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
     }
     next();
   });
+  app.use(createHttpAuthMiddleware(config.HARNESS_MCP_AUTH_TOKEN));
 
   // ---- Session store ----
   const sessions = new Map<string, Session>();

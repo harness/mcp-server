@@ -433,3 +433,17 @@
 - Supporting docs now align risk classification/testing expectations for STO exemption creation and derived approver IDs, PR state endpoint behavior, and template list/get/create/update paths.
 - Addressed review feedback by adding required STO promote `scope` examples and correcting refreshed testing examples to use current `filters`, `params`, and `resource_id` tool input shapes.
 - Verified with `pnpm install --frozen-lockfile`, `pnpm build`, `pnpm docs:check`, and `git diff --check`.
+
+## HTTP MCP Auth Hardening (2026-05-17)
+- [x] Add config for optional HTTP bearer auth and explicit unauthenticated opt-out
+- [x] Add focused regression tests for auth parsing, route authentication, and non-loopback fail-closed behavior
+- [x] Gate all `/mcp` HTTP routes before session creation or session reuse
+- [x] Update README and env documentation so CORS/Host validation are not presented as authentication
+- [x] Run focused tests, typecheck, build, commit, and push
+
+### Plan
+- Keep stdio behavior unchanged.
+- Add `HARNESS_MCP_AUTH_TOKEN` as the HTTP transport bearer token. When set, `/mcp` requires `Authorization: Bearer <token>` for `POST`, `GET`, and `DELETE`.
+- Add `HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP` as an explicit escape hatch. If HTTP binds to a non-loopback host without `HARNESS_MCP_AUTH_TOKEN`, startup fails unless this escape hatch is true.
+- Preserve `/health` as unauthenticated for probes, because it returns only status and session count.
+- Keep Host-header validation and CORS as defense-in-depth controls, not auth controls.

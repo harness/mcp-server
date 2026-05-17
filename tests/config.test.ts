@@ -168,6 +168,33 @@ describe("ConfigSchema", () => {
     }
   });
 
+  it("parses HTTP MCP auth token and unauthenticated opt-out config", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      HARNESS_MCP_AUTH_TOKEN: "shared-secret",
+      HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP: "true",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_MCP_AUTH_TOKEN).toBe("shared-secret");
+      expect(result.data.HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP).toBe(true);
+    }
+  });
+
+  it("treats an empty HTTP MCP auth token as unset", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      HARNESS_MCP_AUTH_TOKEN: "",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_MCP_AUTH_TOKEN).toBeUndefined();
+      expect(result.data.HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP).toBe(false);
+    }
+  });
+
   it("rejects malformed MCP allowed host entries during config validation", () => {
     expect(() =>
       ConfigSchema.parse({
