@@ -857,6 +857,64 @@ describe("harness_execute", () => {
     expect(postCall![0].params).toMatchObject({ pipelineBranchName: "feature/my-fix" });
   });
 
+  it("accepts runtime inputs from the action body schema", async () => {
+    const bodyInputsTemplate = `pipeline:
+  identifier: "body_inputs_pipe"
+  variables:
+    - name: "environment"
+      type: "String"
+      value: "<+input>"
+`;
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetTemplateYaml: bodyInputsTemplate } })
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-body-inputs" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "body_inputs_pipe",
+      body: { inputs: { environment: "prod" } },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const runCall = mockRequest.mock.calls[1]![0] as { method?: string; body?: string };
+    expect(runCall.method).toBe("POST");
+    expect(runCall.body).toContain("environment");
+    expect(runCall.body).toContain("prod");
+  });
+
+  it("accepts input_set_ids from the action body schema", async () => {
+    const inputSetYaml = `inputSet:
+  pipeline:
+    identifier: body_set_pipe
+    variables:
+      - name: x
+        type: String
+        value: "1"
+`;
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetYaml } })
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { planExecutionId: "exec-body-set" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "body_set_pipe",
+      body: { input_set_ids: ["saved_set"] },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledTimes(2);
+    const getCall = mockRequest.mock.calls[0]![0] as { method?: string; path?: string };
+    expect(getCall.method).toBe("GET");
+    expect(getCall.path).toContain("/pipeline/api/inputSets/");
+    expect(getCall.path).toContain("saved_set");
+    const runCall = mockRequest.mock.calls[1]![0] as { method?: string; body?: string };
+    expect(runCall.method).toBe("POST");
+    expect(runCall.body).toContain("body_set_pipe");
+    expect(runCall.body).toContain("x");
+  });
+
   it("uses pipeline_branch when resolving runtime inputs for feature-branch pipeline YAML", async () => {
     const branchTemplate = `pipeline:
   identifier: "branch_pipe"
