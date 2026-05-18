@@ -154,6 +154,7 @@ curl http://localhost:3000/health
 # In multi-user mode, x-harness-api-key and x-harness-account-id are required on initialize.
 curl -i -X POST http://localhost:3000/mcp \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
   -H "Authorization: Bearer $HARNESS_MCP_AUTH_TOKEN" \
   -H "x-harness-api-key: $HARNESS_API_KEY" \
   -H "x-harness-account-id: $HARNESS_ACCOUNT_ID" \
@@ -162,6 +163,7 @@ curl -i -X POST http://localhost:3000/mcp \
 # Subsequent MCP request (use returned session ID)
 curl -X POST http://localhost:3000/mcp \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
   -H "Authorization: Bearer $HARNESS_MCP_AUTH_TOKEN" \
   -H "mcp-session-id: <session-id>" \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
