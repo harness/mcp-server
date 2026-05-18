@@ -43,6 +43,7 @@ export const FAILURE_STATUSES: ReadonlySet<string> = new Set([
   "Aborted",
   "Expired",
   "AbortedByFreeze",
+  "IgnoreFailed",
 ]);
 
 export interface PollOptions {

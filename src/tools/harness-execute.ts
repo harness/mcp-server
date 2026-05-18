@@ -18,7 +18,7 @@ import { sendProgress } from "../utils/progress.js";
 
 const log = createLogger("execute");
 
-const DEFAULT_WAIT_TIMEOUT_SECONDS = 1800;
+const DEFAULT_WAIT_TIMEOUT_SECONDS = 600;
 const DEFAULT_WAIT_POLL_INTERVAL_SECONDS = 3;
 const MAX_WAIT_INTERVAL_MS = 30_000;
 
@@ -65,7 +65,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         body: z.record(z.string(), z.unknown()).describe("Additional body payload for the action").optional(),
         params: z.record(z.string(), z.unknown()).describe("Action-specific parameters. Call harness_describe for available fields per resource_type.").optional(),
         wait: z.boolean().describe("For pipeline run/retry actions: block until the execution reaches a terminal status (Success/Failed/Aborted/Errored/Expired). Server-side polling — a single tool call gives the agent the final outcome instead of an LLM polling loop. Ignored for other actions.").optional(),
-        wait_timeout_seconds: z.number().min(10).max(7200).describe("Max seconds to wait when wait=true. Default 1800 (30 min). Max 7200 (2 h). When the timeout fires, returns execution_timed_out=true with the last observed status.").optional(),
+        wait_timeout_seconds: z.number().min(10).max(7200).describe("Max seconds to wait when wait=true. Default 600 (10 min). Max 7200 (2 h). When the timeout fires, returns execution_timed_out=true with the last observed status.").optional(),
         wait_poll_interval_seconds: z.number().min(2).max(60).describe("Initial poll interval when wait=true (seconds). Default 3. Backoff multiplier 1.5x, capped at 30s.").optional(),
       },
       annotations: {
