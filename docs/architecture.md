@@ -120,7 +120,7 @@ These actions have production blast radius and block on clients without elicitat
 - **Feature Flags:** `fme_feature_flag.kill`, `fme_feature_flag.restore`, `fme_feature_flag.archive`, `fme_feature_flag.unarchive`
 - **Approvals:** `approval_instance.approve`, `approval_instance.reject`
 - **Freeze:** `freeze_window.toggle_status`, `global_freeze.manage`
-- **STO:** `security_exemption.approve`, `security_exemption.reject`, `security_exemption.promote`
+- **STO:** `security_exemption.create`, `security_exemption.approve`, `security_exemption.reject`, `security_exemption.promote`
 - **IDP:** `idp_workflow.execute`
 
 ---
