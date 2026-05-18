@@ -1,6 +1,33 @@
 import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
+const FILTER_FIELDS = [
+  "search",
+  "severity_codes",
+  "issue_types",
+  "target_ids",
+  "target_types",
+  "pipeline_ids",
+  "scan_tools",
+] as const;
+
+type FilterField = typeof FILTER_FIELDS[number];
+
+function hasText(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function hasIssueIds(issueIds: string | undefined): boolean {
+  return issueIds?.split(",").some((id) => id.trim().length > 0) ?? false;
+}
+
+function hasIssueFilter(
+  issueFilterInputSet: Partial<Record<FilterField | "exemption_statuses", string>> | undefined,
+  topLevelFilters: Partial<Record<FilterField | "exemption_statuses", string | undefined>>,
+): boolean {
+  return FILTER_FIELDS.some((field) => hasText(topLevelFilters[field]) || hasText(issueFilterInputSet?.[field]));
+}
+
 export function registerBulkExemptionCreatePrompt(server: McpServer): void {
   server.registerPrompt(
     "bulk-exemption-create",
@@ -54,6 +81,30 @@ export function registerBulkExemptionCreatePrompt(server: McpServer): void {
       link,
       expiration,
     }) => {
+      const hasSelector = hasIssueIds(issue_ids) || hasIssueFilter(issue_filter_input_set, {
+        search,
+        severity_codes,
+        issue_types,
+        target_ids,
+        target_types,
+        pipeline_ids,
+        scan_tools,
+        exemption_statuses,
+      });
+      if (!hasSelector) {
+        return {
+          messages: [{
+            role: "user" as const,
+            content: {
+              type: "text" as const,
+              text: `Cannot create bulk exemptions safely for project "${projectId}" because no issue selector was provided.
+
+Provide issue_ids or at least one narrowing security_issue filter such as search, severity_codes, issue_types, target_ids, target_types, pipeline_ids, or scan_tools. Refusing to generate harness_create instructions because an empty selector would target every non-exempt issue in the project.`,
+            },
+          }],
+        };
+      }
+
       const orgScope = orgId ? `, org_id="${orgId}"` : "";
       const projectScope = `, project_id="${projectId}"`;
       const issueIdsHint = issue_ids ? `\n- issue_ids input: "${issue_ids}"` : "";
