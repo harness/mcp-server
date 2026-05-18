@@ -19,7 +19,7 @@ import { resolveHttpHostValidationOptions } from "./utils/http-hosts.js";
 import { createHttpAuthMiddleware, validateHttpAuthForBindHost, isLoopbackBindHost } from "./utils/http-auth.js";
 import { loadEnvFile } from "./utils/env.js";
 import { createAuditManager, type AuditManager } from "./audit/index.js";
-import { mergeConfigWithSessionHeaders } from "./utils/session-headers.js";
+import { mergeConfigWithSessionHeaders, MissingSessionCredentialsError } from "./utils/session-headers.js";
 
 
 const log = createLogger("main");
@@ -229,10 +229,10 @@ async function startHttp(config: Config, port: number): Promise<void> {
   const host = process.env.HOST || "127.0.0.1";
 
   validateHttpAuthForBindHost(host, config);
-  if (!isLoopbackBindHost(host) && config.HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP) {
+  if (!isLoopbackBindHost(host) && !config.HARNESS_MCP_AUTH_TOKEN && config.HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP) {
     log.warn(
       "HTTP server binding to non-loopback address without authentication. " +
-      "Any client that can reach this address will have full access to Harness resources via the configured API key. " +
+      "Any client that can reach this address will have access to Harness resources. " +
       "Set HARNESS_MCP_AUTH_TOKEN or deploy behind an authenticated reverse proxy.",
       { host, port },
     );
@@ -248,7 +248,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
   app.use((_req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", `http://${host}:${port}`);
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, mcp-session-id, x-harness-pipeline-version, x-harness-auto-approve-risk");
+    res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, mcp-session-id, x-harness-api-key, x-harness-account-id, x-harness-org, x-harness-project, x-harness-pipeline-version, x-harness-auto-approve-risk");
     res.setHeader("Access-Control-Expose-Headers", "mcp-session-id");
     next();
   });
@@ -372,6 +372,17 @@ async function startHttp(config: Config, port: number): Promise<void> {
       await server.connect(transport);
       await transport.handleRequest(req, res, req.body);
     } catch (err) {
+      if (err instanceof MissingSessionCredentialsError) {
+        log.warn("Session rejected — missing credentials", { error: err.message });
+        if (!res.headersSent) {
+          res.status(401).json({
+            jsonrpc: "2.0",
+            error: { code: -32001, message: err.message },
+            id: null,
+          });
+        }
+        return;
+      }
       log.error("Error initializing session", { error: String(err) });
       if (!res.headersSent) {
         res.status(400).json({
@@ -545,11 +556,19 @@ async function main(): Promise<void> {
   const config = loadConfig();
   setLogLevel(config.LOG_LEVEL);
 
+  if (config.HARNESS_MCP_MODE === "multi-user" && transport === "stdio") {
+    throw new Error(
+      "Multi-user mode is only supported with HTTP transport. " +
+      "Use --transport http or set HARNESS_MCP_MODE=single-user for stdio.",
+    );
+  }
+
   log.info("Starting harness-mcp-server", {
     transport,
+    mode: config.HARNESS_MCP_MODE,
     baseUrl: config.HARNESS_BASE_URL,
-    accountId: config.HARNESS_ACCOUNT_ID,
-    defaultOrg: config.HARNESS_ORG,
+    accountId: config.HARNESS_ACCOUNT_ID || "(per-session)",
+    defaultOrg: config.HARNESS_ORG ?? "(none)",
     defaultProject: config.HARNESS_PROJECT ?? "(none)",
     toolsets: config.HARNESS_TOOLSETS ?? "(all)",
   });

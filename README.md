@@ -136,6 +136,16 @@ Operational constraints in HTTP mode:
 - Set `x-harness-pipeline-version: 0` or `1` on the `initialize` request to select V0 or V1 pipeline resources for that HTTP session.
 - Set `x-harness-auto-approve-risk: none|low_write|medium_write|high_write|all` on the `initialize` request to choose a stricter per-session auto-approval threshold. The server caps this value at the deployment-level `HARNESS_AUTO_APPROVE_RISK`, so a session can reduce but not expand the configured approval ceiling.
 
+#### Multi-User Mode
+
+Set `HARNESS_MCP_MODE=multi-user` for shared HTTP deployments where each client authenticates as a different Harness user. In this mode:
+
+- `HARNESS_API_KEY` must **not** be set in the server config — the server holds no Harness credentials.
+- Each session must provide `x-harness-api-key` and `x-harness-account-id` headers on the `initialize` request. Sessions without these headers are rejected with a 401.
+- Sessions may also provide `x-harness-org` and `x-harness-project` headers to set default scope for that session.
+- The Harness API key flows through to every Harness API call for that session, so the audit trail in Harness reflects the real user.
+- `HARNESS_MCP_AUTH_TOKEN` is independent and can still be used as an additional transport-layer gate.
+
 ```bash
 # Health check
 curl http://localhost:3000/health
@@ -502,8 +512,9 @@ The server automatically loads environment variables from a `.env` file in the p
 
 | Variable                    | Required | Default                     | Description                                                                                                                                                                                                                                           |
 | --------------------------- | -------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `HARNESS_API_KEY`           | Yes      | --                          | Harness personal access token or service account token                                                                                                                                                                                                |
-| `HARNESS_ACCOUNT_ID`        | No       | *(from PAT)*                | Harness account identifier. Auto-extracted from PAT tokens; only needed for non-PAT API keys                                                                                                                                                          |
+| `HARNESS_MCP_MODE`          | No       | `single-user`               | Deployment mode: `single-user` (API key in config, used for all sessions) or `multi-user` (HTTP only, per-session credentials via `x-harness-api-key` and `x-harness-account-id` headers)                                                            |
+| `HARNESS_API_KEY`           | Yes*     | --                          | Harness personal access token or service account token. Required in `single-user` mode. Must NOT be set in `multi-user` mode                                                                                                                          |
+| `HARNESS_ACCOUNT_ID`        | No       | *(from PAT)*                | Harness account identifier. Auto-extracted from PAT tokens in single-user mode; sessions provide their own via `x-harness-account-id` in multi-user mode                                                                                              |
 | `HARNESS_BASE_URL`          | No       | `https://app.harness.io`    | Harness API/UI base URL for local stdio or self-hosted HTTP deployments. Set this to environments such as `https://harness0.harness.io` when running the server yourself. It does not affect the managed `https://mcp.harness.io/mcp` hosted endpoint |
 | `HARNESS_ORG`               | No       | --                          | Organization ID. Used when `org_id` is not specified per tool call. If omitted, `org_id` must be provided explicitly. Agents can also discover orgs dynamically via `harness_list(resource_type="organization")`                                      |
 | `HARNESS_PROJECT`           | No       | --                          | Project ID. Used when `project_id` is not specified per tool call. Agents can also discover projects dynamically via `harness_list(resource_type="project")`                                                                                          |
