@@ -52,7 +52,11 @@ export function extractAccountIdFromToken(apiKey: string): string | undefined {
 }
 
 const RawConfigSchema = z.object({
-  HARNESS_API_KEY: z.string().min(1, "HARNESS_API_KEY is required"),
+  HARNESS_MCP_MODE: z.preprocess(
+    emptyStringAsUndefined,
+    z.enum(["single-user", "multi-user"]).default("single-user"),
+  ),
+  HARNESS_API_KEY: optionalStringFromEnv,
   HARNESS_ACCOUNT_ID: optionalStringFromEnv,
   HARNESS_BASE_URL: urlFromEnv("https://app.harness.io"),
   // New names (preferred)
@@ -78,6 +82,8 @@ const RawConfigSchema = z.object({
   ),
   HARNESS_ALLOW_HTTP: booleanFromEnv.default(false),
   HARNESS_MCP_ALLOWED_HOSTS: optionalStringFromEnv.transform(validateAllowedHosts),
+  HARNESS_MCP_AUTH_TOKEN: optionalStringFromEnv,
+  HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP: booleanFromEnv.default(false),
   HARNESS_FME_BASE_URL: urlFromEnv("https://api.split.io"),
   HARNESS_LOG_UNSAFE_BODIES: booleanFromEnv.default(false),
   HARNESS_PIPELINE_VERSION: z.enum(["0", "1"]).optional(),
@@ -89,11 +95,31 @@ const RawConfigSchema = z.object({
 });
 
 export const ConfigSchema = RawConfigSchema.transform((data) => {
-  const accountId = data.HARNESS_ACCOUNT_ID ?? extractAccountIdFromToken(data.HARNESS_API_KEY);
-  if (!accountId) {
+  const isMultiUser = data.HARNESS_MCP_MODE === "multi-user";
+
+  if (isMultiUser && data.HARNESS_API_KEY) {
     throw new Error(
-      "HARNESS_ACCOUNT_ID is required when the API key is not a PAT (pat.<accountId>.<tokenId>.<secret>)",
+      "HARNESS_API_KEY must not be set in multi-user mode. " +
+      "Each session must provide its own API key via the x-harness-api-key header.",
     );
+  }
+
+  if (!isMultiUser && !data.HARNESS_API_KEY) {
+    throw new Error(
+      "HARNESS_API_KEY is required in single-user mode.",
+    );
+  }
+
+  let accountId: string | undefined;
+  if (isMultiUser) {
+    accountId = data.HARNESS_ACCOUNT_ID ?? "";
+  } else {
+    accountId = data.HARNESS_ACCOUNT_ID ?? extractAccountIdFromToken(data.HARNESS_API_KEY!);
+    if (!accountId) {
+      throw new Error(
+        "HARNESS_ACCOUNT_ID is required when the API key is not a PAT (pat.<accountId>.<tokenId>.<secret>)",
+      );
+    }
   }
 
   if (!data.HARNESS_BASE_URL.startsWith("https://") && !data.HARNESS_ALLOW_HTTP) {
@@ -140,7 +166,7 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
   // Remove deprecated keys from output, expose only the canonical names
   const { HARNESS_DEFAULT_ORG_ID: _oldOrg, HARNESS_DEFAULT_PROJECT_ID: _oldProject, ...rest } = data;
 
-  return { ...rest, HARNESS_ACCOUNT_ID: accountId, HARNESS_ORG, HARNESS_PROJECT, HARNESS_AUTO_APPROVE_RISK };
+  return { ...rest, HARNESS_API_KEY: data.HARNESS_API_KEY ?? "", HARNESS_ACCOUNT_ID: accountId, HARNESS_ORG, HARNESS_PROJECT, HARNESS_AUTO_APPROVE_RISK };
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
