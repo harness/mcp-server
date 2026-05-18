@@ -148,6 +148,63 @@ export const stoToolset: ToolsetDefinition = {
           skipCompact: true,
           description: "List security exemptions filtered by status. Recommended `size`: 5 (pass explicitly via `filters` — the shared default of 20 is too large for this resource). Response includes items[], total, page, pageSize, totalPages and `_nextPageHint`. ALWAYS read `_nextPageHint` — it spells out the exact follow-up call, including all active filters. NEVER re-use the same page for a 'next' request, NEVER drop filters between pages, and NEVER change size mid-session.",
         },
+        create: {
+          method: "POST",
+          path: "/sto/api/v2/exemptions",
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
+          preflight: async ({ client, input }) => {
+            const body = (input.body as Record<string, unknown> | undefined) ?? {};
+            // Validate required fields here against raw input (snake_case) rather
+            // than relying on the generic registry check which runs on the built body.
+            const requiredFields = ["issue_id", "type", "reason"] as const;
+            const missing = requiredFields.filter(f => body[f] === undefined);
+            if (missing.length > 0) {
+              throw new Error(
+                `Missing required fields for security_exemption: ${missing.join(", ")}. ` +
+                `Use harness_describe(resource_type="security_exemption") to see the schema.`
+              );
+            }
+            const harnessClient = client as unknown as HarnessClient;
+            body.requester_id = await harnessClient.getCurrentUserId();
+            input.body = body;
+          },
+          bodyBuilder: (input) => {
+            const b = (input.body as Record<string, unknown> | undefined) ?? {};
+            return {
+              issueId: b.issue_id,
+              type: b.type,
+              reason: b.reason,
+              requesterId: b.requester_id,
+              exemptFutureOccurrences: true,
+              pendingChanges: { durationDays: b.duration_days ?? 30 },
+              ...(b.occurrences ? { occurrences: b.occurrences } : {}),
+              ...(b.scan_id ? { scanId: b.scan_id } : {}),
+              ...(b.pipeline_id ? { pipelineId: b.pipeline_id } : {}),
+              ...(b.target_id ? { targetId: b.target_id } : {}),
+              ...(b.search ? { search: b.search } : {}),
+              ...(b.link ? { link: b.link } : {}),
+              ...(b.expiration ? { expiration: b.expiration } : {}),
+            };
+          },
+          responseExtractor: passthrough,
+          description: "Create a new security exemption for an issue. requesterId is always derived from the authenticated PAT and exemptFutureOccurrences is always true.",
+          bodySchema: {
+            description: "Exemption creation fields. Required: issue_id, type, reason.",
+            fields: [
+              { name: "issue_id", type: "string", required: false, description: "REQUIRED. Issue ID to exempt (22-char Harness ID)." },
+              { name: "type", type: "string", required: false, description: "REQUIRED. Exemption type: Compensating Controls | Acceptable Use | Acceptable Risk | False Positive | Fix Unavailable | Other." },
+              { name: "reason", type: "string", required: false, description: "REQUIRED. Text justification for the exemption (max 1024 chars)." },
+              { name: "duration_days", type: "number", required: false, description: "Exemption duration in days (default: 30)." },
+              { name: "occurrences", type: "array", required: false, description: "Specific occurrence IDs (integers) to exempt.", itemType: "number" },
+              { name: "scan_id", type: "string", required: false, description: "Scan ID — exempts all occurrences in that scan." },
+              { name: "pipeline_id", type: "string", required: false, description: "Pipeline ID scope. Use with org/project scope." },
+              { name: "target_id", type: "string", required: false, description: "Target ID scope. Cannot be combined with pipeline scope fields." },
+              { name: "search", type: "string", required: false, description: "Search filter for issue occurrences (e.g. component/CWE expressions)." },
+              { name: "link", type: "string", required: false, description: "Related ticket or reference URL." },
+              { name: "expiration", type: "number", required: false, description: "Unix timestamp at which this exemption expires." },
+            ],
+          },
+        },
       },
       executeActions: {
         approve: {
