@@ -421,7 +421,7 @@
 - [x] Update README public interface tables and operational workflow notes
 - [x] Align architecture/testing docs for STO exemptions and pull request state handling
 - [x] Run docs consistency checks and review the doc-only diff
-- [ ] Commit, push, and open/update a documentation PR
+- [x] Commit, push, and open/update a documentation PR
 
 ### Plan
 - Use recent merged commits and source files as the source of truth; do not document behavior that is not present in code.
