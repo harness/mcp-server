@@ -25,8 +25,8 @@
 | TC-tpl-007 | List | Filter by template_list_type Stable | `harness_list(resource_type="template", template_list_type="Stable")` | Returns only stable templates |
 | TC-tpl-008 | List | Filter by template_list_type LastUpdated | `harness_list(resource_type="template", template_list_type="LastUpdated")` | Returns templates sorted by last updated |
 | TC-tpl-009 | List | Combined filters: type + search + list_type + pagination | `harness_list(resource_type="template", template_type="Step", search_term="shell", template_list_type="Stable", page=0, size=10)` | Returns filtered, paginated templates |
-| TC-tpl-009a | List | List metadata only | `harness_list(resource_type="template", metadata_only=true, page=0, size=10)` | Returns lightweight template metadata from the list-metadata endpoint |
-| TC-tpl-009b | List | List global templates | `harness_list(resource_type="template", global=true, page=0, size=10)` | Returns global template metadata |
+| TC-tpl-009a | List | List metadata only | `harness_list(resource_type="template", filters={metadata_only: true}, page=0, size=10)` | Returns lightweight template metadata from the list-metadata endpoint |
+| TC-tpl-009b | List | List global templates | `harness_list(resource_type="template", filters={global: true}, page=0, size=10)` | Returns global template metadata |
 | TC-tpl-010 | Get | Get template by identifier | `harness_get(resource_type="template", template_id="my_template")` | Returns full template details including YAML |
 | TC-tpl-011 | Get | Get template with specific version_label | `harness_get(resource_type="template", template_id="my_template", version_label="v2")` | Returns template at specified version |
 | TC-tpl-012 | Get | Get template with scope overrides | `harness_get(resource_type="template", template_id="my_template", org_id="other_org", project_id="other_project")` | Returns template from specified org/project |

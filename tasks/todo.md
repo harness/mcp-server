@@ -431,4 +431,5 @@
 ### Review
 - README now reflects current public interfaces for commit create, pull request close, security exemption create, template service paths, pipeline `pipeline_branch`, per-session auto-approval headers, bulk exemption prompt usage, and execution-log download troubleshooting.
 - Supporting docs now align risk classification/testing expectations for STO exemption creation and derived approver IDs, PR state endpoint behavior, and template list/get/create/update paths.
+- Addressed review feedback by adding required STO promote `scope` examples and correcting refreshed testing examples to use current `filters`, `params`, and `resource_id` tool input shapes.
 - Verified with `pnpm install --frozen-lockfile`, `pnpm build`, `pnpm docs:check`, and `git diff --check`.
