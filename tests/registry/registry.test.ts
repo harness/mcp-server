@@ -624,7 +624,7 @@ describe("Registry", () => {
       expect(call.params.projectIdentifier).toBeUndefined();
     });
 
-    it("template v1 update uses project-scoped path when resource_scope='project' with config defaults", async () => {
+    it("template update uses NG API path with pathParams", async () => {
       const templateRegistry = new Registry(makeConfig({
         HARNESS_TOOLSETS: "templates",
         HARNESS_ORG: "default-org",
@@ -641,10 +641,10 @@ describe("Registry", () => {
       });
 
       const call = mockRequest.mock.calls[0][0];
-      expect(call.path).toBe("/v1/orgs/default-org/projects/default-proj/templates/my-template/versions/v2");
+      expect(call.path).toBe("/template/api/templates/update/my-template/v2");
     });
 
-    it("template v1 update uses account-scoped path when resource_scope='account'", async () => {
+    it("template update at account scope uses same NG API path without org/project query params", async () => {
       const templateRegistry = new Registry(makeConfig({
         HARNESS_TOOLSETS: "templates",
         HARNESS_ORG: "default-org",
@@ -661,7 +661,9 @@ describe("Registry", () => {
       });
 
       const call = mockRequest.mock.calls[0][0];
-      expect(call.path).toBe("/v1/templates/my-template/versions/v2");
+      expect(call.path).toBe("/template/api/templates/update/my-template/v2");
+      expect(call.params.orgIdentifier).toBeUndefined();
+      expect(call.params.projectIdentifier).toBeUndefined();
     });
 
     it("does not treat resource-specific scope filters as dispatcher scope", async () => {

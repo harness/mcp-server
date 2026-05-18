@@ -1,27 +1,5 @@
-import type { ToolsetDefinition, PathBuilderConfig } from "../types.js";
+import type { ToolsetDefinition } from "../types.js";
 import { ngExtract, pageExtract } from "../extractors.js";
-
-/**
- * Builds a scope-aware v1 API base path for templates.
- * Uses ONLY explicit input fields (org_id, project_id) — never falls back to
- * config defaults. This lets callers target org/account scope even when
- * HARNESS_PROJECT is configured. The dispatcher still handles default scope
- * injection for NG endpoints (list/get/delete) via query params.
- */
-function templateV1BasePath(input: Record<string, unknown>, _config: PathBuilderConfig): string {
-  const org = input.org_id as string | undefined;
-  const project = input.project_id as string | undefined;
-  const templateId = input.template_id as string;
-  if (!templateId) throw new Error("template_id is required");
-
-  if (org && project) {
-    return `/v1/orgs/${encodeURIComponent(org)}/projects/${encodeURIComponent(project)}/templates/${encodeURIComponent(templateId)}`;
-  }
-  if (org) {
-    return `/v1/orgs/${encodeURIComponent(org)}/templates/${encodeURIComponent(templateId)}`;
-  }
-  return `/v1/templates/${encodeURIComponent(templateId)}`;
-}
 
 /**
  * Builds the NG delete path for templates.
@@ -99,13 +77,9 @@ export const templatesToolset: ToolsetDefinition = {
         },
         update: {
           method: "PUT",
-          path: "/v1/orgs/{org}/projects/{project}/templates/{template}/versions/{version}",
+          path: "/template/api/templates/update/{templateIdentifier}/{versionLabel}",
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
-          pathBuilder: (input, config) => {
-            const version = input.version_label as string;
-            if (!version) throw new Error("version_label is required for template update");
-            return `${templateV1BasePath(input, config)}/versions/${encodeURIComponent(version)}`;
-          },
+          pathParams: { template_id: "templateIdentifier", version_label: "versionLabel" },
           bodyBuilder: (input) => {
             const b = (input.body as Record<string, unknown>) ?? {};
             const templateYaml =
@@ -113,19 +87,13 @@ export const templatesToolset: ToolsetDefinition = {
                 ? b.template_yaml
                 : typeof b.yaml === "string"
                   ? b.yaml
-                  : null;
+                  : typeof input.body === "string"
+                    ? input.body
+                    : null;
             if (!templateYaml) {
               throw new Error("body.template_yaml (or body.yaml) is required: full template YAML string with your changes");
             }
-            const out: Record<string, unknown> = { template_yaml: templateYaml };
-            if (b.identifier !== undefined) out.identifier = b.identifier;
-            if (b.name !== undefined) out.name = b.name;
-            if (b.label !== undefined) out.label = b.label;
-            if (b.yaml_version !== undefined) out.yaml_version = b.yaml_version;
-            if (b.git_details !== undefined) out.git_details = b.git_details;
-            if (b.is_stable !== undefined) out.is_stable = b.is_stable;
-            if (b.comments !== undefined) out.comments = b.comments;
-            return out;
+            return templateYaml;
           },
           bodySchema: {
             description: "Template version update",
@@ -145,19 +113,8 @@ export const templatesToolset: ToolsetDefinition = {
         },
         create: {
           method: "POST",
-          path: "/v1/orgs/{org}/projects/{project}/templates",
+          path: "/template/api/templates",
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
-          pathBuilder: (input, _config) => {
-            const org = input.org_id as string | undefined;
-            const project = input.project_id as string | undefined;
-            if (org && project) {
-              return `/v1/orgs/${encodeURIComponent(org)}/projects/${encodeURIComponent(project)}/templates`;
-            }
-            if (org) {
-              return `/v1/orgs/${encodeURIComponent(org)}/templates`;
-            }
-            return "/v1/templates";
-          },
           bodyBuilder: (input) => {
             const b = (input.body as Record<string, unknown>) ?? {};
             const templateYaml =
@@ -165,26 +122,13 @@ export const templatesToolset: ToolsetDefinition = {
                 ? b.template_yaml
                 : typeof b.yaml === "string"
                   ? b.yaml
-                  : null;
+                  : typeof input.body === "string"
+                    ? input.body
+                    : null;
             if (!templateYaml) {
               throw new Error("body.template_yaml (or body.yaml) is required: full template YAML string");
             }
-            const identifier = (b.identifier as string) ?? "";
-            const name = (b.name as string) ?? "";
-            if (!identifier || !name) {
-              throw new Error("body.identifier and body.name are required when creating a template");
-            }
-            const out: Record<string, unknown> = {
-              template_yaml: templateYaml,
-              identifier,
-              name,
-              label: (b.label ?? b.versionLabel ?? "v1") as string,
-              is_stable: b.is_stable !== false,
-            };
-            if (b.description !== undefined) out.description = b.description;
-            if (b.tags !== undefined) out.tags = b.tags;
-            if (b.comments !== undefined) out.comments = b.comments;
-            return out;
+            return templateYaml;
           },
           bodySchema: {
             description: "Template definition",
