@@ -27,6 +27,8 @@
 | TC-pr-012 | Update PR description | `harness_update(resource_type="pull_request", params={"repo_id":"test-mcp", "pr_number":1}, body={"description":"Updated description"}, org_id="AI_Devops", project_id="Sanity")` | Updates PR description | ⬜ Pending | | |
 | TC-pr-013 | Close a PR | `harness_update(resource_type="pull_request", params={"repo_id":"test-mcp", "pr_number":1}, body={"state":"closed"}, org_id="AI_Devops", project_id="Sanity")` | Changes PR state to closed | ⬜ Pending | | |
 | TC-pr-014 | Reopen a PR | `harness_update(resource_type="pull_request", params={"repo_id":"test-mcp", "pr_number":1}, body={"state":"open"}, org_id="AI_Devops", project_id="Sanity")` | Reopens a closed PR | ⬜ Pending | | |
+| TC-pr-014a | Reject mixed state and metadata update | `harness_update(resource_type="pull_request", params={"repo_id":"test-mcp", "pr_number":1}, body={"state":"closed", "title":"Close this"}, org_id="AI_Devops", project_id="Sanity")` | Returns error telling callers to send state and metadata updates separately | ⬜ Pending | | |
+| TC-pr-014b | Close a PR with execute action | `harness_execute(resource_type="pull_request", action="close", params={"repo_id":"test-mcp", "pr_number":1}, org_id="AI_Devops", project_id="Sanity")` | Changes PR state to closed using the dedicated state endpoint | ⬜ Pending | | |
 | TC-pr-015 | Merge PR with default method | `harness_execute(resource_type="pull_request", action="merge", params={"repo_id":"test-mcp", "pr_number":1}, org_id="AI_Devops", project_id="Sanity")` | Merges PR using default merge method | ⬜ Pending | | |
 | TC-pr-016 | Squash merge PR | `harness_execute(resource_type="pull_request", action="merge", params={"repo_id":"test-mcp", "pr_number":1}, body={"method":"squash","delete_source_branch":true}, org_id="AI_Devops", project_id="Sanity")` | Squash merges PR and deletes source branch | ⬜ Pending | | |
 | TC-pr-017 | Dry run merge | `harness_execute(resource_type="pull_request", action="merge", params={"repo_id":"test-mcp", "pr_number":1}, body={"dry_run":true}, org_id="AI_Devops", project_id="Sanity")` | Simulates merge without executing, returns merge feasibility | ⬜ Pending | | |
@@ -41,11 +43,11 @@
 
 | Metric | Count |
 |--------|-------|
-| Total Tests | 23 |
+| Total Tests | 25 |
 | ✅ Passed | 6 |
 | ❌ Failed | 0 |
 | ⚠️ Blocked | 0 |
-| ⬜ Not Run | 17 |
+| ⬜ Not Run | 19 |
 
 ## Issues Found
 

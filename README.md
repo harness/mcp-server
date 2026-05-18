@@ -132,6 +132,7 @@ Operational constraints in HTTP mode:
 - `GET /health` is the only non-MCP endpoint.
 - Request body size is capped by `HARNESS_MAX_BODY_SIZE_MB` (default `10` MB).
 - Set `x-harness-pipeline-version: 0` or `1` on the `initialize` request to select V0 or V1 pipeline resources for that HTTP session.
+- Set `x-harness-auto-approve-risk: none|low_write|medium_write|high_write|all` on the `initialize` request to choose a stricter per-session auto-approval threshold. The server caps this value at the deployment-level `HARNESS_AUTO_APPROVE_RISK`, so a session can reduce but not expand the configured approval ceiling.
 
 ```bash
 # Health check
@@ -732,6 +733,17 @@ Use this sequence to reduce execution-time input errors:
   - **Constraint:** shorthand expansion is skipped when `inputs.build` is already present (explicit `build` wins).
 3. **Execute the run**
   - `harness_execute(resource_type="pipeline", action="run", resource_id="<pipeline_id>", ...)`
+  - For Git-backed pipelines whose YAML should be loaded from a non-default branch, pass `params.pipeline_branch` (sent to Harness as `pipelineBranchName`):
+
+    ```json
+    {
+      "resource_type": "pipeline",
+      "action": "run",
+      "resource_id": "deploy_app",
+      "params": { "pipeline_branch": "feature/new-stage" },
+      "inputs": { "branch": "main" }
+    }
+    ```
 4. **Optional: combine both**
   - Use `input_set_ids` for the base shape and `inputs` for simple overrides.
 
@@ -1064,11 +1076,13 @@ Only one pipeline YAML resource type is loaded at startup. By default `HARNESS_P
 | -------------- | ---- | --- | ------ | ------ | ------ | -------------------- |
 | `repository`   | x    | x   | x      | x      |        |                      |
 | `branch`       | x    | x   | x      |        | x      |                      |
-| `commit`       | x    | x   |        |        |        | `diff`, `diff_stats` |
+| `commit`       | x    | x   | x      |        |        | `diff`, `diff_stats` |
 | `file_content` |      | x   |        |        |        | `blame`              |
 | `tag`          | x    |     | x      |        | x      |                      |
 | `repo_rule`    | x    | x   |        |        |        |                      |
 | `space_rule`   | x    | x   |        |        |        |                      |
+
+`commit` creation commits one or more file actions directly through the Harness Code API without cloning. Pass `body.title`, `body.branch`, and `body.actions`; each action is `CREATE`, `UPDATE`, `DELETE`, or `MOVE`, and `UPDATE` requires the current blob SHA.
 
 
 ### Artifact Registries
@@ -1088,6 +1102,8 @@ Only one pipeline YAML resource type is loaded at startup. By default `HARNESS_P
 | Resource Type | List | Get | Create | Update | Delete | Execute Actions |
 | ------------- | ---- | --- | ------ | ------ | ------ | --------------- |
 | `template`    | x    | x   | x      | x      | x      |                 |
+
+Template operations use the Harness Template service paths (`/template/api/templates...`). Create and update require the full template YAML string in `body.template_yaml` or `body.yaml`; `version_label` targets a specific version for update/delete, while deleting without `version_label` deletes all versions.
 
 
 ### Dashboards
@@ -1130,11 +1146,13 @@ Only one pipeline YAML resource type is loaded at startup. By default `HARNESS_P
 
 | Resource Type  | List | Get | Create | Update | Delete | Execute Actions |
 | -------------- | ---- | --- | ------ | ------ | ------ | --------------- |
-| `pull_request` | x    | x   | x      | x      |        | `merge`         |
+| `pull_request` | x    | x   | x      | x      |        | `close`, `merge` |
 | `pr_reviewer`  | x    |     | x      |        |        | `submit_review` |
 | `pr_comment`   | x    |     | x      |        |        |                 |
 | `pr_check`     | x    |     |        |        |        |                 |
 | `pr_activity`  | x    |     |        |        |        |                 |
+
+Use `harness_execute(resource_type="pull_request", action="close", ...)` for an explicit close operation. `harness_update` also accepts `body.state` (`open` or `closed`) and routes state changes to the dedicated Harness Code PR state endpoint; send title/description edits in a separate update call.
 
 
 ### Feature Flags
@@ -1258,7 +1276,9 @@ SEI resources are consolidated for token efficiency. Use `metric` or `aspect` pa
 | ----------------------- | ---- | --- | ------ | ------ | ------ | ------------------------------ |
 | `security_issue`        | x    |     |        |        |        |                                |
 | `security_issue_filter` | x    |     |        |        |        |                                |
-| `security_exemption`    | x    |     |        |        |        | `approve`, `reject`, `promote` |
+| `security_exemption`    | x    |     | x      |        |        | `approve`, `reject`, `promote` |
+
+`security_exemption` create is a `high_write` operation. The server derives `requester_id` from the authenticated PAT, sets `exemptFutureOccurrences=true`, and defaults `duration_days` to 30 when not provided. For listing exemptions, pass a small explicit page size (for example `filters: { "status": "Pending", "size": 5 }`) and follow the `_nextPageHint` returned in each response.
 
 
 ### Access Control
@@ -1370,6 +1390,7 @@ Inline PNG chart visualizations rendered from Harness data. These are metadata-o
 | `sbom-compliance-check`     | Audit SBOM and compliance posture for artifacts — license risks, policy violations, component vulnerabilities | `artifactId` (optional), `projectId` (optional)                         |
 | `supply-chain-audit`        | End-to-end software supply chain security audit — provenance, chain of custody, policy compliance             | `projectId` (optional)                                                  |
 | `security-exemption-review` | Review pending security exemptions and make batch approval or rejection decisions                             | `projectId` (optional)                                                  |
+| `bulk-exemption-create`     | Create justified security exemptions for multiple STO issues with explicit scope and duration guidance        | `projectId` (required), `exemption_type` (required), `reason` (required), issue filters (optional) |
 | `access-control-audit`      | Audit user permissions, over-privileged accounts, and role assignments to enforce least-privilege             | `projectId` (optional), `orgId` (optional)                              |
 
 
@@ -1777,6 +1798,8 @@ The Harness MCP server pairs well with **[Harness Skills](https://github.com/har
 | `Read-only mode is enabled ... operations are not allowed`                       | `HARNESS_READ_ONLY=true` blocks create/update/delete/execute                                         | Set `HARNESS_READ_ONLY=false` if write operations are intended                                                                       |
 | Pipeline run fails pre-flight with unresolved required inputs                    | Provided `inputs` did not cover required runtime placeholders                                        | Fetch `runtime_input_template`, supply missing simple keys, or use `input_set_ids` for structural inputs                             |
 | Pipeline CI shorthand (`branch`, `tag`, `pr_number`, `commit_sha`) did not apply | `inputs.build` was already provided, so shorthand expansion was intentionally skipped                | Remove `inputs.build` to use shorthand expansion, or keep full explicit `build` structure                                            |
+| Pipeline run loaded the wrong YAML revision                                     | The pipeline definition is stored in Git and the run did not specify the desired pipeline branch      | Pass `params.pipeline_branch` on the `run` action; this maps to Harness `pipelineBranchName`                                         |
+| Execution logs are empty or blob downloads return 403                           | Harness-hosted log blob URLs require the configured Harness client/auth path, especially for internal or self-managed hosts | Keep `HARNESS_BASE_URL` pointed at the target Harness host and use `harness_get(resource_type="execution_log", ...)` or `harness_diagnose(..., include_logs=true)` rather than bypassing the MCP client |
 | `Operation declined by user`                                                     | User declined the elicitation confirmation dialog                                                    | The user chose not to proceed — verify the operation details and retry if intended                                                   |
 | `body.template_yaml (or body.yaml) is required` for template create/update       | Template APIs expect full YAML payload                                                               | Provide full `template_yaml` string in `body`; for deletes, pass `version_label` to delete one version (omit to delete all versions) |
 | `HARNESS_BASE_URL must use HTTPS` on startup                                     | `HARNESS_BASE_URL` is set to an HTTP URL                                                             | Use HTTPS, or set `HARNESS_ALLOW_HTTP=true` for local development                                                                    |

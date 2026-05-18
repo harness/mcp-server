@@ -415,3 +415,20 @@
 - Added focused regression coverage for capping and lowering behavior, and updated the architecture note to describe the cap.
 - Reviewed other recent changes (schema sync, commit create, STO pagination, pipeline branch loading, release workflow idempotency) and did not find another high-confidence critical issue to patch in this run.
 - Verified with `pnpm test tests/utils/session-headers.test.ts tests/utils/elicitation.test.ts`, `pnpm typecheck`, `pnpm build`, full `pnpm test`, `pnpm docs:check`, and `git diff --check`.
+
+## Documentation Alignment Automation (2026-05-18)
+- [x] Audit recent user-facing code changes against existing docs
+- [x] Update README public interface tables and operational workflow notes
+- [x] Align architecture/testing docs for STO exemptions and pull request state handling
+- [x] Run docs consistency checks and review the doc-only diff
+- [ ] Commit, push, and open/update a documentation PR
+
+### Plan
+- Use recent merged commits and source files as the source of truth; do not document behavior that is not present in code.
+- Keep the updates in existing documentation surfaces (`README.md`, `docs/architecture.md`, and targeted `docs/testing/*` files) instead of creating redundant pages.
+- Prioritize recent public interfaces that agents rely on: commit creation, PR close, STO exemption create/promote behavior, pipeline `pipeline_branch`, template API paths, session auto-approve headers, and log download troubleshooting.
+
+### Review
+- README now reflects current public interfaces for commit create, pull request close, security exemption create, template service paths, pipeline `pipeline_branch`, per-session auto-approval headers, bulk exemption prompt usage, and execution-log download troubleshooting.
+- Supporting docs now align risk classification/testing expectations for STO exemption creation and derived approver IDs, PR state endpoint behavior, and template list/get/create/update paths.
+- Verified with `pnpm install --frozen-lockfile`, `pnpm build`, `pnpm docs:check`, and `git diff --check`.

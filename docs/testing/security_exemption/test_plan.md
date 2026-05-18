@@ -6,7 +6,7 @@
 | **Display Name** | Security Exemption |
 | **Toolset** | sto |
 | **Scope** | project |
-| **Operations** | list |
+| **Operations** | list, create |
 | **Execute Actions** | approve, reject, promote |
 | **Identifier Fields** | exemption_id |
 | **Filter Fields** | status, search |
@@ -25,6 +25,7 @@
 | TC-se-007 | List | Combined status + search | `harness_list(resource_type="security_exemption", status="Pending", search="critical")` | Returns Pending exemptions matching search |
 | TC-se-008 | List | Pagination - page 0, size 5 | `harness_list(resource_type="security_exemption", page=0, size=5)` | Returns first 5 exemptions |
 | TC-se-009 | List | Pagination - page 1 | `harness_list(resource_type="security_exemption", page=1, size=5)` | Returns second page of exemptions |
+| TC-se-009a | Create | Create exemption with required fields | `harness_create(resource_type="security_exemption", body={issue_id: "<issue_id>", type: "Acceptable Risk", reason: "Accepted by security review", duration_days: 30})` | Creates exemption; requester is derived from the authenticated PAT |
 | TC-se-010 | Execute | Approve exemption | `harness_execute(resource_type="security_exemption", action="approve", exemption_id="<id>", body={approver_id: "<uuid>", comment: "Approved"})` | Exemption status changes to Approved |
 | TC-se-011 | Execute | Approve without comment | `harness_execute(resource_type="security_exemption", action="approve", exemption_id="<id>", body={approver_id: "<uuid>"})` | Exemption approved without comment |
 | TC-se-012 | Execute | Reject exemption | `harness_execute(resource_type="security_exemption", action="reject", exemption_id="<id>", body={approver_id: "<uuid>", comment: "Rejected - risk too high"})` | Exemption status changes to Rejected |
@@ -32,7 +33,7 @@
 | TC-se-014 | Execute | Promote with pipeline_id scope | `harness_execute(resource_type="security_exemption", action="promote", exemption_id="<id>", body={approver_id: "<uuid>", pipeline_id: "<pid>"})` | Exemption promoted scoped to pipeline |
 | TC-se-015 | Execute | Promote with target_id scope | `harness_execute(resource_type="security_exemption", action="promote", exemption_id="<id>", body={approver_id: "<uuid>", target_id: "<tid>"})` | Exemption promoted scoped to target |
 | TC-se-016 | Scope | Custom org and project | `harness_list(resource_type="security_exemption", org_id="custom_org", project_id="custom_project")` | Returns exemptions for specified org/project |
-| TC-se-017 | Error | Approve without approver_id | `harness_execute(resource_type="security_exemption", action="approve", exemption_id="<id>", body={})` | Returns validation error — approver_id required |
+| TC-se-017 | Execute | Approve without approver_id | `harness_execute(resource_type="security_exemption", action="approve", exemption_id="<id>", body={})` | Derives approver_id from the authenticated PAT and approves the exemption |
 | TC-se-018 | Error | Invalid exemption_id | `harness_execute(resource_type="security_exemption", action="approve", exemption_id="nonexistent", body={approver_id: "<uuid>"})` | Returns not found error |
 | TC-se-019 | Error | Invalid action name | `harness_execute(resource_type="security_exemption", action="invalid_action", exemption_id="<id>")` | Returns error — unknown action |
 | TC-se-020 | Edge | Approve already-approved exemption | `harness_execute(resource_type="security_exemption", action="approve", ...)` on approved exemption | Returns error or idempotent success |
@@ -41,9 +42,10 @@
 ## Notes
 - STO API uses non-standard scope params: `accountId`, `orgId`, `projectId`
 - List endpoint is POST-based at `/sto/api/v2/frontend/exemptions`
+- Create endpoint is POST-based at `/sto/api/v2/exemptions`; `requester_id` is derived from the PAT and `duration_days` defaults to 30.
 - status filter enum: Pending, Approved, Rejected, Expired, Canceled
 - Execute actions use PUT method with path params
-- approve body: `approver_id` (required), `comment` (optional)
-- reject body: `approver_id` (required), `comment` (optional)
-- promote body: `approver_id` (required), `comment` (optional), `pipeline_id` (optional), `target_id` (optional)
+- approve body: `approver_id` (optional; derived from PAT when omitted), `comment` (optional)
+- reject body: `approver_id` (optional; derived from PAT when omitted), `comment` (optional)
+- promote body: `approver_id` (optional; derived from PAT when omitted), `comment` (optional), `pipeline_id` (optional), `target_id` (optional)
 - STO gateway may have auth limitations with x-api-key PATs

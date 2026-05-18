@@ -7,7 +7,7 @@
 | **Toolset** | pull-requests |
 | **Scope** | account |
 | **Operations** | list, get, create, update |
-| **Execute Actions** | merge |
+| **Execute Actions** | close, merge |
 | **Identifier Fields** | repo_id, pr_number |
 | **Filter Fields** | state, query |
 | **Deep Link** | Yes |
@@ -30,6 +30,8 @@
 | TC-pr-012 | Update | Update PR description | `harness_update(resource_type="pull_request", repo_id="my-repo", pr_number=1, body={"description": "Updated description with more details"})` | Updates PR description |
 | TC-pr-013 | Update | Close a PR | `harness_update(resource_type="pull_request", repo_id="my-repo", pr_number=1, body={"state": "closed"})` | Changes PR state to closed |
 | TC-pr-014 | Update | Reopen a PR | `harness_update(resource_type="pull_request", repo_id="my-repo", pr_number=1, body={"state": "open"})` | Reopens a closed PR |
+| TC-pr-014a | Error | Reject mixed state and metadata update | `harness_update(resource_type="pull_request", repo_id="my-repo", pr_number=1, body={"state": "closed", "title": "Close this"})` | Returns error telling callers to send state and metadata updates separately |
+| TC-pr-014b | Execute | Close a PR with execute action | `harness_execute(resource_type="pull_request", action="close", repo_id="my-repo", pr_number=1)` | Changes PR state to closed using the dedicated state endpoint |
 | TC-pr-015 | Execute | Merge PR with default method | `harness_execute(resource_type="pull_request", action="merge", repo_id="my-repo", pr_number=1)` | Merges PR using default merge method |
 | TC-pr-016 | Execute | Squash merge PR | `harness_execute(resource_type="pull_request", action="merge", repo_id="my-repo", pr_number=1, body={"method": "squash", "delete_source_branch": true})` | Squash merges PR and deletes source branch |
 | TC-pr-017 | Execute | Dry run merge | `harness_execute(resource_type="pull_request", action="merge", repo_id="my-repo", pr_number=1, body={"dry_run": true})` | Simulates merge without executing, returns merge feasibility |
@@ -44,6 +46,8 @@
 - Pull request scope is `account` — org_id/project_id are optional and determine repo scope
 - Identifier fields: `repo_id` (always required) and `pr_number`
 - State filter supports enum values: `open`, `closed`, `merged`
+- State updates (`body.state` of `open` or `closed`) use the dedicated Harness Code `/state` endpoint and cannot be combined with `title` or `description` in the same update call.
+- The `close` execute action is a shorthand for setting pull request state to `closed`.
 - Merge action supports methods: `merge`, `squash`, `rebase`, `fast-forward`
 - Merge body supports `source_sha` for optimistic locking
 - Deep link format: `/ng/account/{accountId}/module/code/orgs/{orgIdentifier}/projects/{projectIdentifier}/repos/{repoIdentifier}/pull-requests/{prNumber}`
