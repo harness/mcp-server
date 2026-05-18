@@ -378,3 +378,40 @@
 - Added conditional PR update routing so state changes use the Harness Code state endpoint while title/description updates continue using PATCH.
 - Added `skipScopeBodyInjection` for endpoints that must not receive org/project fields in POST/PUT bodies, and applied it to PR state changes so the request body remains `{ state }`.
 - Verified with `pnpm test tests/registry/pull-requests.test.ts`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
+
+## Slack Bug Triage: v3.0.2 Release Idempotency (2026-05-15)
+- [x] Read the trigger thread and nearby channel context for the git tag report
+- [x] Confirm the v3.0.2 tag, GitHub Release, npm latest version, and failed release workflow run
+- [x] Add failing regression coverage for release workflow idempotency
+- [x] Make `release.yml` skip or tolerate already-published npm/GitHub release artifacts
+- [x] Run focused tests, typecheck/build, commit, push, open PR, and reply in Slack thread
+
+### Plan
+- Keep the fix in `.github/workflows/release.yml`; the package metadata and tag are already correct at `3.0.2`.
+- Add a workflow-structure regression test so future edits do not reintroduce unconditional `npm publish` or `gh release create`.
+- Make npm publishing idempotent by checking the package/version first and rechecking after publish failures before failing the job.
+- Make GitHub Release creation idempotent by skipping `gh release create` when the tag release already exists.
+
+### Review
+- Confirmed the release workflow failed at `npm publish` for `v3.0.2` because npm already had `harness-mcp-v2@3.0.2`; package metadata, the Git tag, GitHub Release, and npm `latest` were otherwise correct.
+- Added `tests/release-workflow.test.ts` to require idempotency guards for npm publish and GitHub Release creation.
+- Updated `.github/workflows/release.yml` to skip npm publish when the package version already exists, tolerate a publish race by rechecking npm after failure, and skip `gh release create` when the release already exists.
+- Verified with `pnpm test tests/release-workflow.test.ts tests/release-metadata.test.ts`, `pnpm typecheck`, `pnpm build`, `pnpm docs:check`, and full `pnpm test`.
+
+## Critical Bug Inspection (2026-05-16)
+- [x] Inspect recent commits for high-severity behavioral regressions
+- [x] Trace suspicious changes through caller chains and downstream behavior
+- [x] Implement a minimal fix only if a concrete critical bug is confirmed
+- [x] Run focused verification and report the outcome
+
+### Plan
+- Review recent merged commits since the last critical bug inspection, prioritizing code-path changes over docs/schema churn.
+- Focus tracing on repository write actions, release workflow behavior, schema sync side effects, and any client/request construction changes.
+- If no data-loss, crash, security, or major user-facing breakage has a concrete trigger, do not open a PR; post a concise no-critical-findings summary instead.
+
+### Review
+- Found a safety regression from the per-session auto-approve header: any HTTP client starting a session could set `x-harness-auto-approve-risk: all` and widen the session beyond the deployment's configured `HARNESS_AUTO_APPROVE_RISK`, bypassing the server operator's confirmation threshold for writes and destructive operations.
+- Capped session header auto-approve values at the server-configured threshold while preserving the ability for a session to lower its own threshold.
+- Added focused regression coverage for capping and lowering behavior, and updated the architecture note to describe the cap.
+- Reviewed other recent changes (schema sync, commit create, STO pagination, pipeline branch loading, release workflow idempotency) and did not find another high-confidence critical issue to patch in this run.
+- Verified with `pnpm test tests/utils/session-headers.test.ts tests/utils/elicitation.test.ts`, `pnpm typecheck`, `pnpm build`, full `pnpm test`, `pnpm docs:check`, and `git diff --check`.

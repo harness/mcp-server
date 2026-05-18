@@ -18,24 +18,10 @@ import { configureElicitation } from "./utils/elicitation.js";
 import { resolveHttpHostValidationOptions } from "./utils/http-hosts.js";
 import { loadEnvFile } from "./utils/env.js";
 import { createAuditManager, type AuditManager } from "./audit/index.js";
+import { mergeConfigWithSessionHeaders } from "./utils/session-headers.js";
 
 
 const log = createLogger("main");
-
-const PIPELINE_VERSION_HEADER = "x-harness-pipeline-version";
-
-function parsePipelineVersionHeader(req: import("express").Request): "0" | "1" | undefined {
-  const raw = req.headers[PIPELINE_VERSION_HEADER];
-  const s = Array.isArray(raw) ? raw[0] : raw;
-  if (s === "0" || s === "1") return s;
-  return undefined;
-}
-
-function mergeConfigWithPipelineVersion(baseConfig: Config, req: import("express").Request): Config {
-  const pv = parsePipelineVersionHeader(req);
-  if (pv === undefined) return baseConfig;
-  return { ...baseConfig, HARNESS_PIPELINE_VERSION: pv };
-}
 
 interface HarnessServerResult {
   server: McpServer;
@@ -261,7 +247,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
   app.use((_req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", `http://${host}:${port}`);
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, mcp-session-id, x-harness-pipeline-version");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, mcp-session-id, x-harness-pipeline-version, x-harness-auto-approve-risk");
     res.setHeader("Access-Control-Expose-Headers", "mcp-session-id");
     next();
   });
@@ -364,7 +350,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
     let server: McpServer | undefined;
     let transport: StreamableHTTPServerTransport | undefined;
     try {
-      const sessionConfig = mergeConfigWithPipelineVersion(config, req);
+      const sessionConfig = mergeConfigWithSessionHeaders(config, req.headers);
       const result = createHarnessServer(sessionConfig, sharedAuditManager);
       server = result.server;
       transport = new StreamableHTTPServerTransport({

@@ -48,15 +48,19 @@ export async function confirmViaElicitation({
   toolName,
   message,
   risk,
+  autoApproveRisk,
 }: {
   server: McpServer;
   toolName: string;
   message: string;
   /** The risk level of the operation (from operationPolicy). */
   risk: RiskLevel;
+  /** Optional per-session threshold. Falls back to the process default. */
+  autoApproveRisk?: AutoApproveRisk;
 }): Promise<ElicitationResult> {
-  if (shouldAutoApprove(risk, _autoApproveRisk)) {
-    log.debug("Auto-approved (risk within autonomous threshold)", { toolName, risk, threshold: _autoApproveRisk });
+  const threshold = autoApproveRisk ?? _autoApproveRisk;
+  if (shouldAutoApprove(risk, threshold)) {
+    log.debug("Auto-approved (risk within autonomous threshold)", { toolName, risk, threshold });
     return { proceed: true, method: "auto_approved" };
   }
 
