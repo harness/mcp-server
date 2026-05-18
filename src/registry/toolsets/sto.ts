@@ -121,6 +121,195 @@ export const stoToolset: ToolsetDefinition = {
       },
     },
 
+    // ── Pipeline Security Issues (per-execution view) ─────────────────
+    {
+      resourceType: "pipeline_security_issue",
+      displayName: "Pipeline Security Issue",
+      description:
+        "Security issues from STO's per-execution **Pipeline Security view** — the issues shown on a "
+        + "specific pipeline execution's Security tab. Keyed by REQUIRED `execution_id`. Use this "
+        + "(not `security_issue`, which is the cross-execution Issues page) when the user asks about "
+        + "issues that caused a specific pipeline run to fail, or when correlating to a policy "
+        + "evaluation. Response merges `existing` + `new` issue summaries into a single `items[]` "
+        + "(each row tagged with `_partition`) and exposes per-partition counts + matching-step "
+        + "metadata as side-channels. PAGINATION: this endpoint uses DIFF pagination — not standard "
+        + "`page`/`size`. Use `page_existing` / `page_size_existing` (for the 'existing' partition) "
+        + "and `page_new` / `page_size_new` (for the 'new' partition) independently. Each defaults to "
+        + "page 0, size 50 (max 100). For most chat-driven workflows, calling once with both sizes "
+        + "set to 100 returns the full page of each partition.",
+      searchAliases: ["pipeline security", "execution issues", "security tab", "issues for execution", "issues that failed pipeline"],
+      relatedResources: [
+        { resourceType: "pipeline_security_step", relationship: "sibling", description: "List the STO scan steps (Trivy, Semgrep, …) that ran in this execution. Required to attribute an issue to its source scanner." },
+        { resourceType: "security_exemption", relationship: "child", description: "Create exemptions for issues from this view (one per issue_id)." },
+        { resourceType: "policy_evaluation", relationship: "sibling", description: "Find OPA policy evaluations that ran on the same execution_id to learn why the pipeline was denied." },
+      ],
+      toolset: "sto",
+      scope: "project",
+      scopeParams: STO_SCOPE,
+      identifierFields: ["issue_id"],
+      listFilterFields: [
+        { name: "execution_id", description: "REQUIRED. Pipeline plan execution ID (e.g. 'ehsPKtczTRO5CUDAt-NR'). Identifies which execution's Pipeline Security view to read.", required: true },
+        { name: "stages", description: "Comma-separated stage identifiers (or parent.stage). Narrows issues to specific pipeline stages." },
+        { name: "steps", description: "Comma-separated step identifiers as 'stage.step' or 'parent.stage.step'. Narrows issues to specific scan steps (Trivy / Semgrep / …)." },
+        { name: "target_ids", description: "Comma-separated 22-char target IDs." },
+        { name: "target_types", description: "Comma-separated target types.", enum: ["repository", "container", "instance", "configuration"] },
+        { name: "product_names", description: "Comma-separated scanner product names (e.g. 'owasp,zap')." },
+        { name: "severity_codes", description: "Comma-separated severities.", enum: ["Critical", "High", "Medium", "Low", "Info"] },
+        { name: "include_exempted", type: "boolean", description: "Include already-exempted issues. Defaults to true on the API; pass false when looking for unexempted candidates." },
+        { name: "search", description: "Free-text search across issue title / CWE / CVE." },
+        { name: "issue_types", description: "Comma-separated issue types.", enum: ["SAST", "DAST", "SCA", "IAC", "SECRET", "MISCONFIG", "BUG_SMELLS", "CODE_SMELLS", "CODE_COVERAGE", "EXTERNAL_POLICY", "UNKNOWN"] },
+        { name: "status", description: "Comma-separated issue statuses.", enum: ["ACTIVE", "REMEDIATED", "PENDING_EXEMPTION", "EXEMPTED", "PARTIALLY_EXEMPTED", "REJECTED"] },
+        { name: "origins", description: "Comma-separated origin layers.", enum: ["app", "base", "no_layer"] },
+        { name: "origin_statuses", description: "Comma-separated origin statuses.", enum: ["approved", "unapproved"] },
+        { name: "epss", description: "EPSS probability bucket (single select).", enum: ["all", "gte_15", "gte_5", "gte_1", "na"] },
+        { name: "epss_percentile", description: "EPSS percentile bucket (single select).", enum: ["all", "gte_99", "gte_90", "gte_80", "na"] },
+        { name: "severity_overridden", description: "Filter by whether severity was manually overridden.", enum: ["Yes", "No"] },
+        { name: "reachability", description: "Reachability filter.", enum: ["reachable", "unknown-reachability"] },
+        { name: "exploitability", description: "Exploitability filter.", enum: ["yes", "no"] },
+        // Diff pagination — this endpoint paginates `existing` and `new` partitions independently.
+        // See DiffPaginationRequestParams in sto-core/design/frontend.go.
+        { name: "page_existing", type: "number", description: "0-indexed page number for the 'existing' issue partition (defaults to 0). The endpoint paginates existing and new issues independently — NOT a single combined cursor." },
+        { name: "page_size_existing", type: "number", description: "Page size for the 'existing' partition (1–100, default 50)." },
+        { name: "page_new", type: "number", description: "0-indexed page number for the 'new' issue partition (defaults to 0)." },
+        { name: "page_size_new", type: "number", description: "Page size for the 'new' partition (1–100, default 50)." },
+      ],
+      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/sto/executions/{executionId}/pipeline",
+      operations: {
+        list: {
+          method: "GET",
+          path: "/sto/api/v2/frontend/pipeline-security/issues",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            execution_id: "executionId",
+            stages: "stages",
+            steps: "steps",
+            target_ids: "targetIds",
+            target_types: "targetTypes",
+            product_names: "productNames",
+            severity_codes: "severityCodes",
+            include_exempted: "includeExempted",
+            search: "search",
+            issue_types: "issueTypes",
+            status: "status",
+            origins: "origins",
+            origin_statuses: "originStatuses",
+            epss: "epss",
+            epss_percentile: "epssPercentile",
+            severity_overridden: "severityOverridden",
+            reachability: "reachability",
+            exploitability: "exploitability",
+            // Diff pagination — NOT standard page/pageSize. This endpoint splits
+            // pagination between the 'existing' and 'new' partitions.
+            page_existing: "pageExisting",
+            page_size_existing: "pageSizeExisting",
+            page_new: "pageNew",
+            page_size_new: "pageSizeNew",
+          },
+          responseExtractor: (raw: unknown): unknown => {
+            // Pipeline Security endpoint (sto-core PipelineSecurityIssuesResult) returns:
+            //   { existing: { issues: [...], pagination: { totalItems, ... } },
+            //     new:      { issues: [...], pagination: { totalItems, ... } },
+            //     counts: {...}, matchingSteps: [...] }
+            // NOTE: the partition payload key is `issues` (not `items`) and totals live
+            // under `pagination.totalItems` (not a top-level `totalItems`). We flatten
+            // existing+new into a single items[] for prompt consumption and preserve
+            // the partitioned counts + matchingSteps as side-channels.
+            if (raw === null || raw === undefined || typeof raw !== "object") return raw;
+            type Partition = {
+              issues?: unknown[];
+              items?: unknown[]; // defensive: handle older or alternate shapes
+              pagination?: { totalItems?: number };
+              totalItems?: number; // defensive
+            };
+            const r = raw as {
+              existing?: Partition;
+              new?: Partition;
+              counts?: unknown;
+              matchingSteps?: unknown;
+            };
+            const partitionItems = (p: Partition | undefined): unknown[] => {
+              if (!p) return [];
+              if (Array.isArray(p.issues)) return p.issues;
+              if (Array.isArray(p.items)) return p.items;
+              return [];
+            };
+            const partitionTotal = (p: Partition | undefined, fallback: number): number => {
+              if (!p) return fallback;
+              if (typeof p.pagination?.totalItems === "number") return p.pagination.totalItems;
+              if (typeof p.totalItems === "number") return p.totalItems;
+              return fallback;
+            };
+            const existingItems = partitionItems(r.existing);
+            const newItems = partitionItems(r.new);
+            // Tag each row so the prompt can tell which partition it came from.
+            const tagged = [
+              ...existingItems.map(it => (typeof it === "object" && it !== null ? { ...it, _partition: "existing" } : it)),
+              ...newItems.map(it => (typeof it === "object" && it !== null ? { ...it, _partition: "new" } : it)),
+            ];
+            const existingTotal = partitionTotal(r.existing, existingItems.length);
+            const newTotal = partitionTotal(r.new, newItems.length);
+            return {
+              items: tagged,
+              total: existingTotal + newTotal,
+              existing_total: existingTotal,
+              new_total: newTotal,
+              counts: r.counts,
+              matching_steps: r.matchingSteps,
+            };
+          },
+          skipCompact: true,
+          description: "List the security issues shown on a specific pipeline execution's Security tab. Requires execution_id. Flattens existing + new partitions into items[]; each item is tagged with _partition.",
+        },
+      },
+    },
+
+    // ── Pipeline Security Steps (scan steps for an execution) ─────────
+    {
+      resourceType: "pipeline_security_step",
+      displayName: "Pipeline Security Scan Step",
+      description:
+        "STO scan steps (Trivy / Semgrep / Snyk / …) that ran inside a specific pipeline execution. "
+        + "Use to attribute Pipeline Security issues to their source scanner, or to narrow a "
+        + "`pipeline_security_issue` query by `steps`. Keyed by REQUIRED `execution_id`. Response also "
+        + "carries `reachabilityFlag` / `exploitabilityFlag` indicating whether reachability or "
+        + "exploitability analysis is available for this execution.",
+      searchAliases: ["scan steps", "sto steps", "pipeline scan steps", "execution scan steps"],
+      relatedResources: [
+        { resourceType: "pipeline_security_issue", relationship: "sibling", description: "List issues for the same execution; filter by 'steps' to scope to one scanner." },
+      ],
+      toolset: "sto",
+      scope: "project",
+      scopeParams: STO_SCOPE,
+      identifierFields: [],
+      listFilterFields: [
+        { name: "execution_id", description: "REQUIRED. Pipeline plan execution ID.", required: true },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "/sto/api/v2/frontend/pipeline-security/steps",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            execution_id: "executionId",
+          },
+          responseExtractor: (raw: unknown): unknown => {
+            // Response: { steps: [...], reachabilityFlag: bool, exploitabilityFlag: bool }
+            if (raw === null || raw === undefined || typeof raw !== "object") return raw;
+            const r = raw as { steps?: unknown[]; reachabilityFlag?: boolean; exploitabilityFlag?: boolean };
+            const steps = Array.isArray(r.steps) ? r.steps : [];
+            return {
+              items: steps,
+              total: steps.length,
+              reachability_flag: r.reachabilityFlag ?? false,
+              exploitability_flag: r.exploitabilityFlag ?? false,
+            };
+          },
+          skipCompact: true,
+          description: "List STO scan steps that ran in a given pipeline execution. Use to map issues back to their source scanner.",
+        },
+      },
+    },
+
     // ── Security Exemptions ────────────────────────────────────────────
     {
       resourceType: "security_exemption",
