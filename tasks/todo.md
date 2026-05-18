@@ -415,3 +415,16 @@
 - Added focused regression coverage for capping and lowering behavior, and updated the architecture note to describe the cap.
 - Reviewed other recent changes (schema sync, commit create, STO pagination, pipeline branch loading, release workflow idempotency) and did not find another high-confidence critical issue to patch in this run.
 - Verified with `pnpm test tests/utils/session-headers.test.ts tests/utils/elicitation.test.ts`, `pnpm typecheck`, `pnpm build`, full `pnpm test`, `pnpm docs:check`, and `git diff --check`.
+
+## Critical Bug Inspection (2026-05-18)
+- [x] Inspect recent commits for high-severity behavioral regressions
+- [x] Trace the new bulk STO exemption create prompt through the generated tool workflow
+- [x] Add a selector guard so empty bulk exemption prompts do not create project-wide exemptions
+- [x] Add prompt regression tests for the refusal and explicit issue ID paths
+- [x] Run focused and full verification, commit, push, and open a PR
+
+### Review
+- Found that `bulk-exemption-create` could be invoked with no `issue_ids` or issue filters because all selector inputs were optional.
+- The generated prompt then instructed agents to list all project security issues and create exemptions for every non-exempt finding, potentially suppressing an entire project's vulnerabilities.
+- Added prompt-level selector detection that refuses to emit `harness_create` instructions unless `issue_ids` or at least one narrowing security issue filter is present.
+- Verified with `pnpm test tests/prompts/bulk-exemption-create.test.ts`, `pnpm typecheck`, `pnpm build`, focused prompt tests, full `pnpm test`, `pnpm docs:check`, and `git diff --check`.
