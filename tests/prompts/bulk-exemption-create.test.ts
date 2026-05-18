@@ -20,7 +20,7 @@ async function createTestClient(): Promise<Client> {
   ]);
 
   return client;
-}
+});
 
 function messageText(result: Awaited<ReturnType<Client["getPrompt"]>>): string {
   return (result.messages[0].content as { type: string; text: string }).text;
