@@ -967,6 +967,84 @@ describe("harness_execute", () => {
     expect(data._note).toContain("fresh pipeline run");
   });
 
+  // Single-poll wait tests verify the wiring (extract execution_id, poll once,
+  // merge envelope fields). Multi-poll backoff and abort handling are covered
+  // by the unit tests in tests/utils/poll-execution.test.ts.
+  it("extracts execution_id from the live planExecution.uuid response shape", async () => {
+    // Real Harness response wraps the ID inside { planExecution: { uuid, metadata: { executionUuid } } }
+    mockRequest
+      .mockResolvedValueOnce({
+        data: {
+          planExecution: {
+            uuid: "exec-wait-uuid",
+            status: "RUNNING",
+            metadata: { executionUuid: "exec-wait-uuid", pipelineIdentifier: "wait_pipe" },
+          },
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          pipelineExecutionSummary: {
+            planExecutionId: "exec-wait-uuid",
+            status: "Success",
+            pipelineIdentifier: "wait_pipe",
+            startTs: 1_700_000_000_000,
+            endTs: 1_700_000_010_000,
+          },
+        },
+      });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "wait_pipe",
+      wait: true,
+      wait_poll_interval_seconds: 2,
+      wait_timeout_seconds: 10,
+    });
+
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as Record<string, unknown>;
+    expect(data.execution_status).toBe("Success");
+    expect(data.execution_terminal).toBe(true);
+
+    // Confirm the extracted ID was used to build the poll URL
+    const pollCall = mockRequest.mock.calls[1]![0] as { path?: string };
+    expect(pollCall.path).toBe("/pipeline/api/pipelines/execution/v2/exec-wait-uuid");
+  });
+
+  it("attaches a diagnose hint when the awaited execution fails", async () => {
+    mockRequest
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-wait-fail" } })
+      .mockResolvedValueOnce({
+        data: {
+          pipelineExecutionSummary: {
+            planExecutionId: "exec-wait-fail",
+            status: "Failed",
+            name: "Failing Pipeline",
+            pipelineIdentifier: "fail_pipe",
+            startTs: 1_700_000_000_000,
+            endTs: 1_700_000_005_000,
+          },
+        },
+      });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "fail_pipe",
+      wait: true,
+      wait_poll_interval_seconds: 2,
+      wait_timeout_seconds: 10,
+    });
+
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as Record<string, unknown>;
+    expect(data.execution_status).toBe("Failed");
+    expect(data._diagnose_hint).toEqual(expect.stringContaining("harness_diagnose"));
+    expect(data._diagnose_hint).toEqual(expect.stringContaining("exec-wait-fail"));
+  });
+
   it("blocks when flat inputs have unmatchedRequired and no input_set_ids", async () => {
     // Template fetch returns a template with required + optional fields
     const mixedTemplate = `pipeline:
