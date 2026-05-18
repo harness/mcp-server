@@ -240,10 +240,6 @@ async function startHttp(config: Config, port: number): Promise<void> {
 
   const app = createMcpExpressApp(resolveHttpHostValidationOptions(host, config));
 
-  const maxBodySize = config.HARNESS_MAX_BODY_SIZE_MB * 1024 * 1024;
-  const { json } = await import("express");
-  app.use(json({ limit: maxBodySize }));
-
   // CORS — allow GET, POST, DELETE for session-based MCP
   app.use((_req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", `http://${host}:${port}`);
@@ -252,6 +248,9 @@ async function startHttp(config: Config, port: number): Promise<void> {
     res.setHeader("Access-Control-Expose-Headers", "mcp-session-id");
     next();
   });
+
+  // Auth gate before body parsing — reject unauthenticated requests without allocating body memory
+  app.use(createHttpAuthMiddleware(config.HARNESS_MCP_AUTH_TOKEN));
 
   // Simple per-IP rate limiting: 60 requests per minute
   const ipHits = new Map<string, { count: number; resetAt: number }>();
@@ -277,7 +276,10 @@ async function startHttp(config: Config, port: number): Promise<void> {
     }
     next();
   });
-  app.use(createHttpAuthMiddleware(config.HARNESS_MCP_AUTH_TOKEN));
+
+  const maxBodySize = config.HARNESS_MAX_BODY_SIZE_MB * 1024 * 1024;
+  const { json } = await import("express");
+  app.use(json({ limit: maxBodySize }));
 
   // ---- Session store ----
   const sessions = new Map<string, Session>();

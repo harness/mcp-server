@@ -1,5 +1,6 @@
 import type { IncomingHttpHeaders } from "node:http";
 import type { Config } from "../config.js";
+import { extractAccountIdFromToken } from "../config.js";
 import { RISK_SEVERITY, type RiskLevel } from "../registry/types.js";
 
 export const PIPELINE_VERSION_HEADER = "x-harness-pipeline-version";
@@ -90,6 +91,13 @@ export function mergeConfigWithSessionHeaders(
     if (!sessionAccountId) missing.push(ACCOUNT_ID_HEADER);
     if (missing.length > 0) {
       throw new MissingSessionCredentialsError(missing);
+    }
+
+    const patAccountId = extractAccountIdFromToken(sessionApiKey!);
+    if (patAccountId && patAccountId !== sessionAccountId) {
+      throw new MissingSessionCredentialsError([
+        `${ACCOUNT_ID_HEADER} (value "${sessionAccountId}" does not match PAT account "${patAccountId}")`,
+      ]);
     }
   }
 

@@ -151,9 +151,12 @@ Set `HARNESS_MCP_MODE=multi-user` for shared HTTP deployments where each client 
 curl http://localhost:3000/health
 
 # MCP initialize request (capture mcp-session-id response header)
+# In multi-user mode, x-harness-api-key and x-harness-account-id are required on initialize.
 curl -i -X POST http://localhost:3000/mcp \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $HARNESS_MCP_AUTH_TOKEN" \
+  -H "x-harness-api-key: $HARNESS_API_KEY" \
+  -H "x-harness-account-id: $HARNESS_ACCOUNT_ID" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
 
 # Subsequent MCP request (use returned session ID)

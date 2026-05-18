@@ -96,17 +96,17 @@ describe("multi-user session credentials", () => {
     const base = makeConfig({ HARNESS_MCP_MODE: "multi-user", HARNESS_API_KEY: "", HARNESS_ACCOUNT_ID: "" });
     const merged = mergeConfigWithSessionHeaders(base, {
       "x-harness-api-key": "pat.user1.tok.sec",
-      "x-harness-account-id": "user1-account",
+      "x-harness-account-id": "user1",
     });
     expect(merged.HARNESS_API_KEY).toBe("pat.user1.tok.sec");
-    expect(merged.HARNESS_ACCOUNT_ID).toBe("user1-account");
+    expect(merged.HARNESS_ACCOUNT_ID).toBe("user1");
   });
 
   it("merges x-harness-org and x-harness-project as session defaults", () => {
     const base = makeConfig({ HARNESS_MCP_MODE: "multi-user", HARNESS_API_KEY: "", HARNESS_ACCOUNT_ID: "" });
     const merged = mergeConfigWithSessionHeaders(base, {
       "x-harness-api-key": "pat.user1.tok.sec",
-      "x-harness-account-id": "user1-account",
+      "x-harness-account-id": "user1",
       "x-harness-org": "user-org",
       "x-harness-project": "user-project",
     });
@@ -118,7 +118,7 @@ describe("multi-user session credentials", () => {
     const base = makeConfig({ HARNESS_MCP_MODE: "multi-user", HARNESS_API_KEY: "", HARNESS_ACCOUNT_ID: "" });
     expect(() =>
       mergeConfigWithSessionHeaders(base, {
-        "x-harness-account-id": "user1-account",
+        "x-harness-account-id": "user1",
       }),
     ).toThrow(MissingSessionCredentialsError);
   });
@@ -130,6 +130,25 @@ describe("multi-user session credentials", () => {
         "x-harness-api-key": "pat.user1.tok.sec",
       }),
     ).toThrow(MissingSessionCredentialsError);
+  });
+
+  it("throws when PAT account ID does not match x-harness-account-id", () => {
+    const base = makeConfig({ HARNESS_MCP_MODE: "multi-user", HARNESS_API_KEY: "", HARNESS_ACCOUNT_ID: "" });
+    expect(() =>
+      mergeConfigWithSessionHeaders(base, {
+        "x-harness-api-key": "pat.accountA.tok.sec",
+        "x-harness-account-id": "accountB",
+      }),
+    ).toThrow(MissingSessionCredentialsError);
+  });
+
+  it("allows non-PAT tokens without account ID validation", () => {
+    const base = makeConfig({ HARNESS_MCP_MODE: "multi-user", HARNESS_API_KEY: "", HARNESS_ACCOUNT_ID: "" });
+    const merged = mergeConfigWithSessionHeaders(base, {
+      "x-harness-api-key": "sat.sometoken.secret",
+      "x-harness-account-id": "any-account",
+    });
+    expect(merged.HARNESS_ACCOUNT_ID).toBe("any-account");
   });
 
   it("does not require session credential headers in personal mode", () => {
