@@ -199,6 +199,38 @@ export const descSearchProbes = `Search probes by name (case-insensitive).`;
 export const descProbeIds = `Comma-separated probe IDs for bulk lookup (e.g. "id1,id2,id3").`;
 export const descProbeSortField = `Field to sort probe results by. Accepted values: NAME, TIME, ENABLED. Defaults to TIME server-side.`;
 
+export const descCreateProbe = `Create a chaos resilience probe (POST /rest/v2/probes).
+
+Required: probe_id, name, type, infrastructure_type, probe_properties.<typeKey>.
+type discriminator: httpProbe | cmdProbe | promProbe | k8sProbe | sloProbe | datadogProbe | dynatraceProbe | apmProbe | containerProbe — probe_properties.<typeKey> MUST match.
+infrastructure_type: Kubernetes | Linux | Windows.
+probe_id: [a-z0-9-]+, unique within project.
+
+Phase 1 documents httpProbe; other types accepted as camelCase passthrough per Harness API.
+
+Elicitation: never silently default a user-facing field. Ask the user — in short, focused prompts, NOT one mega-question — for every applicable field. For httpProbe at minimum confirm: name, type, infrastructure_type, URL, HTTP method (GET|POST), criteria operator + target (responseCode XOR responseBody), auth (Basic|Bearer, or omit for none), TLS, headers, run cadence (timeout, interval, attempt, pollingInterval, initialDelay, stopOnFailure, verbosity), variables, tags. If method=POST also ask: contentType (e.g. application/json) + payload via body (inline) XOR bodyPath (file path).`;
+
+export const descBodyProbeCreate = `Body for chaos probe create.
+
+Required: probe_id (slug), name, type, infrastructure_type, probe_properties.<typeKey>.
+Optional: description, tags, is_enabled (default true server-side), run_properties, variables, inputs.
+
+probe_properties contains exactly ONE inner key matching type. For type=httpProbe set probe_properties.httpProbe (full schema below). Other types: supply the matching camelCase key per the Harness API — accepted as passthrough.
+
+run_properties (all optional, server defaults): timeout, interval, attempt, pollingInterval, initialDelay, stopOnFailure, verbosity (info|debug).
+
+For httpProbe, also ask the user about: response body assertion (responseBody — alternative to responseCode), auth (Basic|Bearer or omit), tlsConfig (mTLS / custom CA / insecureSkipVerify), headers. If method=POST: contentType (e.g. application/json) and payload via body XOR bodyPath.
+
+Runtime: any value inside probe_properties or run_properties may be a Harness runtime expression like "<+input>" (resolved at experiment run time) — useful for parameterising probes via variables/inputs.
+
+Minimal httpProbe body:
+{"probe_id":"my-http-probe","name":"my-http-probe","type":"httpProbe","infrastructure_type":"Kubernetes","probe_properties":{"httpProbe":{"url":"https://example.com/health","method":{"get":{"criteria":"==","responseCode":"200"}}}}}`;
+
+export const descProbeIdField = `Unique probe identifier. Lowercase alphanumeric + hyphen ([a-z0-9-]+). Must be unique within the project scope.`;
+export const descProbeNameField = `Human-readable probe name. Defaults to probe_id when omitted.`;
+export const descProbePropertiesField = `Type-specific probe configuration. Provide exactly one inner key matching the value of "type" (e.g. for type=httpProbe set probe_properties.httpProbe). Phase 1 documents only the httpProbe shape; other type shapes are accepted as passthrough.`;
+export const descRunPropertiesField = `Probe execution cadence and retry behavior. All fields optional with server-side defaults: timeout (e.g. "10s"), interval (e.g. "2s"), attempt (retry count), pollingInterval, initialDelay, stopOnFailure (boolean), verbosity ("info" | "debug").`;
+
 export const descListExperimentTemplates = `List chaos experiment templates from chaos hubs.
 Returns a paginated list of templates with identity, name, description, tags, revision, infraType, hub identity, and audit info.
 Supports filtering by hub, infrastructure, tags, search, sort, and cross-scope inclusion.`;

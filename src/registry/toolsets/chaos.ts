@@ -30,7 +30,7 @@ import {
   // Operation descriptions
   descListExperiments, descGetExperiment,
   descGetExperimentRun,
-  descListProbes, descGetProbe,
+  descListProbes, descGetProbe, descCreateProbe,
   descListExperimentTemplates, descGetExperimentTemplate, descDeleteExperimentTemplate,
   descListExperimentVariables, descGetComponentVariable, descCreateExperiment,
   descListLinuxInfra,
@@ -67,7 +67,7 @@ import {
   // Body schema descriptions
   descBodyExperimentRun, descBodyNoBody, descBodyExperimentCreate,
   descBodyCreateFromTemplate, descBodyLoadtestDefinition,
-  descBodyProbeEnable, descBodyProbeVerify, descBodyProbesInRun,
+  descBodyProbeEnable, descBodyProbeVerify, descBodyProbesInRun, descBodyProbeCreate,
   // Field descriptions
   descInputsetIdentity, descRuntimeInputs,
   descHubIdentity, descInfraType,
@@ -104,6 +104,7 @@ import {
   descExperimentStartDate, descExperimentEndDate,
   descExperimentTargetNetworkMapIds, descExperimentMyExperiments, descExperimentExcludeAutomation,
   descSearchProbes, descProbeIds, descProbeSortField,
+  descProbeIdField, descProbeNameField, descProbePropertiesField, descRunPropertiesField,
   descDRTestSort,
   descCreateDRTest,
   descBodyDRTestCreate,
@@ -453,6 +454,175 @@ export const chaosToolset: ToolsetDefinition = {
           pathParams: { probe_id: "probeId" },
           responseExtractor: passthrough,
           description: descDeleteProbe,
+        },
+        create: {
+          method: "POST",
+          path: `${CHAOS}/rest/v2/probes`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: (input) => {
+            const b = coerceBody(input);
+            const probeId = b.probe_id ?? b.probeId ?? b.identity;
+            const tags = b.tags;
+            const isEnabled = b.is_enabled ?? b.isEnabled;
+            const infrastructureType =
+              b.infrastructure_type ?? b.infrastructureType ?? "Kubernetes";
+            const type = b.type ?? "httpProbe";
+            const probeProperties = b.probe_properties ?? b.probeProperties;
+            const runProperties = b.run_properties ?? b.runProperties;
+            return {
+              probeId,
+              ...(probeId !== undefined ? { probe_id: probeId } : {}),
+              name: b.name ?? probeId,
+              ...(b.description ? { description: b.description } : {}),
+              ...(tags
+                ? {
+                    tags: Array.isArray(tags)
+                      ? tags
+                      : (tags as string).split(",").map((t: string) => t.trim()).filter(Boolean),
+                  }
+                : {}),
+              type,
+              infrastructureType,
+              infrastructure_type: infrastructureType,
+              ...(isEnabled !== undefined ? { isEnabled } : {}),
+              ...(probeProperties ? { probeProperties, probe_properties: probeProperties } : {}),
+              ...(runProperties ? { runProperties } : {}),
+              ...(b.variables ? { variables: b.variables } : {}),
+              ...(b.inputs ? { inputs: b.inputs } : {}),
+            };
+          },
+          responseExtractor: passthrough,
+          description: descCreateProbe,
+          bodySchema: {
+            description: descBodyProbeCreate,
+            fields: [
+              { name: "probe_id", type: "string", required: true, description: descProbeIdField },
+              { name: "name", type: "string", required: true, description: descProbeNameField },
+              {
+                name: "type",
+                type: "string",
+                required: true,
+                description: "Probe type discriminator: httpProbe | cmdProbe | promProbe | k8sProbe | sloProbe | datadogProbe | dynatraceProbe | apmProbe | containerProbe. Phase 1 documents httpProbe; others pass through.",
+              },
+              {
+                name: "infrastructure_type",
+                type: "string",
+                required: true,
+                description: "Kubernetes | Linux | Windows. Default Kubernetes.",
+              },
+              { name: "description", type: "string", required: false, description: "Free-form probe description." },
+              { name: "tags", type: "array", required: false, description: "Tags array or comma-separated string. Each tag follows the 'key:value' convention." },
+              { name: "is_enabled", type: "boolean", required: false, description: "Whether the probe is enabled. Defaults to true server-side." },
+              {
+                name: "probe_properties",
+                type: "object",
+                required: true,
+                description: descProbePropertiesField,
+                fields: [
+                  {
+                    name: "httpProbe",
+                    type: "object",
+                    required: false,
+                    description: "Required when type=httpProbe. Defines URL, method, optional auth/tlsConfig/headers.",
+                    fields: [
+                      { name: "url", type: "string", required: true, description: "Target HTTP/HTTPS endpoint the probe sends requests to." },
+                      {
+                        name: "method",
+                        type: "object",
+                        required: true,
+                        description: "HTTP method. Set exactly one of: get (GET) | post (POST).",
+                        fields: [
+                          {
+                            name: "get",
+                            type: "object",
+                            required: false,
+                            description: "GET request method. Use either get OR post, not both.",
+                            fields: [
+                              { name: "criteria", type: "string", required: true, description: "Comparator. For responseCode (numeric): == | != | >= | <= | > | < | oneOf | between. For responseBody (string): contains | equal | notEqual | matches | notMatches | oneOf." },
+                              { name: "responseCode", type: "string", required: false, description: "Numeric response code as string, e.g. \"200\". Set this XOR responseBody." },
+                              { name: "responseBody", type: "string", required: false, description: "Expected substring/regex in response body. Set this XOR responseCode." },
+                            ],
+                          },
+                          {
+                            name: "post",
+                            type: "object",
+                            required: false,
+                            description: "POST request method. Use either get OR post, not both.",
+                            fields: [
+                              { name: "contentType", type: "string", required: false, description: "HTTP Content-Type header for the request body, e.g. \"application/json\"." },
+                              { name: "body", type: "string", required: false, description: "Inline request body. Set this XOR bodyPath." },
+                              { name: "bodyPath", type: "string", required: false, description: "Path to a file containing the request body. Set this XOR body." },
+                              { name: "criteria", type: "string", required: true, description: "Comparator. For responseCode (numeric): == | != | >= | <= | > | < | oneOf | between. For responseBody (string): contains | equal | notEqual | matches | notMatches | oneOf." },
+                              { name: "responseCode", type: "string", required: false, description: "Numeric response code as string, e.g. \"200\". Set this XOR responseBody." },
+                              { name: "responseBody", type: "string", required: false, description: "Expected substring/regex in response body. Set this XOR responseCode." },
+                            ],
+                          },
+                        ],
+                      },
+                      {
+                        name: "auth",
+                        type: "object",
+                        required: false,
+                        description: "Optional HTTP authorization (Bearer, Basic, etc.).",
+                        fields: [
+                          { name: "type", type: "string", required: false, description: "Auth scheme: Basic | Bearer. Omit auth entirely for no-auth." },
+                          { name: "credentials", type: "string", required: false, description: "Authentication credentials (base64-encoded username=password) required to access the URL. Plain text or secret reference." },
+                        ],
+                      },
+                      {
+                        name: "tlsConfig",
+                        type: "object",
+                        required: false,
+                        description: "Optional TLS configuration for mTLS / custom CA.",
+                        fields: [
+                          { name: "caFile", type: "string", required: false, description: "CA certificate file or file path used to validate the target's TLS certificate." },
+                          { name: "certFile", type: "string", required: false, description: "Client certificate file or file path required for mTLS." },
+                          { name: "keyFile", type: "string", required: false, description: "Client key file or file path required for mTLS." },
+                          { name: "insecureSkipVerify", type: "boolean", required: false, description: "If true, bypass SSL/TLS certificate verification (allows invalid/self-signed certs). Dev only." },
+                        ],
+                      },
+                      {
+                        name: "headers",
+                        type: "array",
+                        required: false,
+                        itemType: "object",
+                        description: "Extra request headers. Each item: { key, value }.",
+                      },
+                    ],
+                  },
+                ],
+              },
+              {
+                name: "run_properties",
+                type: "object",
+                required: false,
+                description: descRunPropertiesField,
+                fields: [
+                  { name: "timeout", type: "string", required: false, description: "Time limit for the probe to execute the check and return output, e.g. \"10s\"." },
+                  { name: "interval", type: "string", required: false, description: "Duration the probe waits between subsequent attempts, e.g. \"2s\"." },
+                  { name: "attempt", type: "number", required: false, description: "Number of times the check is retried upon failure before declaring FAILED." },
+                  { name: "pollingInterval", type: "string", required: false, description: "Wait time between iterations for Continuous / OnChaos probe modes, e.g. \"30s\"." },
+                  { name: "initialDelay", type: "string", required: false, description: "Duration to wait before the probe begins execution, e.g. \"5s\"." },
+                  { name: "stopOnFailure", type: "boolean", required: false, description: "If true, stop experiment execution when the probe fails. Default false (continue)." },
+                  { name: "verbosity", type: "string", required: false, description: "Log level: info | debug. Default info." },
+                ],
+              },
+              {
+                name: "variables",
+                type: "array",
+                required: false,
+                itemType: "object",
+                description: "Probe-level template variables. Each item: { name, type, value, required, description }.",
+              },
+              {
+                name: "inputs",
+                type: "array",
+                required: false,
+                itemType: "object",
+                description: "Optional template inputs (advanced). Usually [].",
+              },
+            ],
+          },
         },
       },
       executeActions: {
