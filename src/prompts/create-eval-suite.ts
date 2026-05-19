@@ -33,7 +33,7 @@ export function registerCreateEvalSuitePrompt(server: McpServer): void {
 
 1. **List existing evaluations** — \`harness_list(resource_type="evaluation")\` — pick eval IDs to include.
 
-2. **Create the suite** — \`harness_create(resource_type="eval_suite", body={ name: "${suite_name}", pass_strategy: "all_must_pass" | "weighted_threshold", pass_threshold?: number })\`
+2. **Create the suite** — \`harness_create(resource_type="eval_suite", body={ name: "${suite_name}", pass_strategy: "all_must_pass" | "weighted_threshold", pass_threshold?: number, schedule?: { cron: "0 8 * * *", timezone?: "UTC", enabled?: true } })\`
 
 3. **Add members** (choose one pattern)
    - **Add one at a time**: \`harness_create(resource_type="eval_suite_evaluation", params={ suite_id: "<SUITE_ID>" }, body={ evaluation_id: "<EVAL_ID>", is_required: true })\`
