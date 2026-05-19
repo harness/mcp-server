@@ -1,10 +1,17 @@
 import { describe, it, expect, vi } from "vitest";
 import type { ToolResult } from "../../src/utils/response-formatter.js";
+import type { RequestOptions } from "../../src/client/types.js";
 import type { SchemaEntry } from "../../src/data/schemas/types.js";
 import { registerSchemaTool } from "../../src/tools/harness-schema.js";
 
 function entry(schema: Record<string, any>): SchemaEntry {
   return { schema, description: "test", group: "test" };
+}
+
+function makeSchemaClient(response: unknown) {
+  return {
+    request: vi.fn(async (_options: RequestOptions) => response),
+  };
 }
 
 function makeMcpServer() {
@@ -100,5 +107,69 @@ describe("registerSchemaTool additionalSchemas", () => {
 
     expect(parsed.resource_type).toBe("pipeline");
     expect(Array.isArray(parsed.fields)).toBe(true);
+  });
+
+  it("keeps root-level summaries for built-in v1 schemas", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server);
+
+    const result = await server.call("harness_schema", { resource_type: "service_v1" });
+    const parsed = parseResult(result) as Record<string, unknown>;
+
+    expect(parsed.fields).toEqual([
+      { name: "version", type: "number", required: true },
+      { name: "kind", type: "string", required: true },
+      { name: "spec", type: "object", required: true, ref: "ServiceSpec" },
+      { name: "desc", type: "unknown", required: false },
+    ]);
+  });
+
+  it("fetches missing entity schemas from the authenticated yaml-schema endpoint", async () => {
+    const server = makeMcpServer();
+    const client = makeSchemaClient({
+      data: {
+        schema: {
+          type: "object",
+          properties: {
+            identifier: { type: "string" },
+            spec: { type: "object" },
+          },
+          required: ["identifier"],
+        },
+      },
+    });
+    registerSchemaTool(server, client);
+
+    const result = await server.call("harness_schema", { resource_type: "connector" });
+    const parsed = parseResult(result) as Record<string, unknown>;
+
+    expect(client.request).toHaveBeenCalledWith({
+      method: "GET",
+      path: "/ng/api/yaml-schema",
+      params: { entityType: "CONNECTOR" },
+    });
+    expect(parsed.resource_type).toBe("connector");
+    expect(parsed.fields).toEqual([
+      { name: "identifier", type: "string", required: true },
+      { name: "spec", type: "object", required: false },
+    ]);
+  });
+
+  it("caches live entity schemas after the first fetch", async () => {
+    const server = makeMcpServer();
+    const client = makeSchemaClient({
+      data: {
+        schema: {
+          type: "object",
+          properties: { name: { type: "string" } },
+        },
+      },
+    });
+    registerSchemaTool(server, client);
+
+    await server.call("harness_schema", { resource_type: "environment" });
+    await server.call("harness_schema", { resource_type: "environment" });
+
+    expect(client.request).toHaveBeenCalledTimes(1);
   });
 });

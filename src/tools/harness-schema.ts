@@ -1,5 +1,6 @@
 import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { RequestOptions } from "../client/types.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { createLogger } from "../utils/logger.js";
 import { SCHEMAS, VALID_SCHEMAS } from "../data/schemas/index.js";
@@ -8,12 +9,199 @@ import { getExample, searchExamples, getExamplesForResource } from "../data/exam
 
 const log = createLogger("tool:harness-schema");
 
+type JsonObject = Record<string, unknown>;
+
+interface SchemaClient {
+  request<T>(options: RequestOptions): Promise<T>;
+}
+
+interface LiveEntitySchemaDefinition {
+  entityType: string;
+  description: string;
+}
+
+const LIVE_ENTITY_SCHEMAS: Record<string, LiveEntitySchemaDefinition> = {
+  connector: {
+    entityType: "CONNECTOR",
+    description: "Connector entity schema fetched from Harness at runtime",
+  },
+  environment: {
+    entityType: "ENVIRONMENT",
+    description: "Environment entity schema fetched from Harness at runtime",
+  },
+  service: {
+    entityType: "SERVICE",
+    description: "Service entity schema fetched from Harness at runtime",
+  },
+  infrastructure: {
+    entityType: "INFRASTRUCTURE",
+    description: "Infrastructure entity schema fetched from Harness at runtime",
+  },
+  secret: {
+    entityType: "SECRET",
+    description: "Secret entity schema fetched from Harness at runtime",
+  },
+};
+
+const RESPONSE_SCHEMA_KEYS = ["schema", "yamlSchema", "jsonSchema", "yaml_schema", "json_schema"];
+
+function isRecord(value: unknown): value is JsonObject {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function isSchemaClient(value: unknown): value is SchemaClient {
+  return isRecord(value) && typeof value.request === "function";
+}
+
+function looksLikeJsonSchema(value: unknown): value is JsonObject {
+  return isRecord(value) && (
+    "$schema" in value ||
+    "definitions" in value ||
+    "properties" in value ||
+    "type" in value ||
+    "oneOf" in value ||
+    "anyOf" in value ||
+    "allOf" in value
+  );
+}
+
+function parseSchemaCandidate(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
+function collectSchemaCandidates(response: unknown): unknown[] {
+  const candidates: unknown[] = [response];
+  const parsedResponse = parseSchemaCandidate(response);
+  if (parsedResponse !== response) candidates.push(parsedResponse);
+
+  for (const candidate of [...candidates]) {
+    const parsed = parseSchemaCandidate(candidate);
+    if (!isRecord(parsed)) continue;
+
+    candidates.push(parsed.data);
+    for (const key of RESPONSE_SCHEMA_KEYS) {
+      candidates.push(parsed[key]);
+    }
+
+    const data = parseSchemaCandidate(parsed.data);
+    if (isRecord(data)) {
+      for (const key of RESPONSE_SCHEMA_KEYS) {
+        candidates.push(data[key]);
+      }
+    }
+  }
+
+  return candidates;
+}
+
+function extractLiveSchema(response: unknown): JsonObject {
+  for (const candidate of collectSchemaCandidates(response)) {
+    const parsed = parseSchemaCandidate(candidate);
+    if (looksLikeJsonSchema(parsed)) return parsed;
+  }
+
+  throw new Error(
+    "Harness yaml-schema response did not contain a JSON Schema object. " +
+    "Expected a schema object or a response envelope containing data.schema.",
+  );
+}
+
+function liveSchemaNames(client?: SchemaClient): string[] {
+  return client ? Object.keys(LIVE_ENTITY_SCHEMAS) : [];
+}
+
+function getLiveSchemaDefinition(resourceType: string): LiveEntitySchemaDefinition | undefined {
+  return LIVE_ENTITY_SCHEMAS[resourceType];
+}
+
+function getNestedSchemaRoot(value: unknown, preferredKey: string): JsonObject | undefined {
+  if (!isRecord(value)) return undefined;
+  if (looksLikeJsonSchema(value) && ("properties" in value || "type" in value)) return value;
+
+  const preferred = value[preferredKey];
+  if (looksLikeJsonSchema(preferred)) return preferred;
+
+  for (const nested of Object.values(value)) {
+    if (looksLikeJsonSchema(nested) && ("properties" in nested || "type" in nested)) {
+      return nested;
+    }
+  }
+
+  return undefined;
+}
+
+function getResourceDefinitions(schema: JsonObject, resourceType: string): JsonObject | undefined {
+  const definitions = schema.definitions;
+  if (!isRecord(definitions)) return undefined;
+
+  const title = typeof schema.title === "string" ? schema.title : undefined;
+  const keys = [
+    resourceType,
+    title,
+    resourceType.toUpperCase(),
+    resourceType[0]?.toUpperCase() + resourceType.slice(1),
+  ].filter((key): key is string => !!key);
+
+  for (const key of keys) {
+    const direct = definitions[key];
+    if (isRecord(direct)) return direct;
+  }
+
+  return undefined;
+}
+
+function getRootDefinition(schema: JsonObject, resourceType: string): JsonObject | undefined {
+  const resourceDefs = getResourceDefinitions(schema, resourceType);
+  const exactHarnessRoot = resourceDefs?.[resourceType];
+  if (looksLikeJsonSchema(exactHarnessRoot)) return exactHarnessRoot;
+
+  if (looksLikeJsonSchema(schema) && schema.properties) return schema;
+
+  const rootFromResourceDefs = getNestedSchemaRoot(resourceDefs, resourceType);
+  if (rootFromResourceDefs) return rootFromResourceDefs;
+
+  const definitions = schema.definitions;
+  if (!isRecord(definitions)) return undefined;
+
+  for (const definition of Object.values(definitions)) {
+    const root = getNestedSchemaRoot(definition, resourceType);
+    if (root) return root;
+  }
+
+  return undefined;
+}
+
+function getDefinitionSections(schema: JsonObject, resourceType: string): string[] {
+  const resourceDefs = getResourceDefinitions(schema, resourceType);
+  if (resourceDefs) return Object.keys(resourceDefs);
+
+  const definitions = schema.definitions;
+  return isRecord(definitions) ? Object.keys(definitions) : [];
+}
+
+function navigateByDotPath(node: unknown, path: string): unknown {
+  const parts = path.split(".");
+  let current: unknown = node;
+  for (const part of parts) {
+    if (current && typeof current === "object" && !Array.isArray(current)) {
+      current = (current as Record<string, unknown>)[part];
+    } else {
+      return undefined;
+    }
+  }
+  return current;
+}
 
 /**
  * Resolve a $ref pointer within the schema.
  * E.g. "#/definitions/trigger/trigger_source" → schema.definitions.trigger.trigger_source
  */
-function resolveRef(schema: Record<string, unknown>, ref: string): unknown {
+function resolveRef(schema: JsonObject, ref: string): unknown {
   if (!ref.startsWith("#/")) return undefined;
   const parts = ref.slice(2).split("/");
   let current: unknown = schema;
@@ -31,7 +219,7 @@ function resolveRef(schema: Record<string, unknown>, ref: string): unknown {
  * Inline $ref references one level deep so the returned schema fragment
  * is self-contained and useful without chasing references.
  */
-function inlineRefs(schema: Record<string, unknown>, node: unknown, depth = 0): unknown {
+function inlineRefs(schema: JsonObject, node: unknown, depth = 0): unknown {
   if (depth > 3) return node; // prevent infinite recursion
   if (!node || typeof node !== "object") return node;
 
@@ -65,46 +253,33 @@ function inlineRefs(schema: Record<string, unknown>, node: unknown, depth = 0): 
  *       "scheduled_trigger" → definitions.trigger.scheduled_trigger
  */
 function navigateToPath(
-  schema: Record<string, unknown>,
+  schema: JsonObject,
   resourceType: string,
   path: string,
 ): unknown {
-  const definitions = schema.definitions as Record<string, unknown> | undefined;
-  if (!definitions) return undefined;
-
-  const resourceDefs = definitions[resourceType] as Record<string, unknown> | undefined;
-  if (!resourceDefs) return undefined;
+  const resourceDefs = getResourceDefinitions(schema, resourceType);
 
   // Try direct key first
-  if (resourceDefs[path]) return resourceDefs[path];
+  if (resourceDefs?.[path]) return resourceDefs[path];
 
   // Try dot-separated path
-  const parts = path.split(".");
-  let current: unknown = resourceDefs;
-  for (const part of parts) {
-    if (current && typeof current === "object" && !Array.isArray(current)) {
-      current = (current as Record<string, unknown>)[part];
-    } else {
-      return undefined;
-    }
-  }
-  return current;
+  const resourcePathResult = resourceDefs ? navigateByDotPath(resourceDefs, path) : undefined;
+  if (resourcePathResult !== undefined) return resourcePathResult;
+
+  return navigateByDotPath(schema, path);
 }
 
 /**
  * Get a compact summary of the top-level structure: property names, types,
  * required fields, and available definition sections.
  */
-function getSummary(schema: Record<string, unknown>, resourceType: string): Record<string, unknown> {
-  const definitions = schema.definitions as Record<string, Record<string, unknown>> | undefined;
-
+function getSummary(schema: JsonObject, resourceType: string): Record<string, unknown> {
   // Harness-generated schemas nest the root definition under definitions[type][type].
-  // Plain JSON Schemas (extension schemas) place properties at the root level.
-  const harnessRootDef = definitions?.[resourceType]?.[resourceType] as Record<string, unknown> | undefined;
-  const rootDef = harnessRootDef ?? (schema.properties ? schema : undefined) as Record<string, unknown> | undefined;
+  // Plain JSON Schemas (extension/live schemas) place properties at the root level.
+  const rootDef = getRootDefinition(schema, resourceType);
 
-  const sections = definitions ? Object.keys(definitions[resourceType] ?? {}) : [];
-  const properties = rootDef?.properties as Record<string, unknown> | undefined;
+  const sections = getDefinitionSections(schema, resourceType);
+  const properties = rootDef?.properties as JsonObject | undefined;
   const required = rootDef?.required as string[] | undefined;
 
   const fields: Array<{ name: string; type: string; required: boolean; ref?: string }> = [];
@@ -130,19 +305,63 @@ function getSummary(schema: Record<string, unknown>, resourceType: string): Reco
 
 export function registerSchemaTool(
   server: McpServer,
+  client: SchemaClient,
   additionalSchemas?: Record<string, SchemaEntry>,
+): void;
+export function registerSchemaTool(
+  server: McpServer,
+  additionalSchemas?: Record<string, SchemaEntry>,
+): void;
+export function registerSchemaTool(
+  server: McpServer,
+  clientOrAdditionalSchemas?: SchemaClient | Record<string, SchemaEntry>,
+  maybeAdditionalSchemas?: Record<string, SchemaEntry>,
 ): void {
+  const client = isSchemaClient(clientOrAdditionalSchemas) ? clientOrAdditionalSchemas : undefined;
+  const additionalSchemas = isSchemaClient(clientOrAdditionalSchemas)
+    ? maybeAdditionalSchemas
+    : clientOrAdditionalSchemas;
+  const liveNames = liveSchemaNames(client);
+
   if (additionalSchemas) {
     for (const key of Object.keys(additionalSchemas)) {
       if (key in SCHEMAS) {
         throw new Error(`additionalSchemas key '${key}' conflicts with a built-in schema name`);
       }
+      if (liveNames.includes(key)) {
+        throw new Error(`additionalSchemas key '${key}' conflicts with a live schema name`);
+      }
     }
   }
-  const allSchemas: Record<string, Record<string, any>> = additionalSchemas
+  const allSchemas: Record<string, JsonObject> = additionalSchemas
     ? { ...SCHEMAS, ...Object.fromEntries(Object.entries(additionalSchemas).map(([k, v]) => [k, v.schema])) }
     : { ...SCHEMAS };
-  const availableSchemas = Object.keys(allSchemas);
+  const availableSchemas = [...Object.keys(allSchemas), ...liveNames];
+  const liveSchemaCache = new Map<string, JsonObject>();
+
+  async function getSchema(resourceType: string): Promise<JsonObject | undefined> {
+    const staticSchema = allSchemas[resourceType];
+    if (staticSchema) return staticSchema;
+
+    const liveDefinition = getLiveSchemaDefinition(resourceType);
+    if (!client || !liveDefinition) return undefined;
+
+    const cached = liveSchemaCache.get(resourceType);
+    if (cached) return cached;
+
+    log.debug("Fetching live Harness YAML schema", {
+      resource_type: resourceType,
+      entity_type: liveDefinition.entityType,
+    });
+    const response = await client.request<unknown>({
+      method: "GET",
+      path: "/ng/api/yaml-schema",
+      params: { entityType: liveDefinition.entityType },
+    });
+    const schema = extractLiveSchema(response);
+    liveSchemaCache.set(resourceType, schema);
+    return schema;
+  }
 
   server.registerTool(
     "harness_schema",
@@ -230,7 +449,12 @@ export function registerSchemaTool(
           return errorResult("resource_type is required for schema lookups. Use example_search to search examples without specifying a resource type.");
         }
 
-        const schema = allSchemas[args.resource_type] as Record<string, unknown>;
+        const schema = await getSchema(args.resource_type);
+        if (!schema) {
+          return errorResult(
+            `Schema '${args.resource_type}' not found. Available schemas: ${availableSchemas.join(", ")}`,
+          );
+        }
 
         // No path → return summary with available examples
         if (!args.path) {
@@ -245,8 +469,7 @@ export function registerSchemaTool(
         // Navigate to the requested path
         const node = navigateToPath(schema, args.resource_type, args.path);
         if (!node) {
-          const definitions = schema.definitions as Record<string, Record<string, unknown>> | undefined;
-          const available = definitions ? Object.keys(definitions[args.resource_type] ?? {}) : [];
+          const available = getDefinitionSections(schema, args.resource_type);
           return errorResult(
             `Path '${args.path}' not found in ${args.resource_type} schema. ` +
             `Available sections: ${available.join(", ")}`,

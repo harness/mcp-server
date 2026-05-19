@@ -454,3 +454,23 @@
 - Wired the auth middleware after CORS/rate-limit middleware and before MCP session creation/reuse in `src/index.ts`; `/health` and CORS preflight remain unauthenticated.
 - Updated README and `.env.example` to document HTTP auth and clarify that CORS/Host validation are not authentication.
 - Verified with `pnpm test tests/utils/http-auth.test.ts tests/config.test.ts tests/integration/http-transport.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test` (58 files / 1360 tests).
+
+## Slack Bug Triage: Live Entity Schemas (2026-05-19)
+- [x] Read the triggered Slack thread and confirm there are no screenshots or follow-up messages
+- [x] Trace `harness_schema` registration and static schema loading
+- [x] Add failing coverage for entity schema lookup through authenticated `/ng/api/yaml-schema`
+- [x] Implement a minimal live schema fallback for entity schemas missing from `harness-schema`
+- [x] Run focused tests, typecheck, build, and diff checks
+- [ ] Commit, push, open PR, and reply in the Slack thread
+
+### Plan
+- Keep static schemas and examples unchanged for pipeline/template/trigger and extension schemas.
+- Add a small allowlist of live entity schema names such as `connector`, `environment`, `service`, and `infrastructure` to `harness_schema` so agents can select them even though they are absent from the static repo.
+- Fetch live entity schemas with the existing authenticated `HarnessClient` against `/ng/api/yaml-schema`, cache successful results in memory, and normalize common response envelopes before reusing the existing summary/path output logic.
+- Preserve backwards compatibility for tests and external callers by keeping `registerSchemaTool(server, additionalSchemas)` usable and only enabling live fetches when a client is supplied.
+
+### Review
+- Confirmed `harness_schema` previously registered only static `harness-schema` repo files plus injected extension schemas, so entity names like `connector` could not reach any authenticated schema fetch path.
+- Added live entity schemas for `connector`, `environment`, `service`, `infrastructure`, and `secret`, fetched lazily from `/ng/api/yaml-schema?entityType=...` with the existing `HarnessClient` and cached per tool registration.
+- Kept static schema/resource behavior intact and normalized common live response envelopes before using the existing summary/path code. Added coverage to keep root-level summaries for built-in v1 schemas.
+- Verified with `pnpm test tests/tools/harness-schema-tool.test.ts`, `pnpm typecheck`, `pnpm build`, `pnpm test tests/tools/harness-schema-tool.test.ts tests/resources/harness-schema.test.ts`, full `pnpm test` (59 files / 1401 tests), and `git diff --check`.
