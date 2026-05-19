@@ -28,7 +28,7 @@ export function registerExemptOpaFailedIssuesPrompt(server: McpServer): void {
         + "execution's Pipeline Security issues + scan steps, correlates the deny signals to "
         + "specific issue_ids, asks for confirmation, then bulk-creates exemptions.",
       argsSchema: {
-        executionId: z.string().describe("Pipeline plan execution ID (e.g. 'ehsPKtczTRO5CUDAt-NR'). Accepts a Harness UI execution URL too — extract the executionId segment."),
+        executionId: z.string().describe("Pipeline plan execution ID (e.g. 'ehsPKtczTRO5CUDAt-NR'), OR any Harness UI URL that contains '/executions/<executionId>/' in its path. Examples: the pipeline execution page, the Security Tests / vulnerabilities tab, the Policy Evaluations tab. If a URL is pasted, the prompt extracts the executionId segment automatically. orgId and projectId are also extracted from the URL if present."),
         projectId: z.string().describe("Project identifier (optional; defaults to configured project)").optional(),
         orgId: z.string().describe("Organization identifier (optional; defaults to configured org)").optional(),
         exemption_type: z.string().describe("Exemption type to apply: 'Compensating Controls' | 'Acceptable Use' | 'Acceptable Risk' | 'False Positive' | 'Fix Unavailable' | 'Other'. Optional — if omitted, the prompt will ask after showing the candidate table.").optional(),
@@ -79,7 +79,14 @@ Inputs for this run:
 ${exemption_type ? `- exemption_type: "${exemption_type}"` : "- exemption_type: (NOT PROVIDED — ask the user at the confirmation gate)"}
 ${reason ? `- reason: "${reason}"` : "- reason: (NOT PROVIDED — ask the user at the confirmation gate)"}${duration_days ? `\n- duration_days: ${duration_days}` : "\n- duration_days: 30 (default — confirm with user)"}${link ? `\n- link: ${link}` : ""}${expiration ? `\n- expiration: ${expiration}` : ""}${extraFiltersHint}${dryRunHint}
 
-If executionId looks like a URL, extract the plan-execution ID segment (typically a 20+ character base64-ish token) before any further calls.
+## 0. Normalize the input
+
+The \`executionId\` argument may be either a raw ID or a full Harness UI URL. Before any other step:
+
+- If the value contains \`/executions/\`, extract the segment immediately after it as the executionId. Example: \`https://app.harness.io/ng/account/<acct>/all/orgs/<org>/projects/<proj>/pipelines/<pid>/executions/drWLj24BRQCHZYeIuaquEQ/pipeline?stage=...\` → executionId = \`drWLj24BRQCHZYeIuaquEQ\`. The same shape covers the Security Tests / vulnerabilities tab, the Policy Evaluations tab, and the default pipeline view — they all have \`/executions/<id>/\` in the path.
+- If the URL also contains \`/orgs/<orgId>/\` and/or \`/projects/<projectId>/\` and the corresponding argument was NOT provided, use the URL values for scope.
+- If the value is already a bare ID (no \`/\` in it), use it as-is.
+- Print the normalized values back to the user in one line before continuing: \`Resolved: executionId=<id>, orgId=<...>, projectId=<...>\`. Do not proceed if executionId is empty after extraction — ask the user to paste a valid ID or URL.
 
 ═══════════════════════════════════════════════════════════════════
 🛑 CRITICAL RULES — READ FIRST, OBEY ABSOLUTELY 🛑
