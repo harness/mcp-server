@@ -454,3 +454,14 @@
 - Wired the auth middleware after CORS/rate-limit middleware and before MCP session creation/reuse in `src/index.ts`; `/health` and CORS preflight remain unauthenticated.
 - Updated README and `.env.example` to document HTTP auth and clarify that CORS/Host validation are not authentication.
 - Verified with `pnpm test tests/utils/http-auth.test.ts tests/config.test.ts tests/integration/http-transport.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test` (58 files / 1360 tests).
+
+## Critical Bug Inspection (2026-05-19)
+- [ ] Inspect recent commits for high-severity behavioral regressions
+- [ ] Trace suspicious changes through caller chains and downstream behavior
+- [ ] Implement a minimal fix only if a concrete critical bug is confirmed
+- [ ] Run focused verification and report the outcome
+
+### Plan
+- Review the branch diff against `origin/main` and recent commits since the last critical bug inspection, prioritizing auth/session handling, write actions, request construction, and workflow changes over documentation churn.
+- For each suspicious change, construct a concrete trigger scenario and trace the call path to impact before deciding whether it meets the critical bar.
+- If no data-loss, crash, security, or major user-facing breakage has a plausible trigger, do not open a PR; post a concise no-critical-findings summary instead.

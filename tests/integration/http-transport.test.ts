@@ -15,6 +15,7 @@ import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js
 import { resolveHttpHostValidationOptions } from "../../src/utils/http-hosts.js";
 import { createHttpAuthMiddleware } from "../../src/utils/http-auth.js";
 import { mergeConfigWithSessionHeaders, MissingSessionCredentialsError } from "../../src/utils/session-headers.js";
+import { beginSessionRequest, endSessionRequest, shouldReapSession } from "../../src/utils/http-session.js";
 
 // We can't easily test the full HTTP server without starting it,
 // so we test the session management patterns and transport lifecycle
@@ -78,25 +79,49 @@ describe("HTTP transport session management", () => {
       expect(sessions.get(id)!.lastActivity).toBe(now);
     });
 
-    it("session TTL reaper removes idle sessions", () => {
+    it("session TTL reaper removes idle sessions with no active requests", () => {
       const SESSION_TTL_MS = 30 * 60_000;
-      const sessions = new Map<string, { lastActivity: number }>();
+      const sessions = new Map<string, { lastActivity: number; activeRequests: number }>();
 
       // Active session
-      sessions.set("active", { lastActivity: Date.now() });
+      sessions.set("active", { lastActivity: Date.now(), activeRequests: 0 });
       // Expired session (31 minutes ago)
-      sessions.set("expired", { lastActivity: Date.now() - SESSION_TTL_MS - 60_000 });
+      sessions.set("expired", { lastActivity: Date.now() - SESSION_TTL_MS - 60_000, activeRequests: 0 });
 
       // Simulate reaper
       const now = Date.now();
       for (const [id, session] of sessions) {
-        if (now - session.lastActivity > SESSION_TTL_MS) {
+        if (shouldReapSession(session, now, SESSION_TTL_MS)) {
           sessions.delete(id);
         }
       }
 
       expect(sessions.has("active")).toBe(true);
       expect(sessions.has("expired")).toBe(false);
+    });
+
+    it("session TTL reaper keeps sessions with active requests past idle TTL", () => {
+      const SESSION_TTL_MS = 30 * 60_000;
+      const now = Date.now();
+      const session = {
+        lastActivity: now - SESSION_TTL_MS - 60_000,
+        activeRequests: 1,
+      };
+
+      expect(shouldReapSession(session, now, SESSION_TTL_MS)).toBe(false);
+    });
+
+    it("tracks active request count and refreshes activity around long requests", () => {
+      const initialTime = Date.now() - 60_000;
+      const session = { lastActivity: initialTime, activeRequests: 0 };
+
+      beginSessionRequest(session, initialTime + 1);
+      expect(session.activeRequests).toBe(1);
+      expect(session.lastActivity).toBe(initialTime + 1);
+
+      endSessionRequest(session, initialTime + 120_000);
+      expect(session.activeRequests).toBe(0);
+      expect(session.lastActivity).toBe(initialTime + 120_000);
     });
 
     it("session lastActivity is updated on request", () => {
