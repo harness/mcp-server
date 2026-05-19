@@ -38,10 +38,12 @@ const createDatasetSchema: BodySchema = {
       name: "items",
       type: "array",
       required: false,
-      description: "Inline dataset items (CreateDatasetItemRequest[])",
+      description: "Inline dataset items (CreateDatasetItemRequest[]); must be empty when storage_type='git'",
       itemType: "object",
     },
     { name: "metadata", type: "object", required: false, description: "Arbitrary metadata" },
+    { name: "storage_type", type: "string", required: false, description: "managed (default) | git" },
+    { name: "git_source", type: "object", required: false, description: "Git location (required when storage_type='git'): { connector_ref?, repo?, branch?, file_path }" },
   ],
 };
 
@@ -55,23 +57,26 @@ const updateDatasetSchema: BodySchema = {
       name: "items",
       type: "array",
       required: false,
-      description: "Replace items (CreateDatasetItemRequest[])",
+      description: "Replace items (CreateDatasetItemRequest[]); must be empty when storage_type='git'",
       itemType: "object",
     },
     { name: "metadata", type: "object", required: false, description: "Metadata" },
+    { name: "storage_type", type: "string", required: false, description: "managed | git (switches storage mode)" },
+    { name: "git_source", type: "object", required: false, description: "Git location (required when switching to storage_type='git'): { connector_ref?, repo?, branch?, file_path }" },
   ],
 };
 
 const createDatasetItemSchema: BodySchema = {
   description: "Create dataset item",
   fields: [
-    { name: "id", type: "string", required: false, description: "Business id for the row" },
+    { name: "id", type: "string", required: false, description: "Business id for the row (required for CLI/backend run correlation)" },
     { name: "input", type: "object", required: true, description: "Model input (JSON)" },
     { name: "expected_output", type: "object", required: false, description: "Expected output" },
-    { name: "precomputed_output", type: "object", required: false, description: "Precomputed target output" },
-    { name: "context", type: "array", required: false, description: "Context strings", itemType: "string" },
-    { name: "expected_tools", type: "array", required: false, description: "Expected tool names", itemType: "string" },
-    { name: "comments", type: "string", required: false, description: "Comments" },
+    { name: "precomputed_output", type: "object", required: false, description: "Precomputed target output for offline/metrics-only scoring" },
+    { name: "context", type: "array", required: false, description: "Retrieved chunks for RAG evaluation", itemType: "string" },
+    { name: "expected_tools", type: "array", required: false, description: "Expected tool names for agent evaluation", itemType: "string" },
+    { name: "expected_tool_calls", type: "array", required: false, description: "Structured tool call expectations (name + arguments) for ToolArgumentMatchMetric", itemType: "object" },
+    { name: "comments", type: "string", required: false, description: "Internal notes, not used in evaluation" },
     { name: "metadata", type: "object", required: false, description: "Extra metadata" },
     { name: "sort_order", type: "number", required: false, description: "Sort position" },
   ],
@@ -82,10 +87,11 @@ const updateDatasetItemSchema: BodySchema = {
   fields: [
     { name: "input", type: "object", required: false, description: "Input" },
     { name: "expected_output", type: "object", required: false, description: "Expected output" },
-    { name: "precomputed_output", type: "object", required: false, description: "Precomputed target output" },
-    { name: "context", type: "array", required: false, description: "Context", itemType: "string" },
-    { name: "expected_tools", type: "array", required: false, description: "Expected tool names", itemType: "string" },
-    { name: "comments", type: "string", required: false, description: "Comments" },
+    { name: "precomputed_output", type: "object", required: false, description: "Precomputed target output for offline/metrics-only scoring" },
+    { name: "context", type: "array", required: false, description: "Retrieved chunks for RAG evaluation", itemType: "string" },
+    { name: "expected_tools", type: "array", required: false, description: "Expected tool names for agent evaluation", itemType: "string" },
+    { name: "expected_tool_calls", type: "array", required: false, description: "Structured tool call expectations (name + arguments) for ToolArgumentMatchMetric", itemType: "object" },
+    { name: "comments", type: "string", required: false, description: "Internal notes, not used in evaluation" },
     { name: "metadata", type: "object", required: false, description: "Metadata" },
     { name: "sort_order", type: "number", required: false, description: "Sort position" },
   ],
@@ -105,6 +111,8 @@ const createEvalSchema: BodySchema = {
     { name: "concurrency", type: "number", required: false, description: "Parallelism (default 5, min 1)" },
     { name: "cost_limit_usd", type: "number", required: false, description: "Max cost in USD" },
     { name: "timeout_per_item_ms", type: "number", required: false, description: "Per-item timeout ms (default 30000, min 1000)" },
+    { name: "storage_type", type: "string", required: false, description: "managed (default) | git" },
+    { name: "git_source", type: "object", required: false, description: "Git location (required when storage_type='git'): { connector_ref?, repo?, branch?, file_path }" },
   ],
 };
 
@@ -123,6 +131,8 @@ const updateEvalSchema: BodySchema = {
     { name: "concurrency", type: "number", required: false, description: "Parallelism (min 1)" },
     { name: "cost_limit_usd", type: "number", required: false, description: "Max cost in USD" },
     { name: "timeout_per_item_ms", type: "number", required: false, description: "Per-item timeout ms (min 1000)" },
+    { name: "storage_type", type: "string", required: false, description: "managed | git (switches storage mode)" },
+    { name: "git_source", type: "object", required: false, description: "Git location (required when switching to storage_type='git'): { connector_ref?, repo?, branch?, file_path }" },
   ],
 };
 
@@ -140,6 +150,7 @@ const triggerEvalRunSchema: BodySchema = {
       description: "RunInputs overrides: { model_id?, target_id?, dataset_id?, metric_set_id?, variables? }",
     },
     { name: "input_set_id", type: "string", required: false, description: "Saved input set id" },
+    { name: "branch", type: "string", required: false, description: "Override git branch (e.g. run against a PR branch)" },
   ],
 };
 
@@ -147,13 +158,16 @@ const createRunSchema: BodySchema = {
   description: "Create run. Provide eval_id XOR suite (not both).",
   fields: [
     { name: "eval_id", type: "string", required: false, description: "Eval UUID (mutually exclusive with suite)" },
-    { name: "suite", type: "object", required: false, description: "Suite config (mutually exclusive with eval_id)" },
+    { name: "suite", type: "object", required: false, description: "Full suite definition (mutually exclusive with eval_id)" },
     { name: "name", type: "string", required: false, description: "Run name" },
     { name: "pass_threshold", type: "number", required: false, description: "Pass threshold" },
     { name: "dataset_id", type: "string", required: false, description: "Dataset UUID" },
-    { name: "dataset_snapshot", type: "object", required: false, description: "Dataset snapshot" },
+    { name: "dataset_snapshot", type: "object", required: false, description: "Dataset snapshot (when dataset_id is omitted)" },
     { name: "variant_id", type: "string", required: false, description: "Variant identifier" },
-    { name: "environment", type: "string", required: false, description: "Environment label" },
+    { name: "suite_run_id", type: "string", required: false, description: "Parent SuiteRun UUID (links child run to suite run)" },
+    { name: "target_id", type: "string", required: false, description: "Target UUID (for single-eval runs)" },
+    { name: "metric_set_id", type: "string", required: false, description: "MetricSet UUID (for single-eval runs)" },
+    { name: "environment", type: "string", required: false, description: "Execution environment (local, ci, prod)" },
     { name: "metadata", type: "object", required: false, description: "Arbitrary metadata" },
     { name: "trigger_type", type: "string", required: false, description: "manual | scheduled | api | ci (default manual)" },
   ],
@@ -169,6 +183,7 @@ const updateRunSchema: BodySchema = {
     { name: "success_count", type: "number", required: false, description: "Successful items" },
     { name: "failed_count", type: "number", required: false, description: "Failed items" },
     { name: "summary_scores", type: "object", required: false, description: "Aggregated scores { metric_name: float }" },
+    { name: "git_commit_sha", type: "string", required: false, description: "Resolved commit SHA (max 64 chars, set once, ignored on subsequent updates)" },
   ],
 };
 
@@ -190,9 +205,9 @@ const createMetricSchema: BodySchema = {
   description: "Create custom metric",
   fields: [
     { name: "name", type: "string", required: true, description: "Metric name" },
-    { name: "type", type: "string", required: true, description: "Metric type (e.g. exact_match, ai_judge, json_diff)" },
+    { name: "type", type: "string", required: true, description: "heuristic | llm | embedding | code | composite" },
     { name: "description", type: "string", required: false, description: "Description" },
-    { name: "kind", type: "string", required: false, description: "Kind slug (e.g. exact_match)" },
+    { name: "kind", type: "string", required: false, description: "harness-evals metric kind identifier (e.g. exact_match, contains, levenshtein)" },
     { name: "config", type: "object", required: false, description: "Metric config JSON" },
     { name: "default_threshold", type: "number", required: false, description: "Default threshold 0-1 (default 0.8)" },
     { name: "tags", type: "array", required: false, description: "Tags", itemType: "string" },
@@ -218,6 +233,8 @@ const createMetricSetSchema: BodySchema = {
     { name: "name", type: "string", required: true, description: "Name" },
     { name: "description", type: "string", required: false, description: "Description" },
     { name: "tags", type: "array", required: false, description: "Tags", itemType: "string" },
+    { name: "judge_model_id", type: "string", required: false, description: "Default judge model UUID for LLM metrics in this set" },
+    { name: "entries", type: "array", required: false, description: "Initial metric entries (AddMetricSetEntryRequest[])", itemType: "object" },
   ],
 };
 
@@ -227,6 +244,7 @@ const updateMetricSetSchema: BodySchema = {
     { name: "name", type: "string", required: false, description: "Name" },
     { name: "description", type: "string", required: false, description: "Description" },
     { name: "tags", type: "array", required: false, description: "Tags", itemType: "string" },
+    { name: "judge_model_id", type: "string", required: false, description: "Default judge model UUID for LLM metrics" },
   ],
 };
 
@@ -237,6 +255,7 @@ const addMetricSetEntrySchema: BodySchema = {
     { name: "threshold", type: "number", required: true, description: "Pass threshold 0-1" },
     { name: "weight", type: "number", required: false, description: "Weight" },
     { name: "position", type: "number", required: false, description: "Order" },
+    { name: "config", type: "object", required: false, description: "Per-use-site config override (merged over metric's base config at eval time)" },
   ],
 };
 
@@ -246,6 +265,7 @@ const updateMetricSetEntrySchema: BodySchema = {
     { name: "threshold", type: "number", required: false, description: "Threshold" },
     { name: "weight", type: "number", required: false, description: "Weight" },
     { name: "position", type: "number", required: false, description: "Position" },
+    { name: "config", type: "object", required: false, description: "Per-use-site config override (merged over metric's base config at eval time)" },
   ],
 };
 
@@ -262,11 +282,14 @@ const createSuiteSchema: BodySchema = {
   fields: [
     { name: "name", type: "string", required: true, description: "Suite name" },
     { name: "description", type: "string", required: false, description: "Description" },
-    { name: "purpose", type: "string", required: false, description: "Purpose (default custom)" },
+    { name: "purpose", type: "string", required: false, description: "pr_gate | cd_gate | release_gate | custom (default custom)" },
     { name: "pass_strategy", type: "string", required: false, description: "all_must_pass | weighted_threshold (default all_must_pass)" },
     { name: "pass_threshold", type: "number", required: false, description: "0-1, used when strategy is weighted_threshold" },
     { name: "is_blocking", type: "boolean", required: false, description: "Blocking suite (default true)" },
     { name: "triggered_by", type: "string", required: false, description: "Who created the suite" },
+    { name: "schedule", type: "object", required: false, description: "Cron schedule: { cron: string, timezone?: string (default UTC), enabled?: boolean (default true) }" },
+    { name: "storage_type", type: "string", required: false, description: "managed (default) | git" },
+    { name: "git_source", type: "object", required: false, description: "Git location (required when storage_type='git'): { connector_ref?, repo?, branch?, file_path }" },
   ],
 };
 
@@ -275,10 +298,13 @@ const updateSuiteSchema: BodySchema = {
   fields: [
     { name: "name", type: "string", required: false, description: "Name" },
     { name: "description", type: "string", required: false, description: "Description" },
-    { name: "purpose", type: "string", required: false, description: "Purpose" },
+    { name: "purpose", type: "string", required: false, description: "pr_gate | cd_gate | release_gate | custom" },
     { name: "pass_strategy", type: "string", required: false, description: "all_must_pass | weighted_threshold" },
     { name: "pass_threshold", type: "number", required: false, description: "Pass threshold 0-1" },
     { name: "is_blocking", type: "boolean", required: false, description: "Blocking suite" },
+    { name: "schedule", type: "object", required: false, description: "Cron schedule: { cron, timezone?, enabled? } — set null to remove" },
+    { name: "storage_type", type: "string", required: false, description: "managed | git (switches storage mode)" },
+    { name: "git_source", type: "object", required: false, description: "Git location (required when switching to storage_type='git'): { connector_ref?, repo?, branch?, file_path }" },
   ],
 };
 
@@ -308,8 +334,9 @@ const triggerSuiteRunSchema: BodySchema = {
   description: "Trigger suite run",
   fields: [
     { name: "triggered_by", type: "string", required: false, description: "Who triggered the run" },
-    { name: "trigger_type", type: "string", required: false, description: "manual | ci | ... (default manual)" },
-    { name: "suite_path", type: "string", required: false, description: "Suite YAML path (git-backed)" },
+    { name: "trigger_type", type: "string", required: false, description: "manual | api | ci | scheduled (default manual)" },
+    { name: "suite_path", type: "string", required: false, description: "Suite YAML path (git-backed, overrides suite.source_path)" },
+    { name: "branch", type: "string", required: false, description: "Override git branch (e.g. run against a PR branch)" },
     {
       name: "run_inputs",
       type: "object",
@@ -327,15 +354,18 @@ const triggerSuiteRunSchema: BodySchema = {
 };
 
 const createTargetSchema: BodySchema = {
-  description: "Create target",
+  description: "Create target. For managed: type + config are required. For git-backed: omit type/config and provide storage_type='git' + git_source.",
   fields: [
     { name: "name", type: "string", required: true, description: "Name" },
-    { name: "type", type: "string", required: true, description: "prompt | app | static" },
-    { name: "config", type: "object", required: true, description: "Target config (PromptTargetConfig | AppTargetConfig | StaticTargetConfig)" },
+    { name: "type", type: "string", required: false, description: "prompt | agent | precomputed (required when storage_type='managed', omit for git)" },
+    { name: "config", type: "object", required: false, description: "Target config (required when storage_type='managed', omit for git)" },
     { name: "description", type: "string", required: false, description: "Description" },
     { name: "tags", type: "array", required: false, description: "Tags", itemType: "string" },
     { name: "is_active", type: "boolean", required: false, description: "Active (default true)" },
     { name: "env_secrets", type: "object", required: false, description: "Env var to Harness secret ref mapping" },
+    { name: "connector_ref", type: "string", required: false, description: "Harness HTTP connector for endpoint configuration" },
+    { name: "storage_type", type: "string", required: false, description: "managed (default) | git" },
+    { name: "git_source", type: "object", required: false, description: "Git location (required when storage_type='git'): { connector_ref?, repo?, branch?, file_path }" },
   ],
 };
 
@@ -344,16 +374,23 @@ const updateTargetSchema: BodySchema = {
   fields: [
     { name: "name", type: "string", required: false, description: "Name" },
     { name: "description", type: "string", required: false, description: "Description" },
+    { name: "type", type: "string", required: false, description: "prompt | agent | precomputed" },
     { name: "config", type: "object", required: false, description: "Config" },
     { name: "tags", type: "array", required: false, description: "Tags", itemType: "string" },
     { name: "is_active", type: "boolean", required: false, description: "Active" },
     { name: "env_secrets", type: "object", required: false, description: "Env var to Harness secret ref mapping" },
+    { name: "connector_ref", type: "string", required: false, description: "Harness HTTP connector for endpoint configuration" },
+    { name: "storage_type", type: "string", required: false, description: "managed | git (switches storage mode)" },
+    { name: "git_source", type: "object", required: false, description: "Git location (required when switching to storage_type='git'): { connector_ref?, repo?, branch?, file_path }" },
   ],
 };
 
 const testTargetSchema: BodySchema = {
   description: "Test target invocation",
-  fields: [{ name: "input", type: "string", required: true, description: "Sample input string" }],
+  fields: [
+    { name: "input", type: "string", required: true, description: "Sample input string" },
+    { name: "item_identifier", type: "string", required: false, description: "Dataset item identifier (used by precomputed targets to look up output)" },
+  ],
 };
 
 const uploadOutputsSchema: BodySchema = {
@@ -373,10 +410,11 @@ const createModelSchema: BodySchema = {
   description: "Register AI model",
   fields: [
     { name: "name", type: "string", required: true, description: "Display name" },
-    { name: "provider", type: "string", required: true, description: "openai | anthropic | ..." },
+    { name: "provider", type: "string", required: true, description: "openai | anthropic | google | azure | custom" },
     { name: "model_id", type: "string", required: true, description: "Provider model id" },
     { name: "description", type: "string", required: false, description: "Description" },
     { name: "api_key_secret_ref", type: "string", required: false, description: "Harness secret ref for API key" },
+    { name: "connector_ref", type: "string", required: false, description: "Harness connector identifier for LLM credentials" },
     { name: "default_temperature", type: "number", required: false, description: "Default temperature 0-2" },
     { name: "default_max_tokens", type: "number", required: false, description: "Default max tokens (min 1)" },
     { name: "default_top_p", type: "number", required: false, description: "Default top_p 0-1" },
@@ -391,6 +429,7 @@ const updateModelSchema: BodySchema = {
   fields: [
     { name: "name", type: "string", required: false, description: "Name" },
     { name: "description", type: "string", required: false, description: "Description" },
+    { name: "connector_ref", type: "string", required: false, description: "Harness connector identifier for LLM credentials" },
     { name: "default_temperature", type: "number", required: false, description: "Temperature 0-2" },
     { name: "default_max_tokens", type: "number", required: false, description: "Max tokens (min 1)" },
     { name: "default_top_p", type: "number", required: false, description: "Top_p 0-1" },
@@ -517,6 +556,13 @@ const importSuiteYamlSchema: BodySchema = {
   ],
 };
 
+const bulkUpsertDatasetItemsSchema: BodySchema = {
+  description: "Bulk upsert dataset items (insert or update by business ID)",
+  fields: [
+    { name: "items", type: "array", required: true, description: "Dataset items to upsert (CreateDatasetItemRequest[])", itemType: "object" },
+  ],
+};
+
 /** Merge harness_execute `body` into JSON POST body */
 function bodyFromInput(input: Record<string, unknown>): unknown {
   const b = input.body;
@@ -534,19 +580,21 @@ export const aiEvalsToolset: ToolsetDefinition = {
   displayName: "AI Evals",
   description:
     "Harness AI Evals control plane: datasets, evaluations, runs, metrics, metric sets, suites, targets, models, annotations, analytics, registry, git settings.",
-  optIn: true,
+  optIn: false,
   resources: [
     // --- Datasets ---
     {
       resourceType: "eval_dataset",
       displayName: "AI Evals Dataset",
-      description: "Evaluation dataset (JSONL-backed rows). CRUD + items sub-resource via eval_dataset_item.",
+      description: "Evaluation dataset (managed JSONL rows or git-backed). CRUD + items sub-resource via eval_dataset_item.",
       toolset: "ai-evals",
       scope: "project",
       scopeOptional: true,
       headerBasedScoping: true,
       identifierFields: ["dataset_id"],
-      listFilterFields: [],
+      listFilterFields: [
+        { name: "search", description: "Search by name, identifier, or description" },
+      ],
       relatedResources: [
         { resourceType: "eval_dataset_item", relationship: "contains", description: "Dataset rows" },
         { resourceType: "evaluation", relationship: "uses", description: "Evals reference datasets" },
@@ -557,7 +605,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/dataset`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          queryParams: listQ,
+          queryParams: { ...listQ, search: "search" },
           responseExtractor: aiEvalsListExtract,
           description: "List datasets",
         },
@@ -712,6 +760,19 @@ export const aiEvalsToolset: ToolsetDefinition = {
           description: "Delete item",
         },
       },
+      executeActions: {
+        bulk_upsert: {
+          method: "PATCH",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/dataset/${input.dataset_id as string}/items/bulk`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: bodyFromInput,
+          bodySchema: bulkUpsertDatasetItemsSchema,
+          responseExtractor: aiEvalsArrayExtract,
+          actionDescription: "Bulk upsert dataset items by business ID. Body: { items: CreateDatasetItemRequest[] }",
+        },
+      },
     },
     // --- Evaluations ---
     {
@@ -729,6 +790,9 @@ export const aiEvalsToolset: ToolsetDefinition = {
           description: "Filter by status",
           enum: ["active", "draft", "archived"],
         },
+        { name: "target_id", description: "Filter by target UUID(s)" },
+        { name: "metric_set_id", description: "Filter by metric set UUID" },
+        { name: "search", description: "Search by name or description" },
       ],
       executeHint: "Run an eval with harness_execute(resource_type='evaluation', action='run', resource_id=EVAL_ID, body={...}).",
       operations: {
@@ -737,7 +801,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/evals`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          queryParams: { ...listQ, status: "status" },
+          queryParams: { ...listQ, status: "status", target_id: "target_id", metric_set_id: "metric_set_id", search: "search" },
           responseExtractor: aiEvalsListExtract,
           description: "List evals",
         },
@@ -817,15 +881,14 @@ export const aiEvalsToolset: ToolsetDefinition = {
     {
       resourceType: "eval_run",
       displayName: "AI Evals Run",
-      description: "A single evaluation run. Compare runs or rescore via execute actions.",
+      description: "A single evaluation run. Compare runs or rescore via execute actions. To filter by eval_id, use the eval_run_by_eval resource instead.",
       toolset: "ai-evals",
       scope: "project",
       scopeOptional: true,
       headerBasedScoping: true,
       identifierFields: ["run_id"],
       listFilterFields: [
-        { name: "eval_id", description: "Filter runs by evaluation UUID" },
-        { name: "status", description: "Filter by run status" },
+        { name: "target_id", description: "Filter runs by target UUID" },
       ],
       relatedResources: [
         { resourceType: "eval_run_item", relationship: "contains", description: "Per-item results" },
@@ -836,9 +899,9 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/runs`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          queryParams: { ...listQ, eval_id: "eval_id", status: "status" },
+          queryParams: { ...listQ, target_id: "target_id" },
           responseExtractor: aiEvalsListExtract,
-          description: "List runs in project (filterable by eval_id, status)",
+          description: "List runs in project. Use eval_run_by_eval resource to filter by eval_id.",
         },
         get: {
           method: "GET",
@@ -1042,19 +1105,22 @@ export const aiEvalsToolset: ToolsetDefinition = {
     {
       resourceType: "eval_metric_set",
       displayName: "AI Evals Metric Set",
-      description: "Grouped metrics with thresholds. Manage entries via eval_metric_set_entry.",
+      description: "Grouped metrics with thresholds and optional judge model. Manage entries via eval_metric_set_entry.",
       toolset: "ai-evals",
       scope: "project",
       scopeOptional: true,
       headerBasedScoping: true,
       identifierFields: ["set_id"],
+      listFilterFields: [
+        { name: "search", description: "Search by name or description" },
+      ],
       operations: {
         list: {
           method: "GET",
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/metric-sets`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          queryParams: listQ,
+          queryParams: { ...listQ, search: "search" },
           responseExtractor: aiEvalsListExtract,
           description: "List metric sets",
         },
@@ -1188,7 +1254,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
     {
       resourceType: "eval_suite",
       displayName: "AI Evals Suite",
-      description: "Multi-eval suite with pass strategy. Members: eval_suite_evaluation.",
+      description: "Multi-eval suite with pass strategy and optional cron schedule. Members: eval_suite_evaluation.",
       toolset: "ai-evals",
       scope: "project",
       scopeOptional: true,
@@ -1365,20 +1431,23 @@ export const aiEvalsToolset: ToolsetDefinition = {
     {
       resourceType: "eval_target",
       displayName: "AI Evals Target",
-      description: "Invocation target (prompt, app, or static).",
+      description: "Invocation target (prompt, agent, or precomputed).",
       toolset: "ai-evals",
       scope: "project",
       scopeOptional: true,
       headerBasedScoping: true,
       identifierFields: ["target_id"],
-      listFilterFields: [{ name: "type", description: "prompt | app | static" }],
+      listFilterFields: [
+        { name: "type", description: "prompt | agent | precomputed" },
+        { name: "search", description: "Search by name or description" },
+      ],
       operations: {
         list: {
           method: "GET",
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/targets`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          queryParams: { ...listQ, type: "type" },
+          queryParams: { ...listQ, type: "type", search: "search" },
           responseExtractor: aiEvalsListExtract,
           description: "List targets",
         },
@@ -1453,6 +1522,26 @@ export const aiEvalsToolset: ToolsetDefinition = {
           actionDescription: "List uploaded static target outputs (paginated).",
           bodySchema: { description: "No body", fields: [] },
         },
+        export_yaml: {
+          method: "GET",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/targets/${input.target_id as string}/export-yaml`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: passthrough,
+          actionDescription: "Export target config as a standalone YAML document.",
+          bodySchema: { description: "No body", fields: [] },
+        },
+        overview: {
+          method: "GET",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/targets/${input.target_id as string}/overview`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: passthrough,
+          actionDescription: "Summary metrics and per-eval health trend (total_evals, total_runs, last_run_at, overall_pass_rate, per-eval pass rates).",
+          bodySchema: { description: "No body", fields: [] },
+        },
       },
     },
     {
@@ -1464,14 +1553,17 @@ export const aiEvalsToolset: ToolsetDefinition = {
       scopeOptional: true,
       headerBasedScoping: true,
       identifierFields: ["model_id"],
-      listFilterFields: [{ name: "active_only", description: "Only active models", type: "boolean" }],
+      listFilterFields: [
+        { name: "active_only", description: "Only active models", type: "boolean" },
+        { name: "search", description: "Search by name, provider, or model ID" },
+      ],
       operations: {
         list: {
           method: "GET",
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/models`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          queryParams: { ...listQ, active_only: "active_only" },
+          queryParams: { ...listQ, active_only: "active_only", search: "search" },
           responseExtractor: aiEvalsListExtract,
           description: "List models",
         },
