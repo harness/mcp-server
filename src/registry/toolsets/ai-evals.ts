@@ -534,7 +534,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
   displayName: "AI Evals",
   description:
     "Harness AI Evals control plane: datasets, evaluations, runs, metrics, metric sets, suites, targets, models, annotations, analytics, registry, git settings.",
-  optIn: true,
+  optIn: false,
   resources: [
     // --- Datasets ---
     {
