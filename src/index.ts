@@ -20,6 +20,7 @@ import { createHttpAuthMiddleware, validateHttpAuthForBindHost, isLoopbackBindHo
 import { loadEnvFile } from "./utils/env.js";
 import { createAuditManager, type AuditManager } from "./audit/index.js";
 import { mergeConfigWithSessionHeaders, MissingSessionCredentialsError } from "./utils/session-headers.js";
+import { beginSessionRequest, endSessionRequest, shouldReapSession } from "./utils/http-session.js";
 
 
 const log = createLogger("main");
@@ -211,6 +212,7 @@ interface Session {
   server: McpServer;
   transport: StreamableHTTPServerTransport;
   lastActivity: number;
+  activeRequests: number;
 }
 
 const SESSION_TTL_MS = 30 * 60_000; // 30 minutes
@@ -298,7 +300,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
   const reaper = setInterval(() => {
     const now = Date.now();
     for (const [id, session] of sessions) {
-      if (now - session.lastActivity > SESSION_TTL_MS) {
+      if (shouldReapSession(session, now, SESSION_TTL_MS)) {
         log.info("Reaping idle session", { sessionId: id });
         destroySession(id);
       }
@@ -334,7 +336,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
         });
         return;
       }
-      session.lastActivity = Date.now();
+      beginSessionRequest(session);
       try {
         await session.transport.handleRequest(req, res, req.body);
       } catch (err) {
@@ -346,6 +348,8 @@ async function startHttp(config: Config, port: number): Promise<void> {
             id: null,
           });
         }
+      } finally {
+        endSessionRequest(session);
       }
       return;
     }
@@ -360,7 +364,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
       transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (id) => {
-          sessions.set(id, { server: server!, transport: transport!, lastActivity: Date.now() });
+          sessions.set(id, { server: server!, transport: transport!, lastActivity: Date.now(), activeRequests: 0 });
           log.info("Session created", { sessionId: id, total: sessions.size });
         },
       });
@@ -420,7 +424,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
       return;
     }
 
-    session.lastActivity = Date.now();
+    beginSessionRequest(session);
     try {
       await session.transport.handleRequest(req, res);
     } catch (err) {
@@ -432,6 +436,8 @@ async function startHttp(config: Config, port: number): Promise<void> {
           id: null,
         });
       }
+    } finally {
+      endSessionRequest(session);
     }
   });
 

@@ -82,6 +82,17 @@ class AbortError extends Error {
   }
 }
 
+class PollExecutionError extends Error {
+  constructor(executionId: string, consecutiveErrors: number, pollCount: number, lastStatus: string | undefined, cause: unknown) {
+    const causeMessage = cause instanceof Error ? cause.message : String(cause);
+    super(
+      `Polling failed ${consecutiveErrors} consecutive times for execution ${executionId} ` +
+      `after ${pollCount} poll(s); last status: ${lastStatus ?? "Unknown"}. Last error: ${causeMessage}`,
+    );
+    this.name = "PollExecutionError";
+  }
+}
+
 /**
  * Sleep for `ms`, rejecting early if the signal aborts.
  * Cleans up listeners and timers in both branches to avoid leaks across long polls.
@@ -204,16 +215,7 @@ export async function pollExecutionToTerminal(
         error: String(err),
       });
       if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-        // Give up — but return a result rather than throwing so the caller still
-        // gets a usable response with the last known status.
-        return buildResult(
-          opts.executionId,
-          lastSnapshot,
-          false,
-          true,
-          Date.now() - startedAt,
-          pollCount,
-        );
+        throw new PollExecutionError(opts.executionId, consecutiveErrors, pollCount, lastSnapshot.status, err);
       }
     }
 
@@ -253,4 +255,4 @@ function buildResult(
   };
 }
 
-export { AbortError };
+export { AbortError, PollExecutionError };
