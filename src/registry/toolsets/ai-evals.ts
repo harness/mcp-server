@@ -354,7 +354,7 @@ const triggerSuiteRunSchema: BodySchema = {
 };
 
 const createTargetSchema: BodySchema = {
-  description: "Create target",
+  description: "Create target. For managed: type + config are required. For git-backed: omit type/config and provide storage_type='git' + git_source.",
   fields: [
     { name: "name", type: "string", required: true, description: "Name" },
     { name: "type", type: "string", required: false, description: "prompt | agent | precomputed (required when storage_type='managed', omit for git)" },
@@ -881,7 +881,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
     {
       resourceType: "eval_run",
       displayName: "AI Evals Run",
-      description: "A single evaluation run. Compare runs or rescore via execute actions.",
+      description: "A single evaluation run. Compare runs or rescore via execute actions. To filter by eval_id, use the eval_run_by_eval resource instead.",
       toolset: "ai-evals",
       scope: "project",
       scopeOptional: true,
