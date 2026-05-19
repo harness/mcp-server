@@ -129,12 +129,12 @@ The fetched Evaluation has this shape:
     .input                                  ← entity input fed to OPA (the deterministic-join SOURCE)
     .details[]                              ← one per POLICY_SET (EvaluationDetail)
         .identifier, .name, .type, .action
-        .status
+        .status: "error" | "warning" | "pass" | "pending"
         .details[]                          ← one per POLICY (EvaluatedPolicy)
-            .status
-            .policy_severity                ← "Error & Exit" | "Warn & Continue"
+            .status: "error" | "warning" | "pass" | "pending"
+            .policy_severity: "error" | "warning"     ← API value (NOT UI labels "Error & Exit"/"Warn & Continue")
             .policy: { identifier, name, rego, ... }
-            .output                         ← full structured rego result (NOT just the deny-strings list)
+            .output                         ← OPA ResultSet: [{ expressions: [{ value: { <pkg>: { deny: [...], deny_list_violations: [[...]] } } }] }]
             .deny_messages: string[]
 
 ## 3. Classify each policy_set and perform the deterministic title-join
@@ -150,10 +150,10 @@ If zero policy_sets PROCEED, stop and explain why.
 
 For each PROCEEDing policy_set, walk its inner \`details[]\` (per policy) and KEEP only entries where BOTH:
 
-  policy.status == "error"            — the policy actually denied this run
-  policy.policy_severity == "Error & Exit"   — this policy is configured to fail the pipeline (not just warn)
+  policy.status == "error"             — the policy actually denied this run
+  policy.policy_severity == "error"    — this policy is configured to fail the pipeline (Error & Exit), not just warn
 
-Both checks are required: a Warn & Continue policy with status=error emits a message but does NOT block the run, and exempting its issues would be over-exemption.
+Both checks are required. \`policy_severity == "warning"\` corresponds to the UI's "Warn & Continue" setting — such a policy emits messages but does NOT block the pipeline; collecting its deny strings would over-exempt.
 
 For each kept \`EvaluatedPolicy\`, perform this deterministic title-join — do not perform any other matching:
 
@@ -178,7 +178,7 @@ If NO such segment exists in \`evaluation.input\`:
 
 Try, in order:
 
-a) **Canonical**: read \`policy.output\`. It is the full rego result data. Look for \`deny_list_violations\` anywhere in the tree (top level or nested under a package name). Each entry is shaped \`{ "issue": {"title": "<...>"}, "violation": {...} }\`. Collect every \`issue.title\`.
+a) **Canonical**: read \`policy.output\`. It is an OPA ResultSet wrapped as \`output[].expressions[].value.<package>\` (e.g. \`output[0].expressions[0].value.securityTests\`). Inside that package object, find \`deny_list_violations\`. NOTE: it is a 2D array — \`[[{issue, violation}], [{issue, violation}], ...]\` — because the rego defines it via set comprehension that yields per-issue arrays. Flatten one level, then collect every \`issue.title\`. If you can't predict the package name, recurse the whole \`output\` tree looking for any \`deny_list_violations\` key — both work.
 
 b) **Fallback**: regex over each entry in \`policy.deny_messages\`:
 
