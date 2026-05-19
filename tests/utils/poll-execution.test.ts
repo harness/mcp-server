@@ -7,7 +7,6 @@ import {
   TERMINAL_STATUSES,
   FAILURE_STATUSES,
   AbortError,
-  PollExecutionError,
 } from "../../src/utils/poll-execution.js";
 
 /**
@@ -232,10 +231,13 @@ describe("pollExecutionToTerminal", () => {
       initialIntervalMs: 100,
       maxIntervalMs: 200,
     });
+    const assertion = expect(promise).rejects.toMatchObject({
+      name: "PollExecutionError",
+      message: expect.stringContaining("Polling failed 5 consecutive times"),
+    });
 
     await flushAll();
-    await expect(promise).rejects.toBeInstanceOf(PollExecutionError);
-    await expect(promise).rejects.toThrow("Polling failed 5 consecutive times");
+    await assertion;
   });
 
   it("invokes onPoll callback after each successful poll", async () => {
