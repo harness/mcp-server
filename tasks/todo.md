@@ -456,12 +456,19 @@
 - Verified with `pnpm test tests/utils/http-auth.test.ts tests/config.test.ts tests/integration/http-transport.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test` (58 files / 1360 tests).
 
 ## Critical Bug Inspection (2026-05-19)
-- [ ] Inspect recent commits for high-severity behavioral regressions
-- [ ] Trace suspicious changes through caller chains and downstream behavior
-- [ ] Implement a minimal fix only if a concrete critical bug is confirmed
-- [ ] Run focused verification and report the outcome
+- [x] Inspect recent commits for high-severity behavioral regressions
+- [x] Trace suspicious changes through caller chains and downstream behavior
+- [x] Implement a minimal fix only if a concrete critical bug is confirmed
+- [x] Run focused verification and report the outcome
 
 ### Plan
 - Review the branch diff against `origin/main` and recent commits since the last critical bug inspection, prioritizing auth/session handling, write actions, request construction, and workflow changes over documentation churn.
 - For each suspicious change, construct a concrete trigger scenario and trace the call path to impact before deciding whether it meets the critical bar.
 - If no data-loss, crash, security, or major user-facing breakage has a plausible trigger, do not open a PR; post a concise no-critical-findings summary instead.
+
+### Review
+- Found that `harness_execute(..., wait=true)` reported `execution_timed_out=true` after five consecutive polling errors, even when the configured wait window had not expired. Agents could treat a transient Harness polling outage as a true timeout and make unsafe downstream decisions while the execution was still running.
+- Found that HTTP Streamable sessions could be reaped after 30 minutes of no new requests even while a long `wait=true` tool call or SSE stream was actively in flight, despite `wait_timeout_seconds` supporting up to 7200 seconds.
+- Fixed poll error streaks to throw a wait failure so `harness_execute` surfaces `_wait.error` instead of a false timeout, while preserving the successful trigger response.
+- Added active request tracking to HTTP sessions and made the idle reaper skip sessions with in-flight POST/SSE requests.
+- Verified with focused red/green tests, `pnpm typecheck`, `pnpm build`, full `pnpm test` (59 files / 1400 tests), and an independent code review.
