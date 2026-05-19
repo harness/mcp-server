@@ -553,7 +553,12 @@ describe("Opt-in toolset structural validation", () => {
   const defaultNames = new Set(defaultRegistry.getAllToolsets().map((t) => t.name));
   const optInNames = ALL_TOOLSET_NAMES.filter((n) => !defaultNames.has(n));
 
-  if (optInNames.length === 0) return;
+  if (optInNames.length === 0) {
+    it("no opt-in toolsets to validate", () => {
+      expect(optInNames).toEqual([]);
+    });
+    return;
+  }
 
   const additive = optInNames.map((n) => `+${n}`).join(",");
   const expandedRegistry = new Registry({ ...makeConfig(), HARNESS_TOOLSETS: additive });

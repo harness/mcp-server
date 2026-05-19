@@ -83,17 +83,8 @@ describe("Registry", () => {
       expect(registry.getResource("agent").toolset).toBe("agents");
     });
 
-    it("excludes opt-in toolsets by default", () => {
+    it("includes ai-evals in defaults", () => {
       const registry = new Registry(makeConfig());
-      expect(() => registry.getResource("eval_dataset")).toThrow(/Unknown resource_type/);
-    });
-
-    it("enables opt-in toolset with + prefix", () => {
-      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "+ai-evals" }));
-      const desc = registry.describe() as { total_toolsets: number };
-      // All defaults plus ai-evals
-      expect(desc.total_toolsets).toBeGreaterThan(20);
-      // ai-evals resource is accessible
       const res = registry.getResource("eval_dataset");
       expect(res.resourceType).toBe("eval_dataset");
     });
