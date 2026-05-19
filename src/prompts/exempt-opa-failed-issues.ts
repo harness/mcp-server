@@ -1,5 +1,6 @@
 import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { parseHarnessUrl } from "../utils/url-parser.js";
 
 /**
  * Skill: exempt-opa-failed-issues
@@ -28,9 +29,10 @@ export function registerExemptOpaFailedIssuesPrompt(server: McpServer): void {
         + "execution's Pipeline Security issues + scan steps, correlates the deny signals to "
         + "specific issue_ids, asks for confirmation, then bulk-creates exemptions.",
       argsSchema: {
-        executionId: z.string().describe("Pipeline plan execution ID (e.g. 'ehsPKtczTRO5CUDAt-NR'), OR any Harness UI URL that contains '/executions/<executionId>/' in its path. Examples: the pipeline execution page, the Security Tests / vulnerabilities tab, the Policy Evaluations tab. If a URL is pasted, the prompt extracts the executionId segment automatically. orgId and projectId are also extracted from the URL if present."),
-        projectId: z.string().describe("Project identifier (optional; defaults to configured project)").optional(),
-        orgId: z.string().describe("Organization identifier (optional; defaults to configured org)").optional(),
+        executionId: z.string().describe("Pipeline plan execution ID (e.g. 'ehsPKtczTRO5CUDAt-NR'). Either this OR `url` is required. If both are supplied, `executionId` wins.").optional(),
+        url: z.string().describe("Any Harness UI URL referencing the failed execution — pipeline run page, Security Tests tab, Policy Evaluations tab, etc. Auto-extracts executionId, pipelineId, orgId, projectId. Works for both '/executions/<id>/' and '/deployments/<id>/' URL shapes.").optional(),
+        projectId: z.string().describe("Project identifier (optional; defaults to configured project or URL-extracted value)").optional(),
+        orgId: z.string().describe("Organization identifier (optional; defaults to configured org or URL-extracted value)").optional(),
         exemption_type: z.string().describe("Exemption type to apply: 'Compensating Controls' | 'Acceptable Use' | 'Acceptable Risk' | 'False Positive' | 'Fix Unavailable' | 'Other'. Optional — if omitted, the prompt will ask after showing the candidate table.").optional(),
         reason: z.string().describe("Business/security justification for the exemption. Optional — if omitted, the prompt will ask after showing the candidate table.").optional(),
         duration_days: z.number().describe("Exemption duration in days (defaults to 30 when omitted)").optional(),
@@ -49,6 +51,7 @@ export function registerExemptOpaFailedIssuesPrompt(server: McpServer): void {
     },
     async ({
       executionId,
+      url,
       projectId,
       orgId,
       exemption_type,
@@ -59,8 +62,27 @@ export function registerExemptOpaFailedIssuesPrompt(server: McpServer): void {
       extra_filters,
       dry_run,
     }) => {
-      const orgScope = orgId ? `, org_id="${orgId}"` : "";
-      const projectScope = projectId ? `, project_id="${projectId}"` : "";
+      // Pre-resolve identifiers from a pasted Harness URL (handles both
+      // /executions/<id>/ and /deployments/<id>/ shapes via the shared parser).
+      // Explicit args take precedence over URL-extracted values.
+      let resolvedExecutionId = executionId;
+      let resolvedOrgId = orgId;
+      let resolvedProjectId = projectId;
+      let resolvedPipelineId: string | undefined;
+      let urlParseError: string | undefined;
+      if (url) {
+        try {
+          const parsed = parseHarnessUrl(url);
+          resolvedExecutionId = resolvedExecutionId || parsed.execution_id;
+          resolvedOrgId = resolvedOrgId || parsed.org_id;
+          resolvedProjectId = resolvedProjectId || parsed.project_id;
+          resolvedPipelineId = parsed.pipeline_id;
+        } catch (e) {
+          urlParseError = e instanceof Error ? e.message : String(e);
+        }
+      }
+      const orgScope = resolvedOrgId ? `, org_id="${resolvedOrgId}"` : "";
+      const projectScope = resolvedProjectId ? `, project_id="${resolvedProjectId}"` : "";
       const scope = `${orgScope}${projectScope}`;
       const extraFiltersHint = extra_filters
         ? `\n- extra_filters: ${JSON.stringify(extra_filters)}`
@@ -75,7 +97,7 @@ export function registerExemptOpaFailedIssuesPrompt(server: McpServer): void {
             text: `Create STO exemptions for the issues that an OPA Policy step denied during a pipeline execution, using a PURE DETERMINISTIC join — no fuzzy correlation, no severity guessing.
 
 Inputs for this run:
-- executionId: "${executionId}"${orgId ? `\n- orgId: "${orgId}"` : ""}${projectId ? `\n- projectId: "${projectId}"` : ""}
+${resolvedExecutionId ? `- executionId: "${resolvedExecutionId}"` : "- executionId: (NOT RESOLVED — see Step 0)"}${resolvedOrgId ? `\n- orgId: "${resolvedOrgId}"` : ""}${resolvedProjectId ? `\n- projectId: "${resolvedProjectId}"` : ""}${resolvedPipelineId ? `\n- pipelineId: "${resolvedPipelineId}" (from URL — informational only)` : ""}${url ? `\n- url (raw input): "${url}"` : ""}${urlParseError ? `\n- urlParseError: "${urlParseError}"` : ""}
 ${exemption_type ? `- exemption_type: "${exemption_type}"` : "- exemption_type: (NOT PROVIDED — ask at the confirmation gate)"}
 ${reason ? `- reason: "${reason}"` : "- reason: (NOT PROVIDED — ask at the confirmation gate)"}${duration_days ? `\n- duration_days: ${duration_days}` : "\n- duration_days: 30 (default — confirm with user)"}${link ? `\n- link: ${link}` : ""}${expiration ? `\n- expiration: ${expiration}` : ""}${extraFiltersHint}${dryRunHint}
 
@@ -99,11 +121,17 @@ ${reason ? `- reason: "${reason}"` : "- reason: (NOT PROVIDED — ask at the con
 
 ## 0. Normalize the input
 
-If \`executionId\` contains \`/executions/\`, extract the segment immediately after it. Also extract \`orgId\` / \`projectId\` from \`/orgs/<id>/\` and \`/projects/<id>/\` when not provided as arguments. If the value is a bare ID, use it as-is. Print one line: \`Resolved: executionId=<id>, orgId=<...>, projectId=<...>\`. If executionId is empty after extraction, ask the user to repaste.
+The prompt handler has already parsed any pasted URL via the shared \`url-parser\` utility (which understands both \`/executions/<id>/\` and \`/deployments/<id>/\` shapes). Use the resolved values above. Print one line: \`Resolved: executionId=<id>, orgId=<...>, projectId=<...>\`.
+
+If \`executionId\` is still empty (no \`url\` supplied, no \`executionId\` arg, or URL parse error reported above), STOP and ask the user to either:
+- Paste a Harness URL of the failed execution (the pipeline run page works), OR
+- Provide the bare \`executionId\` (e.g. \`ehsPKtczTRO5CUDAt-NR\`).
+
+For every \`harness_*\` call in subsequent steps, you may also pass the raw \`url\` as the \`url\` parameter — the MCP tools auto-extract identifiers from it. This is a fallback in case the handler-side parse missed anything.
 
 ## 1. Resolve the execution
 
-  harness_get(resource_type="execution", execution_id="${executionId}"${scope})
+  harness_get(resource_type="execution", execution_id="${resolvedExecutionId ?? "<resolved above>"}"${scope})
 
 - Capture \`pipelineId\` and \`status\`. If status is "Success" (or any non-failure), stop — exemptions are unnecessary.
 - If the execution does not exist, surface the error verbatim and stop.
@@ -111,11 +139,11 @@ If \`executionId\` contains \`/executions/\`, extract the segment immediately af
 ## 2. Fetch the failing policy evaluation(s)
 
   harness_list(resource_type="policy_evaluation",
-               filters={ execution_id: "${executionId}", status: "error" }${scope})
+               filters={ execution_id: "${resolvedExecutionId ?? "<executionId>"}", status: "error" }${scope})
 
 The resource definition sets \`created_date_from=0\` so older executions are not filtered by policy-mgmt's silent 7-day default. Paginate until exhausted.
 
-If the result is empty, stop and report verbatim: "No failing OPA evaluation was recorded for execution ${executionId}. This is likely not an OPA failure — try \`harness_diagnose(resource_type='execution', execution_id='${executionId}')\` to find the real cause."
+If the result is empty, stop and report verbatim: "No failing OPA evaluation was recorded for execution ${resolvedExecutionId ?? "<executionId>"}. This is likely not an OPA failure — try \`harness_diagnose(resource_type='execution', execution_id='${resolvedExecutionId ?? "<executionId>"}')\` to find the real cause."
 
 For every returned item, call:
 
@@ -207,7 +235,7 @@ Where \`source\` ∈ { \`output.deny_list_violations\`, \`deny_messages_regex\` 
 
   harness_list(resource_type="pipeline_security_issue",
                filters={
-                 execution_id: "${executionId}",
+                 execution_id: "${resolvedExecutionId ?? "<executionId>"}",
                  include_exempted: false,
                  status: "ACTIVE,PENDING_EXEMPTION",
                  page_size_existing: 100,
