@@ -746,3 +746,33 @@ export const descInputSetSpec = `JSON string containing the input set variable o
 export const descInputSetId = `Input set ID. Use harness_list with resource_type=chaos_input_set to find input set IDs.`;
 
 export const descIsIdentity = `Controls how experiment_id is interpreted. false (default): experiment_id is an internal UUID. true: experiment_id is a human-readable identity slug.`;
+
+// ── Chaos Service Usage ────────────────────────────────────────────
+
+export const descChaosServiceUsage = `Account-level chaos service usage. Lists every service touched by chaos experiments within a time window with per-service experiment counts, run counts, fault counts, and license utilisation. Account-scoped — no org/project filtering. Supports list, plus execute actions: get_stats (periodic stats), get_overall_stats (totals by service type), get_csv_report (service-usage CSV rows), get_experimentation_csv_report (experimentation activity CSV rows).`;
+
+export const descListChaosServiceUsage = `List per-service usage for the account in [start_time, end_time]. Filters: service (substring), service_type (Kubernetes | Linux | Windows | Serverless | ContainerServices | CloudResources | Others). Sort by sort_field (faultsRan | experiments | experimentsRan) with sort_ascending. 0-indexed pagination. Response includes serviceTypes for valid filter values.`;
+
+export const descChaosServiceUsageStartTime = `Window start time, unix milliseconds. Required.`;
+
+export const descChaosServiceUsageEndTime = `Window end time, unix milliseconds. Required.`;
+
+export const descChaosServiceUsageService = `Optional service-name substring filter.`;
+
+export const descChaosServiceUsageServiceType = `Optional service-type filter. One of Kubernetes, Linux, Windows, Serverless, ContainerServices, CloudResources, Others.`;
+
+export const descChaosServiceUsageSortField = `Sort field. One of faultsRan (default), experiments, experimentsRan.`;
+
+export const descChaosServiceUsageSortAscending = `When true, sort ascending. Defaults to false (descending).`;
+
+export const descChaosServiceUsageGroupBy = `Period bucket for stats: 'day' or 'month'. Required for get_stats.`;
+
+export const descChaosServiceUsageCumulative = `When true, returns cumulative running totals. Server-side defaults: get_stats=false, get_csv_report=true, get_experimentation_csv_report=false.`;
+
+export const descChaosServiceUsageGetStats = `Periodic service-usage stats grouped by day or month for the account in the requested window. Requires start_time, end_time, group_by. Optional: cumulative.`;
+
+export const descChaosServiceUsageGetOverallStats = `Overall service-usage stats by infra type for the account in the requested window. Requires start_time, end_time.`;
+
+export const descChaosServiceUsageGetCsvReport = `Service-usage report as an array of CSV rows ([][]string) for the account in the requested window. Requires start_time, end_time. Optional: cumulative.`;
+
+export const descChaosServiceUsageGetExperimentationCsvReport = `Experimentation-activity report as an array of CSV rows ([][]string) for the account in the requested window. Requires start_time, end_time. Optional: cumulative.`;

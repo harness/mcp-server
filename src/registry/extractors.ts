@@ -406,6 +406,21 @@ export const chaosPageExtract = (raw: unknown): { items: unknown[]; total: numbe
 };
 
 /**
+ * Extract chaos service-usage list: { serviceData, serviceTypes, total }.
+ * Normalises to the standard { items, total } shape and preserves the
+ * `serviceTypes` enum so agents can discover valid service_type filter values
+ * without an extra call.
+ */
+export const chaosServiceUsageExtract = (raw: unknown): { items: unknown[]; total: number; serviceTypes: string[] } => {
+  const r = raw as { serviceData?: unknown[]; serviceTypes?: string[]; total?: number };
+  return {
+    items: r.serviceData ?? [],
+    total: r.total ?? (Array.isArray(r.serviceData) ? r.serviceData.length : 0),
+    serviceTypes: r.serviceTypes ?? [],
+  };
+};
+
+/**
  * Extract chaos probe list response: { totalNoOfProbes, data: [...] }
  */
 export const chaosProbeListExtract = (raw: unknown): { items: unknown[]; total: number } => {

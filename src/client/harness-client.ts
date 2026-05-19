@@ -196,11 +196,18 @@ export class HarnessClient {
       ...options.headers,
     };
 
+    // LOCAL DEBUG ONLY — drop before merging. Forwards a browser session cookie
+    // to the Harness platform gateway so it can swap cookie -> JWT downstream.
+    const debugCookie = process.env.HARNESS_COOKIE;
+    if (debugCookie) headers["Cookie"] = debugCookie;
+
     // Only inject x-api-key when the caller hasn't already set auth.
     // When service-routing handles auth (bearer-jwt, remote-mcp), it sets
     // Authorization directly — sending x-api-key alongside would cause
     // downstream services to attempt API-key validation on the dummy token.
-    if (!headers["Authorization"] && !headers["x-api-key"]) {
+    // Cookie is also auth — skip x-api-key so the gateway's JWT swap wins
+    // (per jwt_middleware.go: x-api-key has higher priority than Authorization).
+    if (!headers["Authorization"] && !headers["x-api-key"] && !headers["Cookie"]) {
       headers["x-api-key"] = this.token;
     }
 

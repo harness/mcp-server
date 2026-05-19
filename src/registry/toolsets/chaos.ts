@@ -8,6 +8,7 @@ import {
   chaosK8sInfraListExtract,
   chaosHubListExtract,
   chaosDRTestListExtract,
+  chaosServiceUsageExtract,
 } from "../extractors.js";
 import {
   descToolsetChaos,
@@ -107,6 +108,14 @@ import {
   descCreateInputSet, descUpdateInputSet, descDeleteInputSet,
   descInputSetIdentityField, descInputSetName, descInputSetDescription,
   descInputSetSpec, descIsIdentity,
+  // Service usage descriptions
+  descChaosServiceUsage, descListChaosServiceUsage,
+  descChaosServiceUsageStartTime, descChaosServiceUsageEndTime,
+  descChaosServiceUsageService, descChaosServiceUsageServiceType,
+  descChaosServiceUsageSortField, descChaosServiceUsageSortAscending,
+  descChaosServiceUsageGroupBy, descChaosServiceUsageCumulative,
+  descChaosServiceUsageGetStats, descChaosServiceUsageGetOverallStats,
+  descChaosServiceUsageGetCsvReport, descChaosServiceUsageGetExperimentationCsvReport,
 } from "./chaos-descriptions.js";
 
 /**
@@ -1937,6 +1946,144 @@ export const chaosToolset: ToolsetDefinition = {
           pathParams: { risk_id: "riskId" },
           responseExtractor: passthrough,
           description: descGetRisk,
+        },
+      },
+    },
+
+    // ── Chaos Service Usage (account-level analytics) ──────────────────
+    {
+      resourceType: "chaos_service_usage",
+      displayName: "Chaos Service Usage",
+      description: descChaosServiceUsage,
+      toolset: "chaos",
+      scope: "account",
+      identifierFields: [],
+      listFilterFields: [
+        { name: "start_time", description: descChaosServiceUsageStartTime, type: "number", required: true },
+        { name: "end_time", description: descChaosServiceUsageEndTime, type: "number", required: true },
+        { name: "service", description: descChaosServiceUsageService },
+        {
+          name: "service_type",
+          description: descChaosServiceUsageServiceType,
+          enum: ["Kubernetes", "Linux", "Windows", "Serverless", "ContainerServices", "CloudResources", "Others"],
+        },
+        {
+          name: "sort_field",
+          description: descChaosServiceUsageSortField,
+          enum: ["faultsRan", "experiments", "experimentsRan"],
+        },
+        { name: "sort_ascending", description: descChaosServiceUsageSortAscending, type: "boolean" },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${CHAOS}/rest/service/{accountID}`,
+          pathBuilder: (_input, config) =>
+            `${CHAOS}/rest/service/${encodeURIComponent(config.HARNESS_ACCOUNT_ID ?? "")}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            page: "page",
+            limit: "limit",
+            size: "limit",
+            start_time: "startTime",
+            end_time: "endTime",
+            service: "service",
+            service_type: "serviceType",
+            sort_field: "sortField",
+            sort_ascending: "sortAscending",
+          },
+          responseExtractor: chaosServiceUsageExtract,
+          description: descListChaosServiceUsage,
+        },
+      },
+      executeActions: {
+        get_stats: {
+          method: "GET",
+          path: `${CHAOS}/rest/service/stats/{accountID}`,
+          pathBuilder: (_input, config) =>
+            `${CHAOS}/rest/service/stats/${encodeURIComponent(config.HARNESS_ACCOUNT_ID ?? "")}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            start_time: "startTime",
+            end_time: "endTime",
+            group_by: "groupBy",
+            cumulative: "cumulative",
+          },
+          responseExtractor: passthrough,
+          actionDescription: descChaosServiceUsageGetStats,
+          bodySchema: {
+            description: "No body. Pass start_time, end_time, group_by, and optional cumulative via params.",
+            fields: [
+              { name: "start_time", type: "number", required: true, description: descChaosServiceUsageStartTime },
+              { name: "end_time", type: "number", required: true, description: descChaosServiceUsageEndTime },
+              { name: "group_by", type: "string", required: true, description: descChaosServiceUsageGroupBy },
+              { name: "cumulative", type: "boolean", required: false, description: descChaosServiceUsageCumulative },
+            ],
+          },
+        },
+        get_overall_stats: {
+          method: "GET",
+          path: `${CHAOS}/rest/service/overall/stats/{accountID}`,
+          pathBuilder: (_input, config) =>
+            `${CHAOS}/rest/service/overall/stats/${encodeURIComponent(config.HARNESS_ACCOUNT_ID ?? "")}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            start_time: "startTime",
+            end_time: "endTime",
+          },
+          responseExtractor: passthrough,
+          actionDescription: descChaosServiceUsageGetOverallStats,
+          bodySchema: {
+            description: "No body. Pass start_time and end_time via params.",
+            fields: [
+              { name: "start_time", type: "number", required: true, description: descChaosServiceUsageStartTime },
+              { name: "end_time", type: "number", required: true, description: descChaosServiceUsageEndTime },
+            ],
+          },
+        },
+        get_csv_report: {
+          method: "GET",
+          path: `${CHAOS}/rest/service/report/{accountID}`,
+          pathBuilder: (_input, config) =>
+            `${CHAOS}/rest/service/report/${encodeURIComponent(config.HARNESS_ACCOUNT_ID ?? "")}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            start_time: "startTime",
+            end_time: "endTime",
+            cumulative: "cumulative",
+          },
+          responseExtractor: passthrough,
+          actionDescription: descChaosServiceUsageGetCsvReport,
+          bodySchema: {
+            description: "No body. Returns CSV rows as [][]string. cumulative defaults to true server-side.",
+            fields: [
+              { name: "start_time", type: "number", required: true, description: descChaosServiceUsageStartTime },
+              { name: "end_time", type: "number", required: true, description: descChaosServiceUsageEndTime },
+              { name: "cumulative", type: "boolean", required: false, description: descChaosServiceUsageCumulative },
+            ],
+          },
+        },
+        get_experimentation_csv_report: {
+          method: "GET",
+          path: `${CHAOS}/rest/service/experimentation/report/{accountID}`,
+          pathBuilder: (_input, config) =>
+            `${CHAOS}/rest/service/experimentation/report/${encodeURIComponent(config.HARNESS_ACCOUNT_ID ?? "")}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            start_time: "startTime",
+            end_time: "endTime",
+            cumulative: "cumulative",
+          },
+          responseExtractor: passthrough,
+          actionDescription: descChaosServiceUsageGetExperimentationCsvReport,
+          bodySchema: {
+            description: "No body. Returns CSV rows as [][]string. cumulative defaults to false server-side.",
+            fields: [
+              { name: "start_time", type: "number", required: true, description: descChaosServiceUsageStartTime },
+              { name: "end_time", type: "number", required: true, description: descChaosServiceUsageEndTime },
+              { name: "cumulative", type: "boolean", required: false, description: descChaosServiceUsageCumulative },
+            ],
+          },
         },
       },
     },
