@@ -456,14 +456,20 @@
 - Verified with `pnpm test tests/utils/http-auth.test.ts tests/config.test.ts tests/integration/http-transport.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test` (58 files / 1360 tests).
 
 ## Slack Bug Triage: Public Chat Model Slug (2026-05-20)
-- [ ] Read the Slack thread and identify the screenshot-reported model exposure
-- [ ] Trace all public model metadata surfaces in source
-- [ ] Add regression coverage so public examples do not hardcode provider chat model slugs
-- [ ] Replace the exposed model slug with a neutral placeholder
-- [ ] Run focused and broad verification
+- [x] Read the Slack thread and identify the screenshot-reported model exposure
+- [x] Trace all public model metadata surfaces in source
+- [x] Add regression coverage so public examples do not hardcode provider chat model slugs
+- [x] Replace the exposed model slug with a neutral placeholder
+- [x] Run focused and broad verification
 - [ ] Commit, push, open PR, and reply in Slack thread
 
 ### Plan
 - Treat this as a public metadata exposure unless code evidence shows a backend API leak.
 - Keep the fix scoped to example/schema surfaces that the MCP server returns to customers.
 - Prefer a neutral runtime-input placeholder over documenting a concrete provider model ID.
+
+### Review
+- Found a hardcoded provider chat model slug in the public `agent-pipeline` pipeline v1 example.
+- Replaced it with `model: <+input>` so generated examples do not disclose or imply a concrete internal/default chat model.
+- Added regression coverage that the public agent example uses the placeholder and avoids concrete provider model slug patterns.
+- Verified with `pnpm test tests/tools/harness-schema-examples.test.ts`, `pnpm typecheck`, `pnpm build`, full `pnpm test`, and `rg "claude-sonnet-4-6"`.
