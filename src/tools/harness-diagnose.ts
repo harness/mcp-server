@@ -48,6 +48,7 @@ export function registerDiagnoseTool(server: McpServer, registry: Registry, clie
       annotations: {
         title: "Diagnose Harness Resource",
         readOnlyHint: true,
+        destructiveHint: false,
         openWorldHint: true,
       },
     },

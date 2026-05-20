@@ -1,5 +1,29 @@
 # Harness MCP Server — Task Tracking
 
+## GPT App Tool Annotation Compliance (2026-05-20)
+- [x] Add explicit `destructiveHint: false` to all non-destructive read-only MCP tools flagged by the GPT App form
+- [x] Add regression coverage that every registered tool sets `readOnlyHint`, `openWorldHint`, and `destructiveHint` to explicit booleans with value assertions
+- [x] Run focused tests and typecheck
+- [x] Regenerate README for updated resource counts
+- [x] Fix smoke test for ai-evals no longer being opt-in
+- [x] Remove stale ai-evals opt-in references from README
+- [x] Document `harness_describe` as a local-only exception to `openWorldHint: true` policy
+- [x] Commit, push, and open PR
+
+### Plan
+- Add explicit boolean annotations to all tools for GPT App form compatibility.
+- Treat list/get/diagnose/search/describe/status/schema as non-destructive because they do not delete resources.
+- Verify at registration level so future tools cannot omit required GPT App annotation fields.
+- Document `harness_describe` as a local-only tool (openWorldHint: false) since it reads registry metadata without external API calls.
+- Fix collateral drift: ai-evals opt-in language, README counts, smoke test assertion.
+
+### Review
+- Added explicit `destructiveHint: false` to `harness_list`, `harness_get`, `harness_diagnose`, `harness_search`, `harness_describe`, `harness_status`, and `harness_schema`.
+- Regression test now asserts both type (boolean) and expected values: `openWorldHint: true` for API-calling tools, `openWorldHint: false` only for documented local-only tools (`harness_describe`).
+- Regenerated README to reflect current registry counts (187 resource types, 32 toolsets).
+- Fixed smoke test to allow additive (+) toolset filters that reference already-default toolsets.
+- Removed stale ai-evals "opt-in / excluded by default" language from README since it's been default-enabled since 31c119dd.
+
 ## Phase 1: Foundation ✅
 - [x] Project scaffolding (package.json, tsconfig, pnpm)
 - [x] Config validation with Zod

@@ -83,6 +83,7 @@ export function registerStatusTool(
       annotations: {
         title: "Project Health Status",
         readOnlyHint: true,
+        destructiveHint: false,
         openWorldHint: true,
       },
     },

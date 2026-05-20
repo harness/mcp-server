@@ -179,7 +179,9 @@ export function registerSchemaTool(
       annotations: {
         title: "Harness YAML Schema",
         readOnlyHint: true,
-        openWorldHint: true,
+        destructiveHint: false,
+        // Bundled schemas/examples only — no external API call
+        openWorldHint: false,
       },
     },
     async (args) => {
