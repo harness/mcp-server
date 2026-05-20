@@ -51,6 +51,13 @@ describe("pipeline v1 examples", () => {
     expect(ex!.tags).toContain("agent");
   });
 
+  it("agent pipeline example does not expose a concrete chat model slug", () => {
+    const ex = getExample("agent-pipeline");
+    expect(ex).toBeDefined();
+    expect(ex!.yaml).toContain("model: <+input>");
+    expect(ex!.yaml).not.toMatch(/\b(claude|gpt|gemini|o\d)[\w.-]*/i);
+  });
+
   it("searchExamples('agent') finds agent-pipeline", () => {
     const results = searchExamples("agent");
     expect(results.some((r) => r.name === "agent-pipeline")).toBe(true);

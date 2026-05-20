@@ -35,7 +35,7 @@ const examples: ResourceExample[] = [
       steps:
         - type: agent
           spec:
-            model: claude-sonnet-4-6
+            model: <+input>
             prompt: "Review the PR for correctness, security, and performance issues"
             tools:
               - name: read_file

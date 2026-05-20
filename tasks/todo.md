@@ -454,3 +454,16 @@
 - Wired the auth middleware after CORS/rate-limit middleware and before MCP session creation/reuse in `src/index.ts`; `/health` and CORS preflight remain unauthenticated.
 - Updated README and `.env.example` to document HTTP auth and clarify that CORS/Host validation are not authentication.
 - Verified with `pnpm test tests/utils/http-auth.test.ts tests/config.test.ts tests/integration/http-transport.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test` (58 files / 1360 tests).
+
+## Slack Bug Triage: Public Chat Model Slug (2026-05-20)
+- [ ] Read the Slack thread and identify the screenshot-reported model exposure
+- [ ] Trace all public model metadata surfaces in source
+- [ ] Add regression coverage so public examples do not hardcode provider chat model slugs
+- [ ] Replace the exposed model slug with a neutral placeholder
+- [ ] Run focused and broad verification
+- [ ] Commit, push, open PR, and reply in Slack thread
+
+### Plan
+- Treat this as a public metadata exposure unless code evidence shows a backend API leak.
+- Keep the fix scoped to example/schema surfaces that the MCP server returns to customers.
+- Prefer a neutral runtime-input placeholder over documenting a concrete provider model ID.
