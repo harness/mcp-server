@@ -461,7 +461,8 @@
 - [x] Add regression coverage so public examples do not hardcode provider chat model slugs
 - [x] Replace the exposed model slug with a neutral placeholder
 - [x] Run focused and broad verification
-- [ ] Commit, push, open PR, and reply in Slack thread
+- [x] Commit, push, and open PR
+- [ ] Reply in Slack thread (blocked: trigger channel unavailable to posting tool)
 
 ### Plan
 - Treat this as a public metadata exposure unless code evidence shows a backend API leak.
@@ -473,3 +474,4 @@
 - Replaced it with `model: <+input>` so generated examples do not disclose or imply a concrete internal/default chat model.
 - Added regression coverage that the public agent example uses the placeholder and avoids concrete provider model slug patterns.
 - Verified with `pnpm test tests/tools/harness-schema-examples.test.ts`, `pnpm typecheck`, `pnpm build`, full `pnpm test`, and `rg "claude-sonnet-4-6"`.
+- Opened the PR, but Slack reply was blocked because `C08SYT1FWJD` is not available in the configured posting channels. No alternate channel was used.
