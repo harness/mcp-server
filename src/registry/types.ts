@@ -137,7 +137,8 @@ export type ToolsetName =
   | "governance"
   | "freeze"
   | "overrides"
-  | "ai-evals";
+  | "ai-evals"
+  | "iacm";
 
 export type ProductName = "harness" | "fme";
 
