@@ -167,7 +167,7 @@ describe("Registry", () => {
 
       expect(server.registerTool).toHaveBeenCalled();
 
-      const LOCAL_ONLY_TOOLS = new Set(["harness_describe"]);
+      const LOCAL_ONLY_TOOLS = new Set(["harness_describe", "harness_schema"]);
 
       for (const [toolName, definition] of server.registerTool.mock.calls) {
         const annotations = (definition as { annotations?: Record<string, unknown> }).annotations;
