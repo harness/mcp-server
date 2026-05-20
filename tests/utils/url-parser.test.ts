@@ -59,6 +59,7 @@ describe("parseHarnessUrl", () => {
     expect(result.account_id).toBe("lnFZRF6jQO6tQnB9znMALw");
     expect(result.resource_type).toBe("connector");
     expect(result.resource_id).toBeUndefined();
+    expect(result.resource_scope).toBe("account");
     expect(result.org_id).toBeUndefined();
     expect(result.project_id).toBeUndefined();
   });
@@ -69,6 +70,7 @@ describe("parseHarnessUrl", () => {
     );
     expect(result.resource_type).toBe("connector");
     expect(result.resource_id).toBe("test");
+    expect(result.resource_scope).toBe("account");
     expect(result.org_id).toBeUndefined();
   });
 
@@ -78,8 +80,20 @@ describe("parseHarnessUrl", () => {
     );
     expect(result.org_id).toBe("default");
     expect(result.project_id).toBe("GitX_Test");
+    expect(result.resource_scope).toBe("project");
     expect(result.resource_type).toBe("connector");
     expect(result.resource_id).toBe("harnessSecretManager");
+  });
+
+  it("handles account-level settings infrastructure list", () => {
+    const result = parseHarnessUrl(
+      "https://app.harness.io/ng/account/lnFZRF6jQO6tQnB9znMALw/all/settings/infrastructures",
+    );
+    expect(result.account_id).toBe("lnFZRF6jQO6tQnB9znMALw");
+    expect(result.resource_type).toBe("infrastructure");
+    expect(result.resource_scope).toBe("account");
+    expect(result.org_id).toBeUndefined();
+    expect(result.project_id).toBeUndefined();
   });
 
   it("extracts execution ID and pipeline ID from execution URL", () => {
@@ -134,6 +148,7 @@ describe("parseHarnessUrl", () => {
     expect(result.resource_type).toBe("environment");
     expect(result.resource_id).toBe("prod");
     expect(result.environment_id).toBe("prod");
+    expect(result.resource_scope).toBe("project");
   });
 
   it("handles gitops agents URL", () => {
@@ -151,6 +166,7 @@ describe("parseHarnessUrl", () => {
     );
     expect(result.resource_type).toBe("fme_feature_flag");
     expect(result.resource_id).toBe("my_flag");
+    expect(result.resource_scope).toBeUndefined();
   });
 
   it("extracts repo_id and pr_number from Harness Code PR URL", () => {
@@ -211,6 +227,39 @@ describe("applyUrlDefaults", () => {
     expect(result.org_id).toBe("explicitOrg"); // explicit wins
     expect(result.resource_type).toBe("service"); // explicit wins
     expect(result.project_id).toBe("urlProject"); // filled from URL
+  });
+
+  it("does not merge URL-derived resource_scope unless requested by the caller", () => {
+    const result = applyUrlDefaults(
+      {},
+      "https://app.harness.io/ng/account/abc/all/settings/connectors/test",
+    );
+
+    expect(result.resource_type).toBe("connector");
+    expect(result.resource_id).toBe("test");
+    expect(result.resource_scope).toBeUndefined();
+  });
+
+  it("can opt into URL-derived resource_scope for read tools", () => {
+    const result = applyUrlDefaults(
+      {},
+      "https://app.harness.io/ng/account/abc/all/settings/connectors/test",
+      { includeResourceScope: true },
+    );
+
+    expect(result.resource_scope).toBe("account");
+  });
+
+  it("injects resource_scope='account' for account-level template URLs", () => {
+    const result = applyUrlDefaults(
+      {},
+      "https://app.harness.io/ng/account/abc/all/settings/templates/my-template",
+      { includeResourceScope: true },
+    );
+
+    expect(result.resource_type).toBe("template");
+    expect(result.resource_id).toBe("my-template");
+    expect(result.resource_scope).toBe("account");
   });
 
   it("returns args unchanged when url is undefined", () => {

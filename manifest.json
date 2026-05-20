@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "harness-mcp-server",
   "display_name": "Harness MCP Server",
-  "version": "0.9.6",
+  "version": "3.0.4",
   "description": "Connect AI agents to Harness for CI/CD, code repositories, pull requests, services, environments, and feature flags.",
   "long_description": "The Harness MCP Server gives MCP-compatible clients access to Harness platform workflows through consolidated tools, resources, and prompts. It supports local stdio usage and can be bundled as a Node-based MCPB extension.",
   "author": {
@@ -77,7 +77,7 @@
     "HARNESS_ORG": {
       "type": "string",
       "title": "Default Harness Organization",
-      "description": "Default Harness organization identifier. If omitted, the server uses default.",
+      "description": "Default Harness organization identifier. If omitted, org_id must be provided per tool call.",
       "required": false,
       "sensitive": false
     },
@@ -91,7 +91,7 @@
     "HARNESS_BASE_URL": {
       "type": "string",
       "title": "Harness Base URL",
-      "description": "Harness base URL. Use the default for Harness SaaS unless you run a self-managed Harness installation.",
+      "description": "Harness API/UI base URL for this local MCP server. Use the default for public Harness SaaS, or set an environment such as https://harness0.harness.io when running the server yourself.",
       "default": "https://app.harness.io",
       "required": false,
       "sensitive": false

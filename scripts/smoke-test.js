@@ -59,10 +59,11 @@ async function main() {
     const { HARNESS_TOOLSETS: _ignoreToolsets, ...registryConfigWithoutToolsets } = config;
     const baseRegistry = new Registry(registryConfigWithoutToolsets);
     const baseTypes = baseRegistry.getAllResourceTypes();
+    const isAdditive = process.env.HARNESS_TOOLSETS.startsWith("+");
     const filtered = resourceTypes.length !== baseTypes.length;
     checks.push(check(
       `HARNESS_TOOLSETS filtering: ${resourceTypes.length} types (base ${baseTypes.length})`,
-      filtered,
+      filtered || isAdditive,
       `filtering had no effect (${resourceTypes.length} = ${baseTypes.length})`,
     ));
   }

@@ -122,9 +122,7 @@ const schema: Record<string, any> = {
                 "format": "int32"
               },
               {
-                "type": "string",
-                "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)",
-                "minLength": 1
+                "$ref": "#/definitions/pipeline_v1/common/Expression"
               }
             ]
           },
@@ -135,9 +133,7 @@ const schema: Record<string, any> = {
                 "type": "boolean"
               },
               {
-                "type": "string",
-                "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)",
-                "minLength": 1
+                "$ref": "#/definitions/pipeline_v1/common/Expression"
               }
             ]
           },
@@ -148,9 +144,7 @@ const schema: Record<string, any> = {
                 "type": "boolean"
               },
               {
-                "type": "string",
-                "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)",
-                "minLength": 1
+                "$ref": "#/definitions/pipeline_v1/common/Expression"
               }
             ]
           },
@@ -161,9 +155,7 @@ const schema: Record<string, any> = {
                 "type": "boolean"
               },
               {
-                "type": "string",
-                "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)",
-                "minLength": 1
+                "$ref": "#/definitions/pipeline_v1/common/Expression"
               }
             ]
           },
@@ -176,15 +168,21 @@ const schema: Record<string, any> = {
             ]
           },
           "submodules": {
-            "description": "Submodules enables cloning all submodules.",
+            "description": "Submodules enables cloning all submodules. Accepts boolean, string (true/false/recursive), or expression.",
             "oneOf": [
               {
                 "type": "boolean"
               },
               {
                 "type": "string",
-                "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)",
-                "minLength": 1
+                "enum": [
+                  "true",
+                  "false",
+                  "recursive"
+                ]
+              },
+              {
+                "$ref": "#/definitions/pipeline_v1/common/Expression"
               }
             ]
           },
@@ -195,9 +193,7 @@ const schema: Record<string, any> = {
                 "type": "boolean"
               },
               {
-                "type": "string",
-                "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)",
-                "minLength": 1
+                "$ref": "#/definitions/pipeline_v1/common/Expression"
               }
             ]
           },
@@ -208,9 +204,7 @@ const schema: Record<string, any> = {
                 "type": "boolean"
               },
               {
-                "type": "string",
-                "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)",
-                "minLength": 1
+                "$ref": "#/definitions/pipeline_v1/common/Expression"
               }
             ]
           },
@@ -221,9 +215,7 @@ const schema: Record<string, any> = {
                 "$ref": "#/definitions/pipeline_v1/Reference"
               },
               {
-                "type": "string",
-                "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)",
-                "minLength": 1
+                "$ref": "#/definitions/pipeline_v1/common/Expression"
               }
             ]
           },
@@ -256,9 +248,7 @@ const schema: Record<string, any> = {
                 }
               },
               {
-                "type": "string",
-                "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)",
-                "minLength": 1
+                "$ref": "#/definitions/pipeline_v1/common/Expression"
               }
             ]
           },
@@ -269,9 +259,7 @@ const schema: Record<string, any> = {
                 "type": "string"
               },
               {
-                "type": "string",
-                "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)",
-                "minLength": 1
+                "$ref": "#/definitions/pipeline_v1/common/Expression"
               }
             ]
           },
@@ -282,92 +270,21 @@ const schema: Record<string, any> = {
                 "type": "boolean"
               },
               {
-                "type": "string",
-                "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)",
-                "minLength": 1
+                "$ref": "#/definitions/pipeline_v1/common/Expression"
               }
             ]
-          }
-        },
-        "$schema": "http://json-schema.org/draft-07/schema#"
-      },
-      "Reference": {
-        "title": "Reference",
-        "description": "Reference defines a git clone reference.",
-        "type": "object",
-        "properties": {
-          "name": {
-            "description": "Name provides ref name (branch name, tag name, or PR number).",
-            "type": "string",
-            "minLength": 1
-          },
-          "type": {
-            "description": "Type defines the ref type.",
-            "type": "string",
-            "enum": [
-              "branch",
-              "tag",
-              "pull-request",
-              "commit"
-            ]
-          },
-          "sha": {
-            "description": "Sha provides the commit sha for direct sha-based clone.",
-            "type": "string",
-            "minLength": 1
-          },
-          "number": {
-            "description": "Number provides the PR number for pull-request type clone.",
-            "oneOf": [
-              {
-                "type": "integer",
-                "format": "int32"
-              },
-              {
-                "type": "string",
-                "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)",
-                "minLength": 1
-              }
-            ]
-          }
-        },
-        "$schema": "http://json-schema.org/draft-07/schema#"
-      },
-      "Resource": {
-        "title": "Resource",
-        "type": "object",
-        "description": "Resource defines container resource limits and requests.",
-        "properties": {
-          "limits": {
-            "description": "Limits defines the maximum resources the container can use.",
-            "$ref": "#/definitions/pipeline_v1/ResourceLimits"
-          },
-          "requests": {
-            "description": "Requests defines the minimum resources reserved for the container.",
-            "$ref": "#/definitions/pipeline_v1/ResourceLimits"
-          }
-        },
-        "$schema": "http://json-schema.org/draft-07/schema#"
-      },
-      "ResourceLimits": {
-        "title": "ResourceLimits",
-        "type": "object",
-        "description": "ResourceLimits defines CPU and memory constraints.",
-        "properties": {
-          "cpu": {
-            "description": "CPU allocation (e.g., \"100m\", \"0.5\", \"2\").",
-            "type": "string",
-            "minLength": 1
-          },
-          "memory": {
-            "description": "Memory allocation (e.g., \"128Mi\", \"1Gi\").",
-            "type": "string",
-            "minLength": 1
           }
         },
         "$schema": "http://json-schema.org/draft-07/schema#"
       },
       "common": {
+        "Expression": {
+          "title": "Expression",
+          "description": "String value matching a Harness pipeline expression or template placeholder (e.g., <+something> or ${{ ... }}).",
+          "type": "string",
+          "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)",
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
         "NGVariableV1Wrapper": {
           "title": "NGVariableV1Wrapper",
           "description": "Wrapper for stage/pipeline-level input variables. Keys are variable names, values define variable configuration.",
@@ -945,7 +862,7 @@ const schema: Record<string, any> = {
         },
         "Delegate": {
           "title": "Delegate",
-          "description": "Delegate defines the delegate matching logic.",
+          "description": "Delegate defines the delegate matching logic. Supports expressions.",
           "oneOf": [
             {
               "type": "array",
@@ -956,7 +873,8 @@ const schema: Record<string, any> = {
             {
               "type": "string"
             }
-          ]
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "TemplateRef": {
           "title": "TemplateRef",
@@ -1007,8 +925,7 @@ const schema: Record<string, any> = {
                   "type": "integer"
                 },
                 {
-                  "type": "string",
-                  "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                  "$ref": "#/definitions/pipeline_v1/common/Expression"
                 }
               ]
             },
@@ -1019,10 +936,13 @@ const schema: Record<string, any> = {
                   "type": "boolean"
                 },
                 {
-                  "type": "string",
-                  "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                  "$ref": "#/definitions/pipeline_v1/common/Expression"
                 }
               ]
+            },
+            "if": {
+              "description": "Conditional expression to determine whether the strategy should execute. Supports expressions.",
+              "type": "string"
             }
           },
           "oneOf": [
@@ -1034,8 +954,7 @@ const schema: Record<string, any> = {
                       "$ref": "#/definitions/pipeline_v1/common/MatrixConfigV1"
                     },
                     {
-                      "type": "string",
-                      "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                      "$ref": "#/definitions/pipeline_v1/common/Expression"
                     }
                   ]
                 }
@@ -1052,8 +971,7 @@ const schema: Record<string, any> = {
                       "$ref": "#/definitions/pipeline_v1/common/ForConfigV1"
                     },
                     {
-                      "type": "string",
-                      "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                      "$ref": "#/definitions/pipeline_v1/common/Expression"
                     }
                   ]
                 }
@@ -1070,8 +988,7 @@ const schema: Record<string, any> = {
                       "$ref": "#/definitions/pipeline_v1/common/WhileConfigV1"
                     },
                     {
-                      "type": "string",
-                      "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                      "$ref": "#/definitions/pipeline_v1/common/Expression"
                     }
                   ]
                 }
@@ -1088,8 +1005,7 @@ const schema: Record<string, any> = {
                       "$ref": "#/definitions/pipeline_v1/common/RepeatConfigV1"
                     },
                     {
-                      "type": "string",
-                      "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                      "$ref": "#/definitions/pipeline_v1/common/Expression"
                     }
                   ]
                 }
@@ -1117,8 +1033,7 @@ const schema: Record<string, any> = {
                   }
                 },
                 {
-                  "type": "string",
-                  "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                  "$ref": "#/definitions/pipeline_v1/common/Expression"
                 }
               ]
             },
@@ -1133,8 +1048,7 @@ const schema: Record<string, any> = {
                   }
                 },
                 {
-                  "type": "string",
-                  "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                  "$ref": "#/definitions/pipeline_v1/common/Expression"
                 }
               ]
             },
@@ -1179,8 +1093,7 @@ const schema: Record<string, any> = {
                   "minimum": 0
                 },
                 {
-                  "type": "string",
-                  "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                  "$ref": "#/definitions/pipeline_v1/common/Expression"
                 }
               ]
             },
@@ -1204,8 +1117,7 @@ const schema: Record<string, any> = {
                   "minimum": 0
                 },
                 {
-                  "type": "string",
-                  "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                  "$ref": "#/definitions/pipeline_v1/common/Expression"
                 }
               ]
             },
@@ -1232,8 +1144,7 @@ const schema: Record<string, any> = {
                   "type": "integer"
                 },
                 {
-                  "type": "string",
-                  "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                  "$ref": "#/definitions/pipeline_v1/common/Expression"
                 }
               ]
             },
@@ -1247,8 +1158,7 @@ const schema: Record<string, any> = {
                   }
                 },
                 {
-                  "type": "string",
-                  "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                  "$ref": "#/definitions/pipeline_v1/common/Expression"
                 }
               ]
             },
@@ -1264,8 +1174,7 @@ const schema: Record<string, any> = {
                   "minimum": 0
                 },
                 {
-                  "type": "string",
-                  "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                  "$ref": "#/definitions/pipeline_v1/common/Expression"
                 }
               ]
             },
@@ -1277,8 +1186,7 @@ const schema: Record<string, any> = {
                   "minimum": 0
                 },
                 {
-                  "type": "string",
-                  "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                  "$ref": "#/definitions/pipeline_v1/common/Expression"
                 }
               ]
             },
@@ -1290,8 +1198,7 @@ const schema: Record<string, any> = {
                   "minimum": 0
                 },
                 {
-                  "type": "string",
-                  "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                  "$ref": "#/definitions/pipeline_v1/common/Expression"
                 }
               ]
             },
@@ -1320,8 +1227,7 @@ const schema: Record<string, any> = {
               }
             },
             {
-              "type": "string",
-              "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+              "$ref": "#/definitions/pipeline_v1/common/Expression"
             }
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
@@ -1446,8 +1352,7 @@ const schema: Record<string, any> = {
                   "minimum": 1
                 },
                 {
-                  "type": "string",
-                  "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                  "$ref": "#/definitions/pipeline_v1/common/Expression"
                 }
               ]
             },
@@ -1508,8 +1413,7 @@ const schema: Record<string, any> = {
                   "minimum": 1
                 },
                 {
-                  "type": "string",
-                  "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                  "$ref": "#/definitions/pipeline_v1/common/Expression"
                 }
               ]
             },
@@ -1564,8 +1468,7 @@ const schema: Record<string, any> = {
               "additionalProperties": true
             },
             {
-              "type": "string",
-              "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+              "$ref": "#/definitions/pipeline_v1/common/Expression"
             }
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
@@ -1612,7 +1515,119 @@ const schema: Record<string, any> = {
             }
           },
           "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "CIResourceClass": {
+          "title": "CIResourceClass",
+          "description": "Cloud runner machine size enumeration (maps to io.harness.beans.yaml.extended.CIResourceClass).",
+          "type": "string",
+          "enum": [
+            "xsmall",
+            "flex",
+            "small",
+            "medium",
+            "large",
+            "xlarge",
+            "xxlarge",
+            "xxxlarge"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "PullPolicy": {
+          "title": "PullPolicy",
+          "description": "Image pull policy enumeration (maps to io.harness.beans.yaml.extended.beans.PullPolicy).",
+          "type": "string",
+          "enum": [
+            "always",
+            "never",
+            "if-not-exists"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "OSType": {
+          "title": "OSType",
+          "description": "Operating system type enumeration (maps to io.harness.beans.yaml.extended.infrastrucutre.OSType).",
+          "type": "string",
+          "enum": [
+            "Linux",
+            "MacOS",
+            "Windows"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
         }
+      },
+      "Reference": {
+        "title": "Reference",
+        "description": "Reference defines a git clone reference.",
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "Name provides ref name (branch name, tag name, or PR number).",
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "description": "Type defines the ref type.",
+            "type": "string",
+            "enum": [
+              "branch",
+              "tag",
+              "pull-request",
+              "commit"
+            ]
+          },
+          "sha": {
+            "description": "Sha provides the commit sha for direct sha-based clone.",
+            "type": "string",
+            "minLength": 1
+          },
+          "number": {
+            "description": "Number provides the PR number for pull-request type clone.",
+            "oneOf": [
+              {
+                "type": "integer",
+                "format": "int32"
+              },
+              {
+                "$ref": "#/definitions/pipeline_v1/common/Expression"
+              }
+            ]
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "Resource": {
+        "title": "Resource",
+        "type": "object",
+        "description": "Resource defines container resource limits and requests.",
+        "properties": {
+          "limits": {
+            "description": "Limits defines the maximum resources the container can use.",
+            "$ref": "#/definitions/pipeline_v1/ResourceLimits"
+          },
+          "requests": {
+            "description": "Requests defines the minimum resources reserved for the container.",
+            "$ref": "#/definitions/pipeline_v1/ResourceLimits"
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "ResourceLimits": {
+        "title": "ResourceLimits",
+        "type": "object",
+        "description": "ResourceLimits defines CPU and memory constraints.",
+        "properties": {
+          "cpu": {
+            "description": "CPU allocation (e.g., \"100m\", \"0.5\", \"2\").",
+            "type": "string",
+            "minLength": 1
+          },
+          "memory": {
+            "description": "Memory allocation (e.g., \"128Mi\", \"1Gi\").",
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#"
       },
       "Repository": {
         "title": "Repository",
@@ -1717,41 +1732,120 @@ const schema: Record<string, any> = {
             }
           },
           "uses": {
-            "type": "string",
             "description": "Notification channel type.",
+            "type": "string",
             "enum": [
               "email",
               "webhook",
-              "pagerduty",
-              "msteams",
+              "pager-duty",
+              "ms-teams",
               "slack",
               "datadog"
             ]
           },
           "with": {
             "description": "Channel-specific configuration based on 'uses' type.",
-            "oneOf": [
-              {
-                "$ref": "#/definitions/pipeline_v1/PmsEmailChannel"
-              },
-              {
-                "$ref": "#/definitions/pipeline_v1/PmsSlackChannel"
-              },
-              {
-                "$ref": "#/definitions/pipeline_v1/PmsMSTeamChannel"
-              },
-              {
-                "$ref": "#/definitions/pipeline_v1/PmsWebhookChannel"
-              },
-              {
-                "$ref": "#/definitions/pipeline_v1/PmsPagerDutyChannel"
-              },
-              {
-                "$ref": "#/definitions/pipeline_v1/PmsDatadogChannel"
-              }
-            ]
+            "type": "object"
           }
         },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "uses": {
+                  "const": "email"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "with": {
+                  "$ref": "#/definitions/pipeline_v1/PmsEmailChannel"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "uses": {
+                  "const": "slack"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "with": {
+                  "$ref": "#/definitions/pipeline_v1/PmsSlackChannel"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "uses": {
+                  "const": "ms-teams"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "with": {
+                  "$ref": "#/definitions/pipeline_v1/PmsMSTeamChannel"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "uses": {
+                  "const": "webhook"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "with": {
+                  "$ref": "#/definitions/pipeline_v1/PmsWebhookChannel"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "uses": {
+                  "const": "pager-duty"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "with": {
+                  "$ref": "#/definitions/pipeline_v1/PmsPagerDutyChannel"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "uses": {
+                  "const": "datadog"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "with": {
+                  "$ref": "#/definitions/pipeline_v1/PmsDatadogChannel"
+                }
+              }
+            }
+          }
+        ],
         "$schema": "http://json-schema.org/draft-07/schema#"
       },
       "NotificationEvent": {
@@ -1920,9 +2014,6 @@ const schema: Record<string, any> = {
         "title": "PmsEmailChannel",
         "description": "Email notification channel configuration.",
         "type": "object",
-        "required": [
-          "recipients"
-        ],
         "properties": {
           "user-groups": {
             "description": "List of user group references.",
@@ -2294,7 +2385,7 @@ const schema: Record<string, any> = {
                 "type": "string",
                 "description": "Display name of the stage."
               },
-              "desc": {
+              "description": {
                 "type": "string",
                 "description": "Description of the stage."
               },
@@ -2309,15 +2400,27 @@ const schema: Record<string, any> = {
                 "type": "string",
                 "description": "Conditional execution expression. Stage is skipped if condition resolves to false."
               },
+              "variables": {
+                "description": "Stage-level variables.",
+                "$ref": "#/definitions/pipeline_v1/common/NGVariableV1Wrapper"
+              },
               "inputs": {
+                "description": "Stage-level input variables.",
                 "$ref": "#/definitions/pipeline_v1/common/NGVariableV1Wrapper"
               },
               "delegate": {
                 "$ref": "#/definitions/pipeline_v1/common/Delegate"
               },
               "strategy": {
-                "description": "Execution strategy (matrix, parallelism, etc.).",
-                "$ref": "#/definitions/pipeline_v1/common/StrategyConfigV1"
+                "description": "Execution strategy (matrix, parallelism, etc.). Supports expressions.",
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline_v1/common/StrategyConfigV1"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
+                  }
+                ]
               },
               "timeout": {
                 "type": "string",
@@ -2337,6 +2440,20 @@ const schema: Record<string, any> = {
               },
               "on-failure": {
                 "$ref": "#/definitions/pipeline_v1/common/OnFailure"
+              },
+              "shared-paths": {
+                "description": "Paths shared across steps within the stage. Supports expressions.",
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
+                  }
+                ]
               },
               "needs": {
                 "description": "Stage dependencies (stages that must complete before this one).",
@@ -2380,25 +2497,8 @@ const schema: Record<string, any> = {
                 "$ref": "#/definitions/pipeline_v1/Clone"
               },
               "platform": {
-                "type": "object",
                 "description": "Platform configuration (OS, architecture).",
-                "properties": {
-                  "os": {
-                    "type": "string",
-                    "enum": [
-                      "linux",
-                      "windows",
-                      "macos"
-                    ]
-                  },
-                  "arch": {
-                    "type": "string",
-                    "enum": [
-                      "amd64",
-                      "arm64"
-                    ]
-                  }
-                }
+                "$ref": "#/definitions/pipeline_v1/steps/common/PlatformV1"
               },
               "service": {
                 "description": "Service configuration for CD stages.",
@@ -2421,11 +2521,16 @@ const schema: Record<string, any> = {
                 "description": "OpenTofu/Terraform module reference."
               },
               "env": {
-                "type": "object",
-                "description": "Environment variables for the stage.",
-                "additionalProperties": {
-                  "type": "string"
-                }
+                "description": "Environment variables for the stage. Supports expressions.",
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
+                  }
+                ]
               },
               "cache": {
                 "description": "Cache intelligence configuration.",
@@ -2434,13 +2539,27 @@ const schema: Record<string, any> = {
               "build-intelligence": {
                 "description": "Build intelligence configuration for test optimization.",
                 "$ref": "#/definitions/pipeline_v1/stages/unified/BuildIntelligenceV1"
+              },
+              "volumes": {
+                "description": "Volume configurations for the stage runtime. Supports expressions.",
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline_v1/stages/unified/CIVolumeV1"
+                    }
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
+                  }
+                ]
               }
             },
             "$schema": "http://json-schema.org/draft-07/schema#"
           },
           "RuntimeV1": {
             "title": "RuntimeV1",
-            "description": "Defines the runtime execution engine. Can be a string shorthand or object with configuration.",
+            "description": "Runtime execution engine configuration. Either a string shorthand (cloud|shell|vm|k8) or an object carrying one of the runtime specs.",
             "$schema": "http://json-schema.org/draft-07/schema#",
             "oneOf": [
               {
@@ -2454,72 +2573,80 @@ const schema: Record<string, any> = {
               },
               {
                 "type": "object",
-                "oneOf": [
-                  {
-                    "properties": {
-                      "shell": {
-                        "$ref": "#/definitions/pipeline_v1/stages/unified/ShellRuntimeSpec"
-                      }
-                    },
-                    "required": [
-                      "shell"
-                    ],
-                    "additionalProperties": false
+                "additionalProperties": false,
+                "properties": {
+                  "shell": {
+                    "description": "Shell runtime specification.",
+                    "$ref": "#/definitions/pipeline_v1/stages/unified/ShellRuntimeSpec"
                   },
-                  {
-                    "properties": {
-                      "cloud": {
-                        "$ref": "#/definitions/pipeline_v1/stages/unified/CloudRuntimeSpec"
-                      }
-                    },
-                    "required": [
-                      "cloud"
-                    ],
-                    "additionalProperties": false
+                  "cloud": {
+                    "description": "Cloud runtime specification.",
+                    "$ref": "#/definitions/pipeline_v1/stages/unified/CloudRuntimeSpec"
                   },
-                  {
-                    "properties": {
-                      "vm": {
-                        "$ref": "#/definitions/pipeline_v1/stages/unified/VMRuntimeSpec"
-                      }
-                    },
-                    "required": [
-                      "vm"
-                    ],
-                    "additionalProperties": false
+                  "vm": {
+                    "description": "VM runtime specification.",
+                    "$ref": "#/definitions/pipeline_v1/stages/unified/VMRuntimeSpec"
                   },
-                  {
-                    "properties": {
-                      "kubernetes": {
-                        "$ref": "#/definitions/pipeline_v1/stages/unified/K8RuntimeSpec"
-                      }
-                    },
-                    "required": [
-                      "kubernetes"
-                    ],
-                    "additionalProperties": false
+                  "kubernetes": {
+                    "description": "Kubernetes runtime specification.",
+                    "$ref": "#/definitions/pipeline_v1/stages/unified/K8RuntimeSpec"
                   }
-                ]
+                }
               }
             ]
           },
           "ShellRuntimeSpec": {
             "title": "ShellRuntimeSpec",
-            "description": "Shell runtime specification.",
+            "description": "Shell runtime specification. Mirrors io.harness.beans.yaml.extended.runtime.V1.RuntimeV1.ShellRuntimeSpec (no configurable fields).",
             "type": "object",
+            "additionalProperties": false,
+            "properties": {},
             "$schema": "http://json-schema.org/draft-07/schema#"
           },
           "CloudRuntimeSpec": {
             "title": "CloudRuntimeSpec",
-            "description": "Cloud runtime specification.",
+            "description": "Cloud runtime specification. Mirrors io.harness.beans.yaml.extended.runtime.V1.RuntimeV1.CloudRuntimeSpec.",
             "type": "object",
-            "properties": {},
+            "additionalProperties": false,
+            "properties": {
+              "size": {
+                "description": "Machine size class for the cloud runner. Supports expressions.",
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline_v1/common/CIResourceClass"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
+                  }
+                ]
+              },
+              "virtualization": {
+                "description": "Whether nested virtualization is enabled on the runner. Supports expressions.",
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
+                  }
+                ]
+              },
+              "image": {
+                "description": "Bring-Your-Own-Image runner image reference. Supports expressions.",
+                "type": "string"
+              },
+              "connector": {
+                "description": "Connector reference used to pull the BYOI runner image. Supports expressions.",
+                "type": "string"
+              }
+            },
             "$schema": "http://json-schema.org/draft-07/schema#"
           },
           "VMRuntimeSpec": {
             "title": "VMRuntimeSpec",
-            "description": "VM runtime specification.",
+            "description": "VM runtime specification. Mirrors io.harness.beans.yaml.extended.runtime.V1.RuntimeV1.VMRuntimeSpec.",
             "type": "object",
+            "additionalProperties": false,
             "required": [
               "pool"
             ],
@@ -2527,14 +2654,40 @@ const schema: Record<string, any> = {
               "pool": {
                 "description": "VM pool identifier. Supports expressions.",
                 "type": "string"
+              },
+              "os": {
+                "description": "Operating system for the VM runtime. Supports expressions.",
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "linux",
+                      "windows",
+                      "macos"
+                    ]
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
+                  }
+                ]
+              },
+              "harness-image-connector": {
+                "description": "Harness image connector used to pull runner images. Supports expressions.",
+                "type": "string"
+              },
+              "timeout": {
+                "description": "VM init timeout duration. Supports expressions.",
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
               }
             },
             "$schema": "http://json-schema.org/draft-07/schema#"
           },
           "K8RuntimeSpec": {
             "title": "K8RuntimeSpec",
-            "description": "Kubernetes runtime specification.",
+            "description": "Kubernetes runtime specification. Mirrors io.harness.beans.yaml.extended.runtime.V1.RuntimeV1.K8RuntimeSpec.",
             "type": "object",
+            "additionalProperties": false,
             "properties": {
               "namespace": {
                 "description": "Kubernetes namespace. Supports expressions.",
@@ -2551,8 +2704,7 @@ const schema: Record<string, any> = {
                     "type": "integer"
                   },
                   {
-                    "type": "string",
-                    "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               },
@@ -2560,15 +2712,10 @@ const schema: Record<string, any> = {
                 "description": "Image pull policy. Supports expressions.",
                 "oneOf": [
                   {
-                    "type": "string",
-                    "enum": [
-                      "always",
-                      "never",
-                      "if-not-exists"
-                    ]
+                    "$ref": "#/definitions/pipeline_v1/common/PullPolicy"
                   },
                   {
-                    "type": "string"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               },
@@ -2576,15 +2723,10 @@ const schema: Record<string, any> = {
                 "description": "Operating system type. Supports expressions.",
                 "oneOf": [
                   {
-                    "type": "string",
-                    "enum": [
-                      "Linux",
-                      "MacOS",
-                      "Windows"
-                    ]
+                    "$ref": "#/definitions/pipeline_v1/common/OSType"
                   },
                   {
-                    "type": "string"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               },
@@ -2599,8 +2741,7 @@ const schema: Record<string, any> = {
                     "type": "boolean"
                   },
                   {
-                    "type": "string",
-                    "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               },
@@ -2609,11 +2750,18 @@ const schema: Record<string, any> = {
                 "type": "string"
               },
               "tolerations": {
-                "description": "Kubernetes pod tolerations.",
-                "type": "array",
-                "items": {
-                  "$ref": "#/definitions/pipeline_v1/stages/unified/Toleration"
-                }
+                "description": "Kubernetes pod tolerations. Supports expressions.",
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline_v1/stages/unified/Toleration"
+                    }
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
+                  }
+                ]
               },
               "host": {
                 "description": "Host aliases for the pod. Supports expressions.",
@@ -2625,7 +2773,7 @@ const schema: Record<string, any> = {
                     }
                   },
                   {
-                    "type": "string"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               },
@@ -2639,7 +2787,7 @@ const schema: Record<string, any> = {
                     }
                   },
                   {
-                    "type": "string"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               },
@@ -2662,7 +2810,7 @@ const schema: Record<string, any> = {
                     }
                   },
                   {
-                    "type": "string"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               },
@@ -2676,7 +2824,7 @@ const schema: Record<string, any> = {
                     }
                   },
                   {
-                    "type": "string"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               },
@@ -2690,8 +2838,7 @@ const schema: Record<string, any> = {
                     }
                   },
                   {
-                    "type": "string",
-                    "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               },
@@ -2706,7 +2853,7 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline_v1/stages/unified/SecurityContextV1"
                   },
                   {
-                    "type": "string"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               }
@@ -2905,8 +3052,7 @@ const schema: Record<string, any> = {
                     "type": "boolean"
                   },
                   {
-                    "type": "string",
-                    "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               }
@@ -2961,8 +3107,7 @@ const schema: Record<string, any> = {
                     "type": "boolean"
                   },
                   {
-                    "type": "string",
-                    "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               }
@@ -2993,8 +3138,7 @@ const schema: Record<string, any> = {
                     "type": "boolean"
                   },
                   {
-                    "type": "string",
-                    "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               }
@@ -3013,8 +3157,7 @@ const schema: Record<string, any> = {
                     "type": "boolean"
                   },
                   {
-                    "type": "string",
-                    "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               },
@@ -3029,8 +3172,7 @@ const schema: Record<string, any> = {
                     "type": "boolean"
                   },
                   {
-                    "type": "string",
-                    "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               },
@@ -3041,8 +3183,7 @@ const schema: Record<string, any> = {
                     "type": "boolean"
                   },
                   {
-                    "type": "string",
-                    "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               },
@@ -3053,8 +3194,7 @@ const schema: Record<string, any> = {
                     "type": "boolean"
                   },
                   {
-                    "type": "string",
-                    "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               },
@@ -3065,8 +3205,7 @@ const schema: Record<string, any> = {
                     "type": "integer"
                   },
                   {
-                    "type": "string",
-                    "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               },
@@ -3077,8 +3216,7 @@ const schema: Record<string, any> = {
                     "type": "integer"
                   },
                   {
-                    "type": "string",
-                    "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               },
@@ -3089,8 +3227,7 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline_v1/stages/unified/Capabilities"
                   },
                   {
-                    "type": "string",
-                    "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               }
@@ -3112,8 +3249,7 @@ const schema: Record<string, any> = {
                     }
                   },
                   {
-                    "type": "string",
-                    "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               },
@@ -3127,8 +3263,7 @@ const schema: Record<string, any> = {
                     }
                   },
                   {
-                    "type": "string",
-                    "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               }
@@ -3206,7 +3341,7 @@ const schema: Record<string, any> = {
               "anyOf": [
                 {
                   "required": [
-                    "deploy-to"
+                    "id"
                   ]
                 },
                 {
@@ -3231,14 +3366,13 @@ const schema: Record<string, any> = {
                 {
                   "if": {
                     "required": [
-                      "deploy-to"
+                      "id"
                     ]
                   },
                   "then": {
                     "type": "object",
                     "required": [
-                      "id",
-                      "deploy-to"
+                      "id"
                     ],
                     "properties": {
                       "id": {
@@ -3339,7 +3473,7 @@ const schema: Record<string, any> = {
             },
             "else": {
               "required": [
-                "deploy-to"
+                "id"
               ]
             },
             "$schema": "http://json-schema.org/draft-07/schema#"
@@ -3588,8 +3722,15 @@ const schema: Record<string, any> = {
             "type": "object",
             "properties": {
               "enabled": {
-                "description": "Whether caching is enabled.",
-                "type": "boolean"
+                "description": "Whether caching is enabled. Supports expressions.",
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
+                  }
+                ]
               },
               "path": {
                 "description": "Paths to cache.",
@@ -3630,8 +3771,7 @@ const schema: Record<string, any> = {
                     "type": "boolean"
                   },
                   {
-                    "type": "string",
-                    "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               }
@@ -3674,8 +3814,7 @@ const schema: Record<string, any> = {
                                 "additionalProperties": true
                               },
                               {
-                                "type": "string",
-                                "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                                "$ref": "#/definitions/pipeline_v1/common/Expression"
                               }
                             ]
                           },
@@ -4109,8 +4248,7 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline_v1/common/StrategyConfigV1"
                   },
                   {
-                    "type": "string",
-                    "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               },
@@ -4151,8 +4289,7 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline_v1/steps/unified/RunTestsStepInfoV1"
                   },
                   {
-                    "type": "string",
-                    "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               },
@@ -4167,8 +4304,7 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline_v1/steps/unified/RunStepInfoV1"
                   },
                   {
-                    "type": "string",
-                    "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               }
@@ -4255,8 +4391,7 @@ const schema: Record<string, any> = {
                     }
                   },
                   {
-                    "type": "string",
-                    "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               },
@@ -4339,8 +4474,7 @@ const schema: Record<string, any> = {
                     ]
                   },
                   {
-                    "type": "string",
-                    "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               },
@@ -4394,8 +4528,7 @@ const schema: Record<string, any> = {
                     "type": "boolean"
                   },
                   {
-                    "type": "string",
-                    "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               },
@@ -4420,8 +4553,7 @@ const schema: Record<string, any> = {
                     }
                   },
                   {
-                    "type": "string",
-                    "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               },
@@ -4449,8 +4581,7 @@ const schema: Record<string, any> = {
                     "type": "integer"
                   },
                   {
-                    "type": "string",
-                    "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               },
@@ -4511,8 +4642,7 @@ const schema: Record<string, any> = {
                 }
               },
               {
-                "type": "string",
-                "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                "$ref": "#/definitions/pipeline_v1/common/Expression"
               }
             ],
             "$schema": "http://json-schema.org/draft-07/schema#"
@@ -4540,8 +4670,7 @@ const schema: Record<string, any> = {
                     }
                   },
                   {
-                    "type": "string",
-                    "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               },
@@ -4583,8 +4712,7 @@ const schema: Record<string, any> = {
                         "type": "boolean"
                       },
                       {
-                        "type": "string",
-                        "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                        "$ref": "#/definitions/pipeline_v1/common/Expression"
                       }
                     ]
                   }
@@ -4653,8 +4781,7 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline_v1/common/StrategyConfigV1"
                   },
                   {
-                    "type": "string",
-                    "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               },
@@ -4727,8 +4854,7 @@ const schema: Record<string, any> = {
                     "properties": {
                       "key": {
                         "description": "Resource key for the queue. Supports expressions.",
-                        "type": "string",
-                        "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                        "type": "string"
                       },
                       "scope": {
                         "description": "Scope of the queue holding.",
@@ -4776,15 +4902,13 @@ const schema: Record<string, any> = {
                             }
                           },
                           {
-                            "type": "string",
-                            "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                            "$ref": "#/definitions/pipeline_v1/common/Expression"
                           }
                         ]
                       },
                       "payload": {
                         "description": "JSON payload to evaluate against policies. Supports expressions.",
-                        "type": "string",
-                        "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                        "type": "string"
                       }
                     }
                   }
@@ -4907,13 +5031,11 @@ const schema: Record<string, any> = {
             "properties": {
               "message": {
                 "description": "Approval message. Supports expressions.",
-                "type": "string",
-                "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                "type": "string"
               },
               "callback": {
                 "description": "Callback ID for the approval. Supports expressions.",
-                "type": "string",
-                "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                "type": "string"
               },
               "user-groups": {
                 "description": "User groups for approval. Supports single value or array. Supports expressions.",
@@ -4925,8 +5047,7 @@ const schema: Record<string, any> = {
                     }
                   },
                   {
-                    "type": "string",
-                    "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               },
@@ -4940,8 +5061,7 @@ const schema: Record<string, any> = {
                     }
                   },
                   {
-                    "type": "string",
-                    "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               },
@@ -4952,8 +5072,7 @@ const schema: Record<string, any> = {
                     "type": "integer"
                   },
                   {
-                    "type": "string",
-                    "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               },
@@ -4964,8 +5083,7 @@ const schema: Record<string, any> = {
                     "type": "boolean"
                   },
                   {
-                    "type": "string",
-                    "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
               },
@@ -4983,18 +5101,15 @@ const schema: Record<string, any> = {
               },
               "timezone": {
                 "description": "Timezone for auto-approval deadline. Supports expressions.",
-                "type": "string",
-                "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                "type": "string"
               },
               "deadline": {
                 "description": "Deadline for auto-approval. Supports expressions.",
-                "type": "string",
-                "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                "type": "string"
               },
               "comments": {
                 "description": "Comments for auto-approval. Supports expressions.",
-                "type": "string",
-                "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                "type": "string"
               },
               "params": {
                 "description": "Approver input parameters.",
@@ -5196,8 +5311,7 @@ const schema: Record<string, any> = {
                         "$ref": "#/definitions/pipeline_v1/common/StrategyConfigV1"
                       },
                       {
-                        "type": "string",
-                        "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)"
+                        "$ref": "#/definitions/pipeline_v1/common/Expression"
                       }
                     ]
                   },
@@ -5216,6 +5330,48 @@ const schema: Record<string, any> = {
                     }
                   }
                 }
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          }
+        },
+        "common": {
+          "PlatformV1": {
+            "title": "PlatformV1",
+            "description": "Platform configuration describing the operating system and CPU architecture for a stage runtime.",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "os": {
+                "description": "Operating system for the stage runtime. Supports expressions.",
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "linux",
+                      "windows",
+                      "macos"
+                    ]
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
+                  }
+                ]
+              },
+              "arch": {
+                "description": "CPU architecture for the stage runtime. Supports expressions.",
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "amd64",
+                      "arm64"
+                    ]
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
+                  }
+                ]
               }
             },
             "$schema": "http://json-schema.org/draft-07/schema#"

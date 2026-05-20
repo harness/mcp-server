@@ -22,6 +22,8 @@
 | TC-tpl-007 | Filter by template_list_type Stable | `harness_list(resource_type="template", template_list_type="Stable")` | Returns only stable templates | ⬜ Pending | | |
 | TC-tpl-008 | Filter by template_list_type LastUpdated | `harness_list(resource_type="template", template_list_type="LastUpdated")` | Returns last updated templates | ⬜ Pending | | |
 | TC-tpl-009 | Combined filters | `harness_list(resource_type="template", template_type="Step", search_term="shell", template_list_type="Stable", page=0, size=10)` | Returns filtered results | ⬜ Pending | | |
+| TC-tpl-009a | List metadata only | `harness_list(resource_type="template", filters={metadata_only: true}, page=0, size=10)` | Returns lightweight template metadata from the list-metadata endpoint | ⬜ Pending | | |
+| TC-tpl-009b | List global templates | `harness_list(resource_type="template", filters={global: true}, page=0, size=10)` | Returns global template metadata | ⬜ Pending | | |
 | TC-tpl-010 | Get template by identifier | `harness_get(resource_type="template", template_id="my_template")` | Returns full template details | ⬜ Pending | | |
 | TC-tpl-011 | Get with specific version_label | `harness_get(resource_type="template", template_id="my_template", version_label="v2")` | Returns template at version v2 | ⬜ Pending | | |
 | TC-tpl-012 | Get with scope overrides | `harness_get(resource_type="template", template_id="my_template", org_id="other_org", project_id="other_project")` | Returns from specified scope | ⬜ Pending | | |
@@ -35,7 +37,7 @@
 | TC-tpl-020 | Update with missing template_yaml | `harness_update(resource_type="template", template_id="my_template", version_label="v1")` | Error: template_yaml required | ⬜ Pending | | |
 | TC-tpl-021 | Delete all versions | `harness_delete(resource_type="template", template_id="my_template")` | All versions deleted | ⬜ Pending | | |
 | TC-tpl-022 | Delete specific version | `harness_delete(resource_type="template", template_id="my_template", version_label="v1")` | Only v1 deleted | ⬜ Pending | | |
-| TC-tpl-023 | List with different org_id | `harness_list(resource_type="template", org_id="custom_org")` | Returns from specified org | ⬜ Pending | | |
+| TC-tpl-023 | List with different org_id | `harness_list(resource_type="template", resource_scope="org", org_id="custom_org")` | Returns from specified org | ⬜ Pending | | |
 | TC-tpl-024 | Get non-existent template | `harness_get(resource_type="template", template_id="nonexistent_tpl_xyz")` | Error: not found (404) | ⬜ Pending | | |
 | TC-tpl-025 | Delete non-existent template | `harness_delete(resource_type="template", template_id="nonexistent_tpl_xyz")` | Error: not found (404) | ⬜ Pending | | |
 | TC-tpl-026 | List with empty results | `harness_list(resource_type="template", search_term="zzz_no_match_xyz")` | Empty items, total=0 | ⬜ Pending | | |
@@ -46,11 +48,11 @@
 
 | Metric | Count |
 |--------|-------|
-| Total Tests | 28 |
+| Total Tests | 30 |
 | ✅ Passed | 1 |
 | ❌ Failed | 0 |
 | ⚠️ Blocked | 0 |
-| ⬜ Not Run | 27 |
+| ⬜ Not Run | 29 |
 
 ## Issues Found
 

@@ -14,18 +14,20 @@ import { registerSearchTool } from "./harness-search.js";
 import { registerDescribeTool } from "./harness-describe.js";
 import { registerStatusTool } from "./harness-status.js";
 import { registerSchemaTool } from "./harness-schema.js";
+import type { SchemaEntry } from "../data/schemas/types.js";
+import "../data/examples/load-all.js";
 
 
-export function registerAllTools(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
+export function registerAllTools(server: McpServer, registry: Registry, client: HarnessClient, config: Config, additionalSchemas?: Record<string, SchemaEntry>): void {
   registerListTool(server, registry, client);
   registerGetTool(server, registry, client);
-  registerCreateTool(server, registry, client);
-  registerUpdateTool(server, registry, client);
-  registerDeleteTool(server, registry, client);
-  registerExecuteTool(server, registry, client);
+  registerCreateTool(server, registry, client, config);
+  registerUpdateTool(server, registry, client, config);
+  registerDeleteTool(server, registry, client, config);
+  registerExecuteTool(server, registry, client, config);
   registerDiagnoseTool(server, registry, client, config);
   registerSearchTool(server, registry, client);
   registerDescribeTool(server, registry);
   registerStatusTool(server, registry, client, config);
-  registerSchemaTool(server, registry);
+  registerSchemaTool(server, additionalSchemas);
 }

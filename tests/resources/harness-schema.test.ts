@@ -1,5 +1,32 @@
-import { describe, it, expect } from "vitest";
-import { isValidSchemaName } from "../../src/resources/harness-schema.js";
+import { describe, it, expect, vi } from "vitest";
+import { isValidSchemaName, registerHarnessSchemaResource } from "../../src/resources/harness-schema.js";
+import type { SchemaEntry } from "../../src/data/schemas/types.js";
+
+describe("registerHarnessSchemaResource collision guard", () => {
+  it("throws when additionalSchemas key collides with a built-in schema name", () => {
+    const server = { registerResource: vi.fn() } as any;
+    const e: SchemaEntry = { schema: { type: "object" }, description: "test", group: "test" };
+    expect(() =>
+      registerHarnessSchemaResource(server, { pipeline: e }),
+    ).toThrow("conflicts with a built-in schema name");
+  });
+});
+
+describe("isValidSchemaName with extension schemas", () => {
+  it("returns false for an extension schema name when no extensions passed", () => {
+    expect(isValidSchemaName("DashboardContract")).toBe(false);
+  });
+
+  it("returns true for an extension schema name when passed in merged set", () => {
+    const mergedNames = ["pipeline", "DashboardContract"];
+    expect(isValidSchemaName("DashboardContract", mergedNames)).toBe(true);
+  });
+
+  it("returns false for unknown name even with merged set", () => {
+    const mergedNames = ["pipeline", "DashboardContract"];
+    expect(isValidSchemaName("unknown", mergedNames)).toBe(false);
+  });
+});
 
 describe("harness-schema resource", () => {
   describe("isValidSchemaName", () => {

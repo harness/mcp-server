@@ -1,6 +1,6 @@
 ## Harness MCP Server 2.0
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 166 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 187 resource types.
 
 ## Why Use This MCP Server
 
@@ -8,8 +8,8 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **11 tools, 166 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
-- **Full platform coverage.** 31 toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Governance, Service Overrides, Visualizations, and more. Not just pipelines — the entire Harness platform.
+- **11 tools, 187 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **Full platform coverage.** 32 toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Governance, Service Overrides, Visualizations, and more. Not just pipelines — the entire Harness platform.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **31 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
 - **Works everywhere.** Stdio transport for local clients (Claude Desktop, Cursor, Windsurf), HTTP transport for remote/shared deployments, Docker and Kubernetes ready.
@@ -125,6 +125,8 @@ The HTTP transport runs in **session-based mode**. A new MCP session is created 
 
 Operational constraints in HTTP mode:
 
+- Set `HARNESS_MCP_AUTH_TOKEN` for any shared or remotely reachable deployment. When set, every `POST`, `GET`, and `DELETE` request to `/mcp` must include `Authorization: Bearer <token>`.
+- Non-loopback binds require `HARNESS_MCP_AUTH_TOKEN` by default. To run unauthenticated on a non-loopback interface anyway, set `HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP=true` explicitly.
 - `POST /mcp` without `mcp-session-id` must be an `initialize` request.
 - `POST /mcp`, `GET /mcp`, and `DELETE /mcp` for existing sessions require the `mcp-session-id` header.
 - `GET /mcp` is used for SSE notifications (progress updates and elicitation prompts).
@@ -132,26 +134,47 @@ Operational constraints in HTTP mode:
 - `GET /health` is the only non-MCP endpoint.
 - Request body size is capped by `HARNESS_MAX_BODY_SIZE_MB` (default `10` MB).
 - Set `x-harness-pipeline-version: 0` or `1` on the `initialize` request to select V0 or V1 pipeline resources for that HTTP session.
+- Set `x-harness-auto-approve-risk: none|low_write|medium_write|high_write|all` on the `initialize` request to choose a stricter per-session auto-approval threshold. The server caps this value at the deployment-level `HARNESS_AUTO_APPROVE_RISK`, so a session can reduce but not expand the configured approval ceiling.
+
+#### Multi-User Mode
+
+Set `HARNESS_MCP_MODE=multi-user` for shared HTTP deployments where each client authenticates as a different Harness user. In this mode:
+
+- `HARNESS_API_KEY` must **not** be set in the server config — the server holds no Harness credentials.
+- Each session must provide `x-harness-api-key` and `x-harness-account-id` headers on the `initialize` request. Sessions without these headers are rejected with a 401.
+- Sessions may also provide `x-harness-org` and `x-harness-project` headers to set default scope for that session.
+- The Harness API key flows through to every Harness API call for that session, so the audit trail in Harness reflects the real user.
+- `HARNESS_MCP_AUTH_TOKEN` is independent and can still be used as an additional transport-layer gate.
 
 ```bash
 # Health check
 curl http://localhost:3000/health
 
 # MCP initialize request (capture mcp-session-id response header)
+# In multi-user mode, x-harness-api-key and x-harness-account-id are required on initialize.
 curl -i -X POST http://localhost:3000/mcp \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Authorization: Bearer $HARNESS_MCP_AUTH_TOKEN" \
+  -H "x-harness-api-key: $HARNESS_API_KEY" \
+  -H "x-harness-account-id: $HARNESS_ACCOUNT_ID" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
 
 # Subsequent MCP request (use returned session ID)
 curl -X POST http://localhost:3000/mcp \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Authorization: Bearer $HARNESS_MCP_AUTH_TOKEN" \
   -H "mcp-session-id: <session-id>" \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
 
 # Terminate session
 curl -X DELETE http://localhost:3000/mcp \
+  -H "Authorization: Bearer $HARNESS_MCP_AUTH_TOKEN" \
   -H "mcp-session-id: <session-id>"
 ```
+
+`HARNESS_MCP_ALLOWED_HOSTS` controls Host-header validation for DNS-rebinding protection, and CORS limits browser origins. Neither is authentication; use `HARNESS_MCP_AUTH_TOKEN` or an authenticated gateway/reverse proxy for access control.
 
 ### Client Configuration
 
@@ -162,6 +185,8 @@ curl -X DELETE http://localhost:3000/mcp \
 Harness also supports a hosted MCP endpoint for accounts that have the managed service enabled. This is useful when you want a shared remote MCP endpoint instead of running `npx harness-mcp-v2` or self-hosting the HTTP transport yourself.
 
 > **Important:** Hosted MCP authentication uses **Harness Platform OAuth**. It does **not** use `HARNESS_API_KEY` in the client config. Hosted MCP availability is configured per Harness account, so you will need to work with **Harness Support** to enable/configure the setting before using it.
+>
+> The hosted endpoint `https://mcp.harness.io/mcp` is a managed service. Client-side MCP config in Claude, Cursor, or Cowork cannot override which Harness environment it routes to. For Harness0 or another private Harness SaaS environment, ask Harness Support to enable/configure hosted MCP for that environment, or run the local/self-hosted server and set `HARNESS_BASE_URL` to the target Harness host.
 
 **Hosted MCP example:**
 
@@ -492,23 +517,26 @@ The server automatically loads environment variables from a `.env` file in the p
 
 | Variable                    | Required | Default                     | Description                                                                                                                                                                                                                                           |
 | --------------------------- | -------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `HARNESS_API_KEY`           | Yes      | --                          | Harness personal access token or service account token                                                                                                                                                                                                |
-| `HARNESS_ACCOUNT_ID`        | No       | *(from PAT)*                | Harness account identifier. Auto-extracted from PAT tokens; only needed for non-PAT API keys                                                                                                                                                          |
-| `HARNESS_BASE_URL`          | No       | `https://app.harness.io`    | Base URL (override for self-managed Harness)                                                                                                                                                                                                          |
-| `HARNESS_ORG`               | No       | `default`                   | Organization ID. Used when `org_id` is not specified per tool call. Agents can also discover orgs dynamically via `harness_list(resource_type="organization")`                                                                                        |
+| `HARNESS_MCP_MODE`          | No       | `single-user`               | Deployment mode: `single-user` (API key in config, used for all sessions) or `multi-user` (HTTP only, per-session credentials via `x-harness-api-key` and `x-harness-account-id` headers)                                                            |
+| `HARNESS_API_KEY`           | Yes*     | --                          | Harness personal access token or service account token. Required in `single-user` mode. Must NOT be set in `multi-user` mode                                                                                                                          |
+| `HARNESS_ACCOUNT_ID`        | No       | *(from PAT)*                | Harness account identifier. Auto-extracted from PAT tokens in single-user mode; sessions provide their own via `x-harness-account-id` in multi-user mode                                                                                              |
+| `HARNESS_BASE_URL`          | No       | `https://app.harness.io`    | Harness API/UI base URL for local stdio or self-hosted HTTP deployments. Set this to environments such as `https://harness0.harness.io` when running the server yourself. It does not affect the managed `https://mcp.harness.io/mcp` hosted endpoint |
+| `HARNESS_ORG`               | No       | --                          | Organization ID. Used when `org_id` is not specified per tool call. If omitted, `org_id` must be provided explicitly. Agents can also discover orgs dynamically via `harness_list(resource_type="organization")`                                      |
 | `HARNESS_PROJECT`           | No       | --                          | Project ID. Used when `project_id` is not specified per tool call. Agents can also discover projects dynamically via `harness_list(resource_type="project")`                                                                                          |
 | `HARNESS_API_TIMEOUT_MS`    | No       | `30000`                     | HTTP request timeout in milliseconds                                                                                                                                                                                                                  |
 | `HARNESS_MAX_RETRIES`       | No       | `3`                         | Retry count for transient failures (429, 5xx)                                                                                                                                                                                                         |
 | `HARNESS_MAX_BODY_SIZE_MB`  | No       | `10`                        | Max HTTP request body size in MB for `http` transport                                                                                                                                                                                                 |
 | `HARNESS_RATE_LIMIT_RPS`    | No       | `10`                        | Client-side request throttle (requests per second) to Harness APIs                                                                                                                                                                                    |
 | `LOG_LEVEL`                 | No       | `info`                      | Log verbosity: `debug`, `info`, `warn`, `error`                                                                                                                                                                                                       |
-| `HARNESS_TOOLSETS`          | No       | *(defaults)*                | Comma-separated toolset list. Empty loads default toolsets and excludes opt-in toolsets such as `ai-evals`. Supports `+name` to add opt-in toolsets and `-name` to remove defaults (see [Toolset Filtering](#toolset-filtering))                      |
+| `HARNESS_TOOLSETS`          | No       | *(all)*                     | Comma-separated toolset list. Empty loads all toolsets. Supports `+name` to explicitly include and `-name` to remove toolsets (see [Toolset Filtering](#toolset-filtering))                                                                           |
 | `HARNESS_READ_ONLY`         | No       | `false`                     | Block all mutating operations (create, update, delete, execute). Only list and get are allowed. Useful for shared/demo environments                                                                                                                   |
 | `HARNESS_AUTO_APPROVE_RISK` | No       | `none`                      | Risk-based auto-approve threshold for autonomous workflows. Operations at or below this risk proceed without confirmation. Values: `none`, `low_write`, `medium_write`, `high_write`, `all`. See [Elicitation](#elicitation)                          |
 | `HARNESS_SKIP_ELICITATION`  | No       | `false`                     | **Deprecated** — use `HARNESS_AUTO_APPROVE_RISK=all` instead. Kept for backward compatibility                                                                                                                                                         |
 | `HARNESS_ALLOW_HTTP`        | No       | `false`                     | Allow non-HTTPS `HARNESS_BASE_URL`. By default, the server enforces HTTPS for security. Set to `true` only for local development against a non-TLS Harness instance                                                                                   |
 | `HARNESS_PIPELINE_VERSION`  | No       | `0`                         | **(Alpha)** Pipeline YAML version. `0` loads the `pipeline` resource type and excludes `pipeline_v1`; `1` loads `pipeline_v1` and excludes `pipeline`. HTTP sessions can override this at initialize time with `x-harness-pipeline-version: 0` or `1` |
 | `HARNESS_MCP_ALLOWED_HOSTS` | No       | --                          | Comma-separated hostnames allowed by HTTP transport Host-header validation. `mcp.harness.io` is allowed by default for localhost binds; add proxy/custom domains here                                                                                 |
+| `HARNESS_MCP_AUTH_TOKEN`    | No       | --                          | Bearer token required on `/mcp` HTTP routes when set. Required by default when HTTP transport binds to a non-loopback host                                                                                                                             |
+| `HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP` | No | `false`         | Explicitly allow unauthenticated HTTP transport on non-loopback binds. Use only behind another authenticated control                                                                                                                                    |
 | `HARNESS_MCP_LOG_FILE`      | No       | `~/.claude/harness-mcp.log` | File used for stdio disconnect/crash diagnostics when stderr may no longer be available                                                                                                                                                               |
 
 
@@ -730,6 +758,17 @@ Use this sequence to reduce execution-time input errors:
   - **Constraint:** shorthand expansion is skipped when `inputs.build` is already present (explicit `build` wins).
 3. **Execute the run**
   - `harness_execute(resource_type="pipeline", action="run", resource_id="<pipeline_id>", ...)`
+  - For Git-backed pipelines whose YAML should be loaded from a non-default branch, pass `params.pipeline_branch` (sent to Harness as `pipelineBranchName`):
+
+    ```json
+    {
+      "resource_type": "pipeline",
+      "action": "run",
+      "resource_id": "deploy_app",
+      "params": { "pipeline_branch": "feature/new-stage" },
+      "inputs": { "branch": "main" }
+    }
+    ```
 4. **Optional: combine both**
   - Use `input_set_ids` for the base shape and `inputs` for simple overrides.
 
@@ -952,7 +991,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-166 resource types organized across 31 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+187 resource types organized across 32 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -1062,11 +1101,13 @@ Only one pipeline YAML resource type is loaded at startup. By default `HARNESS_P
 | -------------- | ---- | --- | ------ | ------ | ------ | -------------------- |
 | `repository`   | x    | x   | x      | x      |        |                      |
 | `branch`       | x    | x   | x      |        | x      |                      |
-| `commit`       | x    | x   |        |        |        | `diff`, `diff_stats` |
+| `commit`       | x    | x   | x      |        |        | `diff`, `diff_stats` |
 | `file_content` |      | x   |        |        |        | `blame`              |
 | `tag`          | x    |     | x      |        | x      |                      |
 | `repo_rule`    | x    | x   |        |        |        |                      |
 | `space_rule`   | x    | x   |        |        |        |                      |
+
+`commit` creation commits one or more file actions directly through the Harness Code API without cloning. Pass `body.title`, `body.branch`, and `body.actions`; each action is `CREATE`, `UPDATE`, `DELETE`, or `MOVE`, and `UPDATE` requires the current blob SHA.
 
 
 ### Artifact Registries
@@ -1086,6 +1127,8 @@ Only one pipeline YAML resource type is loaded at startup. By default `HARNESS_P
 | Resource Type | List | Get | Create | Update | Delete | Execute Actions |
 | ------------- | ---- | --- | ------ | ------ | ------ | --------------- |
 | `template`    | x    | x   | x      | x      | x      |                 |
+
+Template operations use the Harness Template service paths (`/template/api/templates...`). Create and update require the full template YAML string in `body.template_yaml` or `body.yaml`; `version_label` targets a specific version for update/delete, while deleting without `version_label` deletes all versions.
 
 
 ### Dashboards
@@ -1128,11 +1171,13 @@ Only one pipeline YAML resource type is loaded at startup. By default `HARNESS_P
 
 | Resource Type  | List | Get | Create | Update | Delete | Execute Actions |
 | -------------- | ---- | --- | ------ | ------ | ------ | --------------- |
-| `pull_request` | x    | x   | x      | x      |        | `merge`         |
+| `pull_request` | x    | x   | x      | x      |        | `close`, `merge` |
 | `pr_reviewer`  | x    |     | x      |        |        | `submit_review` |
 | `pr_comment`   | x    |     | x      |        |        |                 |
 | `pr_check`     | x    |     |        |        |        |                 |
 | `pr_activity`  | x    |     |        |        |        |                 |
+
+Use `harness_execute(resource_type="pull_request", action="close", ...)` for an explicit close operation. `harness_update` also accepts `body.state` (`open` or `closed`) and routes state changes to the dedicated Harness Code PR state endpoint; send title/description edits in a separate update call.
 
 
 ### Feature Flags
@@ -1256,7 +1301,9 @@ SEI resources are consolidated for token efficiency. Use `metric` or `aspect` pa
 | ----------------------- | ---- | --- | ------ | ------ | ------ | ------------------------------ |
 | `security_issue`        | x    |     |        |        |        |                                |
 | `security_issue_filter` | x    |     |        |        |        |                                |
-| `security_exemption`    | x    |     |        |        |        | `approve`, `reject`, `promote` |
+| `security_exemption`    | x    |     | x      |        |        | `approve`, `reject`, `promote` |
+
+`security_exemption` create is a `high_write` operation. The server derives `requester_id` from the authenticated PAT, sets `exemptFutureOccurrences=true`, and defaults `duration_days` to 30 when not provided. For listing exemptions, pass a small explicit page size (for example `filters: { "status": "Pending", "size": 5 }`) and follow the `_nextPageHint` returned in each response.
 
 
 ### Access Control
@@ -1368,6 +1415,7 @@ Inline PNG chart visualizations rendered from Harness data. These are metadata-o
 | `sbom-compliance-check`     | Audit SBOM and compliance posture for artifacts — license risks, policy violations, component vulnerabilities | `artifactId` (optional), `projectId` (optional)                         |
 | `supply-chain-audit`        | End-to-end software supply chain security audit — provenance, chain of custody, policy compliance             | `projectId` (optional)                                                  |
 | `security-exemption-review` | Review pending security exemptions and make batch approval or rejection decisions                             | `projectId` (optional)                                                  |
+| `bulk-exemption-create`     | Create justified security exemptions for multiple STO issues with explicit scope and duration guidance        | `projectId` (required), `exemption_type` (required), `reason` (required), issue filters (optional) |
 | `access-control-audit`      | Audit user permissions, over-privileged accounts, and role assignments to enforce least-privilege             | `projectId` (optional), `orgId` (optional)                              |
 
 
@@ -1398,14 +1446,14 @@ Inline PNG chart visualizations rendered from Harness data. These are metadata-o
 
 ## Toolset Filtering
 
-By default, 31 of 33 toolsets are enabled. One toolset (`ai-evals`) is opt-in — excluded by default to avoid polluting the resource list for users who don't need it.
+By default, all 32 toolsets are enabled.
 
-### Enabling opt-in toolsets
+### Adding toolsets with `+` prefix
 
-Use the `+` prefix to add opt-in toolsets to the defaults:
+Use the `+` prefix to explicitly include toolsets alongside all defaults (useful if a toolset becomes opt-in in the future):
 
 ```bash
-# Enable ai-evals alongside all defaults
+# Explicitly include ai-evals alongside all defaults
 HARNESS_TOOLSETS=+ai-evals
 ```
 
@@ -1470,7 +1518,7 @@ Available toolset names:
 | `overrides`             | service_override                                                                                                                                                                                                                                                                                |
 | `settings`              | setting                                                                                                                                                                                                                                                                                         |
 | `visualizations`        | visual_timeline, visual_stage_flow, visual_health_dashboard, visual_pie_chart, visual_bar_chart, visual_timeseries, visual_architecture                                                                                                                                                         |
-| `ai-evals` **(opt-in)** | eval_dataset, eval_dataset_item, evaluation, eval_run, eval_run_item, eval_run_by_eval, eval_metric, eval_metric_set, eval_metric_set_entry, eval_suite, eval_suite_evaluation, eval_suite_run, eval_target, eval_model, eval_annotation, eval_analytics, eval_git_settings, eval_registry_item |
+| `ai-evals`              | eval_dataset, eval_dataset_item, evaluation, eval_run, eval_run_item, eval_run_by_eval, eval_metric, eval_metric_set, eval_metric_set_entry, eval_suite, eval_suite_evaluation, eval_suite_run, eval_target, eval_model, eval_annotation, eval_analytics, eval_git_settings, eval_registry_item |
 
 
 ## Architecture
@@ -1489,7 +1537,7 @@ Available toolset names:
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
                 |  32 Toolsets      |      (data files, not code)
-                |  166 Resource Types|
+                |  187 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+
@@ -1692,17 +1740,15 @@ Elicitation behavior varies by operation risk when client support is missing:
 
 If elicitation fails at runtime, operations at `medium_write` or above are blocked.
 
-### Auto-Approve for Autonomous Workflows
+### Autonomous Mode
 
-For CI/CD bots, headless agents, or batch automation, use `HARNESS_AUTO_APPROVE_RISK` to auto-approve operations up to a given risk level:
+**Autonomous mode** means the server proceeds with all operations — including writes and destructive actions — without prompting for confirmation. Enable it by setting:
 
 ```bash
-# Auto-approve everything (equivalent to old HARNESS_SKIP_ELICITATION=true)
 HARNESS_AUTO_APPROVE_RISK=all
-
-# Auto-approve only low-risk writes, still prompt for medium+
-HARNESS_AUTO_APPROVE_RISK=low_write
 ```
+
+This is the deployment-level ceiling: once set, individual sessions cannot escalate beyond it (though they can choose a stricter threshold per-session via the `x-harness-auto-approve-risk` header).
 
 Or in your MCP client config:
 
@@ -1721,9 +1767,27 @@ Or in your MCP client config:
 }
 ```
 
-> **Migration note:** `HARNESS_SKIP_ELICITATION=true` is still supported and maps to `HARNESS_AUTO_APPROVE_RISK=all`. A deprecation warning is logged to stderr. If both are set, `HARNESS_AUTO_APPROVE_RISK` takes precedence.
+**Partial autonomy:** You can also auto-approve only up to a specific risk level while still prompting for higher-risk operations:
 
-When set to `all`, **all** write and delete operations proceed without user confirmation — including destructive operations like `harness_delete`. Use with caution and consider pairing with `HARNESS_TOOLSETS` to restrict which resource types are available.
+```bash
+# Auto-approve reads and low-risk writes; prompt for medium_write, high_write, destructive
+HARNESS_AUTO_APPROVE_RISK=low_write
+
+# Auto-approve up to high-risk writes; only prompt for destructive operations
+HARNESS_AUTO_APPROVE_RISK=high_write
+```
+
+| Value | What's auto-approved |
+|---|---|
+| `none` (default) | Nothing — no auto-approval threshold |
+| `low_write` | Reads + low-risk writes |
+| `medium_write` | Reads + low + medium-risk writes |
+| `high_write` | Reads + low + medium + high-risk writes |
+| `all` | Everything, including destructive operations |
+
+> **Autonomous mode warning:** `HARNESS_AUTO_APPROVE_RISK=all` skips confirmation for **all** operations including `harness_delete`. Use with caution and consider pairing with `HARNESS_TOOLSETS` to restrict which resource types are available.
+
+> **Migration note:** `HARNESS_SKIP_ELICITATION=true` is still supported and maps to `HARNESS_AUTO_APPROVE_RISK=all`. A deprecation warning is logged to stderr. If both are set, `HARNESS_AUTO_APPROVE_RISK` takes precedence.
 
 ## Safety
 
@@ -1759,6 +1823,8 @@ The Harness MCP server pairs well with **[Harness Skills](https://github.com/har
 | `Read-only mode is enabled ... operations are not allowed`                       | `HARNESS_READ_ONLY=true` blocks create/update/delete/execute                                         | Set `HARNESS_READ_ONLY=false` if write operations are intended                                                                       |
 | Pipeline run fails pre-flight with unresolved required inputs                    | Provided `inputs` did not cover required runtime placeholders                                        | Fetch `runtime_input_template`, supply missing simple keys, or use `input_set_ids` for structural inputs                             |
 | Pipeline CI shorthand (`branch`, `tag`, `pr_number`, `commit_sha`) did not apply | `inputs.build` was already provided, so shorthand expansion was intentionally skipped                | Remove `inputs.build` to use shorthand expansion, or keep full explicit `build` structure                                            |
+| Pipeline run loaded the wrong YAML revision                                     | The pipeline definition is stored in Git and the run did not specify the desired pipeline branch      | Pass `params.pipeline_branch` on the `run` action; this maps to Harness `pipelineBranchName`                                         |
+| Execution logs are empty or blob downloads return 403                           | Harness-hosted log blob URLs require the configured Harness client/auth path, especially for internal or self-managed hosts | Keep `HARNESS_BASE_URL` pointed at the target Harness host and use `harness_get(resource_type="execution_log", ...)` or `harness_diagnose(..., include_logs=true)` rather than bypassing the MCP client |
 | `Operation declined by user`                                                     | User declined the elicitation confirmation dialog                                                    | The user chose not to proceed — verify the operation details and retry if intended                                                   |
 | `body.template_yaml (or body.yaml) is required` for template create/update       | Template APIs expect full YAML payload                                                               | Provide full `template_yaml` string in `body`; for deletes, pass `version_label` to delete one version (omit to delete all versions) |
 | `HARNESS_BASE_URL must use HTTPS` on startup                                     | `HARNESS_BASE_URL` is set to an HTTP URL                                                             | Use HTTPS, or set `HARNESS_ALLOW_HTTP=true` for local development                                                                    |

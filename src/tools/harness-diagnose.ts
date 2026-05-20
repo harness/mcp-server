@@ -15,6 +15,7 @@ import { pipelineHandler } from "./diagnose/pipeline.js";
 import { connectorHandler } from "./diagnose/connector.js";
 import { delegateHandler } from "./diagnose/delegate.js";
 import { gitopsApplicationHandler } from "./diagnose/gitops-application.js";
+import { diagnoseOutputSchema } from "./output-schemas.js";
 
 const logDiag = createLogger("diagnose");
 
@@ -45,9 +46,11 @@ export function registerDiagnoseTool(server: McpServer, registry: Registry, clie
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
         options: z.record(z.string(), z.unknown()).describe("Resource-specific diagnostic options. Pipeline: execution_id, pipeline_id, summary, include_yaml, include_logs, log_snippet_lines, max_failed_steps, include_visual (boolean, include PNG image inline), visual_type ('timeline'|'flow'|'architecture', default 'timeline' — 'architecture' renders full pipeline YAML as multi-level diagram with stages, step groups, steps, rollback), visual_width (number, default 900). When a Harness URL contains ?step=<nodeExecutionId>, setting include_logs:true fetches that specific step's log regardless of pass/fail status and returns it as requested_step_log alongside any failed_step_logs. GitOps: agent_id. Call harness_describe for details.").optional(),
       },
+      outputSchema: diagnoseOutputSchema,
       annotations: {
         title: "Diagnose Harness Resource",
         readOnlyHint: true,
+        destructiveHint: false,
         openWorldHint: true,
       },
     },
