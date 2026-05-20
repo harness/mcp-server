@@ -167,12 +167,20 @@ describe("Registry", () => {
 
       expect(server.registerTool).toHaveBeenCalled();
 
+      const LOCAL_ONLY_TOOLS = new Set(["harness_describe"]);
+
       for (const [toolName, definition] of server.registerTool.mock.calls) {
         const annotations = (definition as { annotations?: Record<string, unknown> }).annotations;
         expect(annotations, `${toolName} should define annotations`).toBeDefined();
         expect(typeof annotations?.readOnlyHint, `${toolName} readOnlyHint`).toBe("boolean");
-        expect(typeof annotations?.openWorldHint, `${toolName} openWorldHint`).toBe("boolean");
         expect(typeof annotations?.destructiveHint, `${toolName} destructiveHint`).toBe("boolean");
+        expect(typeof annotations?.openWorldHint, `${toolName} openWorldHint`).toBe("boolean");
+
+        if (LOCAL_ONLY_TOOLS.has(toolName)) {
+          expect(annotations?.openWorldHint, `${toolName} is local-only`).toBe(false);
+        } else {
+          expect(annotations?.openWorldHint, `${toolName} calls external API`).toBe(true);
+        }
       }
     });
   });

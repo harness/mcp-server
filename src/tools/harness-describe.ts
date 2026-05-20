@@ -22,6 +22,7 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
         title: "Describe Harness Resources",
         readOnlyHint: true,
         destructiveHint: false,
+        // Local registry metadata only — no external API call
         openWorldHint: false,
       },
     },
