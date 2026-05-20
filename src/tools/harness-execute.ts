@@ -15,6 +15,7 @@ import { materializeInputSetsToRuntimeYaml } from "../utils/materialize-input-se
 import { resourceTypeSchema } from "./input-schemas.js";
 import { pollExecutionToTerminal, FAILURE_STATUSES, AbortError } from "../utils/poll-execution.js";
 import { sendProgress } from "../utils/progress.js";
+import { executeOutputSchema } from "./output-schemas.js";
 
 const log = createLogger("execute");
 
@@ -68,6 +69,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         wait_timeout_seconds: z.number().min(10).max(7200).describe("Max seconds to wait when wait=true. Default 600 (10 min). Max 7200 (2 h). When the timeout fires, returns execution_timed_out=true with the last observed status.").optional(),
         wait_poll_interval_seconds: z.number().min(2).max(60).describe("Initial poll interval when wait=true (seconds). Default 3. Backoff multiplier 1.5x, capped at 30s.").optional(),
       },
+      outputSchema: executeOutputSchema,
       annotations: {
         title: "Execute Harness Action",
         readOnlyHint: false,

@@ -16,11 +16,16 @@ export interface ToolResult {
   [key: string]: unknown;
   content: ContentItem[];
   isError?: boolean;
+  structuredContent?: Record<string, unknown>;
 }
 
 export function jsonResult(data: unknown): ToolResult {
   return {
     content: [{ type: "text", text: JSON.stringify(data) }],
+    // MCP structuredContent must be an object; arrays and primitives are intentionally excluded.
+    ...(data !== null && typeof data === "object" && !Array.isArray(data)
+      ? { structuredContent: data as Record<string, unknown> }
+      : {}),
   };
 }
 
@@ -51,5 +56,9 @@ export async function mixedResult(data: unknown, svgString: string, options?: Mi
       { type: "text", text: JSON.stringify(data) },
       { type: "image", data: imageData, mimeType: "image/png" },
     ],
+    // MCP structuredContent must be an object; arrays and primitives are intentionally excluded.
+    ...(data !== null && typeof data === "object" && !Array.isArray(data)
+      ? { structuredContent: data as Record<string, unknown> }
+      : {}),
   };
 }

@@ -11,6 +11,7 @@ import { renderListVisual } from "../utils/svg/list-visuals.js";
 import type { ListVisualType } from "../utils/svg/list-visuals.js";
 import { createLogger } from "../utils/logger.js";
 import { resourceTypeSchema } from "./input-schemas.js";
+import { listOutputSchema } from "./output-schemas.js";
 
 const log = createLogger("list");
 
@@ -42,6 +43,7 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
         include_visual: z.boolean().describe("Include an inline PNG chart of the results (default false). Supported for execution resource_type. Use when user asks for a visualization, chart, or graph.").default(false).optional(),
         visual_type: z.enum(["timeseries", "bar", "pie"]).describe("Chart type when include_visual=true. 'timeseries' = daily execution counts, 'pie' = breakdown by status, 'bar' = breakdown by pipeline. Default 'pie'.").default("pie").optional(),
       },
+      outputSchema: listOutputSchema,
       annotations: {
         title: "List Harness Resources",
         readOnlyHint: true,

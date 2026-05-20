@@ -9,6 +9,7 @@ import { confirmViaElicitation } from "../utils/elicitation.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { coerceRecord } from "../utils/type-guards.js";
 import { resourceTypeSchema } from "./input-schemas.js";
+import { createOutputSchema } from "./output-schemas.js";
 
 export function registerCreateTool(server: McpServer, registry: Registry, client: HarnessClient, config?: Config): void {
   const creatableTypes = registry.getTypesForOperation("create");
@@ -28,6 +29,7 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
         params: z.record(z.string(), z.unknown()).describe("Additional parameters. For external Git pipelines: store_type='REMOTE', connector_ref, repo_name, branch, file_path, commit_msg. For Harness Code pipelines: store_type='REMOTE', is_harness_code_repo=true, repo_name, branch, file_path.").optional(),
       },
+      outputSchema: createOutputSchema,
       annotations: {
         title: "Create Harness Resource",
         readOnlyHint: false,

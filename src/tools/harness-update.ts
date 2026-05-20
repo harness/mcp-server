@@ -9,6 +9,7 @@ import { confirmViaElicitation } from "../utils/elicitation.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, isRecord, coerceRecord } from "../utils/type-guards.js";
 import { resourceTypeSchema } from "./input-schemas.js";
+import { updateOutputSchema } from "./output-schemas.js";
 
 export function registerUpdateTool(server: McpServer, registry: Registry, client: HarnessClient, config?: Config): void {
   const updatableTypes = registry.getTypesForOperation("update");
@@ -29,6 +30,7 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
         params: z.record(z.string(), z.unknown()).describe("Additional identifiers (e.g. pipeline_id for triggers/input sets, version_label for templates).").optional(),
       },
+      outputSchema: updateOutputSchema,
       annotations: {
         title: "Update Harness Resource",
         readOnlyHint: false,

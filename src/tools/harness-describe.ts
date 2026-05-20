@@ -4,6 +4,7 @@ import type { Registry } from "../registry/index.js";
 import type { InputExpansionRule } from "../registry/types.js";
 import { jsonResult } from "../utils/response-formatter.js";
 import { getExamplesForResource } from "../data/examples/index.js";
+import { describeOutputSchema } from "./output-schemas.js";
 
 export function registerDescribeTool(server: McpServer, registry: Registry): void {
   const allTypes = registry.getAllResourceTypes() as [string, ...string[]];
@@ -18,6 +19,7 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
         toolset: z.enum(allToolsets).describe("Filter to a specific toolset").optional(),
         search_term: z.string().describe("Search for resource types by keyword (matches type name, display name, toolset, description)").optional(),
       },
+      outputSchema: describeOutputSchema,
       annotations: {
         title: "Describe Harness Resources",
         readOnlyHint: true,

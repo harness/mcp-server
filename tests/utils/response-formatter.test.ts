@@ -2,26 +2,30 @@ import { describe, it, expect } from "vitest";
 import { jsonResult, errorResult, imageResult, mixedResult } from "../../src/utils/response-formatter.js";
 
 describe("jsonResult", () => {
-  it("wraps data as text content", () => {
+  it("wraps data as text content with structuredContent", () => {
     const result = jsonResult({ count: 42 });
     expect(result).toEqual({
       content: [{ type: "text", text: JSON.stringify({ count: 42 }) }],
+      structuredContent: { count: 42 },
     });
   });
 
-  it("handles arrays", () => {
+  it("handles arrays without structuredContent", () => {
     const result = jsonResult([1, 2, 3]);
     expect(result.content[0].text).toBe(JSON.stringify([1, 2, 3]));
+    expect(result.structuredContent).toBeUndefined();
   });
 
-  it("handles null", () => {
+  it("handles null without structuredContent", () => {
     const result = jsonResult(null);
     expect(result.content[0].text).toBe("null");
+    expect(result.structuredContent).toBeUndefined();
   });
 
-  it("handles strings", () => {
+  it("handles strings without structuredContent", () => {
     const result = jsonResult("hello");
     expect(result.content[0].text).toBe('"hello"');
+    expect(result.structuredContent).toBeUndefined();
   });
 
   it("does not set isError", () => {
@@ -70,7 +74,7 @@ describe("imageResult", () => {
 });
 
 describe("mixedResult", () => {
-  it("returns text first, then PNG image", { timeout: 15_000 }, async () => {
+  it("returns text first, then PNG image, with structuredContent", { timeout: 15_000 }, async () => {
     const data = { count: 5 };
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="blue"/></svg>';
     const result = await mixedResult(data, svg);
@@ -83,5 +87,6 @@ describe("mixedResult", () => {
     expect(img.mimeType).toBe("image/png");
     const buf = Buffer.from(img.data, "base64");
     expect(buf[0]).toBe(0x89); // PNG signature
+    expect(result.structuredContent).toEqual({ count: 5 });
   });
 });

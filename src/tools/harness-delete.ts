@@ -9,6 +9,7 @@ import { confirmViaElicitation } from "../utils/elicitation.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { coerceRecord } from "../utils/type-guards.js";
 import { resourceTypeSchema } from "./input-schemas.js";
+import { deleteOutputSchema } from "./output-schemas.js";
 
 export function registerDeleteTool(server: McpServer, registry: Registry, client: HarnessClient, config?: Config): void {
   const deletableTypes = registry.getTypesForOperation("delete");
@@ -25,6 +26,7 @@ export function registerDeleteTool(server: McpServer, registry: Registry, client
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
         params: z.record(z.string(), z.unknown()).describe("Additional identifiers for nested resources (e.g. pipeline_id for triggers/input sets, environment_id for infrastructure).").optional(),
       },
+      outputSchema: deleteOutputSchema,
       annotations: {
         title: "Delete Harness Resource",
         readOnlyHint: false,

@@ -183,6 +183,25 @@ describe("Registry", () => {
         }
       }
     });
+
+    it("registers every tool with an outputSchema", () => {
+      const registry = new Registry(makeConfig());
+      const server = {
+        registerTool: vi.fn(),
+      };
+
+      registerAllTools(
+        server as never,
+        registry,
+        makeClient(),
+        makeConfig(),
+      );
+
+      for (const [toolName, definition] of server.registerTool.mock.calls) {
+        const outputSchema = (definition as { outputSchema?: unknown }).outputSchema;
+        expect(outputSchema, `${toolName} should define outputSchema`).toBeDefined();
+      }
+    });
   });
 
   describe("getResource", () => {
