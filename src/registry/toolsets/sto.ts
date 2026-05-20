@@ -23,7 +23,9 @@ export const stoToolset: ToolsetDefinition = {
       resourceType: "security_issue",
       displayName: "Security Issue",
       description:
-        "Security vulnerability/issue from scan results. Supports list with extensive filtering.",
+        "STOP — IF THE USER WANTS TO APPROVE, REJECT, OR PROMOTE AN EXEMPTION, USE resource_type='security_exemption' INSTEAD. " +
+        "This 'security_issue' resource only lists raw vulnerabilities from scans — it has NO approve/reject/promote actions. " +
+        "Security vulnerability/issue from scan results. Supports list with extensive filtering by severity, type, target, pipeline, and scan tool.",
       toolset: "sto",
       scope: "project",
       scopeParams: STO_SCOPE,
@@ -55,6 +57,19 @@ export const stoToolset: ToolsetDefinition = {
             exemption_statuses: "exemptionStatuses",
             page: "page",
             size: "pageSize",
+          },
+          preflight: async ({ input }) => {
+            // LLMs sometimes pass scope keywords as literal org_id/project_id
+            // values (e.g. "approve for org" → org_id="org"). These are never
+            // valid Harness identifiers, so strip them and fall back to config
+            // defaults rather than letting the request fail with a confusing 500.
+            const SCOPE_KEYWORDS = new Set(["org", "account", "project", "organization"]);
+            if (typeof input.org_id === "string" && SCOPE_KEYWORDS.has(input.org_id.toLowerCase())) {
+              delete input.org_id;
+            }
+            if (typeof input.project_id === "string" && SCOPE_KEYWORDS.has(input.project_id.toLowerCase())) {
+              delete input.project_id;
+            }
           },
           responseExtractor: passthrough,
           description: "List security issues with filtering by severity, type, target, pipeline, and scan tool",
@@ -91,7 +106,11 @@ export const stoToolset: ToolsetDefinition = {
     {
       resourceType: "security_exemption",
       displayName: "Security Exemption",
-      description: "Security issue exemption/waiver. Supports list (POST with status filter) with approve/reject/promote actions. PAGINATION CONTRACT: (1) Pass `size: 5` explicitly inside `filters` for the first call — the recommended default for this resource is 5, not the global 20. (2) Page is 0-indexed: page=0 → items 1–5, page=1 → items 6–10. (3) CRITICAL — `size` AND all other filters (status, search, …) MUST stay identical across every page in a session. The backend computes offset = page × size, so altering either silently shifts the dataset. (4) For 'next N' requests, increment `page` by 1 and keep `size` constant. If the user asks for 'next 10' after showing 5, make TWO sequential calls with the same size=5 — do NOT bump size mid-session. (5) After each response, read `_nextPageHint` — it spells out the exact follow-up call to make.",
+      searchAliases: ["approve", "reject", "promote", "waiver", "exception", "exempt", "approval"],
+      description: "Security issue exemption/waiver. THIS is the resource for ALL approve/reject/promote operations — even when the user mentions a vulnerability title like 'SQL Injection'. Supports list (POST with status filter) with approve/reject/promote actions. " +
+        "IMPORTANT: When listing exemptions, NEVER override org_id or project_id — always use the configured defaults. " +
+        "Phrases like 'for org' or 'for account' refer to the APPROVAL SCOPE (passed as body.scope to the execute action), NOT as an org_id filter for listing. " +
+        "PAGINATION CONTRACT: (1) Pass `size: 5` explicitly inside `filters` for the first call — the recommended default for this resource is 5, not the global 20. (2) Page is 0-indexed: page=0 → items 1–5, page=1 → items 6–10. (3) CRITICAL — `size` AND all other filters (status, search, …) MUST stay identical across every page in a session. The backend computes offset = page × size, so altering either silently shifts the dataset. (4) For 'next N' requests, increment `page` by 1 and keep `size` constant. If the user asks for 'next 10' after showing 5, make TWO sequential calls with the same size=5 — do NOT bump size mid-session. (5) After each response, read `_nextPageHint` — it spells out the exact follow-up call to make.",
       toolset: "sto",
       scope: "project",
       scopeParams: STO_SCOPE,
@@ -116,11 +135,19 @@ export const stoToolset: ToolsetDefinition = {
           },
           bodyBuilder: () => ({}),
           preflight: async ({ input }) => {
-            // Fail-loud validation only — no silent rewriting of caller-supplied
-            // values. The shared `harness_list` tool already applies Zod
-            // defaults; this preflight enforces STO-specific BOUNDS and rejects
-            // invalid inputs so misuse surfaces immediately instead of being
-            // papered over (Cursor review feedback).
+            // Strip scope keywords that LLMs mistakenly pass as org_id/project_id
+            // (e.g. "approve for org" → org_id="org"). These are never valid
+            // Harness identifiers — real IDs are alphanumeric slugs or UUIDs.
+            const SCOPE_KEYWORDS = new Set(["org", "account", "project", "organization"]);
+            const rawOrg = input.org_id;
+            if (typeof rawOrg === "string" && SCOPE_KEYWORDS.has(rawOrg.toLowerCase())) {
+              delete input.org_id;
+            }
+            const rawProject = input.project_id;
+            if (typeof rawProject === "string" && SCOPE_KEYWORDS.has(rawProject.toLowerCase())) {
+              delete input.project_id;
+            }
+
             const STO_EXEMPTION_SIZE_MAX = 50;
             const rawSize = input.size;
             if (rawSize !== undefined) {
@@ -212,33 +239,81 @@ export const stoToolset: ToolsetDefinition = {
           path: "/sto/api/v2/exemptions/{exemptionId}/approve",
           operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: { exemption_id: "exemptionId" },
+          // pathBuilder dynamically picks /approve vs /promote based on body.scope.
+          // 'CURRENT' (or missing) → /approve; anything else → /promote.
+          pathBuilder: (input) => {
+            const exemptionId = encodeURIComponent(String(input.exemption_id ?? ""));
+            const b = (input.body as Record<string, unknown> | undefined) ?? {};
+            const scope = ((b.scope ?? input.scope) as string | undefined)?.toUpperCase();
+            const elevating = scope && scope !== "CURRENT";
+            const endpoint = elevating ? "promote" : "approve";
+            return `/sto/api/v2/exemptions/${exemptionId}/${endpoint}`;
+          },
           preflight: async ({ client, input }) => {
-            const harnessClient = client as unknown as HarnessClient;
-            const body = ((input.body as Record<string, unknown> | undefined) ?? {});
-            if (!body.approver_id) {
-              body.approver_id = await harnessClient.getCurrentUserId();
+            const b = ((input.body as Record<string, unknown> | undefined) ?? {});
+            const rawScope = ((b.scope ?? input.scope) as string | undefined)?.toUpperCase();
+
+            if (!rawScope) {
+              throw new Error(
+                "security_exemption approve: body.scope is required. " +
+                "Pass one of: 'CURRENT' (approve at the exemption's existing scope) | 'ORG' | 'ACCOUNT' | 'PROJECT' (elevate + approve). " +
+                "If the user said plain 'approve this exemption', pass body={scope:'CURRENT'}. " +
+                "If the user said 'approve for org' / 'org-wide', pass body={scope:'ORG'}. " +
+                "If the user said 'approve for account' / 'account-wide', pass body={scope:'ACCOUNT'}.",
+              );
             }
-            input.body = body;
+            const allowed = ["CURRENT", "ACCOUNT", "ORG", "PROJECT"] as const;
+            if (!(allowed as readonly string[]).includes(rawScope)) {
+              throw new Error(
+                `security_exemption approve: invalid scope '${rawScope}'. Must be one of: ${allowed.join(", ")}.`,
+              );
+            }
+
+            if (rawScope === "ACCOUNT") {
+              input.org_id = "";
+              input.project_id = "";
+            } else if (rawScope === "ORG") {
+              input.project_id = "";
+            }
+
+            const harnessClient = client as unknown as HarnessClient;
+            if (!b.approver_id) {
+              b.approver_id = await harnessClient.getCurrentUserId();
+              input.body = b;
+            }
           },
           bodyBuilder: (input) => {
             const b = (input.body as Record<string, unknown> | undefined) ?? {};
+            const rawScope = ((b.scope ?? input.scope) as string | undefined)?.toUpperCase();
+            const elevating = rawScope && rawScope !== "CURRENT";
             return {
               approverId: b.approver_id,
+              ...(elevating ? { scope: rawScope } : {}),
               ...(b.comment ? { comment: b.comment } : {}),
             };
           },
           responseExtractor: passthrough,
           actionDescription:
-            "Approve a security exemption AT ITS CURRENT SCOPE (PROJECT, PIPELINE, or TARGET — whichever scope the requester created it at). Does NOT change the exemption's scope. This is the default for routine 'approve this exemption' requests. The STO backend uses your project-level RBAC for PROJECT/PIPELINE/TARGET exemptions, so the orgId+projectId from config defaults (or overridden via top-level org_id/project_id) is sufficient. " +
-            "ROUTING — when NOT to use this action: any user phrasing that names a target scope different from the exemption's current scope is a PROMOTION, NOT an approval. Examples that MUST route to the 'promote' action instead (not this one): " +
-            "'approve to org scope', 'approve at account level', 'approve org-wide', 'approve account-wide', 'approve for the whole org', 'approve at ACCOUNT', 'elevate to ORG and approve', 'promote and approve to project' (from a PIPELINE/TARGET exemption), 'make this exemption org-wide and approve', 'approve this account-level'. " +
-            "If the user mentions ACCOUNT, ORG, or 'whole org/account' anywhere in the same sentence as the approval, call 'promote' with the corresponding target_scope — do NOT call this 'approve' action with overridden org_id/project_id as a workaround.",
+        "Approve a security exemption. body.scope is REQUIRED — pick one of: " +
+        "'CURRENT' (approve at the exemption's existing scope, no elevation), " +
+        "'ORG' (elevate + approve at organization scope), " +
+        "'ACCOUNT' (elevate + approve at account scope), " +
+        "'PROJECT' (elevate + approve at project scope, only valid when source is TARGET/PIPELINE). " +
+        "MAPPING — scan the user's prompt and pick scope accordingly: " +
+        "plain 'approve this' → 'CURRENT'; " +
+        "'approve for org' / 'org-wide' / 'at org level' → 'ORG'; " +
+        "'approve for account' / 'account-wide' / 'promote to account' → 'ACCOUNT'; " +
+        "'promote to project' → 'PROJECT'.",
           bodySchema: {
-            description:
-              "Exemption approval details. Approves at the exemption's existing scope; does not change scope.",
+            // scope is REQUIRED at the call layer (enforced by preflight with a fail-loud
+            // error), but declared required:false here because bodySchema validates the
+            // BUILT body — and the bodyBuilder strips scope='CURRENT' from the wire payload
+            // (the /approve endpoint doesn't accept scope). Preflight is authoritative.
+            description: "Exemption approval details. body.scope is REQUIRED (validated by preflight).",
             fields: [
-              { name: "approver_id", type: "string", required: false, description: "User UUID of the approver. Auto-derived from the authenticated PAT via /ng/api/user/currentUser when omitted." },
-              { name: "comment",     type: "string", required: false, description: "Optional approval comment (max 1024 chars)." },
+              { name: "scope",       type: "string", required: false, description: "REQUIRED (enforced by preflight). One of: 'CURRENT' | 'ORG' | 'ACCOUNT' | 'PROJECT'. Use 'CURRENT' to approve at the exemption's existing scope. Use ORG/ACCOUNT/PROJECT to elevate (calls the /promote endpoint internally). MUST be passed on every call." },
+              { name: "approver_id", type: "string", required: false, description: "User UUID of the approver. Auto-derived from the authenticated PAT via /ng/api/user/currentUser if omitted." },
+              { name: "comment",     type: "string", required: false, description: "Optional approval comment" },
             ],
           },
         },
@@ -269,109 +344,6 @@ export const stoToolset: ToolsetDefinition = {
             fields: [
               { name: "approver_id", type: "string", required: false, description: "User UUID of the rejector. Auto-derived from the authenticated PAT via /ng/api/user/currentUser if omitted." },
               { name: "comment",     type: "string", required: false, description: "Optional rejection comment" },
-            ],
-          },
-        },
-        promote: {
-          method: "PUT",
-          path: "/sto/api/v2/exemptions/{exemptionId}/promote",
-          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
-          pathParams: { exemption_id: "exemptionId" },
-          // NOTE: PromoteExemption does NOT read pipelineId/targetId from the URL.
-          // The goa-generated decoder only reads accountId/orgId/projectId from the
-          // query string; pipelineId/targetId live in the request body. We therefore
-          // do not declare queryParams here — the backend derives the new scope from
-          // (a) whether orgId/projectId are present on the URL and (b) whether
-          // pipelineId/targetId are present in the body. See
-          // sto-core/internal/services/exemptions/exemptions_service.go:957-969.
-          preflight: async ({ client, input }) => {
-            const b = ((input.body as Record<string, unknown> | undefined) ?? {});
-
-            // target_scope is REQUIRED. Fail loud rather than silently defaulting
-            // to PROJECT (the latter was the root cause of the "promote to ORG
-            // landed at PROJECT" hallucinations the STO team reported).
-            const rawScope = b.target_scope ?? b.scope ?? input.target_scope ?? input.scope;
-            if (rawScope === undefined || rawScope === null || rawScope === "") {
-              throw new Error(
-                "security_exemption promote: 'target_scope' is required in body. " +
-                "Valid values: 'ACCOUNT' | 'ORG' | 'PROJECT'. " +
-                "Use 'PROJECT' only when promoting from PIPELINE- or TARGET-scoped exemptions. " +
-                "For same-scope approval, use the 'approve' action instead.",
-              );
-            }
-            if (typeof rawScope !== "string") {
-              throw new Error(
-                `security_exemption promote: 'target_scope' must be a string, got ${typeof rawScope}.`,
-              );
-            }
-            const targetScope = rawScope.toUpperCase();
-            const allowed = ["ACCOUNT", "ORG", "PROJECT"] as const;
-            if (!(allowed as readonly string[]).includes(targetScope)) {
-              throw new Error(
-                `security_exemption promote: invalid target_scope '${rawScope}'. ` +
-                `Must be one of: ${allowed.join(", ")}. ` +
-                "PIPELINE and TARGET are exemption SOURCE scopes only; they cannot be promote destinations.",
-              );
-            }
-
-            // Map target_scope → URL scope params. The STO backend infers the new
-            // scope from which of orgId/projectId are present on the URL:
-            //   neither            → ACCOUNT
-            //   orgId only         → ORG
-            //   orgId + projectId  → PROJECT
-            // Setting the registry input to "" overrides any HARNESS_ORG / HARNESS_PROJECT
-            // config default (nullish coalescing only short-circuits null/undefined), and
-            // harness-client.buildUrl skips params whose value is "" — so the URL param
-            // is omitted entirely.
-            if (targetScope === "ACCOUNT") {
-              input.org_id = "";
-              input.project_id = "";
-            } else if (targetScope === "ORG") {
-              input.project_id = "";
-              // org_id is left untouched so the registry injects it from input or config.
-            }
-            // PROJECT: nothing to override — registry injects both org_id and project_id.
-
-            const harnessClient = client as unknown as HarnessClient;
-            if (!b.approver_id) {
-              b.approver_id = await harnessClient.getCurrentUserId();
-            }
-            input.body = b;
-          },
-          bodyBuilder: (input) => {
-            const b = (input.body as Record<string, unknown> | undefined) ?? {};
-            // The backend's PromoteExemptionRequestBody accepts approverId, comment,
-            // pendingChangesOverride, pipelineId, targetId — it does NOT accept a
-            // 'scope' field (scope is derived from URL params). pipelineId/targetId
-            // are intentionally omitted here: this MCP exposes promote only for
-            // ACCOUNT/ORG/PROJECT elevations, which never need them.
-            return {
-              approverId: b.approver_id,
-              ...(b.comment ? { comment: b.comment } : {}),
-            };
-          },
-          responseExtractor: passthrough,
-          actionDescription:
-            "Approve a security exemption AND elevate its scope in one step. Valid target_scope values: 'ACCOUNT' | 'ORG' | 'PROJECT'. Allowed elevations (enforced by the STO backend via canApproveFor): " +
-            "PROJECT → ORG, ACCOUNT;  PIPELINE → PROJECT, ORG, ACCOUNT;  TARGET → PROJECT, ORG, ACCOUNT. " +
-            "PIPELINE and TARGET are source scopes only — they cannot be promote destinations. " +
-            "ROUTING — when to use this action: ANY user phrasing that names ACCOUNT or ORG as the target, OR names PROJECT when the exemption is currently PIPELINE/TARGET-scoped. Examples that MUST route here (not to 'approve'): " +
-            "'approve to org scope' → target_scope='ORG';  'approve at account level' / 'approve account-wide' → target_scope='ACCOUNT';  'elevate to ORG and approve' → target_scope='ORG';  'make this exemption org-wide and approve' → target_scope='ORG';  'promote to project and approve' (from a PIPELINE/TARGET exemption) → target_scope='PROJECT'. " +
-            "For same-scope approval (no scope change), use the 'approve' action instead — do NOT call promote with the exemption's existing scope. " +
-            "approver_id is auto-derived from the authenticated PAT when omitted. " +
-            "Backend returns 403 if the caller lacks RBAC for the requested target_scope.",
-          bodySchema: {
-            description:
-              "Exemption promotion details. Approves the exemption AND changes its scope to target_scope. " +
-              "NOTE: target_scope is a CONTROL field (used by preflight to set URL scope params) — it is NOT sent to the backend body. " +
-              "It is therefore declared required:false at this schema layer (which validates HTTP body fields), but the preflight throws loudly if it is missing or invalid.",
-            fields: [
-              // target_scope is required-in-spirit but required:false here because the registry's
-              // generic bodySchema validator checks the BUILT body (after bodyBuilder strips
-              // control fields). Our preflight is the authoritative validator for target_scope.
-              { name: "target_scope", type: "string", required: false, description: "REQUIRED (enforced by preflight, not by this schema). Target scope to elevate to: 'ACCOUNT' | 'ORG' | 'PROJECT'. Case-insensitive on input; normalized to upper-case before validation. Use 'PROJECT' only when the source exemption is PIPELINE- or TARGET-scoped. Omitting this field causes the preflight to throw immediately with a fail-loud error message." },
-              { name: "approver_id",  type: "string", required: false, description: "User UUID of the approver. Auto-derived from the authenticated PAT via /ng/api/user/currentUser when omitted." },
-              { name: "comment",      type: "string", required: false, description: "Optional comment recorded in exemption history (max 1024 chars)." },
             ],
           },
         },
