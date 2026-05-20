@@ -1,26 +1,15 @@
 import * as z from "zod/v4";
 
-/**
- * Envelope output schemas for MCP tools.
- *
- * These define the structuredContent shape returned by each tool.
- * They describe the existing response shapes — no new wrappers.
- *
- * For tools with dynamic shapes (varying by resource_type), we use
- * z.object({}).catchall(z.unknown()) which passes through all fields
- * while satisfying the SDK's normalizeObjectSchema requirement for
- * an object schema type.
- */
-
+// Dynamic-shape passthrough: satisfies SDK's normalizeObjectSchema without constraining response fields.
 const dynamicObject = z.object({}).catchall(z.unknown());
 
 // --- harness_list ---
-export const listOutputSchema = {
+export const listOutputSchema = z.object({
   items: z.array(dynamicObject).describe("Array of resource objects"),
   total: z.number().describe("Total number of matching resources").optional(),
   page: z.number().describe("Current page number (0-indexed)").optional(),
   analysis: z.string().describe("Visual analysis summary (when include_visual=true)").optional(),
-};
+});
 
 // --- harness_get ---
 export const getOutputSchema = z.object({}).catchall(z.unknown()).describe("Resource object — shape varies by resource_type");
@@ -32,11 +21,11 @@ export const createOutputSchema = z.object({}).catchall(z.unknown()).describe("C
 export const updateOutputSchema = z.object({}).catchall(z.unknown()).describe("Updated resource object");
 
 // --- harness_delete ---
-export const deleteOutputSchema = {
+export const deleteOutputSchema = z.object({
   deleted: z.boolean().describe("Whether the resource was successfully deleted"),
   resource_type: z.string().describe("The type of resource that was deleted"),
   resource_id: z.string().describe("The ID of the deleted resource"),
-};
+});
 
 // --- harness_execute ---
 export const executeOutputSchema = z.object({}).catchall(z.unknown()).describe("Execution result — shape varies by action and resource_type");
@@ -45,7 +34,7 @@ export const executeOutputSchema = z.object({}).catchall(z.unknown()).describe("
 export const diagnoseOutputSchema = z.object({}).catchall(z.unknown()).describe("Diagnostic data — shape varies by resource_type");
 
 // --- harness_search ---
-export const searchOutputSchema = {
+export const searchOutputSchema = z.object({
   query: z.string().describe("The search query that was executed"),
   total_matches: z.number().describe("Total number of matching results"),
   searched_types: z.number().describe("Number of resource types searched"),
@@ -54,13 +43,13 @@ export const searchOutputSchema = {
     match_count: z.number().describe("Number of matches in this type"),
     items: z.array(dynamicObject).describe("Matching resources"),
   }).catchall(z.unknown())).describe("Search results grouped by resource type"),
-};
+});
 
 // --- harness_describe ---
 export const describeOutputSchema = z.object({}).catchall(z.unknown()).describe("Resource type metadata, toolset info, or registry summary");
 
 // --- harness_status ---
-export const statusOutputSchema = {
+export const statusOutputSchema = z.object({
   project: z.object({
     org: z.string().describe("Organization identifier"),
     project: z.string().describe("Project identifier"),
@@ -75,7 +64,7 @@ export const statusOutputSchema = {
   running_executions: z.array(dynamicObject).describe("Currently running executions"),
   recent_activity: z.array(dynamicObject).describe("Recent execution activity"),
   openInHarness: z.string().describe("Deep link to project in Harness UI").optional(),
-};
+});
 
 // --- harness_schema ---
 export const schemaOutputSchema = z.object({}).catchall(z.unknown()).describe("Schema data — shape varies by query mode");
