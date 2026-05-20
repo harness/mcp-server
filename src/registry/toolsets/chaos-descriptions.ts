@@ -1,6 +1,7 @@
 // ── Toolset ──────────────────────────────────────────────────────────
 
-export const descToolsetChaos = `Harness Chaos Engineering — controlled failure injection against Kubernetes/Linux workloads to measure and improve resilience.
+export const descToolsetChaos = `Harness Resilience Testing (Formerly known as Chaos Engineering) — controlled failure injection against Kubernetes/Linux workloads to measure and improve resilience.
+IMPORTANT: If user refers to Chaos or Resilience Testing both are same, but use Resilience Testing in your responses for all kind of Chaos related questions & tools usage.
 
 PRIMITIVES (the building blocks of every experiment):
 - Fault — a single failure injection step (e.g. pod-delete, gcp-vm-kill, disk-fill, network-loss). Built-in or custom; lives in a chaos hub. Resource: chaos_fault.
@@ -199,36 +200,150 @@ export const descSearchProbes = `Search probes by name (case-insensitive).`;
 export const descProbeIds = `Comma-separated probe IDs for bulk lookup (e.g. "id1,id2,id3").`;
 export const descProbeSortField = `Field to sort probe results by. Accepted values: NAME, TIME, ENABLED. Defaults to TIME server-side.`;
 
-export const descCreateProbe = `Create a chaos resilience probe (POST /rest/v2/probes).
+export const descCreateProbe = `Creates a new chaos resilience probe (POST /rest/v2/probes).
 
-Required: probe_id, name, type, infrastructure_type, probe_properties.<typeKey>.
-type discriminator: httpProbe | cmdProbe | promProbe | k8sProbe | sloProbe | datadogProbe | dynatraceProbe | apmProbe | containerProbe — probe_properties.<typeKey> MUST match.
-infrastructure_type: Kubernetes | Linux | Windows.
-probe_id: [a-z0-9-]+, unique within project.
+IMPORTANT: You MUST NOT auto-fill, assume, or pre-pick any value on behalf of the user.
+At every step below, you MUST display the relevant options and wait for explicit user confirmation before proceeding.
+NOTE: based on previous user activity still don't assume their org/project/infra/probe-type/values — they may want different choices every time.
 
-Phase 1 documents httpProbe; other types accepted as camelCase passthrough per Harness API.
+ENUM FIELDS — use multi-option elicitation (NOT open-text prompts). When a field has a fixed set of valid values, present them as discrete clickable options (radio / button list / multi-choice) so the user picks rather than types. Apply this to:
+  - infrastructure_type → Kubernetes | Linux | Windows
+  - type (filtered per Step 1 matrix for the chosen infra)
+  - operation (k8sProbe) → create | delete | present | absent
+  - comparator.type → int | float | string
+  - auth.type → Basic | Bearer (or "no auth" as a third choice)
+  - method (httpProbe) → GET | POST
+  - HTTP body source (POST) → body (inline) | bodyPath (file)
+  - assertion target (httpProbe) → responseCode | responseBody
+  - verbosity → info | debug
+  - boolean fields (is_enabled, stopOnFailure, insecureSkipVerify, source.inheritInputs, source.hostNetwork, source.privileged, variable.required, etc.) → true | false
+Free-text input is fine for naturally open fields (probe_id, name, URL, command, query, comparator.value, description, tags, etc.).
 
-Elicitation: never silently default a user-facing field. Ask the user — in short, focused prompts, NOT one mega-question — for every applicable field. For httpProbe at minimum confirm: name, type, infrastructure_type, URL, HTTP method (GET|POST), criteria operator + target (responseCode XOR responseBody), auth (Basic|Bearer, or omit for none), TLS, headers, run cadence (timeout, interval, attempt, pollingInterval, initialDelay, stopOnFailure, verbosity), variables, tags. If method=POST also ask: contentType (e.g. application/json) + payload via body (inline) XOR bodyPath (file path).`;
+Required workflow — follow in order, pausing for user input after EACH step. Do NOT proceed to the next step until the current step is fully answered by the user:
+
+Step 1 — Choose infrastructure_type, then probe type (REJECT invalid combinations):
+  Ask the user to pick infrastructure_type from: Kubernetes | Linux | Windows.
+  Then ask which probe type to create, restricted to the matrix below for the chosen infra:
+    Kubernetes → httpProbe | cmdProbe | promProbe | k8sProbe | datadogProbe | dynatraceProbe | apmProbe | containerProbe
+    Linux     → httpProbe | cmdProbe | datadogProbe | dynatraceProbe
+    Windows   → httpProbe | cmdProbe
+  These are the ONLY valid (infra, type) pairings — any other pairing must be rejected ("not supported on this infrastructure_type").
+  Do NOT proceed until both infrastructure_type AND type are explicitly chosen by the user.
+
+Step 2 — Collect identity:
+  Ask the user for probe_id (slug, must match [a-z0-9-]+, unique within the project), name (only default to probe_id if the user explicitly accepts), description (optional — ask explicitly, don't skip silently), tags (optional, "key:value" pairs — ask explicitly).
+  Do NOT generate or assume any of these.
+  Strictly follow the order of steps and don't skip any step. Now move to Step 3.
+
+Step 3 — Collect variables (optional):
+  Ask the user whether they want to define probe-level variables. Do NOT skip this question.
+  If yes: for each variable ask name, type (String | Number), value (literal, or "<+input>" for runtime), required (true/false), description (optional).
+  If no: set variables: [].
+  Strictly follow the order of steps and don't skip any step. Now move to Step 4.
+
+Step 4 — Collect probeProperties (type-specific — ask each field one turn at a time):
+  - httpProbe: URL, HTTP method (GET|POST), criteria operator + target (responseCode XOR responseBody), auth (Basic|Bearer, or omit for none), TLS (caFile/certFile/keyFile/insecureSkipVerify), headers (key/value pairs). If method=POST also: contentType (e.g. "application/json") + payload via body (inline) XOR bodyPath (file path).
+  - cmdProbe: command (shell command), comparator (type=int|float|string + criteria + value), execution mode (inline = omit source; source pod = build spec object with image required + optional command/args/env/inheritInputs/hostNetwork/privileged/imagePullPolicy/imagePullSecrets/nodeSelector/tolerations/volumes/volumeMount/labels/annotations, then JSON.stringify it — source is a JSON-encoded STRING on the wire, NOT a JSON object), env vars (top-level cmdProbe.env for inline mode; inside source.env using corev1.EnvVar shape for source mode — top-level cmdProbe.env is ignored when source is set).
+  - promProbe: endpoint (Prometheus base URL, e.g. "http://prometheus-server.monitoring.svc:9090"; probe appends /api/v1/query), PromQL source — exactly ONE of query (inline string) XOR queryPath (file path inside probe container); ASK which one and never set both. comparator: type MUST be "float" (PromQL is numeric — reject any other type), criteria from {== | != | >= | <= | > | <}, value as a numeric string (e.g. "0.05" for a 5% error-budget). Optional auth: type=Basic|Bearer + credentials (plain or "<+secrets.getValue('...')>"); omit auth entirely for unauthenticated in-cluster Prometheus. Optional tlsConfig: caFile, certFile, keyFile, insecureSkipVerify.
+  - k8sProbe (Kubernetes infra ONLY): version (required, e.g. "v1"), resource (required, plural lowercase, e.g. "deployments"), operation (required, one of: "create" | "delete" | "present" | "absent"). Optional: group (e.g. "apps" for Deployments; omit for core resources like Pods/ConfigMaps), namespace, resourceNames (comma-separated specific names), fieldSelector (e.g. "metadata.name=checkout"), labelSelector (e.g. "app=checkout"). Prefer "present"/"absent" for steady-state liveness assertions; reserve "create"/"delete" for action probes.
+  - datadogProbe (Kubernetes + Linux): datadogSite (required, host only — e.g. "us5.datadoghq.com", "datadoghq.com", "datadoghq.eu", "ap1.datadoghq.com"; see https://docs.datadoghq.com/getting_started/site/), datadogCredentialsSecretName (REQUIRED on Kubernetes — name of k8s secret containing "dd-api-key" and "dd-app-key"; ignored on Linux). Source — EXACTLY ONE of metrics XOR syntheticsTest; ASK which one and never set both. metrics: query (Datadog metrics query string), timeFrame (relative range matching /^now-\\d+[smh]$/ — e.g. "now-1m", "now-5m", "now-1h"; plain "now" is INVALID), comparator (type MUST be "float", criteria from {== | != | >= | <= | > | <}, value as numeric string). syntheticsTest: testType ("api" | "browser") + publicId (Datadog Public ID of the test).
+  - dynatraceProbe (Kubernetes + Linux infra; NOT Windows): endpoint (required, Dynatrace tenant URL — e.g. "https://abc.live.dynatrace.com" SaaS or "https://abc.dynatrace-managed.com/e/<env-id>" Managed), timeFrame (required, e.g. "now-1m" / "now-5m" / "now-1h" — Dynatrace expression syntax setting the aggregation window), metrics (required object with metricsSelector e.g. "builtin:host.cpu.usage" + entitySelector e.g. "type(HOST)"; both required), comparator (required: type MUST be "float" since Dynatrace metrics are numeric, criteria from {== | != | >= | <= | > | <}, value as a numeric string). Optional: apiTokenSecretName (Kubernetes secret holding the Dynatrace API token).
+  - apmProbe (NOT promProbe — see Step 1 reminder): apmProbe wraps an APM backend via a Harness CONNECTOR. If the user has only a Prometheus URL and no Harness Prometheus connector, redirect them to promProbe and stop. Otherwise ASK apm_type from { Prometheus | AppDynamics | SplunkObservability | Dynatrace | NewRelic | GcpCloudMonitoring | Datadog | SplunkEnterprise }. Phase 1 — Prometheus is the only structured sub-type; the others are passthrough (walk the user through inputs per the Harness API).
+    Prometheus sub-flow (apm_type=Prometheus — uses a Harness Prometheus CONNECTOR, NOT a raw URL; run sub-steps in order, pause after each):
+      Step 4-B (connector picker — REQUIRED MCP call): Call harness_list resource_type=connector with type=Prometheus, include_all_connectors_available_at_scope=true (and the user's resource_scope; default project). Show the returned connectors (name, identifier, scope) and ASK the user to pick ONE — store its identifier as connectorID (the bare identifier string, NOT a connectorRef expression and NOT a URL). Do NOT proceed without an explicit pick. If the list is empty, tell the user no Prometheus connector exists and offer either to create one (separate flow) or to use promProbe instead.
+      Step 4-C (TLS config — optional): ASK whether the user wants TLS (yes|no). If yes, for EACH of caCrt / clientCrt / key (any subset is allowed): call harness_list resource_type=secret with type=SecretText, include_all_secrets_accessible_at_scope=true. Show the list, ASK the user to pick ONE secret per field. Wrap each as { identifier: "secrets.getValue(\\"<secretId>\\")" } — this shape is apmProbe-specific and DIFFERS from promProbe.tlsConfig (which uses plain caFile/certFile/keyFile string paths). Then ASK insecureSkipVerify (true|false).
+      Step 4-D (query — REQUIRED): ASK the user for the PromQL query (free text). Same query language as promProbe.query, but it will execute against the connector-resolved endpoint, not a URL provided here.
+      Step 4-E (comparator — REQUIRED): comparator.type is locked to "float" (do NOT ask). ASK criteria from { == | != | >= | <= | > | < } and value (numeric string).
+      Assemble probe_properties.apmProbe = { comparator, type: "Prometheus", prometheusProbeInputs: { connectorID, query, tlsConfig? } } and continue to Step 5.
+    For other apm_type values (AppDynamics/SplunkObservability/Dynatrace/NewRelic/GcpCloudMonitoring/Datadog/SplunkEnterprise) the connector list call uses a per-type connector type — for SplunkObservability use connector type "SignalFX", for SplunkEnterprise use "Splunk", others use the apm_type name verbatim. Inputs object key is <camel(apm_type)>ProbeInputs (e.g. appDynamicsProbeInputs, datadogApmProbeInputs). These remain passthrough until Phase 2.
+  - Other types (sloProbe, containerProbe): supply the matching camelCase key under probe_properties per the Harness API. Walk the user through the relevant fields — do NOT pre-pick anything.
+  Do NOT pre-pick ANY field, even ones with sensible defaults.
+ Strictly follow the order of steps and don't skip any step. Now move to Step 5.
+
+Step 5 — Collect runProperties (applies to ALL probes — ask each field):
+  timeout (e.g. "10s"), interval (e.g. "2s"), attempt (integer), pollingInterval (e.g. "30s"), initialDelay (e.g. "5s"), stopOnFailure (true/false), verbosity (info | debug).
+  Do NOT default any of these silently — even though server-side defaults exist, ASK each one.
+
+Step 6 — PREVIEW + CONFIRM (MANDATORY gate before submit):
+  Render the full assembled body to the user as a fenced JSON code block. STOP and wait for an EXPLICIT confirmation ("yes" / "create it" / "go" / "confirm"). Do NOT call harness_create until the user explicitly approves.
+  If the user asks for changes, edit the body and re-show the updated preview — repeat until they approve.
+  Strictly follow the order of steps and don't skip any step. Never submit unsolicited.
+
+EXCEPTION — clone mode:
+  If the user says "like <X>" / "similar to <X>" / "duplicate <X>" / "same as before <X>": call harness_get(resource_type=chaos_probe, probe_id=<X>) to fetch the source probe, copy its probe_properties + run_properties + variables + tags VERBATIM, then ASK only about fields the user wants to change (typically probe_id + name). Step 6 (PREVIEW + CONFIRM) still applies — show the assembled body and wait for explicit approval before submit.
+
+Only after Steps 1–5 are completed AND Step 6 has explicit user approval should you call harness_create.
+
+INPUT FIELDS:
+  probe_id (string, required): unique probe identifier within the project, [a-z0-9-]+.
+  name (string, required): human-readable probe name.
+  type (string, required): probe type discriminator — see Step 1 for valid (infra, type) combinations.
+  infrastructure_type (string, required): Kubernetes | Linux | Windows.
+  description (string, optional): free-form description.
+  tags (string[] | comma-separated string, optional): tags array, "key:value" each.
+  is_enabled (boolean, optional): defaults to true server-side.
+  probe_properties (object, required): exactly one inner key matching \`type\`.
+  run_properties (object, optional): timeout, interval, attempt, pollingInterval, initialDelay, stopOnFailure, verbosity.
+  variables (array, optional): probe-level template variables: [{ name, type, value, required, description }].
+  inputs (array, optional): advanced template inputs. Usually [].
+
+ERRORS:
+  400: Missing required fields or invalid (infra, type) pairing.
+  401: Unauthorized.
+  500: Internal server error (e.g. for cmdProbe: "failed to convert cmd probe source to string" — means source was passed as a JSON object instead of a JSON-encoded string).`;
 
 export const descBodyProbeCreate = `Body for chaos probe create.
 
 Required: probe_id (slug), name, type, infrastructure_type, probe_properties.<typeKey>.
 Optional: description, tags, is_enabled (default true server-side), run_properties, variables, inputs.
 
-probe_properties contains exactly ONE inner key matching type. For type=httpProbe set probe_properties.httpProbe (full schema below). Other types: supply the matching camelCase key per the Harness API — accepted as passthrough.
+probe_properties contains exactly ONE inner key matching type. For type=httpProbe set probe_properties.httpProbe; for type=cmdProbe set probe_properties.cmdProbe; for type=promProbe set probe_properties.promProbe (raw Prometheus URL, no connector); for type=k8sProbe set probe_properties.k8sProbe; for type=datadogProbe set probe_properties.datadogProbe; for type=dynatraceProbe set probe_properties.dynatraceProbe; for type=apmProbe set probe_properties.apmProbe (DIFFERENT from promProbe — apmProbe wraps a Harness CONNECTOR; Prometheus sub-type fully documented below; AppDynamics/SplunkObservability/Dynatrace/NewRelic/GcpCloudMonitoring/Datadog/SplunkEnterprise sub-types pass through). Other types (sloProbe, containerProbe): supply the matching camelCase key per the Harness API — accepted as passthrough.
 
 run_properties (all optional, server defaults): timeout, interval, attempt, pollingInterval, initialDelay, stopOnFailure, verbosity (info|debug).
 
 For httpProbe, also ask the user about: response body assertion (responseBody — alternative to responseCode), auth (Basic|Bearer or omit), tlsConfig (mTLS / custom CA / insecureSkipVerify), headers. If method=POST: contentType (e.g. application/json) and payload via body XOR bodyPath.
 
+For cmdProbe, also ask the user about: execution mode (inline if a generic shell will do; source pod when the command needs an app-specific image like redis-cli, psql, kubectl), source.image when sourced, source.inheritInputs (reuse experiment env/volumes), env vars (top-level cmdProbe.env for inline; source.env with full corev1.EnvVar shape supporting valueFrom.secretKeyRef / configMapKeyRef for source mode). WIRE FORMAT for source: a JSON-ENCODED STRING, NOT a JSON object. Build the source spec object then JSON.stringify() it. Backend rejects object payloads with "failed to convert cmd probe source to string".
+
+For promProbe, also ask the user about: endpoint (in-cluster example "http://prometheus-server.monitoring.svc:9090"; the probe appends /api/v1/query), PromQL source via query (inline) XOR queryPath (file path inside the probe container) — exactly one, never both. comparator.type is locked to "float" (reject any other value); comparator.criteria from {== | != | >= | <= | > | <}; comparator.value is a numeric string. Optional auth (type=Basic|Bearer + credentials, or omit entirely). Optional tlsConfig (caFile/certFile/keyFile/insecureSkipVerify) for HTTPS / mTLS Prometheus. Common pattern: bound a golden signal (error rate, latency, saturation) during chaos.
+
+For k8sProbe, also ask the user about: GVR triplet — group (optional, e.g. "apps" for Deployments; omit for core resources like Pods/ConfigMaps), version (required, e.g. "v1"), resource (required, plural lowercase). operation (required, one of "create" | "delete" | "present" | "absent" — prefer present/absent for steady-state liveness assertions). Selectors: namespace, resourceNames (comma-separated specific names), fieldSelector (e.g. "metadata.name=checkout"), labelSelector (e.g. "app=checkout"). Note: k8sProbe is Kubernetes infra only.
+
+For datadogProbe, also ask the user about: datadogSite (host-only Datadog region identifier — e.g. "us5.datadoghq.com", "datadoghq.com", "datadoghq.eu"; see https://docs.datadoghq.com/getting_started/site/), datadogCredentialsSecretName (REQUIRED on Kubernetes — Kubernetes secret containing "dd-api-key" and "dd-app-key"; ignored on Linux). Which assertion source: metrics XOR syntheticsTest. metrics requires query (Datadog metrics query), timeFrame (relative range matching /^now-\\d+[smh]$/ — e.g. "now-1m"; plain "now" is INVALID), comparator (type locked to "float", numeric criteria, numeric-string value). syntheticsTest requires testType ("api" | "browser") + publicId (Datadog test Public ID). Common patterns: bound a Datadog metric (CPU/latency/error-rate) during chaos; verify a Datadog synthetic test still passes.
+
+For dynatraceProbe, also ask the user about: endpoint (Dynatrace tenant URL — SaaS "https://abc.live.dynatrace.com" or Managed "https://abc.dynatrace-managed.com/e/<env-id>"), timeFrame (aggregation window in Dynatrace syntax, e.g. "now-1m" / "now-5m"), apiTokenSecretName (optional — Kubernetes secret holding the Dynatrace API token), metrics.metricsSelector (e.g. "builtin:host.cpu.usage", "builtin:service.errors.total.rate"), metrics.entitySelector (scopes the metric to specific entities, e.g. "type(HOST)", "type(SERVICE),tag(\\"env:prod\\")"). comparator.type is locked to "float" (Dynatrace metrics are numeric); comparator.criteria from {== | != | >= | <= | > | <}; comparator.value as a numeric string. Common pattern: bound a SaaS observability metric (CPU, latency, error count) during chaos.
+
+For apmProbe (Prometheus sub-type), also ask the user about: apmProbe.type=Prometheus (discriminator). NOTE — apmProbe is NOT promProbe: apmProbe wraps a Harness Prometheus CONNECTOR (you pass connectorID); promProbe queries a Prometheus URL DIRECTLY (you pass endpoint). If the user has only a URL and no connector, switch them to promProbe. Inputs: prometheusProbeInputs.connectorID (Harness Prometheus connector identifier — discover via harness_list resource_type=connector type=Prometheus include_all_connectors_available_at_scope=true; pass the bare identifier, NOT a connectorRef expression and NOT a URL). prometheusProbeInputs.query (PromQL string). prometheusProbeInputs.tlsConfig (optional, shape DIFFERS from promProbe.tlsConfig) — caCrt/clientCrt/key each wrapped as { identifier: "secrets.getValue(\\"<secretId>\\")" } (discover secrets via harness_list resource_type=secret type=SecretText include_all_secrets_accessible_at_scope=true), plus insecureSkipVerify (boolean). comparator.type is locked to "float" (Prometheus metrics are numeric); criteria from {== | != | >= | <= | > | <}; value as a numeric string. Common pattern: bound a Prometheus metric (CPU, latency, error rate) during chaos via a managed Harness Prometheus connector.
+
 Runtime: any value inside probe_properties or run_properties may be a Harness runtime expression like "<+input>" (resolved at experiment run time) — useful for parameterising probes via variables/inputs.
 
 Minimal httpProbe body:
-{"probe_id":"my-http-probe","name":"my-http-probe","type":"httpProbe","infrastructure_type":"Kubernetes","probe_properties":{"httpProbe":{"url":"https://example.com/health","method":{"get":{"criteria":"==","responseCode":"200"}}}}}`;
+{"probe_id":"my-http-probe","name":"my-http-probe","type":"httpProbe","infrastructure_type":"Kubernetes","probe_properties":{"httpProbe":{"url":"https://example.com/health","method":{"get":{"criteria":"==","responseCode":"200"}}}}}
+
+Minimal cmdProbe body (source MUST be a JSON-encoded string, not a JSON object):
+{"probe_id":"my-cmd-probe","name":"my-cmd-probe","type":"cmdProbe","infrastructure_type":"Kubernetes","probe_properties":{"cmdProbe":{"command":"redis-cli -h redis ping","comparator":{"type":"string","criteria":"equal","value":"PONG"},"source":"{\\"image\\":\\"redis:7-alpine\\",\\"inheritInputs\\":true}"}}}
+
+Minimal promProbe body (continuous 5xx-rate guard under 5%):
+{"probe_id":"checkout-err-rate","name":"checkout-err-rate","type":"promProbe","infrastructure_type":"Kubernetes","probe_properties":{"promProbe":{"endpoint":"http://prometheus-server.monitoring.svc:9090","query":"sum(rate(http_requests_total{status=~\"5..\"}[1m])) / sum(rate(http_requests_total[1m]))","comparator":{"type":"float","criteria":"<","value":"0.05"}}}}
+
+Minimal k8sProbe body (assert checkout Deployment is present during chaos):
+{"probe_id":"checkout-deployment-present","name":"checkout-deployment-present","type":"k8sProbe","infrastructure_type":"Kubernetes","probe_properties":{"k8sProbe":{"group":"apps","version":"v1","resource":"deployments","namespace":"boutique","labelSelector":"app=checkout","operation":"present"}}}
+
+Minimal datadogProbe body (Kubernetes — CPU stays below 80% during chaos):
+{"probe_id":"checkout-cpu-bound","name":"checkout-cpu-bound","type":"datadogProbe","infrastructure_type":"Kubernetes","probe_properties":{"datadogProbe":{"datadogSite":"us5.datadoghq.com","datadogCredentialsSecretName":"datadog-creds","metrics":{"query":"avg:system.cpu.user{service:checkout}","timeFrame":"now-1m","comparator":{"type":"float","criteria":"<","value":"80"}}}}}
+
+Minimal datadogProbe body (Kubernetes — synthetic browser test still passes during chaos):
+{"probe_id":"checkout-synth-ok","name":"checkout-synth-ok","type":"datadogProbe","infrastructure_type":"Kubernetes","probe_properties":{"datadogProbe":{"datadogSite":"us5.datadoghq.com","datadogCredentialsSecretName":"datadog-creds","syntheticsTest":{"testType":"browser","publicId":"abc-123-xyz"}}}}
+
+Minimal dynatraceProbe body (host CPU stays under 80% during chaos):
+{"probe_id":"host-cpu-bound","name":"host-cpu-bound","type":"dynatraceProbe","infrastructure_type":"Kubernetes","probe_properties":{"dynatraceProbe":{"endpoint":"https://abc.live.dynatrace.com","timeFrame":"now-1m","apiTokenSecretName":"dynatrace-creds","metrics":{"metricsSelector":"builtin:host.cpu.usage","entitySelector":"type(HOST)"},"comparator":{"type":"float","criteria":"<","value":"80"}}}}
+
+Minimal apmProbe body (Prometheus sub-type — uses a Harness Prometheus CONNECTOR; for a raw URL use promProbe instead):
+{"probe_id":"my-apm-probe","name":"my-apm-probe","type":"apmProbe","infrastructure_type":"Kubernetes","probe_properties":{"apmProbe":{"comparator":{"type":"float","criteria":"==","value":"90"},"type":"Prometheus","prometheusProbeInputs":{"query":"up","connectorID":"gcpmgrpromconnector","tlsConfig":{"caCrt":{"identifier":"secrets.getValue(\\"ca-cert\\")"},"clientCrt":{"identifier":"secrets.getValue(\\"client-cert\\")"},"key":{"identifier":"secrets.getValue(\\"client-key\\")"},"insecureSkipVerify":true}}}}}`;
 
 export const descProbeIdField = `Unique probe identifier. Lowercase alphanumeric + hyphen ([a-z0-9-]+). Must be unique within the project scope.`;
 export const descProbeNameField = `Human-readable probe name. Defaults to probe_id when omitted.`;
-export const descProbePropertiesField = `Type-specific probe configuration. Provide exactly one inner key matching the value of "type" (e.g. for type=httpProbe set probe_properties.httpProbe). Phase 1 documents only the httpProbe shape; other type shapes are accepted as passthrough.`;
+export const descProbePropertiesField = `Type-specific probe configuration. Provide exactly one inner key matching the value of "type" (e.g. for type=dynatraceProbe set probe_properties.dynatraceProbe). promProbe and apmProbe are DIFFERENT — promProbe queries a Prometheus URL directly; apmProbe.type=Prometheus uses a managed Harness Prometheus connector. httpProbe, cmdProbe, promProbe, k8sProbe, datadogProbe, dynatraceProbe, and apmProbe (Prometheus sub-type only) are fully documented in this schema; other type shapes (sloProbe, containerProbe, and the remaining apmProbe sub-types — AppDynamics/SplunkObservability/Dynatrace/NewRelic/GcpCloudMonitoring/Datadog/SplunkEnterprise) are accepted as camelCase passthrough per the Harness API.`;
 export const descRunPropertiesField = `Probe execution cadence and retry behavior. All fields optional with server-side defaults: timeout (e.g. "10s"), interval (e.g. "2s"), attempt (retry count), pollingInterval, initialDelay, stopOnFailure (boolean), verbosity ("info" | "debug").`;
 
 export const descListExperimentTemplates = `List chaos experiment templates from chaos hubs.
@@ -434,6 +549,7 @@ export const descCreateFromTemplate = `Creates and launches a new chaos experime
 
 IMPORTANT: You MUST NOT auto-select, assume, or pre-fill any value on behalf of the user.
 At every step below, you MUST display the available options and wait for explicit user confirmation before proceeding.
+NOTE: based on your previous user activies still don't assume their org/project/hub/template etc, they might would want to chose a different everytime. 
 
 Required workflow — follow in order, pausing for user input after each step:
 

@@ -296,3 +296,479 @@ describe("chaos_probe create", () => {
     expect(call.body.probeProperties).toMatchObject({ httpProbe: { url: "https://example.com" } });
   });
 });
+
+describe("chaos_probe create — cmdProbe", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("create: inline cmdProbe (no source) round-trips command + comparator + top-level env", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ probeId: "inline-cmd", name: "inline-cmd" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_probe", "create", {
+      probe_id: "inline-cmd",
+      name: "inline-cmd",
+      type: "cmdProbe",
+      infrastructure_type: "Kubernetes",
+      project_id: "proj1",
+      org_id: "org1",
+      probe_properties: {
+        cmdProbe: {
+          command: "kubectl get pods -n boutique --no-headers | wc -l",
+          comparator: { type: "int", criteria: ">=", value: "3" },
+          env: [{ name: "KUBECONFIG", value: "/root/.kube/config" }],
+        },
+      },
+      run_properties: { timeout: "5s", interval: "2s", attempt: 3 },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/chaos/manager/api/rest/v2/probes");
+    expect(call.body.type).toBe("cmdProbe");
+    expect(call.body.probeProperties).toEqual({
+      cmdProbe: {
+        command: "kubectl get pods -n boutique --no-headers | wc -l",
+        comparator: { type: "int", criteria: ">=", value: "3" },
+        env: [{ name: "KUBECONFIG", value: "/root/.kube/config" }],
+      },
+    });
+    // No `source` key in the body when inline mode.
+    expect((call.body.probeProperties as Record<string, Record<string, unknown>>).cmdProbe.source).toBeUndefined();
+    expect(call.body.runProperties).toMatchObject({ timeout: "5s", interval: "2s", attempt: 3 });
+  });
+
+  it("create: source-mode cmdProbe round-trips full Pod-spec source object verbatim", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ probeId: "sourced-cmd", name: "sourced-cmd" });
+    const client = makeClient(mockRequest);
+
+    const sourceSpec = {
+      image: "postgres:16-alpine",
+      command: ["sh", "-c"],
+      args: ["psql -h db -U postgres -tA -c 'SELECT count(*) FROM orders'"],
+      env: [
+        {
+          name: "PGPASSWORD",
+          valueFrom: {
+            secretKeyRef: { name: "db-creds", key: "password" },
+          },
+        },
+      ],
+      inheritInputs: true,
+      hostNetwork: false,
+      privileged: false,
+      imagePullPolicy: "IfNotPresent",
+      imagePullSecrets: [{ name: "regcred" }],
+      nodeSelector: { "kubernetes.io/os": "linux" },
+      tolerations: [{ key: "chaos", operator: "Equal", value: "true", effect: "NoSchedule" }],
+      volumes: [{ name: "scripts", configMap: { name: "probe-scripts" } }],
+      volumeMount: [{ name: "scripts", mountPath: "/scripts", readOnly: true }],
+      labels: { app: "chaos-probe" },
+      annotations: { "sidecar.istio.io/inject": "false" },
+    };
+
+    const sourceJsonString = JSON.stringify(sourceSpec);
+
+    await registry.dispatch(client, "chaos_probe", "create", {
+      probe_id: "sourced-cmd",
+      name: "sourced-cmd",
+      type: "cmdProbe",
+      infrastructure_type: "Kubernetes",
+      project_id: "proj1",
+      org_id: "org1",
+      probe_properties: {
+        cmdProbe: {
+          command: "exec",
+          comparator: { type: "int", criteria: ">=", value: "1" },
+          source: sourceJsonString,
+        },
+      },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.body.type).toBe("cmdProbe");
+    // Wire format: source must travel as a JSON-encoded STRING (not an object).
+    // Pass-through preserves the string verbatim.
+    expect((call.body.probeProperties as Record<string, Record<string, unknown>>).cmdProbe.source).toBe(sourceJsonString);
+    expect(typeof (call.body.probeProperties as Record<string, Record<string, unknown>>).cmdProbe.source).toBe("string");
+  });
+
+  it("create: cmdProbe accepts comparator.type=string with criteria=equal", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ probeId: "redis-ping", name: "redis-ping" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_probe", "create", {
+      probe_id: "redis-ping",
+      name: "redis-ping",
+      type: "cmdProbe",
+      infrastructure_type: "Kubernetes",
+      project_id: "proj1",
+      org_id: "org1",
+      probe_properties: {
+        cmdProbe: {
+          command: "redis-cli -h redis ping",
+          comparator: { type: "string", criteria: "equal", value: "PONG" },
+          source: '{"image":"redis:7-alpine"}',
+        },
+      },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    const cmdProbe = (call.body.probeProperties as Record<string, Record<string, unknown>>).cmdProbe;
+    expect(cmdProbe.command).toBe("redis-cli -h redis ping");
+    expect(cmdProbe.comparator).toEqual({ type: "string", criteria: "equal", value: "PONG" });
+    expect(cmdProbe.source).toBe('{"image":"redis:7-alpine"}');
+  });
+});
+
+describe("chaos_probe create — promProbe", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("create: inline-query promProbe round-trips endpoint + query + comparator + auth + tlsConfig", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ probeId: "checkout-err-rate", name: "checkout-err-rate" });
+    const client = makeClient(mockRequest);
+
+    const promProbe = {
+      endpoint: "http://prometheus-server.monitoring.svc:9090",
+      query:
+        'sum(rate(http_requests_total{status=~"5.."}[1m])) / sum(rate(http_requests_total[1m]))',
+      comparator: { type: "float", criteria: "<", value: "0.05" },
+      auth: { type: "Bearer", credentials: "<+secrets.getValue('promToken')>" },
+      tlsConfig: { caFile: "ca.pem", certFile: "cert.pem", keyFile: "key.pem", insecureSkipVerify: false },
+    };
+
+    await registry.dispatch(client, "chaos_probe", "create", {
+      probe_id: "checkout-err-rate",
+      name: "checkout-err-rate",
+      type: "promProbe",
+      infrastructure_type: "Kubernetes",
+      project_id: "proj1",
+      org_id: "org1",
+      probe_properties: { promProbe },
+      run_properties: {
+        timeout: "10s",
+        interval: "5s",
+        attempt: 1,
+        pollingInterval: "15s",
+        initialDelay: "30s",
+        stopOnFailure: false,
+      },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/chaos/manager/api/rest/v2/probes");
+    expect(call.body.type).toBe("promProbe");
+    expect(call.body.probeProperties).toEqual({ promProbe });
+    // queryPath must NOT be synthesised when only query was supplied.
+    expect(
+      (call.body.probeProperties as Record<string, Record<string, unknown>>).promProbe.queryPath,
+    ).toBeUndefined();
+    expect(call.body.runProperties).toMatchObject({ timeout: "10s", pollingInterval: "15s" });
+  });
+
+  it("create: queryPath variant round-trips queryPath verbatim (no query key)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ probeId: "prom-via-file", name: "prom-via-file" });
+    const client = makeClient(mockRequest);
+
+    const promProbe = {
+      endpoint: "http://prometheus-server.monitoring.svc:9090",
+      queryPath: "/etc/probes/checkout-err-rate.promql",
+      comparator: { type: "float", criteria: ">=", value: "1" },
+    };
+
+    await registry.dispatch(client, "chaos_probe", "create", {
+      probe_id: "prom-via-file",
+      name: "prom-via-file",
+      type: "promProbe",
+      infrastructure_type: "Kubernetes",
+      project_id: "proj1",
+      org_id: "org1",
+      probe_properties: { promProbe },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    const out = (call.body.probeProperties as Record<string, Record<string, unknown>>).promProbe;
+    expect(out.queryPath).toBe("/etc/probes/checkout-err-rate.promql");
+    expect(out.query).toBeUndefined();
+    expect(out.endpoint).toBe("http://prometheus-server.monitoring.svc:9090");
+    expect(out.comparator).toEqual({ type: "float", criteria: ">=", value: "1" });
+  });
+
+  it("create: minimal promProbe (endpoint + query + comparator) does NOT synthesise optional keys", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ probeId: "prom-min", name: "prom-min" });
+    const client = makeClient(mockRequest);
+
+    const promProbe = {
+      endpoint: "http://prometheus-server.monitoring.svc:9090",
+      query: "up{job=\"checkout\"}",
+      comparator: { type: "float", criteria: "==", value: "1" },
+    };
+
+    await registry.dispatch(client, "chaos_probe", "create", {
+      probe_id: "prom-min",
+      name: "prom-min",
+      type: "promProbe",
+      infrastructure_type: "Kubernetes",
+      project_id: "proj1",
+      org_id: "org1",
+      probe_properties: { promProbe },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    const out = (call.body.probeProperties as Record<string, Record<string, unknown>>).promProbe;
+    expect(out).toEqual(promProbe);
+    expect(out.auth).toBeUndefined();
+    expect(out.tlsConfig).toBeUndefined();
+    expect(out.queryPath).toBeUndefined();
+  });
+});
+
+describe("chaos_probe create — k8sProbe", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("create: minimal k8sProbe round-trips required fields (version + resource + operation)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ probeId: "k8s-min", name: "k8s-min" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_probe", "create", {
+      probe_id: "k8s-min",
+      name: "k8s-min",
+      type: "k8sProbe",
+      infrastructure_type: "Kubernetes",
+      project_id: "proj1",
+      org_id: "org1",
+      probe_properties: {
+        k8sProbe: {
+          version: "v1",
+          resource: "pods",
+          operation: "present",
+        },
+      },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/chaos/manager/api/rest/v2/probes");
+    expect(call.body.type).toBe("k8sProbe");
+    expect(call.body.probeProperties).toEqual({
+      k8sProbe: { version: "v1", resource: "pods", operation: "present" },
+    });
+    const out = (call.body.probeProperties as Record<string, Record<string, unknown>>).k8sProbe;
+    // Optional selector fields must NOT be present unless the user supplied them.
+    expect(out.group).toBeUndefined();
+    expect(out.namespace).toBeUndefined();
+    expect(out.fieldSelector).toBeUndefined();
+    expect(out.labelSelector).toBeUndefined();
+    expect(out.resourceNames).toBeUndefined();
+  });
+
+  it("create: full k8sProbe round-trips all 8 fields (3 required + 5 selectors) verbatim", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ probeId: "k8s-full", name: "k8s-full" });
+    const client = makeClient(mockRequest);
+
+    const k8sSpec = {
+      group: "apps",
+      version: "v1",
+      resource: "deployments",
+      operation: "absent",
+      namespace: "boutique",
+      resourceNames: "checkout,payment",
+      fieldSelector: "metadata.name=checkout",
+      labelSelector: "app=checkout",
+    };
+
+    await registry.dispatch(client, "chaos_probe", "create", {
+      probe_id: "k8s-full",
+      name: "k8s-full",
+      type: "k8sProbe",
+      infrastructure_type: "Kubernetes",
+      project_id: "proj1",
+      org_id: "org1",
+      probe_properties: {
+        k8sProbe: k8sSpec,
+      },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.body.type).toBe("k8sProbe");
+    // Pass-through must preserve every field byte-for-byte.
+    expect((call.body.probeProperties as Record<string, Record<string, unknown>>).k8sProbe).toEqual(k8sSpec);
+  });
+});
+
+describe("chaos_probe create — dynatraceProbe", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("create: minimal dynatraceProbe round-trips required fields (endpoint + timeFrame + metrics + comparator)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ probeId: "dt-min", name: "dt-min" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_probe", "create", {
+      probe_id: "dt-min",
+      name: "dt-min",
+      type: "dynatraceProbe",
+      infrastructure_type: "Kubernetes",
+      project_id: "proj1",
+      org_id: "org1",
+      probe_properties: {
+        dynatraceProbe: {
+          endpoint: "https://abc.live.dynatrace.com",
+          timeFrame: "now-1m",
+          metrics: {
+            metricsSelector: "builtin:host.cpu.usage",
+            entitySelector: "type(HOST)",
+          },
+          comparator: { type: "float", criteria: "<", value: "80" },
+        },
+      },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/chaos/manager/api/rest/v2/probes");
+    expect(call.body.type).toBe("dynatraceProbe");
+    const out = (call.body.probeProperties as Record<string, Record<string, unknown>>).dynatraceProbe;
+    expect(out.endpoint).toBe("https://abc.live.dynatrace.com");
+    expect(out.timeFrame).toBe("now-1m");
+    expect(out.metrics).toEqual({
+      metricsSelector: "builtin:host.cpu.usage",
+      entitySelector: "type(HOST)",
+    });
+    expect(out.comparator).toEqual({ type: "float", criteria: "<", value: "80" });
+    expect(out.apiTokenSecretName).toBeUndefined();
+  });
+
+  it("create: full dynatraceProbe round-trips all 5 top-level fields verbatim", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ probeId: "dt-full", name: "dt-full" });
+    const client = makeClient(mockRequest);
+
+    const dynatraceSpec = {
+      endpoint: "https://abc.dynatrace-managed.com/e/env-id",
+      timeFrame: "now-5m",
+      apiTokenSecretName: "dynatrace-creds",
+      metrics: {
+        metricsSelector: "builtin:service.response.time:avg",
+        entitySelector: "type(SERVICE),tag(\"env:prod\")",
+      },
+      comparator: { type: "float", criteria: "<=", value: "500" },
+    };
+
+    await registry.dispatch(client, "chaos_probe", "create", {
+      probe_id: "dt-full",
+      name: "dt-full",
+      type: "dynatraceProbe",
+      infrastructure_type: "Linux",
+      project_id: "proj1",
+      org_id: "org1",
+      probe_properties: {
+        dynatraceProbe: dynatraceSpec,
+      },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.body.type).toBe("dynatraceProbe");
+    expect(call.body.infrastructureType).toBe("Linux");
+    expect((call.body.probeProperties as Record<string, Record<string, unknown>>).dynatraceProbe).toEqual(dynatraceSpec);
+  });
+});
+
+describe("chaos_probe create — apmProbe (Prometheus)", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("create: APM Prometheus payload matches the Harness CURL body shape (apmProbe.type=Prometheus, prometheusProbeInputs with connectorID + tlsConfig secret refs + query, runProperties)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      probeId: "new-apm-probedvdv",
+      name: "new-apm-probedvdv",
+    });
+    const client = makeClient(mockRequest);
+
+    const apmProbe = {
+      comparator: { type: "float", criteria: "==", value: "90" },
+      type: "Prometheus",
+      prometheusProbeInputs: {
+        query: "query",
+        tlsConfig: {
+          caCrt: { identifier: 'secrets.getValue("harnessoauthaccesstoken_github_1778796232970")' },
+          clientCrt: { identifier: 'secrets.getValue("ir-demo-external-cluster")' },
+          key: { identifier: 'secrets.getValue("priyanshu_atlassian_api_token")' },
+          insecureSkipVerify: true,
+        },
+        connectorID: "gcpmgrpromconnector",
+      },
+    };
+
+    await registry.dispatch(client, "chaos_probe", "create", {
+      probe_id: "new-apm-probedvdv",
+      name: "new-apm-probedvdv",
+      description: "",
+      tags: [],
+      type: "apmProbe",
+      infrastructure_type: "Kubernetes",
+      project_id: "ChaosDev1",
+      org_id: "default",
+      variables: [],
+      probe_properties: { apmProbe },
+      run_properties: {
+        attempt: 1,
+        initialDelay: "5s",
+        interval: "2s",
+        pollingInterval: "30s",
+        stopOnFailure: true,
+        timeout: "10s",
+        verbosity: "info",
+      },
+      inputs: [],
+    });
+
+    expect(mockRequest).toHaveBeenCalledOnce();
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/chaos/manager/api/rest/v2/probes");
+    expect(call.params).toMatchObject({
+      organizationIdentifier: "default",
+      projectIdentifier: "ChaosDev1",
+    });
+
+    expect(call.body.probeId).toBe("new-apm-probedvdv");
+    expect(call.body.name).toBe("new-apm-probedvdv");
+    expect(call.body.type).toBe("apmProbe");
+    expect(call.body.infrastructureType).toBe("Kubernetes");
+    expect(call.body.infrastructure_type).toBe("Kubernetes");
+
+    expect(call.body.probeProperties).toEqual({ apmProbe });
+    expect(call.body.probe_properties).toEqual({ apmProbe });
+
+    expect(call.body.runProperties).toEqual({
+      attempt: 1,
+      initialDelay: "5s",
+      interval: "2s",
+      pollingInterval: "30s",
+      stopOnFailure: true,
+      timeout: "10s",
+      verbosity: "info",
+    });
+
+    expect(call.body.variables).toEqual([]);
+    expect(call.body.inputs).toEqual([]);
+  });
+});
