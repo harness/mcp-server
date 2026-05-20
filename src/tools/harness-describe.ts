@@ -21,6 +21,7 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
       annotations: {
         title: "Describe Harness Resources",
         readOnlyHint: true,
+        destructiveHint: false,
         openWorldHint: false,
       },
     },

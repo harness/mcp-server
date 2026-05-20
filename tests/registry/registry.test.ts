@@ -151,6 +151,30 @@ describe("Registry", () => {
       )).not.toThrow();
       expect(server.registerTool).toHaveBeenCalled();
     });
+
+    it("registers every tool with explicit GPT App annotation booleans", () => {
+      const registry = new Registry(makeConfig());
+      const server = {
+        registerTool: vi.fn(),
+      };
+
+      registerAllTools(
+        server as never,
+        registry,
+        makeClient(),
+        makeConfig(),
+      );
+
+      expect(server.registerTool).toHaveBeenCalled();
+
+      for (const [toolName, definition] of server.registerTool.mock.calls) {
+        const annotations = (definition as { annotations?: Record<string, unknown> }).annotations;
+        expect(annotations, `${toolName} should define annotations`).toBeDefined();
+        expect(typeof annotations?.readOnlyHint, `${toolName} readOnlyHint`).toBe("boolean");
+        expect(typeof annotations?.openWorldHint, `${toolName} openWorldHint`).toBe("boolean");
+        expect(typeof annotations?.destructiveHint, `${toolName} destructiveHint`).toBe("boolean");
+      }
+    });
   });
 
   describe("getResource", () => {

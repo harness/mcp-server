@@ -29,6 +29,7 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
       annotations: {
         title: "Get Harness Resource",
         readOnlyHint: true,
+        destructiveHint: false,
         openWorldHint: true,
       },
     },

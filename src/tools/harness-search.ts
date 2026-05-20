@@ -63,6 +63,7 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
       annotations: {
         title: "Search Harness Resources",
         readOnlyHint: true,
+        destructiveHint: false,
         openWorldHint: true,
       },
     },

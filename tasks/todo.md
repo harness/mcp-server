@@ -1,5 +1,21 @@
 # Harness MCP Server — Task Tracking
 
+## GPT App Tool Annotation Compliance (2026-05-20)
+- [x] Add explicit `destructiveHint: false` to all non-destructive read-only MCP tools flagged by the GPT App form
+- [x] Add regression coverage that every registered tool sets `readOnlyHint`, `openWorldHint`, and `destructiveHint` to a boolean
+- [x] Run focused tests and typecheck
+- [ ] Commit, push, and open a draft PR
+
+### Plan
+- Keep the change scoped to tool annotations only; no tool behavior or schema changes.
+- Treat list/get/diagnose/search/describe/status/schema as non-destructive because they do not delete resources.
+- Verify at registration level so future tools cannot omit required GPT App annotation fields.
+
+### Review
+- Added explicit `destructiveHint: false` to `harness_list`, `harness_get`, `harness_diagnose`, `harness_search`, `harness_describe`, `harness_status`, and `harness_schema`.
+- Added regression coverage that every registered MCP tool exposes boolean `readOnlyHint`, `openWorldHint`, and `destructiveHint` annotations for GPT App form compatibility.
+- Verified with `pnpm test tests/registry/registry.test.ts` and `pnpm typecheck`.
+
 ## Phase 1: Foundation ✅
 - [x] Project scaffolding (package.json, tsconfig, pnpm)
 - [x] Config validation with Zod

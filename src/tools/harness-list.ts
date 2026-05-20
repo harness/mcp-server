@@ -45,6 +45,7 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
       annotations: {
         title: "List Harness Resources",
         readOnlyHint: true,
+        destructiveHint: false,
         openWorldHint: true,
       },
     },
