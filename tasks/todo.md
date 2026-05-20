@@ -471,7 +471,10 @@
 
 ### Review
 - Found a hardcoded provider chat model slug in the public `agent-pipeline` pipeline v1 example.
+- CI also exposed that `ai-evals` had been enabled by default, making AI Evals model resources visible without the documented opt-in.
 - Replaced it with `model: <+input>` so generated examples do not disclose or imply a concrete internal/default chat model.
 - Added regression coverage that the public agent example uses the placeholder and avoids concrete provider model slug patterns.
+- Restored `ai-evals` to opt-in-only and added registry coverage that default toolsets exclude `eval_dataset` while `+ai-evals` enables the toolset.
 - Verified with `pnpm test tests/tools/harness-schema-examples.test.ts`, `pnpm typecheck`, `pnpm build`, full `pnpm test`, and a source search for the removed model slug.
+- Verified the CI smoke case with `HARNESS_TOOLSETS='+ai-evals' node scripts/smoke-test.js`.
 - Opened the PR, but Slack reply was blocked because `C08SYT1FWJD` is not available in the configured posting channels. No alternate channel was used.
