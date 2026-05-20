@@ -1446,7 +1446,7 @@ Inline PNG chart visualizations rendered from Harness data. These are metadata-o
 
 ## Toolset Filtering
 
-By default, all 32 toolsets are enabled.
+By default, 32 of 32 toolsets are enabled. One toolset (`ai-evals`) is opt-in — excluded by default to avoid polluting the resource list for users who don't need it.
 
 ### Adding toolsets with `+` prefix
 
