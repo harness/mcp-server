@@ -83,10 +83,9 @@ describe("Registry", () => {
       expect(registry.getResource("agent").toolset).toBe("agents");
     });
 
-    it("includes ai-evals in defaults", () => {
+    it("excludes ai-evals from defaults", () => {
       const registry = new Registry(makeConfig());
-      const res = registry.getResource("eval_dataset");
-      expect(res.resourceType).toBe("eval_dataset");
+      expect(() => registry.getResource("eval_dataset")).toThrow(/Unknown resource_type/);
     });
 
     it("accepts legacy agent-pipelines alias with + prefix", () => {
