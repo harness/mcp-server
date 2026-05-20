@@ -9,6 +9,7 @@ import { createLogger } from "../utils/logger.js";
 import { sendProgress, sendLog } from "../utils/progress.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import type { ResourceScope } from "../registry/types.js";
+import { searchOutputSchema } from "./output-schemas.js";
 
 const log = createLogger("search");
 const RESOURCE_SCOPES: readonly ResourceScope[] = ["account", "org", "project"];
@@ -60,6 +61,7 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
         max_per_type: z.number().describe("Max results per type").default(5).optional(),
         compact: z.boolean().describe("Strip verbose metadata (default true)").default(true).optional(),
       },
+      outputSchema: searchOutputSchema,
       annotations: {
         title: "Search Harness Resources",
         readOnlyHint: true,

@@ -9,6 +9,7 @@ import { asString, coerceRecord } from "../utils/type-guards.js";
 import { resolveLogContent } from "../utils/log-resolver.js";
 import { buildLogPrefixFromExecution } from "../utils/log-prefix.js";
 import { resourceTypeSchema } from "./input-schemas.js";
+import { getOutputSchema } from "./output-schemas.js";
 
 export function registerGetTool(server: McpServer, registry: Registry, client: HarnessClient): void {
   const gettableTypes = registry.getTypesForOperation("get");
@@ -26,6 +27,7 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
         params: z.record(z.string(), z.unknown()).describe("Additional identifiers for nested resources. Call harness_describe for fields per resource_type.").optional(),
       },
+      outputSchema: getOutputSchema,
       annotations: {
         title: "Get Harness Resource",
         readOnlyHint: true,
