@@ -276,6 +276,17 @@ export const stoToolset: ToolsetDefinition = {
           preflight: async ({ client, input }) => {
             const b = ((input.body as Record<string, unknown> | undefined) ?? {});
             const scope = ((b.scope ?? input.scope) as string | undefined)?.toUpperCase();
+            const pipelineId = b.pipeline_id ?? input.pipeline_id;
+            const targetId = b.target_id ?? input.target_id;
+            if (scope && !["ACCOUNT", "ORG", "PROJECT", "PIPELINE", "TARGET"].includes(scope)) {
+              throw new Error("security_exemption promote: scope must be one of ACCOUNT, ORG, PROJECT, PIPELINE, TARGET.");
+            }
+            if (scope === "PIPELINE" && !pipelineId) {
+              throw new Error("security_exemption promote: pipeline_id is required when scope is PIPELINE.");
+            }
+            if (scope === "TARGET" && !targetId) {
+              throw new Error("security_exemption promote: target_id is required when scope is TARGET.");
+            }
             // The STO backend determines target scope by which query params are present:
             //   orgId + projectId + pipelineId → PIPELINE scope
             //   orgId + projectId + targetId   → TARGET scope
@@ -290,12 +301,12 @@ export const stoToolset: ToolsetDefinition = {
             } else if (scope === "ORG") {
               input.project_id = "";
               // org_id left undefined so registry injects it from config
-            } else if (scope === "PIPELINE" && b.pipeline_id) {
+            } else if (scope === "PIPELINE") {
               // Hoist to top-level so queryParams mapping sends it as URL param
-              input.promote_pipeline_id = b.pipeline_id;
-            } else if (scope === "TARGET" && b.target_id) {
+              input.promote_pipeline_id = pipelineId;
+            } else if (scope === "TARGET") {
               // Hoist to top-level so queryParams mapping sends it as URL param
-              input.promote_target_id = b.target_id;
+              input.promote_target_id = targetId;
             }
             // PROJECT: leave both org_id and project_id as-is, no extra params
 
@@ -309,12 +320,14 @@ export const stoToolset: ToolsetDefinition = {
             const b = (input.body as Record<string, unknown> | undefined) ?? {};
             // scope may arrive in body OR as a top-level input param depending on the calling agent
             const scope = (b.scope ?? input.scope) as string | undefined;
+            const pipelineId = b.pipeline_id ?? input.pipeline_id;
+            const targetId = b.target_id ?? input.target_id;
             const requestBody = {
               approverId: b.approver_id,
               scope,
               ...(b.comment     ? { comment:    b.comment }     : {}),
-              ...(b.pipeline_id ? { pipelineId: b.pipeline_id } : {}),
-              ...(b.target_id   ? { targetId:   b.target_id }   : {}),
+              ...(pipelineId ? { pipelineId } : {}),
+              ...(targetId   ? { targetId }   : {}),
             };
             return requestBody;
           },

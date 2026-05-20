@@ -45,6 +45,7 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
 function makeClient(requestFn?: (...args: unknown[]) => unknown): HarnessClient {
   return {
     request: requestFn ?? vi.fn().mockResolvedValue({}),
+    getCurrentUserId: vi.fn().mockResolvedValue("approver-1"),
     account: "test-account",
   } as unknown as HarnessClient;
 }
@@ -271,5 +272,81 @@ describe("security_exemption list — registry dispatch", () => {
     // compactItems call — the actual tool skips it via the marker).
     const compacted = compactItems(result.items);
     expect(compacted[0]).toBeDefined();
+  });
+});
+
+describe("security_exemption promote — registry dispatch", () => {
+  it.each([
+    {
+      scope: "PIPELINE",
+      inputKey: "pipeline_id",
+      inputValue: "pipeline-1",
+      queryKey: "pipelineId",
+      bodyKey: "pipelineId",
+    },
+    {
+      scope: "TARGET",
+      inputKey: "target_id",
+      inputValue: "target-1",
+      queryKey: "targetId",
+      bodyKey: "targetId",
+    },
+  ])("propagates top-level $inputKey for $scope promotions", async ({
+    scope,
+    inputKey,
+    inputValue,
+    queryKey,
+    bodyKey,
+  }) => {
+    const requestSpy = vi.fn().mockResolvedValue({ id: "exemption-1", scope });
+    const client = makeClient(requestSpy);
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+
+    await registry.dispatchExecute(client, "security_exemption", "promote", {
+      exemption_id: "exemption-1",
+      scope,
+      [inputKey]: inputValue,
+      body: { comment: "approved for narrow scope" },
+    });
+
+    expect(requestSpy).toHaveBeenCalledTimes(1);
+    const callArgs = requestSpy.mock.calls[0]![0] as {
+      params: Record<string, unknown>;
+      body: Record<string, unknown>;
+    };
+    expect(callArgs.params[queryKey]).toBe(inputValue);
+    expect(callArgs.body.scope).toBe(scope);
+    expect(callArgs.body[bodyKey]).toBe(inputValue);
+  });
+
+  it.each([
+    { scope: "PIPELINE", missingField: "pipeline_id" },
+    { scope: "TARGET", missingField: "target_id" },
+  ])("rejects $scope promotions when $missingField is missing", async ({ scope, missingField }) => {
+    const requestSpy = vi.fn().mockResolvedValue({ id: "exemption-1", scope });
+    const client = makeClient(requestSpy);
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+
+    await expect(
+      registry.dispatchExecute(client, "security_exemption", "promote", {
+        exemption_id: "exemption-1",
+        body: { scope, comment: "missing narrow-scope identifier" },
+      }),
+    ).rejects.toThrow(new RegExp(`${missingField}.*required`, "i"));
+    expect(requestSpy).not.toHaveBeenCalled();
+  });
+
+  it("rejects unknown promotion scopes before reaching the API", async () => {
+    const requestSpy = vi.fn().mockResolvedValue({ id: "exemption-1", scope: "PROJECT" });
+    const client = makeClient(requestSpy);
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+
+    await expect(
+      registry.dispatchExecute(client, "security_exemption", "promote", {
+        exemption_id: "exemption-1",
+        body: { scope: "WORKSPACE", comment: "invalid scope" },
+      }),
+    ).rejects.toThrow(/scope.*ACCOUNT.*ORG.*PROJECT.*PIPELINE.*TARGET/i);
+    expect(requestSpy).not.toHaveBeenCalled();
   });
 });

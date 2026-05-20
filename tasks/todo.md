@@ -454,3 +454,20 @@
 - Wired the auth middleware after CORS/rate-limit middleware and before MCP session creation/reuse in `src/index.ts`; `/health` and CORS preflight remain unauthenticated.
 - Updated README and `.env.example` to document HTTP auth and clarify that CORS/Host validation are not authentication.
 - Verified with `pnpm test tests/utils/http-auth.test.ts tests/config.test.ts tests/integration/http-transport.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test` (58 files / 1360 tests).
+
+## Critical Bug Inspection (2026-05-20)
+- [x] Inspect recent commits for high-severity behavioral regressions
+- [x] Trace suspicious changes through caller chains and downstream effects
+- [x] Implement a minimal fix only if a concrete critical bug is confirmed
+- [x] Run focused verification and report the outcome
+
+### Plan
+- Review commits after the 2026-05-16 critical inspection, prioritizing HTTP auth/single-user mode, blocking execution waits, log blob rewriting, template NG API paths, STO exemption create/promote flows, and schema sync changes.
+- Build concrete trigger scenarios only for issues with data loss, crashes, security bypass, silent truncation, or major user-facing breakage.
+- If no high-confidence critical bug is confirmed, leave product code unchanged and report a concise no-critical-findings summary.
+
+### Review
+- Found a security-relevant STO promotion regression: `harness_execute` merges `params` to top-level input, but `security_exemption.promote` only hoisted `pipeline_id`/`target_id` from `body`, so pipeline/target promotions could omit `pipelineId`/`targetId` query params and fall through to the backend's broader project-scope promotion.
+- Updated promote preflight/body construction to accept narrow-scope IDs from either top-level input or body, and to fail loudly for invalid scopes or missing `pipeline_id`/`target_id` on narrow-scope promotions.
+- Added regression coverage for top-level pipeline/target IDs and fail-loud validation before any API request.
+- Verified with `pnpm test tests/registry/sto-exemptions.test.ts`, `pnpm typecheck`, `pnpm build`, full `pnpm test` (59 files / 1396 tests), and `git diff --check`.
