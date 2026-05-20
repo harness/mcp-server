@@ -473,5 +473,5 @@
 - Found a hardcoded provider chat model slug in the public `agent-pipeline` pipeline v1 example.
 - Replaced it with `model: <+input>` so generated examples do not disclose or imply a concrete internal/default chat model.
 - Added regression coverage that the public agent example uses the placeholder and avoids concrete provider model slug patterns.
-- Verified with `pnpm test tests/tools/harness-schema-examples.test.ts`, `pnpm typecheck`, `pnpm build`, full `pnpm test`, and `rg "claude-sonnet-4-6"`.
+- Verified with `pnpm test tests/tools/harness-schema-examples.test.ts`, `pnpm typecheck`, `pnpm build`, full `pnpm test`, and a source search for the removed model slug.
 - Opened the PR, but Slack reply was blocked because `C08SYT1FWJD` is not available in the configured posting channels. No alternate channel was used.
