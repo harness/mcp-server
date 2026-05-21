@@ -10,6 +10,7 @@ import type { HarnessClient } from "../../src/client/harness-client.js";
 import type { ToolResult } from "../../src/utils/response-formatter.js";
 import { Registry } from "../../src/registry/index.js";
 import { HarnessApiError } from "../../src/utils/errors.js";
+import { listOutputSchema } from "../../src/tools/output-schemas.js";
 
 // Top-level mocks for execution_log tests — must be before any imports that pull these in
 vi.mock("../../src/utils/log-resolver.js", () => ({
@@ -112,6 +113,35 @@ describe("harness_list", () => {
     expect(result.isError).toBeUndefined();
     const data = parseResult(result) as { items: unknown[]; total: number };
     expect(data.items).toBeDefined();
+  });
+
+  it("returns schema-valid structured content for passthrough list responses", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    mockRequest = vi.fn().mockResolvedValue({ content: [{ identifier: "repo-1" }], totalElements: 1 });
+    client = makeClient(mockRequest);
+    const repositoryServer = makeMcpServer();
+    const { registerListTool } = await import("../../src/tools/harness-list.js");
+    registerListTool(repositoryServer, registry, client);
+
+    const result = await repositoryServer.call("harness_list", { resource_type: "repository" });
+
+    expect(result.isError).toBeUndefined();
+    expect(listOutputSchema.safeParse(result.structuredContent).success).toBe(true);
+  });
+
+  it("wraps top-level array list responses so output schema validation can run", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    mockRequest = vi.fn().mockResolvedValue([{ identifier: "repo-1" }]);
+    client = makeClient(mockRequest);
+    const repositoryServer = makeMcpServer();
+    const { registerListTool } = await import("../../src/tools/harness-list.js");
+    registerListTool(repositoryServer, registry, client);
+
+    const result = await repositoryServer.call("harness_list", { resource_type: "repository" });
+
+    expect(result.isError).toBeUndefined();
+    expect(parseResult(result)).toMatchObject({ items: [{ identifier: "repo-1" }] });
+    expect(listOutputSchema.safeParse(result.structuredContent).success).toBe(true);
   });
 
   it("documents resource_scope in the registered input schema", () => {

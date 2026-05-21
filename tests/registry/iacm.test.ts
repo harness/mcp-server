@@ -296,30 +296,26 @@ describe("activityChangesExtract", () => {
     return getOp("iacm_activity_resource_change", "list").responseExtractor!(raw) as Record<string, unknown>;
   }
 
-  it("extracts summary counts and resource_changes", () => {
+  it("passes through documented execution resource-change sections", () => {
     const raw = {
-      activity_id: "act-123",
+      pipeline_execution: "exec-123",
       workspace_id: "ws-abc",
-      resource_changes: [{ resource_name: "aws_instance.main", action: "change" }],
-      total_added: 0,
-      total_changed: 1,
-      total_destroyed: 0,
-      total_unchanged: 5,
+      resources: [{ name: "aws_instance.main" }],
+      planned_changes: [{ name: "aws_instance.main", change: "changed" }],
+      drift_changes: [],
+      outputs: [],
+      data_sources: [],
     };
     const result = extract(raw);
-    expect(result.activity_id).toBe("act-123");
+    expect(result.pipeline_execution).toBe("exec-123");
     expect(result.workspace_id).toBe("ws-abc");
-    const summary = result.summary as Record<string, unknown>;
-    expect(summary.total_changed).toBe(1);
-    expect(summary.total_unchanged).toBe(5);
-    expect((result.resource_changes as unknown[]).length).toBe(1);
+    expect(result.resources).toEqual([{ name: "aws_instance.main" }]);
+    expect(result.planned_changes).toEqual([{ name: "aws_instance.main", change: "changed" }]);
   });
 
-  it("defaults counts to 0 when absent", () => {
-    const result = extract({});
-    const summary = result.summary as Record<string, unknown>;
-    expect(summary.total_added).toBe(0);
-    expect(summary.total_destroyed).toBe(0);
+  it("adds resource_changes alias from planned_changes when absent", () => {
+    const result = extract({ planned_changes: [{ name: "aws_instance.main" }] });
+    expect(result.resource_changes).toEqual([{ name: "aws_instance.main" }]);
   });
 });
 
@@ -345,9 +341,38 @@ describe("endpoint paths", () => {
     expect(getOp("iacm_module", "get").path).toBe("/iacm/api/modules/{moduleId}");
   });
 
-  it("iacm_activity_resource_change list uses /activities/{activityId}/resource-changes", () => {
+  it("iacm_activity_resource_change list uses the execution resource-changes endpoint", () => {
     expect(getOp("iacm_activity_resource_change", "list").path).toContain(
-      "/activities/{activityId}/resource-changes",
+      "/executions/{pipelineExecutionId}/resource-changes",
     );
+  });
+});
+
+// ─── Registry dispatch integration ───────────────────────────────────────────
+
+describe("iacm registry dispatch", () => {
+  it("dispatches iacm_module get using the numeric id from harness_get resource_id mapping", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ id: 4640, name: "vpc" });
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    await registry.dispatch(makeClient(mockRequest), "iacm_module", "get", { id: "4640" });
+
+    const request = mockRequest.mock.calls[0]![0] as { path: string };
+    expect(request.path).toBe("/iacm/api/modules/4640");
+  });
+
+  it("dispatches activity resource changes by execution id", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ planned_changes: [] });
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    await registry.dispatch(makeClient(mockRequest), "iacm_activity_resource_change", "list", {
+      org_id: "default",
+      project_id: "Testim",
+      activity_id: "exec-123",
+    });
+
+    const request = mockRequest.mock.calls[0]![0] as { path: string; params: Record<string, unknown> };
+    expect(request.path).toBe("/iacm/api/orgs/default/projects/Testim/executions/exec-123/resource-changes");
+    expect(request.params.workspace).toBeUndefined();
   });
 });

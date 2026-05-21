@@ -15,6 +15,16 @@ import { listOutputSchema } from "./output-schemas.js";
 
 const log = createLogger("list");
 
+function normalizeListResult(result: unknown): Record<string, unknown> {
+  if (Array.isArray(result)) {
+    return { items: result };
+  }
+  if (isRecord(result)) {
+    return result;
+  }
+  return { items: [], value: result };
+}
+
 export function registerListTool(server: McpServer, registry: Registry, client: HarnessClient): void {
   // Build a dynamic description for the filters param from all enabled resource definitions
   const allFilterNames = registry.getAllFilterFields().map((f) => f.name);
@@ -68,7 +78,7 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
         if (resourceType === "template" && input.template_list_type === undefined) {
           input.template_list_type = "All";
         }
-        const result = await registry.dispatch(client, resourceType, "list", input);
+        const result = normalizeListResult(await registry.dispatch(client, resourceType, "list", input));
 
         // Apply compact mode — strip verbose metadata from list items.
         // Skip when the endpoint spec has opted out via `skipCompact` (marker

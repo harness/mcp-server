@@ -1,5 +1,17 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Inspection (2026-05-21)
+- [ ] Inspect recent commits for high-severity behavioral regressions
+- [ ] Trace suspicious changes through caller chains and downstream behavior
+- [ ] Implement a minimal fix only if a concrete critical bug is confirmed
+- [ ] Run focused verification for reviewed or changed behavior
+- [ ] Report the outcome in Slack; open a PR only for a confirmed critical fix
+
+### Plan
+- Review recent merged commits after the last critical-bug/documentation automation, prioritizing code changes over docs and version metadata.
+- Focus on high-blast-radius surfaces: MCP tool annotations/output contracts, IaCM resource registration, HTTP auth/session handling, request construction, and write-operation safety.
+- For each suspicious change, require a concrete trigger scenario that can cause data loss, crashes, security bypass, or significant user-facing breakage before patching.
+
 ## GPT App Tool Annotation Compliance (2026-05-20)
 - [x] Add explicit `destructiveHint: false` to all non-destructive read-only MCP tools flagged by the GPT App form
 - [x] Add regression coverage that every registered tool sets `readOnlyHint`, `openWorldHint`, and `destructiveHint` to explicit booleans with value assertions
