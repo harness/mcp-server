@@ -235,6 +235,7 @@ describe("iacmResourcesExtract", () => {
       totalItems: 1,
     };
     const result = extract(raw);
+    expect(result.items).toEqual(raw.resources);
     expect((result.resources as unknown[]).length).toBe(1);
     expect((result.outputs as unknown[]).length).toBe(1);
     expect(result.total_items).toBe(1);
@@ -243,7 +244,18 @@ describe("iacmResourcesExtract", () => {
 
   it("total_items defaults to -1 when absent", () => {
     const result = extract({ resources: [] });
+    expect(result.items).toEqual([]);
     expect(result.total_items).toBe(-1);
+  });
+
+  it("returns empty items when the API response has no state sections", () => {
+    const result = extract({});
+    expect(result.items).toEqual([]);
+    expect(result.resources).toEqual([]);
+    expect(result.outputs).toEqual([]);
+    expect(result.data_sources).toEqual([]);
+    expect(result.page_count).toBe(0);
+    expect(result.has_more).toBe(false);
   });
 
   it("has_more reflects hasMore from API", () => {

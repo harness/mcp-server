@@ -52,6 +52,7 @@ const iacmResourcesExtract = (raw: unknown): unknown => {
   const has_more = r.hasMore ?? false;
   const page_count = resources.length;
   return {
+    items: resources,
     resources,
     outputs: r.outputs ?? [],
     data_sources: r.data_sources ?? [],
