@@ -16,7 +16,7 @@ import { registerAllPrompts } from "./prompts/index.js";
 import { parseArgs, resolvePort, getVersion } from "./utils/cli.js";
 import { configureElicitation } from "./utils/elicitation.js";
 import { resolveHttpHostValidationOptions } from "./utils/http-hosts.js";
-import { createHttpAuthMiddleware, validateHttpAuthForBindHost, isLoopbackBindHost } from "./utils/http-auth.js";
+import { createHttpAuthMiddleware, validateHttpAuthForBindHost } from "./utils/http-auth.js";
 import { loadEnvFile } from "./utils/env.js";
 import { createAuditManager, type AuditManager } from "./audit/index.js";
 import { mergeConfigWithSessionHeaders, MissingSessionCredentialsError } from "./utils/session-headers.js";
@@ -229,14 +229,6 @@ async function startHttp(config: Config, port: number): Promise<void> {
   const host = process.env.HOST || "127.0.0.1";
 
   validateHttpAuthForBindHost(host, config);
-  if (!isLoopbackBindHost(host) && !config.HARNESS_MCP_AUTH_TOKEN && config.HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP) {
-    log.warn(
-      "HTTP server binding to non-loopback address without authentication. " +
-      "Any client that can reach this address will have access to Harness resources. " +
-      "Set HARNESS_MCP_AUTH_TOKEN or deploy behind an authenticated reverse proxy.",
-      { host, port },
-    );
-  }
 
   const app = createMcpExpressApp(resolveHttpHostValidationOptions(host, config));
 
