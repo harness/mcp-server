@@ -73,7 +73,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
       annotations: {
         title: "Execute Harness Action",
         readOnlyHint: false,
-        destructiveHint: false,
+        destructiveHint: true,
         idempotentHint: false,
         openWorldHint: true,
       },

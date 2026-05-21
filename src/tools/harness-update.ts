@@ -34,7 +34,7 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
       annotations: {
         title: "Update Harness Resource",
         readOnlyHint: false,
-        destructiveHint: false,
+        destructiveHint: true,
         idempotentHint: true,
         openWorldHint: true,
       },
