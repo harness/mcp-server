@@ -52,7 +52,7 @@ const iacmResourcesExtract = (raw: unknown): unknown => {
   const has_more = r.hasMore ?? false;
   const page_count = resources.length;
   return {
-    resources,
+    items: resources,
     outputs: r.outputs ?? [],
     data_sources: r.data_sources ?? [],
     page_count,
@@ -389,6 +389,7 @@ export const iacmToolset: ToolsetDefinition = {
             page: "page",
             size: "size",
           },
+          pageOneIndexed: true,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: moduleListExtract,
           description:

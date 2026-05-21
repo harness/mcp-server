@@ -226,7 +226,7 @@ describe("iacmResourcesExtract", () => {
     return getOp("iacm_resource", "list").responseExtractor!(raw) as Record<string, unknown>;
   }
 
-  it("extracts resources, outputs, data_sources sections", () => {
+  it("extracts resources as items, outputs, data_sources sections", () => {
     const raw = {
       resources: [{ name: "aws_instance.main" }],
       outputs: [{ name: "vpc_id", value: "vpc-123" }],
@@ -235,7 +235,7 @@ describe("iacmResourcesExtract", () => {
       totalItems: 1,
     };
     const result = extract(raw);
-    expect((result.resources as unknown[]).length).toBe(1);
+    expect((result.items as unknown[]).length).toBe(1);
     expect((result.outputs as unknown[]).length).toBe(1);
     expect(result.total_items).toBe(1);
     expect(result.has_more).toBe(false);
@@ -249,6 +249,17 @@ describe("iacmResourcesExtract", () => {
   it("has_more reflects hasMore from API", () => {
     const result = extract({ resources: Array(30).fill({}), hasMore: true });
     expect(result.has_more).toBe(true);
+  });
+
+  it("returns items (not resources) to satisfy listOutputSchema", () => {
+    const result = extract({ resources: [{ name: "x" }] });
+    expect(result.items).toBeDefined();
+    expect(result).not.toHaveProperty("resources");
+  });
+
+  it("returns empty items array when API returns null/undefined resources", () => {
+    const result = extract({});
+    expect(result.items).toEqual([]);
   });
 });
 
@@ -320,6 +331,22 @@ describe("activityChangesExtract", () => {
     const summary = result.summary as Record<string, unknown>;
     expect(summary.total_added).toBe(0);
     expect(summary.total_destroyed).toBe(0);
+  });
+});
+
+// ─── pageOneIndexed ──────────────────────────────────────────────────────────
+
+describe("pageOneIndexed", () => {
+  it("all list operations with page queryParam have pageOneIndexed: true", () => {
+    for (const resource of iacmToolset.resources) {
+      const listOp = resource.operations.list;
+      if (listOp?.queryParams && "page" in listOp.queryParams) {
+        expect(
+          listOp.pageOneIndexed,
+          `${resource.resourceType}.list has page queryParam but missing pageOneIndexed: true`,
+        ).toBe(true);
+      }
+    }
   });
 });
 
