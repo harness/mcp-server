@@ -3,6 +3,25 @@ import { passthrough, stoExemptionsExtract } from "../extractors.js";
 import type { HarnessClient } from "../../client/harness-client.js";
 
 /**
+ * Injects a redirect hint into every security_issue list response.
+ * When the LLM lands here while trying to approve/reject an exemption, it sees
+ * the hint in the response and pivots to security_exemption on the next call.
+ */
+const securityIssueListExtract = (raw: unknown): unknown => {
+  const base = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return {
+    ...base,
+    _action_hint:
+      "If the user asked to APPROVE, REJECT, or PROMOTE an exemption — even by mentioning a CVE or package name — " +
+      "STOP using this resource. " +
+      "The correct workflow is: " +
+      "(1) harness_list(resource_type='security_exemption', filters={status:'Pending', search:'<keyword from user prompt>'}). " +
+      "(2) Get the exemption_id from _action_id_by_row. " +
+      "(3) harness_execute(resource_type='security_exemption', action='approve', resource_id=<exemption_id>, body={scope:'CURRENT'|'ORG'|'ACCOUNT'|'PROJECT'}).",
+  };
+};
+
+/**
  * STO scope override — STO API uses accountId / orgId / projectId
  * instead of the standard NG accountIdentifier / orgIdentifier / projectIdentifier.
  *
@@ -71,7 +90,7 @@ export const stoToolset: ToolsetDefinition = {
               delete input.project_id;
             }
           },
-          responseExtractor: passthrough,
+          responseExtractor: securityIssueListExtract,
           description: "List security issues with filtering by severity, type, target, pipeline, and scan tool",
         },
       },
@@ -108,15 +127,19 @@ export const stoToolset: ToolsetDefinition = {
       displayName: "Security Exemption",
       searchAliases: ["approve", "reject", "promote", "waiver", "exception", "exempt", "approval"],
       description: "Security issue exemption/waiver. THIS is the resource for ALL approve/reject/promote operations — even when the user mentions a vulnerability title like 'SQL Injection'. Supports list (POST with status filter) with approve/reject/promote actions. " +
-        "IMPORTANT: When listing exemptions, NEVER override org_id or project_id — always use the configured defaults. " +
-        "Phrases like 'for org' or 'for account' refer to the APPROVAL SCOPE (passed as body.scope to the execute action), NOT as an org_id filter for listing. " +
+        "CRITICAL SCOPE DISTINCTION: There are TWO different scope concepts that must NOT be confused: " +
+        "(1) LISTING scope — security_exemption ALWAYS lists at project scope. NEVER pass resource_scope='account' or resource_scope='org' to harness_list — it will fail. Always list using project defaults. " +
+        "(2) APPROVAL scope — the scope the exemption is approved AT, passed as body.scope to harness_execute. This CAN be 'ACCOUNT', 'ORG', 'PROJECT', or 'CURRENT'. " +
+        "If harness_list returns an error about 'account scope not supported', that means you passed resource_scope='account' to the LIST call — NOT that account-level approval is impossible. Fix: remove resource_scope from the list call, keep project defaults, then approve with body={scope:'ACCOUNT'}. " +
+        "IMPORTANT: When listing exemptions, NEVER pass resource_scope, org_id, or project_id overrides. " +
+        "Phrases like 'for org' or 'for account' refer to the APPROVAL SCOPE (body.scope on execute), NOT to resource_scope or org_id on list. " +
         "PAGINATION CONTRACT: (1) Pass `size: 5` explicitly inside `filters` for the first call — the recommended default for this resource is 5, not the global 20. (2) Page is 0-indexed: page=0 → items 1–5, page=1 → items 6–10. (3) CRITICAL — `size` AND all other filters (status, search, …) MUST stay identical across every page in a session. The backend computes offset = page × size, so altering either silently shifts the dataset. (4) For 'next N' requests, increment `page` by 1 and keep `size` constant. If the user asks for 'next 10' after showing 5, make TWO sequential calls with the same size=5 — do NOT bump size mid-session. (5) After each response, read `_nextPageHint` — it spells out the exact follow-up call to make.",
       toolset: "sto",
       scope: "project",
       scopeParams: STO_SCOPE,
       identifierFields: ["exemption_id"],
       listFilterFields: [
-        { name: "status", description: "Exemption status filter", enum: ["Pending", "Approved", "Rejected", "Expired", "Canceled"], required: true },
+        { name: "status", description: "Exemption status filter — SINGLE value only, not comma-separated. Make separate calls for each status.", enum: ["Pending", "Approved", "Rejected", "Expired", "Canceled"], required: true },
         { name: "search", description: "Free-text search for issue/exemption titles" },
         { name: "size", type: "number", description: "Exemptions per page (recommended: 5, max: 50). Always pass explicitly inside `filters` — `harness_list`'s global default of 20 is too large for this resource. Must remain constant across pages in a session." },
         { name: "page", type: "number", description: "0-indexed page number. Increment by 1 for each 'next' request — never repeat the same value." },
@@ -135,9 +158,17 @@ export const stoToolset: ToolsetDefinition = {
           },
           bodyBuilder: () => ({}),
           preflight: async ({ input }) => {
-            // Strip scope keywords that LLMs mistakenly pass as org_id/project_id
-            // (e.g. "approve for org" → org_id="org"). These are never valid
-            // Harness identifiers — real IDs are alphanumeric slugs or UUIDs.
+            // Security exemptions ALWAYS list at project scope.
+            // Strip resource_scope='account'/'org' silently — these are
+            // approval scope intents (for harness_execute), not list scopes.
+            // Without this, the registry rejects the call with "account scope
+            // not supported" which causes the LLM to forget the user's
+            // original account-level approval intent and fall back to CURRENT.
+            const wideScopes = new Set(["account", "org", "organization"]);
+            if (typeof input.resource_scope === "string" && wideScopes.has(input.resource_scope.toLowerCase())) {
+              delete input.resource_scope;
+            }
+
             const SCOPE_KEYWORDS = new Set(["org", "account", "project", "organization"]);
             const rawOrg = input.org_id;
             if (typeof rawOrg === "string" && SCOPE_KEYWORDS.has(rawOrg.toLowerCase())) {
@@ -173,7 +204,7 @@ export const stoToolset: ToolsetDefinition = {
           },
           responseExtractor: stoExemptionsExtract,
           skipCompact: true,
-          description: "List security exemptions filtered by status. Recommended `size`: 5 (pass explicitly via `filters` — the shared default of 20 is too large for this resource). Response includes items[], total, page, pageSize, totalPages and `_nextPageHint`. ALWAYS read `_nextPageHint` — it spells out the exact follow-up call, including all active filters. NEVER re-use the same page for a 'next' request, NEVER drop filters between pages, and NEVER change size mid-session.",
+          description: "List security exemptions filtered by status. ALWAYS uses project scope — NEVER pass resource_scope='account' or resource_scope='org', it will fail. 'For account' / 'for org' are approval scopes for harness_execute, not list scopes. Recommended `size`: 5 (pass explicitly via `filters` — the shared default of 20 is too large for this resource). Response includes items[], total, page, pageSize, totalPages and `_nextPageHint`. ALWAYS read `_nextPageHint` — it spells out the exact follow-up call, including all active filters. NEVER re-use the same page for a 'next' request, NEVER drop filters between pages, and NEVER change size mid-session.",
         },
         create: {
           method: "POST",
@@ -302,8 +333,10 @@ export const stoToolset: ToolsetDefinition = {
         "MAPPING — scan the user's prompt and pick scope accordingly: " +
         "plain 'approve this' → 'CURRENT'; " +
         "'approve for org' / 'org-wide' / 'at org level' → 'ORG'; " +
-        "'approve for account' / 'account-wide' / 'promote to account' → 'ACCOUNT'; " +
-        "'promote to project' → 'PROJECT'.",
+        "'approve for account' / 'account-wide' / 'account level' → 'ACCOUNT'; " +
+        "'promote to project' → 'PROJECT'. " +
+        "IMPORTANT: If harness_list returned an error saying 'account scope not supported', that error was about the LIST call scope — it does NOT mean account-level approval is impossible. " +
+        "The listing always uses project scope; the approval scope (body.scope) is independent and CAN be 'ACCOUNT'.",
           bodySchema: {
             // scope is REQUIRED at the call layer (enforced by preflight with a fail-loud
             // error), but declared required:false here because bodySchema validates the
