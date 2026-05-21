@@ -101,6 +101,16 @@ const STRUCTURAL = new Set([
 ]);
 
 /**
+ * Placeholder base used only to satisfy `new URL()` when the input is a path-only
+ * string like `/ng/account/<id>/...`. parseHarnessUrl never reads `url.host` /
+ * `url.origin` / `url.protocol`; it walks `url.pathname` and `url.searchParams`
+ * only. Using an explicitly fake host makes it clear in code review that the
+ * host is not consulted and the parser is cluster-agnostic (prod0 / eu1 /
+ * harness0 / self-managed / vanity hosts all parse identically).
+ */
+const PLACEHOLDER_BASE = "https://harness.invalid";
+
+/**
  * Parse a Harness UI URL and extract identifiers.
  *
  * Handles patterns like:
@@ -110,9 +120,11 @@ const STRUCTURAL = new Set([
  * - .../all/cd/orgs/{org}/projects/{project}/...
  * - .../all/settings/connectors/{id}
  * - Vanity domains (e.g. ancestry.harness.io)
+ * - Path-only URLs (e.g. `/ng/account/<id>/...`) — the Harness UI's copy-link
+ *   actions sometimes produce these.
  */
 export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
-  const url = new URL(urlStr);
+  const url = new URL(urlStr, PLACEHOLDER_BASE);
   const segments = url.pathname.split("/").filter(Boolean);
 
   const result: ParsedHarnessUrl = { account_id: "" };
