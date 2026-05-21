@@ -14,7 +14,7 @@ describe("release metadata", () => {
     const rootManifest = readJson("manifest.json");
     const directoryManifest = readJson("mcp-directory/manifest.json");
 
-    expect(packageJson.version).toBe("3.0.4");
+    expect(packageJson.version).toBe("3.0.5");
     expect(rootManifest.version).toBe(packageJson.version);
     expect(directoryManifest.version).toBe(packageJson.version);
   });
