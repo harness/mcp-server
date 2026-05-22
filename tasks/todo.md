@@ -6,7 +6,7 @@
 - [x] Add failing regression coverage for bare-array `pr_activity` list responses
 - [x] Normalize `harness_list` list results to structured `{ items, ... }` output
 - [x] Run focused tests, typecheck, and build
-- [ ] Commit, push, open PR, and reply in the original Slack thread
+- [x] Commit, push, open PR, and attempt original-thread Slack reply
 
 ### Plan
 - Keep the fix in `src/tools/harness-list.ts`, where the `harness_list` output schema is declared and final result shape is prepared.
@@ -18,6 +18,7 @@
 - Added a regression test covering a bare-array `pr_activity` response and asserting both JSON text and `structuredContent` are normalized to `{ items, total }`.
 - Added `normalizeListResult()` in `src/tools/harness-list.ts` so list responses that are bare arrays or objects with common list-array keys expose `items` before compaction and formatting.
 - Verified with `pnpm test tests/tools/tool-handlers.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test` (61 files / 1459 tests).
+- Opened PR #248. Attempted to reply in the original Slack thread, but the Slack tool rejected channel `C08SYT1FWJD` because it is not configured for posting; no alternate channel was used.
 
 ## GPT App Tool Annotation Compliance (2026-05-20)
 - [x] Add explicit `destructiveHint: false` to all non-destructive read-only MCP tools flagged by the GPT App form
