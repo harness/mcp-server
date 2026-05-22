@@ -220,7 +220,7 @@ describe("pollExecutionToTerminal", () => {
     expect(result.poll_count).toBe(3); // failure + 2 successful polls
   });
 
-  it("gives up after MAX_CONSECUTIVE_ERRORS persistent failures", async () => {
+  it("throws after MAX_CONSECUTIVE_ERRORS persistent failures instead of reporting a timeout", async () => {
     // 10 consecutive errors — should exceed the consecutive-error threshold (5)
     const errors = Array.from({ length: 10 }, () => new Error("503 Service Unavailable"));
     const { registry } = makeRegistry(errors);
@@ -233,11 +233,8 @@ describe("pollExecutionToTerminal", () => {
     });
 
     await flushAll();
-    const result = await promise;
 
-    expect(result.is_terminal).toBe(false);
-    expect(result.timed_out).toBe(true);
-    expect(result.status).toBe("Unknown"); // never got a snapshot
+    await expect(promise).rejects.toThrow("Polling execution exec-7 failed after 5 consecutive attempts");
   });
 
   it("invokes onPoll callback after each successful poll", async () => {
