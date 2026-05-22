@@ -1045,6 +1045,42 @@ describe("harness_execute", () => {
     expect(data._diagnose_hint).toEqual(expect.stringContaining("exec-wait-fail"));
   });
 
+  it("preserves trigger response and surfaces wait error when execution polling fails persistently", async () => {
+    vi.useFakeTimers();
+    try {
+      mockRequest
+        .mockResolvedValueOnce({ data: { planExecutionId: "exec-wait-error", status: "RUNNING" } })
+        .mockRejectedValue(new Error("503 Service Unavailable"));
+
+      const pending = server.call("harness_execute", {
+        resource_type: "pipeline",
+        action: "run",
+        resource_id: "error_pipe",
+        wait: true,
+        wait_poll_interval_seconds: 2,
+        wait_timeout_seconds: 60,
+      });
+
+      for (let i = 0; i < 100; i++) {
+        await Promise.resolve();
+        await vi.advanceTimersByTimeAsync(1000);
+      }
+
+      const result = await pending;
+      expect(result.isError).toBeUndefined();
+
+      const data = parseResult(result) as Record<string, unknown>;
+      expect(data.planExecutionId).toBe("exec-wait-error");
+      expect(data.execution_id).toBe("exec-wait-error");
+      expect(data.execution_timed_out).toBeUndefined();
+      expect(data._wait).toEqual(expect.objectContaining({
+        error: expect.stringContaining("Polling execution exec-wait-error failed after 5 consecutive attempts"),
+      }));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("blocks when flat inputs have unmatchedRequired and no input_set_ids", async () => {
     // Template fetch returns a template with required + optional fields
     const mixedTemplate = `pipeline:
