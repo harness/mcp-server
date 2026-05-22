@@ -143,8 +143,8 @@ function snapshotFromExecution(raw: unknown): ExecutionSnapshot {
 /**
  * Poll a pipeline execution until it reaches a terminal status or the timeout fires.
  *
- * Errors during individual polls are swallowed (logged at warn level) and the
- * loop continues — Harness sometimes returns 5xx for a few seconds while an
+ * Errors during individual polls are tolerated for a few attempts (logged at
+ * warn level) — Harness sometimes returns 5xx for a few seconds while an
  * execution is spinning up, and that shouldn't fail the whole wait.
  *
  * If the signal aborts, the function rejects with an AbortError so callers
@@ -204,15 +204,8 @@ export async function pollExecutionToTerminal(
         error: String(err),
       });
       if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-        // Give up — but return a result rather than throwing so the caller still
-        // gets a usable response with the last known status.
-        return buildResult(
-          opts.executionId,
-          lastSnapshot,
-          false,
-          true,
-          Date.now() - startedAt,
-          pollCount,
+        throw new Error(
+          `Polling execution ${opts.executionId} failed after ${consecutiveErrors} consecutive attempts: ${String(err)}`,
         );
       }
     }

@@ -25,6 +25,12 @@ export const deleteOutputSchema = z.object({
   deleted: z.boolean().describe("Whether the resource was successfully deleted"),
   resource_type: z.string().describe("The type of resource that was deleted"),
   resource_id: z.string().describe("The ID of the deleted resource"),
+  version_label: z.string().describe("Deleted template version label, when applicable").optional(),
+  details: z
+    .object({})
+    .catchall(z.unknown())
+    .describe("Optional API response payload (e.g. template-service delete body)")
+    .optional(),
 });
 
 // --- harness_execute ---

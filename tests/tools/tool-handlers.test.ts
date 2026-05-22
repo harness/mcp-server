@@ -793,6 +793,42 @@ describe("harness_delete", () => {
     const data = parseResult(result) as { deleted: boolean };
     expect(data.deleted).toBe(true);
   });
+
+  it("returns structured delete payload without spreading API fields at top level", async () => {
+    const templateRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const templateServer = makeMcpServer("accept");
+    mockRequest.mockResolvedValue({
+      identifier: "my_tpl",
+      account: "acct",
+      scope: "project",
+      version_label: "1.0.0",
+    });
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(templateServer, templateRegistry, client);
+
+    const result = await templateServer.call("harness_delete", {
+      resource_type: "template_v1",
+      resource_id: "my_tpl",
+      org_id: "default",
+      project_id: "proj",
+      params: { version_label: "1.0.0" },
+    });
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({
+      deleted: true,
+      resource_type: "template_v1",
+      resource_id: "my_tpl",
+      version_label: "1.0.0",
+      details: {
+        identifier: "my_tpl",
+        account: "acct",
+        scope: "project",
+        version_label: "1.0.0",
+      },
+    });
+    expect(result.structuredContent).not.toHaveProperty("account");
+    expect(result.structuredContent).not.toHaveProperty("scope");
+  });
 });
 
 describe("harness_execute", () => {
@@ -1073,6 +1109,42 @@ describe("harness_execute", () => {
     expect(data.execution_status).toBe("Failed");
     expect(data._diagnose_hint).toEqual(expect.stringContaining("harness_diagnose"));
     expect(data._diagnose_hint).toEqual(expect.stringContaining("exec-wait-fail"));
+  });
+
+  it("preserves trigger response and surfaces wait error when execution polling fails persistently", async () => {
+    vi.useFakeTimers();
+    try {
+      mockRequest
+        .mockResolvedValueOnce({ data: { planExecutionId: "exec-wait-error", status: "RUNNING" } })
+        .mockRejectedValue(new Error("503 Service Unavailable"));
+
+      const pending = server.call("harness_execute", {
+        resource_type: "pipeline",
+        action: "run",
+        resource_id: "error_pipe",
+        wait: true,
+        wait_poll_interval_seconds: 2,
+        wait_timeout_seconds: 60,
+      });
+
+      for (let i = 0; i < 100; i++) {
+        await Promise.resolve();
+        await vi.advanceTimersByTimeAsync(1000);
+      }
+
+      const result = await pending;
+      expect(result.isError).toBeUndefined();
+
+      const data = parseResult(result) as Record<string, unknown>;
+      expect(data.planExecutionId).toBe("exec-wait-error");
+      expect(data.execution_id).toBe("exec-wait-error");
+      expect(data.execution_timed_out).toBeUndefined();
+      expect(data._wait).toEqual(expect.objectContaining({
+        error: expect.stringContaining("Polling execution exec-wait-error failed after 5 consecutive attempts"),
+      }));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("blocks when flat inputs have unmatchedRequired and no input_set_ids", async () => {

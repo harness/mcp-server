@@ -19,6 +19,48 @@ export interface ToolResult {
   structuredContent?: Record<string, unknown>;
 }
 
+/**
+ * Coerce registry list payloads into the `{ items, total?, page? }` shape expected by
+ * `harness_list`'s output schema and MCP `structuredContent` (objects only — raw arrays
+ * cannot be sent as structured content).
+ *
+ * Harness Code endpoints such as `pr_activity` return a top-level JSON array; without
+ * this step, clients that require structured output fail with output validation errors.
+ */
+export function normalizeHarnessListPayload(
+  result: unknown,
+  options?: { page?: number },
+): unknown {
+  const page = options?.page;
+  if (Array.isArray(result)) {
+    return {
+      items: result,
+      total: result.length,
+      ...(page !== undefined ? { page } : {}),
+    };
+  }
+  if (result !== null && typeof result === "object" && !Array.isArray(result)) {
+    const r = result as Record<string, unknown>;
+    if (!Array.isArray(r.items)) {
+      for (const key of ["body", "content", "data", "objects", "features"] as const) {
+        const arr = r[key];
+        if (Array.isArray(arr)) {
+          const total = typeof r.total === "number" ? r.total : arr.length;
+          return {
+            ...r,
+            items: arr,
+            total,
+            ...(page !== undefined && r.page === undefined ? { page } : {}),
+          };
+        }
+      }
+    } else if (Array.isArray(r.items) && r.total === undefined) {
+      return { ...r, total: r.items.length };
+    }
+  }
+  return result;
+}
+
 export function jsonResult(data: unknown): ToolResult {
   return {
     content: [{ type: "text", text: JSON.stringify(data) }],
