@@ -14,6 +14,38 @@ import { resourceTypeSchema } from "./input-schemas.js";
 import { listOutputSchema } from "./output-schemas.js";
 
 const log = createLogger("list");
+const LIST_ARRAY_KEYS = ["items", "features", "content", "data", "objects"] as const;
+
+function numericField(record: Record<string, unknown>, keys: readonly string[]): number | undefined {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "number") return value;
+  }
+  return undefined;
+}
+
+function normalizeListResult(result: unknown): Record<string, unknown> | unknown {
+  if (Array.isArray(result)) {
+    return { items: result, total: result.length };
+  }
+
+  if (!isRecord(result) || Array.isArray(result.items)) {
+    return result;
+  }
+
+  for (const key of LIST_ARRAY_KEYS) {
+    const items = result[key];
+    if (Array.isArray(items)) {
+      return {
+        ...result,
+        items,
+        total: numericField(result, ["total", "totalElements", "totalItems", "count", "itemCount"]) ?? items.length,
+      };
+    }
+  }
+
+  return result;
+}
 
 export function registerListTool(server: McpServer, registry: Registry, client: HarnessClient): void {
   // Build a dynamic description for the filters param from all enabled resource definitions
@@ -68,7 +100,7 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
         if (resourceType === "template" && input.template_list_type === undefined) {
           input.template_list_type = "All";
         }
-        const result = await registry.dispatch(client, resourceType, "list", input);
+        const result = normalizeListResult(await registry.dispatch(client, resourceType, "list", input));
 
         // Apply compact mode — strip verbose metadata from list items.
         // Skip when the endpoint spec has opted out via `skipCompact` (marker

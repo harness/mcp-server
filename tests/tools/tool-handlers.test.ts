@@ -114,6 +114,35 @@ describe("harness_list", () => {
     expect(data.items).toBeDefined();
   });
 
+  it("normalizes bare-array pr_activity responses into structured list output", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    mockRequest = vi.fn().mockResolvedValue([
+      {
+        id: "activity-1",
+        kind: "comment",
+        type: "comment",
+        message: "Looks good",
+      },
+    ]);
+    client = makeClient(mockRequest);
+    const prServer = makeMcpServer();
+    const { registerListTool } = await import("../../src/tools/harness-list.js");
+    registerListTool(prServer, registry, client);
+
+    const result = await prServer.call("harness_list", {
+      resource_type: "pr_activity",
+      params: { repo_id: "harness-core", pr_number: "117398" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as { items: unknown[]; total: number };
+    expect(data).toEqual({
+      items: [{ kind: "comment", type: "comment", message: "Looks good" }],
+      total: 1,
+    });
+    expect(result.structuredContent).toEqual(data);
+  });
+
   it("documents resource_scope in the registered input schema", () => {
     const schema = server.schema("harness_list") as {
       inputSchema: { resource_scope?: { description?: string | null } };

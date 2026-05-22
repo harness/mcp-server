@@ -1,5 +1,21 @@
 # Harness MCP Server — Task Tracking
 
+## Slack Bug Triage: PR Activity Output Validation (2026-05-22)
+- [x] Read the Slack report thread and capture the screenshot symptom
+- [x] Trace `harness_list` output-schema handling for `pr_activity`
+- [x] Add failing regression coverage for bare-array `pr_activity` list responses
+- [x] Normalize `harness_list` list results to structured `{ items, ... }` output
+- [ ] Run focused tests, typecheck, and build
+- [ ] Commit, push, open PR, and reply in the original Slack thread
+
+### Plan
+- Keep the fix in `src/tools/harness-list.ts`, where the `harness_list` output schema is declared and final result shape is prepared.
+- Preserve existing registry extractors and response formatters so non-list tools keep their current behavior.
+- Add coverage in `tests/tools/tool-handlers.test.ts` for Harness Code `pr_activity` returning a bare array from the API, because that is the response shape that can omit `structuredContent`.
+
+### Review
+- Pending.
+
 ## GPT App Tool Annotation Compliance (2026-05-20)
 - [x] Add explicit `destructiveHint: false` to all non-destructive read-only MCP tools flagged by the GPT App form
 - [x] Add regression coverage that every registered tool sets `readOnlyHint`, `openWorldHint`, and `destructiveHint` to explicit booleans with value assertions
