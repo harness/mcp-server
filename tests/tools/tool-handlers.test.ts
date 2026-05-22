@@ -763,6 +763,42 @@ describe("harness_delete", () => {
     const data = parseResult(result) as { deleted: boolean };
     expect(data.deleted).toBe(true);
   });
+
+  it("returns structured delete payload without spreading API fields at top level", async () => {
+    const templateRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const templateServer = makeMcpServer("accept");
+    mockRequest.mockResolvedValue({
+      identifier: "my_tpl",
+      account: "acct",
+      scope: "project",
+      version_label: "1.0.0",
+    });
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(templateServer, templateRegistry, client);
+
+    const result = await templateServer.call("harness_delete", {
+      resource_type: "template_v1",
+      resource_id: "my_tpl",
+      org_id: "default",
+      project_id: "proj",
+      params: { version_label: "1.0.0" },
+    });
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({
+      deleted: true,
+      resource_type: "template_v1",
+      resource_id: "my_tpl",
+      version_label: "1.0.0",
+      details: {
+        identifier: "my_tpl",
+        account: "acct",
+        scope: "project",
+        version_label: "1.0.0",
+      },
+    });
+    expect(result.structuredContent).not.toHaveProperty("account");
+    expect(result.structuredContent).not.toHaveProperty("scope");
+  });
 });
 
 describe("harness_execute", () => {
