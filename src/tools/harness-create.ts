@@ -8,7 +8,7 @@ import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.
 import { confirmViaElicitation } from "../utils/elicitation.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { coerceRecord } from "../utils/type-guards.js";
-import { resourceTypeSchema } from "./input-schemas.js";
+import { resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
 import { createOutputSchema } from "./output-schemas.js";
 
 export function registerCreateTool(server: McpServer, registry: Registry, client: HarnessClient, config?: Config): void {
@@ -25,6 +25,7 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
           z.string(),
         ]).describe("The resource definition body. For pipelines: pass a YAML string directly, or an object with yamlPipeline (YAML string) or pipeline (JSON object). For other resources: pass a JSON object"),
         url: z.string().describe("A Harness UI URL — org and project are extracted automatically").optional(),
+        resource_scope: resourceScopeSchema,
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
         params: z.record(z.string(), z.unknown()).describe("Additional parameters. For external Git pipelines: store_type='REMOTE', connector_ref, repo_name, branch, file_path, commit_msg. For Harness Code pipelines: store_type='REMOTE', is_harness_code_repo=true, repo_name, branch, file_path.").optional(),

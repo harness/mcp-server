@@ -564,6 +564,29 @@ describe("harness_create", () => {
     expect(callArgs.params.orgIdentifier).toBe("default");
     expect(callArgs.params.projectIdentifier).toBe("test-project");
   });
+
+  it("passes explicit resource_scope through create requests", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    mockRequest = vi.fn().mockResolvedValue({ identifier: "account_step" });
+    client = makeClient(mockRequest);
+    const templateServer = makeMcpServer("accept");
+    const { registerCreateTool } = await import("../../src/tools/harness-create.js");
+    registerCreateTool(templateServer, registry, client);
+
+    const result = await templateServer.call("harness_create", {
+      resource_type: "template_v1",
+      resource_scope: "account",
+      body: {
+        template_yaml: "version: 1\ntemplate:\n  identifier: account_step\n  name: Account Step\n  step:\n    run:\n      script: echo hi\n",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { path: string; params: Record<string, unknown> };
+    expect(callArgs.path).toBe("/v1/templates");
+    expect(callArgs.params.orgIdentifier).toBeUndefined();
+    expect(callArgs.params.projectIdentifier).toBeUndefined();
+  });
 });
 
 describe("harness_update", () => {
@@ -640,6 +663,32 @@ describe("harness_update", () => {
       name: "Project One",
       identifier: "proj1",
     });
+  });
+
+  it("passes explicit resource_scope through update requests", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    mockRequest = vi.fn().mockResolvedValue({ identifier: "org_step" });
+    client = makeClient(mockRequest);
+    const templateServer = makeMcpServer("accept");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(templateServer, registry, client);
+
+    const result = await templateServer.call("harness_update", {
+      resource_type: "template_v1",
+      resource_id: "org_step",
+      resource_scope: "org",
+      org_id: "org-only",
+      params: { version_label: "1.0.0" },
+      body: {
+        template_yaml: "version: 1\ntemplate:\n  identifier: org_step\n  name: Org Step\n  step:\n    run:\n      script: echo updated\n",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { path: string; params: Record<string, unknown> };
+    expect(callArgs.path).toBe("/v1/orgs/org-only/templates/org_step/versions/1.0.0");
+    expect(callArgs.params.orgIdentifier).toBe("org-only");
+    expect(callArgs.params.projectIdentifier).toBeUndefined();
   });
 });
 
@@ -762,6 +811,28 @@ describe("harness_delete", () => {
     expect(result.isError).toBeUndefined();
     const data = parseResult(result) as { deleted: boolean };
     expect(data.deleted).toBe(true);
+  });
+
+  it("passes explicit resource_scope through delete requests", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    mockRequest = vi.fn().mockResolvedValue({});
+    client = makeClient(mockRequest);
+    const templateServer = makeMcpServer("accept");
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(templateServer, registry, client);
+
+    const result = await templateServer.call("harness_delete", {
+      resource_type: "template_v1",
+      resource_id: "account_step",
+      resource_scope: "account",
+      params: { version_label: "1.0.0" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { path: string; params: Record<string, unknown> };
+    expect(callArgs.path).toBe("/v1/templates/account_step/versions/1.0.0");
+    expect(callArgs.params.orgIdentifier).toBeUndefined();
+    expect(callArgs.params.projectIdentifier).toBeUndefined();
   });
 });
 

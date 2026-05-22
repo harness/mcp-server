@@ -708,6 +708,84 @@ describe("Registry", () => {
       expect(call.params.projectIdentifier).toBeUndefined();
     });
 
+    it("template_v1 create defaults to configured project scope and builds v1 JSON body", async () => {
+      const templateRegistry = new Registry(makeConfig({
+        HARNESS_TOOLSETS: "templates",
+        HARNESS_ORG: "default-org",
+        HARNESS_PROJECT: "default-proj",
+      }));
+      const mockRequest = vi.fn().mockResolvedValue({ identifier: "my_step", label: "1.0.0" });
+      const client = makeClient(mockRequest);
+
+      await templateRegistry.dispatch(client, "template_v1", "create", {
+        body: {
+          template_yaml: "version: 1\ntemplate:\n  identifier: my_step\n  name: My Step\n  step:\n    run:\n      script: echo hi\n",
+        },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/v1/orgs/default-org/projects/default-proj/templates");
+      expect(call.headerBasedScoping).toBe(true);
+      expect(call.body).toMatchObject({
+        template_yaml: expect.stringContaining("identifier: my_step"),
+        yaml_version: "1",
+        identifier: "my_step",
+        name: "My Step",
+        label: "1.0.0",
+        git_details: { store_type: "INLINE" },
+      });
+      expect(call.body.orgIdentifier).toBeUndefined();
+      expect(call.body.projectIdentifier).toBeUndefined();
+    });
+
+    it("template_v1 explicit account scope uses account-level v1 paths", async () => {
+      const templateRegistry = new Registry(makeConfig({
+        HARNESS_TOOLSETS: "templates",
+        HARNESS_ORG: "default-org",
+        HARNESS_PROJECT: "default-proj",
+      }));
+      const mockRequest = vi.fn().mockResolvedValue({});
+      const client = makeClient(mockRequest);
+
+      await templateRegistry.dispatch(client, "template_v1", "update", {
+        resource_scope: "account",
+        template_id: "my_step",
+        version_label: "1.0.0",
+        body: {
+          template_yaml: "version: 1\ntemplate:\n  identifier: my_step\n  name: My Step\n  step:\n    run:\n      script: echo updated\n",
+        },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("PUT");
+      expect(call.path).toBe("/v1/templates/my_step/versions/1.0.0");
+      expect(call.params.orgIdentifier).toBeUndefined();
+      expect(call.params.projectIdentifier).toBeUndefined();
+    });
+
+    it("template_v1 explicit org scope uses org-level v1 paths", async () => {
+      const templateRegistry = new Registry(makeConfig({
+        HARNESS_TOOLSETS: "templates",
+        HARNESS_ORG: "default-org",
+        HARNESS_PROJECT: "default-proj",
+      }));
+      const mockRequest = vi.fn().mockResolvedValue({});
+      const client = makeClient(mockRequest);
+
+      await templateRegistry.dispatch(client, "template_v1", "delete", {
+        resource_scope: "org",
+        org_id: "org-only",
+        template_id: "my_step",
+        version_label: "1.0.0",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("DELETE");
+      expect(call.path).toBe("/v1/orgs/org-only/templates/my_step/versions/1.0.0");
+      expect(call.params.orgIdentifier).toBe("org-only");
+      expect(call.params.projectIdentifier).toBeUndefined();
+    });
+
     it("does not treat resource-specific scope filters as dispatcher scope", async () => {
       const gitopsRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
       const mockRequest = vi.fn().mockResolvedValue({

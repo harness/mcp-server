@@ -1,5 +1,27 @@
 # Harness MCP Server — Task Tracking
 
+## Slack Bug Triage: Template v1 CRUD Support (2026-05-22)
+- [x] Read the triggered Slack thread and referenced PR
+- [x] Identify the local gap and scope-risk root cause
+- [x] Add failing regression coverage for `template_v1` CRUD paths and default scoping
+- [x] Implement a distinct `template_v1` resource in the templates toolset
+- [x] Expose `resource_scope` on write/delete tools so callers can explicitly target account/org/project scope
+- [x] Run focused tests, typecheck/build, and review the diff
+- [ ] Commit, push, open PR, and reply in Slack
+
+### Plan
+- Keep classic NG template behavior under `resource_type="template"` unchanged.
+- Add a separate `resource_type="template_v1"` for the template-service v1 REST API using `/v1/templates`, `/v1/orgs/{org}/templates`, and `/v1/orgs/{org}/projects/{project}/templates` paths.
+- Use a template-specific scope resolver so explicit `resource_scope` wins, explicit `org_id`/`project_id` selects org/project scope, and configured `HARNESS_ORG`/`HARNESS_PROJECT` remain the default when no explicit scope is supplied.
+- Build v1 create/update bodies as JSON with `template_yaml`, `yaml_version`, `identifier`, `name`, `label`, and inline git details, while keeping NG `template` bodies as raw YAML.
+- Verify through registry dispatch tests and tool-handler coverage for scoped write/delete inputs.
+
+### Review
+- Confirmed the Slack thread contained only PR #249; local source had `template_v1` schema data but no registry resource, so generic CRUD tools could not operate on v1 templates.
+- Added `template_v1` list/get/create/update/delete in `src/registry/toolsets/templates.ts` with account/org/project v1 REST paths and default-project scoping from configured org/project.
+- Added `resource_scope` to create/update/delete tool input schemas so callers can explicitly force account or org scope for writes.
+- Verified with focused registry/tool tests, structural validation, typecheck, build, docs generation/check, full test suite, and `git diff --check`.
+
 ## GPT App Tool Annotation Compliance (2026-05-20)
 - [x] Add explicit `destructiveHint: false` to all non-destructive read-only MCP tools flagged by the GPT App form
 - [x] Add regression coverage that every registered tool sets `readOnlyHint`, `openWorldHint`, and `destructiveHint` to explicit booleans with value assertions

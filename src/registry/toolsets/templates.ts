@@ -1,5 +1,176 @@
-import type { ToolsetDefinition } from "../types.js";
-import { ngExtract, pageExtract } from "../extractors.js";
+import YAML from "yaml";
+import type { BodySchema, PathBuilderConfig, ResourceScope, ToolsetDefinition } from "../types.js";
+import { ngExtract, pageExtract, passthrough, v1ListExtract } from "../extractors.js";
+
+function getString(input: Record<string, unknown>, key: string): string | undefined {
+  const value = input[key];
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function getTemplateYamlFromInput(input: Record<string, unknown>): string {
+  const body = input.body;
+  const bodyRecord = isRecord(body) ? body : {};
+  const templateYaml =
+    getString(bodyRecord, "template_yaml") ??
+    getString(bodyRecord, "yaml") ??
+    (typeof body === "string" ? body : undefined);
+
+  if (!templateYaml) {
+    throw new Error(
+      "template_yaml (or yaml) is required: pass a full template YAML string as body.template_yaml, body.yaml, or a raw YAML body string",
+    );
+  }
+
+  return templateYaml;
+}
+
+function resolveTemplateV1Scope(
+  input: Record<string, unknown>,
+  config: PathBuilderConfig,
+): { scope: ResourceScope; org?: string; project?: string } {
+  const requestedScope = getString(input, "resource_scope") as ResourceScope | undefined;
+  const explicitOrg = getString(input, "org_id");
+  const explicitProject = getString(input, "project_id");
+  const defaultOrg = config.HARNESS_ORG;
+  const defaultProject = config.HARNESS_PROJECT;
+
+  if (requestedScope === "account") {
+    return { scope: "account" };
+  }
+
+  if (requestedScope === "org") {
+    const org = explicitOrg ?? defaultOrg;
+    if (!org) {
+      throw new Error("org_id is required for template_v1 org scope when HARNESS_ORG is not configured");
+    }
+    return { scope: "org", org };
+  }
+
+  if (requestedScope === "project") {
+    const org = explicitOrg ?? defaultOrg;
+    const project = explicitProject ?? defaultProject;
+    if (!org) {
+      throw new Error("org_id is required for template_v1 project scope when HARNESS_ORG is not configured");
+    }
+    if (!project) {
+      throw new Error("project_id is required for template_v1 project scope when HARNESS_PROJECT is not configured");
+    }
+    return { scope: "project", org, project };
+  }
+
+  if (explicitProject) {
+    const org = explicitOrg ?? defaultOrg;
+    if (!org) {
+      throw new Error("org_id is required when project_id is provided for template_v1");
+    }
+    return { scope: "project", org, project: explicitProject };
+  }
+
+  if (explicitOrg) {
+    return { scope: "org", org: explicitOrg };
+  }
+
+  if (defaultOrg && defaultProject) {
+    return { scope: "project", org: defaultOrg, project: defaultProject };
+  }
+
+  if (defaultOrg) {
+    return { scope: "org", org: defaultOrg };
+  }
+
+  return { scope: "account" };
+}
+
+function templateV1BasePath(input: Record<string, unknown>, config: PathBuilderConfig): string {
+  const scope = resolveTemplateV1Scope(input, config);
+  if (scope.scope === "project") {
+    return `/v1/orgs/${encodeURIComponent(scope.org!)}/projects/${encodeURIComponent(scope.project!)}/templates`;
+  }
+  if (scope.scope === "org") {
+    return `/v1/orgs/${encodeURIComponent(scope.org!)}/templates`;
+  }
+  return "/v1/templates";
+}
+
+function templateV1GetPath(input: Record<string, unknown>, config: PathBuilderConfig): string {
+  const templateId = getString(input, "template_id");
+  if (!templateId) throw new Error("template_id is required");
+  const base = templateV1BasePath(input, config);
+  const version = getString(input, "version_label");
+  if (version) {
+    return `${base}/${encodeURIComponent(templateId)}/versions/${encodeURIComponent(version)}`;
+  }
+  return `${base}/${encodeURIComponent(templateId)}`;
+}
+
+function templateV1VersionPath(input: Record<string, unknown>, config: PathBuilderConfig): string {
+  const templateId = getString(input, "template_id");
+  const version = getString(input, "version_label");
+  if (!templateId) throw new Error("template_id is required");
+  if (!version) throw new Error("version_label is required");
+  return `${templateV1BasePath(input, config)}/${encodeURIComponent(templateId)}/versions/${encodeURIComponent(version)}`;
+}
+
+function extractTemplateV1Metadata(templateYaml: string): {
+  identifier?: string;
+  name?: string;
+  label?: string;
+} {
+  const parsed = YAML.parse(templateYaml);
+  const template = isRecord(parsed) && isRecord(parsed.template) ? parsed.template : undefined;
+  if (!template) return {};
+
+  return {
+    identifier: getString(template, "identifier"),
+    name: getString(template, "name"),
+    label: getString(template, "versionLabel") ?? getString(template, "label") ?? getString(template, "version"),
+  };
+}
+
+function buildTemplateV1Body(input: Record<string, unknown>): Record<string, unknown> {
+  const body = isRecord(input.body) ? input.body : {};
+  const templateYaml = getTemplateYamlFromInput(input);
+  const metadata = extractTemplateV1Metadata(templateYaml);
+  const identifier = getString(body, "identifier") ?? getString(input, "template_id") ?? metadata.identifier;
+  if (!identifier) {
+    throw new Error("identifier is required for template_v1 create/update: set body.identifier, template_id, or template.identifier in template_yaml");
+  }
+
+  const result: Record<string, unknown> = {
+    template_yaml: templateYaml,
+    yaml_version: getString(body, "yaml_version") ?? "1",
+    identifier,
+    name: getString(body, "name") ?? metadata.name ?? identifier,
+    label: getString(body, "label") ?? getString(body, "version_label") ?? getString(input, "version_label") ?? metadata.label ?? "1.0.0",
+    git_details: isRecord(body.git_details) ? body.git_details : { store_type: "INLINE" },
+  };
+
+  const description = getString(body, "description");
+  if (description) result.description = description;
+  if (body.tags !== undefined) result.tags = body.tags;
+  if (body.is_stable !== undefined) result.is_stable = body.is_stable;
+  if (body.comments !== undefined) result.comments = body.comments;
+
+  return result;
+}
+
+const templateV1BodySchema: BodySchema = {
+  description: "Unified v1 template-service request body. Pass template_yaml containing top-level version: 1 and template.step, template.stage, or template.pipeline.",
+  fields: [
+    { name: "template_yaml", type: "yaml", required: true, description: "Unified v1 template YAML" },
+    { name: "identifier", type: "string", required: true, description: "Template identifier. Defaults from template_yaml or template_id when omitted." },
+    { name: "name", type: "string", required: true, description: "Template display name. Defaults from template_yaml or identifier when omitted." },
+    { name: "label", type: "string", required: false, description: "Version label. Defaults from version_label or 1.0.0." },
+    { name: "yaml_version", type: "string", required: false, description: "Template YAML schema version. Defaults to 1." },
+    { name: "git_details", type: "object", required: false, description: "Git storage details. Defaults to { store_type: 'INLINE' }." },
+    { name: "is_stable", type: "boolean", required: false, description: "Mark this version stable/default." },
+    { name: "comments", type: "string", required: false, description: "Version comments." },
+  ],
+};
 
 /**
  * Builds the NG delete path for templates.
@@ -154,6 +325,89 @@ export const templatesToolset: ToolsetDefinition = {
           responseExtractor: ngExtract,
           description:
             "Delete a template. When version_label is provided, deletes that specific version. When omitted, deletes all versions of the template.",
+        },
+      },
+    },
+    {
+      resourceType: "template_v1",
+      displayName: "Template (v1)",
+      description:
+        "Unified v1 template-service template. Use when the user explicitly asks for template_v1 or provides unified YAML with top-level version: 1 and template.step, template.stage, or template.pipeline. Supports account, org, and project scope.",
+      toolset: "templates",
+      scope: "project",
+      supportedScopes: ["account", "org", "project"],
+      scopeOptional: true,
+      headerBasedScoping: true,
+      identifierFields: ["template_id"],
+      searchAliases: ["v1 template", "template v1", "unified template"],
+      listFilterFields: [
+        { name: "search_term", description: "Filter templates by name or keyword" },
+        { name: "template_type", description: "Template entity type", enum: ["Pipeline", "Stage", "Step", "StepGroup"] },
+        { name: "type", description: "Template list type", enum: ["STABLE_TEMPLATE", "LAST_UPDATES_TEMPLATE", "ALL"] },
+        { name: "sort", description: "Field to sort by" },
+        { name: "order", description: "Sort order", enum: ["asc", "desc"] },
+      ],
+      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/setup/resources/templates/{templateIdentifier}",
+      operations: {
+        list: {
+          method: "GET",
+          path: "/v1/templates",
+          pathBuilder: templateV1BasePath,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            search_term: "search_term",
+            template_type: "entity_types",
+            page: "page",
+            size: "limit",
+            type: "type",
+            sort: "sort",
+            order: "order",
+          },
+          responseExtractor: v1ListExtract(),
+          description:
+            "List unified v1 templates. Without explicit scope, configured HARNESS_ORG/HARNESS_PROJECT default to project scope; pass resource_scope='account' or 'org' to override.",
+        },
+        get: {
+          method: "GET",
+          path: "/v1/templates/{template}",
+          pathBuilder: templateV1GetPath,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: passthrough,
+          description: "Get a unified v1 template. Omit version_label for the stable/default version; pass version_label for a specific version.",
+        },
+        create: {
+          method: "POST",
+          path: "/v1/templates",
+          pathBuilder: templateV1BasePath,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: buildTemplateV1Body,
+          bodySchema: templateV1BodySchema,
+          skipScopeBodyInjection: true,
+          responseExtractor: passthrough,
+          description: "Create a unified v1 template with a JSON template-service body containing template_yaml, yaml_version, identifier, name, label, and git_details.",
+        },
+        update: {
+          method: "PUT",
+          path: "/v1/templates/{template}/versions/{version}",
+          pathBuilder: templateV1VersionPath,
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          bodyBuilder: buildTemplateV1Body,
+          bodySchema: templateV1BodySchema,
+          skipScopeBodyInjection: true,
+          responseExtractor: passthrough,
+          description: "Update a unified v1 template version. Requires template_id and version_label.",
+        },
+        delete: {
+          method: "DELETE",
+          path: "/v1/templates/{template}/versions/{version}",
+          pathBuilder: templateV1VersionPath,
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          queryParams: {
+            comments: "comments",
+            force_delete: "force_delete",
+          },
+          responseExtractor: passthrough,
+          description: "Delete a unified v1 template version. Requires template_id and version_label.",
         },
       },
     },

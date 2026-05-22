@@ -8,7 +8,7 @@ import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.
 import { confirmViaElicitation } from "../utils/elicitation.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { coerceRecord } from "../utils/type-guards.js";
-import { resourceTypeSchema } from "./input-schemas.js";
+import { resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
 import { deleteOutputSchema } from "./output-schemas.js";
 
 export function registerDeleteTool(server: McpServer, registry: Registry, client: HarnessClient, config?: Config): void {
@@ -22,6 +22,7 @@ export function registerDeleteTool(server: McpServer, registry: Registry, client
         resource_type: resourceTypeSchema(deletableTypes).describe("The type of resource to delete"),
         resource_id: z.string().describe("The identifier of the resource to delete"),
         url: z.string().describe("A Harness UI URL — org, project, resource type, and ID are extracted automatically").optional(),
+        resource_scope: resourceScopeSchema,
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
         params: z.record(z.string(), z.unknown()).describe("Additional identifiers for nested resources (e.g. pipeline_id for triggers/input sets, environment_id for infrastructure).").optional(),
