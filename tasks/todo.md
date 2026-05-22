@@ -480,13 +480,20 @@
 - Verified with `pnpm test tests/utils/http-auth.test.ts tests/config.test.ts tests/integration/http-transport.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test` (58 files / 1360 tests).
 
 ## Critical Bug Inspection (2026-05-22)
-- [ ] Inspect recent commits for high-severity behavioral regressions
-- [ ] Trace suspicious changes through caller chains and downstream effects
-- [ ] Implement a minimal fix only if a concrete critical bug is confirmed
-- [ ] Run focused verification and report the outcome
-- [ ] Commit/push/open PR only if a fix is made
+- [x] Inspect recent commits for high-severity behavioral regressions
+- [x] Trace suspicious changes through caller chains and downstream effects
+- [x] Implement a minimal fix only if a concrete critical bug is confirmed
+- [x] Run focused verification and report the outcome
+- [x] Commit/push/open PR only if a fix is made
 
 ### Plan
 - Review commits and diffs since `origin/main`, plus recent merged history if this branch is empty.
 - Prioritize behavioral changes in request construction, auth/authorization, write actions, session lifecycle, and resource-scoping paths.
 - Require a concrete trigger scenario before patching; if no data-loss, crash, security, or major user-facing breakage is confirmed, post a concise no-critical-findings summary without opening a PR.
+
+### Review
+- Found a correctness bug in `harness_execute(wait=true)`: if the pipeline trigger succeeded but repeated `execution.get` polls failed, `pollExecutionToTerminal()` returned `timed_out=true` with `Unknown` status.
+- Impact: agents could interpret a polling outage as a still-running execution and retry the pipeline, causing duplicate deployments or other duplicate side effects.
+- Fixed the poller so only the configured wait deadline reports a timeout; persistent poll failures now throw and are surfaced by `harness_execute` as `_wait.error` while preserving the trigger response and execution ID.
+- Added unit coverage for the poller and boundary coverage that `harness_execute` preserves the trigger response, omits `execution_timed_out`, and returns `_wait.error` on persistent polling failures.
+- Verified with `pnpm test tests/utils/poll-execution.test.ts tests/tools/tool-handlers.test.ts`, `pnpm typecheck`, full `pnpm test` (61 files / 1459 tests), `pnpm build`, and `git diff --check origin/main...HEAD`.
