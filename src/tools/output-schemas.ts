@@ -5,11 +5,11 @@ const dynamicObject = z.object({}).catchall(z.unknown());
 
 // --- harness_list ---
 export const listOutputSchema = z.object({
-  items: z.array(dynamicObject).describe("Array of resource objects"),
-  total: z.number().describe("Total number of matching resources").optional(),
-  page: z.number().describe("Current page number (0-indexed)").optional(),
-  analysis: z.string().describe("Visual analysis summary (when include_visual=true)").optional(),
-});
+  items: z.array(dynamicObject).optional().describe("Array of resource objects when the API returns a canonical list"),
+  total: z.number().optional().describe("Total number of matching resources when provided by the API"),
+  page: z.number().optional().describe("Current page number (0-indexed) when provided by the API"),
+  analysis: z.string().optional().describe("Visual analysis summary (when include_visual=true)"),
+}).catchall(z.unknown());
 
 // --- harness_get ---
 export const getOutputSchema = z.object({}).catchall(z.unknown()).describe("Resource object — shape varies by resource_type");

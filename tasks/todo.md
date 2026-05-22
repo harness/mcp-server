@@ -9,6 +9,26 @@
 ### Review
 - Normalizes top-level arrays to `{ items, total, page }` and hoists common wrapper keys (`body`, `content`, `data`, …) when `items` is missing; fills `total` when `items` exists without `total`.
 
+## Critical Bug Inspection (2026-05-21)
+- [x] Inspect recent commits for high-severity behavioral regressions
+- [x] Trace suspicious changes through caller chains and downstream behavior
+- [x] Implement a minimal fix only if a concrete critical bug is confirmed
+- [x] Run focused verification for reviewed or changed behavior
+- [ ] Report the outcome in Slack; open a PR only for a confirmed critical fix
+
+### Plan
+- Review recent merged commits after the last critical-bug/documentation automation, prioritizing code changes over docs and version metadata.
+- Focus on high-blast-radius surfaces: MCP tool annotations/output contracts, IaCM resource registration, HTTP auth/session handling, request construction, and write-operation safety.
+- For each suspicious change, require a concrete trigger scenario that can cause data loss, crashes, security bypass, or significant user-facing breakage before patching.
+
+### Review
+- Found that the new `outputSchema` on `harness_list` required `items`, but many existing passthrough list APIs return object shapes such as `content`, `data`, or `resources`; SDK output validation could turn successful API calls into tool errors. Top-level array list responses also had no structured content despite the declared output schema.
+- Fixed `harness_list` to normalize array responses into object-shaped `{ items }` structured content and relaxed the list output schema to match actual registry list response shapes while preserving known fields.
+- Found `iacm_module.get` could not be called through normal `harness_get(resource_id=...)` because the resource identifier was `id` but the get path required `module_id`.
+- Found `iacm_activity_resource_change.list` targeted the non-documented `/activities/{activityId}/resource-changes` path, required an unused `workspace_id`, and truncated the documented execution resource-change response.
+- Fixed IaCM module get path parameter mapping and routed resource-change listing to the documented `/executions/{pipeline_execution_id}/resource-changes` endpoint while preserving the existing `activity_id` input as the execution ID.
+- Verified with red/green focused coverage, `pnpm typecheck`, `pnpm build`, full `pnpm test`, and `git diff --check`.
+
 ## GPT App Tool Annotation Compliance (2026-05-20)
 - [x] Add explicit `destructiveHint: false` to all non-destructive read-only MCP tools flagged by the GPT App form
 - [x] Add regression coverage that every registered tool sets `readOnlyHint`, `openWorldHint`, and `destructiveHint` to explicit booleans with value assertions
