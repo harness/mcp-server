@@ -34200,6 +34200,9 @@ const schema: Record<string, any> = {
                   "markNextChangeSetRun": {
                     "type": "boolean"
                   },
+                  "tagDatabaseChangeSet": {
+                    "type": "boolean"
+                  },
                   "resources": {
                     "$ref": "#/definitions/pipeline/common/ContainerResource"
                   },
@@ -43085,6 +43088,198 @@ const schema: Record<string, any> = {
                 "desc": "This is the description for ProvenanceLocalSourceSpec"
               }
             }
+          },
+          "HsaRepoScanStepNode": {
+            "title": "HsaRepoScanStepNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "spec"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for HsaRepoScanStepNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "HsaRepoScan"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "HsaRepoScan"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/common/HsaRepoScanStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "HsaRepoScanStepInfo": {
+            "title": "HsaRepoScanStepInfo",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/StepSpecType"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "workspace": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "path": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "repoPath": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "resources": {
+                    "$ref": "#/definitions/pipeline/common/ContainerResource"
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "properties": {
+              "workspace": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "path": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "repoPath": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "resources": {
+                "$ref": "#/definitions/pipeline/common/ContainerResource"
+              },
+              "description": {
+                "desc": "This is the description for HsaRepoScanStepInfo"
+              }
+            }
           }
         },
         "ci": {
@@ -43760,8 +43955,8 @@ const schema: Record<string, any> = {
               }
             }
           },
-          "AiEvalsRunStepNode": {
-            "title": "AiEvalsRunStepNode",
+          "AiEvalStepNode": {
+            "title": "AiEvalStepNode",
             "type": "object",
             "required": [
               "identifier",
@@ -43772,7 +43967,7 @@ const schema: Record<string, any> = {
             "properties": {
               "description": {
                 "type": "string",
-                "desc": "This is the description for AiEvalsRunStepNode"
+                "desc": "This is the description for AiEvalStepNode"
               },
               "enforce": {
                 "$ref": "#/definitions/pipeline/common/PolicyConfig"
@@ -43819,7 +44014,7 @@ const schema: Record<string, any> = {
               "type": {
                 "type": "string",
                 "enum": [
-                  "AiEvalsRun"
+                  "AiEval"
                 ]
               },
               "when": {
@@ -43841,22 +44036,22 @@ const schema: Record<string, any> = {
                 "if": {
                   "properties": {
                     "type": {
-                      "const": "AiEvalsRun"
+                      "const": "AiEval"
                     }
                   }
                 },
                 "then": {
                   "properties": {
                     "spec": {
-                      "$ref": "#/definitions/pipeline/steps/ci/AiEvalsRunStepInfo"
+                      "$ref": "#/definitions/pipeline/steps/ci/AiEvalStepInfo"
                     }
                   }
                 }
               }
             ]
           },
-          "AiEvalsRunStepInfo": {
-            "title": "AiEvalsRunStepInfo",
+          "AiEvalStepInfo": {
+            "title": "AiEvalStepInfo",
             "allOf": [
               {
                 "$ref": "#/definitions/pipeline/steps/ci/CIStepInfo"
@@ -44074,7 +44269,7 @@ const schema: Record<string, any> = {
                 ]
               },
               "description": {
-                "desc": "This is the description for AiEvalsRunStepInfo"
+                "desc": "This is the description for AiEvalStepInfo"
               }
             }
           },
@@ -75363,6 +75558,17 @@ const schema: Record<string, any> = {
                       "Artifact",
                       "Config"
                     ]
+                  },
+                  "preserveDirectoryStructure": {
+                    "oneOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ],
+                    "default": false
                   }
                 }
               }
@@ -89185,6 +89391,22 @@ const schema: Record<string, any> = {
                                       "weight"
                                     ]
                                   }
+                                },
+                                "headerRoutingAdd": {
+                                  "type": "array",
+                                  "items": {
+                                    "$ref": "#/definitions/pipeline/steps/cd/GoogleMigHeaderRoutingAddSpec"
+                                  },
+                                  "minItems": 1,
+                                  "description": "Optional. Add or update header-based routing rules."
+                                },
+                                "headerRoutingRemove": {
+                                  "type": "array",
+                                  "items": {
+                                    "$ref": "#/definitions/pipeline/steps/cd/GoogleMigHeaderRoutingRemoveSpec"
+                                  },
+                                  "minItems": 1,
+                                  "description": "Optional. Remove header-based routing rules by key."
                                 }
                               },
                               "required": [
@@ -89367,6 +89589,22 @@ const schema: Record<string, any> = {
                                   "weight"
                                 ]
                               }
+                            },
+                            "headerRoutingAdd": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/definitions/pipeline/steps/cd/GoogleMigHeaderRoutingAddSpec"
+                              },
+                              "minItems": 1,
+                              "description": "Optional. Add or update header-based routing rules."
+                            },
+                            "headerRoutingRemove": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/definitions/pipeline/steps/cd/GoogleMigHeaderRoutingRemoveSpec"
+                              },
+                              "minItems": 1,
+                              "description": "Optional. Remove header-based routing rules by key."
                             }
                           },
                           "required": [
@@ -89385,6 +89623,89 @@ const schema: Record<string, any> = {
               },
               "description": {
                 "desc": "This is the description for GoogleMigTrafficShiftStepInfo"
+              }
+            }
+          },
+          "GoogleMigHeaderRoutingAddSpec": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "title": "GoogleMigHeaderRoutingAddSpec",
+            "type": "object",
+            "required": [
+              "key",
+              "value",
+              "destination"
+            ],
+            "properties": {
+              "key": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ],
+                "description": "HTTP header key to match. Supports fixed value or expression."
+              },
+              "value": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ],
+                "description": "HTTP header value to match. Supports fixed value or expression."
+              },
+              "matchType": {
+                "type": "string",
+                "enum": [
+                  "exact",
+                  "regex"
+                ],
+                "default": "exact",
+                "description": "How to match the header value. Default: exact. Both HTTPRoute and GRPCRoute support these types."
+              },
+              "destination": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ],
+                "description": "Target backend: 'stable', 'stage', or full backend service path. Supports expression."
+              }
+            }
+          },
+          "GoogleMigHeaderRoutingRemoveSpec": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "title": "GoogleMigHeaderRoutingRemoveSpec",
+            "type": "object",
+            "required": [
+              "key"
+            ],
+            "properties": {
+              "key": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ],
+                "description": "HTTP header key of the rule to remove. Supports fixed value or expression."
               }
             }
           },
@@ -98165,6 +98486,192 @@ const schema: Record<string, any> = {
               }
             },
             "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "IdpActionStepNode": {
+            "title": "IdpActionStepNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "spec",
+              "type"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for IdpActionStepNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "IdpAction"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "IdpAction"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/idp/IdpActionStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "IdpActionStepInfo": {
+            "title": "IdpActionStepInfo",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/StepSpecType"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "actionRef"
+                ],
+                "properties": {
+                  "actionRef": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "actionVersion": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "inputs": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/common/ParameterFieldMapStringJsonNode"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "required": [
+              "actionRef"
+            ],
+            "properties": {
+              "actionRef": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "actionVersion": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "inputs": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/ParameterFieldMapStringJsonNode"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              }
+            }
           }
         },
         "drtest": {
@@ -102359,7 +102866,7 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/resiliencetesting/ChaosFaultNode"
                   },
                   {
-                    "$ref": "#/definitions/pipeline/steps/ci/AiEvalsRunStepNode"
+                    "$ref": "#/definitions/pipeline/steps/ci/AiEvalStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/cd/AiTestAutomationStepNode"
@@ -111872,7 +112379,7 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/common/StepElementConfig"
                   },
                   {
-                    "$ref": "#/definitions/pipeline/steps/ci/AiEvalsRunStepNode"
+                    "$ref": "#/definitions/pipeline/steps/ci/AiEvalStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/ci/AiTestAutomationStepNode"
@@ -112134,6 +112641,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/SscaComplianceStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/HsaRepoScanStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/custom/EventListenerStepNode"
@@ -113584,7 +114094,7 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/resiliencetesting/ChaosFaultNode"
                   },
                   {
-                    "$ref": "#/definitions/pipeline/steps/ci/AiEvalsRunStepNode"
+                    "$ref": "#/definitions/pipeline/steps/ci/AiEvalStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/cd/AiTestAutomationStepNode"
@@ -115233,6 +115743,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/idp/IDPUpdateCatalogPropertyStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/idp/IdpActionStepNode"
                   }
                 ]
               },
