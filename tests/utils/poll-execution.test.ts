@@ -231,10 +231,10 @@ describe("pollExecutionToTerminal", () => {
       initialIntervalMs: 100,
       maxIntervalMs: 200,
     });
+    const rejection = expect(promise).rejects.toThrow("Polling execution exec-7 failed after 5 consecutive attempts");
 
     await flushAll();
-
-    await expect(promise).rejects.toThrow("Polling execution exec-7 failed after 5 consecutive attempts");
+    await rejection;
   });
 
   it("invokes onPoll callback after each successful poll", async () => {
