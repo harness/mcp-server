@@ -1,5 +1,5 @@
 import express from "express";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { request as httpRequest } from "node:http";
 import type { AddressInfo } from "node:net";
 import {
@@ -112,6 +112,8 @@ describe("HTTP MCP auth", () => {
       validateHttpAuthForBindHost("0.0.0.0", {
         HARNESS_MCP_AUTH_TOKEN: undefined,
         HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP: false,
+        HARNESS_MCP_MODE: "single-user",
+        HARNESS_API_KEY: "pat.test.abc.xyz",
       }),
     ).toThrow("HARNESS_MCP_AUTH_TOKEN is required");
 
@@ -119,6 +121,8 @@ describe("HTTP MCP auth", () => {
       validateHttpAuthForBindHost("0.0.0.0", {
         HARNESS_MCP_AUTH_TOKEN: undefined,
         HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP: true,
+        HARNESS_MCP_MODE: "single-user",
+        HARNESS_API_KEY: "pat.test.abc.xyz",
       }),
     ).not.toThrow();
 
@@ -126,7 +130,69 @@ describe("HTTP MCP auth", () => {
       validateHttpAuthForBindHost("0.0.0.0", {
         HARNESS_MCP_AUTH_TOKEN: "secret-token",
         HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP: false,
+        HARNESS_MCP_MODE: "single-user",
+        HARNESS_API_KEY: "pat.test.abc.xyz",
       }),
     ).not.toThrow();
+  });
+
+  it("warns for loopback single-user with no auth token (reverse-proxy risk)", () => {
+    const warnSpy = vi.spyOn(console, "error");
+
+    expect(() =>
+      validateHttpAuthForBindHost("127.0.0.1", {
+        HARNESS_MCP_AUTH_TOKEN: undefined,
+        HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP: false,
+        HARNESS_MCP_MODE: "single-user",
+        HARNESS_API_KEY: "pat.test.abc.xyz",
+      }),
+    ).not.toThrow();
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('"level":"warn"'),
+    );
+    warnSpy.mockRestore();
+  });
+
+  it("does not warn when HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP silences it", () => {
+    const warnSpy = vi.spyOn(console, "error");
+
+    validateHttpAuthForBindHost("127.0.0.1", {
+      HARNESS_MCP_AUTH_TOKEN: undefined,
+      HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP: true,
+      HARNESS_MCP_MODE: "single-user",
+      HARNESS_API_KEY: "pat.test.abc.xyz",
+    });
+
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it("does not warn when auth token is configured", () => {
+    const warnSpy = vi.spyOn(console, "error");
+
+    validateHttpAuthForBindHost("127.0.0.1", {
+      HARNESS_MCP_AUTH_TOKEN: "secret",
+      HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP: false,
+      HARNESS_MCP_MODE: "single-user",
+      HARNESS_API_KEY: "pat.test.abc.xyz",
+    });
+
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it("does not warn in multi-user mode (no credentials in config)", () => {
+    const warnSpy = vi.spyOn(console, "error");
+
+    validateHttpAuthForBindHost("127.0.0.1", {
+      HARNESS_MCP_AUTH_TOKEN: undefined,
+      HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP: false,
+      HARNESS_MCP_MODE: "multi-user",
+      HARNESS_API_KEY: "",
+    });
+
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 });

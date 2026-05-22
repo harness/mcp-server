@@ -77,6 +77,28 @@ function isPresignedUrl(url: URL): boolean {
   return false;
 }
 
+/**
+ * True when the URL's signature covers the HTTP `Host` header.
+ * Rewriting the hostname for CDN fetch would invalidate the signature (401).
+ */
+function signedHeadersIncludeHost(url: URL): boolean {
+  const goog = url.searchParams.get("X-Goog-SignedHeaders");
+  if (goog) {
+    return goog
+      .split(";")
+      .map((s) => s.trim().toLowerCase())
+      .includes("host");
+  }
+  const amz = url.searchParams.get("X-Amz-SignedHeaders");
+  if (amz) {
+    return amz
+      .split(";")
+      .map((s) => s.trim().toLowerCase())
+      .includes("host");
+  }
+  return false;
+}
+
 
 // ─── ANSI / log parsing helpers ─────────────────────────────────────────────
 
@@ -345,7 +367,7 @@ async function downloadBlobContent(
   //    The URL is publicly routable with embedded signature params; routing through
   //    the client or adding extra headers would invalidate the AWS/GCS signature.
   //
-  // 2. *.harness.io pre-signed CDN blob URLs → rewrite hostname to match
+  // 2. *.harness.io pre-signed CDN blob URLs → usually rewrite hostname to match
   //    HARNESS_BASE_URL host, then direct fetch.
   //    The Harness log-service always returns blob links pointing to app.harness.io/storage/...
   //    regardless of the configured base URL. On self-managed deployments app.harness.io is
@@ -353,6 +375,8 @@ async function downloadBlobContent(
   //    (e.g. self-managed.example.com/storage/...). The pre-signed params authenticate the request
   //    so no API key header is needed — and adding one would not help anyway since this is
   //    a CDN path, not an API gateway path (/gateway/... would 403 for /storage/... paths).
+  //    Exception: if SignedHeaders includes `host`, the signature is bound to the link's
+  //    hostname — do not rewrite; fetch the original URL (e.g. QA SaaS with qa.harness.io base).
   //
   // 3. Standard log-service paths → client.requestStream() with gateway prefix so
   //    PAT/JWT auth headers are injected by the client proxy.
@@ -374,6 +398,18 @@ async function downloadBlobContent(
     // that happen to carry pre-signed params — those must go through client.requestStream() for auth.
     // The blob link always points to app.harness.io/storage/... regardless of HARNESS_BASE_URL.
     // Rewrite to the configured host so self-managed deployments can reach it.
+    if (signedHeadersIncludeHost(blobUrl)) {
+      log.debug("Downloading log blob (direct, host-bound presigned CDN)", {
+        prefix,
+        url: blobLink.slice(0, 80),
+      });
+      try {
+        return await fetch(blobLink, { signal });
+      } catch (err) {
+        const cause = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+        throw new Error(`Log download fetch failed for ${blobUrl.hostname}: ${cause}`);
+      }
+    }
     const baseUrl = safeParseUrl(client.baseURL);
     if (!baseUrl) {
       // If baseURL is unparseable we cannot safely rewrite — throw rather than
