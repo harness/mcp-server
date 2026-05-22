@@ -5,7 +5,7 @@
 - [x] Trace `harness_list` output-schema handling for `pr_activity`
 - [x] Add failing regression coverage for bare-array `pr_activity` list responses
 - [x] Normalize `harness_list` list results to structured `{ items, ... }` output
-- [ ] Run focused tests, typecheck, and build
+- [x] Run focused tests, typecheck, and build
 - [ ] Commit, push, open PR, and reply in the original Slack thread
 
 ### Plan
@@ -14,7 +14,10 @@
 - Add coverage in `tests/tools/tool-handlers.test.ts` for Harness Code `pr_activity` returning a bare array from the API, because that is the response shape that can omit `structuredContent`.
 
 ### Review
-- Pending.
+- Found that `pr_activity` uses the Harness Code activities endpoint with a pass-through extractor, so bare-array API responses reached `jsonResult()` directly. Arrays intentionally do not set MCP `structuredContent`, which violates the SDK output-schema contract for `harness_list`.
+- Added a regression test covering a bare-array `pr_activity` response and asserting both JSON text and `structuredContent` are normalized to `{ items, total }`.
+- Added `normalizeListResult()` in `src/tools/harness-list.ts` so list responses that are bare arrays or objects with common list-array keys expose `items` before compaction and formatting.
+- Verified with `pnpm test tests/tools/tool-handlers.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test` (61 files / 1459 tests).
 
 ## GPT App Tool Annotation Compliance (2026-05-20)
 - [x] Add explicit `destructiveHint: false` to all non-destructive read-only MCP tools flagged by the GPT App form
