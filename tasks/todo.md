@@ -1,5 +1,14 @@
 # Harness MCP Server — Task Tracking
 
+## harness_list structured output for array APIs (2026-05-22)
+- [x] Root cause: Harness Code `pr_activity` returns a top-level JSON array; `jsonResult` only sets `structuredContent` for objects, so strict MCP clients (Cursor) fail with output schema validation (-32602).
+- [x] Add `normalizeHarnessListPayload` and call it from `harness_list` after dispatch; unit tests in `response-formatter.test.ts`.
+- [x] Typecheck and focused tests
+- [x] Commit, push, PR
+
+### Review
+- Normalizes top-level arrays to `{ items, total, page }` and hoists common wrapper keys (`body`, `content`, `data`, …) when `items` is missing; fills `total` when `items` exists without `total`.
+
 ## GPT App Tool Annotation Compliance (2026-05-20)
 - [x] Add explicit `destructiveHint: false` to all non-destructive read-only MCP tools flagged by the GPT App form
 - [x] Add regression coverage that every registered tool sets `readOnlyHint`, `openWorldHint`, and `destructiveHint` to explicit booleans with value assertions

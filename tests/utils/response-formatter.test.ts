@@ -1,5 +1,31 @@
 import { describe, it, expect } from "vitest";
-import { jsonResult, errorResult, imageResult, mixedResult } from "../../src/utils/response-formatter.js";
+import { jsonResult, errorResult, imageResult, mixedResult, normalizeHarnessListPayload } from "../../src/utils/response-formatter.js";
+
+describe("normalizeHarnessListPayload", () => {
+  it("wraps a top-level array into { items, total, page } for MCP structured output", () => {
+    const activities = [{ id: 1 }, { id: 2 }];
+    const normalized = normalizeHarnessListPayload(activities, { page: 0 });
+    expect(normalized).toEqual({ items: activities, total: 2, page: 0 });
+    const tool = jsonResult(normalized);
+    expect(tool.structuredContent).toEqual({ items: activities, total: 2, page: 0 });
+  });
+
+  it("hoists a list array from body when items is absent", () => {
+    const body = [{ x: 1 }];
+    const normalized = normalizeHarnessListPayload({ body, meta: "keep" }, { page: 1 });
+    expect(normalized).toEqual({ body, meta: "keep", items: body, total: 1, page: 1 });
+  });
+
+  it("fills total from items length when items exists but total is missing", () => {
+    const items = [{ a: 1 }];
+    expect(normalizeHarnessListPayload({ items })).toEqual({ items, total: 1 });
+  });
+
+  it("leaves already-shaped list objects unchanged", () => {
+    const shaped = { items: [{ a: 1 }], total: 99, page: 0 };
+    expect(normalizeHarnessListPayload(shaped)).toBe(shaped);
+  });
+});
 
 describe("jsonResult", () => {
   it("wraps data as text content with structuredContent", () => {
