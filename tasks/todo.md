@@ -7,7 +7,7 @@
 - [x] Implement a distinct `template_v1` resource in the templates toolset
 - [x] Expose `resource_scope` on write/delete tools so callers can explicitly target account/org/project scope
 - [x] Run focused tests, typecheck/build, and review the diff
-- [ ] Commit, push, open PR, and reply in Slack
+- [x] Commit, push, open PR, and reply in Slack
 
 ### Plan
 - Keep classic NG template behavior under `resource_type="template"` unchanged.
