@@ -14,6 +14,13 @@ const OBJECT_KINDS = [
   "OBJECT_KIND_DATA_MODEL",
 ];
 
+/**
+ * List extractor — compact-safe projection for type selection.
+ * Returns only fields that survive harness_list compaction:
+ * identifier, name, description, kind (TYPE_FIELDS), category (TYPE_FIELDS).
+ * Full field metadata (fields, join_predicates, enrichment_fields) is only
+ * returned by the get operation.
+ */
 const schemaTypesExtract = (raw: unknown): { items: unknown[]; total: number } => {
   const r = raw as Record<string, unknown>;
   const items: unknown[] = [];
@@ -26,29 +33,39 @@ const schemaTypesExtract = (raw: unknown): { items: unknown[]; total: number } =
     config_types: "config",
     data_model_types: "data_model",
   };
+
+  const MAX_DESC = 120;
+
   for (const [key, category] of Object.entries(categoryMap)) {
     const arr = r[key];
     if (Array.isArray(arr)) {
       for (const type of arr) {
-        const cleaned = stripInternalMeta(type) as Record<string, unknown>;
-        cleaned._category = category;
+        const typeObj = type as Record<string, unknown>;
+        const id = (typeObj.id ?? typeObj.identifier) as string | undefined;
+        if (!id) continue;
 
+        const rawDesc = (typeObj.description as string) ?? "";
+        const description = rawDesc.length > MAX_DESC ? rawDesc.slice(0, MAX_DESC) + "..." : rawDesc;
+
+        const item: Record<string, unknown> = {
+          identifier: id,
+          name: typeObj.name ?? id,
+          category,           // "entity" | "relationship" | "event" | "metric" | "view" | "config" | "data_model"
+          kind: typeObj.kind, // OBJECT_KIND_* when present
+        };
+        if (description) item.description = description;
+
+        // Surface dcs_enrichment flag on relationship types so agents know
+        // to fetch full details via get before orchestrating DCS calls.
         if (category === "relationship") {
-          const typeObj = type as Record<string, unknown>;
           const annotations = typeObj.annotations as Record<string, unknown>[] | undefined;
           const hasDcsEnrichment = (annotations ?? []).some(
             (a) => (a.key as string) === "dcs_enrichment",
           );
-          if (hasDcsEnrichment) {
-            cleaned.dcs_enrichment = true;
-            cleaned.join_predicates = typeObj.join_predicates;
-            cleaned.left_reference = typeObj.left_reference;
-            cleaned.right_reference = typeObj.right_reference;
-            if (typeObj.fields) cleaned.enrichment_fields = typeObj.fields;
-          }
+          if (hasDcsEnrichment) item.dcs_enrichment = true;
         }
 
-        items.push(cleaned);
+        items.push(item);
       }
     }
   }
@@ -202,7 +219,7 @@ export const semanticLayerToolset: ToolsetDefinition = {
           bodyBuilder: schemaTypesBody,
           responseExtractor: schemaTypesExtract,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          description: "List all schema types, optionally filtered by kind",
+          description: "List all schema types, optionally filtered by kind. Returns id, name, category, kind, description. Use get for full field metadata.",
         },
         get: {
           method: "POST",

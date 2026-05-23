@@ -53,7 +53,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
   server.registerTool(
     "harness_execute",
     {
-      description: "Execute an action on a Harness resource: run/retry/interrupt pipelines, kill/restore FME feature flags, test connectors, sync GitOps apps, run chaos experiments. You can pass a Harness URL to auto-extract identifiers. Pass `wait: true` for pipeline run/retry to block until the execution reaches a terminal status — single tool call instead of an LLM polling loop.",
+      description: "Execute an action on a Harness resource: run/retry/interrupt pipelines, kill/restore FME feature flags, test connectors, sync GitOps apps, run chaos experiments. You can pass a Harness URL to auto-extract identifiers. Pass `wait: true` for pipeline run/retry to block until the execution reaches a terminal status — single tool call instead of an LLM polling loop. For HQL batch operations pass `queries` with resource_type='hql_query' and action='validate' or 'run'.",
       inputSchema: {
         resource_type: resourceTypeSchema(executableTypes).optional().describe("Resource type with executable actions. Auto-detected from url."),
         url: z.string().describe("Harness UI URL — auto-extracts org, project, type, and ID").optional(),
@@ -68,6 +68,13 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         wait: z.boolean().describe("For pipeline run/retry actions: block until the execution reaches a terminal status (Success/Failed/Aborted/Errored/Expired). Server-side polling — a single tool call gives the agent the final outcome instead of an LLM polling loop. Ignored for other actions.").optional(),
         wait_timeout_seconds: z.number().min(10).max(7200).describe("Max seconds to wait when wait=true. Default 600 (10 min). Max 7200 (2 h). When the timeout fires, returns execution_timed_out=true with the last observed status.").optional(),
         wait_poll_interval_seconds: z.number().min(2).max(60).describe("Initial poll interval when wait=true (seconds). Default 3. Backoff multiplier 1.5x, capped at 30s.").optional(),
+        queries: z.array(
+          z.object({
+            query_string: z.string().describe("HQL query string"),
+            timeout_ms: z.number().optional().describe("Per-query timeout in milliseconds"),
+            max_results: z.number().optional().describe("Maximum rows to return"),
+          })
+        ).max(20).describe("Batch HQL queries — use with resource_type='hql_query' and action='validate' or 'run'. Fans out in parallel, returns per-query results.").optional(),
       },
       outputSchema: executeOutputSchema,
       annotations: {
@@ -80,7 +87,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
     },
     async (args, extra) => {
       try {
-        const { params, wait, wait_timeout_seconds, wait_poll_interval_seconds, ...rest } = args;
+        const { params, wait, wait_timeout_seconds, wait_poll_interval_seconds, queries: batchQueries, ...rest } = args;
         const input = applyUrlDefaults(rest as Record<string, unknown>, args.url);
         const coercedParams = coerceRecord(params);
         if (coercedParams) Object.assign(input, coercedParams);
@@ -110,6 +117,26 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         });
         if (!elicit.proceed) {
           return errorResult(`Operation ${elicit.reason} by user.`);
+        }
+
+        // Batch HQL path — fan out queries in parallel through the registry
+        if (batchQueries && batchQueries.length > 0) {
+          if (resourceType !== "hql_query") {
+            return errorResult(`queries batch parameter is only supported for resource_type='hql_query'. Got: ${resourceType}`);
+          }
+          const auditCtxBatch = { tool: "harness_execute" as const, confirmation: elicit.method, action: args.action };
+          const settledResults = await Promise.allSettled(
+            batchQueries.map((q) =>
+              registry.dispatchExecute(client, "hql_query", args.action, { body: { query_string: q.query_string, ...(q.timeout_ms != null ? { timeout_ms: q.timeout_ms } : {}), ...(q.max_results != null ? { max_results: q.max_results } : {}) } }, auditCtxBatch, extra.signal),
+            ),
+          );
+          const results = settledResults.map((r, i) => {
+            const query_string = batchQueries[i]!.query_string;
+            if (r.status === "fulfilled") return { query_string, success: true, ...((r.value as Record<string, unknown>) ?? {}) };
+            return { query_string, success: false, error: r.reason instanceof Error ? r.reason.message : String(r.reason) };
+          });
+          const succeeded = results.filter((r) => r.success).length;
+          return jsonResult({ results, summary: { total: results.length, succeeded, failed: results.length - succeeded } });
         }
 
         // Map resource_id → identifierFields[0] (the documented primary field).

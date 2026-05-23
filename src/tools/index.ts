@@ -15,7 +15,6 @@ import { registerDescribeTool } from "./harness-describe.js";
 import { registerStatusTool } from "./harness-status.js";
 import { registerSchemaTool } from "./harness-schema.js";
 import type { SchemaEntry } from "../data/schemas/types.js";
-import { registerHqlBatchTools } from "./hql-batch.js";
 import "../data/examples/load-all.js";
 
 
@@ -31,5 +30,4 @@ export function registerAllTools(server: McpServer, registry: Registry, client: 
   registerDescribeTool(server, registry);
   registerStatusTool(server, registry, client, config);
   registerSchemaTool(server, additionalSchemas);
-  registerHqlBatchTools(server, client);
 }
