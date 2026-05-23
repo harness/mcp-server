@@ -518,6 +518,24 @@ describe("Registry", () => {
       });
     });
 
+    it("passes the endpoint route template as tracing metadata", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: { content: [], totalElements: 0 },
+      });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "pipeline", "list", {
+        org_id: "default",
+        project_id: "test-project",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/pipeline/api/pipelines/list");
+      expect(call.tracing).toEqual({
+        route: "/pipeline/api/pipelines/list",
+      });
+    });
+
     it("omits default org/project query params for explicit account-scope connector list", async () => {
       const accountRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
       const mockRequest = vi.fn().mockResolvedValue({

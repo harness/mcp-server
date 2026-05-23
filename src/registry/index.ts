@@ -723,6 +723,7 @@ export class Registry {
       ...(product !== "harness" ? { product } : {}),
       ...(spec.headerBasedScoping || def.headerBasedScoping ? { headerBasedScoping: true } : {}),
       ...(spec.operationPolicy?.retryPolicy ? { retryPolicy: spec.operationPolicy.retryPolicy } : {}),
+      ...(!spec.pathBuilder ? { tracing: { route: spec.path } } : {}),
       signal,
     };
 
