@@ -7,7 +7,7 @@
 - [x] Implement configurable global and per-principal session caps
 - [x] Document the new HTTP session guardrails
 - [x] Run focused tests, typecheck, build, and broader verification
-- [ ] Commit, push, open PR, and reply in the Slack thread
+- [x] Commit, push, open PR, and reply in the Slack thread
 
 ### Plan
 - Add a small `src/utils/http-session-limits.ts` helper so session-cap behavior is tested independently of the full MCP server startup.
