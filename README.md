@@ -131,6 +131,7 @@ Operational constraints in HTTP mode:
 - `POST /mcp`, `GET /mcp`, and `DELETE /mcp` for existing sessions require the `mcp-session-id` header.
 - `GET /mcp` is used for SSE notifications (progress updates and elicitation prompts).
 - Idle sessions are reaped after 30 minutes.
+- Active sessions are capped by `HARNESS_MCP_MAX_SESSIONS` globally and `HARNESS_MCP_MAX_SESSIONS_PER_PRINCIPAL` per resolved Harness account.
 - `GET /health` is the only non-MCP endpoint.
 - Request body size is capped by `HARNESS_MAX_BODY_SIZE_MB` (default `10` MB).
 - Set `x-harness-pipeline-version: 0` or `1` on the `initialize` request to select V0 or V1 pipeline resources for that HTTP session.
@@ -537,6 +538,8 @@ The server automatically loads environment variables from a `.env` file in the p
 | `HARNESS_MCP_ALLOWED_HOSTS` | No       | --                          | Comma-separated hostnames allowed by HTTP transport Host-header validation. `mcp.harness.io` is allowed by default for localhost binds; add proxy/custom domains here                                                                                 |
 | `HARNESS_MCP_AUTH_TOKEN`    | No       | --                          | Bearer token required on `/mcp` HTTP routes when set. Required by default when HTTP transport binds to a non-loopback host                                                                                                                             |
 | `HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP` | No | `false`         | Explicitly allow unauthenticated HTTP transport on non-loopback binds. Use only behind another authenticated control                                                                                                                                    |
+| `HARNESS_MCP_MAX_SESSIONS`  | No       | `100`                       | Maximum active HTTP MCP sessions across the process. New `initialize` requests return 429 when the cap is reached                                                                                                                                      |
+| `HARNESS_MCP_MAX_SESSIONS_PER_PRINCIPAL` | No | `25`           | Maximum active HTTP MCP sessions for one resolved Harness account/principal. New `initialize` requests return 429 when the cap is reached                                                                                                              |
 | `HARNESS_MCP_LOG_FILE`      | No       | `~/.claude/harness-mcp.log` | File used for stdio disconnect/crash diagnostics when stderr may no longer be available                                                                                                                                                               |
 
 
@@ -1795,7 +1798,7 @@ HARNESS_AUTO_APPROVE_RISK=high_write
 - **Write operations use elicitation when available.** `harness_create`, `harness_update`, `harness_delete`, and `harness_execute` attempt MCP elicitation before proceeding (see [Elicitation](#elicitation)).
 - **Medium-risk and above fail closed.** If confirmation cannot be obtained for `medium_write`, `high_write`, or `destructive` operations, they are blocked instead of executing blindly. Override with `HARNESS_AUTO_APPROVE_RISK` for autonomous workflows.
 - **CORS restricted to same-origin.** The HTTP transport only allows same-origin requests, preventing CSRF attacks from malicious websites targeting the MCP server on localhost.
-- **HTTP rate limiting.** The HTTP transport enforces 60 requests per minute per IP to prevent request flooding.
+- **HTTP rate limiting.** The HTTP transport enforces 60 requests per minute per IP to prevent request flooding, plus active session caps to prevent unbounded session allocation.
 - **API rate limiting.** The Harness API client enforces a 10 requests/second limit to avoid hitting upstream rate limits.
 - **Pagination bounds enforced.** List queries are capped at 10,000 items total and 100 per page to prevent memory exhaustion.
 - **Retries with backoff.** Transient failures (HTTP 429, 5xx) are retried with exponential backoff and jitter.

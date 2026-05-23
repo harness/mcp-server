@@ -1,5 +1,28 @@
 # Harness MCP Server — Task Tracking
 
+## Slack Bug Triage: HTTP Session Rate Limit Gap (2026-05-23)
+- [x] Read the trigger Slack thread and nearby channel context for the rate-limit question
+- [x] Trace HTTP and tool-layer rate limiting behavior
+- [x] Add failing regression coverage for HTTP session caps
+- [x] Implement configurable global and per-principal session caps
+- [x] Document the new HTTP session guardrails
+- [x] Run focused tests, typecheck, build, and broader verification
+- [ ] Commit, push, open PR, and reply in the Slack thread
+
+### Plan
+- Add a small `src/utils/http-session-limits.ts` helper so session-cap behavior is tested independently of the full MCP server startup.
+- Keep existing per-IP request throttling and Harness API client RPS throttling intact.
+- Add `HARNESS_MCP_MAX_SESSIONS` and `HARNESS_MCP_MAX_SESSIONS_PER_PRINCIPAL` config defaults so operators can tune hosted/shared deployments without code changes.
+- Evaluate caps after session credentials are resolved but before creating a new `McpServer`/`StreamableHTTPServerTransport`, and return `429` for cap exhaustion.
+- Use the resolved Harness account ID as the current principal key because the HTTP transport has no stronger user identity in single-user or multi-user mode.
+
+### Review
+- Confirmed that tool-layer API throttling is per `HarnessClient`, and HTTP mode creates one client per session; without session caps, clients can multiply concurrency by creating many sessions.
+- Added `HARNESS_MCP_MAX_SESSIONS` and `HARNESS_MCP_MAX_SESSIONS_PER_PRINCIPAL` with defaults of `100` and `25`.
+- Added a session-limit helper plus focused coverage for global/per-principal caps and JSON-RPC 429 formatting.
+- Wired HTTP initialize to check caps after credential resolution and before allocating MCP server/transport state; pending initializations are reserved so concurrent requests cannot all pass the cap.
+- Verified with focused tests, `pnpm typecheck`, `pnpm build`, full `pnpm test` (62 files / 1480 tests), `pnpm docs:check`, and `git diff --check`.
+
 ## harness_list structured output for array APIs (2026-05-22)
 - [x] Root cause: Harness Code `pr_activity` returns a top-level JSON array; `jsonResult` only sets `structuredContent` for objects, so strict MCP clients (Cursor) fail with output schema validation (-32602).
 - [x] Add `normalizeHarnessListPayload` and call it from `harness_list` after dispatch; unit tests in `response-formatter.test.ts`.

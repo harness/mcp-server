@@ -20,6 +20,7 @@ import { createHttpAuthMiddleware, validateHttpAuthForBindHost } from "./utils/h
 import { loadEnvFile } from "./utils/env.js";
 import { createAuditManager, type AuditManager } from "./audit/index.js";
 import { mergeConfigWithSessionHeaders, MissingSessionCredentialsError } from "./utils/session-headers.js";
+import { checkHttpSessionLimit, createHttpSessionLimitError } from "./utils/http-session-limits.js";
 
 
 const log = createLogger("main");
@@ -211,6 +212,7 @@ interface Session {
   server: McpServer;
   transport: StreamableHTTPServerTransport;
   lastActivity: number;
+  principal: string;
 }
 
 const SESSION_TTL_MS = 30 * 60_000; // 30 minutes
@@ -275,6 +277,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
 
   // ---- Session store ----
   const sessions = new Map<string, Session>();
+  const pendingSessions = new Map<string, { principal: string }>();
   const sharedAuditManager = createAuditManager(config);
 
   async function destroySession(sessionId: string): Promise<void> {
@@ -345,14 +348,34 @@ async function startHttp(config: Config, port: number): Promise<void> {
     // No session header — must be an initialize request. Create a new session.
     let server: McpServer | undefined;
     let transport: StreamableHTTPServerTransport | undefined;
+    let reservationId: string | undefined;
     try {
       const sessionConfig = mergeConfigWithSessionHeaders(config, req.headers);
+      const principal = sessionConfig.HARNESS_ACCOUNT_ID || "unknown";
+      const countedSessions = new Map([...sessions, ...pendingSessions]);
+      const sessionLimit = checkHttpSessionLimit(countedSessions, principal, {
+        maxSessions: config.HARNESS_MCP_MAX_SESSIONS,
+        maxSessionsPerPrincipal: config.HARNESS_MCP_MAX_SESSIONS_PER_PRINCIPAL,
+      });
+      if (!sessionLimit.allowed) {
+        log.warn("Session rejected — session cap reached", {
+          principal,
+          reason: sessionLimit.reason,
+          activeSessions: sessions.size,
+          pendingSessions: pendingSessions.size,
+        });
+        res.status(sessionLimit.status).json(createHttpSessionLimitError(sessionLimit.message));
+        return;
+      }
+      reservationId = randomUUID();
+      pendingSessions.set(reservationId, { principal });
       const result = createHarnessServer(sessionConfig, sharedAuditManager);
       server = result.server;
       transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (id) => {
-          sessions.set(id, { server: server!, transport: transport!, lastActivity: Date.now() });
+          if (reservationId) pendingSessions.delete(reservationId);
+          sessions.set(id, { server: server!, transport: transport!, lastActivity: Date.now(), principal });
           log.info("Session created", { sessionId: id, total: sessions.size });
         },
       });
@@ -387,6 +410,8 @@ async function startHttp(config: Config, port: number): Promise<void> {
       }
       await transport?.close();
       await server?.close();
+    } finally {
+      if (reservationId) pendingSessions.delete(reservationId);
     }
   });
 

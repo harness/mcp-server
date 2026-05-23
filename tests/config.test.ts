@@ -129,6 +129,28 @@ describe("ConfigSchema", () => {
     }
   });
 
+  it("applies default HTTP session caps", () => {
+    const result = ConfigSchema.safeParse(validConfig);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_MCP_MAX_SESSIONS).toBe(100);
+      expect(result.data.HARNESS_MCP_MAX_SESSIONS_PER_PRINCIPAL).toBe(25);
+    }
+  });
+
+  it("coerces HTTP session caps from env strings", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      HARNESS_MCP_MAX_SESSIONS: "12",
+      HARNESS_MCP_MAX_SESSIONS_PER_PRINCIPAL: "4",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_MCP_MAX_SESSIONS).toBe(12);
+      expect(result.data.HARNESS_MCP_MAX_SESSIONS_PER_PRINCIPAL).toBe(4);
+    }
+  });
+
   it("coerces string numbers for timeout and retries", () => {
     const result = ConfigSchema.safeParse({
       ...validConfig,
