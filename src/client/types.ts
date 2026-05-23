@@ -62,4 +62,9 @@ export interface RequestOptions {
   /** Retry policy from OperationPolicy. When "do_not_retry", transient errors
    *  (5xx, timeouts) throw immediately instead of retrying. */
   retryPolicy?: "safe" | "idempotency_key_required" | "do_not_retry";
+  /** Internal tracing metadata. Never serialized into HTTP headers/query/body. */
+  tracing?: {
+    /** Route template that produced this concrete request path. */
+    route?: string;
+  };
 }
