@@ -708,6 +708,33 @@ describe("Registry", () => {
       expect(call.params.projectIdentifier).toBeUndefined();
     });
 
+    it("template delete requires a version label to avoid deleting all versions", async () => {
+      const templateRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+      const mockRequest = vi.fn().mockResolvedValue({ data: true });
+      const client = makeClient(mockRequest);
+
+      await expect(
+        templateRegistry.dispatch(client, "template", "delete", {
+          template_id: "my-template",
+        }),
+      ).rejects.toThrow(/version_label is required/);
+      expect(mockRequest).not.toHaveBeenCalled();
+    });
+
+    it("template delete uses the versioned NG API path when version_label is provided", async () => {
+      const templateRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+      const mockRequest = vi.fn().mockResolvedValue({ data: true });
+      const client = makeClient(mockRequest);
+
+      await templateRegistry.dispatch(client, "template", "delete", {
+        template_id: "my-template",
+        version_label: "v2",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/template/api/templates/my-template/v2");
+    });
+
     it("template_v1 create infers project scope when org_id and project_id are present", async () => {
       const templateRegistry = new Registry(makeConfig({
         HARNESS_TOOLSETS: "templates",
@@ -776,6 +803,44 @@ describe("Registry", () => {
       expect(call.path).toBe("/v1/templates");
     });
 
+    it("template_v1 explicit account scope omits configured org/project defaults", async () => {
+      const templateRegistry = new Registry(makeConfig({
+        HARNESS_TOOLSETS: "templates",
+        HARNESS_ORG: "AI_Devops",
+        HARNESS_PROJECT: "AICHAT",
+      }));
+      const mockRequest = vi.fn().mockResolvedValue({ identifier: "acc_step", label: "1.0.0" });
+      const client = makeClient(mockRequest);
+
+      await templateRegistry.dispatch(client, "template_v1", "list", {
+        resource_scope: "account",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/v1/templates");
+      expect(call.params.orgIdentifier).toBeUndefined();
+      expect(call.params.projectIdentifier).toBeUndefined();
+    });
+
+    it("template_v1 explicit org scope uses the org template path without project defaults", async () => {
+      const templateRegistry = new Registry(makeConfig({
+        HARNESS_TOOLSETS: "templates",
+        HARNESS_ORG: "AI_Devops",
+        HARNESS_PROJECT: "AICHAT",
+      }));
+      const mockRequest = vi.fn().mockResolvedValue({ identifier: "org_step", label: "1.0.0" });
+      const client = makeClient(mockRequest);
+
+      await templateRegistry.dispatch(client, "template_v1", "list", {
+        resource_scope: "org",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/v1/orgs/AI_Devops/templates");
+      expect(call.params.orgIdentifier).toBe("AI_Devops");
+      expect(call.params.projectIdentifier).toBeUndefined();
+    });
+
     it("template_v1 update uses versioned v1 REST path at account scope", async () => {
       const templateRegistry = new Registry(makeConfig({
         HARNESS_TOOLSETS: "templates",
@@ -796,6 +861,47 @@ describe("Registry", () => {
       const call = mockRequest.mock.calls[0][0];
       expect(call.path).toBe("/v1/templates/testsj/versions/v2");
       expect(call.params.orgIdentifier).toBeUndefined();
+      expect(call.params.projectIdentifier).toBeUndefined();
+    });
+
+    it("template_v1 explicit account scope overrides supplied org/project ids for version writes", async () => {
+      const templateRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+      const mockRequest = vi.fn().mockResolvedValue({ identifier: "testsj", label: "v2" });
+      const client = makeClient(mockRequest);
+
+      await templateRegistry.dispatch(client, "template_v1", "update", {
+        resource_scope: "account",
+        org_id: "AI_Devops",
+        project_id: "AICHAT",
+        template_id: "testsj",
+        version_label: "v2",
+        body: {
+          template_yaml: "version: 1\ntemplate:\n  identifier: testsj\n  name: Test\n  step:\n    run:\n      script: echo ok\n",
+        },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/v1/templates/testsj/versions/v2");
+      expect(call.params.orgIdentifier).toBeUndefined();
+      expect(call.params.projectIdentifier).toBeUndefined();
+    });
+
+    it("template_v1 explicit org scope overrides supplied project ids for version deletes", async () => {
+      const templateRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+      const mockRequest = vi.fn().mockResolvedValue({});
+      const client = makeClient(mockRequest);
+
+      await templateRegistry.dispatch(client, "template_v1", "delete", {
+        resource_scope: "org",
+        org_id: "AI_Devops",
+        project_id: "AICHAT",
+        template_id: "testsj",
+        version_label: "v2",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/v1/orgs/AI_Devops/templates/testsj/versions/v2");
+      expect(call.params.orgIdentifier).toBe("AI_Devops");
       expect(call.params.projectIdentifier).toBeUndefined();
     });
 

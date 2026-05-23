@@ -25,7 +25,7 @@ export function registerDeleteTool(server: McpServer, registry: Registry, client
         resource_scope: resourceScopeSchema,
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
-        params: z.record(z.string(), z.unknown()).describe("Additional identifiers for nested resources (e.g. pipeline_id for triggers/input sets, environment_id for infrastructure).").optional(),
+        params: z.record(z.string(), z.unknown()).describe("Additional identifiers for nested resources (e.g. version_label for templates, pipeline_id for triggers/input sets, environment_id for infrastructure).").optional(),
       },
       outputSchema: deleteOutputSchema,
       annotations: {

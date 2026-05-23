@@ -26,17 +26,15 @@ function buildTemplateYamlBody(input: Record<string, unknown>): string {
 }
 
 /**
- * NG delete path: /template/api/templates/{id}/{version} when version_label set,
- * else /template/api/templates/{id} (all versions).
+ * NG delete path: require an explicit version segment so the generic delete
+ * tool cannot accidentally call the all-versions delete endpoint.
  */
 function templateNgDeletePath(input: Record<string, unknown>): string {
   const templateId = input.template_id as string;
   if (!templateId) throw new Error("template_id is required");
   const version = input.version_label as string | undefined;
-  if (version) {
-    return `/template/api/templates/${encodeURIComponent(templateId)}/${encodeURIComponent(version)}`;
-  }
-  return `/template/api/templates/${encodeURIComponent(templateId)}`;
+  if (!version) throw new Error("version_label is required to delete a template version");
+  return `/template/api/templates/${encodeURIComponent(templateId)}/${encodeURIComponent(version)}`;
 }
 
 function templateV1GetPath(input: Record<string, unknown>, config: PathBuilderConfig): string {
@@ -337,7 +335,7 @@ export const templatesToolset: ToolsetDefinition = {
           },
           responseExtractor: ngExtract,
           description:
-            "Delete a template. Provide version_label to delete one version; omit to delete all versions (may require force_delete).",
+            "Delete one template version. Requires version_label; all-version deletion is intentionally not exposed by this generic delete tool.",
         },
       },
     },
@@ -350,6 +348,7 @@ export const templatesToolset: ToolsetDefinition = {
       toolset: "templates",
       scope: "project",
       scopeOptional: true,
+      supportedScopes: ["account", "org", "project"],
       headerBasedScoping: true,
       identifierFields: ["template_id"],
       searchAliases: ["v1 template", "unified template", "agent template", "template v1"],

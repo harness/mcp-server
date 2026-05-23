@@ -145,4 +145,48 @@ describe("Registry audit emission", () => {
     expect(sink.events).toHaveLength(1);
     expect(sink.events[0]!.tool).toBe("harness_list");
   });
+
+  it("emits audit event for template_v1 explicit scope using config defaults", async () => {
+    const sink = collectingSink();
+    const auditManager = new AuditManager();
+    auditManager.addSink(sink);
+
+    const config = makeConfig({
+      HARNESS_TOOLSETS: "templates",
+      HARNESS_ORG: "default",
+      HARNESS_PROJECT: "proj1",
+    });
+    const registry = new Registry(config as any, { auditManager });
+
+    const mockClient = {
+      request: vi.fn().mockResolvedValue({ identifier: "tpl", label: "v2" }),
+      account: "acct1",
+    };
+
+    await registry.dispatch(
+      mockClient as any,
+      "template_v1",
+      "update",
+      {
+        resource_scope: "org",
+        template_id: "tpl",
+        version_label: "v2",
+        body: {
+          template_yaml: "version: 1\ntemplate:\n  identifier: tpl\n  name: Test\n  step:\n    run:\n      script: echo ok\n",
+        },
+      },
+      { tool: "harness_update", confirmation: "elicited", resource_id: "tpl" },
+    );
+
+    expect(mockClient.request).toHaveBeenCalledOnce();
+    expect(mockClient.request.mock.calls[0]![0].path).toBe("/v1/orgs/default/templates/tpl/versions/v2");
+    expect(sink.events).toHaveLength(1);
+    expect(sink.events[0]).toMatchObject({
+      tool: "harness_update",
+      outcome: "success",
+      org_id: "default",
+      project_id: undefined,
+      http_path: "/v1/orgs/default/templates/tpl/versions/v2",
+    });
+  });
 });

@@ -1,5 +1,24 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Inspection (2026-05-23)
+- [x] Inspect recent commits for high-severity behavioral regressions
+- [x] Trace suspicious changes through caller chains and downstream effects
+- [x] Implement a minimal fix only if a concrete critical bug is confirmed
+- [x] Run focused verification and report the outcome
+- [ ] Commit/push/open PR only if a fix is made
+
+### Plan
+- Review `origin/main...HEAD` for branch-local changes and recent merged commits after the last critical inspection, prioritizing code paths over docs/version metadata.
+- Focus on high-blast-radius surfaces: HTTP authentication/session lifecycle, request construction, write-operation safety, scope/default injection, output schemas, and long-running execution behavior.
+- Require a concrete trigger scenario that can cause data loss, crashes, security bypass, or significant user-facing breakage before patching; otherwise report no critical findings in Slack without opening a PR.
+
+### Review
+- Found a data-loss risk in v0 template deletes: omitting `version_label` routed the generic delete tool to `/template/api/templates/{id}`, which deletes every version of a template after a generic confirmation prompt.
+- Found a related write-safety risk in v0 template updates: `harness_update(resource_type="template")` defaulted a missing `version_label` to `v1`, which could overwrite the wrong template version.
+- Fixed both paths to require explicit template version labels and added tool/registry regression coverage that verifies no Harness request is made without one.
+- Restored explicit account/org/project `resource_scope` support for `template_v1`, and fixed the path builder so explicit scope wins even when extra IDs are present or audit recomputes paths from config defaults.
+- Verified with red/green focused tests, `pnpm typecheck`, `pnpm build`, full `pnpm test` (61 files / 1482 tests), `git diff --check`, and code-reviewer pass.
+
 ## harness_list structured output for array APIs (2026-05-22)
 - [x] Root cause: Harness Code `pr_activity` returns a top-level JSON array; `jsonResult` only sets `structuredContent` for objects, so strict MCP clients (Cursor) fail with output schema validation (-32602).
 - [x] Add `normalizeHarnessListPayload` and call it from `harness_list` after dispatch; unit tests in `response-formatter.test.ts`.

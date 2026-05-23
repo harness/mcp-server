@@ -13,10 +13,25 @@ export const SCOPE_BEHAVIOR_DOC =
  */
 export function templateV1BasePathFromScope(
   input: Record<string, unknown>,
-  _config: PathBuilderConfig,
+  config: PathBuilderConfig,
 ): string {
   const org = input.org_id as string | undefined;
   const project = input.project_id as string | undefined;
+  const explicitOrg = org ?? config.HARNESS_ORG;
+  const explicitProject = project ?? config.HARNESS_PROJECT;
+
+  if (input.resource_scope === "account") {
+    return "/v1/templates";
+  }
+  if (input.resource_scope === "org") {
+    if (!explicitOrg) throw new Error('resource_scope "org" requires org_id or HARNESS_ORG.');
+    return `/v1/orgs/${encodeURIComponent(explicitOrg)}/templates`;
+  }
+  if (input.resource_scope === "project") {
+    if (!explicitOrg) throw new Error('resource_scope "project" requires org_id or HARNESS_ORG.');
+    if (!explicitProject) throw new Error('resource_scope "project" requires project_id or HARNESS_PROJECT.');
+    return `/v1/orgs/${encodeURIComponent(explicitOrg)}/projects/${encodeURIComponent(explicitProject)}/templates`;
+  }
 
   if (org && project) {
     return `/v1/orgs/${encodeURIComponent(org)}/projects/${encodeURIComponent(project)}/templates`;

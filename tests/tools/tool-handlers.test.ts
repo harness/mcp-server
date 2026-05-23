@@ -671,6 +671,27 @@ describe("harness_update", () => {
       identifier: "proj1",
     });
   });
+
+  it("does not infer a template version label when updating templates", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: {} });
+    client = makeClient(mockRequest);
+    const templateServer = makeMcpServer("accept");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(templateServer, registry, client);
+
+    const result = await templateServer.call("harness_update", {
+      resource_type: "template",
+      resource_id: "my-template",
+      body: { template_yaml: "template:\n  name: My Template\n  type: Step\n" },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("version_label"),
+    });
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
 });
 
 describe("harness_update — pull request", () => {
@@ -792,6 +813,24 @@ describe("harness_delete", () => {
     expect(result.isError).toBeUndefined();
     const data = parseResult(result) as { deleted: boolean };
     expect(data.deleted).toBe(true);
+  });
+
+  it("does not delete a template when version_label is missing", async () => {
+    const templateRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const templateServer = makeMcpServer("accept");
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(templateServer, templateRegistry, client);
+
+    const result = await templateServer.call("harness_delete", {
+      resource_type: "template",
+      resource_id: "my_tpl",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("version_label is required"),
+    });
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 
   it("returns structured delete payload without spreading API fields at top level", async () => {
