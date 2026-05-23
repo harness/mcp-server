@@ -1518,6 +1518,8 @@ Available toolset names:
 | `overrides`             | service_override                                                                                                                                                                                                                                                                                |
 | `settings`              | setting                                                                                                                                                                                                                                                                                         |
 | `visualizations`        | visual_timeline, visual_stage_flow, visual_health_dashboard, visual_pie_chart, visual_bar_chart, visual_timeseries, visual_architecture                                                                                                                                                         |
+| `knowledge-graph`       | kg_queryable_type_summary, kg_grammar, hql_query                                                                                                                                                                                                                                                |
+| `semantic-layer`        | kg_type, kg_related_type                                                                                                                                                                                                                                                                        |
 | `ai-evals`              | eval_dataset, eval_dataset_item, evaluation, eval_run, eval_run_item, eval_run_by_eval, eval_metric, eval_metric_set, eval_metric_set_entry, eval_suite, eval_suite_evaluation, eval_suite_run, eval_target, eval_model, eval_annotation, eval_analytics, eval_git_settings, eval_registry_item |
 
 
@@ -1536,7 +1538,7 @@ Available toolset names:
                           |
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
-                |  32 Toolsets      |      (data files, not code)
+                |  34 Toolsets      |      (data files, not code)
                 |  193 Resource Types|
                  +--------+---------+
                           |

@@ -55,16 +55,6 @@ const schemaTypesExtract = (raw: unknown): { items: unknown[]; total: number } =
         };
         if (description) item.description = description;
 
-        // Surface dcs_enrichment flag on relationship types so agents know
-        // to fetch full details via get before orchestrating DCS calls.
-        if (category === "relationship") {
-          const annotations = typeObj.annotations as Record<string, unknown>[] | undefined;
-          const hasDcsEnrichment = (annotations ?? []).some(
-            (a) => (a.key as string) === "dcs_enrichment",
-          );
-          if (hasDcsEnrichment) item.dcs_enrichment = true;
-        }
-
         items.push(item);
       }
     }
@@ -205,8 +195,9 @@ export const semanticLayerToolset: ToolsetDefinition = {
       displayName: "Schema Type",
       description:
         "A type in the Harness Knowledge Graph schema (entity, event, metric, view, relationship, " +
-        "config, or data model). List returns all types with field metadata including non-queryable types. " +
-        "Use for exploring the full data model. For HQL query building, use kg_queryable_type instead.",
+        "config, or data model). List returns a compact summary (identifier, name, category, kind, description) " +
+        "for all types including non-queryable ones. Use get for full field metadata. " +
+        "For HQL query building, use kg_queryable_type_summary instead.",
       toolset: "semantic-layer",
       scope: "account",
       identifierFields: ["type_id"],
