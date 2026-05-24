@@ -5456,6 +5456,134 @@ const schema: Record<string, any> = {
               }
             }
           },
+          "RONotifyStepNode": {
+            "title": "RONotifyStepNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "spec",
+              "type"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for RONotifyStepNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "RONotify"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "RONotify"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/custom/RONotifyStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "RONotifyStepInfo": {
+            "title": "RONotifyStepInfo",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/StepSpecType"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "metadata": {
+                    "type": "object",
+                    "properties": {
+                      "values": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "key": {
+                              "type": "string"
+                            },
+                            "value": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
           "HarnessStore": {
             "title": "HarnessStore",
             "allOf": [
@@ -28855,6 +28983,184 @@ const schema: Record<string, any> = {
             ],
             "$schema": "http://json-schema.org/draft-07/schema#",
             "type": "object"
+          },
+          "IdpActionStepNode": {
+            "title": "IdpActionStepNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "spec",
+              "type"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for IdpActionStepNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "IdpAction"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "IdpAction"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/common/IdpActionStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "IdpActionStepInfo": {
+            "title": "IdpActionStepInfo",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/StepSpecType"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "actionRef"
+                ],
+                "properties": {
+                  "actionRef": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                      }
+                    ]
+                  },
+                  "actionVersion": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                      }
+                    ]
+                  },
+                  "inputs": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/common/ParameterFieldMapStringJsonNode"
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "required": [
+              "actionRef"
+            ],
+            "properties": {
+              "actionRef": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "actionVersion": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "inputs": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/ParameterFieldMapStringJsonNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              }
+            }
           },
           "DockerInfraYaml": {
             "title": "DockerInfraYaml",
@@ -89637,30 +89943,14 @@ const schema: Record<string, any> = {
             ],
             "properties": {
               "key": {
-                "oneOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "(<\\+.+>.*)",
-                    "minLength": 1
-                  }
-                ],
-                "description": "HTTP header key to match. Supports fixed value or expression."
+                "type": "string",
+                "minLength": 1,
+                "description": "HTTP header key to match. Supports fixed value or expression (<+...>)."
               },
               "value": {
-                "oneOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "(<\\+.+>.*)",
-                    "minLength": 1
-                  }
-                ],
-                "description": "HTTP header value to match. Supports fixed value or expression."
+                "type": "string",
+                "minLength": 1,
+                "description": "HTTP header value to match. Supports fixed value or expression (<+...>)."
               },
               "matchType": {
                 "type": "string",
@@ -89672,17 +89962,9 @@ const schema: Record<string, any> = {
                 "description": "How to match the header value. Default: exact. Both HTTPRoute and GRPCRoute support these types."
               },
               "destination": {
-                "oneOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "(<\\+.+>.*)",
-                    "minLength": 1
-                  }
-                ],
-                "description": "Target backend: 'stable', 'stage', or full backend service path. Supports expression."
+                "type": "string",
+                "minLength": 1,
+                "description": "Target backend: 'stable', 'stage', or full backend service path. Supports expression (<+...>)."
               }
             }
           },
@@ -89695,17 +89977,9 @@ const schema: Record<string, any> = {
             ],
             "properties": {
               "key": {
-                "oneOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "(<\\+.+>.*)",
-                    "minLength": 1
-                  }
-                ],
-                "description": "HTTP header key of the rule to remove. Supports fixed value or expression."
+                "type": "string",
+                "minLength": 1,
+                "description": "HTTP header key of the rule to remove. Supports fixed value or expression (<+...>)."
               }
             }
           },
@@ -98486,192 +98760,6 @@ const schema: Record<string, any> = {
               }
             },
             "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "IdpActionStepNode": {
-            "title": "IdpActionStepNode",
-            "type": "object",
-            "required": [
-              "identifier",
-              "name",
-              "spec",
-              "type"
-            ],
-            "properties": {
-              "description": {
-                "type": "string",
-                "desc": "This is the description for IdpActionStepNode"
-              },
-              "enforce": {
-                "$ref": "#/definitions/pipeline/common/PolicyConfig"
-              },
-              "failureStrategies": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "identifier": {
-                "type": "string",
-                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
-              },
-              "name": {
-                "type": "string",
-                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
-              },
-              "strategy": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "timeout": {
-                "type": "string",
-                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "IdpAction"
-                ]
-              },
-              "when": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "allOf": [
-              {
-                "if": {
-                  "properties": {
-                    "type": {
-                      "const": "IdpAction"
-                    }
-                  }
-                },
-                "then": {
-                  "properties": {
-                    "spec": {
-                      "$ref": "#/definitions/pipeline/steps/idp/IdpActionStepInfo"
-                    }
-                  }
-                }
-              }
-            ]
-          },
-          "IdpActionStepInfo": {
-            "title": "IdpActionStepInfo",
-            "allOf": [
-              {
-                "$ref": "#/definitions/pipeline/common/StepSpecType"
-              },
-              {
-                "type": "object",
-                "required": [
-                  "actionRef"
-                ],
-                "properties": {
-                  "actionRef": {
-                    "oneOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "string",
-                        "pattern": "(<\\+.+>.*)",
-                        "minLength": 1
-                      }
-                    ]
-                  },
-                  "actionVersion": {
-                    "oneOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "string",
-                        "pattern": "(<\\+.+>.*)",
-                        "minLength": 1
-                      }
-                    ]
-                  },
-                  "inputs": {
-                    "oneOf": [
-                      {
-                        "$ref": "#/definitions/pipeline/common/ParameterFieldMapStringJsonNode"
-                      },
-                      {
-                        "type": "string"
-                      }
-                    ]
-                  }
-                }
-              }
-            ],
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "type": "object",
-            "required": [
-              "actionRef"
-            ],
-            "properties": {
-              "actionRef": {
-                "oneOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "(<\\+.+>.*)",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "actionVersion": {
-                "oneOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "(<\\+.+>.*)",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "inputs": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/common/ParameterFieldMapStringJsonNode"
-                  },
-                  {
-                    "type": "string"
-                  }
-                ]
-              }
-            }
           }
         },
         "drtest": {
@@ -101586,6 +101674,12 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/custom/EventListenerStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/RONotifyStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/IdpActionStepNode"
                   }
                 ]
               },
@@ -103142,6 +103236,9 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/custom/EventListenerStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/custom/RONotifyStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/cd/HelmDeleteStepNode"
                   },
                   {
@@ -103257,6 +103354,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/custom/FmeMetricCheckStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/IdpActionStepNode"
                   }
                 ]
               },
@@ -111914,6 +112014,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/ScaScanNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/IdpActionStepNode"
                   }
                 ]
               },
@@ -112649,6 +112752,9 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/custom/EventListenerStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/custom/RONotifyStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/common/SastScanNode"
                   },
                   {
@@ -112656,6 +112762,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/AgentStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/IdpActionStepNode"
                   }
                 ]
               },
@@ -113266,7 +113375,13 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/custom/EventListenerStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/custom/RONotifyStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/common/AIExperimentStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/IdpActionStepNode"
                   }
                 ]
               },
@@ -114241,6 +114356,9 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/custom/EventListenerStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/custom/RONotifyStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/cd/HelmDeleteStepNode"
                   },
                   {
@@ -114386,6 +114504,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/cd/SalesforceEvaluateDiffStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/IdpActionStepNode"
                   }
                 ]
               },
@@ -115111,6 +115232,9 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/custom/EventListenerStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/custom/RONotifyStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/custom/FmeFlagCreateStepNode"
                   },
                   {
@@ -115187,6 +115311,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/custom/FmeMetricCheckStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/IdpActionStepNode"
                   }
                 ]
               },
@@ -115745,7 +115872,7 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/idp/IDPUpdateCatalogPropertyStepNode"
                   },
                   {
-                    "$ref": "#/definitions/pipeline/steps/idp/IdpActionStepNode"
+                    "$ref": "#/definitions/pipeline/steps/common/IdpActionStepNode"
                   }
                 ]
               },
@@ -116051,6 +116178,9 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/custom/EventListenerStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/custom/RONotifyStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/custom/HarnessApprovalStepNode"
                   },
                   {
@@ -116082,6 +116212,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/custom/ServiceNowImportSetStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/IdpActionStepNode"
                   }
                 ]
               },
