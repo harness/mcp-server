@@ -1,5 +1,17 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Inspection (2026-05-24)
+- [ ] Inspect recent commits for high-severity behavioral regressions
+- [ ] Trace suspicious changes through caller chains and downstream effects
+- [ ] Implement a minimal fix only if a concrete critical bug is confirmed
+- [ ] Run focused verification and report the outcome
+- [ ] Commit/push/open PR only if a fix is made
+
+### Plan
+- Review branch changes against `origin/main` and recent merged history, prioritizing code-path changes over documentation or version metadata.
+- Focus on request/auth/session lifecycle, write-operation confirmation and risk handling, resource scoping, polling/retry semantics, and output-schema contracts.
+- Require a concrete trigger that can cause data loss, crashes, security bypass, or major user-facing breakage before patching; otherwise report no critical findings without opening a PR.
+
 ## harness_list structured output for array APIs (2026-05-22)
 - [x] Root cause: Harness Code `pr_activity` returns a top-level JSON array; `jsonResult` only sets `structuredContent` for objects, so strict MCP clients (Cursor) fail with output schema validation (-32602).
 - [x] Add `normalizeHarnessListPayload` and call it from `harness_list` after dispatch; unit tests in `response-formatter.test.ts`.

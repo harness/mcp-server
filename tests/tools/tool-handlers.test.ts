@@ -671,6 +671,44 @@ describe("harness_update", () => {
       identifier: "proj1",
     });
   });
+
+  it("uses the version label from raw v0 template YAML instead of defaulting to v1", async () => {
+    const templateRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const templateServer = makeMcpServer("accept");
+    mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "my-template" } });
+    client = makeClient(mockRequest);
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(templateServer, templateRegistry, client);
+
+    const result = await templateServer.call("harness_update", {
+      resource_type: "template",
+      resource_id: "my-template",
+      body: "template:\n  identifier: my-template\n  name: My Template\n  versionLabel: 2.0.0\n  type: Step\n  spec: {}\n",
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as { path: string };
+    expect(call.path).toBe("/template/api/templates/update/my-template/2.0.0");
+  });
+
+  it("rejects v0 template updates without a version label", async () => {
+    const templateRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const templateServer = makeMcpServer("accept");
+    mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "my-template" } });
+    client = makeClient(mockRequest);
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(templateServer, templateRegistry, client);
+
+    const result = await templateServer.call("harness_update", {
+      resource_type: "template",
+      resource_id: "my-template",
+      body: "template:\n  identifier: my-template\n  name: My Template\n  type: Step\n  spec: {}\n",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("version_label") });
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
 });
 
 describe("harness_update — pull request", () => {
