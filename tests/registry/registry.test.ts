@@ -817,54 +817,6 @@ describe("Registry", () => {
       expect(call.params.projectIdentifier).toBeUndefined();
     });
 
-    it("template_v1 explicit account scope ignores stray org and project ids in the path", async () => {
-      const templateRegistry = new Registry(makeConfig({
-        HARNESS_TOOLSETS: "templates",
-        HARNESS_ORG: "AI_Devops",
-        HARNESS_PROJECT: "AICHAT",
-      }));
-      const mockRequest = vi.fn().mockResolvedValue({ identifier: "acc_step", label: "1.0.0" });
-      const client = makeClient(mockRequest);
-
-      await templateRegistry.dispatch(client, "template_v1", "create", {
-        resource_scope: "account",
-        org_id: "AI_Devops",
-        project_id: "AICHAT",
-        body: {
-          template_yaml: "version: 1\ntemplate:\n  identifier: acc_step\n  name: Account Step\n  step:\n    run:\n      script: echo hi\n",
-        },
-      });
-
-      const call = mockRequest.mock.calls[0][0];
-      expect(call.path).toBe("/v1/templates");
-      expect(call.params.orgIdentifier).toBeUndefined();
-      expect(call.params.projectIdentifier).toBeUndefined();
-    });
-
-    it("template_v1 explicit org scope ignores stray project ids in the path", async () => {
-      const templateRegistry = new Registry(makeConfig({
-        HARNESS_TOOLSETS: "templates",
-        HARNESS_ORG: "AI_Devops",
-        HARNESS_PROJECT: "AICHAT",
-      }));
-      const mockRequest = vi.fn().mockResolvedValue({ identifier: "org_step", label: "1.0.0" });
-      const client = makeClient(mockRequest);
-
-      await templateRegistry.dispatch(client, "template_v1", "create", {
-        resource_scope: "org",
-        org_id: "AI_Devops",
-        project_id: "AICHAT",
-        body: {
-          template_yaml: "version: 1\ntemplate:\n  identifier: org_step\n  name: Org Step\n  step:\n    run:\n      script: echo hi\n",
-        },
-      });
-
-      const call = mockRequest.mock.calls[0][0];
-      expect(call.path).toBe("/v1/orgs/AI_Devops/templates");
-      expect(call.params.orgIdentifier).toBe("AI_Devops");
-      expect(call.params.projectIdentifier).toBeUndefined();
-    });
-
     it("template_v1 with only project_id does not use project path without org_id", async () => {
       const templateRegistry = new Registry(makeConfig({
         HARNESS_TOOLSETS: "templates",

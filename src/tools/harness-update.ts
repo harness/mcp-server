@@ -1,4 +1,5 @@
 import * as z from "zod/v4";
+import YAML from "yaml";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
@@ -10,6 +11,35 @@ import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, isRecord, coerceRecord } from "../utils/type-guards.js";
 import { resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
 import { updateOutputSchema } from "./output-schemas.js";
+
+function stringField(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key];
+  return typeof value === "string" && value !== "" ? value : undefined;
+}
+
+function extractTemplateVersionLabelFromYaml(templateYaml: string): string | undefined {
+  try {
+    const parsed = YAML.parse(templateYaml) as unknown;
+    if (!isRecord(parsed)) return undefined;
+    const template = parsed.template;
+    if (!isRecord(template)) return undefined;
+    return stringField(template, "versionLabel") ?? stringField(template, "version_label");
+  } catch {
+    return undefined;
+  }
+}
+
+function inferTemplateVersionLabel(body: unknown): string | undefined {
+  if (typeof body === "string") {
+    return extractTemplateVersionLabelFromYaml(body);
+  }
+  if (!isRecord(body)) return undefined;
+
+  return stringField(body, "version_label") ??
+    stringField(body, "versionLabel") ??
+    (typeof body.template_yaml === "string" ? extractTemplateVersionLabelFromYaml(body.template_yaml) : undefined) ??
+    (typeof body.yaml === "string" ? extractTemplateVersionLabelFromYaml(body.yaml) : undefined);
+}
 
 export function registerUpdateTool(server: McpServer, registry: Registry, client: HarnessClient, config?: Config): void {
   const updatableTypes = registry.getTypesForOperation("update");
@@ -75,11 +105,16 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
           input[primaryField] = args.resource_id;
         }
         const versionLabel = asString(input.version_label);
-        if (versionLabel) { /* already set via params */ }
-        else if (isRecord(args.body) && "version_label" in args.body) {
-          input.version_label = args.body.version_label;
+        if (versionLabel) {
+          /* already set via params or URL defaults */
         } else if (args.resource_type === "template") {
-          input.version_label = "v1";
+          const inferredVersionLabel = inferTemplateVersionLabel(coercedBody);
+          if (!inferredVersionLabel) {
+            throw new Error(
+              "version_label is required for template updates: pass params.version_label or include template.versionLabel in the template YAML.",
+            );
+          }
+          input.version_label = inferredVersionLabel;
         }
 
         const result = await registry.dispatch(client, args.resource_type, "update", input, { tool: "harness_update", confirmation: elicit.method, resource_id: args.resource_id });
