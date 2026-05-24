@@ -691,6 +691,27 @@ describe("harness_update", () => {
     expect(call.path).toBe("/template/api/templates/update/my-template/2.0.0");
   });
 
+  it("uses the version label from v0 template_yaml object bodies", async () => {
+    const templateRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const templateServer = makeMcpServer("accept");
+    mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "my-template" } });
+    client = makeClient(mockRequest);
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(templateServer, templateRegistry, client);
+
+    const result = await templateServer.call("harness_update", {
+      resource_type: "template",
+      resource_id: "my-template",
+      body: {
+        template_yaml: "template:\n  identifier: my-template\n  name: My Template\n  versionLabel: 3.0.0\n  type: Step\n  spec: {}\n",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as { path: string };
+    expect(call.path).toBe("/template/api/templates/update/my-template/3.0.0");
+  });
+
   it("rejects v0 template updates without a version label", async () => {
     const templateRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
     const templateServer = makeMcpServer("accept");
