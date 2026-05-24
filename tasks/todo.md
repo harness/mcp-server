@@ -1,16 +1,23 @@
 # Harness MCP Server — Task Tracking
 
 ## Critical Bug Inspection (2026-05-24)
-- [ ] Inspect recent commits for high-severity behavioral regressions
-- [ ] Trace suspicious changes through caller chains and downstream effects
-- [ ] Implement a minimal fix only if a concrete critical bug is confirmed
-- [ ] Run focused verification and report the outcome
-- [ ] Commit/push/open PR only if a fix is made
+- [x] Inspect recent commits for high-severity behavioral regressions
+- [x] Trace suspicious changes through caller chains and downstream effects
+- [x] Implement a minimal fix only if a concrete critical bug is confirmed
+- [x] Run focused verification and report the outcome
+- [x] Commit/push/open PR only if a fix is made
 
 ### Plan
 - Review branch changes against `origin/main` and recent merged history, prioritizing code-path changes over documentation or version metadata.
 - Focus on request/auth/session lifecycle, write-operation confirmation and risk handling, resource scoping, polling/retry semantics, and output-schema contracts.
 - Require a concrete trigger that can cause data loss, crashes, security bypass, or major user-facing breakage before patching; otherwise report no critical findings without opening a PR.
+
+### Review
+- Found a high-severity v0 template update bug: `harness_update(resource_type="template")` defaulted missing `version_label` to `v1`, even when the raw YAML body declared a different `template.versionLabel`.
+- Impact: an agent updating a template via the documented raw YAML body could mutate `/template/api/templates/update/{templateIdentifier}/v1` instead of the intended version such as `2.0.0`, causing wrong-version data loss or confusing 404s.
+- Fixed `harness_update` to infer v0 template versions from raw YAML, `body.template_yaml`, or `body.yaml`, and to fail loudly when neither `params.version_label` nor `template.versionLabel` is present.
+- Reviewed recent schema-sync, tracing metadata, template scope, IaCM/list output, and execution polling changes. A template-v1 explicit `resource_scope` concern failed safely before dispatch rather than silently misrouting, so it was not included in the critical fix.
+- Verified red/green focused coverage, `pnpm test tests/tools/tool-handlers.test.ts tests/registry/registry.test.ts`, `pnpm typecheck`, `pnpm build`, full `pnpm test`, and `git diff --check origin/main...HEAD`.
 
 ## harness_list structured output for array APIs (2026-05-22)
 - [x] Root cause: Harness Code `pr_activity` returns a top-level JSON array; `jsonResult` only sets `structuredContent` for objects, so strict MCP clients (Cursor) fail with output schema validation (-32602).
