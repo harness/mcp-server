@@ -241,12 +241,12 @@ export const governanceToolset: ToolsetDefinition = {
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/governance/evaluation/{id}",
       listFilterFields: [
         { name: "entity", description: "Filter by entity identifier" },
-        { name: "type", description: "Filter by entity type. Matches the evaluated policy_set's type — for SBOM/SSCA enforcement use 'sbom' (NOT 'sbom_enforcement'; that is the policy-level type, not the evaluation-level type).", enum: ["sbom", "pipeline", "connector", "service", "environment", "secret", "template", "infrastructure"] },
-        { name: "action", description: "Filter by enforcement action. SBOM enforcement uses 'onstep'. Other values: onrun (pipeline), onsave, onpush, onstepstart.", enum: ["onrun", "onsave", "onpush", "onstep", "onstepstart"] },
-        { name: "status", description: "Filter by evaluation status" },
-        { name: "execution_id", description: "Filter by pipeline execution ID" },
-        { name: "created_date_from", description: "Filter evaluations created after this date (ISO 8601)" },
-        { name: "created_date_to", description: "Filter evaluations created before this date (ISO 8601)" },
+        { name: "type", description: "Filter by entity type. Matches the evaluated policy_set's type — for SBOM/SSCA enforcement use 'sbom' (NOT 'sbom_enforcement'; that is the policy-level type, not the evaluation-level type). For STO scan-step enforcement use 'securityTests'.", enum: ["sbom", "securityTests", "pipeline", "connector", "service", "environment", "secret", "template", "infrastructure", "custom"] },
+        { name: "action", description: "Filter by enforcement action. SBOM enforcement and STO scan-step (Semgrep/Trivy etc. with enforce.policySets) both use 'onstep'. Pipeline governance uses 'onrun'.", enum: ["onrun", "onsave", "onpush", "onstep", "onstepstart"] },
+        { name: "status", description: "Filter by evaluation status. Pass 'error' to find failing evaluations." },
+        { name: "execution_id", description: "Filter by pipeline plan execution ID (e.g. 'drWLj24BRQCHZYeIuaquEQ'). Returns the OPA evaluation(s) that ran for that execution, including STO onstep enforcement evaluations." },
+        { name: "created_date_from", description: "Filter evaluations created after this epoch-millis timestamp. ⚠️ IMPORTANT: when omitted, the upstream policy-mgmt API silently defaults to 'past 7 days', which hides older executions. This resource overrides that default to 0 (no lower bound) so execution_id lookups work for arbitrarily old runs. Pass an explicit value only if you want to narrow the window." },
+        { name: "created_date_to", description: "Filter evaluations created before this epoch-millis timestamp" },
         { name: "include_child_scopes", description: "Include evaluations from child scopes", type: "boolean" },
       ],
       operations: {
@@ -266,8 +266,25 @@ export const governanceToolset: ToolsetDefinition = {
             created_date_to: "created_date_to",
             include_child_scopes: "includeChildScopes",
           },
-          responseExtractor: v1ListExtract(),
-          description: "List OPA policy evaluation results",
+          // Defeat policy-mgmt's silent 7-day default window. Without this, listing by
+          // execution_id silently returns 0 items for executions older than 7 days
+          // (see policy-mgmt internal/handlers/evaluations/list.go:44-48). Callers can
+          // still override by passing their own created_date_from.
+          defaultQueryParams: {
+            created_date_from: "0",
+          },
+          responseExtractor: (raw: unknown) => {
+            const result = v1ListExtract()(raw);
+            // Remap `id` → `evaluation_id` so compact mode preserves it.
+            // The compactor's IDENTIFIER_PATTERN matches `_id$` but not bare `id`.
+            result.items = result.items.map(item => {
+              if (typeof item !== "object" || item === null || !("id" in item)) return item;
+              const r = item as Record<string, unknown>;
+              return { ...r, evaluation_id: r.id };
+            });
+            return result;
+          },
+          description: "List OPA policy evaluation results. Covers BOTH pipeline-governance onrun evaluations AND STO scan-step onstep enforcement evaluations (type=securityTests). Filter by execution_id to find evaluations for a specific pipeline run.",
         },
         get: {
           method: "GET",
