@@ -4,8 +4,10 @@
  * Patches README.md with dynamic counts from the registry.
  *
  * Usage:
- *   node scripts/generate-docs.js          # patch in place
- *   node scripts/generate-docs.js --check  # exit 1 if README is stale
+ *   pnpm docs:generate  # build, then patch in place
+ *   pnpm docs:check     # build, then exit 1 if README is stale
+ *
+ * Direct node usage assumes build/ is already current.
  */
 
 import { readFileSync, writeFileSync, readdirSync } from "node:fs";

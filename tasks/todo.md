@@ -1,5 +1,24 @@
 # Harness MCP Server — Task Tracking
 
+## Slack Bug Triage: PR 188 docs:check Failure (2026-05-25)
+- [x] Read Slack thread and CI failure logs
+- [x] Reproduce `docs:check` against PR head and PR merge ref
+- [x] Identify why local and CI results differ
+- [x] Implement a minimal fix only if the repo has a bug
+- [x] Verify with focused and relevant broader commands
+- [ ] Commit/push/open PR if a fix is made, then reply in Slack thread
+
+### Plan
+- Treat GitHub Actions logs as the source of truth for the failing command and exact checkout ref.
+- Compare generated docs counts/diffs on `refs/pull/188/head` and `refs/pull/188/merge` without leaving the working branch.
+- If the failure is only a contributor PR README drift, report that clearly; if `docs:check` is misleading or missing actionable output, add focused coverage and improve the script.
+
+### Review
+- CI failed on `pnpm docs:check` because PR #188 README had counts generated from stale compiled registry metadata (`168 resource types`, `31/32 toolsets`, `30 prompts`), while a fresh build on the PR source produces `191 resource types`, `32/33 toolsets`, and `32 prompts`.
+- Root cause: `docs:generate` and `docs:check` imported `build/registry` but did not rebuild TypeScript first, so local checks could pass against stale `build/` output even though CI rebuilt before checking.
+- Fixed `package.json` so both docs scripts run `pnpm build` before `generate-docs.js`, updated the script usage comment, and added `tests/docs-scripts.test.ts` to prevent regression.
+- Verified with red/green focused coverage, `pnpm docs:check`, full `pnpm test`, and `git diff --check`.
+
 ## harness_list structured output for array APIs (2026-05-22)
 - [x] Root cause: Harness Code `pr_activity` returns a top-level JSON array; `jsonResult` only sets `structuredContent` for objects, so strict MCP clients (Cursor) fail with output schema validation (-32602).
 - [x] Add `normalizeHarnessListPayload` and call it from `harness_list` after dispatch; unit tests in `response-formatter.test.ts`.
