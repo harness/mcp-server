@@ -522,18 +522,22 @@ The server automatically loads environment variables from a `.env` file in the p
 | `HARNESS_TOOLSETS` | No | *(defaults)* | Comma-separated toolset list. Empty loads default toolsets and excludes opt-in toolsets such as `ai-evals`. Supports `+name` to add opt-in toolsets and `-name` to remove defaults (see [Toolset Filtering](#toolset-filtering)) |
 | `HARNESS_READ_ONLY` | No | `false` | Block all mutating operations (create, update, delete, execute). Only list and get are allowed. Useful for shared/demo environments |
 | `HARNESS_SKIP_ELICITATION` | No | `false` | Skip all elicitation confirmation prompts. When `true`, write and delete operations proceed without user approval — enabling fully autonomous agent workflows. See [Elicitation](#elicitation) |
-| `HARNESS_ALLOW_HTTP` | No | `false` | Allow non-HTTPS `HARNESS_BASE_URL`. By default, the server enforces HTTPS for security. Set to `true` only for local development against a non-TLS Harness instance |
+| `HARNESS_ALLOW_HTTP` | No | `false` | Allow non-HTTPS `HARNESS_BASE_URL` and `HARNESS_FME_BASE_URL`. By default, the server enforces HTTPS for security. Set to `true` only for local development against a non-TLS instance |
+| `HARNESS_FME_BASE_URL` | No | `https://api.split.io` | Base URL for Harness FME (Split.io) requests. Override for self-managed/staging FME environments. Must be HTTPS unless `HARNESS_ALLOW_HTTP=true` |
+| `HARNESS_LOG_UNSAFE_BODIES` | No | `false` | Debug-only: log raw request/response bodies without redaction. By default, sensitive fields (`token`, `secret`, `password`, `apiKey`, `credential`, `webhook`, etc.) are redacted from debug logs. Set to `true` ONLY for local debugging — never in shared environments |
 | `HARNESS_PIPELINE_VERSION` | No | `0` | **(Alpha)** Pipeline YAML version. `0` loads the `pipeline` resource type and excludes `pipeline_v1`; `1` loads `pipeline_v1` and excludes `pipeline`. HTTP sessions can override this at initialize time with `x-harness-pipeline-version: 0` or `1` |
 | `HARNESS_MCP_ALLOWED_HOSTS` | No | -- | Comma-separated hostnames allowed by HTTP transport Host-header validation. `mcp.harness.io` is allowed by default for localhost binds; add proxy/custom domains here |
 | `HARNESS_MCP_LOG_FILE` | No | `~/.claude/harness-mcp.log` | File used for stdio disconnect/crash diagnostics when stderr may no longer be available |
 
 ### HTTPS Enforcement
 
-`HARNESS_BASE_URL` must use HTTPS by default. If you set a non-HTTPS URL (e.g. `http://localhost:8080`), the server will refuse to start with:
+`HARNESS_BASE_URL` and `HARNESS_FME_BASE_URL` must use HTTPS by default. If you set a non-HTTPS URL (e.g. `http://localhost:8080`), the server will refuse to start with:
 
 ```
 HARNESS_BASE_URL must use HTTPS (got "http://..."). If you need HTTP for local development, set HARNESS_ALLOW_HTTP=true.
 ```
+
+The same enforcement applies to `HARNESS_FME_BASE_URL`. Setting `HARNESS_ALLOW_HTTP=true` relaxes the check for both URLs.
 
 ### Audit Logging
 
@@ -1709,6 +1713,7 @@ The Harness MCP server pairs well with **[Harness Skills](https://github.com/har
 | `Operation declined by user`                                                     | User declined the elicitation confirmation dialog                                                    | The user chose not to proceed — verify the operation details and retry if intended                                                   |
 | `body.template_yaml (or body.yaml) is required` for template create/update       | Template APIs expect full YAML payload                                                               | Provide full `template_yaml` string in `body`; for deletes, pass `version_label` to delete one version (omit to delete all versions) |
 | `HARNESS_BASE_URL must use HTTPS` on startup                                     | `HARNESS_BASE_URL` is set to an HTTP URL                                                             | Use HTTPS, or set `HARNESS_ALLOW_HTTP=true` for local development                                                                    |
+| `HARNESS_FME_BASE_URL must use HTTPS` on startup                                 | `HARNESS_FME_BASE_URL` is set to an HTTP URL                                                         | Use HTTPS, or set `HARNESS_ALLOW_HTTP=true` for local development                                                                    |
 
 
 ## License
