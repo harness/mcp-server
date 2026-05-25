@@ -5,7 +5,7 @@
 - [x] Inspect merged PR #194 behavior and URL parsing for Harness Code PR links.
 - [x] Add failing regression coverage for conversation-style PR URLs.
 - [x] Treat conversation as a PR view tab so `harness_get(url=...)` fetches PR details.
-- [x] Run focused tests, typecheck/build as appropriate, commit, push, and report in Slack.
+- [x] Run focused tests, typecheck/build as appropriate, commit, push, and attempt Slack report.
 
 ### Plan
 - Keep the fix in URL parsing because request routing and PR endpoint mappings already work when `resource_type="pull_request"` is selected.
@@ -16,7 +16,8 @@
 - Confirmed the Slack thread only provided a Harness Code PR conversation URL, and the related merged PR #194 state endpoint mappings are present on `main`.
 - Found the URL parser treated the `conversation` UI tab as `pr_activity`, so `harness_get(url=<PR conversation URL>)` selected a resource without `get` support instead of fetching PR details.
 - Removed `conversation` from resource segment matching and added `code` to known `/all/{module}` parsing so `/all/code/.../pulls/{number}/conversation` preserves `module=code`, `repo_id`, `pr_number`, `resource_type=pull_request`, and `resource_id`.
-- Verified with red/green focused coverage, `pnpm typecheck`, `pnpm build`, full `pnpm test` (61 files / 1476 tests), and `git diff --check`.
+- Verified with red/green focused coverage, `pnpm typecheck`, `pnpm build`, full `pnpm test` (61 files / 1478 tests), and `git diff --check`.
+- Could not reply in the original Slack thread because `SendSlackMessage` is not configured for the trigger channel; no message was posted elsewhere per the automation constraints.
 
 ## harness_list structured output for array APIs (2026-05-22)
 - [x] Root cause: Harness Code `pr_activity` returns a top-level JSON array; `jsonResult` only sets `structuredContent` for objects, so strict MCP clients (Cursor) fail with output schema validation (-32602).
