@@ -278,8 +278,7 @@ export const dbopsToolset: ToolsetDefinition = {
         "The connector field can be used directly with the connectors toolset to resolve the " +
         "DB engine type — no separate instance fetch is needed. " +
         "Use this when a schema has no primaryDbInstanceId configured and you need " +
-        "to auto-select an instance for changeset generation. " +
-        "IMPORTANT: This is an x-internal endpoint.",
+        "to auto-select an instance for changeset generation.",
       toolset: "dbops",
       scope: "project",
       identifierFields: ["dbschema_id"],
