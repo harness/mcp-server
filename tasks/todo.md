@@ -16,6 +16,7 @@
 - README now documents `resource_scope`, MCP structured list output normalization, pipeline execute wait semantics, audit sink configuration, and the current `iacm` opt-in / `ai-evals` default-enabled toolset behavior.
 - `.env.example`, `CONTRIBUTING.md`, `docs/architecture.md`, and `docs/gemini.md` now align with current scope, output schema, audit, HTTP auth, and OperationPolicy expectations.
 - Verified with `git diff --check`, `pnpm build`, `pnpm docs:check`, `pnpm typecheck`, `pnpm test`, and focused `rg` checks for stale docs phrases.
+- Code review follow-up corrected the wait-mode docs to exclude unsupported `pipeline_v1.retry` and refreshed `.env.example` toolset guidance to include `dbops` and explicit IaCM allowlist usage.
 
 ## harness_list structured output for array APIs (2026-05-22)
 - [x] Root cause: Harness Code `pr_activity` returns a top-level JSON array; `jsonResult` only sets `structuredContent` for objects, so strict MCP clients (Cursor) fail with output schema validation (-32602).

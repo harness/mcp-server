@@ -800,7 +800,7 @@ If required fields are unresolved, the tool returns a pre-flight error with expe
 
 ### Pipeline Execute Wait Mode
 
-For `pipeline.run`, `pipeline.retry`, `pipeline_v1.run`, and `pipeline_v1.retry`, pass `wait: true` to let the server poll until the execution reaches a terminal status. This keeps a pipeline launch and status check in one tool call instead of asking the client or LLM to run a polling loop.
+For `pipeline.run`, `pipeline.retry`, and `pipeline_v1.run`, pass `wait: true` to let the server poll until the execution reaches a terminal status. This keeps a pipeline launch and status check in one tool call instead of asking the client or LLM to run a polling loop.
 
 ```json
 {
