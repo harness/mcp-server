@@ -162,7 +162,7 @@ export const repositoriesToolset: ToolsetDefinition = {
       resourceType: "commit",
       displayName: "Commit",
       description:
-        "Git commit in a Harness Code repository. Supports list and get.",
+        "Git commit in a Harness Code repository. Supports list, get, and create. Use create to commit file changes (CREATE, UPDATE, DELETE, MOVE) directly via the API without cloning.",
       toolset: "repositories",
       scope: "account",
       scopeOptional: true,
@@ -203,6 +203,30 @@ export const repositoriesToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           description: "Get commit details by SHA",
+        },
+        create: {
+          method: "POST",
+          path: "/code/api/v1/repos/{repoIdentifier}/commits",
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          pathParams: { repo_id: "repoIdentifier" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => input.body,
+          responseExtractor: passthrough,
+          description:
+            "Commit file changes to a repository. Each action specifies a file operation (CREATE, UPDATE, DELETE, MOVE). Payload is the file content (utf8 or base64). For UPDATE, include the current blob sha. Returns the new commit_id and list of changed files.",
+          bodySchema: {
+            description:
+              "Commit with one or more file actions. branch is the target branch, message is the commit message, actions is the list of file operations.",
+            fields: [
+              { name: "title", type: "string", required: true, description: "Commit title (first line of commit message)" },
+              { name: "message", type: "string", required: false, description: "Extended commit message body" },
+              { name: "branch", type: "string", required: true, description: "Target branch to commit to (e.g. 'main')" },
+              { name: "new_branch", type: "string", required: false, description: "If set, creates a new branch from 'branch' and commits there instead" },
+              { name: "actions", type: "array", required: true, description: "File operations. Each action: {action: 'CREATE'|'UPDATE'|'DELETE'|'MOVE', path: 'file/path', payload: 'content', encoding: 'utf8'|'base64', sha: 'blob_sha (required for UPDATE)'}." },
+              { name: "bypass_rules", type: "boolean", required: false, description: "Bypass branch protection rules (requires permission)" },
+              { name: "dry_run_rules", type: "boolean", required: false, description: "Check rules without committing" },
+            ],
+          },
         },
       },
       executeActions: {

@@ -2,7 +2,7 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
-import { jsonResult, errorResult, mixedResult } from "../utils/response-formatter.js";
+import { jsonResult, errorResult, mixedResult, normalizeHarnessListPayload } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError, enrichErrorWithHint, HarnessApiError } from "../utils/errors.js";
 import { compactItems } from "../utils/compact.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
@@ -11,6 +11,7 @@ import { renderListVisual } from "../utils/svg/list-visuals.js";
 import type { ListVisualType } from "../utils/svg/list-visuals.js";
 import { createLogger } from "../utils/logger.js";
 import { resourceTypeSchema } from "./input-schemas.js";
+import { listOutputSchema } from "./output-schemas.js";
 
 const log = createLogger("list");
 
@@ -30,6 +31,7 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
       inputSchema: {
         resource_type: resourceTypeSchema(listableTypes).optional().describe("Resource type to list. Auto-detected from url."),
         url: z.string().describe("Harness UI URL — auto-extracts org, project, and type").optional(),
+        resource_scope: z.enum(["account", "org", "project"]).optional().describe("Scope to query. Use account for account-level resources and to omit org/project defaults; org injects only org; project injects org+project. Auto-detected from url."),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
         page: z.number().describe("Page number, 0-indexed").default(0).optional(),
@@ -41,16 +43,18 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
         include_visual: z.boolean().describe("Include an inline PNG chart of the results (default false). Supported for execution resource_type. Use when user asks for a visualization, chart, or graph.").default(false).optional(),
         visual_type: z.enum(["timeseries", "bar", "pie"]).describe("Chart type when include_visual=true. 'timeseries' = daily execution counts, 'pie' = breakdown by status, 'bar' = breakdown by pipeline. Default 'pie'.").default("pie").optional(),
       },
+      outputSchema: listOutputSchema,
       annotations: {
         title: "List Harness Resources",
         readOnlyHint: true,
+        destructiveHint: false,
         openWorldHint: true,
       },
     },
     async (args) => {
       try {
         const { params, filters, ...rest } = args;
-        const input = applyUrlDefaults(rest as Record<string, unknown>, args.url);
+        const input = applyUrlDefaults(rest as Record<string, unknown>, args.url, { includeResourceScope: true });
         // Spread caller-supplied params (path identifiers) and filters into the input
         // Use coerceRecord to handle LLMs that serialize objects as JSON strings
         const coercedParams = coerceRecord(params);
@@ -64,10 +68,15 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
         if (resourceType === "template" && input.template_list_type === undefined) {
           input.template_list_type = "All";
         }
-        const result = await registry.dispatch(client, resourceType, "list", input);
+        const rawResult = await registry.dispatch(client, resourceType, "list", input);
+        const page = typeof args.page === "number" ? args.page : 0;
+        const result = normalizeHarnessListPayload(rawResult, { page });
 
-        // Apply compact mode — strip verbose metadata from list items
-        if (args.compact !== false && isRecord(result)) {
+        // Apply compact mode — strip verbose metadata from list items.
+        // Skip when the endpoint spec has opted out via `skipCompact` (marker
+        // propagated as non-enumerable `__skipCompact` by the registry).
+        const resultSkipCompact = isRecord(result) && (result as Record<string, unknown> & { __skipCompact?: boolean }).__skipCompact === true;
+        if (args.compact !== false && !resultSkipCompact && isRecord(result)) {
           const items = result.items;
           if (Array.isArray(items)) {
             result.items = compactItems(items);
@@ -82,7 +91,7 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
               const vt = (args.visual_type ?? "pie") as ListVisualType;
               const visual = renderListVisual(resourceType, items, vt);
               if (visual) {
-                (result as Record<string, unknown>).analysis = visual.analysis;
+                result.analysis = visual.analysis;
                 return await mixedResult(result, visual.svg);
               }
             } catch (err) {

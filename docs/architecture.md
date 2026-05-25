@@ -63,7 +63,8 @@ Tool handler validates resource_type + action
   │
   ▼
 confirmViaElicitation({
-  risk: endpoint.operationPolicy.risk   // execute: per-action; delete: destructive
+  risk: endpoint.operationPolicy.risk,  // execute: per-action; delete: destructive
+  autoApproveRisk: config.HARNESS_AUTO_APPROVE_RISK
 })
   │
   ▼
@@ -119,7 +120,7 @@ These actions have production blast radius and block on clients without elicitat
 - **Feature Flags:** `fme_feature_flag.kill`, `fme_feature_flag.restore`, `fme_feature_flag.archive`, `fme_feature_flag.unarchive`
 - **Approvals:** `approval_instance.approve`, `approval_instance.reject`
 - **Freeze:** `freeze_window.toggle_status`, `global_freeze.manage`
-- **STO:** `security_exemption.approve`, `security_exemption.reject`, `security_exemption.promote`
+- **STO:** `security_exemption.create`, `security_exemption.approve`, `security_exemption.reject`, `security_exemption.promote`
 - **IDP:** `idp_workflow.execute`
 
 ---
@@ -140,16 +141,16 @@ src/registry/index.ts         ← Registry class; dispatch() passes specs to
                                  elicitation (that's for tool handlers and future P5)
 
 src/tools/harness-create.ts   ┐
-src/tools/harness-update.ts   ├─ pass operationPolicy.risk to confirmViaElicitation({ risk })
-src/tools/harness-execute.ts   │
+src/tools/harness-update.ts   ├─ pass operationPolicy.risk and session config
+src/tools/harness-execute.ts   │  autoApproveRisk to confirmViaElicitation()
 src/tools/harness-delete.ts   ┘
 
-src/utils/elicitation.ts      ← confirmViaElicitation({ risk: RiskLevel })
+src/utils/elicitation.ts      ← confirmViaElicitation({ risk, autoApproveRisk })
                                  uses requiresConfirmation(), shouldAutoApprove(),
                                  clientSupportsElicitation(server)
 ```
 
-Key design choice: tool handlers thread `risk: RiskLevel` from the endpoint spec directly into `confirmViaElicitation`. The elicitation module imports confirmation helpers from `types.ts`, so failure behavior stays aligned with the registry contract (including `medium_write` blocking without elicitation). `isBlockingRisk()` remains in `types.ts` as deprecated and is not used for this gate anymore.
+Key design choice: tool handlers thread `risk: RiskLevel` from the endpoint spec and `autoApproveRisk` from the session config directly into `confirmViaElicitation`. The elicitation module imports confirmation helpers from `types.ts`, so failure behavior stays aligned with the registry contract (including `medium_write` blocking without elicitation). `isBlockingRisk()` remains in `types.ts` as deprecated and is not used for this gate anymore.
 
 ---
 
@@ -173,7 +174,7 @@ These tests run on every `pnpm test` invocation and validate all ~500+ endpoint 
 
 ### Elicitation Module (`src/utils/elicitation.ts`)
 
-Confirmation is driven by `risk: RiskLevel` plus optional auto-approve level from config (`HARNESS_AUTO_APPROVE_RISK`; deprecated `HARNESS_SKIP_ELICITATION` maps to approving all risks at startup).
+Confirmation is driven by `risk: RiskLevel` plus optional auto-approve level from the session config (`HARNESS_AUTO_APPROVE_RISK`; deprecated `HARNESS_SKIP_ELICITATION` maps to approving all risks at startup). HTTP sessions may lower the deployment default during initialize with `X-Harness-Auto-Approve-Risk`, but cannot raise it above the server-configured threshold; tool handlers pass the resolved session value explicitly, so different sessions do not mutate shared process state.
 
 | Risk level | Client supports elicitation | Behavior |
 |---|---|---|

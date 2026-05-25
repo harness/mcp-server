@@ -4,6 +4,7 @@ import type { Registry } from "../registry/index.js";
 import type { InputExpansionRule } from "../registry/types.js";
 import { jsonResult } from "../utils/response-formatter.js";
 import { getExamplesForResource } from "../data/examples/index.js";
+import { describeOutputSchema } from "./output-schemas.js";
 
 export function registerDescribeTool(server: McpServer, registry: Registry): void {
   const allTypes = registry.getAllResourceTypes() as [string, ...string[]];
@@ -18,9 +19,12 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
         toolset: z.enum(allToolsets).describe("Filter to a specific toolset").optional(),
         search_term: z.string().describe("Search for resource types by keyword (matches type name, display name, toolset, description)").optional(),
       },
+      outputSchema: describeOutputSchema,
       annotations: {
         title: "Describe Harness Resources",
         readOnlyHint: true,
+        destructiveHint: false,
+        // Local registry metadata only — no external API call
         openWorldHint: false,
       },
     },
@@ -28,12 +32,20 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
       if (args.resource_type) {
         try {
           const def = registry.getResource(args.resource_type);
+          const resourceScopes = registry.getSupportedScopes(args.resource_type);
+          const supportedScopes = resourceScopes.length > 1 ? resourceScopes : undefined;
           return jsonResult({
             resource_type: def.resourceType,
             displayName: def.displayName,
             description: def.description,
             toolset: def.toolset,
             scope: def.scope,
+            supportedScopes,
+            scopeHint: supportedScopes && supportedScopes.length > 1
+              ? def.scopeOptional
+                ? "Set resource_scope='account' for account-level data, resource_scope='org' for org-level data, or resource_scope='project' for project-level data. If resource_scope is omitted, org/project are only included when explicitly passed (no fallback to configured defaults)."
+                : "Set resource_scope='account' for account-level data, resource_scope='org' for org-level data, or resource_scope='project' for project-level data. If resource_scope is omitted, the resource uses its default scope and configured defaults."
+              : undefined,
             identifierFields: def.identifierFields,
             listFilterFields: def.listFilterFields,
             operations: Object.entries(def.operations).map(([op, spec]) => ({

@@ -633,6 +633,37 @@ Add to Claude Desktop config (`claude_desktop_config.json`):
 
 ---
 
+## Cursor Cloud specific instructions
+
+### Services
+
+This is a single-service TypeScript MCP server (no database, no sidecar containers). The only external dependency is the Harness.io REST API.
+
+### Common commands
+
+See `package.json` scripts. Key commands:
+- `pnpm build` — compile TypeScript to `build/`
+- `pnpm typecheck` — type-check without emitting
+- `pnpm test` — run vitest unit tests (1458 tests, ~12s)
+- `pnpm start` — run server in stdio mode (requires `HARNESS_API_KEY`)
+- `pnpm start:http` — run server in HTTP mode on port 3000
+- `pnpm dev` — watch mode for TypeScript compilation
+- `pnpm inspect` — launch MCP Inspector against stdio server
+
+### Running the server locally
+
+The server requires `HARNESS_API_KEY` env var to start in single-user mode. Set it before running `pnpm start` or `node build/index.js stdio`. Account ID is auto-extracted from PAT tokens (`pat.<accountId>.<tokenId>.<secret>`).
+
+For HTTP transport, set `HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP=true` for local dev without auth tokens.
+
+### Gotchas
+
+- **pnpm install warning about build scripts**: `esbuild` and `protobufjs` build scripts are blocked by default. This is expected and does not affect functionality — those packages are transitive dependencies that work without native builds.
+- **Stdio transport**: Never use `console.log()` in source code — it corrupts JSON-RPC. Use `console.error()` or the stderr logger from `src/utils/logger.ts`.
+- **Build before run**: Always run `pnpm build` before `pnpm start` or `pnpm inspect` — the server runs from `build/index.js`, not source.
+
+---
+
 ## References
 
 - Harness API Docs: https://apidocs.harness.io/

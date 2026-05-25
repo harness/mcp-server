@@ -168,10 +168,18 @@ const schema: Record<string, any> = {
             ]
           },
           "submodules": {
-            "description": "Submodules enables cloning all submodules.",
+            "description": "Submodules enables cloning all submodules. Accepts boolean, string (true/false/recursive), or expression.",
             "oneOf": [
               {
                 "type": "boolean"
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "true",
+                  "false",
+                  "recursive"
+                ]
               },
               {
                 "$ref": "#/definitions/pipeline_v1/common/Expression"
@@ -864,9 +872,6 @@ const schema: Record<string, any> = {
             },
             {
               "type": "string"
-            },
-            {
-              "$ref": "#/definitions/pipeline_v1/common/Expression"
             }
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
@@ -934,6 +939,10 @@ const schema: Record<string, any> = {
                   "$ref": "#/definitions/pipeline_v1/common/Expression"
                 }
               ]
+            },
+            "if": {
+              "description": "Conditional expression to determine whether the strategy should execute. Supports expressions.",
+              "type": "string"
             }
           },
           "oneOf": [
@@ -1052,17 +1061,7 @@ const schema: Record<string, any> = {
             "description": "Matrix axes - key is axis name, value is array of values or expression.",
             "oneOf": [
               {
-                "type": "array",
-                "items": {
-                  "oneOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "object"
-                    }
-                  ]
-                }
+                "type": "array"
               },
               {
                 "type": "string"
@@ -1286,11 +1285,13 @@ const schema: Record<string, any> = {
                 "success",
                 "stage-rollback",
                 "pipeline-rollback",
-                "fail"
+                "fail",
+                "proceed-with-default"
               ]
             },
             {
               "type": "object",
+              "additionalProperties": false,
               "properties": {
                 "retry": {
                   "$ref": "#/definitions/pipeline_v1/common/RetryFailureSpecConfigV1"
@@ -1324,6 +1325,14 @@ const schema: Record<string, any> = {
                 },
                 "retry-step-group": {
                   "$ref": "#/definitions/pipeline_v1/common/RetryStepGroupFailureSpecConfigV1"
+                },
+                "proceed-with-default": {
+                  "description": "Proceed with default values.",
+                  "type": "object"
+                },
+                "fail-all": {
+                  "description": "Fail all running stages/steps.",
+                  "type": "boolean"
                 }
               }
             }
@@ -1575,11 +1584,10 @@ const schema: Record<string, any> = {
             "description": "Number provides the PR number for pull-request type clone.",
             "oneOf": [
               {
-                "type": "integer",
-                "format": "int32"
+                "type": "integer"
               },
               {
-                "$ref": "#/definitions/pipeline_v1/common/Expression"
+                "type": "string"
               }
             ]
           }
@@ -1723,41 +1731,120 @@ const schema: Record<string, any> = {
             }
           },
           "uses": {
-            "type": "string",
             "description": "Notification channel type.",
+            "type": "string",
             "enum": [
               "email",
               "webhook",
-              "pagerduty",
-              "msteams",
+              "pager-duty",
+              "ms-teams",
               "slack",
               "datadog"
             ]
           },
           "with": {
             "description": "Channel-specific configuration based on 'uses' type.",
-            "oneOf": [
-              {
-                "$ref": "#/definitions/pipeline_v1/PmsEmailChannel"
-              },
-              {
-                "$ref": "#/definitions/pipeline_v1/PmsSlackChannel"
-              },
-              {
-                "$ref": "#/definitions/pipeline_v1/PmsMSTeamChannel"
-              },
-              {
-                "$ref": "#/definitions/pipeline_v1/PmsWebhookChannel"
-              },
-              {
-                "$ref": "#/definitions/pipeline_v1/PmsPagerDutyChannel"
-              },
-              {
-                "$ref": "#/definitions/pipeline_v1/PmsDatadogChannel"
-              }
-            ]
+            "type": "object"
           }
         },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "uses": {
+                  "const": "email"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "with": {
+                  "$ref": "#/definitions/pipeline_v1/PmsEmailChannel"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "uses": {
+                  "const": "slack"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "with": {
+                  "$ref": "#/definitions/pipeline_v1/PmsSlackChannel"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "uses": {
+                  "const": "ms-teams"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "with": {
+                  "$ref": "#/definitions/pipeline_v1/PmsMSTeamChannel"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "uses": {
+                  "const": "webhook"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "with": {
+                  "$ref": "#/definitions/pipeline_v1/PmsWebhookChannel"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "uses": {
+                  "const": "pager-duty"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "with": {
+                  "$ref": "#/definitions/pipeline_v1/PmsPagerDutyChannel"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "uses": {
+                  "const": "datadog"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "with": {
+                  "$ref": "#/definitions/pipeline_v1/PmsDatadogChannel"
+                }
+              }
+            }
+          }
+        ],
         "$schema": "http://json-schema.org/draft-07/schema#"
       },
       "NotificationEvent": {
@@ -1926,9 +2013,6 @@ const schema: Record<string, any> = {
         "title": "PmsEmailChannel",
         "description": "Email notification channel configuration.",
         "type": "object",
-        "required": [
-          "recipients"
-        ],
         "properties": {
           "user-groups": {
             "description": "List of user group references.",
@@ -1958,9 +2042,6 @@ const schema: Record<string, any> = {
         "title": "PmsSlackChannel",
         "description": "Slack notification channel configuration.",
         "type": "object",
-        "required": [
-          "webhook"
-        ],
         "properties": {
           "user-groups": {
             "description": "List of user group references.",
@@ -1987,9 +2068,6 @@ const schema: Record<string, any> = {
         "title": "PmsMSTeamChannel",
         "description": "Microsoft Teams notification channel configuration.",
         "type": "object",
-        "required": [
-          "keys"
-        ],
         "properties": {
           "keys": {
             "description": "List of MS Teams webhook keys.",
@@ -2019,9 +2097,6 @@ const schema: Record<string, any> = {
         "title": "PmsWebhookChannel",
         "description": "Webhook notification channel configuration.",
         "type": "object",
-        "required": [
-          "url"
-        ],
         "properties": {
           "url": {
             "description": "Webhook URL.",
@@ -2041,9 +2116,6 @@ const schema: Record<string, any> = {
         "title": "PmsPagerDutyChannel",
         "description": "PagerDuty notification channel configuration.",
         "type": "object",
-        "required": [
-          "key"
-        ],
         "properties": {
           "user-groups": {
             "description": "List of user group references.",
@@ -2070,10 +2142,6 @@ const schema: Record<string, any> = {
         "title": "PmsDatadogChannel",
         "description": "Datadog notification channel configuration.",
         "type": "object",
-        "required": [
-          "api-key",
-          "url"
-        ],
         "properties": {
           "api-key": {
             "description": "Datadog API key.",
@@ -2416,26 +2484,12 @@ const schema: Record<string, any> = {
                 "$ref": "#/definitions/pipeline_v1/steps/common/PlatformV1"
               },
               "service": {
-                "description": "Service configuration for CD stages. Supports expressions.",
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline_v1/stages/unified/ServiceV1"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline_v1/common/Expression"
-                  }
-                ]
+                "description": "Service configuration for CD stages.",
+                "$ref": "#/definitions/pipeline_v1/stages/unified/ServiceV1"
               },
               "environment": {
-                "description": "Environment configuration for CD stages. Supports expressions.",
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline_v1/stages/unified/EnvironmentV1"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline_v1/common/Expression"
-                  }
-                ]
+                "description": "Environment configuration for CD stages.",
+                "$ref": "#/definitions/pipeline_v1/stages/unified/EnvironmentV1"
               },
               "workspace": {
                 "type": "string",
@@ -2633,7 +2687,7 @@ const schema: Record<string, any> = {
                     "type": "integer"
                   },
                   {
-                    "$ref": "#/definitions/pipeline_v1/common/Expression"
+                    "type": "string"
                   }
                 ]
               },
@@ -3145,7 +3199,7 @@ const schema: Record<string, any> = {
                     "type": "integer"
                   },
                   {
-                    "$ref": "#/definitions/pipeline_v1/common/Expression"
+                    "type": "string"
                   }
                 ]
               },
@@ -3221,8 +3275,15 @@ const schema: Record<string, any> = {
                   },
                   "sequential": {
                     "description": "Execute services sequentially (one at a time). When false, services run in parallel.",
-                    "type": "boolean",
-                    "default": false
+                    "oneOf": [
+                      {
+                        "type": "boolean",
+                        "default": false
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline_v1/common/Expression"
+                      }
+                    ]
                   }
                 },
                 "additionalProperties": false
@@ -3270,7 +3331,7 @@ const schema: Record<string, any> = {
               "anyOf": [
                 {
                   "required": [
-                    "deploy-to"
+                    "id"
                   ]
                 },
                 {
@@ -3295,14 +3356,13 @@ const schema: Record<string, any> = {
                 {
                   "if": {
                     "required": [
-                      "deploy-to"
+                      "id"
                     ]
                   },
                   "then": {
                     "type": "object",
                     "required": [
-                      "id",
-                      "deploy-to"
+                      "id"
                     ],
                     "properties": {
                       "id": {
@@ -3342,8 +3402,15 @@ const schema: Record<string, any> = {
                       },
                       "sequential": {
                         "description": "Execute environments sequentially (one at a time). When false, environments run in parallel.",
-                        "type": "boolean",
-                        "default": false
+                        "oneOf": [
+                          {
+                            "type": "boolean",
+                            "default": false
+                          },
+                          {
+                            "$ref": "#/definitions/pipeline_v1/common/Expression"
+                          }
+                        ]
                       }
                     },
                     "additionalProperties": false
@@ -3367,8 +3434,15 @@ const schema: Record<string, any> = {
                       },
                       "sequential": {
                         "description": "Execute environments sequentially (one at a time). When false, environments run in parallel.",
-                        "type": "boolean",
-                        "default": false
+                        "oneOf": [
+                          {
+                            "type": "boolean",
+                            "default": false
+                          },
+                          {
+                            "$ref": "#/definitions/pipeline_v1/common/Expression"
+                          }
+                        ]
                       }
                     },
                     "additionalProperties": false
@@ -3392,8 +3466,15 @@ const schema: Record<string, any> = {
                       },
                       "sequential": {
                         "description": "Execute environments sequentially (one at a time). When false, environments run in parallel.",
-                        "type": "boolean",
-                        "default": false
+                        "oneOf": [
+                          {
+                            "type": "boolean",
+                            "default": false
+                          },
+                          {
+                            "$ref": "#/definitions/pipeline_v1/common/Expression"
+                          }
+                        ]
                       }
                     },
                     "additionalProperties": false
@@ -3403,7 +3484,7 @@ const schema: Record<string, any> = {
             },
             "else": {
               "required": [
-                "deploy-to"
+                "id"
               ]
             },
             "$schema": "http://json-schema.org/draft-07/schema#"
@@ -3467,32 +3548,16 @@ const schema: Record<string, any> = {
               "ref": {
                 "description": "Git branch for the environment configuration.",
                 "type": "string"
+              },
+              "deploy-to": {
+                "description": "Infrastructure(s) to deploy to.",
+                "$ref": "#/definitions/pipeline_v1/stages/unified/DeployTo"
+              },
+              "filters": {
+                "description": "Filters for selecting infrastructures.",
+                "$ref": "#/definitions/pipeline_v1/stages/unified/Filters"
               }
             },
-            "oneOf": [
-              {
-                "required": [
-                  "deploy-to"
-                ],
-                "properties": {
-                  "deploy-to": {
-                    "description": "Infrastructure(s) to deploy to.",
-                    "$ref": "#/definitions/pipeline_v1/stages/unified/DeployTo"
-                  }
-                }
-              },
-              {
-                "required": [
-                  "filters"
-                ],
-                "properties": {
-                  "filters": {
-                    "description": "Filters for selecting infrastructures.",
-                    "$ref": "#/definitions/pipeline_v1/stages/unified/Filters"
-                  }
-                }
-              }
-            ],
             "additionalProperties": false,
             "$schema": "http://json-schema.org/draft-07/schema#"
           },
@@ -3594,10 +3659,17 @@ const schema: Record<string, any> = {
                     "properties": {
                       "in": {
                         "description": "Match any of the specified tags (OR).",
-                        "type": "object",
-                        "additionalProperties": {
-                          "type": "string"
-                        }
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          {
+                            "type": "string"
+                          }
+                        ]
                       }
                     },
                     "additionalProperties": false
@@ -3609,10 +3681,17 @@ const schema: Record<string, any> = {
                     "properties": {
                       "all": {
                         "description": "Match all of the specified tags (AND).",
-                        "type": "object",
-                        "additionalProperties": {
-                          "type": "string"
-                        }
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          {
+                            "type": "string"
+                          }
+                        ]
                       }
                     },
                     "additionalProperties": false
@@ -3635,14 +3714,42 @@ const schema: Record<string, any> = {
                 "description": "Environment group identifier.",
                 "type": "string"
               },
+              "sequential": {
+                "description": "Execute environments sequentially (one at a time). When false, environments run in parallel.",
+                "oneOf": [
+                  {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
+                  }
+                ]
+              },
               "items": {
                 "description": "List of environments from the group.",
                 "type": "array",
                 "items": {
                   "$ref": "#/definitions/pipeline_v1/stages/unified/EnvironmentItem"
                 }
+              },
+              "filters": {
+                "description": "Filters for selecting environments and infrastructures.",
+                "$ref": "#/definitions/pipeline_v1/stages/unified/Filters"
               }
             },
+            "oneOf": [
+              {
+                "required": [
+                  "items"
+                ]
+              },
+              {
+                "required": [
+                  "filters"
+                ]
+              }
+            ],
             "additionalProperties": false,
             "$schema": "http://json-schema.org/draft-07/schema#"
           },
@@ -3663,11 +3770,18 @@ const schema: Record<string, any> = {
                 ]
               },
               "path": {
-                "description": "Paths to cache.",
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
+                "description": "Paths to cache. Supports expressions.",
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
+                  }
+                ]
               },
               "key": {
                 "description": "Cache key.",
@@ -4511,7 +4625,7 @@ const schema: Record<string, any> = {
                     "type": "integer"
                   },
                   {
-                    "$ref": "#/definitions/pipeline_v1/common/Expression"
+                    "type": "string"
                   }
                 ]
               },
@@ -5002,7 +5116,7 @@ const schema: Record<string, any> = {
                     "type": "integer"
                   },
                   {
-                    "$ref": "#/definitions/pipeline_v1/common/Expression"
+                    "type": "string"
                   }
                 ]
               },
@@ -5022,8 +5136,15 @@ const schema: Record<string, any> = {
                 "type": "boolean"
               },
               "auto-reject": {
-                "description": "Enable automatic rejection on timeout.",
-                "type": "boolean"
+                "description": "Enable automatic rejection on timeout. Supports expressions.",
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
+                  }
+                ]
               },
               "auto-approve": {
                 "description": "Enable automatic approval.",
@@ -5056,10 +5177,9 @@ const schema: Record<string, any> = {
             "title": "UnifiedJiraApprovalStepSpec",
             "description": "Jira approval step specification.",
             "type": "object",
+            "additionalProperties": true,
             "required": [
-              "retry",
-              "approve",
-              "source"
+              "approve"
             ],
             "properties": {
               "retry": {
@@ -5068,18 +5188,27 @@ const schema: Record<string, any> = {
               },
               "approve": {
                 "description": "Approval criteria configuration.",
-                "type": "object",
-                "additionalProperties": true
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
               },
               "reject": {
                 "description": "Rejection criteria configuration.",
-                "type": "object",
-                "additionalProperties": true
-              },
-              "source": {
-                "description": "Shell script source configuration.",
-                "type": "object",
-                "additionalProperties": true
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
               },
               "run": {
                 "description": "Run step configuration for script execution.",
@@ -5092,10 +5221,9 @@ const schema: Record<string, any> = {
             "title": "UnifiedServiceNowApprovalStepSpec",
             "description": "ServiceNow approval step specification.",
             "type": "object",
+            "additionalProperties": true,
             "required": [
-              "retry",
-              "approve",
-              "source"
+              "approve"
             ],
             "properties": {
               "retry": {
@@ -5104,18 +5232,27 @@ const schema: Record<string, any> = {
               },
               "approve": {
                 "description": "Approval criteria configuration.",
-                "type": "object",
-                "additionalProperties": true
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
               },
               "reject": {
                 "description": "Rejection criteria configuration.",
-                "type": "object",
-                "additionalProperties": true
-              },
-              "source": {
-                "description": "Shell script source configuration.",
-                "type": "object",
-                "additionalProperties": true
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
               },
               "run": {
                 "description": "Run step configuration for script execution.",
@@ -5142,10 +5279,10 @@ const schema: Record<string, any> = {
             "title": "UnifiedCustomApprovalStepSpec",
             "description": "Custom approval step specification.",
             "type": "object",
+            "additionalProperties": true,
             "required": [
               "retry",
-              "approve",
-              "source"
+              "approve"
             ],
             "properties": {
               "script-timeout": {
@@ -5158,18 +5295,27 @@ const schema: Record<string, any> = {
               },
               "approve": {
                 "description": "Approval criteria configuration.",
-                "type": "object",
-                "additionalProperties": true
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
               },
               "reject": {
                 "description": "Rejection criteria configuration.",
-                "type": "object",
-                "additionalProperties": true
-              },
-              "source": {
-                "description": "Shell script source configuration.",
-                "type": "object",
-                "additionalProperties": true
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
               },
               "run": {
                 "description": "Run step configuration for script execution.",

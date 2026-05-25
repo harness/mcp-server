@@ -193,8 +193,40 @@ function buildTimeFilters(timeFilter: string): Record<string, unknown>[] {
       end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999));
       break;
     }
+    case "THIS_QUARTER": {
+      const quarterStartMonth = Math.floor(now.getUTCMonth() / 3) * 3;
+      start = new Date(Date.UTC(now.getUTCFullYear(), quarterStartMonth, 1));
+      end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999));
+      break;
+    }
+    case "THIS_YEAR": {
+      start = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
+      end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999));
+      break;
+    }
     case "LAST_MONTH": {
       start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+      end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0, 23, 59, 59, 999));
+      break;
+    }
+    case "LAST_QUARTER": {
+      const currentQuarterStartMonth = Math.floor(now.getUTCMonth() / 3) * 3;
+      start = new Date(Date.UTC(now.getUTCFullYear(), currentQuarterStartMonth - 3, 1));
+      end = new Date(Date.UTC(now.getUTCFullYear(), currentQuarterStartMonth, 0, 23, 59, 59, 999));
+      break;
+    }
+    case "LAST_YEAR": {
+      start = new Date(Date.UTC(now.getUTCFullYear() - 1, 0, 1));
+      end = new Date(Date.UTC(now.getUTCFullYear() - 1, 11, 31, 23, 59, 59, 999));
+      break;
+    }
+    case "LAST_3_MONTHS": {
+      start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 3, 1));
+      end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0, 23, 59, 59, 999));
+      break;
+    }
+    case "LAST_6_MONTHS": {
+      start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 6, 1));
       end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0, 23, 59, 59, 999));
       break;
     }

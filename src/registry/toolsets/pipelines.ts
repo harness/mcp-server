@@ -309,6 +309,7 @@ export const pipelinesToolset: ToolsetDefinition = {
             module: "module",
             input_set_ids: "inputSetIdentifiers",
             branch: "branch",
+            pipeline_branch: "pipelineBranchName",
             store_type: "storeType",
             connector_ref: "connectorRef",
             repo_name: "repoName",
@@ -348,12 +349,13 @@ export const pipelinesToolset: ToolsetDefinition = {
               skipIfPresent: "build",
             },
           ],
-          actionDescription: "Execute/run a pipeline. RECOMMENDED: first check harness_get(resource_type='runtime_input_template', resource_id='PIPELINE_ID') to see required inputs. For simple variable inputs: pass key-value pairs in inputs (e.g. {branch: 'main'}) — auto-resolved. For CI pipelines with codebase: pass {branch: 'main'}, {tag: 'v1.0'}, {pr_number: '42'}, or {commit_sha: 'abc123'} — auto-expanded to the full build structure. For complex pipelines with template inputs: use input_set_ids to reference a saved input set. List available sets with harness_list(resource_type='input_set', filters={pipeline_id: '...'}).",
+          actionDescription: "Execute/run a pipeline. RECOMMENDED: first check harness_get(resource_type='runtime_input_template', resource_id='PIPELINE_ID') to see required inputs. For simple variable inputs: pass key-value pairs in inputs (e.g. {branch: 'main'}) — auto-resolved. For CI pipelines with codebase: pass {branch: 'main'}, {tag: 'v1.0'}, {pr_number: '42'}, or {commit_sha: 'abc123'} — auto-expanded to the full build structure. For complex pipelines with template inputs: use input_set_ids to reference a saved input set. List available sets with harness_list(resource_type='input_set', filters={pipeline_id: '...'}). To load the pipeline YAML from a specific git branch (e.g. a feature branch): pass params={pipeline_branch: 'feature/my-fix'} — sent as ?pipelineBranchName= on the API call.",
           bodySchema: {
             description: "Runtime inputs for pipeline execution. For simple variables: pass key-value pairs in inputs like {branch: 'main', env: 'prod'}, auto-resolved against the pipeline's runtime input template. CI codebase shorthands (branch, tag, pr_number, commit_sha) are auto-expanded to full build structures. For complex pipelines with template inputs, use input_set_ids to reference saved input sets. You can combine both: input_set_ids for the base config + inputs for simple overrides. Check runtime_input_template first to see what the pipeline expects.",
             fields: [
               { name: "inputs", type: "yaml", required: false, description: "Key-value pairs (e.g. {branch: 'main', env: 'prod'}) — auto-resolved to full YAML. CI codebase shorthands (branch, tag, pr_number, commit_sha) are auto-expanded. For template inputs, use input_set_ids instead." },
               { name: "input_set_ids", type: "array", required: false, description: "Input set identifiers to apply. Recommended for complex pipelines with template inputs. List available: harness_list(resource_type='input_set', filters={pipeline_id: '...'})." },
+              { name: "pipeline_branch", type: "string", required: false, description: "Git branch to load the pipeline YAML from (sent as ?pipelineBranchName= on the API). Use when the pipeline definition lives on a feature branch rather than the default branch." },
             ],
           },
         },

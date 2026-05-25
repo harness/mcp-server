@@ -55,8 +55,9 @@ describe("ConfigSchema", () => {
   });
 
   it("fails when HARNESS_API_KEY is missing", () => {
-    const result = ConfigSchema.safeParse({ HARNESS_ACCOUNT_ID: "acct123" });
-    expect(result.success).toBe(false);
+    expect(() =>
+      ConfigSchema.parse({ HARNESS_ACCOUNT_ID: "acct123" }),
+    ).toThrow("HARNESS_API_KEY is required in single-user mode");
   });
 
   it("HARNESS_ACCOUNT_ID is optional in schema", () => {
@@ -65,8 +66,9 @@ describe("ConfigSchema", () => {
   });
 
   it("fails when HARNESS_API_KEY is empty", () => {
-    const result = ConfigSchema.safeParse({ HARNESS_API_KEY: "", HARNESS_ACCOUNT_ID: "acct" });
-    expect(result.success).toBe(false);
+    expect(() =>
+      ConfigSchema.parse({ HARNESS_API_KEY: "", HARNESS_ACCOUNT_ID: "acct" }),
+    ).toThrow("HARNESS_API_KEY is required in single-user mode");
   });
 
   it("applies default HARNESS_BASE_URL", () => {
@@ -165,6 +167,71 @@ describe("ConfigSchema", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.HARNESS_MCP_ALLOWED_HOSTS).toBe("mcp.example.com,localhost");
+    }
+  });
+
+  it("defaults HARNESS_MCP_MODE to single-user", () => {
+    const result = ConfigSchema.safeParse(validConfig);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_MCP_MODE).toBe("single-user");
+    }
+  });
+
+  it("accepts multi-user mode without HARNESS_API_KEY", () => {
+    const result = ConfigSchema.safeParse({
+      HARNESS_MCP_MODE: "multi-user",
+      HARNESS_ACCOUNT_ID: "acct123",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_MCP_MODE).toBe("multi-user");
+      expect(result.data.HARNESS_API_KEY).toBe("");
+    }
+  });
+
+  it("rejects multi-user mode when HARNESS_API_KEY is set", () => {
+    expect(() =>
+      ConfigSchema.parse({
+        ...validConfig,
+        HARNESS_MCP_MODE: "multi-user",
+      }),
+    ).toThrow("HARNESS_API_KEY must not be set in multi-user mode");
+  });
+
+  it("requires HARNESS_API_KEY in single-user mode", () => {
+    expect(() =>
+      ConfigSchema.parse({
+        HARNESS_MCP_MODE: "single-user",
+        HARNESS_ACCOUNT_ID: "acct123",
+      }),
+    ).toThrow("HARNESS_API_KEY is required in single-user mode");
+  });
+
+  it("parses HTTP MCP auth token and unauthenticated opt-out config", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      HARNESS_MCP_AUTH_TOKEN: "shared-secret",
+      HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP: "true",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_MCP_AUTH_TOKEN).toBe("shared-secret");
+      expect(result.data.HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP).toBe(true);
+    }
+  });
+
+  it("treats an empty HTTP MCP auth token as unset", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      HARNESS_MCP_AUTH_TOKEN: "",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_MCP_AUTH_TOKEN).toBeUndefined();
+      expect(result.data.HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP).toBe(false);
     }
   });
 

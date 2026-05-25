@@ -1,6 +1,56 @@
 import type { ToolsetDefinition } from "../types.js";
 import { passthrough } from "../extractors.js";
 
+function bodyRecord(input: Record<string, unknown>): Record<string, unknown> | undefined {
+  const body = input.body;
+  return body && typeof body === "object" && !Array.isArray(body)
+    ? body as Record<string, unknown>
+    : undefined;
+}
+
+function pullRequestState(input: Record<string, unknown>): "open" | "closed" | undefined {
+  const state = bodyRecord(input)?.state;
+  return state === "open" || state === "closed" ? state : undefined;
+}
+
+function requiredPathPart(input: Record<string, unknown>, field: string): string {
+  const value = input[field];
+  if (value === undefined || value === "") {
+    throw new Error(`Missing required field "${field}" for pull_request.`);
+  }
+  return encodeURIComponent(String(value));
+}
+
+const PR_METADATA_FIELDS = ["title", "description"];
+
+function pullRequestUpdatePath(input: Record<string, unknown>): string {
+  const repoIdentifier = requiredPathPart(input, "repo_id");
+  const prNumber = requiredPathPart(input, "pr_number");
+  const state = pullRequestState(input);
+  if (state) {
+    rejectMixedStateUpdate(input);
+    return `/code/api/v1/repos/${repoIdentifier}/pullreq/${prNumber}/state`;
+  }
+  return `/code/api/v1/repos/${repoIdentifier}/pullreq/${prNumber}`;
+}
+
+function rejectMixedStateUpdate(input: Record<string, unknown>): void {
+  const body = bodyRecord(input);
+  if (!body) return;
+  const extras = PR_METADATA_FIELDS.filter((f) => body[f] !== undefined);
+  if (extras.length > 0) {
+    throw new Error(
+      `Cannot combine state change with metadata fields (${extras.join(", ")}). ` +
+      `Send state changes and metadata updates as separate harness_update calls.`,
+    );
+  }
+}
+
+function pullRequestUpdateBody(input: Record<string, unknown>): unknown {
+  const state = pullRequestState(input);
+  return state ? { state } : input.body;
+}
+
 export const pullRequestsToolset: ToolsetDefinition = {
   name: "pull-requests",
   displayName: "Pull Requests",
@@ -11,7 +61,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
       resourceType: "pull_request",
       displayName: "Pull Request",
       description:
-        "Code pull request. Supports list, get, create, and update. Use execute actions for merge.",
+        "Code pull request. Supports list, get, create, and update. Use execute actions for close and merge.",
       toolset: "pull-requests",
       scope: "account",
       scopeOptional: true,
@@ -69,16 +119,19 @@ export const pullRequestsToolset: ToolsetDefinition = {
         },
         update: {
           method: "PATCH",
+          methodBuilder: (input) => pullRequestState(input) ? "POST" : "PATCH",
           path: "/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}",
+          pathBuilder: pullRequestUpdatePath,
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
           pathParams: {
             repo_id: "repoIdentifier",
             pr_number: "prNumber",
           },
-          bodyBuilder: (input) => input.body,
+          bodyBuilder: pullRequestUpdateBody,
           responseExtractor: passthrough,
           description:
-            "Update a pull request. Body fields: title, description, state (open/closed).",
+            "Update a pull request. Body fields: title, description, state (open/closed). State changes use the dedicated Harness Code PR state endpoint.",
           bodySchema: {
             description: "Pull request update fields",
             fields: [
@@ -90,6 +143,24 @@ export const pullRequestsToolset: ToolsetDefinition = {
         },
       },
       executeActions: {
+        close: {
+          method: "POST",
+          path: "/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}/state",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
+          pathParams: {
+            repo_id: "repoIdentifier",
+            pr_number: "prNumber",
+          },
+          bodyBuilder: () => ({ state: "closed" }),
+          responseExtractor: passthrough,
+          actionDescription:
+            "Close a pull request by setting its state to closed.",
+          bodySchema: {
+            description: "Close pull request state transition",
+            fields: [],
+          },
+        },
         merge: {
           method: "POST",
           path: "/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}/merge",

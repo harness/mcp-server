@@ -27,6 +27,8 @@ import { registerVulnerabilityTriagePrompt } from "./vulnerability-triage.js";
 import { registerSbomCompliancePrompt } from "./sbom-compliance.js";
 import { registerSupplyChainAuditPrompt } from "./supply-chain-audit.js";
 import { registerExemptionReviewPrompt } from "./exemption-review.js";
+import { registerBulkExemptionCreatePrompt } from "./bulk-exemption-create.js";
+import { registerExemptOpaFailedIssuesPrompt } from "./exempt-opa-failed-issues.js";
 import { registerAccessControlAuditPrompt } from "./access-control-audit.js";
 
 // Harness Code prompts
@@ -74,6 +76,8 @@ export function registerAllPrompts(server: McpServer): void {
   registerSbomCompliancePrompt(server);
   registerSupplyChainAuditPrompt(server);
   registerExemptionReviewPrompt(server);
+  registerBulkExemptionCreatePrompt(server);
+  registerExemptOpaFailedIssuesPrompt(server);
   registerAccessControlAuditPrompt(server);
 
   // Harness Code

@@ -5,6 +5,7 @@ import { createLogger } from "../utils/logger.js";
 import { SCHEMAS, VALID_SCHEMAS } from "../data/schemas/index.js";
 import type { SchemaEntry } from "../data/schemas/types.js";
 import { getExample, searchExamples, getExamplesForResource } from "../data/examples/index.js";
+import { schemaOutputSchema } from "./output-schemas.js";
 
 const log = createLogger("tool:harness-schema");
 
@@ -176,10 +177,13 @@ export function registerSchemaTool(
           .optional()
           .describe("Search examples by keyword. Returns matching example names and descriptions. Optionally combine with resource_type to filter."),
       },
+      outputSchema: schemaOutputSchema,
       annotations: {
         title: "Harness YAML Schema",
         readOnlyHint: true,
-        openWorldHint: true,
+        destructiveHint: false,
+        // Bundled schemas/examples only — no external API call
+        openWorldHint: false,
       },
     },
     async (args) => {

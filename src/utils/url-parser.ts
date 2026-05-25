@@ -5,6 +5,7 @@
 
 export interface ParsedHarnessUrl {
   account_id: string;
+  resource_scope?: "account" | "org" | "project";
   org_id?: string;
   project_id?: string;
   module?: string;
@@ -52,6 +53,8 @@ const RESOURCE_SEGMENTS: Record<string, { type: string; contextField: ContextFie
   "input-sets":       { type: "input_set",           contextField: "resource_id" },
   "services":         { type: "service",             contextField: "resource_id" },
   "environments":     { type: "environment",         contextField: "environment_id" },
+  "infrastructures":  { type: "infrastructure",      contextField: "resource_id" },
+  "infrastructure-definitions": { type: "infrastructure", contextField: "resource_id" },
   "connectors":       { type: "connector",           contextField: "resource_id" },
   "templates":        { type: "template",            contextField: "resource_id" },
   "secrets":          { type: "secret",              contextField: "resource_id" },
@@ -83,10 +86,29 @@ const RESOURCE_SEGMENTS: Record<string, { type: string; contextField: ContextFie
   "conversation":     { type: "pr_activity",          contextField: "comment_id" },
 };
 
+const URL_RESOURCE_SCOPE_TYPES = new Set([
+  "connector",
+  "service",
+  "environment",
+  "infrastructure",
+  "secret",
+  "template",
+]);
+
 /** Structural segments that should never be treated as resource IDs */
 const STRUCTURAL = new Set([
   "ng", "all", "account", "module", "orgs", "projects", "organizations",
 ]);
+
+/**
+ * Placeholder base used only to satisfy `new URL()` when the input is a path-only
+ * string like `/ng/account/<id>/...`. parseHarnessUrl never reads `url.host` /
+ * `url.origin` / `url.protocol`; it walks `url.pathname` and `url.searchParams`
+ * only. Using an explicitly fake host makes it clear in code review that the
+ * host is not consulted and the parser is cluster-agnostic (prod0 / eu1 /
+ * harness0 / self-managed / vanity hosts all parse identically).
+ */
+const PLACEHOLDER_BASE = "https://harness.invalid";
 
 /**
  * Parse a Harness UI URL and extract identifiers.
@@ -98,9 +120,11 @@ const STRUCTURAL = new Set([
  * - .../all/cd/orgs/{org}/projects/{project}/...
  * - .../all/settings/connectors/{id}
  * - Vanity domains (e.g. ancestry.harness.io)
+ * - Path-only URLs (e.g. `/ng/account/<id>/...`) — the Harness UI's copy-link
+ *   actions sometimes produce these.
  */
 export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
-  const url = new URL(urlStr);
+  const url = new URL(urlStr, PLACEHOLDER_BASE);
   const segments = url.pathname.split("/").filter(Boolean);
 
   const result: ParsedHarnessUrl = { account_id: "" };
@@ -176,6 +200,16 @@ export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
     if (primary.id) {
       result.resource_id = primary.id;
     }
+
+    if (URL_RESOURCE_SCOPE_TYPES.has(primary.type)) {
+      if (result.project_id) {
+        result.resource_scope = "project";
+      } else if (result.org_id) {
+        result.resource_scope = "org";
+      } else {
+        result.resource_scope = "account";
+      }
+    }
   }
 
   const stepId = url.searchParams.get("step") ?? url.searchParams.get("stepId");
@@ -214,6 +248,10 @@ const MERGEABLE_FIELDS: (keyof ParsedHarnessUrl)[] = [
   "stage_execution_id",
 ];
 
+export interface ApplyUrlDefaultsOptions {
+  includeResourceScope?: boolean;
+}
+
 /**
  * If `url` is provided, parse it and merge extracted values into args as defaults.
  * Explicit args always take precedence over URL-derived values.
@@ -222,6 +260,7 @@ const MERGEABLE_FIELDS: (keyof ParsedHarnessUrl)[] = [
 export function applyUrlDefaults(
   args: Record<string, unknown>,
   url?: unknown,
+  options: ApplyUrlDefaultsOptions = {},
 ): Record<string, unknown> {
   if (!url || typeof url !== "string") return args;
 
@@ -234,6 +273,13 @@ export function applyUrlDefaults(
   }
 
   const merged = { ...args };
+  if (
+    options.includeResourceScope &&
+    (merged.resource_scope === undefined || merged.resource_scope === "") &&
+    parsed.resource_scope !== undefined
+  ) {
+    merged.resource_scope = parsed.resource_scope;
+  }
   for (const field of MERGEABLE_FIELDS) {
     if ((merged[field] === undefined || merged[field] === "") && parsed[field] !== undefined) {
       merged[field] = parsed[field];

@@ -23,10 +23,12 @@
 | TC-pr-008 | Get PR by number | `harness_get(resource_type="pull_request", params={"repo_id":"test-mcp", "pr_number":4}, org_id="AI_Devops", project_id="Sanity")` | Returns full PR details including title, description, branches, state | ✅ Passed | PR #4 full details with openInHarness deep link | Re-tested 2026-03-23 |
 | TC-pr-009 | Create a pull request | `harness_create(resource_type="pull_request", body={"title":"Test PR","source_branch":"testmcp","target_branch":"main","description":"Testing"}, params={"repo_id":"test-mcp"}, org_id="AI_Devops", project_id="Sanity")` | Creates PR, returns PR details with pr_number | ✅ Passed | Created PR #4 with correct deep link | |
 | TC-pr-010 | Create PR with minimal fields | `harness_create(resource_type="pull_request", body={"title":"Quick fix","source_branch":"hotfix","target_branch":"main"}, params={"repo_id":"test-mcp"}, org_id="AI_Devops", project_id="Sanity")` | Creates PR without description | ⬜ Pending | | |
-| TC-pr-011 | Update PR title | `harness_update(resource_type="pull_request", params={"repo_id":"test-mcp", "pr_number":1}, body={"title":"Updated title"}, org_id="AI_Devops", project_id="Sanity")` | Updates PR title | ⬜ Pending | | |
-| TC-pr-012 | Update PR description | `harness_update(resource_type="pull_request", params={"repo_id":"test-mcp", "pr_number":1}, body={"description":"Updated description"}, org_id="AI_Devops", project_id="Sanity")` | Updates PR description | ⬜ Pending | | |
-| TC-pr-013 | Close a PR | `harness_update(resource_type="pull_request", params={"repo_id":"test-mcp", "pr_number":1}, body={"state":"closed"}, org_id="AI_Devops", project_id="Sanity")` | Changes PR state to closed | ⬜ Pending | | |
-| TC-pr-014 | Reopen a PR | `harness_update(resource_type="pull_request", params={"repo_id":"test-mcp", "pr_number":1}, body={"state":"open"}, org_id="AI_Devops", project_id="Sanity")` | Reopens a closed PR | ⬜ Pending | | |
+| TC-pr-011 | Update PR title | `harness_update(resource_type="pull_request", resource_id="1", params={"repo_id":"test-mcp"}, body={"title":"Updated title"}, org_id="AI_Devops", project_id="Sanity")` | Updates PR title | ⬜ Pending | | |
+| TC-pr-012 | Update PR description | `harness_update(resource_type="pull_request", resource_id="1", params={"repo_id":"test-mcp"}, body={"description":"Updated description"}, org_id="AI_Devops", project_id="Sanity")` | Updates PR description | ⬜ Pending | | |
+| TC-pr-013 | Close a PR | `harness_update(resource_type="pull_request", resource_id="1", params={"repo_id":"test-mcp"}, body={"state":"closed"}, org_id="AI_Devops", project_id="Sanity")` | Changes PR state to closed | ⬜ Pending | | |
+| TC-pr-014 | Reopen a PR | `harness_update(resource_type="pull_request", resource_id="1", params={"repo_id":"test-mcp"}, body={"state":"open"}, org_id="AI_Devops", project_id="Sanity")` | Reopens a closed PR | ⬜ Pending | | |
+| TC-pr-014a | Reject mixed state and metadata update | `harness_update(resource_type="pull_request", resource_id="1", params={"repo_id":"test-mcp"}, body={"state":"closed", "title":"Close this"}, org_id="AI_Devops", project_id="Sanity")` | Returns error telling callers to send state and metadata updates separately | ⬜ Pending | | |
+| TC-pr-014b | Close a PR with execute action | `harness_execute(resource_type="pull_request", action="close", resource_id="1", params={"repo_id":"test-mcp"}, org_id="AI_Devops", project_id="Sanity")` | Changes PR state to closed using the dedicated state endpoint | ⬜ Pending | | |
 | TC-pr-015 | Merge PR with default method | `harness_execute(resource_type="pull_request", action="merge", params={"repo_id":"test-mcp", "pr_number":1}, org_id="AI_Devops", project_id="Sanity")` | Merges PR using default merge method | ⬜ Pending | | |
 | TC-pr-016 | Squash merge PR | `harness_execute(resource_type="pull_request", action="merge", params={"repo_id":"test-mcp", "pr_number":1}, body={"method":"squash","delete_source_branch":true}, org_id="AI_Devops", project_id="Sanity")` | Squash merges PR and deletes source branch | ⬜ Pending | | |
 | TC-pr-017 | Dry run merge | `harness_execute(resource_type="pull_request", action="merge", params={"repo_id":"test-mcp", "pr_number":1}, body={"dry_run":true}, org_id="AI_Devops", project_id="Sanity")` | Simulates merge without executing, returns merge feasibility | ⬜ Pending | | |
@@ -41,11 +43,11 @@
 
 | Metric | Count |
 |--------|-------|
-| Total Tests | 23 |
+| Total Tests | 25 |
 | ✅ Passed | 6 |
 | ❌ Failed | 0 |
 | ⚠️ Blocked | 0 |
-| ⬜ Not Run | 17 |
+| ⬜ Not Run | 19 |
 
 ## Issues Found
 
