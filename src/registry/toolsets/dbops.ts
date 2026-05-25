@@ -274,7 +274,9 @@ export const dbopsToolset: ToolsetDefinition = {
         "Returns the best database instance for LLM change authoring given a schema. " +
         "Selection priority: (1) oldest instance with a metadata snapshot, " +
         "(2) oldest instance overall. Returns a minimal response with the instance " +
-        "identifier, name, and whether it has a snapshot. " +
+        "identifier, name, connector (JDBC connector identifier), and whether it has a snapshot. " +
+        "The connector field can be used directly with the connectors toolset to resolve the " +
+        "DB engine type — no separate instance fetch is needed. " +
         "Use this when a schema has no primaryDbInstanceId configured and you need " +
         "to auto-select an instance for changeset generation. " +
         "IMPORTANT: This is an x-internal endpoint.",
@@ -294,7 +296,9 @@ export const dbopsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           description:
             "Get the best instance for LLM change authoring for a schema. " +
-            "Returns { identifier: string, name: string, hasSnapshot: boolean }. " +
+            "Returns { identifier: string, name: string, hasSnapshot: boolean, connector: string }. " +
+            "The connector field is the JDBC connector identifier linked to this instance — " +
+            "use it directly with harness_get(resource_type='connector') to resolve the DB engine type. " +
             "Prefers the oldest instance that has a metadata snapshot; falls back to " +
             "the oldest instance overall if none have snapshots. " +
             "Returns 404 if no instances exist for the schema.",
