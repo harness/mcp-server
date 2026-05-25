@@ -1,5 +1,17 @@
 # Harness MCP Server — Task Tracking
 
+## Documentation Alignment Automation (2026-05-25)
+- [ ] Audit recent source/task history for public interface and operational documentation drift.
+- [ ] Update existing README sections for resource scoping, structured list output, execute wait mode, audit sinks, and toolset filtering.
+- [ ] Align developer/operator docs (`.env.example`, `CONTRIBUTING.md`, `docs/architecture.md`) with the verified codepaths.
+- [ ] Run documentation consistency checks plus focused text searches.
+- [ ] Commit, push, and open/update a documentation-only PR.
+
+### Plan
+- Use source as truth for recently changed subsystems: `src/registry/index.ts`, `src/tools/input-schemas.ts`, `src/tools/harness-execute.ts`, `src/utils/response-formatter.ts`, `src/audit/index.ts`, and `src/registry/toolsets/iacm.ts`.
+- Prefer targeted edits to existing public docs rather than adding duplicate pages.
+- Keep the PR documentation-only and avoid changing generated schemas or runtime code.
+
 ## harness_list structured output for array APIs (2026-05-22)
 - [x] Root cause: Harness Code `pr_activity` returns a top-level JSON array; `jsonResult` only sets `structuredContent` for objects, so strict MCP clients (Cursor) fail with output schema validation (-32602).
 - [x] Add `normalizeHarnessListPayload` and call it from `harness_list` after dispatch; unit tests in `response-formatter.test.ts`.
