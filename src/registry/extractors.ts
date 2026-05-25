@@ -406,6 +406,31 @@ export const chaosPageExtract = (raw: unknown): { items: unknown[]; total: numbe
 };
 
 /**
+ * Normalize chaos experiment variables response (RunTimeInputs shape):
+ * { experiment: [...] | null, tasks: { taskName: [...] } | null }
+ * → { items: [{ task, variables }], total }
+ * Groups variables by task name. Handles null/undefined gracefully.
+ */
+export const chaosRunTimeInputsExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { experiment?: unknown[] | null; tasks?: Record<string, unknown[]> | null } | null | undefined;
+  if (!r) return { items: [], total: 0 };
+  const items: unknown[] = [];
+  const expVars = r.experiment;
+  if (Array.isArray(expVars) && expVars.length > 0) {
+    items.push({ task: "experiment", variables: expVars });
+  }
+  const tasks = r.tasks;
+  if (tasks && typeof tasks === "object") {
+    for (const [taskName, vars] of Object.entries(tasks)) {
+      if (Array.isArray(vars) && vars.length > 0) {
+        items.push({ task: taskName, variables: vars });
+      }
+    }
+  }
+  return { items, total: items.length };
+};
+
+/**
  * Extract chaos application-map (a.k.a. network map) list response:
  * { data: [...], page: { index, limit, totalPages, totalItems } }
  *

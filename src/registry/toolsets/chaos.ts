@@ -11,6 +11,7 @@ import {
   chaosHubListExtract,
   chaosDRTestListExtract,
   sdPageExtract,
+  chaosRunTimeInputsExtract,
 } from "../extractors.js";
 import {
   descToolsetChaos,
@@ -287,7 +288,7 @@ export const chaosToolset: ToolsetDefinition = {
           bodySchema: {
             description: descBodyExperimentCreate,
             fields: [
-              { name: "id", type: "string", required: true, description: descExperimentIdUUID },
+              { name: "id", type: "string", required: false, description: descExperimentIdUUID },
               { name: "name", type: "string", required: true, description: descExperimentName },
               { name: "manifest", type: "string", required: true, description: descExperimentManifest },
               { name: "infra_id", type: "string", required: true, description: descExperimentInfraIdCreate },
@@ -308,7 +309,8 @@ export const chaosToolset: ToolsetDefinition = {
           path: `${CHAOS}/rest/v2/experiments/{experimentId}/run`,
           operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: { experiment_id: "experimentId" },
-          staticQueryParams: { isIdentity: "false" },
+          queryParams: { is_identity: "isIdentity" },
+          defaultQueryParams: { isIdentity: "true" },
           bodyBuilder: (input) => {
             const body: Record<string, unknown> = {};
             if (input.inputset_identity) {
@@ -345,6 +347,7 @@ export const chaosToolset: ToolsetDefinition = {
               { name: "runtime_inputs", type: "object", required: false, description: descRuntimeInputs },
               { name: "experiment_variables", type: "array", required: false, description: descExperimentVariablesParam },
               { name: "tasks", type: "object", required: false, description: descTasksParam },
+              { name: "is_identity", type: "boolean", required: false, description: descIsIdentity },
             ],
           },
         },
@@ -1148,6 +1151,7 @@ export const chaosToolset: ToolsetDefinition = {
       identifierFields: ["experiment_id"],
       listFilterFields: [
         { name: "experiment_id", description: descExperimentId, required: true },
+        { name: "is_identity", description: descIsIdentity, type: "boolean" },
       ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/chaos/experiments/{experimentId}",
       operations: {
@@ -1156,8 +1160,9 @@ export const chaosToolset: ToolsetDefinition = {
           path: `${CHAOS}/rest/v2/experiments/{experimentId}/variables`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { experiment_id: "experimentId" },
-          staticQueryParams: { isIdentity: "false" },
-          responseExtractor: passthrough,
+          queryParams: { is_identity: "isIdentity" },
+          defaultQueryParams: { isIdentity: "true" },
+          responseExtractor: chaosRunTimeInputsExtract,
           description: descListExperimentVariables,
         },
       },

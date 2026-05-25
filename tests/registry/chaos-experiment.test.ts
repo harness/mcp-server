@@ -143,6 +143,62 @@ describe("chaos_experiment list/get", () => {
   });
 });
 
+describe("chaos_experiment create", () => {
+  // Locks the bodySchema <-> bodyBuilder contract:
+  //   - bodySchema marks `id` optional, so omitting it must NOT trip required-field validation
+  //   - bodyBuilder must auto-generate a v4 UUID when `id` is missing
+  //   - caller-supplied `id` must round-trip untouched
+  const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("create: auto-generates a v4 UUID for id when caller omits it", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ experimentID: "new-exp" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_experiment", "create", {
+      org_id: "default",
+      project_id: "test-project",
+      name: "demo-exp-01",
+      manifest: "apiVersion: litmuschaos.io/v1alpha1\nkind: ChaosEngine",
+      infra_id: "infra-1",
+      infra_type: "Kubernetes",
+    });
+
+    expect(mockRequest).toHaveBeenCalledOnce();
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/chaos/manager/api/rest/v2/experiment");
+    expect(call.body.id).toMatch(UUID_V4);
+    expect(call.body.name).toBe("demo-exp-01");
+    expect(call.body.infraId).toBe("infra-1");
+    expect(call.body.infra_id).toBe("infra-1");
+    expect(call.body.infraType).toBe("Kubernetes");
+  });
+
+  it("create: echoes caller-supplied id without overwriting it", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ experimentID: "new-exp" });
+    const client = makeClient(mockRequest);
+    const callerId = "11111111-2222-4333-8444-555555555555";
+
+    await registry.dispatch(client, "chaos_experiment", "create", {
+      org_id: "default",
+      project_id: "test-project",
+      id: callerId,
+      name: "demo-exp-02",
+      manifest: "apiVersion: litmuschaos.io/v1alpha1\nkind: ChaosEngine",
+      infra_id: "infra-2",
+      infra_type: "Kubernetes",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.body.id).toBe(callerId);
+  });
+});
+
 describe("chaos_probe enable execute action", () => {
   let registry: Registry;
 
@@ -456,5 +512,123 @@ describe("chaos_probe_template list pagination and defaults", () => {
 
     const call = mockRequest.mock.calls[0][0];
     expect(call.params.includeAllScope).toBe(false);
+  });
+});
+
+describe("chaos_experiment isIdentity routing", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("run: defaults isIdentity=true so a slug experiment_id works", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ experimentRunId: "run-1" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "chaos_experiment", "run", {
+      experiment_id: "exp-without-runtime",
+      project_id: "templatescopetest",
+      org_id: "templatescopetest",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/chaos/manager/api/rest/v2/experiments/exp-without-runtime/run");
+    expect(call.params.isIdentity).toBe("true");
+  });
+
+  it("run: is_identity=false override forces UUID lookup", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ experimentRunId: "run-1" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "chaos_experiment", "run", {
+      experiment_id: "ef9199b6-0248-4c0b-9d63-9176bf2b7123",
+      is_identity: false,
+      project_id: "templatescopetest",
+      org_id: "templatescopetest",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.isIdentity).toBe(false);
+  });
+
+  it("variables list: defaults isIdentity=true so a slug experiment_id works", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ experiment: [], tasks: {} });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_experiment_variable", "list", {
+      experiment_id: "exp-without-runtime",
+      project_id: "templatescopetest",
+      org_id: "templatescopetest",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("GET");
+    expect(call.path).toBe("/chaos/manager/api/rest/v2/experiments/exp-without-runtime/variables");
+    expect(call.params.isIdentity).toBe("true");
+  });
+
+  it("variables list: null experiment/tasks returns empty items (no schema error)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ experiment: null, tasks: null });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "chaos_experiment_variable", "list", {
+      experiment_id: "ef9199b6-0248-4c0b-9d63-9176bf2b7123",
+      is_identity: false,
+      project_id: "templatescopetest",
+      org_id: "templatescopetest",
+    }) as { items: unknown[]; total: number };
+
+    expect(Array.isArray(result.items)).toBe(true);
+    expect(result.items).toHaveLength(0);
+    expect(result.total).toBe(0);
+  });
+
+  it("input_set list: defaults isIdentity=false so UUID is the default lookup", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], pagination: { totalItems: 0 } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_input_set", "list", {
+      experiment_id: "ef9199b6-0248-4c0b-9d63-9176bf2b7123",
+      project_id: "templatescopetest",
+      org_id: "templatescopetest",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("GET");
+    expect(call.path).toBe("/chaos/manager/api/rest/v2/experiments/ef9199b6-0248-4c0b-9d63-9176bf2b7123/inputsets");
+    expect(call.params.isIdentity).toBe("false");
+  });
+
+  it("input_set list: is_identity=true override passes slug to backend", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], pagination: { totalItems: 0 } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_input_set", "list", {
+      experiment_id: "exp-without-runtime",
+      is_identity: true,
+      project_id: "templatescopetest",
+      org_id: "templatescopetest",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.isIdentity).toBe(true);
+    expect(call.path).toBe("/chaos/manager/api/rest/v2/experiments/exp-without-runtime/inputsets");
+  });
+
+  it("input_set list: is_identity=false with UUID passes false to backend", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], pagination: { totalItems: 0 } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_input_set", "list", {
+      experiment_id: "ef9199b6-0248-4c0b-9d63-9176bf2b7123",
+      is_identity: false,
+      project_id: "templatescopetest",
+      org_id: "templatescopetest",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.isIdentity).toBe(false);
   });
 });

@@ -181,13 +181,13 @@ Supports search by name and sort by lastModifiedAt or name.`;
 export const descListExperiments = `List chaos experiments with optional filtering.
 Supports filtering by experiment name, status, infrastructure (ID, name, active state), tags, environment, date range, and bulk experiment IDs.
 Default page size is 15, max 50.`;
-export const descGetExperiment = `Get chaos experiment details including revisions and recent run details`;
+export const descGetExperiment = `Get chaos experiment details including revisions and recent run details. The backend for this endpoint REQUIRES the internal UUID (experimentID, e.g. "ef9199b6-0248-4c0b-9d63-9176bf2b7123") — the human-readable identity slug from a UI URL will not work here. If you only have the slug, first call harness_list with resource_type=chaos_experiment and experiment_name=<slug> to obtain the experimentID.`;
 
 export const descGetExperimentRun = `Get the full timeline of a chaos experiment run. This is a read-only endpoint — it does NOT trigger a run.
 Returns the execution pipeline: individual fault/probe/action nodes with status, timing, chaos data, and error details.
 Also returns experiment name, infraID, resiliency score, run phase, manifest version, and template details.
 Pass experiment_id via resource_id. Pass run_id or notify_id via params (not resource_id) to identify the specific run.
-To start a new run, use chaos_experiment execute action: run instead.`;
+To start a new run, use chaos_experiment execute action: run instead. Pass the internal UUID (experimentID) via resource_id; the slug from a UI URL will not work for this endpoint.`;
 
 export const descListProbes = `List chaos probes with optional filtering.
 Supports filtering by name, tags, date range, probe IDs, infrastructure type, probe entity type, and sorting.
@@ -360,7 +360,7 @@ export const descDeleteExperimentTemplate = `Delete a chaos experiment template 
 Requires hub_identity to identify which chaos hub owns the template.
 Returns a success confirmation on completion.`;
 
-export const descListExperimentVariables = `List variables for a chaos experiment (experiment-level and task-level)`;
+export const descListExperimentVariables = `List variables for a chaos experiment (experiment-level and task-level). By default treats experiment_id as a human-readable identity slug (e.g. "exp-without-runtime"); pass is_identity=false to use the internal UUID instead.`;
 
 export const descListLinuxInfra = `List chaos Linux infrastructures (load runners)`;
 
@@ -495,6 +495,9 @@ export const descGetRisk = `Get chaos risk details`;
 
 export const descRunExperiment = `Trigger a new chaos experiment run. This is an action — it starts execution.
 Returns notifyId, experimentRunId, experimentId, and experimentName.
+
+Step 0 — Inspect the action contract FIRST:
+  Call harness_describe with resource_type=chaos_experiment and look at the run execute action. It lists every accepted input field (inputset_identity, runtime_inputs, experiment_variables, tasks, is_identity) with type and description. Do NOT skip this step — it is the source of truth for what the action accepts, and is how you discover knobs like is_identity (controls slug vs UUID lookup for experiment_id).
 
 IMPORTANT: You MUST follow this workflow before triggering a run. Do NOT skip steps or auto-fill values.
 
@@ -796,14 +799,14 @@ REQUIRED pre-call workflow:
 3. Do NOT proceed unless the user explicitly confirms using the experiment name (not just "yes").
 4. If the user seems unsure, suggest archiving or disabling instead of deleting.
 
-Returns experimentId, experimentName, isDeleted.`;
+Returns experimentId, experimentName, isDeleted. Like get, this endpoint requires the internal UUID (experimentID); the UI slug will not work — list first if you only have the slug.`;
 
 export const descStopExperiment = `Stop a chaos experiment run.
 Pass experiment_id via resource_id. Pass experiment_run_id, notify_id, force via params (not inputs).
 If notify_id is set, the run is found by notify_id and scope; otherwise by experiment_run_id and scope.
 If both are omitted, all runs for the experiment with phase 'Running' are stopped.
 force=true immediately marks the run as Stopped in the database; false (default) requests stop on cluster/machine.
-Returns isStopped, experimentId, and experimentName.`;
+Returns isStopped, experimentId, and experimentName. Requires the internal UUID (experimentID); the UI slug will not work — list first if you only have the slug.`;
 
 export const descGetProbeManifest = `Get the YAML manifest for a chaos probe by its ID (compatible with chaos engine).
 Returns a JSON object with a 'manifest' field containing the raw YAML string.
@@ -1012,7 +1015,7 @@ export const descInputSetSpec = `JSON string containing the input set variable o
 
 export const descInputSetId = `Input set ID. Use harness_list with resource_type=chaos_input_set to find input set IDs.`;
 
-export const descIsIdentity = `Controls how experiment_id is interpreted. false (default): experiment_id is an internal UUID. true: experiment_id is a human-readable identity slug.`;
+export const descIsIdentity = `Controls how experiment_id is interpreted by the backend. Pass is_identity=true to use the human-readable identity slug (e.g. "exp-without-runtime" from the UI URL). Pass is_identity=false to use the internal UUID (e.g. "ef9199b6-0248-4c0b-9d63-9176bf2b7123"). Default varies by resource: chaos_input_set operations default to false (UUID); chaos_experiment_variable.list and chaos_experiment.run default to true (slug). Only applies where the backend honors the toggle: chaos_experiment.run, chaos_experiment_variable.list, and chaos_input_set.{list,get,create,update,delete}. If is_identity=true fails with "no documents in result", the experiment may predate the identity field — use harness_list(resource_type=chaos_experiment) to find the UUID and retry with is_identity=false.`;
 
 // ── Chaos Component Variables (unified v3 endpoint) ─────────────────
 
@@ -1224,4 +1227,4 @@ Supports search (name substring) and the all toggle (default false → server re
 
 export const descSDNetworkMapSearch = `Case-insensitive substring match on network-map name. Optional.`;
 
-export const descExperimentIdUUID = `Experiment UUID (v4). Required — generate a new random UUID for create. For update, pass the exact id from harness_get to avoid creating a duplicate.`;
+export const descExperimentIdUUID = `Experiment UUID (v4). Optional for create — the server auto-generates a UUID when omitted; only pass an id if you need to control it explicitly. For update, pass the exact id from harness_get to avoid creating a duplicate.`;
