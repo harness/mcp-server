@@ -6,7 +6,7 @@
 - [x] Identify why local and CI results differ
 - [x] Implement a minimal fix only if the repo has a bug
 - [x] Verify with focused and relevant broader commands
-- [ ] Commit/push/open PR if a fix is made, then reply in Slack thread
+- [x] Commit/push/open PR if a fix is made, then reply in Slack thread
 
 ### Plan
 - Treat GitHub Actions logs as the source of truth for the failing command and exact checkout ref.
@@ -18,6 +18,7 @@
 - Root cause: `docs:generate` and `docs:check` imported `build/registry` but did not rebuild TypeScript first, so local checks could pass against stale `build/` output even though CI rebuilt before checking.
 - Fixed `package.json` so both docs scripts run `pnpm build` before `generate-docs.js`, updated the script usage comment, and added `tests/docs-scripts.test.ts` to prevent regression.
 - Verified with red/green focused coverage, `pnpm docs:check`, full `pnpm test`, and `git diff --check`.
+- Opened the fix PR; Slack reply was blocked because the original channel was not available to the Slack send tool, so no message was posted to any other channel.
 
 ## harness_list structured output for array APIs (2026-05-22)
 - [x] Root cause: Harness Code `pr_activity` returns a top-level JSON array; `jsonResult` only sets `structuredContent` for objects, so strict MCP clients (Cursor) fail with output schema validation (-32602).
