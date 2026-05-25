@@ -198,6 +198,17 @@ describe("parseHarnessUrl", () => {
     expect(result.resource_id).toBe("194");
   });
 
+  it("preserves repo identifiers that match known module names", () => {
+    const result = parseHarnessUrl(
+      "https://harness0.harness.io/ng/account/l7B_kbSEQD2wjrM7PShm5w/all/code/orgs/PROD/projects/Harness_Commons/repos/code/pulls/194/conversation",
+    );
+    expect(result.module).toBe("code");
+    expect(result.repo_id).toBe("code");
+    expect(result.pr_number).toBe("194");
+    expect(result.resource_type).toBe("pull_request");
+    expect(result.resource_id).toBe("194");
+  });
+
   it("extracts repo_id and pr_number from pull-requests deep link URL", () => {
     const result = parseHarnessUrl(
       "https://app.harness.io/ng/account/abc123/module/code/orgs/default/projects/myProject/repos/my-repo/pull-requests/42",

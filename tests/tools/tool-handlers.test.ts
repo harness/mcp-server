@@ -236,6 +236,29 @@ describe("harness_get", () => {
     });
   });
 
+  it("uses PR conversation URL defaults when pr_activity is explicit", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    mockRequest = vi.fn().mockResolvedValue([{ kind: "comment", text: "LGTM" }]);
+    client = makeClient(mockRequest);
+    const prServer = makeMcpServer();
+    const { registerListTool } = await import("../../src/tools/harness-list.js");
+    registerListTool(prServer, registry, client);
+
+    const result = await prServer.call("harness_list", {
+      resource_type: "pr_activity",
+      url: "https://harness0.harness.io/ng/account/l7B_kbSEQD2wjrM7PShm5w/all/code/orgs/PROD/projects/Harness_Commons/repos/mcpServerInternal/pulls/194/conversation",
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledOnce();
+    const call = mockRequest.mock.calls[0]![0] as { path?: string; params?: Record<string, unknown> };
+    expect(call.path).toBe("/code/api/v1/repos/mcpServerInternal/pullreq/194/activities");
+    expect(call.params).toMatchObject({
+      orgIdentifier: "PROD",
+      projectIdentifier: "Harness_Commons",
+    });
+  });
+
   it("documents resource_scope in the registered input schema", () => {
     const schema = server.schema("harness_get") as {
       inputSchema: { resource_scope?: { description?: string | null } };
