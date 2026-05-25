@@ -179,8 +179,23 @@ describe("parseHarnessUrl", () => {
     expect(result.project_id).toBe("Data_Platform");
     expect(result.repo_id).toBe("query-service");
     expect(result.pr_number).toBe("166");
-    expect(result.resource_type).toBe("pr_activity");
-    // conversation URLs route to pr_activity (the canonical way to read PR comments)
+    expect(result.resource_type).toBe("pull_request");
+    expect(result.resource_id).toBe("166");
+    // conversation is a UI tab for the PR; callers can still request pr_activity explicitly.
+  });
+
+  it("extracts pull_request from /all/code PR conversation URLs", () => {
+    const result = parseHarnessUrl(
+      "https://harness0.harness.io/ng/account/l7B_kbSEQD2wjrM7PShm5w/all/code/orgs/PROD/projects/Harness_Commons/repos/mcpServerInternal/pulls/194/conversation",
+    );
+    expect(result.account_id).toBe("l7B_kbSEQD2wjrM7PShm5w");
+    expect(result.module).toBe("code");
+    expect(result.org_id).toBe("PROD");
+    expect(result.project_id).toBe("Harness_Commons");
+    expect(result.repo_id).toBe("mcpServerInternal");
+    expect(result.pr_number).toBe("194");
+    expect(result.resource_type).toBe("pull_request");
+    expect(result.resource_id).toBe("194");
   });
 
   it("extracts repo_id and pr_number from pull-requests deep link URL", () => {

@@ -39,7 +39,7 @@ type ContextField =
   | "environment_id";
 
 /** Known Harness module identifiers that appear in URL paths */
-const MODULES = new Set(["cd", "ci", "ce", "cv", "sto", "chaos", "idp", "sei", "fme"]);
+const MODULES = new Set(["cd", "ci", "ce", "cv", "code", "sto", "chaos", "idp", "sei", "fme"]);
 
 /**
  * Maps URL path segments (plural resource names) to registry resource types
@@ -83,7 +83,6 @@ const RESOURCE_SEGMENTS: Record<string, { type: string; contextField: ContextFie
   "pullrequests":     { type: "pull_request",        contextField: "pr_number" },
   "pulls":            { type: "pull_request",        contextField: "pr_number" },
   "pull-requests":    { type: "pull_request",        contextField: "pr_number" },
-  "conversation":     { type: "pr_activity",          contextField: "comment_id" },
 };
 
 const URL_RESOURCE_SCOPE_TYPES = new Set([

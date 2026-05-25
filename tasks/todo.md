@@ -1,5 +1,17 @@
 # Harness MCP Server — Task Tracking
 
+## Slack PR Review: Harness Code Conversation URL Parsing (2026-05-25)
+- [x] Read Slack thread and confirm the only provided context is a Harness Code PR conversation URL.
+- [x] Inspect merged PR #194 behavior and URL parsing for Harness Code PR links.
+- [x] Add failing regression coverage for conversation-style PR URLs.
+- [x] Treat conversation as a PR view tab so `harness_get(url=...)` fetches PR details.
+- [ ] Run focused tests, typecheck/build as appropriate, commit, push, and report in Slack.
+
+### Plan
+- Keep the fix in URL parsing because request routing and PR endpoint mappings already work when `resource_type="pull_request"` is selected.
+- Preserve extracted `repo_id` and `pr_number` for `/pulls/{number}/conversation` links from both `/module/code` and `/all/code` UI paths.
+- Prefer explicit `resource_type="pr_activity"` when callers want the conversation activity list; do not make generic PR links default to a resource without `get`.
+
 ## harness_list structured output for array APIs (2026-05-22)
 - [x] Root cause: Harness Code `pr_activity` returns a top-level JSON array; `jsonResult` only sets `structuredContent` for objects, so strict MCP clients (Cursor) fail with output schema validation (-32602).
 - [x] Add `normalizeHarnessListPayload` and call it from `harness_list` after dispatch; unit tests in `response-formatter.test.ts`.
