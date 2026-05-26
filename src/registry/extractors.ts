@@ -405,6 +405,24 @@ export const chaosPageExtract = (raw: unknown): { items: unknown[]; total: numbe
   };
 };
 
+export const chaosGuardConditionListExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { conditions?: unknown[]; pagination?: { totalItems?: number } };
+  const items = r.conditions ?? [];
+  return { items, total: r.pagination?.totalItems ?? items.length };
+};
+
+export const chaosGuardRuleListExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { rules?: unknown[]; pagination?: { totalItems?: number } };
+  const items = r.rules ?? [];
+  return { items, total: r.pagination?.totalItems ?? items.length };
+};
+
+export const chaosRecommendationListExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { recommendations?: unknown[]; pagination?: { totalItems?: number } };
+  const items = r.recommendations ?? [];
+  return { items, total: r.pagination?.totalItems ?? items.length };
+};
+
 /**
  * Normalize chaos experiment variables response (RunTimeInputs shape):
  * { experiment: [...] | null, tasks: { taskName: [...] } | null }
@@ -493,10 +511,10 @@ export const chaosHubListExtract = (raw: unknown): { items: unknown[]; total: nu
   };
 };
 
-/** Extract chaos DR test list response: { items: [...], pagination: { totalItems } } */
+/** Extract chaos DR test list response: { drtests: [...], pagination?: { totalItems } } */
 export const chaosDRTestListExtract = (raw: unknown): { items: unknown[]; total: number } => {
-  const r = raw as { items?: unknown[]; pagination?: { totalItems?: number } };
-  const items = r.items ?? [];
+  const r = raw as { drtests?: unknown[]; pagination?: { totalItems?: number } };
+  const items = r.drtests ?? [];
   return { items, total: r.pagination?.totalItems ?? items.length };
 };
 

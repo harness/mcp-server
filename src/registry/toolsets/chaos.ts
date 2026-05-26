@@ -10,6 +10,9 @@ import {
   chaosK8sInfraListExtract,
   chaosHubListExtract,
   chaosDRTestListExtract,
+  chaosGuardConditionListExtract,
+  chaosGuardRuleListExtract,
+  chaosRecommendationListExtract,
   sdPageExtract,
   chaosRunTimeInputsExtract,
 } from "../extractors.js";
@@ -2434,7 +2437,7 @@ export const chaosToolset: ToolsetDefinition = {
             infrastructure_type: "infrastructureType",
             tags: "tags",
           },
-          responseExtractor: chaosPageExtract,
+          responseExtractor: chaosGuardConditionListExtract,
           description: descListGuardConditions,
         },
         get: {
@@ -2486,7 +2489,7 @@ export const chaosToolset: ToolsetDefinition = {
             infrastructure_type: "infrastructureType",
             tags: "tags",
           },
-          responseExtractor: chaosPageExtract,
+          responseExtractor: chaosGuardRuleListExtract,
           description: descListGuardRules,
         },
         get: {
@@ -2538,21 +2541,23 @@ export const chaosToolset: ToolsetDefinition = {
       identifierFields: ["recommendation_id"],
       operations: {
         list: {
-          method: "GET",
+          method: "POST",
           path: `${CHAOS}/rest/recommendations`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             page: "page",
             limit: "limit",
           },
-          responseExtractor: chaosPageExtract,
+          bodyBuilder: () => ({}),
+          skipScopeBodyInjection: true,
+          responseExtractor: chaosRecommendationListExtract,
           description: descListRecommendations,
         },
         get: {
           method: "GET",
-          path: `${CHAOS}/rest/recommendations/{recommendationId}`,
+          path: `${CHAOS}/rest/recommendations`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          pathParams: { recommendation_id: "recommendationId" },
+          queryParams: { recommendation_id: "recommendationID" },
           responseExtractor: passthrough,
           description: descGetRecommendation,
         },
@@ -2571,7 +2576,7 @@ export const chaosToolset: ToolsetDefinition = {
       operations: {
         list: {
           method: "GET",
-          path: `${CHAOS}/rest/v2/risks`,
+          path: `${CHAOS}/v3/risks`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             page: "page",
@@ -2582,7 +2587,7 @@ export const chaosToolset: ToolsetDefinition = {
         },
         get: {
           method: "GET",
-          path: `${CHAOS}/rest/v2/risks/{riskId}`,
+          path: `${CHAOS}/v3/risks/{riskId}`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { risk_id: "riskId" },
           responseExtractor: passthrough,

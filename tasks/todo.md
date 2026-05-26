@@ -1,5 +1,17 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Inspection (2026-05-26)
+- [ ] Inspect recent commits for high-severity behavioral regressions
+- [ ] Trace suspicious changes through caller chains and downstream effects
+- [ ] Implement a minimal fix only if a concrete critical bug is confirmed
+- [ ] Run focused verification for reviewed or changed behavior
+- [ ] Report the outcome in Slack; open a PR only for a confirmed critical fix
+
+### Plan
+- Review commits merged after the previous critical-bug scan, prioritizing code changes over docs/version-only updates.
+- Focus on DBOps default authoring instance, Chaos endpoint/refactor changes, STO vulnerability/exemption behavior, template scope/version handling, URL parsing, request construction, auth/session lifecycle, and write-operation safety.
+- Require a concrete trigger scenario with crash, data loss, security bypass, or major user-facing breakage before patching; otherwise report no critical findings without opening a PR.
+
 ## Jira Feature Request Spec Automation (2026-05-25)
 - [x] Inspect current automation registry and saved schedules
 - [x] Create Jira Feature Request spec drafting automation

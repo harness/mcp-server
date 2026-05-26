@@ -82,12 +82,25 @@ function buildV1TemplateBody(input: Record<string, unknown>): Record<string, unk
   const b = (input.body as Record<string, unknown>) ?? {};
   const templateYaml = getTemplateYamlFromInput(input);
 
-  let identifier = (b.identifier as string | undefined) ?? (input.template_id as string | undefined);
+  const inputTemplateId = typeof input.template_id === "string" && input.template_id !== "" ? input.template_id : undefined;
+  const inputVersionLabel = typeof input.version_label === "string" && input.version_label !== "" ? input.version_label : undefined;
+  const bodyIdentifier = typeof b.identifier === "string" && b.identifier !== "" ? b.identifier : undefined;
+  const bodyLabel = typeof b.label === "string" && b.label !== "" ? b.label : undefined;
+  const bodyVersionLabel = typeof b.version_label === "string" && b.version_label !== "" ? b.version_label : undefined;
+
+  if (inputTemplateId && bodyIdentifier && bodyIdentifier !== inputTemplateId) {
+    throw new Error("body.identifier must match template_id for template_v1 operations");
+  }
+  if (inputVersionLabel && bodyLabel && bodyLabel !== inputVersionLabel) {
+    throw new Error("body.label must match version_label for template_v1 operations");
+  }
+  if (inputVersionLabel && bodyVersionLabel && bodyVersionLabel !== inputVersionLabel) {
+    throw new Error("body.version_label must match version_label for template_v1 operations");
+  }
+
+  let identifier = inputTemplateId ?? bodyIdentifier;
   let name = b.name as string | undefined;
-  let label =
-    (b.label as string | undefined) ??
-    (b.version_label as string | undefined) ??
-    (input.version_label as string | undefined);
+  let label = inputVersionLabel ?? bodyLabel ?? bodyVersionLabel;
 
   try {
     const parsed = YAML.parse(templateYaml) as Record<string, unknown>;

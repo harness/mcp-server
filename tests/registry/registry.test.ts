@@ -814,6 +814,54 @@ describe("Registry", () => {
       expect(call.path).toBe("/v1/templates");
     });
 
+    it("template_v1 create honors explicit account scope even when org/project IDs are present", async () => {
+      const templateRegistry = new Registry(makeConfig({
+        HARNESS_TOOLSETS: "templates",
+        HARNESS_ORG: "AI_Devops",
+        HARNESS_PROJECT: "AICHAT",
+      }));
+      const mockRequest = vi.fn().mockResolvedValue({ identifier: "acc_explicit", label: "1.0.0" });
+      const client = makeClient(mockRequest);
+
+      await templateRegistry.dispatch(client, "template_v1", "create", {
+        resource_scope: "account",
+        org_id: "AI_Devops",
+        project_id: "AICHAT",
+        body: {
+          template_yaml: "version: 1\ntemplate:\n  identifier: acc_explicit\n  name: Account Explicit\n  step:\n    run:\n      script: echo hi\n",
+        },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/v1/templates");
+      expect(call.params.orgIdentifier).toBeUndefined();
+      expect(call.params.projectIdentifier).toBeUndefined();
+    });
+
+    it("template_v1 create honors explicit org scope even when project_id is present", async () => {
+      const templateRegistry = new Registry(makeConfig({
+        HARNESS_TOOLSETS: "templates",
+        HARNESS_ORG: "AI_Devops",
+        HARNESS_PROJECT: "AICHAT",
+      }));
+      const mockRequest = vi.fn().mockResolvedValue({ identifier: "org_explicit", label: "1.0.0" });
+      const client = makeClient(mockRequest);
+
+      await templateRegistry.dispatch(client, "template_v1", "create", {
+        resource_scope: "org",
+        org_id: "AI_Devops",
+        project_id: "AICHAT",
+        body: {
+          template_yaml: "version: 1\ntemplate:\n  identifier: org_explicit\n  name: Org Explicit\n  step:\n    run:\n      script: echo hi\n",
+        },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/v1/orgs/AI_Devops/templates");
+      expect(call.params.orgIdentifier).toBe("AI_Devops");
+      expect(call.params.projectIdentifier).toBeUndefined();
+    });
+
     it("template_v1 update uses versioned v1 REST path at account scope", async () => {
       const templateRegistry = new Registry(makeConfig({
         HARNESS_TOOLSETS: "templates",
@@ -835,6 +883,46 @@ describe("Registry", () => {
       expect(call.path).toBe("/v1/templates/testsj/versions/v2");
       expect(call.params.orgIdentifier).toBeUndefined();
       expect(call.params.projectIdentifier).toBeUndefined();
+    });
+
+    it("template_v1 update rejects body identifier that conflicts with the URL path identifier", async () => {
+      const templateRegistry = new Registry(makeConfig({
+        HARNESS_TOOLSETS: "templates",
+        HARNESS_ORG: "AI_Devops",
+        HARNESS_PROJECT: "AICHAT",
+      }));
+      const mockRequest = vi.fn().mockResolvedValue({ identifier: "other_step", label: "v3" });
+      const client = makeClient(mockRequest);
+
+      await expect(templateRegistry.dispatch(client, "template_v1", "update", {
+        template_id: "testsj",
+        version_label: "v2",
+        body: {
+          identifier: "other_step",
+          template_yaml: "version: 1\ntemplate:\n  identifier: testsj\n  name: Test\n  step:\n    run:\n      script: echo ok\n",
+        },
+      })).rejects.toThrow(/body\.identifier must match template_id/);
+      expect(mockRequest).not.toHaveBeenCalled();
+    });
+
+    it("template_v1 update rejects body version label that conflicts with the URL path version", async () => {
+      const templateRegistry = new Registry(makeConfig({
+        HARNESS_TOOLSETS: "templates",
+        HARNESS_ORG: "AI_Devops",
+        HARNESS_PROJECT: "AICHAT",
+      }));
+      const mockRequest = vi.fn().mockResolvedValue({ identifier: "testsj", label: "v3" });
+      const client = makeClient(mockRequest);
+
+      await expect(templateRegistry.dispatch(client, "template_v1", "update", {
+        template_id: "testsj",
+        version_label: "v2",
+        body: {
+          label: "v3",
+          template_yaml: "version: 1\ntemplate:\n  identifier: testsj\n  name: Test\n  step:\n    run:\n      script: echo ok\n",
+        },
+      })).rejects.toThrow(/body\.label must match version_label/);
+      expect(mockRequest).not.toHaveBeenCalled();
     });
 
     it("template_v1 with only project_id does not use project path without org_id", async () => {
