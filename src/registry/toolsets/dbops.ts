@@ -266,6 +266,45 @@ export const dbopsToolset: ToolsetDefinition = {
       },
     },
 
+    // ── Default Authoring Instance ──────────────────────────────────────
+    {
+      resourceType: "database_default_authoring_instance",
+      displayName: "Default Authoring Instance",
+      description:
+        "Returns the best database instance for LLM change authoring given a schema. " +
+        "Selection priority: (1) oldest instance with a metadata snapshot, " +
+        "(2) oldest instance overall. Returns a minimal response with the instance " +
+        "identifier, name, connector (JDBC connector identifier), and whether it has a snapshot. " +
+        "The connector field can be used directly with the connectors toolset to resolve the " +
+        "DB engine type — no separate instance fetch is needed. " +
+        "Use this when a schema has no primaryDbInstanceId configured and you need " +
+        "to auto-select an instance for changeset generation.",
+      toolset: "dbops",
+      scope: "project",
+      identifierFields: ["dbschema_id"],
+      operations: {
+        get: {
+          method: "GET",
+          path: "/dbops/v1/orgs/{org}/projects/{project}/dbschema/{dbschema}/default-authoring-instance",
+          pathParams: {
+            org_id: "org",
+            project_id: "project",
+            dbschema_id: "dbschema",
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: passthrough,
+          description:
+            "Get the best instance for LLM change authoring for a schema. " +
+            "Returns { identifier: string, name: string, hasSnapshot: boolean, connector: string }. " +
+            "The connector field is the JDBC connector identifier linked to this instance — " +
+            "use it directly with harness_get(resource_type='connector') to resolve the DB engine type. " +
+            "Prefers the oldest instance that has a metadata snapshot; falls back to " +
+            "the oldest instance overall if none have snapshots. " +
+            "Returns 404 if no instances exist for the schema.",
+        },
+      },
+    },
+
     // ── LLM Authoring Pipeline ───────────────────────────────────────────
     // NOTE: This endpoint is marked x-internal in the DBOPS OpenAPI spec.
     // The response 'metadata' map is expected to contain the pipeline identifier
